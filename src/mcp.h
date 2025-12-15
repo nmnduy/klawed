@@ -48,6 +48,7 @@ typedef struct MCPServer {
     char *command;               // Command to execute (e.g., "npx")
     char **args;                 // Command arguments
     int args_count;              // Number of arguments
+    char *cwd;                   // Working directory for the process
     char **env;                  // Environment variables (key=value pairs)
     int env_count;               // Number of env vars
     pid_t pid;                   // Process ID (if running)

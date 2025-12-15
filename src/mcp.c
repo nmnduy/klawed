@@ -285,6 +285,12 @@ MCPConfig* mcp_load_config(const char *config_path) {
             }
         }
 
+        // Parse cwd (working directory)
+        cJSON *cwd = cJSON_GetObjectItem(server_item, "cwd");
+        if (cwd && cJSON_IsString(cwd)) {
+            server->cwd = strdup(cwd->valuestring);
+        }
+
         // Parse env
         cJSON *env = cJSON_GetObjectItem(server_item, "env");
         if (env && cJSON_IsObject(env)) {
@@ -338,12 +344,15 @@ MCPConfig* mcp_load_config(const char *config_path) {
             }
         }
         args_buf[off] = '\0';
-        LOG_DEBUG("  - %s: cmd='%s'%s%s%s",
+        LOG_DEBUG("  - %s: cmd='%s'%s%s%s%s%s%s",
                   s->name ? s->name : "<noname>",
                   s->command ? s->command : "<none>",
                   (s->args_count > 0 ? " args=[" : ""),
                   args_buf,
-                  (s->args_count > 0 ? "]" : ""));
+                  (s->args_count > 0 ? "]" : ""),
+                  (s->cwd ? " cwd='" : ""),
+                  (s->cwd ? s->cwd : ""),
+                  (s->cwd ? "'" : ""));
     }
 
 cleanup:
@@ -381,6 +390,7 @@ void mcp_free_config(MCPConfig *config) {
 
         free(server->name);
         free(server->command);
+        free(server->cwd);
         free(server->url);
 
         if (server->args) {
@@ -507,6 +517,14 @@ int mcp_connect_server(MCPServer *server) {
         if (server->env_count > 0) {
             for (int i = 0; i < server->env_count; i++) {
                 putenv(server->env[i]);
+            }
+        }
+
+        // Change working directory if provided
+        if (server->cwd) {
+            if (chdir(server->cwd) != 0) {
+                fprintf(stderr, "MCP: Failed to chdir to %s: %s\n", server->cwd, strerror(errno));
+                exit(1);
             }
         }
 
