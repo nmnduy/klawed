@@ -20,7 +20,7 @@
  * Check if Bedrock mode is enabled via environment variable
  */
 static int is_bedrock_enabled(void) {
-    const char *use_bedrock = getenv("CLAUDE_CODE_USE_BEDROCK");
+    const char *use_bedrock = getenv("KLAWED_USE_BEDROCK");
     return (use_bedrock &&
            (strcmp(use_bedrock, "1") == 0 ||
             strcmp(use_bedrock, "true") == 0 ||
@@ -68,7 +68,7 @@ void provider_init(const char *model,
 
     // Bedrock provider selection
     if (is_bedrock_enabled()) {
-        const char *use_bedrock_env = getenv("CLAUDE_CODE_USE_BEDROCK");
+        const char *use_bedrock_env = getenv("KLAWED_USE_BEDROCK");
         const char *aws_profile = getenv("AWS_PROFILE");
         const char *aws_region = getenv("AWS_REGION");
         const char *aws_config_file = getenv("AWS_CONFIG_FILE");
@@ -78,7 +78,7 @@ void provider_init(const char *model,
         const char *aws_session_token = getenv("AWS_SESSION_TOKEN");
 
         LOG_INFO("Bedrock mode is enabled, creating Bedrock provider...");
-        LOG_INFO("Bedrock env summary: CLAUDE_CODE_USE_BEDROCK=%s",
+        LOG_INFO("Bedrock env summary: KLAWED_USE_BEDROCK=%s",
                  use_bedrock_env ? use_bedrock_env : "(not set)");
         LOG_INFO("Bedrock env summary: AWS_PROFILE=%s, AWS_REGION=%s",
                  aws_profile ? aws_profile : "(not set)",

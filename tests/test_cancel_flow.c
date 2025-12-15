@@ -7,7 +7,7 @@
 #include <assert.h>
 #include <cjson/cJSON.h>
 
-#include "claude_internal.h"
+#include "klawed_internal.h"
 
 // Minimal validation: after an assistant with tool_calls, there must be
 // tool messages for each tool_call_id before the next assistant/user.

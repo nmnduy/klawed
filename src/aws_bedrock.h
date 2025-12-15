@@ -22,7 +22,7 @@
 #define AWS_BEDROCK_STREAM_PATH "/model/%s/invoke-with-response-stream"
 
 // Environment variables
-#define ENV_USE_BEDROCK "CLAUDE_CODE_USE_BEDROCK"
+#define ENV_USE_BEDROCK "KLAWED_USE_BEDROCK"
 #define ENV_AWS_REGION "AWS_REGION"
 #define ENV_AWS_PROFILE "AWS_PROFILE"
 #define ENV_AWS_ACCESS_KEY_ID "AWS_ACCESS_KEY_ID"

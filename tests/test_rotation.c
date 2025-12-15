@@ -191,9 +191,9 @@ static void test_auto_rotate(void) {
     unlink(TEST_DB_PATH);
 
     // Set test environment variables
-    setenv("CLAUDE_C_DB_MAX_DAYS", "20", 1);
-    setenv("CLAUDE_C_DB_MAX_RECORDS", "30", 1);
-    setenv("CLAUDE_C_DB_AUTO_ROTATE", "1", 1);
+    setenv("KLAWED_DB_MAX_DAYS", "20", 1);
+    setenv("KLAWED_DB_MAX_RECORDS", "30", 1);
+    setenv("KLAWED_DB_AUTO_ROTATE", "1", 1);
 
     // Initialize database (auto-rotate should not run on empty DB)
     PersistenceDB *db = persistence_init(TEST_DB_PATH);
@@ -222,9 +222,9 @@ static void test_auto_rotate(void) {
     persistence_close(db);
 
     // Cleanup env vars
-    unsetenv("CLAUDE_C_DB_MAX_DAYS");
-    unsetenv("CLAUDE_C_DB_MAX_RECORDS");
-    unsetenv("CLAUDE_C_DB_AUTO_ROTATE");
+    unsetenv("KLAWED_DB_MAX_DAYS");
+    unsetenv("KLAWED_DB_MAX_RECORDS");
+    unsetenv("KLAWED_DB_AUTO_ROTATE");
 
     printf("  ✓ Auto-rotation test passed\n\n");
 }

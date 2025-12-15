@@ -9,7 +9,7 @@
 #define COMMANDS_H
 
 #include "ncurses_input.h"  // For CompletionResult and CompletionFn types
-#include "claude_internal.h"
+#include "klawed_internal.h"
 
 // ============================================================================
 // Command Definition

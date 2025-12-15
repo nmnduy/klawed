@@ -86,14 +86,14 @@ int mcp_init(void) {
         return 0;
     }
 
-    // Disabled by default; allow opt-in via CLAUDE_MCP_ENABLED=1/true/on
-    const char *enabled = getenv("CLAUDE_MCP_ENABLED");
+    // Disabled by default; allow opt-in via KLAWED_MCP_ENABLED=1/true/on
+    const char *enabled = getenv("KLAWED_MCP_ENABLED");
     if (enabled && (strcmp(enabled, "1") == 0 || strcasecmp(enabled, "true") == 0 || strcasecmp(enabled, "on") == 0)) {
         mcp_enabled = 1;
         LOG_INFO("MCP subsystem initialized and enabled");
     } else {
         mcp_enabled = 0;
-        LOG_DEBUG("MCP subsystem initialized but disabled (set CLAUDE_MCP_ENABLED=1 to enable)");
+        LOG_DEBUG("MCP subsystem initialized but disabled (set KLAWED_MCP_ENABLED=1 to enable)");
     }
 
     mcp_initialized = 1;
@@ -146,7 +146,7 @@ MCPConfig* mcp_load_config(const char *config_path) {
             LOG_ERROR("MCP: Failed to allocate memory for default path");
             return NULL;
         }
-        snprintf(allocated_path, 1024, "%s/.config/claude-c/mcp_servers.json", home);
+        snprintf(allocated_path, 1024, "%s/.config/klawed/mcp_servers.json", home);
         config_path = allocated_path;
     }
 
@@ -541,17 +541,17 @@ int mcp_connect_server(MCPServer *server) {
     }
 
     // Open log file for stderr output
-    // Use ./.claude-c/mcp/<server-name>.log
+    // Use ./.klawed/mcp/<server-name>.log
     char log_path[512];
-    snprintf(log_path, sizeof(log_path), ".claude-c/mcp/%s.log", server->name);
+    snprintf(log_path, sizeof(log_path), ".klawed/mcp/%s.log", server->name);
 
     // Create directory if it doesn't exist
 #ifdef TEST_BUILD
-    if (mcp_mkdir_p(".claude-c/mcp") != 0) {
+    if (mcp_mkdir_p(".klawed/mcp") != 0) {
 #else
-    if (mkdir_p(".claude-c/mcp") != 0) {
+    if (mkdir_p(".klawed/mcp") != 0) {
 #endif
-        LOG_WARN("MCP: Failed to create directory .claude-c/mcp: %s", strerror(errno));
+        LOG_WARN("MCP: Failed to create directory .klawed/mcp: %s", strerror(errno));
     }
 
     server->stderr_log = fopen(log_path, "w");
@@ -574,7 +574,7 @@ int mcp_connect_server(MCPServer *server) {
 
     // clientInfo should be an object with name and version
     cJSON *clientInfo = cJSON_CreateObject();
-    cJSON_AddStringToObject(clientInfo, "name", "claude-c");
+    cJSON_AddStringToObject(clientInfo, "name", "klawed");
     cJSON_AddStringToObject(clientInfo, "version", "1.0");
     cJSON_AddItemToObject(params, "clientInfo", clientInfo);
 

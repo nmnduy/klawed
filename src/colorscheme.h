@@ -419,8 +419,8 @@ static __attribute__((unused)) int init_colorscheme(const char *filepath) {
 
     // No theme loaded - warn user and rely on fallback ANSI colors
     fprintf(stderr, "\033[33mWarning: No Kitty theme loaded, using standard ANSI fallback colors\033[0m\n");
-    fprintf(stderr, "  Set CLAUDE_C_THEME environment variable to a .conf file or built-in theme name (e.g., 'dracula') to use custom colors\n");
-    fprintf(stderr, "  Example: export CLAUDE_C_THEME=\"dracula\" or /path/to/dracula.conf\n");
+    fprintf(stderr, "  Set KLAWED_THEME environment variable to a .conf file or built-in theme name (e.g., 'dracula') to use custom colors\n");
+    fprintf(stderr, "  Example: export KLAWED_THEME=\"dracula\" or /path/to/dracula.conf\n");
 
     // Don't set g_theme_loaded = 1, so get_colorscheme_color() will return -1
     // and code will fall back to ANSI_FALLBACK_* constants from fallback_colors.h

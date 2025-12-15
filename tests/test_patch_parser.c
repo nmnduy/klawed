@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "../src/patch_parser.h"
-#include "../src/claude_internal.h"
+#include "../src/klawed_internal.h"
 
 // Test file paths
 #define TEST_DIR "/tmp/patch_parser_test"

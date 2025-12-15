@@ -16,7 +16,7 @@
 #include "fallback_colors.h"
 #include "logger.h"
 #include "indicators.h"
-#include "claude_internal.h"
+#include "klawed_internal.h"
 #include <stdlib.h>
 #include <bsd/stdlib.h>
 #include <string.h>
@@ -1337,7 +1337,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->history_file = history_file_open(NULL);
     if (tui->history_file) {
         int limit = 100;  // default history size in memory
-        const char *env_limit = getenv("CLAUDE_C_HISTORY_MAX");
+        const char *env_limit = getenv("KLAWED_HISTORY_MAX");
         if (env_limit && *env_limit) {
             long v = strtol(env_limit, NULL, 10);
             if (v > 0 && v < 100000) limit = (int)v;
@@ -2094,7 +2094,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     if (!tui || !tui->is_initialized) return;
 
     // Check if ASCII art cat mascot is enabled
-    const char *cat_env = getenv("CLAUDE_C_CAT");
+    const char *cat_env = getenv("KLAWED_CAT");
     int show_cat_mascot = cat_env && strcmp(cat_env, "1") == 0;
 
     // Format banner lines
@@ -2105,12 +2105,12 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
 
     if (show_cat_mascot) {
         // ASCII art cat mascot
-        snprintf(line1, sizeof(line1), "  /\\_/\\   claude-c v%s", version);
+        snprintf(line1, sizeof(line1), "  /\\_/\\   klawed v%s", version);
         snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
         snprintf(line3, sizeof(line3), "  > ^ <    %s", working_dir);
     } else {
         // Original box drawing mascot
-        snprintf(line1, sizeof(line1), " ▐▛███▜▌   claude-c v%s", version);
+        snprintf(line1, sizeof(line1), " ▐▛███▜▌   klawed v%s", version);
         snprintf(line2, sizeof(line2), "▝▜█████▛▘  %s", model);
         snprintf(line3, sizeof(line3), "  ▘▘ ▝▝    %s", working_dir);
     }
@@ -2136,15 +2136,15 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         /* "Use /add-dir to attach a directory as context.", */
         "Press Ctrl+D to exit quickly.",
         /* "Use /voice to record and transcribe audio (requires PortAudio).", */
-        "Set CLAUDE_C_THEME to change colors. Available: tender (default), kitty-default, dracula, gruvbox-dark, solarized-dark, black-metal.",
+        "Set KLAWED_THEME to change colors. Available: tender (default), kitty-default, dracula, gruvbox-dark, solarized-dark, black-metal.",
         "Set CLAUDE_LOG_LEVEL=DEBUG for verbose logs.",
-        "API history stored in ./.claude-c/api_calls.db (configurable via CLAUDE_C_DB_PATH).",
+        "API history stored in ./.klawed/api_calls.db (configurable via KLAWED_DB_PATH).",
         "Insert mode supports readline keys: Ctrl+A, Ctrl+E, Alt+B, Alt+F.",
         /* "Switch models via OPENAI_MODEL or ANTHROPIC_MODEL environment variables.", */
-        /* "Enable Bedrock with CLAUDE_CODE_USE_BEDROCK=1 and ANTHROPIC_MODEL set.", */
+        /* "Enable Bedrock with KLAWED_USE_BEDROCK=1 and ANTHROPIC_MODEL set.", */
         "Interrupt long tool runs any time with Ctrl+C.",
         /* "Disable prompt caching with DISABLE_PROMPT_CACHING=1 if needed.", */
-        "MCP is disabled by default; enable with CLAUDE_MCP_ENABLED=1 and configure servers in ~/.config/claude-c/.",
+        "MCP is disabled by default; enable with KLAWED_MCP_ENABLED=1 and configure servers in ~/.config/klawed/.",
         "Use /clear to clear conversation; /quit or /exit to leave.",
         "Use /help to see all available commands.",
         "Token usage stats shown in status bar when in Normal mode (Esc).",

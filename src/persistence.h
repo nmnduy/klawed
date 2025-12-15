@@ -59,10 +59,10 @@ typedef struct PersistenceDB {
 // Parameters:
 //   db_path: Path to SQLite database file (NULL = use default location)
 //            Default location priority:
-//              1. $CLAUDE_C_DB_PATH (environment variable)
-//              2. ./.claude-c/api_calls.db (project-local)
-//              3. $XDG_DATA_HOME/claude-c/api_calls.db
-//              4. ~/.local/share/claude-c/api_calls.db
+//              1. $KLAWED_DB_PATH (environment variable)
+//              2. ./.klawed/api_calls.db (project-local)
+//              3. $XDG_DATA_HOME/klawed/api_calls.db
+//              4. ~/.local/share/klawed/api_calls.db
 //              5. ./api_calls.db (fallback)
 //
 // Returns:
@@ -150,7 +150,7 @@ long persistence_get_db_size(PersistenceDB *db);
 int persistence_vacuum(PersistenceDB *db);
 
 // Automatically apply rotation rules based on environment variables
-// Checks CLAUDE_C_DB_MAX_DAYS, CLAUDE_C_DB_MAX_RECORDS, CLAUDE_C_DB_MAX_SIZE_MB
+// Checks KLAWED_DB_MAX_DAYS, KLAWED_DB_MAX_RECORDS, KLAWED_DB_MAX_SIZE_MB
 // and applies appropriate rotation strategies
 //
 // Parameters:

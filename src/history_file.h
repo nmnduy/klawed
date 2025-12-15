@@ -16,7 +16,7 @@ HistoryFile* history_file_open(const char *path);
 void history_file_close(HistoryFile *hf);
 
 // Default history path resolution
-// Priority: $CLAUDE_C_HISTORY_FILE_PATH > ./.claude-c/input_history.txt > $XDG_DATA_HOME/claude-c/input_history.txt > ~/.local/share/claude-c/input_history.txt
+// Priority: $KLAWED_HISTORY_FILE_PATH > ./.klawed/input_history.txt > $XDG_DATA_HOME/klawed/input_history.txt > ~/.local/share/klawed/input_history.txt
 char* history_file_default_path(void);
 
 // Load most recent N lines; returns array oldest -> newest

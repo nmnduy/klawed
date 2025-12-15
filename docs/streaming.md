@@ -120,15 +120,15 @@ typedef enum {
 Set the environment variable:
 
 ```bash
-export CLAUDE_C_ENABLE_STREAMING=1
-./build/claude-c "your prompt"
+export KLAWED_ENABLE_STREAMING=1
+./build/klawed "your prompt"
 ```
 
 Or in your shell configuration:
 
 ```bash
 # ~/.bashrc or ~/.zshrc
-export CLAUDE_C_ENABLE_STREAMING=1
+export KLAWED_ENABLE_STREAMING=1
 ```
 
 ### Behavior
@@ -337,7 +337,7 @@ Enable debug logging to see streaming events:
 
 ```bash
 export CLAUDE_LOG_LEVEL=DEBUG
-./build/claude-c "test prompt"
+./build/klawed "test prompt"
 ```
 
 Look for log messages like:
@@ -351,10 +351,10 @@ To test streaming without changing code:
 
 ```bash
 # Enable streaming
-export CLAUDE_C_ENABLE_STREAMING=1
+export KLAWED_ENABLE_STREAMING=1
 
 # Test with a prompt that generates longer response
-./build/claude-c "Write a detailed explanation of how TCP works"
+./build/klawed "Write a detailed explanation of how TCP works"
 
 # You should see text appearing incrementally
 ```

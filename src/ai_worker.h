@@ -11,7 +11,7 @@
 
 #include <pthread.h>
 #include "message_queue.h"
-#include "claude_internal.h"
+#include "klawed_internal.h"
 
 struct AIWorkerContext;
 

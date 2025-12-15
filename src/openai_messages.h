@@ -9,7 +9,7 @@
 #define OPENAI_MESSAGES_H
 
 #include <cjson/cJSON.h>
-#include "claude_internal.h"
+#include "klawed_internal.h"
 
 /**
  * Build OpenAI request JSON from internal message format

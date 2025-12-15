@@ -4,7 +4,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include "claude_internal.h"  // Must be first to get ApiResponse definition
+#include "klawed_internal.h"  // Must be first to get ApiResponse definition
 #include "bedrock_provider.h"
 #include "logger.h"
 #include "http_client.h"
@@ -44,7 +44,7 @@ static int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow
 // Request Building (from ConversationState)
 // ============================================================================
 
-// Forward declaration - this will be implemented in claude.c and exposed via claude_internal.h
+// Forward declaration - this will be implemented in claude.c and exposed via klawed_internal.h
 // For now, we declare it here as extern
 
 
@@ -711,7 +711,7 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
     // Check if streaming is enabled via environment variable
     int enable_streaming = 0;
-    const char *streaming_env = getenv("CLAUDE_C_ENABLE_STREAMING");
+    const char *streaming_env = getenv("KLAWED_ENABLE_STREAMING");
     if (streaming_env && (strcmp(streaming_env, "1") == 0 || strcasecmp(streaming_env, "true") == 0)) {
         enable_streaming = 1;
         LOG_DEBUG("Bedrock provider: streaming enabled");

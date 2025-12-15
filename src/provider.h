@@ -11,7 +11,7 @@
 
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
-#include "claude_internal.h"  // For ApiResponse typedef
+#include "klawed_internal.h"  // For ApiResponse typedef
 
 // Forward declarations
 struct Provider;
@@ -69,7 +69,7 @@ typedef struct {
  * Initialize the appropriate provider based on environment configuration
  *
  * Checks environment variables to determine which provider to use:
- * - CLAUDE_CODE_USE_BEDROCK=1 -> AWS Bedrock
+ * - KLAWED_USE_BEDROCK=1 -> AWS Bedrock
  * - Otherwise -> OpenAI-compatible API
  *
  * @param model - Model name (e.g., "claude-sonnet-4-20250514")

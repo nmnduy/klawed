@@ -3,7 +3,7 @@
  */
 
 #include "commands.h"
-#include "claude_internal.h"
+#include "klawed_internal.h"
 #include "logger.h"
 #include "fallback_colors.h"
 #include "voice_input.h"

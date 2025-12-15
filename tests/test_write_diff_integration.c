@@ -13,12 +13,12 @@
 #include <cjson/cJSON.h>
 
 // Include internal header to get ConversationState definition
-#include "../src/claude_internal.h"
+#include "../src/klawed_internal.h"
 
 // Define TEST_BUILD to expose internal functions
 #define TEST_BUILD 1
 
-// External functions from claude.c (exposed via TEST_BUILD)
+// External functions from klawed.c (exposed via TEST_BUILD)
 extern int write_file(const char *path, const char *content);
 extern char* read_file(const char *path);
 extern int show_diff(const char *file_path, const char *original_content);

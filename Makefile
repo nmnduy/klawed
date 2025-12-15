@@ -112,7 +112,7 @@ else
 endif
 
 BUILD_DIR = build
-TARGET = $(BUILD_DIR)/claude-c
+TARGET = $(BUILD_DIR)/klawed
 TEST_EDIT_TARGET = $(BUILD_DIR)/test_edit
 TEST_READ_TARGET = $(BUILD_DIR)/test_read
 TEST_TODO_TARGET = $(BUILD_DIR)/test_todo
@@ -137,7 +137,7 @@ TEST_ARRAY_RESIZE_TARGET = $(BUILD_DIR)/test_array_resize
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 QUERY_TOOL = $(BUILD_DIR)/query_logs
-SRC = src/claude.c
+SRC = src/klawed.c
 ARRAY_RESIZE_SRC = src/array_resize.c
 ARRAY_RESIZE_OBJ = $(BUILD_DIR)/array_resize.o
 LOGGER_SRC = src/logger.c
@@ -242,9 +242,9 @@ TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
 
 build: check-deps $(TARGET)
 
-clang: check-deps $(BUILD_DIR)/claude-c-clang
+clang: check-deps $(BUILD_DIR)/klawed-clang
 
-debug: check-deps $(BUILD_DIR)/claude-c-debug
+debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
@@ -501,7 +501,7 @@ $(VERSION_H): $(VERSION_FILE)
 	@echo "✓ Version: $(VERSION)"
 
 # Debug build with AddressSanitizer for finding memory bugs
-$(BUILD_DIR)/claude-c-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) $(COMMANDS_SRC) $(COMPLETION_SRC) $(TUI_SRC) $(TODO_SRC) $(AWS_BEDROCK_SRC) $(PROVIDER_SRC) $(OPENAI_PROVIDER_SRC) $(OPENAI_MESSAGES_SRC) $(BEDROCK_PROVIDER_SRC) $(ANTHROPIC_PROVIDER_SRC) $(BUILTIN_THEMES_SRC) $(PATCH_PARSER_SRC) $(MESSAGE_QUEUE_SRC) $(AI_WORKER_SRC) $(VOICE_INPUT_SRC) $(MCP_SRC) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_SRC)
+$(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) $(COMMANDS_SRC) $(COMPLETION_SRC) $(TUI_SRC) $(TODO_SRC) $(AWS_BEDROCK_SRC) $(PROVIDER_SRC) $(OPENAI_PROVIDER_SRC) $(OPENAI_MESSAGES_SRC) $(BEDROCK_PROVIDER_SRC) $(ANTHROPIC_PROVIDER_SRC) $(BUILTIN_THEMES_SRC) $(PATCH_PARSER_SRC) $(MESSAGE_QUEUE_SRC) $(AI_WORKER_SRC) $(VOICE_INPUT_SRC) $(MCP_SRC) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building with AddressSanitizer (debug mode)..."
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/logger_debug.o $(LOGGER_SRC)
@@ -524,10 +524,10 @@ $(BUILD_DIR)/claude-c-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATION
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/voice_input_debug.o $(VOICE_INPUT_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/mcp_debug.o $(MCP_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/http_client_debug.o $(HTTP_CLIENT_SRC)
-	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/claude-c-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/patch_parser_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/http_client_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
+	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/patch_parser_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/http_client_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
 	@echo ""
 	@echo "✓ Debug build successful with AddressSanitizer!"
-	@echo "Run: ./$(BUILD_DIR)/claude-c-debug \"your prompt here\""
+	@echo "Run: ./$(BUILD_DIR)/klawed-debug \"your prompt here\""
 	@echo ""
 	@echo "AddressSanitizer will detect:"
 	@echo "  - Use-after-free"
@@ -537,14 +537,14 @@ $(BUILD_DIR)/claude-c-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATION
 	@echo ""
 
 # Build with clang compiler
-$(BUILD_DIR)/claude-c-clang: $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(AI_WORKER_OBJ) $(MESSAGE_QUEUE_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_OBJ) $(VERSION_H)
+$(BUILD_DIR)/klawed-clang: $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(AI_WORKER_OBJ) $(MESSAGE_QUEUE_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_OBJ) $(VERSION_H)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building with clang compiler..."
-	$(CLANG) $(CFLAGS) -o $(BUILD_DIR)/claude-c-clang $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_OBJ) $(LDFLAGS)
+	$(CLANG) $(CFLAGS) -o $(BUILD_DIR)/klawed-clang $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Clang build successful!"
 	@echo "Version: $(VERSION)"
-	@echo "Run: ./$(BUILD_DIR)/claude-c-clang \"your prompt here\""
+	@echo "Run: ./$(BUILD_DIR)/klawed-clang \"your prompt here\""
 	@echo ""
 
 # Static analysis with compiler's built-in analyzer
@@ -570,10 +570,10 @@ sanitize-ub: check-deps
 	$(CC) $(CFLAGS) -g -O0 -fsanitize=undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/logger_ub.o $(LOGGER_SRC)
 	$(CC) $(CFLAGS) -g -O0 -fsanitize=undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/migrations_ub.o $(MIGRATIONS_SRC)
 	$(CC) $(CFLAGS) -g -O0 -fsanitize=undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/persistence_ub.o $(PERSISTENCE_SRC)
-	$(CC) $(CFLAGS) -g -O0 -fsanitize=undefined -fno-omit-frame-pointer -o $(BUILD_DIR)/claude-c-ubsan $(SRC) $(BUILD_DIR)/logger_ub.o $(BUILD_DIR)/persistence_ub.o $(BUILD_DIR)/migrations_ub.o $(LDFLAGS) -fsanitize=undefined
+	$(CC) $(CFLAGS) -g -O0 -fsanitize=undefined -fno-omit-frame-pointer -o $(BUILD_DIR)/klawed-ubsan $(SRC) $(BUILD_DIR)/logger_ub.o $(BUILD_DIR)/persistence_ub.o $(BUILD_DIR)/migrations_ub.o $(LDFLAGS) -fsanitize=undefined
 	@echo ""
 	@echo "✓ Build successful with UBSan!"
-	@echo "Run: ./$(BUILD_DIR)/claude-c-ubsan \"your prompt here\""
+	@echo "Run: ./$(BUILD_DIR)/klawed-ubsan \"your prompt here\""
 	@echo ""
 
 # Build with combined Address + Undefined Behavior Sanitizers (recommended)
@@ -609,7 +609,7 @@ sanitize-all: check-deps
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/tool_utils_all.o $(TOOL_UTILS_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/history_file_all.o $(HISTORY_FILE_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/base64_all.o $(BASE64_SRC); \
-	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -o $(BUILD_DIR)/claude-c-allsan $(SRC) \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -o $(BUILD_DIR)/klawed-allsan $(SRC) \
 		$(BUILD_DIR)/logger_all.o $(BUILD_DIR)/persistence_all.o $(BUILD_DIR)/migrations_all.o $(BUILD_DIR)/commands_all.o \
 		$(BUILD_DIR)/completion_all.o $(BUILD_DIR)/tui_all.o $(BUILD_DIR)/todo_all.o $(BUILD_DIR)/aws_bedrock_all.o \
 		$(BUILD_DIR)/provider_all.o $(BUILD_DIR)/openai_provider_all.o $(BUILD_DIR)/openai_messages_all.o \
@@ -619,7 +619,7 @@ sanitize-all: check-deps
 		$(LDFLAGS) -fsanitize=address,undefined
 	@echo ""
 	@echo "✓ Build successful with combined sanitizers!"
-	@echo "Run: ./$(BUILD_DIR)/claude-c-allsan \"your prompt here\""
+	@echo "Run: ./$(BUILD_DIR)/klawed-allsan \"your prompt here\""
 	@echo ""
 	@echo "This build detects:"
 	@echo "  - Use-after-free, double-free, buffer overflows (AddressSanitizer)"
@@ -633,10 +633,10 @@ sanitize-leak: check-deps
 	$(CC) $(CFLAGS) -g -O0 -fsanitize=leak -fno-omit-frame-pointer -c -o $(BUILD_DIR)/logger_leak.o $(LOGGER_SRC)
 	$(CC) $(CFLAGS) -g -O0 -fsanitize=leak -fno-omit-frame-pointer -c -o $(BUILD_DIR)/migrations_leak.o $(MIGRATIONS_SRC)
 	$(CC) $(CFLAGS) -g -O0 -fsanitize=leak -fno-omit-frame-pointer -c -o $(BUILD_DIR)/persistence_leak.o $(PERSISTENCE_SRC)
-	$(CC) $(CFLAGS) -g -O0 -fsanitize=leak -fno-omit-frame-pointer -o $(BUILD_DIR)/claude-c-lsan $(SRC) $(BUILD_DIR)/logger_leak.o $(BUILD_DIR)/persistence_leak.o $(BUILD_DIR)/migrations_leak.o $(LDFLAGS) -fsanitize=leak
+	$(CC) $(CFLAGS) -g -O0 -fsanitize=leak -fno-omit-frame-pointer -o $(BUILD_DIR)/klawed-lsan $(SRC) $(BUILD_DIR)/logger_leak.o $(BUILD_DIR)/persistence_leak.o $(BUILD_DIR)/migrations_leak.o $(LDFLAGS) -fsanitize=leak
 	@echo ""
 	@echo "✓ Build successful with LeakSanitizer!"
-	@echo "Run: ./$(BUILD_DIR)/claude-c-lsan \"your prompt here\""
+	@echo "Run: ./$(BUILD_DIR)/klawed-lsan \"your prompt here\""
 	@echo ""
 
 # Run Valgrind memory checker on tests
@@ -667,11 +667,11 @@ memscan: analyze sanitize-all
 	@echo ""
 	@echo "Next steps:"
 	@echo "  1. Review static analysis results: cat $(BUILD_DIR)/analyze.log"
-	@echo "  2. Test with sanitizers: ./$(BUILD_DIR)/claude-c-allsan \"test prompt\""
+	@echo "  2. Test with sanitizers: ./$(BUILD_DIR)/klawed-allsan \"test prompt\""
 	@echo "  3. Run Valgrind: make valgrind"
 	@echo ""
 	@echo "For production testing, run all test suites with sanitizers:"
-	@echo "  ./$(BUILD_DIR)/claude-c-allsan --help"
+	@echo "  ./$(BUILD_DIR)/klawed-allsan --help"
 	@echo ""
 
 # Comprehensive bug finding - runs ALL available analysis tools
@@ -694,7 +694,7 @@ comprehensive-scan: analyze sanitize-all valgrind
 	@echo ""
 	@echo "Next steps:"
 	@echo "  1. Review static analysis: cat $(BUILD_DIR)/analyze.log"
-	@echo "  2. Test with sanitizers: ./$(BUILD_DIR)/claude-c-allsan \"test prompt\""
+	@echo "  2. Test with sanitizers: ./$(BUILD_DIR)/klawed-allsan \"test prompt\""
 	@echo "  3. Run individual sanitizer builds: make sanitize-ub sanitize-leak"
 	@echo ""
 
@@ -745,7 +745,7 @@ $(COMPLETION_OBJ): $(COMPLETION_SRC) src/completion.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(COMPLETION_OBJ) $(COMPLETION_SRC)
 
-$(TUI_OBJ): $(TUI_SRC) src/tui.h src/claude_internal.h
+$(TUI_OBJ): $(TUI_SRC) src/tui.h src/klawed_internal.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(TUI_OBJ) $(TUI_SRC)
 
@@ -758,7 +758,7 @@ $(HISTORY_FILE_OBJ): $(HISTORY_FILE_SRC) src/history_file.h
 $(WINDOW_MANAGER_OBJ): $(WINDOW_MANAGER_SRC) src/window_manager.h src/logger.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(WINDOW_MANAGER_OBJ) $(WINDOW_MANAGER_SRC)
-$(AI_WORKER_OBJ): $(AI_WORKER_SRC) src/ai_worker.h src/message_queue.h src/claude_internal.h
+$(AI_WORKER_OBJ): $(AI_WORKER_SRC) src/ai_worker.h src/message_queue.h src/klawed_internal.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(AI_WORKER_OBJ) $(AI_WORKER_SRC)
 
@@ -794,7 +794,7 @@ $(ANTHROPIC_PROVIDER_OBJ): $(ANTHROPIC_PROVIDER_SRC) src/anthropic_provider.h sr
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(OPENAI_PROVIDER_OBJ) $(OPENAI_PROVIDER_SRC)
 
-$(OPENAI_MESSAGES_OBJ): $(OPENAI_MESSAGES_SRC) src/openai_messages.h src/claude_internal.h
+$(OPENAI_MESSAGES_OBJ): $(OPENAI_MESSAGES_SRC) src/openai_messages.h src/klawed_internal.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(OPENAI_MESSAGES_OBJ) $(OPENAI_MESSAGES_SRC)
 
@@ -806,7 +806,7 @@ $(BUILTIN_THEMES_OBJ): $(BUILTIN_THEMES_SRC) src/builtin_themes.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILTIN_THEMES_OBJ) $(BUILTIN_THEMES_SRC)
 
-$(PATCH_PARSER_OBJ): $(PATCH_PARSER_SRC) src/patch_parser.h src/claude_internal.h
+$(PATCH_PARSER_OBJ): $(PATCH_PARSER_SRC) src/patch_parser.h src/klawed_internal.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(PATCH_PARSER_OBJ) $(PATCH_PARSER_SRC)
 
@@ -1159,16 +1159,16 @@ $(TEST_MCP_IMAGE_TARGET): $(TEST_MCP_IMAGE_SRC) $(BASE64_OBJ)
 	@echo ""
 
 install: $(TARGET)
-	@echo "Installing claude-c to $(INSTALL_PREFIX)/bin..."
+	@echo "Installing klawed to $(INSTALL_PREFIX)/bin..."
 	@mkdir -p $(INSTALL_PREFIX)/bin
-	@cp $(TARGET) $(INSTALL_PREFIX)/bin/claude-c
+	@cp $(TARGET) $(INSTALL_PREFIX)/bin/klawed
 ifeq ($(UNAME_S),Darwin)
 ifndef GITHUB_ACTIONS
 	@echo "Signing binary for macOS..."
-	@codesign --force --deep --sign - $(INSTALL_PREFIX)/bin/claude-c 2>/dev/null || echo "Warning: Code signing failed (non-fatal)"
+	@codesign --force --deep --sign - $(INSTALL_PREFIX)/bin/klawed 2>/dev/null || echo "Warning: Code signing failed (non-fatal)"
 endif
 endif
-	@echo "✓ Installation complete! Run 'claude-c' from anywhere."
+	@echo "✓ Installation complete! Run 'klawed' from anywhere."
 	@echo ""
 	@echo "Note: Make sure $(INSTALL_PREFIX)/bin is in your PATH:"
 	@echo "  export PATH=\"$(INSTALL_PREFIX)/bin:$$PATH\""
@@ -1201,7 +1201,7 @@ help:
 	@echo "Claude Code - Pure C Edition - Build System"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make           - Build the claude-c executable"
+	@echo "  make           - Build the klawed executable"
 	@echo "  make clang     - Build with clang compiler"
 	@echo "  make debug     - Build with AddressSanitizer (memory bug detection)"
 	@echo "  make test      - Build and run all unit tests"
@@ -1215,7 +1215,7 @@ help:
 	@echo "  make test-token-usage - Build and run Token Usage tests only"
 	@echo "  make query-tool - Build the API call log query utility"
 	@echo "  make clean     - Remove built files"
-	@echo "  make install   - Install to \$$HOME/.local/bin as claude-c (default)"
+	@echo "  make install   - Install to \$$HOME/.local/bin as klawed (default)"
 	@echo "  make install INSTALL_PREFIX=/usr/local - Install to /usr/local/bin (requires sudo)"
 	@echo "  make install INSTALL_PREFIX=/opt - Install to /opt/bin (requires sudo)"
 	@echo "  make check-deps - Check if all dependencies are installed"

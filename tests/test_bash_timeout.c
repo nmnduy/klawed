@@ -22,7 +22,7 @@
 #include <cjson/cJSON.h>
 
 // Include internal header to get ConversationState definition
-#include "../src/claude_internal.h"
+#include "../src/klawed_internal.h"
 
 // Test framework colors
 #define COLOR_RESET "\033[0m"
@@ -36,18 +36,18 @@ static int tests_run = 0;
 static int tests_passed = 0;
 static int tests_failed = 0;
 
-// Forward declarations from claude.c
+// Forward declarations from klawed.c
 extern cJSON* tool_bash(cJSON *params, ConversationState *state);
 
 // Test utilities
 static void setup_environment(void) {
     // Clear any existing timeout environment variable
-    unsetenv("CLAUDE_C_BASH_TIMEOUT");
+    unsetenv("KLAWED_BASH_TIMEOUT");
 }
 
 static void cleanup_environment(void) {
     // Clean up environment after tests
-    unsetenv("CLAUDE_C_BASH_TIMEOUT");
+    unsetenv("KLAWED_BASH_TIMEOUT");
 }
 
 // Test assertion macros
@@ -172,7 +172,7 @@ static void test_environment_timeout(void) {
     setup_environment();
 
     // Set environment variable
-    setenv("CLAUDE_C_BASH_TIMEOUT", "1", 1);
+    setenv("KLAWED_BASH_TIMEOUT", "1", 1);
 
     // Create params without timeout parameter
     cJSON *params = cJSON_CreateObject();
@@ -201,7 +201,7 @@ static void test_parameter_overrides_environment(void) {
     setup_environment();
 
     // Set environment variable to a short timeout
-    setenv("CLAUDE_C_BASH_TIMEOUT", "1", 1);
+    setenv("KLAWED_BASH_TIMEOUT", "1", 1);
 
     // Create params with longer timeout parameter
     cJSON *params = cJSON_CreateObject();
@@ -287,8 +287,8 @@ static void test_tool_definition_includes_timeout(void) {
     // For now, we'll verify the timeout parameter is documented in the description
     // by checking the actual implementation
 
-    // Read the tool definition section from claude.c
-    FILE *file = fopen("src/claude.c", "r");
+    // Read the tool definition section from klawed.c
+    FILE *file = fopen("src/klawed.c", "r");
     ASSERT(file != NULL, "Should be able to open claude.c");
 
     char line[1024];

@@ -64,9 +64,9 @@ The TODO list rendering automatically adapts to the active theme:
 
 Set theme via:
 ```bash
-export CLAUDE_C_THEME="dracula"
+export KLAWED_THEME="dracula"
 # or
-export CLAUDE_C_THEME="/path/to/theme.conf"
+export KLAWED_THEME="/path/to/theme.conf"
 ```
 
 ## Testing

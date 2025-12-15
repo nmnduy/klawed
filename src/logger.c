@@ -70,15 +70,15 @@ static int mkdir_p(const char *path) {
 /**
  * Get default log file path
  * Priority:
- *   1. $CLAUDE_C_LOG_PATH (environment variable)
- *   2. $CLAUDE_C_LOG_DIR/claude.log (if CLAUDE_C_LOG_DIR is set)
- *   3. ./.claude-c/logs/claude.log (project-local)
- *   4. ~/.local/share/claude-c/logs/claude.log
- *   5. /tmp/claude-c.log (fallback)
+ *   1. $KLAWED_LOG_PATH (environment variable)
+ *   2. $KLAWED_LOG_DIR/klawed.log (if KLAWED_LOG_DIR is set)
+ *   3. ./.klawed/logs/klawed.log (project-local)
+ *   4. ~/.local/share/klawed/logs/klawed.log
+ *   5. /tmp/klawed.log (fallback)
  */
 static int get_default_log_path(char *buffer, size_t buffer_size) {
     // Check for explicit log file path first
-    const char *log_path_env = getenv("CLAUDE_C_LOG_PATH");
+    const char *log_path_env = getenv("KLAWED_LOG_PATH");
     if (log_path_env && log_path_env[0] != '\0') {
         snprintf(buffer, buffer_size, "%s", log_path_env);
 
@@ -97,35 +97,35 @@ static int get_default_log_path(char *buffer, size_t buffer_size) {
     }
 
     // Check for log directory override
-    const char *log_dir_env = getenv("CLAUDE_C_LOG_DIR");
+    const char *log_dir_env = getenv("KLAWED_LOG_DIR");
     if (log_dir_env && log_dir_env[0] != '\0') {
         if (mkdir_p(log_dir_env) == 0) {
-            snprintf(buffer, buffer_size, "%s/claude.log", log_dir_env);
+            snprintf(buffer, buffer_size, "%s/klawed.log", log_dir_env);
             return 0;
         } else {
             fprintf(stderr, "Warning: Failed to create log directory: %s\n", log_dir_env);
         }
     }
 
-    // Try project-local .claude-c directory first
-    if (mkdir_p("./.claude-c/logs") == 0) {
-        snprintf(buffer, buffer_size, "./.claude-c/logs/claude.log");
+    // Try project-local .klawed directory first
+    if (mkdir_p("./.klawed/logs") == 0) {
+        snprintf(buffer, buffer_size, "./.klawed/logs/klawed.log");
         return 0;
     }
 
     const char *home = getenv("HOME");
     if (home) {
-        // Try ~/.local/share/claude-c/logs/
-        snprintf(buffer, buffer_size, "%s/.local/share/claude-c/logs", home);
+        // Try ~/.local/share/klawed/logs/
+        snprintf(buffer, buffer_size, "%s/.local/share/klawed/logs", home);
 
         if (mkdir_p(buffer) == 0) {
-            snprintf(buffer, buffer_size, "%s/.local/share/claude-c/logs/claude.log", home);
+            snprintf(buffer, buffer_size, "%s/.local/share/klawed/logs/klawed.log", home);
             return 0;
         }
     }
 
     // Fallback to /tmp
-    snprintf(buffer, buffer_size, "/tmp/claude-c.log");
+    snprintf(buffer, buffer_size, "/tmp/klawed.log");
     return 0;
 }
 

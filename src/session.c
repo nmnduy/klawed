@@ -424,8 +424,8 @@ int session_list_sessions(PersistenceDB *db, int limit) {
     printf("-----------------------------------------------------------------\n");
     printf("Total: %d session(s)\n", count);
     printf("\n");
-    printf("To resume a session, use: claude-c --resume <session_id>\n");
-    printf("To dump a session, use: claude-c --dump-conversation <session_id>\n");
+    printf("To resume a session, use: klawed --resume <session_id>\n");
+    printf("To dump a session, use: klawed --dump-conversation <session_id>\n");
     printf("=================================================================\n\n");
 
     session_free_list(sessions);

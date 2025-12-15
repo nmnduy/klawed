@@ -12,7 +12,7 @@
 // Define TEST_BUILD to expose internal functions
 #define TEST_BUILD 1
 #define main unused_main
-#include "../src/claude.c"
+#include "../src/klawed.c"
 #undef main
 
 // Test helpers

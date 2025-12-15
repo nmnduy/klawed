@@ -7,7 +7,7 @@
 #include <string.h>
 #include <assert.h>
 #include "../src/todo.h"
-#include "../src/claude_internal.h"
+#include "../src/klawed_internal.h"
 #include <cjson/cJSON.h>
 
 // External tool function

@@ -8,7 +8,7 @@
 #ifndef SESSION_H
 #define SESSION_H
 
-#include "claude_internal.h"
+#include "klawed_internal.h"
 #include "persistence.h"
 
 /**

@@ -55,7 +55,7 @@ int main(void) {
         return 1;
     }
 
-    // Test 3: Load theme without CLAUDE_C_THEME env var
+    // Test 3: Load theme without KLAWED_THEME env var
     printf("\nTest 3: Loading with NULL filepath\n");
     g_theme_loaded = 0;  // Reset
     result = init_colorscheme(NULL);

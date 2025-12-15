@@ -433,7 +433,7 @@ static void test_real_world_pattern_array(void) {
 static void test_real_world_pattern_buffer(void) {
     printf("Testing real-world pattern: accumulating output...\n");
 
-    // Simulate bash output accumulation pattern from claude.c
+    // Simulate bash output accumulation pattern from klawed.c
     char *output = NULL;
     size_t capacity = 0;
     size_t total_size = 0;

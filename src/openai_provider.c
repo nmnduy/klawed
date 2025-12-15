@@ -4,7 +4,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include "claude_internal.h"  // Must be first to get ApiResponse definition
+#include "klawed_internal.h"  // Must be first to get ApiResponse definition
 #include "openai_provider.h"
 #include "logger.h"
 #include "http_client.h"
@@ -274,7 +274,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
 
     // Check if streaming is enabled via environment variable
     int enable_streaming = 0;
-    const char *streaming_env = getenv("CLAUDE_C_ENABLE_STREAMING");
+    const char *streaming_env = getenv("KLAWED_ENABLE_STREAMING");
     if (streaming_env && (strcmp(streaming_env, "1") == 0 || strcasecmp(streaming_env, "true") == 0)) {
         enable_streaming = 1;
     }

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Subagent tool allows claude-c to spawn a new instance of itself with a fresh context to work on delegated tasks. This is useful for:
+The Subagent tool allows klawed to spawn a new instance of itself with a fresh context to work on delegated tasks. This is useful for:
 
 1. **Context management** - Start with a clean slate without conversation history
 2. **Task delegation** - Offload complex independent tasks to a separate agent
@@ -52,8 +52,8 @@ The Subagent tool allows claude-c to spawn a new instance of itself with a fresh
 
 ## How It Works
 
-1. **Execution**: Spawns a new claude-c process with the given prompt (non-blocking)
-2. **Logging**: All stdout and stderr output is written to a timestamped log file in `.claude-c/subagent/`
+1. **Execution**: Spawns a new klawed process with the given prompt (non-blocking)
+2. **Logging**: All stdout and stderr output is written to a timestamped log file in `.klawed/subagent/`
 3. **Return value**: Returns immediately with PID and log file path
 4. **Monitoring**: Use `CheckSubagentProgress` to monitor progress by reading the log
 5. **Interruption**: Use `InterruptSubagent` to stop a stuck subagent
@@ -64,7 +64,7 @@ The Subagent tool allows claude-c to spawn a new instance of itself with a fresh
 ```json
 {
   "pid": 12345,
-  "log_file": "/path/to/.claude-c/subagent/subagent_20231208_123456_1234.log",
+  "log_file": "/path/to/.klawed/subagent/subagent_20231208_123456_1234.log",
   "timeout_seconds": 300,
   "message": "Subagent started with PID 12345. Log file: /path/to/log... Use 'CheckSubagentProgress' tool to monitor progress or 'InterruptSubagent' to stop it."
 }
@@ -75,7 +75,7 @@ The Subagent tool allows claude-c to spawn a new instance of itself with a fresh
 {
   "pid": 12345,
   "is_running": true,
-  "log_file": "/path/to/.claude-c/subagent/subagent_20231208_123456_1234.log",
+  "log_file": "/path/to/.klawed/subagent/subagent_20231208_123456_1234.log",
   "total_lines": 150,
   "tail_lines_returned": 50,
   "tail_output": "Last 50 lines of subagent output...",
@@ -182,21 +182,21 @@ Master: Receives tail showing "Report created with 42 files analyzed"
 
 ## Log File Management
 
-**Location**: `.claude-c/subagent/subagent_YYYYMMDD_HHMMSS_PID.log`
+**Location**: `.klawed/subagent/subagent_YYYYMMDD_HHMMSS_PID.log`
 
 **Format**: Timestamped filename with process ID for uniqueness
 
 **Retention**: Log files accumulate over time. Consider periodic cleanup:
 ```bash
 # Remove logs older than 7 days
-find .claude-c/subagent/ -name "*.log" -mtime +7 -delete
+find .klawed/subagent/ -name "*.log" -mtime +7 -delete
 ```
 
 ## Limitations
 
 1. **No streaming output** - The master agent must poll for progress
 2. **No context sharing** - Subagent starts with clean context (this is by design)
-3. **Resource usage** - Each subagent is a full claude-c instance with API calls
+3. **Resource usage** - Each subagent is a full klawed instance with API calls
 4. **Zombie processes** - If orchestrator crashes, subagent processes may become zombies (use `InterruptSubagent` or system tools to clean up)
 
 ## Implementation Details

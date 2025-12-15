@@ -21,7 +21,7 @@
 #include <cjson/cJSON.h>
 
 // Include internal header to get ConversationState definition
-#include "../src/claude_internal.h"
+#include "../src/klawed_internal.h"
 
 // Test framework colors
 #define COLOR_RESET "\033[0m"
@@ -35,20 +35,20 @@ static int tests_run = 0;
 static int tests_passed = 0;
 static int tests_failed = 0;
 
-// Forward declarations from claude.c
+// Forward declarations from klawed.c
 extern cJSON* tool_bash(cJSON *params, ConversationState *state);
 
 // Test utilities
 static void setup_environment(void) {
     // Clear any existing environment variables that might affect tests
-    unsetenv("CLAUDE_C_BASH_TIMEOUT");
-    unsetenv("CLAUDE_C_BASH_FILTER_ANSI");
+    unsetenv("KLAWED_BASH_TIMEOUT");
+    unsetenv("KLAWED_BASH_FILTER_ANSI");
 }
 
 static void cleanup_environment(void) {
     // Clean up environment after tests
-    unsetenv("CLAUDE_C_BASH_TIMEOUT");
-    unsetenv("CLAUDE_C_BASH_FILTER_ANSI");
+    unsetenv("KLAWED_BASH_TIMEOUT");
+    unsetenv("KLAWED_BASH_FILTER_ANSI");
 }
 
 // Test assertion macros
@@ -297,7 +297,7 @@ static void test_tool_definition_stderr_mention(void) {
     printf(COLOR_CYAN "\nTest: Tool definition mentions stderr redirection\n" COLOR_RESET);
 
     // Verify that the tool description mentions stderr redirection
-    FILE *file = fopen("src/claude.c", "r");
+    FILE *file = fopen("src/klawed.c", "r");
     ASSERT(file != NULL, "Should be able to open claude.c");
 
     char line[1024];

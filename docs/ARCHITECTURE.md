@@ -38,7 +38,7 @@
 
 ```
 src/
-├── claude.c         # Main entry point and conversation loop
+├── klawed.c         # Main entry point and conversation loop
 ├── commands.c       # Command-line argument parsing
 ├── completion.c     # Auto-completion system
 ├── lineedit.c       # Line editing and input handling

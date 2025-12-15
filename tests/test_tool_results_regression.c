@@ -13,7 +13,7 @@
 #include <cjson/cJSON.h>
 
 // Include internal headers for testing
-#include "../src/claude_internal.h"
+#include "../src/klawed_internal.h"
 #include "../src/todo.h"
 
 // Test helper: Create sample tool results

@@ -401,27 +401,27 @@ static const char *INDEX_SQL =
     "CREATE INDEX IF NOT EXISTS idx_token_usage_session_id ON token_usage(session_id);";
 
 // Get default database path
-// Priority: $CLAUDE_C_DB_PATH > ./.claude-c/api_calls.db > $XDG_DATA_HOME/claude-c/api_calls.db > ~/.local/share/claude-c/api_calls.db
+// Priority: $KLAWED_DB_PATH > ./.klawed/api_calls.db > $XDG_DATA_HOME/klawed/api_calls.db > ~/.local/share/klawed/api_calls.db
 char* persistence_get_default_path(void) {
     char *path = NULL;
 
     // Check environment variable first
-    const char *env_path = getenv("CLAUDE_C_DB_PATH");
+    const char *env_path = getenv("KLAWED_DB_PATH");
     if (env_path && env_path[0] != '\0') {
         path = strdup(env_path);
         return path;
     }
 
-    // Try project-local .claude-c directory first
+    // Try project-local .klawed directory first
     struct stat st;
-    if (stat("./.claude-c", &st) == 0 && S_ISDIR(st.st_mode)) {
-        // .claude-c exists, use it
-        return strdup("./.claude-c/api_calls.db");
+    if (stat("./.klawed", &st) == 0 && S_ISDIR(st.st_mode)) {
+        // .klawed exists, use it
+        return strdup("./.klawed/api_calls.db");
     }
 
-    // Try to create .claude-c directory
-    if (mkdir("./.claude-c", 0755) == 0 || errno == EEXIST) {
-        return strdup("./.claude-c/api_calls.db");
+    // Try to create .klawed directory
+    if (mkdir("./.klawed", 0755) == 0 || errno == EEXIST) {
+        return strdup("./.klawed/api_calls.db");
     }
 
     // Try XDG_DATA_HOME
@@ -429,7 +429,7 @@ char* persistence_get_default_path(void) {
     if (xdg_data && xdg_data[0] != '\0') {
         path = malloc(PATH_MAX);
         if (path) {
-            snprintf(path, PATH_MAX, "%s/claude-c/api_calls.db", xdg_data);
+            snprintf(path, PATH_MAX, "%s/klawed/api_calls.db", xdg_data);
             return path;
         }
     }
@@ -439,7 +439,7 @@ char* persistence_get_default_path(void) {
     if (home && home[0] != '\0') {
         path = malloc(PATH_MAX);
         if (path) {
-            snprintf(path, PATH_MAX, "%s/.local/share/claude-c/api_calls.db", home);
+            snprintf(path, PATH_MAX, "%s/.local/share/klawed/api_calls.db", home);
             return path;
         }
     }
@@ -956,9 +956,9 @@ int persistence_auto_rotate(PersistenceDB *db) {
     }
 
     // Check if auto-rotation is enabled (default: yes)
-    const char *auto_rotate_env = getenv("CLAUDE_C_DB_AUTO_ROTATE");
+    const char *auto_rotate_env = getenv("KLAWED_DB_AUTO_ROTATE");
     if (auto_rotate_env && strcmp(auto_rotate_env, "0") == 0) {
-        LOG_DEBUG("Auto-rotation disabled by CLAUDE_C_DB_AUTO_ROTATE=0");
+        LOG_DEBUG("Auto-rotation disabled by KLAWED_DB_AUTO_ROTATE=0");
         return 0;
     }
 
@@ -966,7 +966,7 @@ int persistence_auto_rotate(PersistenceDB *db) {
     int need_vacuum = 0;
 
     // Rotate by age (default: 30 days, 0 = unlimited)
-    int max_days = get_env_int("CLAUDE_C_DB_MAX_DAYS", 30);
+    int max_days = get_env_int("KLAWED_DB_MAX_DAYS", 30);
     if (max_days > 0) {
         int deleted = persistence_rotate_by_age(db, max_days);
         if (deleted > 0) {
@@ -978,7 +978,7 @@ int persistence_auto_rotate(PersistenceDB *db) {
     }
 
     // Rotate by count (default: 1000 records, 0 = unlimited)
-    int max_records = get_env_int("CLAUDE_C_DB_MAX_RECORDS", 1000);
+    int max_records = get_env_int("KLAWED_DB_MAX_RECORDS", 1000);
     if (max_records > 0) {
         int deleted = persistence_rotate_by_count(db, max_records);
         if (deleted > 0) {
@@ -990,7 +990,7 @@ int persistence_auto_rotate(PersistenceDB *db) {
     }
 
     // Check size limit (default: 100 MB, 0 = unlimited)
-    int max_size_mb = get_env_int("CLAUDE_C_DB_MAX_SIZE_MB", 100);
+    int max_size_mb = get_env_int("KLAWED_DB_MAX_SIZE_MB", 100);
     if (max_size_mb > 0) {
         long size_bytes = persistence_get_db_size(db);
         long max_size_bytes = max_size_mb * 1024L * 1024L;

@@ -17,14 +17,14 @@ Six themes are embedded in the binary (no external files needed):
 
 **Using a built-in theme:**
 ```bash
-export CLAUDE_C_THEME="dracula"
-./claude-c "your prompt"
+export KLAWED_THEME="dracula"
+./klawed "your prompt"
 ```
 
 **Using an external theme file:**
 ```bash
-export CLAUDE_C_THEME="/path/to/your/theme.conf"
-./claude-c "your prompt"
+export KLAWED_THEME="/path/to/your/theme.conf"
+./klawed "your prompt"
 ```
 
 **No theme specified:** Defaults to `tender` built-in theme
@@ -34,7 +34,7 @@ export CLAUDE_C_THEME="/path/to/your/theme.conf"
 Kitty's dead-simple key-value format - no parser library needed!
 
 ```conf
-# Claude TUI Theme
+# Klawed TUI Theme
 background #282a36
 foreground #f8f8f2
 cursor #bbbbbb
@@ -73,8 +73,8 @@ curl -o ~/nord.conf \
   https://raw.githubusercontent.com/dexpota/kitty-themes/master/themes/Nord.conf
 
 # Use it
-export CLAUDE_C_THEME=~/nord.conf
-./claude-c "your prompt"
+export KLAWED_THEME=~/nord.conf
+./klawed "your prompt"
 ```
 
 ## Adding New Built-in Themes

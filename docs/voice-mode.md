@@ -49,7 +49,7 @@ make clean
 make VOICE=1
 
 # Run
-./build/claude-c
+./build/klawed
 ```
 
 ### 4. Use Voice Mode
@@ -131,7 +131,7 @@ export WHISPER_MODEL_PATH=/path/to/ggml-small.en.bin
 2. `./whisper_models/ggml-small.en.bin`
 3. `./whisper_models/ggml-base.en.bin`
 4. `./whisper_models/ggml-tiny.en.bin`
-5. `~/.local/share/claude-c/models/ggml-small.en.bin`
+5. `~/.local/share/klawed/models/ggml-small.en.bin`
 6. `/usr/local/share/whisper/ggml-small.en.bin`
 
 ### VOICE_DEVICE

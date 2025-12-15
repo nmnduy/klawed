@@ -11,7 +11,7 @@
 #define TUI_H
 
 #include <stdint.h>
-#include "claude_internal.h"
+#include "klawed_internal.h"
 #include "todo.h"
 #include "window_manager.h"
 #include "history_file.h"

@@ -51,11 +51,11 @@ make update-version VERSION=1.0.0-beta.1
 #include "version.h"
 
 // Use version constants
-printf("Claude C version %s\n", CLAUDE_C_VERSION);
-printf("Full version: %s\n", CLAUDE_C_VERSION_FULL);
+printf("Claude C version %s\n", KLAWED_VERSION);
+printf("Full version: %s\n", KLAWED_VERSION_FULL);
 
 // Programmatic version checks
-#if CLAUDE_C_VERSION_NUMBER >= 0x010000
+#if KLAWED_VERSION_NUMBER >= 0x010000
 // Use version 1.0.0+ features
 #endif
 ```
@@ -65,7 +65,7 @@ printf("Full version: %s\n", CLAUDE_C_VERSION_FULL);
 The main executable supports `--version` flag:
 
 ```bash
-./build/claude-c --version
+./build/klawed --version
 # Output: Claude C version 0.0.2 (built 2025-10-28)
 ```
 
@@ -156,9 +156,9 @@ The GitHub Actions workflow will:
    - Windows x86_64 (MSVC build with vcpkg)
 
 3. **Create release archives:**
-   - `claude-c-linux-x86_64.tar.gz`
-   - `claude-c-macos-x86_64.tar.gz`
-   - `claude-c-windows-x86_64.zip`
+   - `klawed-linux-x86_64.tar.gz`
+   - `klawed-macos-x86_64.tar.gz`
+   - `klawed-windows-x86_64.zip`
 
 4. **Generate GitHub Release:**
    - Automatic release notes from recent commits
@@ -175,7 +175,7 @@ The GitHub Actions workflow will:
 All release binaries include version information:
 
 ```bash
-./claude-c --version
+./klawed --version
 # Claude C version 1.0.0 (built 2025-10-28)
 ```
 
@@ -199,9 +199,9 @@ Docker images are tagged with version:
 
 ```bash
 # Tags automatically created
-ghcr.io/username/claude-c:1.0.0
-ghcr.io/username/claude-c:v1.0.0
-ghcr.io/username/claude-c:latest
+ghcr.io/username/klawed:1.0.0
+ghcr.io/username/klawed:v1.0.0
+ghcr.io/username/klawed:latest
 ```
 
 ## Multiple Codebases
@@ -235,16 +235,16 @@ Available from GitHub Container Registry:
 
 ```bash
 # Pull the latest version
-docker pull ghcr.io/yourusername/claude-c:latest
+docker pull ghcr.io/yourusername/klawed:latest
 
 # Pull a specific version
-docker pull ghcr.io/yourusername/claude-c:v1.0.0
+docker pull ghcr.io/yourusername/klawed:v1.0.0
 
 # Run the container
 docker run --rm -it \
   -e OPENAI_API_KEY="$OPENAI_API_KEY" \
   -v $(pwd):/workspace \
-  ghcr.io/yourusername/claude-c:latest "your prompt here"
+  ghcr.io/yourusername/klawed:latest "your prompt here"
 ```
 
 ## Installation Instructions
@@ -254,17 +254,17 @@ docker run --rm -it \
 #### Linux
 ```bash
 # Download and extract
-wget https://github.com/yourusername/claude-c/releases/download/v1.0.0/claude-c-linux-x86_64.tar.gz
-tar -xzf claude-c-linux-x86_64.tar.gz
-cd claude-c-linux-x86_64
+wget https://github.com/yourusername/klawed/releases/download/v1.0.0/klawed-linux-x86_64.tar.gz
+tar -xzf klawed-linux-x86_64.tar.gz
+cd klawed-linux-x86_64
 
 # Install binary
-sudo cp claude-c /usr/local/bin/
-chmod +x /usr/local/bin/claude-c
+sudo cp klawed /usr/local/bin/
+chmod +x /usr/local/bin/klawed
 
 # Or install to user directory
 mkdir -p ~/.local/bin
-cp claude-c ~/.local/bin/
+cp klawed ~/.local/bin/
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ```
 
@@ -274,22 +274,22 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 brew install curl cjson sqlite3
 
 # Download and extract
-curl -L -o claude-c-macos-x86_64.tar.gz \
-  https://github.com/yourusername/claude-c/releases/download/v1.0.0/claude-c-macos-x86_64.tar.gz
-tar -xzf claude-c-macos-x86_64.tar.gz
-cd claude-c-macos-x86_64
+curl -L -o klawed-macos-x86_64.tar.gz \
+  https://github.com/yourusername/klawed/releases/download/v1.0.0/klawed-macos-x86_64.tar.gz
+tar -xzf klawed-macos-x86_64.tar.gz
+cd klawed-macos-x86_64
 
 # Install
-sudo cp claude-c /usr/local/bin/
-chmod +x /usr/local/bin/claude-c
+sudo cp klawed /usr/local/bin/
+chmod +x /usr/local/bin/klawed
 ```
 
 #### Windows
 ```powershell
 # Download and extract
-Invoke-WebRequest -Uri "https://github.com/yourusername/claude-c/releases/download/v1.0.0/claude-c-windows-x86_64.zip" -OutFile "claude-c.zip"
-Expand-Archive -Path claude-c.zip -DestinationPath .
-cd claude-c-windows-x86_64
+Invoke-WebRequest -Uri "https://github.com/yourusername/klawed/releases/download/v1.0.0/klawed-windows-x86_64.zip" -OutFile "klawed.zip"
+Expand-Archive -Path klawed.zip -DestinationPath .
+cd klawed-windows-x86_64
 
 # Add to PATH or copy to desired location
 ```
@@ -300,7 +300,7 @@ cd claude-c-windows-x86_64
 docker run --rm -it \
   -e OPENAI_API_KEY="$OPENAI_API_KEY" \
   -v $(pwd):/workspace \
-  ghcr.io/yourusername/claude-c:latest
+  ghcr.io/yourusername/klawed:latest
 ```
 
 ### Package Manager Installation (Future)
@@ -353,7 +353,7 @@ If you see version mismatches:
 
 3. **Verify binary version**:
    ```bash
-   ./build/claude-c --version
+   ./build/klawed --version
    ```
 
 ### Build Issues
@@ -535,10 +535,10 @@ cmake --build . --config Release
 ### 2. Create Archives
 ```bash
 # Linux
-mkdir claude-c-linux-x86_64
-cp build/claude-c claude-c-linux-x86_64/
-cp README.md LICENSE claude-c-linux-x86_64/
-tar -czf claude-c-linux-x86_64.tar.gz claude-c-linux-x86_64/
+mkdir klawed-linux-x86_64
+cp build/klawed klawed-linux-x86_64/
+cp README.md LICENSE klawed-linux-x86_64/
+tar -czf klawed-linux-x86_64.tar.gz klawed-linux-x86_64/
 
 # Similar for other platforms
 ```

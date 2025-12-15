@@ -1,7 +1,7 @@
 /*
  * mcp.h - Model Context Protocol (MCP) client implementation
  *
- * This module provides MCP server support for claude-c, allowing it to
+ * This module provides MCP server support for klawed, allowing it to
  * connect to and use external MCP servers for additional tools and resources.
  *
  * MCP Specification: https://spec.modelcontextprotocol.io/
@@ -9,10 +9,10 @@
  * Features:
  * - Multiple MCP server connections via stdio/SSE transports
  * - Dynamic tool discovery from connected servers
- * - Seamless integration with existing claude-c tool system
+ * - Seamless integration with existing klawed tool system
  * - Configuration via JSON config file
  *
- * Configuration example (~/.config/claude-c/mcp_servers.json):
+ * Configuration example (~/.config/klawed/mcp_servers.json):
  * {
  *   "mcpServers": {
  *     "filesystem": {
@@ -138,8 +138,8 @@ void mcp_cleanup(void);
  * Load MCP server configuration from JSON file
  * Config file format follows Claude Desktop's mcp_servers.json format
  *
- * Default location: ~/.config/claude-c/mcp_servers.json
- * Can be overridden with CLAUDE_MCP_CONFIG env var
+ * Default location: ~/.config/klawed/mcp_servers.json
+ * Can be overridden with KLAWED_MCP_CONFIG env var
  *
  * Returns: MCPConfig* on success, NULL on error
  */

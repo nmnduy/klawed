@@ -25,7 +25,7 @@
 #define COLOR_YELLOW "\033[33m"
 #define COLOR_CYAN "\033[36m"
 
-// Constants from claude_internal.h
+// Constants from klawed_internal.h
 #define INITIAL_BACKOFF_MS 1000
 #define MAX_BACKOFF_MS 10000
 #define BACKOFF_MULTIPLIER 2.0
@@ -53,7 +53,7 @@ static void assert_in_range(const char *test_name, int value, int min, int max, 
     assert_true(test_name, value >= min && value <= max, msg);
 }
 
-// Simulate the jitter calculation from claude.c
+// Simulate the jitter calculation from klawed.c
 static int calculate_jitter_delay(int backoff_ms) {
     double jitter = 1.0 - ((double)rand() / RAND_MAX) * 0.25;
     return (int)(backoff_ms * jitter);

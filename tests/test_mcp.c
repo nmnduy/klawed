@@ -209,7 +209,7 @@ static void test_mcp_enabled_state(void) {
     printf("Test 7: MCP enabled state... ");
 
     // Ensure clean env
-    unsetenv("CLAUDE_MCP_ENABLED");
+    unsetenv("KLAWED_MCP_ENABLED");
 
     // Before init, should be disabled (not initialized yet)
     int enabled = mcp_is_enabled();
@@ -223,13 +223,13 @@ static void test_mcp_enabled_state(void) {
     mcp_cleanup();
 
     // Set env var to enable and re-init
-    setenv("CLAUDE_MCP_ENABLED", "1", 1);
+    setenv("KLAWED_MCP_ENABLED", "1", 1);
     mcp_init();
     enabled = mcp_is_enabled();
     assert(enabled == 1);
 
     mcp_cleanup();
-    unsetenv("CLAUDE_MCP_ENABLED");
+    unsetenv("KLAWED_MCP_ENABLED");
 
     printf("PASSED\n");
 }

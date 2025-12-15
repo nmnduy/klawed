@@ -40,22 +40,22 @@ static int mkdir_recursive(const char *path) {
 
 char* history_file_default_path(void) {
     char *path = NULL;
-    const char *env = getenv("CLAUDE_C_HISTORY_FILE_PATH");
+    const char *env = getenv("KLAWED_HISTORY_FILE_PATH");
     if (env && *env) return strdup(env);
 
     struct stat st;
-    if (stat("./.claude-c", &st) == 0 && S_ISDIR(st.st_mode)) {
-        return strdup("./.claude-c/input_history.txt");
+    if (stat("./.klawed", &st) == 0 && S_ISDIR(st.st_mode)) {
+        return strdup("./.klawed/input_history.txt");
     }
-    if (mkdir("./.claude-c", 0755) == 0 || errno == EEXIST) {
-        return strdup("./.claude-c/input_history.txt");
+    if (mkdir("./.klawed", 0755) == 0 || errno == EEXIST) {
+        return strdup("./.klawed/input_history.txt");
     }
 
     const char *xdg = getenv("XDG_DATA_HOME");
     if (xdg && *xdg) {
         path = malloc(PATH_MAX);
         if (path) {
-            snprintf(path, PATH_MAX, "%s/claude-c/input_history.txt", xdg);
+            snprintf(path, PATH_MAX, "%s/klawed/input_history.txt", xdg);
             return path;
         }
     }
@@ -64,7 +64,7 @@ char* history_file_default_path(void) {
     if (home && *home) {
         path = malloc(PATH_MAX);
         if (path) {
-            snprintf(path, PATH_MAX, "%s/.local/share/claude-c/input_history.txt", home);
+            snprintf(path, PATH_MAX, "%s/.local/share/klawed/input_history.txt", home);
             return path;
         }
     }

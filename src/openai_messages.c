@@ -6,7 +6,7 @@
 
 #include "openai_messages.h"
 #include "logger.h"
-#include "claude_internal.h"
+#include "klawed_internal.h"
 
 #include <stdio.h>
 #include <stdlib.h>

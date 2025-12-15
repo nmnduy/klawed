@@ -2,7 +2,7 @@
 #define PATCH_PARSER_H
 
 #include <cjson/cJSON.h>
-#include "claude_internal.h"
+#include "klawed_internal.h"
 
 // Represents a single file operation in a patch
 typedef struct {
