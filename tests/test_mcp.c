@@ -357,6 +357,78 @@ static void test_mkdir_p_func(void) {
     printf("PASSED\\n");
 }
 
+// Test 11: Load config with timeout settings
+static void test_load_config_with_timeouts(void) {
+    printf("Test 11: Load config with timeout settings... ");
+
+    const char *config_json =
+        "{\n"
+        "  \"mcpServers\": {\n"
+        "    \"server_with_timeouts\": {\n"
+        "      \"command\": \"echo\",\n"
+        "      \"args\": [\"test\"],\n"
+        "      \"initTimeout\": 5,\n"
+        "      \"requestTimeout\": 15\n"
+        "    },\n"
+        "    \"server_no_timeouts\": {\n"
+        "      \"command\": \"echo\",\n"
+        "      \"args\": [\"test\"]\n"
+        "    },\n"
+        "    \"server_zero_timeout\": {\n"
+        "      \"command\": \"echo\",\n"
+        "      \"args\": [\"test\"],\n"
+        "      \"initTimeout\": 0,\n"
+        "      \"requestTimeout\": 0\n"
+        "    }\n"
+        "  }\n"
+        "}\n";
+
+    char *config_path = create_test_config(config_json);
+    assert(config_path != NULL);
+
+    MCPConfig *config = mcp_load_config(config_path);
+    assert(config != NULL);
+    assert(config->server_count == 3);
+
+    // Find each server
+    MCPServer *server_with_timeouts = NULL;
+    MCPServer *server_no_timeouts = NULL;
+    MCPServer *server_zero_timeout = NULL;
+    
+    for (int i = 0; i < config->server_count; i++) {
+        MCPServer *s = config->servers[i];
+        if (strcmp(s->name, "server_with_timeouts") == 0) {
+            server_with_timeouts = s;
+        } else if (strcmp(s->name, "server_no_timeouts") == 0) {
+            server_no_timeouts = s;
+        } else if (strcmp(s->name, "server_zero_timeout") == 0) {
+            server_zero_timeout = s;
+        }
+    }
+
+    assert(server_with_timeouts != NULL);
+    assert(server_no_timeouts != NULL);
+    assert(server_zero_timeout != NULL);
+
+    // Check timeout values
+    // server_with_timeouts should have specified values
+    assert(server_with_timeouts->init_timeout == 5);
+    assert(server_with_timeouts->request_timeout == 15);
+
+    // server_no_timeouts should have defaults
+    assert(server_no_timeouts->init_timeout == 10);  // Default
+    assert(server_no_timeouts->request_timeout == 30); // Default
+
+    // server_zero_timeout should have 0 values
+    assert(server_zero_timeout->init_timeout == 0);
+    assert(server_zero_timeout->request_timeout == 0);
+
+    mcp_free_config(config);
+    remove_test_config(config_path);
+
+    printf("PASSED\\n");
+}
+
 int main(void) {
     printf("=== MCP Integration Tests ===\\n\\n");
 
@@ -370,6 +442,7 @@ int main(void) {
     test_mcp_get_status();
     test_find_tool_server();
     test_mkdir_p_func();
+    test_load_config_with_timeouts();
 
     printf("\\n=== All MCP tests passed! ===\\n");
     return 0;

@@ -121,6 +121,8 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_TOOL_VERBOSE` - Verbose tool logging (0=off, 1=basic, 2=detailed, default: 0)
 - **Theme**: `KLAWED_THEME` pointing to Kitty .conf file
 - **MCP**: `KLAWED_MCP_ENABLED=1` to enable (disabled by default), `KLAWED_MCP_CONFIG` for config path
+  - `KLAWED_MCP_INIT_TIMEOUT` - Timeout for MCP server initialization in seconds (default: 10, 0=no timeout, overrides config file)
+  - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
 
 **Defaults:**
 - Logs: `./.klawed/logs/klawed.log` (project-local)
@@ -233,6 +235,7 @@ cp examples/mcp_servers.json ~/.config/klawed/
 
 **Configuration**: `~/.config/klawed/mcp_servers.json`
 - Server definitions with command, args, and environment
+- Timeout configuration: `initTimeout` (seconds, default: 10), `requestTimeout` (seconds, default: 30)
 - See `docs/mcp.md` for details and available servers
 
 **Tools provided:**

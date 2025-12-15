@@ -64,6 +64,10 @@ typedef struct MCPServer {
     int tool_count;              // Number of tools
     cJSON *tool_schemas;         // Tool JSON schemas from server
 
+    // Timeouts (in seconds)
+    int init_timeout;            // Timeout for initialization phase (0 = no timeout)
+    int request_timeout;         // Timeout for individual requests (0 = no timeout)
+
     // State
     int connected;               // Connection status
     int message_id;              // Message ID counter for JSON-RPC

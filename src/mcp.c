@@ -317,6 +317,47 @@ MCPConfig* mcp_load_config(const char *config_path) {
             }
         }
 
+        // Parse timeouts with defaults
+        server->init_timeout = 10;      // Default: 10 seconds for initialization
+        server->request_timeout = 30;   // Default: 30 seconds for requests
+
+        cJSON *init_timeout = cJSON_GetObjectItem(server_item, "initTimeout");
+        if (init_timeout && cJSON_IsNumber(init_timeout)) {
+            server->init_timeout = init_timeout->valueint;
+            if (server->init_timeout < 0) {
+                server->init_timeout = 0;  // 0 means no timeout
+            }
+        }
+
+        cJSON *request_timeout = cJSON_GetObjectItem(server_item, "requestTimeout");
+        if (request_timeout && cJSON_IsNumber(request_timeout)) {
+            server->request_timeout = request_timeout->valueint;
+            if (server->request_timeout < 0) {
+                server->request_timeout = 0;  // 0 means no timeout
+            }
+        }
+
+        // Check for environment variable overrides
+        const char *env_init_timeout = getenv("KLAWED_MCP_INIT_TIMEOUT");
+        if (env_init_timeout) {
+            int timeout_val = atoi(env_init_timeout);
+            if (timeout_val >= 0) {
+                server->init_timeout = timeout_val;
+                LOG_DEBUG("MCP: Overriding init_timeout for server '%s' to %d seconds via KLAWED_MCP_INIT_TIMEOUT",
+                         server->name, server->init_timeout);
+            }
+        }
+
+        const char *env_request_timeout = getenv("KLAWED_MCP_REQUEST_TIMEOUT");
+        if (env_request_timeout) {
+            int timeout_val = atoi(env_request_timeout);
+            if (timeout_val >= 0) {
+                server->request_timeout = timeout_val;
+                LOG_DEBUG("MCP: Overriding request_timeout for server '%s' to %d seconds via KLAWED_MCP_REQUEST_TIMEOUT",
+                         server->name, server->request_timeout);
+            }
+        }
+
         config->servers[idx++] = server;
         LOG_INFO("MCP: Configured server '%s' (command: %s)", server->name, server->command ? server->command : "none");
     }
@@ -344,7 +385,7 @@ MCPConfig* mcp_load_config(const char *config_path) {
             }
         }
         args_buf[off] = '\0';
-        LOG_DEBUG("  - %s: cmd='%s'%s%s%s%s%s%s",
+        LOG_DEBUG("  - %s: cmd='%s'%s%s%s%s%s%s init_timeout=%d request_timeout=%d",
                   s->name ? s->name : "<noname>",
                   s->command ? s->command : "<none>",
                   (s->args_count > 0 ? " args=[" : ""),
@@ -352,7 +393,9 @@ MCPConfig* mcp_load_config(const char *config_path) {
                   (s->args_count > 0 ? "]" : ""),
                   (s->cwd ? " cwd='" : ""),
                   (s->cwd ? s->cwd : ""),
-                  (s->cwd ? "'" : ""));
+                  (s->cwd ? "'" : ""),
+                  s->init_timeout,
+                  s->request_timeout);
     }
 
 cleanup:
@@ -615,7 +658,14 @@ int mcp_connect_server(MCPServer *server) {
         size_t total_read = 0;
 
         // Wait for response (with timeout)
-        for (int i = 0; i < 50; i++) {  // 5 second timeout
+        int max_iterations = 50;  // Default: 5 seconds (50 * 100ms)
+        if (server->init_timeout > 0) {
+            // Calculate iterations based on init_timeout (in seconds)
+            // Each iteration is 100ms, so iterations = timeout * 10
+            max_iterations = server->init_timeout * 10;
+        }
+        
+        for (int i = 0; i < max_iterations; i++) {
             // Read any stderr output during initialization
             mcp_read_stderr(server);
 
@@ -797,12 +847,16 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
     size_t total_read = 0;
 
     // Wait for response (with timeout)
-    for (int i = 0; i < 50; i++) {  // 5 second timeout
+    int max_iterations = 50;  // Default: 5 seconds (50 * 100ms)
+    if (server->request_timeout > 0) {
+        // Calculate iterations based on request_timeout (in seconds)
+        // Each iteration is 100ms, so iterations = timeout * 10
+        max_iterations = server->request_timeout * 10;
+    }
+    
+    for (int i = 0; i < max_iterations; i++) {
         // Read any stderr output (for logging/debugging)
         mcp_read_stderr(server);
-
-            // Read any stderr output during initialization
-            mcp_read_stderr(server);
 
         ssize_t n = read(server->stdout_fd, buffer + total_read, sizeof(buffer) - total_read - 1);
         if (n > 0) {
