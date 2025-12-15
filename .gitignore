@@ -44,7 +44,7 @@ test_output/
 *.tmp
 
 # Project-local state and logs
-.claude-c/
+.klawed/
 
 # Whisper models (large binary files)
 whisper_models/*.bin
