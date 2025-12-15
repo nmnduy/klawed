@@ -1,0 +1,439 @@
+/*
+ * commands.c - Command Registration and Dispatch Implementation
+ */
+
+#include "commands.h"
+#include "claude_internal.h"
+#include "logger.h"
+#include "fallback_colors.h"
+#include "voice_input.h"
+#include "tui.h"
+#define COLORSCHEME_EXTERN
+#include "colorscheme.h"
+#include <bsd/string.h>
+#include <bsd/stdlib.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <limits.h>
+#include <glob.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <cjson/cJSON.h>
+
+// ============================================================================
+// Command Registry
+// ============================================================================
+
+#define MAX_COMMANDS 32
+static const Command *command_registry[MAX_COMMANDS];
+static int command_count = 0;
+
+// TUI mode flag - when true, suppress stdout/stderr output
+static int tui_mode_enabled = 0;
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+static void print_status(const char *text) {
+    // In TUI mode, don't print to stdout (it corrupts ncurses)
+    // The caller (claude.c) will handle UI feedback
+    if (tui_mode_enabled) {
+        LOG_DEBUG("Status (TUI): %s", text);
+        return;
+    }
+
+    char color_buf[32];
+    const char *status_color;
+    if (get_colorscheme_color(COLORSCHEME_STATUS, color_buf, sizeof(color_buf)) == 0) {
+        status_color = color_buf;
+    } else {
+        LOG_WARN("Using fallback ANSI color for STATUS (commands)");
+        status_color = ANSI_FALLBACK_STATUS;
+    }
+    printf("%s[Status]%s %s\n", status_color, ANSI_RESET, text);
+    fflush(stdout);
+}
+
+static void print_error(const char *text) {
+    // In TUI mode, don't print to stderr (it corrupts ncurses)
+    // The caller (claude.c) will handle UI feedback
+    if (tui_mode_enabled) {
+        LOG_DEBUG("Error (TUI): %s", text);
+        return;
+    }
+
+    char color_buf[32];
+    const char *error_color;
+    if (get_colorscheme_color(COLORSCHEME_ERROR, color_buf, sizeof(color_buf)) == 0) {
+        error_color = color_buf;
+    } else {
+        LOG_WARN("Using fallback ANSI color for ERROR (commands)");
+        error_color = ANSI_FALLBACK_ERROR;
+    }
+    fprintf(stderr, "%s[Error]%s %s\n", error_color, ANSI_RESET, text);
+    fflush(stderr);
+}
+
+// ============================================================================
+// Forward Declarations for Completion Functions
+// ============================================================================
+
+static CompletionResult* dir_path_completer(const char *line, int cursor_pos, void *ctx);
+
+// ============================================================================
+// Command Handlers
+// ============================================================================
+
+static int cmd_exit(ConversationState *state, const char *args) {
+    (void)state; (void)args;
+    return -2;  // Special code to exit
+}
+
+static int cmd_quit(ConversationState *state, const char *args) {
+    return cmd_exit(state, args);
+}
+
+static int cmd_clear(ConversationState *state, const char *args) {
+    (void)args;
+    clear_conversation(state);
+    print_status("Conversation cleared");
+    if (!tui_mode_enabled) printf("\n");
+    return 0;
+}
+
+static int cmd_add_dir(ConversationState *state, const char *args) {
+    // Trim leading whitespace from args
+    while (*args == ' ' || *args == '\t') args++;
+    if (strlen(args) == 0) {
+        print_error("Usage: /add-dir <directory-path>");
+        printf("\n");
+        return -1;
+    }
+    if (add_directory(state, args) == 0) {
+        print_status("Added directory to context");
+        printf("\n");
+        return 0;
+    } else {
+        char err_msg[PATH_MAX + 64];
+        snprintf(err_msg, sizeof(err_msg),
+                 "Failed to add directory: %s (not found or already added)", args);
+        print_error(err_msg);
+        printf("\n");
+        return -1;
+    }
+}
+
+static int cmd_voice(ConversationState *state, const char *args) {
+    (void)state; (void)args;
+
+    // Check if voice input is available with detailed error reporting
+    const char *api_key = getenv("OPENAI_API_KEY");
+    if (!api_key || !*api_key) {
+        if (!tui_mode_enabled) {
+            print_error("Voice input unavailable: OPENAI_API_KEY environment variable not set");
+            fprintf(stderr, "Set your API key with: export OPENAI_API_KEY=\"your-key-here\"\n");
+            printf("\n");
+        }
+        return -1;
+    }
+
+    if (!voice_input_available()) {
+        if (!tui_mode_enabled) {
+            print_error("Voice input unavailable: PortAudio not installed or no microphone detected");
+            fprintf(stderr, "Install PortAudio:\n");
+            fprintf(stderr, "  macOS:         brew install portaudio\n");
+            fprintf(stderr, "  Ubuntu/Debian: sudo apt-get install portaudio19-dev\n");
+            fprintf(stderr, "  Fedora/RHEL:   sudo yum install portaudio-devel\n");
+            fprintf(stderr, "\nEnsure your system has a working microphone.\n");
+            printf("\n");
+        }
+        return -1;
+    }
+
+    char *transcription = NULL;
+    int result = voice_input_record_and_transcribe(&transcription);
+
+    if (result == 0 && transcription) {
+        // Check if we're in TUI mode
+        if (tui_mode_enabled && state && state->tui) {
+            // In TUI mode: insert transcription into input buffer
+            if (tui_insert_input_text(state->tui, transcription) == 0) {
+                // Successfully inserted into input buffer
+                // Don't print to stdout in TUI mode (corrupts ncurses)
+                // The transcription is now in the input buffer for the user to see/edit
+            } else {
+                // Failed to insert into input buffer, fall back to adding as message
+                add_user_message(state, transcription);
+            }
+        } else {
+            // Not in TUI mode: print transcription and add as message
+            printf("\n");
+            print_status("Transcription:");
+            printf("%s\n\n", transcription);
+
+            // Add transcription to conversation as user message
+            add_user_message(state, transcription);
+        }
+
+        free(transcription);
+        return 0;
+    } else if (result == -2) {
+        if (!tui_mode_enabled) {
+            print_error("No audio recorded");
+            fprintf(stderr, "Make sure you speak into the microphone before pressing ENTER.\n");
+            printf("\n");
+        }
+        return -1;
+    } else if (result == -3) {
+        if (!tui_mode_enabled) {
+            print_error("Recording was silent (no audio detected)");
+            fprintf(stderr, "Check that:\n");
+            fprintf(stderr, "  - Microphone is not muted\n");
+            fprintf(stderr, "  - Correct input device is selected in system settings\n");
+            fprintf(stderr, "  - Microphone volume is adequate\n");
+            fprintf(stderr, "  - Application has microphone permissions (macOS/Linux)\n");
+            printf("\n");
+        }
+        return -1;
+    } else {
+        if (!tui_mode_enabled) {
+            print_error("Voice transcription failed");
+            fprintf(stderr, "This could be due to:\n");
+            fprintf(stderr, "  - Network connectivity issues\n");
+            fprintf(stderr, "  - OpenAI API service problems\n");
+            fprintf(stderr, "  - Invalid API key\n");
+            fprintf(stderr, "Check logs for more details.\n");
+            printf("\n");
+        }
+        return -1;
+    }
+}
+
+static int cmd_help(ConversationState *state, const char *args) {
+    (void)state; (void)args;
+    // Suppress non-TUI help text output
+    return 0;
+}
+
+// ============================================================================
+// Command Definitions
+// ============================================================================
+
+static Command exit_cmd = {
+    .name = "exit",
+    .usage = "/exit",
+    .description = "Exit interactive mode",
+    .handler = cmd_exit,
+    .completer = commands_tab_completer,
+    .needs_terminal = 0
+};
+
+static Command quit_cmd = {
+    .name = "quit",
+    .usage = "/quit",
+    .description = "Exit interactive mode",
+    .handler = cmd_quit,
+    .completer = commands_tab_completer,
+    .needs_terminal = 0
+};
+
+static Command clear_cmd = {
+    .name = "clear",
+    .usage = "/clear",
+    .description = "Clear conversation history",
+    .handler = cmd_clear,
+    .completer = commands_tab_completer,
+    .needs_terminal = 0
+};
+
+static Command add_dir_cmd = {
+    .name = "add-dir",
+    .usage = "/add-dir <path>",
+    .description = "Add directory to working directories",
+    .handler = cmd_add_dir,
+    .completer = dir_path_completer,
+    .needs_terminal = 0
+};
+
+static Command help_cmd = {
+    .name = "help",
+    .usage = "/help",
+    .description = "Show this help",
+    .handler = cmd_help,
+    .completer = commands_tab_completer,
+    .needs_terminal = 0
+};
+
+static Command voice_cmd = {
+    .name = "voice",
+    .usage = "/voice",
+    .description = "Record voice input and transcribe to text",
+    .handler = cmd_voice,
+    .completer = commands_tab_completer,
+    .needs_terminal = 1
+};
+
+// ============================================================================
+// API Implementation
+// ============================================================================
+
+void commands_init(void) {
+    command_count = 0;
+    commands_register(&exit_cmd);
+    commands_register(&quit_cmd);
+    commands_register(&clear_cmd);
+    commands_register(&add_dir_cmd);
+    commands_register(&help_cmd);
+    commands_register(&voice_cmd);
+}
+
+void commands_set_tui_mode(int enabled) {
+    tui_mode_enabled = enabled;
+    LOG_DEBUG("Command system TUI mode: %s", enabled ? "enabled" : "disabled");
+}
+
+void commands_register(const Command *cmd) {
+    if (command_count < MAX_COMMANDS) {
+        command_registry[command_count++] = cmd;
+    } else {
+        LOG_WARN("Command registry full, cannot register '%s'", cmd->name);
+    }
+}
+
+int commands_execute(ConversationState *state, const char *input, const Command **cmd_out) {
+    if (!input || input[0] != '/') return -1;
+    const char *cmd_line = input + 1;
+    const char *space = strchr(cmd_line, ' ');
+    size_t cmd_len = space ? (size_t)(space - cmd_line) : strlen(cmd_line);
+    const char *args = space ? space + 1 : "";
+    for (int i = 0; i < command_count; i++) {
+        const Command *cmd = command_registry[i];
+        if (strlen(cmd->name) == cmd_len && strncmp(cmd->name, cmd_line, cmd_len) == 0) {
+            if (cmd_out) {
+                *cmd_out = cmd;
+            }
+            return cmd->handler(state, args);
+        }
+    }
+    // Don't print error here - let the caller (claude.c) handle it
+    // This prevents stderr output from corrupting the ncurses TUI
+    LOG_DEBUG("Unknown command: %.*s", (int)cmd_len, cmd_line);
+    return -1;
+}
+
+const Command** commands_list(int *count) {
+    *count = command_count;
+    return command_registry;
+}
+
+const Command* commands_lookup(const char *name) {
+    if (!name) return NULL;
+    for (int i = 0; i < command_count; i++) {
+        const Command *cmd = command_registry[i];
+        if (strcmp(cmd->name, name) == 0) {
+            return cmd;
+        }
+    }
+    return NULL;
+}
+
+// ============================================================================
+// Tab Completion Implementations
+// ============================================================================
+
+CompletionResult* commands_tab_completer(const char *line, int cursor_pos, void *ctx) {
+    (void)ctx;  // Suppress unused parameter warning
+    if (!line || line[0] != '/') return NULL;
+    const char *space = strchr(line, ' ');
+    int cmd_name_len = space ? (int)(space - line - 1) : ((int)strlen(line) - 1);
+    int name_end_pos = cmd_name_len + 1;
+    if (cursor_pos <= name_end_pos) {
+        // Complete command names
+        int match_count = 0;
+        for (int i = 0; i < command_count; i++) {
+            if (strncmp(command_registry[i]->name, line + 1, (size_t)cmd_name_len) == 0) match_count++;
+        }
+        if (match_count == 0) return NULL;
+        CompletionResult *res = malloc(sizeof(CompletionResult));
+        if (!res) return NULL;
+        // Use reallocarray for overflow-safe allocation
+        res->options = reallocarray(NULL, (size_t)match_count, sizeof(char*));
+        res->count = 0; res->selected = 0;
+        for (int i = 0; i < command_count; i++) {
+            const char *name = command_registry[i]->name;
+            if (strncmp(name, line + 1, (size_t)cmd_name_len) == 0) {
+                char *opt = malloc(strlen(name) + 2);
+                snprintf(opt, strlen(name) + 2, "/%s", name);
+                res->options[res->count++] = opt;
+            }
+        }
+        return res;
+    } else {
+        // Delegate argument completion
+        // Identify command name
+        char cmd_name[64];
+        int clen = cmd_name_len;
+        if (clen >= (int)sizeof(cmd_name)) clen = sizeof(cmd_name) - 1;
+        memcpy(cmd_name, line + 1, (size_t)clen);
+        cmd_name[clen] = '\0';
+        for (int i = 0; i < command_count; i++) {
+            const Command *cmd = command_registry[i];
+            if (strcmp(cmd->name, cmd_name) == 0 && cmd->completer) {
+                return cmd->completer(line, cursor_pos, ctx);
+            }
+        }
+        return NULL;
+    }
+}
+
+static CompletionResult* dir_path_completer(const char *line, int cursor_pos, void *ctx) {
+    (void)ctx;
+    const char *arg = strchr(line, ' ');
+    if (!arg) return NULL;
+    arg++;
+    int arg_start = (int)(arg - line);
+    int arg_len = cursor_pos - arg_start;
+    if (arg_len < 0) arg_len = 0;
+    char prefix[PATH_MAX];
+    int plen = arg_len < PATH_MAX ? arg_len : PATH_MAX - 1;
+    memcpy(prefix, arg, (size_t)plen);
+    prefix[plen] = '\0';
+    char pattern[PATH_MAX];
+    if (plen == 0) {
+        strlcpy(pattern, "*", sizeof(pattern));
+    } else {
+        // Build pattern: prefix + '*' with safety against overflow
+        size_t max_copy = sizeof(pattern) - 2; // leave space for '*' and '\0'
+        size_t to_copy = (size_t)plen < max_copy ? (size_t)plen : max_copy;
+        memcpy(pattern, prefix, to_copy);
+        pattern[to_copy] = '*';
+        pattern[to_copy + 1] = '\0';
+    }
+    glob_t globbuf;
+    int ret = glob(pattern, GLOB_MARK | GLOB_NOSORT, NULL, &globbuf);
+    if (ret != 0) { globfree(&globbuf); return NULL; }
+    size_t dir_count = 0;
+    for (size_t i = 0; i < globbuf.gl_pathc; i++) {
+        const char *m = globbuf.gl_pathv[i];
+        size_t len = strlen(m);
+        if (len > 0 && m[len-1] == '/') dir_count++;
+    }
+    if (dir_count == 0) { globfree(&globbuf); return NULL; }
+    CompletionResult *res = malloc(sizeof(CompletionResult));
+    if (!res) { globfree(&globbuf); return NULL; }
+    // Use reallocarray for overflow-safe allocation
+    res->options = reallocarray(NULL, dir_count, sizeof(char*));
+    res->count = 0; res->selected = 0;
+    for (size_t i = 0; i < globbuf.gl_pathc; i++) {
+        const char *m = globbuf.gl_pathv[i];
+        size_t len = strlen(m);
+        if (len > 0 && m[len-1] == '/') {
+            res->options[res->count++] = strdup(m);
+        }
+    }
+    globfree(&globbuf);
+    return res;
+}

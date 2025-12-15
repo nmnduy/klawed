@@ -1,0 +1,56 @@
+# Compiled binary
+claude
+
+tags
+
+# Object files
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Build directories
+build/
+dist/
+
+# Core dumps
+core
+core.*
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependency directories
+deps/
+
+# Test outputs
+test_output/
+*.log
+
+# Backup files
+*.bak
+*.tmp
+
+# Project-local state and logs
+.claude-c/
+
+# Whisper models (large binary files)
+whisper_models/*.bin
+whisper_models/*.pt
+
+# Temporary voice recordings
+.voice_recording.wav
+
+.envrc

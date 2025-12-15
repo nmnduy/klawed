@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-ubuntu-gcc:
+    name: Ubuntu + GCC
+    runs-on: ubuntu-latest
+    env:
+      CC: gcc
+      TERM: xterm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libcjson-dev sqlite3 libsqlite3-dev libssl-dev build-essential libncursesw6 libncurses-dev
+
+      - name: Build with GCC
+        run: |
+          make clean
+          make all
+
+      - name: Run tests with GCC
+        run: make test
+
+      - name: Test installation
+        run: |
+          make clean
+          make install INSTALL_PREFIX=/tmp/claude-c-install
+          /tmp/claude-c-install/bin/claude-c --version
+
+      - name: Build with sanitizers (GCC)
+        run: |
+          make clean
+          make SANITIZERS=-fsanitize=address,undefined all
+
+      - name: Run tests with sanitizers (GCC)
+        run: make SANITIZERS=-fsanitize=address,undefined test
+
+  test-ubuntu-clang:
+    name: Ubuntu + Clang
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      TERM: xterm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libcjson-dev sqlite3 libsqlite3-dev libssl-dev build-essential libncursesw6 libncurses-dev
+
+      - name: Build with Clang
+        run: |
+          make clean
+          make all
+
+      - name: Run tests with Clang
+        run: make test
+
+      - name: Test installation
+        run: |
+          make clean
+          make install INSTALL_PREFIX=/tmp/claude-c-install
+          /tmp/claude-c-install/bin/claude-c --version
+
+      - name: Build with sanitizers (Clang)
+        run: |
+          make clean
+          make SANITIZERS=-fsanitize=address,undefined all
+
+      - name: Run tests with sanitizers (Clang)
+        run: make SANITIZERS=-fsanitize=address,undefined test
+
+  test-macos-gcc:
+    name: macOS + GCC
+    runs-on: macos-latest
+    env:
+      CC: gcc
+      TERM: xterm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install curl cjson sqlite3 openssl pkg-config ncurses
+
+      - name: Build with GCC
+        run: |
+          make clean
+          make all
+
+      - name: Run tests with GCC
+        run: make test
+
+      - name: Test installation
+        run: |
+          make clean
+          make install INSTALL_PREFIX=/tmp/claude-c-install
+          /tmp/claude-c-install/bin/claude-c --version
+
+      - name: Build with sanitizers (GCC)
+        run: |
+          make clean
+          make SANITIZERS=-fsanitize=address,undefined all
+
+      - name: Run tests with sanitizers (GCC)
+        run: make SANITIZERS=-fsanitize=address,undefined test
+
+  test-macos-clang:
+    name: macOS + Clang
+    runs-on: macos-latest
+    env:
+      CC: clang
+      TERM: xterm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install curl cjson sqlite3 openssl pkg-config ncurses
+
+      - name: Build with Clang
+        run: |
+          make clean
+          make all
+
+      - name: Run tests with Clang
+        run: make test
+
+      - name: Test installation
+        run: |
+          make clean
+          make install INSTALL_PREFIX=/tmp/claude-c-install
+          /tmp/claude-c-install/bin/claude-c --version
+
+      - name: Build with sanitizers (Clang)
+        run: |
+          make clean
+          make SANITIZERS=-fsanitize=address,undefined all
+
+      - name: Run tests with sanitizers (Clang)
+        run: make SANITIZERS=-fsanitize=address,undefined test
