@@ -9,6 +9,8 @@ typedef struct {
     char *file_path;      // File path to edit
     char *old_content;    // Content to replace (between @@ markers)
     char *new_content;    // Replacement content
+    char *context_before; // Context lines before the change (optional)
+    char *context_after;  // Context lines after the change (optional)
 } PatchOperation;
 
 // Represents a parsed patch

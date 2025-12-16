@@ -54,6 +54,97 @@ static char* extract_between(const char *str, const char *start_marker, const ch
     return result;
 }
 
+// Helper: count lines up to a position in string
+static int count_lines_to_position(const char *str, const char *pos) {
+    if (!str || !pos || pos < str) return 0;
+    
+    int line_count = 1; // 1-indexed like editors
+    const char *p = str;
+    while (p < pos) {
+        if (*p == '\n') {
+            line_count++;
+        }
+        p++;
+    }
+    return line_count;
+}
+
+// Helper: create error message with line number
+static char* create_error_with_line(const char *message, int line_number) {
+    if (line_number > 0) {
+        size_t len = strlen(message) + 32; // Room for line number
+        char *error = malloc(len);
+        if (!error) return strdup(message);
+        snprintf(error, len, "%s at line %d", message, line_number);
+        return error;
+    }
+    return strdup(message);
+}
+
+// Helper: search for pattern with context
+// Returns position of old_content within the match, or NULL if not found
+static char* search_with_context(char *content, 
+                                 const char *context_before,
+                                 const char *old_content,
+                                 const char *context_after) {
+    if (!content || !old_content) return NULL;
+    
+    // If no context, just use strstr
+    if ((!context_before || context_before[0] == '\0') && 
+        (!context_after || context_after[0] == '\0')) {
+        return strstr((char*)content, old_content);
+    }
+    
+    // Build search pattern: context_before + old_content + context_after
+    size_t before_len = context_before ? strlen(context_before) : 0;
+    size_t old_len = strlen(old_content);
+    size_t after_len = context_after ? strlen(context_after) : 0;
+    
+    // Special case: only before context
+    if (before_len > 0 && after_len == 0) {
+        char *pos = content;
+        while ((pos = strstr(pos, context_before)) != NULL) {
+            // Check if old_content follows immediately after context_before
+            if (strncmp(pos + before_len, old_content, old_len) == 0) {
+                return pos + before_len;
+            }
+            pos++;
+        }
+        return NULL;
+    }
+    
+    // Special case: only after context
+    if (after_len > 0 && before_len == 0) {
+        char *pos = content;
+        while ((pos = strstr(pos, old_content)) != NULL) {
+            // Check if context_after follows immediately after old_content
+            if (strncmp(pos + old_len, context_after, after_len) == 0) {
+                return pos;
+            }
+            pos++;
+        }
+        return NULL;
+    }
+    
+    // Full context: before + old + after
+    if (before_len > 0 && after_len > 0) {
+        char *pos = content;
+        while ((pos = strstr(pos, context_before)) != NULL) {
+            // Check if old_content follows immediately after context_before
+            if (strncmp(pos + before_len, old_content, old_len) == 0) {
+                // Check if context_after follows immediately after old_content
+                if (strncmp(pos + before_len + old_len, context_after, after_len) == 0) {
+                    return pos + before_len;
+                }
+            }
+            pos++;
+        }
+        return NULL;
+    }
+    
+    return NULL;
+}
+
 // Check if content appears to be in the "Begin Patch/End Patch" format
 int is_patch_format(const char *content) {
     if (!content) return 0;
@@ -68,12 +159,16 @@ int is_patch_format(const char *content) {
 }
 
 // Parse a single operation block
-static PatchOperation parse_operation(const char *block) {
+static PatchOperation parse_operation(const char *block, int *error_line, char **error_msg) {
     PatchOperation op = {0};
+    if (error_line) *error_line = 0;
+    if (error_msg) *error_msg = NULL;
 
     // Extract file path from "*** Update File: path"
     const char *file_marker = strstr(block, "*** Update File:");
     if (!file_marker) {
+        if (error_line) *error_line = count_lines_to_position(block, block + strlen(block));
+        if (error_msg) *error_msg = strdup("Missing '*** Update File:' marker");
         LOG_ERROR("Failed to find file marker in patch block");
         return op;
     }
@@ -87,6 +182,8 @@ static PatchOperation parse_operation(const char *block) {
     // Find end of line
     const char *line_end = strchr(file_marker, '\n');
     if (!line_end) {
+        if (error_line) *error_line = count_lines_to_position(block, file_marker);
+        if (error_msg) *error_msg = strdup("Missing newline after file path");
         LOG_ERROR("Failed to find end of file path line");
         return op;
     }
@@ -95,6 +192,8 @@ static PatchOperation parse_operation(const char *block) {
     size_t path_len = (size_t)(line_end - file_marker);
     char *raw_path = malloc(path_len + 1);
     if (!raw_path) {
+        if (error_line) *error_line = count_lines_to_position(block, file_marker);
+        if (error_msg) *error_msg = strdup("Memory allocation failed for file path");
         LOG_ERROR("Failed to allocate memory for file path");
         op.file_path = NULL;
         return op;
@@ -107,6 +206,8 @@ static PatchOperation parse_operation(const char *block) {
     free(raw_path);
 
     if (!op.file_path) {
+        if (error_line) *error_line = count_lines_to_position(block, file_marker);
+        if (error_msg) *error_msg = strdup("Memory allocation failed for trimmed file path");
         LOG_ERROR("Failed to allocate memory for file path");
         return op;
     }
@@ -114,6 +215,8 @@ static PatchOperation parse_operation(const char *block) {
     // Find the @@ markers
     const char *old_marker = strstr(line_end, "@@");
     if (!old_marker) {
+        if (error_line) *error_line = count_lines_to_position(block, line_end);
+        if (error_msg) *error_msg = strdup("Missing opening '@@' marker after file path");
         LOG_ERROR("Failed to find opening @@ marker");
         free(op.file_path);
         op.file_path = NULL;
@@ -144,6 +247,8 @@ static PatchOperation parse_operation(const char *block) {
     }
 
     if (!found_closing) {
+        if (error_line) *error_line = count_lines_to_position(block, old_start);
+        if (error_msg) *error_msg = strdup("Missing closing '@@' marker");
         LOG_ERROR("Failed to find closing @@ marker");
         free(op.file_path);
         op.file_path = NULL;
@@ -152,26 +257,42 @@ static PatchOperation parse_operation(const char *block) {
 
     // Extract old and new content between the @@ markers
     // The format is lines starting with - (old) or + (new)
+    // Lines starting with space are context lines
     const char *line = old_start;
     size_t old_capacity = 1024;
     size_t new_capacity = 1024;
+    size_t before_capacity = 1024;
+    size_t after_capacity = 1024;
     size_t old_len = 0;
     size_t new_len = 0;
+    size_t before_len = 0;
+    size_t after_len = 0;
 
     char *old_buf = malloc(old_capacity);
     char *new_buf = malloc(new_capacity);
+    char *before_buf = malloc(before_capacity);
+    char *after_buf = malloc(after_capacity);
 
-    if (!old_buf || !new_buf) {
+    if (!old_buf || !new_buf || !before_buf || !after_buf) {
+        if (error_line) *error_line = count_lines_to_position(block, old_start);
+        if (error_msg) *error_msg = strdup("Memory allocation failed for content buffers");
         LOG_ERROR("Failed to allocate memory for content buffers");
         free(op.file_path);
         free(old_buf);
         free(new_buf);
+        free(before_buf);
+        free(after_buf);
         op.file_path = NULL;
         return op;
     }
 
     old_buf[0] = '\0';
     new_buf[0] = '\0';
+    before_buf[0] = '\0';
+    after_buf[0] = '\0';
+
+    // Track whether we've seen any - or + lines yet
+    int in_change_block = 0;
 
     while (line < closing_marker) {
         // Find end of current line
@@ -187,6 +308,7 @@ static PatchOperation parse_operation(const char *block) {
             size_t content_len = line_len - 1;
 
             if (prefix == '-') {
+                in_change_block = 1;
                 // Old content - remove prefix
                 if (old_len + content_len + 1 >= old_capacity) {
                     old_capacity *= 2;
@@ -195,6 +317,8 @@ static PatchOperation parse_operation(const char *block) {
                         free(op.file_path);
                         free(old_buf);
                         free(new_buf);
+                        free(before_buf);
+                        free(after_buf);
                         op.file_path = NULL;
                         return op;
                     }
@@ -205,6 +329,7 @@ static PatchOperation parse_operation(const char *block) {
                 old_buf[old_len++] = '\n';
                 old_buf[old_len] = '\0';
             } else if (prefix == '+') {
+                in_change_block = 1;
                 // New content - remove prefix
                 if (new_len + content_len + 1 >= new_capacity) {
                     new_capacity *= 2;
@@ -213,6 +338,8 @@ static PatchOperation parse_operation(const char *block) {
                         free(op.file_path);
                         free(old_buf);
                         free(new_buf);
+                        free(before_buf);
+                        free(after_buf);
                         op.file_path = NULL;
                         return op;
                     }
@@ -222,8 +349,45 @@ static PatchOperation parse_operation(const char *block) {
                 new_len += content_len;
                 new_buf[new_len++] = '\n';
                 new_buf[new_len] = '\0';
+            } else if (prefix == ' ') {
+                // Context line (space prefix)
+                // Check if it's before or after the change block
+                char **target_buf = NULL;
+                size_t *target_len = NULL;
+                size_t *target_capacity = NULL;
+                
+                if (in_change_block) {
+                    // After change block
+                    target_buf = &after_buf;
+                    target_len = &after_len;
+                    target_capacity = &after_capacity;
+                } else {
+                    // Before change block
+                    target_buf = &before_buf;
+                    target_len = &before_len;
+                    target_capacity = &before_capacity;
+                }
+                
+                if (*target_len + content_len + 1 >= *target_capacity) {
+                    *target_capacity *= 2;
+                    char *new_buf_ptr = realloc(*target_buf, *target_capacity);
+                    if (!new_buf_ptr) {
+                        free(op.file_path);
+                        free(old_buf);
+                        free(new_buf);
+                        free(before_buf);
+                        free(after_buf);
+                        op.file_path = NULL;
+                        return op;
+                    }
+                    *target_buf = new_buf_ptr;
+                }
+                memcpy(*target_buf + *target_len, content_start, content_len);
+                *target_len += content_len;
+                (*target_buf)[(*target_len)++] = '\n';
+                (*target_buf)[*target_len] = '\0';
             }
-            // Ignore lines without +/- prefix
+            // Ignore lines with other prefixes (could be @@ markers or other)
         }
 
         // Move to next line
@@ -238,11 +402,20 @@ static PatchOperation parse_operation(const char *block) {
     if (new_len > 0 && new_buf[new_len - 1] == '\n') {
         new_buf[--new_len] = '\0';
     }
+    if (before_len > 0 && before_buf[before_len - 1] == '\n') {
+        before_buf[--before_len] = '\0';
+    }
+    if (after_len > 0 && after_buf[after_len - 1] == '\n') {
+        after_buf[--after_len] = '\0';
+    }
 
     op.old_content = old_buf;
     op.new_content = new_buf;
+    op.context_before = before_buf;
+    op.context_after = after_buf;
 
-    LOG_DEBUG("Parsed operation: file=%s, old_len=%zu, new_len=%zu", op.file_path, old_len, new_len);
+    LOG_DEBUG("Parsed operation: file=%s, old_len=%zu, new_len=%zu, before_len=%zu, after_len=%zu", 
+              op.file_path, old_len, new_len, before_len, after_len);
 
     return op;
 }
@@ -319,14 +492,21 @@ ParsedPatch* parse_patch_format(const char *content) {
         block[block_len] = '\0';
 
         // Parse operation
-        patch->operations[i] = parse_operation(block);
+        int error_line = 0;
+        char *error_msg = NULL;
+        patch->operations[i] = parse_operation(block, &error_line, &error_msg);
         free(block);
 
         // Check if parsing succeeded
         if (!patch->operations[i].file_path) {
             LOG_ERROR("Failed to parse operation %d", i);
             patch->is_valid = 0;
-            patch->error_message = strdup("Failed to parse operation");
+            if (error_msg) {
+                patch->error_message = create_error_with_line(error_msg, error_line);
+                free(error_msg);
+            } else {
+                patch->error_message = strdup("Failed to parse operation");
+            }
             free(patch_content);
             return patch;
         }
@@ -352,6 +532,8 @@ void free_parsed_patch(ParsedPatch *patch) {
             free(patch->operations[i].file_path);
             free(patch->operations[i].old_content);
             free(patch->operations[i].new_content);
+            free(patch->operations[i].context_before);
+            free(patch->operations[i].context_after);
         }
         free(patch->operations);
     }
@@ -401,7 +583,11 @@ cJSON* apply_patch(ParsedPatch *patch, ConversationState *state) {
         }
 
         // Find and replace old content with new content
-        char *pos = strstr(current_content, op->old_content);
+        // Use context lines if available for more robust matching
+        char *pos = search_with_context(current_content, 
+                                        op->context_before,
+                                        op->old_content,
+                                        op->context_after);
         if (!pos) {
             LOG_ERROR("Old content not found in file: %s", resolved_path);
             free(current_content);
