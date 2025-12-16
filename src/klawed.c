@@ -7518,6 +7518,112 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
         }
     }
     
+    // Process tool calls if any exist
+    int tool_count = response->tool_count;
+    ToolCall *tool_calls_array = response->tools;
+
+    if (tool_count > 0) {
+        LOG_INFO("Processing %d tool call(s) in socket mode", tool_count);
+
+        // Log details of each tool call
+        for (int i = 0; i < tool_count; i++) {
+            ToolCall *tool = &tool_calls_array[i];
+            LOG_DEBUG("Socket mode tool call[%d]: id=%s, name=%s, has_params=%d",
+                      i, tool->id ? tool->id : "NULL",
+                      tool->name ? tool->name : "NULL",
+                      tool->parameters != NULL);
+        }
+
+        InternalContent *results = calloc((size_t)tool_count, sizeof(InternalContent));
+        if (!results) {
+            LOG_ERROR("Failed to allocate tool result buffer in socket mode");
+            return 1;
+        }
+
+        int valid_tool_calls = 0;
+        for (int i = 0; i < tool_count; i++) {
+            ToolCall *tool = &tool_calls_array[i];
+            if (tool->name && tool->id) {
+                valid_tool_calls++;
+            }
+        }
+
+        if (valid_tool_calls > 0) {
+            // Execute tools (socket mode)
+            for (int i = 0; i < tool_count; i++) {
+                ToolCall *tool = &tool_calls_array[i];
+                if (!tool->name || !tool->id) {
+                    continue;
+                }
+
+                LOG_DEBUG("Socket mode: Executing tool: %s", tool->name);
+
+                // Convert ToolCall to execute_tool parameters
+                cJSON *input = tool->parameters
+                    ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
+                    : cJSON_CreateObject();
+
+                // Execute tool synchronously
+                cJSON *tool_result = execute_tool(tool->name, input, state);
+
+                // Convert result to InternalContent
+                results[i].type = INTERNAL_TOOL_RESPONSE;
+                results[i].tool_id = strdup(tool->id);
+                results[i].tool_name = strdup(tool->name);
+                results[i].tool_output = tool_result;
+                results[i].is_error = tool_result ? cJSON_HasObjectItem(tool_result, "error") : 1;
+
+                cJSON_Delete(input);
+            }
+
+            // Log summary of all tool results before adding to conversation
+            LOG_DEBUG("Socket mode: Collected %d tool results", tool_count);
+            for (int i = 0; i < tool_count; i++) {
+                LOG_DEBUG("Socket mode result[%d]: tool_id=%s, tool_name=%s, is_error=%d",
+                          i, results[i].tool_id ? results[i].tool_id : "NULL",
+                          results[i].tool_name ? results[i].tool_name : "NULL",
+                          results[i].is_error);
+            }
+
+            // Extract TodoWrite information BEFORE transferring ownership to add_tool_results
+            int todo_write_executed = check_todo_write_executed(results, tool_count);
+
+            // Add tool results to conversation
+            // Note: add_tool_results takes ownership of the results array and its contents
+            if (add_tool_results(state, results, tool_count) != 0) {
+                LOG_ERROR("Failed to add tool results to conversation in socket mode - cannot proceed");
+                // Results were already freed by add_tool_results, don't free again
+                return 1;
+            }
+
+            // Update TODO list display if TodoWrite was executed
+            if (todo_write_executed) {
+                // In socket mode, we don't have TUI, so just log the TODO update
+                LOG_INFO("TODO list updated via TodoWrite tool in socket mode");
+            }
+
+            // Call API again with tool results and process recursively
+            ApiResponse *next_response = call_api(state);
+            if (next_response) {
+                // Recursively process the next response (may contain more tool calls)
+                int result = process_response_for_socket_mode(state, next_response, client_fd);
+                api_response_free(next_response);
+                return result;
+            } else {
+                LOG_ERROR("Failed to get response after tool execution in socket mode");
+                char error_buf[] = "{\"error\": \"Failed to get response after tool execution\"}\n";
+                write_socket_output(client_fd, error_buf, strlen(error_buf));
+                return 1;
+            }
+
+            // Do NOT free results here - add_tool_results() took ownership
+        } else {
+            // No valid tool calls, free the allocated results array
+            free(results);
+        }
+    }
+
+    // No tool calls - conversation is complete
     return 0;
 }
 
