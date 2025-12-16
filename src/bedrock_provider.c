@@ -44,7 +44,7 @@ static int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow
 // Request Building (from ConversationState)
 // ============================================================================
 
-// Forward declaration - this will be implemented in claude.c and exposed via klawed_internal.h
+// Forward declaration - this will be implemented in klawed.c and exposed via klawed_internal.h
 // For now, we declare it here as extern
 
 
@@ -694,8 +694,13 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
         return result;
     }
 
+    LOG_DEBUG("Bedrock: Built OpenAI-format request, converting to Bedrock format");
+
     char *bedrock_json = bedrock_convert_request(openai_json);
     free(openai_json);
+    
+    LOG_DEBUG("Bedrock: Converted to Bedrock format, request length: %zu bytes",
+              bedrock_json ? strlen(bedrock_json) : 0);
 
     if (!bedrock_json) {
         result.error_message = strdup("Failed to convert request to Bedrock format");

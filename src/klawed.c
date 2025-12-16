@@ -3,7 +3,7 @@
  * A lightweight coding agent that interacts with OpenAI-compatible APIs
  *
  * Compilation: make
- * Usage: ./claude "your prompt here"
+ * Usage: ./klawed "your prompt here"
  *
  * Dependencies: libcurl, cJSON, pthread
  */
@@ -176,7 +176,7 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 #include "base64.h"
 
 #ifdef TEST_BUILD
-#define main claude_main
+#define main klawed_main
 #endif
 
 // Version
@@ -1382,7 +1382,7 @@ static const char* format_file_size(size_t size) {
 static int show_diff(const char *file_path, const char *original_content) {
     // Create temporary file for original content
     char temp_path[PATH_MAX];
-    snprintf(temp_path, sizeof(temp_path), "%s.claude_diff.XXXXXX", file_path);
+    snprintf(temp_path, sizeof(temp_path), "%s.klawed_diff.XXXXXX", file_path);
 
     int fd = mkstemp(temp_path);
     if (fd == -1) {
@@ -5617,7 +5617,7 @@ char* build_system_prompt(ConversationState *state) {
         offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
             "\n<system-reminder>\n"
             "As you answer the user's questions, you can use the following context:\n"
-            "# claudeMd\n"
+            "# klawedMd\n"
             "Codebase and user instructions are shown below. Be sure to adhere to these instructions. "
             "IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n\n"
             "Contents of %s/KLAWED.md (project instructions, checked into the codebase):\n\n"
@@ -5979,18 +5979,31 @@ static int check_todo_write_executed(InternalContent *results, int count) {
     return 0;
 }
 
-static void add_tool_results(ConversationState *state, InternalContent *results, int count) {
+// Returns 0 on success, -1 on failure
+static int add_tool_results(ConversationState *state, InternalContent *results, int count) {
+    LOG_DEBUG("add_tool_results: Adding %d tool results to conversation", count);
+
     if (conversation_state_lock(state) != 0) {
+        LOG_ERROR("add_tool_results: Failed to acquire conversation lock");
         free_internal_contents(results, count);
-        return;
+        return -1;
     }
 
     if (state->count >= MAX_MESSAGES) {
-        LOG_ERROR("Maximum message count reached");
+        LOG_ERROR("add_tool_results: Cannot add results - maximum message count (%d) reached", MAX_MESSAGES);
         // Free results since they won't be added to state
         free_internal_contents(results, count);
         conversation_state_unlock(state);
-        return;
+        return -1;
+    }
+
+    // Log each tool result being added
+    for (int i = 0; i < count; i++) {
+        InternalContent *result = &results[i];
+        LOG_DEBUG("add_tool_results: result[%d]: tool_id=%s, tool_name=%s, is_error=%d",
+                  i, result->tool_id ? result->tool_id : "NULL",
+                  result->tool_name ? result->tool_name : "NULL",
+                  result->is_error);
     }
 
     InternalMessage *msg = &state->messages[state->count++];
@@ -5998,7 +6011,10 @@ static void add_tool_results(ConversationState *state, InternalContent *results,
     msg->contents = results;
     msg->content_count = count;
 
+    LOG_INFO("add_tool_results: Successfully added %d tool results as msg[%d]", count, state->count - 1);
+
     conversation_state_unlock(state);
+    return 0;
 }
 
 // ============================================================================
@@ -6121,6 +6137,15 @@ static void process_response(ConversationState *state,
     if (tool_count > 0) {
 
         LOG_INFO("Processing %d tool call(s)", tool_count);
+
+        // Log details of each tool call
+        for (int i = 0; i < tool_count; i++) {
+            ToolCall *tool = &tool_calls_array[i];
+            LOG_DEBUG("Tool call[%d]: id=%s, name=%s, has_params=%d",
+                      i, tool->id ? tool->id : "NULL",
+                      tool->name ? tool->name : "NULL",
+                      tool->parameters != NULL);
+        }
 
         struct timespec tool_start, tool_end;
         clock_gettime(CLOCK_MONOTONIC, &tool_start);
@@ -6402,6 +6427,15 @@ static void process_response(ConversationState *state,
             tool_tracker_destroy(&tracker);
         }
 
+        // Log summary of all tool results
+        LOG_DEBUG("Tool execution summary: %d results collected", tool_count);
+        for (int i = 0; i < tool_count; i++) {
+            LOG_DEBUG("Result[%d]: tool_id=%s, tool_name=%s, is_error=%d",
+                      i, results[i].tool_id ? results[i].tool_id : "NULL",
+                      results[i].tool_name ? results[i].tool_name : "NULL",
+                      results[i].is_error);
+        }
+
         int has_error = 0;
         for (int i = 0; i < tool_count; i++) {
             if (results[i].is_error) {
@@ -6459,7 +6493,11 @@ static void process_response(ConversationState *state,
 
         // Record tool results even in the interrupt path so that every tool_call
         // has a corresponding tool_result. This prevents 400s due to missing results.
-        add_tool_results(state, results, tool_count);
+        if (add_tool_results(state, results, tool_count) != 0) {
+            LOG_ERROR("Failed to add tool results to conversation state");
+            // Results were already freed by add_tool_results
+            results = NULL;
+        }
 
         if (todo_write_executed && state->todo_list && state->todo_list->count > 0) {
             // For TUI without queue, use colored rendering
@@ -6991,7 +7029,16 @@ static int process_single_command_response(ConversationState *state, ApiResponse
     ToolCall *tool_calls_array = response->tools;
 
     if (tool_count > 0) {
-        LOG_INFO("Processing %d tool call(s)", tool_count);
+        LOG_INFO("Processing %d tool call(s) in single-command mode", tool_count);
+
+        // Log details of each tool call
+        for (int i = 0; i < tool_count; i++) {
+            ToolCall *tool = &tool_calls_array[i];
+            LOG_DEBUG("Tool call[%d]: id=%s, name=%s, has_params=%d",
+                      i, tool->id ? tool->id : "NULL",
+                      tool->name ? tool->name : "NULL",
+                      tool->parameters != NULL);
+        }
 
         InternalContent *results = calloc((size_t)tool_count, sizeof(InternalContent));
         if (!results) {
@@ -7112,9 +7159,22 @@ static int process_single_command_response(ConversationState *state, ApiResponse
                 cJSON_Delete(input);
             }
 
+            // Log summary of all tool results before adding to conversation
+            LOG_DEBUG("Single-command mode: Collected %d tool results", tool_count);
+            for (int i = 0; i < tool_count; i++) {
+                LOG_DEBUG("Result[%d]: tool_id=%s, tool_name=%s, is_error=%d",
+                          i, results[i].tool_id ? results[i].tool_id : "NULL",
+                          results[i].tool_name ? results[i].tool_name : "NULL",
+                          results[i].is_error);
+            }
+
             // Add tool results to conversation
             // Note: add_tool_results takes ownership of the results array and its contents
-            add_tool_results(state, results, tool_count);
+            if (add_tool_results(state, results, tool_count) != 0) {
+                LOG_ERROR("Failed to add tool results to conversation - cannot proceed");
+                // Results were already freed by add_tool_results, don't free again
+                return 1;
+            }
 
             // Call API again with tool results and process recursively
             ApiResponse *next_response = call_api(state);
