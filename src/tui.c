@@ -3576,7 +3576,7 @@ int tui_event_loop(TUIState *tui, const char *prompt,
 
     TUIMessageQueue *msg_queue = (TUIMessageQueue *)msg_queue_ptr;
     int running = 1;
-    const long frame_time_us = 16667;  // ~60 FPS (1/60 second in microseconds)
+    const long frame_time_us = 8333;  // ~120 FPS (1/120 second in microseconds)
 
     // Note: tui->conversation_state is already set during tui_init()
     // No need to copy plan_mode separately
