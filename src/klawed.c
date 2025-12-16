@@ -7324,6 +7324,26 @@ static int read_socket_input(int client_fd, char *buffer, size_t buffer_size) {
     return (int)bytes_read;
 }
 
+// Write output to socket
+static int write_socket_output(int client_fd, const char *data, size_t data_len) {
+    LOG_DEBUG("write_socket_output: Attempting to write %zu bytes to client fd: %d", data_len, client_fd);
+    
+    if (client_fd < 0) {
+        LOG_DEBUG("write_socket_output: Invalid client fd, returning -1");
+        return -1;
+    }
+    
+    ssize_t bytes_written = write(client_fd, data, data_len);
+    if (bytes_written < 0) {
+        LOG_ERROR("Failed to write to socket: %s", strerror(errno));
+        LOG_DEBUG("write_socket_output: Write error, returning -1");
+        return -1;
+    }
+    
+    LOG_DEBUG("write_socket_output: Wrote %zd bytes to socket fd: %d", bytes_written, client_fd);
+    return (int)bytes_written;
+}
+
 // Check if socket has data available
 static int socket_has_data(int fd) {
     LOG_DEBUG("socket_has_data: Checking if fd %d has data", fd);
@@ -7435,7 +7455,143 @@ static void cleanup_socket(SocketIPC *socket_ipc) {
     LOG_DEBUG("cleanup_socket: Socket cleanup complete");
 }
 
+// Process API response for socket mode (handles tool calls recursively)
+static int process_response_for_socket_mode(ConversationState *state, ApiResponse *response, int client_fd) {
+    if (!response) {
+        return 1;
+    }
+    
+    // Handle API call errors (network errors, etc.)
+    if (response->error_message) {
+        // Create a simple error JSON
+        cJSON *error_json = cJSON_CreateObject();
+        if (error_json) {
+            cJSON_AddStringToObject(error_json, "error", response->error_message);
+            char *json_str = cJSON_PrintUnformatted(error_json);
+            if (json_str) {
+                write_socket_output(client_fd, json_str, strlen(json_str));
+                write_socket_output(client_fd, "\n", 1);
+                free(json_str);
+            }
+            cJSON_Delete(error_json);
+        } else {
+            // Fallback to plain text error
+            char error_buf[512];
+            snprintf(error_buf, sizeof(error_buf), "{\"error\": \"%s\"}\n", response->error_message);
+            write_socket_output(client_fd, error_buf, strlen(error_buf));
+        }
+        return 1;
+    }
+    
+    // Check if we have a raw response
+    if (!response->raw_response) {
+        char error_buf[] = "{\"error\": \"No response data available\"}\n";
+        write_socket_output(client_fd, error_buf, strlen(error_buf));
+        return 1;
+    }
+    
+    // Convert the entire raw response to JSON string
+    char *json_str = cJSON_PrintUnformatted(response->raw_response);
+    if (!json_str) {
+        LOG_ERROR("Failed to serialize JSON response for socket mode");
+        char error_buf[] = "{\"error\": \"Failed to serialize JSON response\"}\n";
+        write_socket_output(client_fd, error_buf, strlen(error_buf));
+        return 1;
+    }
+    
+    // Send the JSON response through socket
+    write_socket_output(client_fd, json_str, strlen(json_str));
+    
+    // Add newline after JSON for readability
+    write_socket_output(client_fd, "\n", 1);
+    
+    // Free the JSON string
+    free(json_str);
+    
+    // Add to conversation history (still needed for multi-turn conversations)
+    cJSON *choices = cJSON_GetObjectItem(response->raw_response, "choices");
+    if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
+        cJSON *choice = cJSON_GetArrayItem(choices, 0);
+        cJSON *message = cJSON_GetObjectItem(choice, "message");
+        if (message) {
+            add_assistant_message_openai(state, message);
+        }
+    }
+    
+    return 0;
+}
 
+// Socket-only mode: runs as a daemon listening on socket, no TUI
+static void socket_only_mode(ConversationState *state, const char *socket_path) {
+    LOG_INFO("Starting socket-only mode on path: %s", socket_path);
+    
+    // Create socket
+    SocketIPC socket_ipc = {0};
+    socket_ipc.server_fd = create_unix_socket(socket_path);
+    if (socket_ipc.server_fd < 0) {
+        LOG_ERROR("Failed to create socket for socket-only mode");
+        return;
+    }
+    
+    socket_ipc.client_fd = -1;
+    socket_ipc.socket_path = strdup(socket_path);
+    socket_ipc.enabled = 1;
+    
+    LOG_INFO("Socket-only mode ready, listening on: %s", socket_path);
+    
+    // Main event loop for socket-only mode
+    int running = 1;
+    while (running) {
+        // Accept new connection if none
+        if (socket_ipc.client_fd < 0) {
+            socket_ipc.client_fd = accept_socket_connection(socket_ipc.server_fd);
+            if (socket_ipc.client_fd >= 0) {
+                LOG_INFO("Client connected in socket-only mode");
+            }
+        }
+        
+        // Read from socket if connected
+        if (socket_ipc.client_fd >= 0) {
+            char buffer[4096];
+            if (socket_has_data(socket_ipc.client_fd)) {
+                int bytes = read_socket_input(socket_ipc.client_fd, buffer, sizeof(buffer));
+                if (bytes > 0) {
+                    LOG_INFO("Received %d bytes from socket", bytes);
+                    
+                    // Process the input
+                    buffer[bytes] = '\0';
+                    
+                    // Add user message to conversation (but don't display it)
+                    add_user_message(state, buffer);
+                    
+                    // Call API synchronously
+                    ApiResponse *response = call_api(state);
+                    if (response) {
+                        // Process response and send output through socket
+                        process_response_for_socket_mode(state, response, socket_ipc.client_fd);
+                        api_response_free(response);
+                    } else {
+                        const char *error_msg = "Error: Failed to get response from API\n";
+                        write_socket_output(socket_ipc.client_fd, error_msg, strlen(error_msg));
+                    }
+                    
+                } else if (bytes < 0) {
+                    // Client disconnected
+                    LOG_INFO("Client disconnected in socket-only mode");
+                    close(socket_ipc.client_fd);
+                    socket_ipc.client_fd = -1;
+                }
+            }
+        }
+        
+        // Small sleep to prevent busy waiting
+        usleep(10000); // 10ms
+    }
+    
+    // Cleanup
+    cleanup_socket(&socket_ipc);
+    LOG_INFO("Socket-only mode exiting");
+}
 
 // Advanced input handler with readline-like keybindings, driven by non-blocking event loop
 static void interactive_mode(ConversationState *state, int socket_ipc_enabled, const char *socket_path) {
@@ -7966,6 +8122,8 @@ int main(int argc, char *argv[]) {
         LOG_ERROR("Unexpected arguments provided");
         printf("Try '%s --help' for usage information.\n", argv[0]);
         return 1;
+    } else if (argc > 3 && socket_ipc_enabled) {
+        LOG_WARN("Extra arguments provided with -s flag, ignoring them (socket-only mode)");
     }
 
 #ifndef TEST_BUILD
@@ -8279,9 +8437,12 @@ int main(int argc, char *argv[]) {
         LOG_WARN("Failed to build system prompt");
     }
 
-    // Run either single command mode or interactive mode
+    // Run in appropriate mode
     int exit_code = 0;
-    if (is_single_command_mode) {
+    if (socket_ipc_enabled) {
+        // Socket-only mode: no TUI, only communicate via socket
+        socket_only_mode(&state, socket_path);
+    } else if (is_single_command_mode) {
         exit_code = single_command_mode(&state, single_command);
     } else {
         interactive_mode(&state, socket_ipc_enabled, socket_path);
