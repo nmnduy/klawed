@@ -1903,7 +1903,12 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     }
 
     if (pid == 0) {
-        // Child process - execute the command
+        // Child process - set environment variable to indicate this is a subagent
+        if (setenv("KLAWED_IS_SUBAGENT", "1", 1) != 0) {
+            fprintf(stderr, "Warning: Failed to set KLAWED_IS_SUBAGENT environment variable: %s\n", strerror(errno));
+        }
+        
+        // Execute the command
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);
         // If we get here, exec failed
         fprintf(stderr, "Failed to execute subagent: %s\n", strerror(errno));
@@ -4127,6 +4132,21 @@ static cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationStat
     // Try built-in tools first
     for (int i = 0; i < num_tools; i++) {
         if (strcmp(tools[i].name, tool_name) == 0) {
+            // Check if we're running as a subagent and exclude subagent-related tools to prevent recursion
+            const char *is_subagent_env = getenv("KLAWED_IS_SUBAGENT");
+            int is_subagent = is_subagent_env && (strcmp(is_subagent_env, "1") == 0 || 
+                                                 strcasecmp(is_subagent_env, "true") == 0 ||
+                                                 strcasecmp(is_subagent_env, "yes") == 0);
+            
+            if (is_subagent && (strcmp(tool_name, "Subagent") == 0 || 
+                               strcmp(tool_name, "CheckSubagentProgress") == 0 || 
+                               strcmp(tool_name, "InterruptSubagent") == 0)) {
+                cJSON *error = cJSON_CreateObject();
+                cJSON_AddStringToObject(error, "error", "Subagent-related tools are disabled when running as a subagent to prevent recursion");
+                result = error;
+                break;
+            }
+            
             LOG_DEBUG("execute_tool: Found built-in tool '%s' at index %d", tool_name, i);
             result = tools[i].handler(input, state);
             break;
@@ -4305,7 +4325,14 @@ static cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationStat
 cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON *tool_array = cJSON_CreateArray();
     int plan_mode = state ? state->plan_mode : 0;
-    LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d", plan_mode);
+    
+    // Check if we're running as a subagent - if so, exclude the Subagent tool to prevent recursion
+    const char *is_subagent_env = getenv("KLAWED_IS_SUBAGENT");
+    int is_subagent = is_subagent_env && (strcmp(is_subagent_env, "1") == 0 || 
+                                         strcasecmp(is_subagent_env, "true") == 0 ||
+                                         strcasecmp(is_subagent_env, "yes") == 0);
+    
+    LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d, is_subagent=%d", plan_mode, is_subagent);
     // Sleep tool
     cJSON *sleep_tool = cJSON_CreateObject();
     cJSON_AddStringToObject(sleep_tool, "type", "function");
@@ -4398,8 +4425,9 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToObject(bash, "function", bash_func);
         cJSON_AddItemToArray(tool_array, bash);
 
-        // Subagent tool
-        cJSON *subagent = cJSON_CreateObject();
+        // Subagent tool - exclude if running as subagent to prevent recursion
+        if (!is_subagent) {
+            cJSON *subagent = cJSON_CreateObject();
         cJSON_AddStringToObject(subagent, "type", "function");
         cJSON *subagent_func = cJSON_CreateObject();
         cJSON_AddStringToObject(subagent_func, "name", "Subagent");
@@ -4437,8 +4465,9 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToArray(subagent_req, cJSON_CreateString("prompt"));
         cJSON_AddItemToObject(subagent_params, "required", subagent_req);
         cJSON_AddItemToObject(subagent_func, "parameters", subagent_params);
-        cJSON_AddItemToObject(subagent, "function", subagent_func);
-        cJSON_AddItemToArray(tool_array, subagent);
+            cJSON_AddItemToObject(subagent, "function", subagent_func);
+            cJSON_AddItemToArray(tool_array, subagent);
+        }
 
         // Write tool
         cJSON *write = cJSON_CreateObject();
