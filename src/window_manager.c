@@ -17,7 +17,7 @@ const WindowManagerConfig DEFAULT_WINDOW_CONFIG = {
     .status_height = 1,
     // No gap between status and input by default
     .padding = 0,
-    .conv_h_padding = 1,    // 1 column horizontal padding for conversation
+    .conv_h_padding = 0,    // No horizontal padding for conversation
     .initial_pad_capacity = 1000
 };
 
