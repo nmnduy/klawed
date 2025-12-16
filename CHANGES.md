@@ -9,7 +9,7 @@ This doesn't help the user understand what actually went wrong (e.g., rate limit
 
 ## Solution
 
-### 1. API Retry Error Messages (src/claude.c)
+### 1. API Retry Error Messages (src/klawed.c)
 
 **Before:**
 - When retries are exhausted: "Maximum retry duration exceeded" (no context)
@@ -43,9 +43,9 @@ This doesn't help the user understand what actually went wrong (e.g., rate limit
 **Changes:**
 - Updated `mcp_call_tool()` to always return MCPToolResult (never NULL)
 - Set `is_error=1` and populate `result` field with error message
-- Updated `tool_call_mcp_tool()` in claude.c to handle NULL check differently
+- Updated `tool_call_mcp_tool()` in klawed.c to handle NULL check differently
 
-### 3. Tool Handler Updates (src/claude.c)
+### 3. Tool Handler Updates (src/klawed.c)
 
 **Before:**
 ```c

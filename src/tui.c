@@ -2219,7 +2219,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         "Press Ctrl+D to exit quickly.",
         /* "Use /voice to record and transcribe audio (requires PortAudio).", */
         "Set KLAWED_THEME to change colors. Available: tender (default), kitty-default, dracula, gruvbox-dark, solarized-dark, black-metal.",
-        "Set CLAUDE_LOG_LEVEL=DEBUG for verbose logs.",
+        "Set KLAWED_LOG_LEVEL=DEBUG for verbose logs.",
         "API history stored in ./.klawed/api_calls.db (configurable via KLAWED_DB_PATH).",
         "Insert mode supports readline keys: Ctrl+A, Ctrl+E, Alt+B, Alt+F.",
         /* "Switch models via OPENAI_MODEL or ANTHROPIC_MODEL environment variables.", */
@@ -2455,7 +2455,7 @@ static int handle_normal_mode_input(TUIState *tui, int ch, const char *prompt, v
     }
 
     // Structure for extracting ConversationState from user_data
-    // Matches InteractiveContext in claude.c
+    // Matches InteractiveContext in klawed.c
     typedef struct {
         ConversationState *state;
         TUIState *tui;
@@ -2925,7 +2925,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         return 0;
     } else if (ch == KEY_BTAB) {  // Shift+Tab: toggle plan_mode
         // Extract InteractiveContext from user_data
-        // Structure matches InteractiveContext in claude.c
+        // Structure matches InteractiveContext in klawed.c
         typedef struct {
             ConversationState *state;
             TUIState *tui;

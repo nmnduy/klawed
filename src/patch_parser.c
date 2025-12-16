@@ -9,7 +9,7 @@
 #include "patch_parser.h"
 #include "logger.h"
 
-// External functions from claude.c
+// External functions from klawed.c
 extern char* read_file(const char *path);
 extern int write_file(const char *path, const char *content);
 extern char* resolve_path(const char *path, const char *base_dir);

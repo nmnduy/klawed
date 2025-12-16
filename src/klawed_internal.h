@@ -4,8 +4,8 @@
  * Shared types and functions used across modules
  */
 
-#ifndef CLAUDE_INTERNAL_H
-#define CLAUDE_INTERNAL_H
+#ifndef KLAWED_INTERNAL_H
+#define KLAWED_INTERNAL_H
 
 #include <cjson/cJSON.h>
 #include <pthread.h>
@@ -303,4 +303,4 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching);
  */
 
 
-#endif // CLAUDE_INTERNAL_H
+#endif // KLAWED_INTERNAL_H

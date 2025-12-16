@@ -7715,8 +7715,8 @@ int main(int argc, char *argv[]) {
         printf("    AWS credentials        Required: Configure via AWS CLI or environment\n\n");
         printf("  Logging and Persistence:\n");
         printf("    KLAWED_LOG_PATH    Optional: Full path to log file\n");
-        printf("    KLAWED_LOG_DIR     Optional: Directory for logs (uses claude.log filename)\n");
-        printf("    CLAUDE_LOG_LEVEL     Optional: Log level (DEBUG, INFO, WARN, ERROR)\n");
+        printf("    KLAWED_LOG_DIR     Optional: Directory for logs (uses klawed.log filename)\n");
+        printf("    KLAWED_LOG_LEVEL     Optional: Log level (DEBUG, INFO, WARN, ERROR)\n");
         printf("    KLAWED_DB_PATH     Optional: Path to SQLite database for API history\n");
         printf("                         Default: ~/.local/share/klawed/api_calls.db\n");
         printf("    KLAWED_MAX_RETRY_DURATION_MS  Optional: Maximum retry duration in milliseconds\n");
@@ -7883,7 +7883,7 @@ int main(int argc, char *argv[]) {
     log_set_rotation(10, 5);
 
     // Set log level from environment or default to INFO
-    const char *log_level_env = getenv("CLAUDE_LOG_LEVEL");
+    const char *log_level_env = getenv("KLAWED_LOG_LEVEL");
     if (log_level_env) {
         if (strcmp(log_level_env, "DEBUG") == 0) {
             log_set_level(LOG_LEVEL_DEBUG);

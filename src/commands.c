@@ -39,7 +39,7 @@ static int tui_mode_enabled = 0;
 
 static void print_status(const char *text) {
     // In TUI mode, don't print to stdout (it corrupts ncurses)
-    // The caller (claude.c) will handle UI feedback
+    // The caller (klawed.c) will handle UI feedback
     if (tui_mode_enabled) {
         LOG_DEBUG("Status (TUI): %s", text);
         return;
@@ -59,7 +59,7 @@ static void print_status(const char *text) {
 
 static void print_error(const char *text) {
     // In TUI mode, don't print to stderr (it corrupts ncurses)
-    // The caller (claude.c) will handle UI feedback
+    // The caller (klawed.c) will handle UI feedback
     if (tui_mode_enabled) {
         LOG_DEBUG("Error (TUI): %s", text);
         return;
@@ -318,7 +318,7 @@ int commands_execute(ConversationState *state, const char *input, const Command 
             return cmd->handler(state, args);
         }
     }
-    // Don't print error here - let the caller (claude.c) handle it
+    // Don't print error here - let the caller (klawed.c) handle it
     // This prevents stderr output from corrupting the ncurses TUI
     LOG_DEBUG("Unknown command: %.*s", (int)cmd_len, cmd_line);
     return -1;
