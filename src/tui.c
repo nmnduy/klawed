@@ -562,6 +562,41 @@ static void tui_clear_resize_flag(void) {
 }
 */
 
+// Message type categories for spacing logic
+typedef enum {
+    MSG_TYPE_UNKNOWN = 0,
+    MSG_TYPE_USER,
+    MSG_TYPE_ASSISTANT,
+    MSG_TYPE_TOOL,
+    MSG_TYPE_SYSTEM,
+    MSG_TYPE_EMPTY
+} MessageType;
+
+// Helper: Classify message type from prefix
+static MessageType get_message_type(const char *prefix) {
+    if (!prefix || prefix[0] == '\0') {
+        return MSG_TYPE_EMPTY;
+    }
+
+    if (strcmp(prefix, "[User]") == 0) {
+        return MSG_TYPE_USER;
+    }
+    if (strcmp(prefix, "[Assistant]") == 0) {
+        return MSG_TYPE_ASSISTANT;
+    }
+    if (strcmp(prefix, "[System]") == 0 || strcmp(prefix, "[Error]") == 0 ||
+        strcmp(prefix, "[Transcription]") == 0) {
+        return MSG_TYPE_SYSTEM;
+    }
+    // Check for tools - must come after checking specific system prefixes
+    // Matches "[Tool: ...]" or any tool name in brackets like "[Bash]", "[Read]", etc.
+    if (prefix[0] == '[') {
+        return MSG_TYPE_TOOL;
+    }
+
+    return MSG_TYPE_UNKNOWN;
+}
+
 // Helper: Add a conversation entry to the TUI state
 static int add_conversation_entry(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
     if (!tui) return -1;
@@ -618,6 +653,110 @@ static void free_conversation_entries(TUIState *tui) {
 static void refresh_conversation_viewport(TUIState *tui) {
     if (!tui) return;
     window_manager_refresh_conversation(&tui->wm);
+}
+
+// Helper: Render a single conversation entry to the pad
+// Returns 0 on success, -1 on error
+static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
+    if (!tui || !tui->wm.conv_pad) {
+        return -1;
+    }
+
+    // Map color pair
+    int mapped_pair = NCURSES_PAIR_FOREGROUND;
+    switch (color_pair) {
+        case COLOR_PAIR_DEFAULT:
+        case COLOR_PAIR_FOREGROUND:
+            mapped_pair = NCURSES_PAIR_FOREGROUND;
+            break;
+        case COLOR_PAIR_USER:
+            mapped_pair = NCURSES_PAIR_USER;
+            break;
+        case COLOR_PAIR_ASSISTANT:
+            mapped_pair = NCURSES_PAIR_ASSISTANT;
+            break;
+        case COLOR_PAIR_TOOL:
+            mapped_pair = NCURSES_PAIR_TOOL;
+            break;
+        case COLOR_PAIR_STATUS:
+            mapped_pair = NCURSES_PAIR_STATUS;
+            break;
+        case COLOR_PAIR_ERROR:
+            mapped_pair = NCURSES_PAIR_ERROR;
+            break;
+        case COLOR_PAIR_PROMPT:
+            mapped_pair = NCURSES_PAIR_PROMPT;
+            break;
+        case COLOR_PAIR_TODO_COMPLETED:
+            mapped_pair = NCURSES_PAIR_TODO_COMPLETED;
+            break;
+        case COLOR_PAIR_TODO_IN_PROGRESS:
+            mapped_pair = NCURSES_PAIR_TODO_IN_PROGRESS;
+            break;
+        case COLOR_PAIR_TODO_PENDING:
+            mapped_pair = NCURSES_PAIR_TODO_PENDING;
+            break;
+        default:
+            /* Keep default mapped_pair (foreground) */
+            break;
+    }
+
+    // Move to end of pad
+    int start_line = window_manager_get_content_lines(&tui->wm);
+    wmove(tui->wm.conv_pad, start_line, 0);
+
+    // Write prefix if present
+    if (prefix && prefix[0] != '\0') {
+        if (has_colors()) {
+            wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+        }
+        waddstr(tui->wm.conv_pad, prefix);
+        waddch(tui->wm.conv_pad, ' ');
+        if (has_colors()) {
+            wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+        }
+    }
+
+    // Write text
+    if (text && text[0] != '\0') {
+        int text_pair = (prefix && prefix[0] != '\0') ? NCURSES_PAIR_FOREGROUND : mapped_pair;
+        if (has_colors()) {
+            wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
+        }
+        waddstr(tui->wm.conv_pad, text);
+        if (has_colors()) {
+            wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
+        }
+    }
+
+    // Add newline
+    waddch(tui->wm.conv_pad, '\n');
+
+    // Update total lines (get actual cursor position after wrapping)
+    int cur_y, cur_x;
+    getyx(tui->wm.conv_pad, cur_y, cur_x);
+    (void)cur_x;
+
+    // Safety check: ensure cursor is within pad bounds
+    int current_pad_height, current_pad_width;
+    getmaxyx(tui->wm.conv_pad, current_pad_height, current_pad_width);
+    if (cur_y >= current_pad_height) {
+        LOG_ERROR("[TUI] Cursor position %d exceeds pad height %d! Expanding pad.", cur_y, current_pad_height);
+        // Emergency expansion with overflow check
+        int emergency_capacity = cur_y + 100;
+        if (emergency_capacity < cur_y) {  // Check for integer overflow
+            LOG_ERROR("[TUI] Emergency expansion would overflow! Limiting cursor.");
+            cur_y = current_pad_height - 1;
+        } else if (window_manager_ensure_pad_capacity(&tui->wm, emergency_capacity) != 0) {
+            LOG_ERROR("[TUI] Failed to expand pad in emergency!");
+            // Try to recover by limiting to current capacity
+            cur_y = current_pad_height - 1;
+        }
+    }
+
+    window_manager_set_content_lines(&tui->wm, cur_y);
+
+    return 0;
 }
 
 // UTF-8 helper functions (from lineedit.c)
@@ -722,8 +861,8 @@ static int resize_input_window(TUIState *tui, int desired_lines) {
         int h, w;
         getmaxyx(tui->wm.input_win, h, w);
         tui->input_buffer->win = tui->wm.input_win;
-        tui->input_buffer->win_width = w - 2;
-        tui->input_buffer->win_height = h - 2;
+        tui->input_buffer->win_width = w;  // No borders
+        tui->input_buffer->win_height = h;
     }
 
     // Ensure content lines are up to date before refresh
@@ -769,8 +908,8 @@ static int input_init(TUIState *tui) {
     // Get window dimensions
     int h, w;
     getmaxyx(tui->wm.input_win, h, w);
-    input->win_width = w - 2;  // Account for borders
-    input->win_height = h - 2;
+    input->win_width = w;  // No borders
+    input->win_height = h;
 
     tui->input_buffer = input;
     return 0;
@@ -1092,7 +1231,8 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     // Clear the window
     werase(win);
 
-    // Draw box with accent color if colors are available
+    // Draw box with accent color if colors are available (commented out - no border)
+    /*
     if (has_colors()) {
         wattron(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
         box(win, 0, 0);
@@ -1100,6 +1240,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     } else {
         box(win, 0, 0);
     }
+    */
 
     // Draw prompt on first visible line (if we're not scrolled past it)
     // In command mode, show command buffer instead of normal prompt
@@ -1490,23 +1631,44 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
         return;
     }
 
-    // Add entry to conversation history
-    if (add_conversation_entry(tui, prefix, text, color_pair) != 0) {
-        LOG_ERROR("[TUI] Failed to add conversation entry");
-        return;
+    // Check if we need to add spacing between different message types
+    // Look at the most recent non-empty entry to determine if spacing is needed
+    MessageType current_type = get_message_type(prefix);
+    MessageType previous_type = MSG_TYPE_UNKNOWN;
+
+    // Find the most recent non-empty entry
+    for (int i = tui->entries_count - 1; i >= 0; i--) {
+        MessageType entry_type = get_message_type(tui->entries[i].prefix);
+        if (entry_type != MSG_TYPE_EMPTY) {
+            previous_type = entry_type;
+            break;
+        }
     }
 
-    // Get pad dimensions
+    // Add blank line if transitioning between different message types
+    // (but not for empty lines or unknown types, and not if previous was empty/unknown)
+    int should_add_spacing = 0;
+    if (current_type != MSG_TYPE_EMPTY && current_type != MSG_TYPE_UNKNOWN &&
+        previous_type != MSG_TYPE_EMPTY && previous_type != MSG_TYPE_UNKNOWN &&
+        current_type != previous_type) {
+        should_add_spacing = 1;
+    }
+
+    // Get pad dimensions for capacity estimation
     int pad_height, pad_width;
     getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
     (void)pad_height;
 
-    // Calculate how many lines this entry will take when wrapped
+    // Calculate how many lines the entries will take when wrapped
     int prefix_len = (prefix && prefix[0] != '\0') ? (int)strlen(prefix) + 1 : 0; // +1 for space
     int text_len = (text && text[0] != '\0') ? (int)strlen(text) : 0;
 
     // Estimate wrapped lines (conservative)
-    int estimated_lines = 1; // At least 1 line
+    int estimated_lines = 1; // At least 1 line for the entry
+    if (should_add_spacing) {
+        estimated_lines += 1; // Add one for the spacing line
+    }
+
     if (text_len > 0) {
         // Count newlines in text (each newline is a line break)
         int newline_count = 0;
@@ -1519,7 +1681,7 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
         // Each newline in text is definitely a line break
         // Text without newlines might wrap
         // Be conservative: assume worst-case wrapping
-        estimated_lines = newline_count + ((prefix_len + text_len) / (pad_width / 2)) + 5;
+        estimated_lines += newline_count + ((prefix_len + text_len) / (pad_width / 2)) + 5;
     }
 
     // Ensure pad has enough capacity (centralized via WindowManager)
@@ -1547,102 +1709,33 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
         return;
     }
 
-    // Map color pair
-    int mapped_pair = NCURSES_PAIR_FOREGROUND;
-    switch (color_pair) {
-        case COLOR_PAIR_DEFAULT:
-        case COLOR_PAIR_FOREGROUND:
-            mapped_pair = NCURSES_PAIR_FOREGROUND;
-            break;
-        case COLOR_PAIR_USER:
-            mapped_pair = NCURSES_PAIR_USER;
-            break;
-        case COLOR_PAIR_ASSISTANT:
-            mapped_pair = NCURSES_PAIR_ASSISTANT;
-            break;
-        case COLOR_PAIR_TOOL:
-            mapped_pair = NCURSES_PAIR_TOOL;
-            break;
-        case COLOR_PAIR_STATUS:
-            mapped_pair = NCURSES_PAIR_STATUS;
-            break;
-        case COLOR_PAIR_ERROR:
-            mapped_pair = NCURSES_PAIR_ERROR;
-            break;
-        case COLOR_PAIR_PROMPT:
-            mapped_pair = NCURSES_PAIR_PROMPT;
-            break;
-        case COLOR_PAIR_TODO_COMPLETED:
-            mapped_pair = NCURSES_PAIR_TODO_COMPLETED;
-            break;
-        case COLOR_PAIR_TODO_IN_PROGRESS:
-            mapped_pair = NCURSES_PAIR_TODO_IN_PROGRESS;
-            break;
-        case COLOR_PAIR_TODO_PENDING:
-            mapped_pair = NCURSES_PAIR_TODO_PENDING;
-            break;
-        default:
-            /* Keep default mapped_pair (foreground) */
-            break;
+    // Insert blank line for spacing if needed
+    if (should_add_spacing) {
+        if (add_conversation_entry(tui, NULL, "", COLOR_PAIR_FOREGROUND) != 0) {
+            LOG_ERROR("[TUI] Failed to add spacing entry");
+            // Continue anyway - spacing is not critical
+        } else {
+            // Render the spacing line
+            render_entry_to_pad(tui, NULL, "", COLOR_PAIR_FOREGROUND);
+        }
     }
 
-    // Move to end of pad
+    // Add entry to conversation history
+    if (add_conversation_entry(tui, prefix, text, color_pair) != 0) {
+        LOG_ERROR("[TUI] Failed to add conversation entry");
+        return;
+    }
+
+    // Render the actual entry
     int start_line = window_manager_get_content_lines(&tui->wm);
-    wmove(tui->wm.conv_pad, start_line, 0);
-
-    // Write prefix if present
-    if (prefix && prefix[0] != '\0') {
-        if (has_colors()) {
-            wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-        }
-        waddstr(tui->wm.conv_pad, prefix);
-        waddch(tui->wm.conv_pad, ' ');
-        if (has_colors()) {
-            wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-        }
+    if (render_entry_to_pad(tui, prefix, text, color_pair) != 0) {
+        LOG_ERROR("[TUI] Failed to render entry to pad");
+        return;
     }
 
-    // Write text
-    if (text && text[0] != '\0') {
-        int text_pair = (prefix && prefix[0] != '\0') ? NCURSES_PAIR_FOREGROUND : mapped_pair;
-        if (has_colors()) {
-            wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
-        }
-        waddstr(tui->wm.conv_pad, text);
-        if (has_colors()) {
-            wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
-        }
-    }
-
-    // Add newline
-    waddch(tui->wm.conv_pad, '\n');
-
-    // Update total lines (get actual cursor position after wrapping)
-    int cur_y, cur_x;
-    getyx(tui->wm.conv_pad, cur_y, cur_x);
-    (void)cur_x;
-
-    // Safety check: ensure cursor is within pad bounds
-    int current_pad_height, current_pad_width;
-    getmaxyx(tui->wm.conv_pad, current_pad_height, current_pad_width);
-    if (cur_y >= current_pad_height) {
-        LOG_ERROR("[TUI] Cursor position %d exceeds pad height %d! Expanding pad.", cur_y, current_pad_height);
-        // Emergency expansion with overflow check
-        int emergency_capacity = cur_y + 100;
-        if (emergency_capacity < cur_y) {  // Check for integer overflow
-            LOG_ERROR("[TUI] Emergency expansion would overflow! Limiting cursor.");
-            cur_y = current_pad_height - 1;
-        } else if (window_manager_ensure_pad_capacity(&tui->wm, emergency_capacity) != 0) {
-            LOG_ERROR("[TUI] Failed to expand pad in emergency!");
-            // Try to recover by limiting to current capacity
-            cur_y = current_pad_height - 1;
-        }
-    }
-
-    window_manager_set_content_lines(&tui->wm, cur_y);
-
-    LOG_DEBUG("[TUI] Added line, total_lines now %d (estimated %d, actual %d, pad_height=%d)",
-              window_manager_get_content_lines(&tui->wm), estimated_lines, cur_y - start_line, current_pad_height);
+    int cur_y = window_manager_get_content_lines(&tui->wm);
+    LOG_DEBUG("[TUI] Added line, total_lines now %d (estimated %d, actual %d)",
+              cur_y, estimated_lines, cur_y - start_line);
 
     // Auto-scroll to bottom only in INSERT mode (preserve scroll position in NORMAL mode)
     if (tui->mode == TUI_MODE_INSERT) {
@@ -1969,8 +2062,8 @@ void tui_handle_resize(TUIState *tui) {
         int h, w;
         getmaxyx(tui->wm.input_win, h, w);
         tui->input_buffer->win = tui->wm.input_win;
-        tui->input_buffer->win_width = w - 2;
-        tui->input_buffer->win_height = h - 2;
+        tui->input_buffer->win_width = w;  // No borders
+        tui->input_buffer->win_height = h;
         LOG_DEBUG("[TUI] Updated input buffer window pointer after resize");
     }
 
@@ -2126,7 +2219,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         "Press Ctrl+D to exit quickly.",
         /* "Use /voice to record and transcribe audio (requires PortAudio).", */
         "Set KLAWED_THEME to change colors. Available: tender (default), kitty-default, dracula, gruvbox-dark, solarized-dark, black-metal.",
-        "Set CLAUDE_LOG_LEVEL=DEBUG for verbose logs.",
+        "Set KLAWED_LOG_LEVEL=DEBUG for verbose logs.",
         "API history stored in ./.klawed/api_calls.db (configurable via KLAWED_DB_PATH).",
         "Insert mode supports readline keys: Ctrl+A, Ctrl+E, Alt+B, Alt+F.",
         /* "Switch models via OPENAI_MODEL or ANTHROPIC_MODEL environment variables.", */
@@ -2362,7 +2455,7 @@ static int handle_normal_mode_input(TUIState *tui, int ch, const char *prompt, v
     }
 
     // Structure for extracting ConversationState from user_data
-    // Matches InteractiveContext in claude.c
+    // Matches InteractiveContext in klawed.c
     typedef struct {
         ConversationState *state;
         TUIState *tui;
@@ -2832,7 +2925,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         return 0;
     } else if (ch == KEY_BTAB) {  // Shift+Tab: toggle plan_mode
         // Extract InteractiveContext from user_data
-        // Structure matches InteractiveContext in claude.c
+        // Structure matches InteractiveContext in klawed.c
         typedef struct {
             ConversationState *state;
             TUIState *tui;
@@ -3485,7 +3578,7 @@ int tui_event_loop(TUIState *tui, const char *prompt,
 
     TUIMessageQueue *msg_queue = (TUIMessageQueue *)msg_queue_ptr;
     int running = 1;
-    const long frame_time_us = 16667;  // ~60 FPS (1/60 second in microseconds)
+    const long frame_time_us = 8333;  // ~120 FPS (1/120 second in microseconds)
 
     // Note: tui->conversation_state is already set during tui_init()
     // No need to copy plan_mode separately

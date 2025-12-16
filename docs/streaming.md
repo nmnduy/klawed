@@ -336,7 +336,7 @@ Potential improvements:
 Enable debug logging to see streaming events:
 
 ```bash
-export CLAUDE_LOG_LEVEL=DEBUG
+export KLAWED_LOG_LEVEL=DEBUG
 ./build/klawed "test prompt"
 ```
 
@@ -395,4 +395,4 @@ The streaming callback checks `state->interrupt_requested` on each event. When u
 - **OpenAI Provider**: `src/openai_provider.c` - OpenAI chunk handling and response reconstruction  
 - **TUI**: `src/tui.c` - `tui_update_last_conversation_line()`
 - **Types**: `src/http_client.h` - `StreamEvent`, `StreamEventType`
-- **State**: `src/claude_internal.h` - `ConversationState.tui` pointer
+- **State**: `src/klawed_internal.h` - `ConversationState.tui` pointer

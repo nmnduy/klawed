@@ -288,6 +288,8 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         return result;
     }
 
+    LOG_DEBUG("OpenAI: Built request with caching %s", enable_caching ? "enabled" : "disabled");
+
     // Add streaming parameter if enabled
     if (enable_streaming) {
         cJSON_AddBoolToObject(request, "stream", cJSON_True);
@@ -296,6 +298,8 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
 
     char *openai_json = cJSON_PrintUnformatted(request);
     cJSON_Delete(request);
+    
+    LOG_DEBUG("OpenAI: Request serialized, length: %zu bytes", openai_json ? strlen(openai_json) : 0);
 
     if (!openai_json) {
         result.error_message = strdup("Failed to serialize request JSON");

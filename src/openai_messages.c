@@ -30,6 +30,8 @@ void ensure_tool_results(ConversationState *state) {
     int tool_call_count = 0;
     int tool_call_capacity = 0;
 
+    LOG_DEBUG("ensure_tool_results: Starting scan of %d messages", state->count);
+
     // Scan messages to collect tool calls and check for results
     for (int i = 0; i < state->count; i++) {
         InternalMessage *msg = &state->messages[i];
@@ -54,6 +56,9 @@ void ensure_tool_results(ConversationState *state) {
                     tool_calls[tool_call_count].id = c->tool_id;
                     tool_calls[tool_call_count].tool_name = c->tool_name;
                     tool_calls[tool_call_count].has_result = 0;
+                    LOG_DEBUG("ensure_tool_results: Found tool call in msg[%d]: id=%s, tool=%s",
+                              i, c->tool_id ? c->tool_id : "NULL",
+                              c->tool_name ? c->tool_name : "NULL");
                     tool_call_count++;
                 }
             }
@@ -62,12 +67,22 @@ void ensure_tool_results(ConversationState *state) {
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
                 if (c->type == INTERNAL_TOOL_RESPONSE && c->tool_id) {
+                    LOG_DEBUG("ensure_tool_results: Found tool result in msg[%d]: id=%s, tool=%s, is_error=%d",
+                              i, c->tool_id ? c->tool_id : "NULL",
+                              c->tool_name ? c->tool_name : "NULL",
+                              c->is_error);
                     // Mark this tool call as having a result
+                    int found = 0;
                     for (int k = 0; k < tool_call_count; k++) {
                         if (tool_calls[k].id && strcmp(tool_calls[k].id, c->tool_id) == 0) {
                             tool_calls[k].has_result = 1;
+                            found = 1;
+                            LOG_DEBUG("ensure_tool_results: Matched result to tool_call[%d]", k);
                             break;
                         }
+                    }
+                    if (!found) {
+                        LOG_WARN("ensure_tool_results: Tool result id=%s has no matching tool call", c->tool_id);
                     }
                 }
             }
@@ -79,8 +94,14 @@ void ensure_tool_results(ConversationState *state) {
     for (int i = 0; i < tool_call_count; i++) {
         if (!tool_calls[i].has_result) {
             missing_count++;
+            LOG_DEBUG("ensure_tool_results: Missing result for tool_call[%d]: id=%s, tool=%s",
+                      i, tool_calls[i].id ? tool_calls[i].id : "NULL",
+                      tool_calls[i].tool_name ? tool_calls[i].tool_name : "NULL");
         }
     }
+
+    LOG_DEBUG("ensure_tool_results: Summary: %d total tool calls, %d missing results",
+              tool_call_count, missing_count);
 
     if (missing_count > 0) {
         LOG_WARN("Found %d tool call(s) without matching results - injecting synthetic results", missing_count);
@@ -125,6 +146,10 @@ void ensure_tool_results(ConversationState *state) {
         msg->role = MSG_USER;
         msg->contents = synthetic_results;
         msg->content_count = missing_count;
+        LOG_INFO("ensure_tool_results: Added synthetic results as msg[%d] with %d tool results",
+                 state->count - 1, missing_count);
+    } else {
+        LOG_DEBUG("ensure_tool_results: All tool calls have matching results - no action needed");
     }
 
     free(tool_calls);
@@ -299,6 +324,51 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
 
     cJSON_AddItemToObject(request, "messages", messages_array);
     conversation_state_unlock(state);
+
+    // Validate request structure - scan for tool calls without results
+    LOG_DEBUG("Validating request structure before sending to API");
+    int msg_count = cJSON_GetArraySize(messages_array);
+    int tool_call_count = 0;
+    int tool_result_count = 0;
+    
+    for (int i = 0; i < msg_count; i++) {
+        cJSON *msg = cJSON_GetArrayItem(messages_array, i);
+        cJSON *role = cJSON_GetObjectItem(msg, "role");
+        if (!role || !cJSON_IsString(role)) continue;
+        
+        if (strcmp(role->valuestring, "assistant") == 0) {
+            cJSON *tool_calls = cJSON_GetObjectItem(msg, "tool_calls");
+            if (tool_calls && cJSON_IsArray(tool_calls)) {
+                int calls_in_msg = cJSON_GetArraySize(tool_calls);
+                tool_call_count += calls_in_msg;
+                LOG_DEBUG("Validation: Message[%d] (assistant) has %d tool_calls", i, calls_in_msg);
+            }
+        } else if (strcmp(role->valuestring, "user") == 0) {
+            // Count tool response content blocks
+            cJSON *content = cJSON_GetObjectItem(msg, "content");
+            if (content && cJSON_IsArray(content)) {
+                int content_count = cJSON_GetArraySize(content);
+                for (int j = 0; j < content_count; j++) {
+                    cJSON *item = cJSON_GetArrayItem(content, j);
+                    cJSON *type = cJSON_GetObjectItem(item, "type");
+                    if (type && cJSON_IsString(type) && strcmp(type->valuestring, "tool_result") == 0) {
+                        tool_result_count++;
+                    }
+                }
+                if (content_count > 0) {
+                    LOG_DEBUG("Validation: Message[%d] (user) has %d content blocks", i, content_count);
+                }
+            }
+        }
+    }
+    
+    LOG_INFO("Request validation: %d messages, %d tool_calls, %d tool_results", 
+             msg_count, tool_call_count, tool_result_count);
+    
+    if (tool_call_count > tool_result_count) {
+        LOG_WARN("Request may be invalid: %d tool_calls but only %d tool_results",
+                 tool_call_count, tool_result_count);
+    }
 
     // Add tools with cache_control support (including MCP tools if available)
     // In plan mode, exclude Bash, Write, and Edit tools

@@ -434,7 +434,7 @@ char* persistence_get_default_path(void) {
         }
     }
 
-    // Fallback to ~/.local/share/claude
+    // Fallback to ~/.local/share/klawed
     const char *home = getenv("HOME");
     if (home && home[0] != '\0') {
         path = malloc(PATH_MAX);

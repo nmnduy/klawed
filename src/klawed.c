@@ -3,7 +3,7 @@
  * A lightweight coding agent that interacts with OpenAI-compatible APIs
  *
  * Compilation: make
- * Usage: ./claude "your prompt here"
+ * Usage: ./klawed "your prompt here"
  *
  * Dependencies: libcurl, cJSON, pthread
  */
@@ -176,7 +176,7 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 #include "base64.h"
 
 #ifdef TEST_BUILD
-#define main claude_main
+#define main klawed_main
 #endif
 
 // Version
@@ -1382,7 +1382,7 @@ static const char* format_file_size(size_t size) {
 static int show_diff(const char *file_path, const char *original_content) {
     // Create temporary file for original content
     char temp_path[PATH_MAX];
-    snprintf(temp_path, sizeof(temp_path), "%s.claude_diff.XXXXXX", file_path);
+    snprintf(temp_path, sizeof(temp_path), "%s.klawed_diff.XXXXXX", file_path);
 
     int fd = mkstemp(temp_path);
     if (fd == -1) {
@@ -1903,7 +1903,12 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     }
 
     if (pid == 0) {
-        // Child process - execute the command
+        // Child process - set environment variable to indicate this is a subagent
+        if (setenv("KLAWED_IS_SUBAGENT", "1", 1) != 0) {
+            fprintf(stderr, "Warning: Failed to set KLAWED_IS_SUBAGENT environment variable: %s\n", strerror(errno));
+        }
+        
+        // Execute the command
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);
         // If we get here, exec failed
         fprintf(stderr, "Failed to execute subagent: %s\n", strerror(errno));
@@ -2793,13 +2798,84 @@ static char* str_replace_all(const char *content, const char *old_str, const cha
     return result;
 }
 
-// Helper function for regex replacement
-static char* regex_replace(const char *content, const char *pattern, const char *replacement,
-                          int replace_all, int *replace_count, char **error_msg) {
+// Helper to expand backreferences in replacement string
+// Supports \1 through \9 for capture groups, and \0 for full match
+static char* expand_backreferences(const char *replacement, const char *src,
+                                   const regmatch_t *matches, int num_matches) {
+    if (!replacement || !src || !matches) return NULL;
+
+    // Calculate required buffer size
+    size_t buf_size = 256;
+    char *result = malloc(buf_size);
+    if (!result) return NULL;
+
+    size_t result_len = 0;
+    const char *p = replacement;
+
+    while (*p) {
+        if (*p == '\\' && *(p + 1) >= '0' && *(p + 1) <= '9') {
+            // Backreference found
+            int group_num = *(p + 1) - '0';
+            p += 2;
+
+            if (group_num < num_matches && matches[group_num].rm_so != -1) {
+                size_t group_len = (size_t)(matches[group_num].rm_eo - matches[group_num].rm_so);
+
+                // Ensure buffer has enough space
+                if (result_len + group_len >= buf_size) {
+                    buf_size = (result_len + group_len + 1) * 2;
+                    char *new_result = realloc(result, buf_size);
+                    if (!new_result) {
+                        free(result);
+                        return NULL;
+                    }
+                    result = new_result;
+                }
+
+                memcpy(result + result_len, src + matches[group_num].rm_so, group_len);
+                result_len += group_len;
+            }
+        } else if (*p == '\\' && *(p + 1) == '\\') {
+            // Escaped backslash
+            if (result_len + 1 >= buf_size) {
+                buf_size *= 2;
+                char *new_result = realloc(result, buf_size);
+                if (!new_result) {
+                    free(result);
+                    return NULL;
+                }
+                result = new_result;
+            }
+            result[result_len++] = '\\';
+            p += 2;
+        } else {
+            // Regular character
+            if (result_len + 1 >= buf_size) {
+                buf_size *= 2;
+                char *new_result = realloc(result, buf_size);
+                if (!new_result) {
+                    free(result);
+                    return NULL;
+                }
+                result = new_result;
+            }
+            result[result_len++] = *p++;
+        }
+    }
+
+    result[result_len] = '\0';
+    return result;
+}
+
+// Helper function for regex replacement with capture group and flags support
+// regex_flags: bitwise OR of REG_ICASE, REG_NEWLINE, etc.
+static char* regex_replace_ex(const char *content, const char *pattern, const char *replacement,
+                              int replace_all, int regex_flags, int *replace_count, char **error_msg) {
     *replace_count = 0;
 
     regex_t regex;
-    int ret = regcomp(&regex, pattern, REG_EXTENDED);
+    int cflags = REG_EXTENDED | regex_flags;
+    int ret = regcomp(&regex, pattern, cflags);
     if (ret != 0) {
         char err_buf[256];
         regerror(ret, &regex, err_buf, sizeof(err_buf));
@@ -2807,7 +2883,9 @@ static char* regex_replace(const char *content, const char *pattern, const char 
         return NULL;
     }
 
-    regmatch_t match;
+    // Support up to 10 capture groups (0 = full match, 1-9 = groups)
+    #define MAX_MATCHES 10
+    regmatch_t matches[MAX_MATCHES];
     const char *src = content;
     size_t result_capacity = strlen(content) * 2;
     char *result = malloc(result_capacity);
@@ -2819,14 +2897,13 @@ static char* regex_replace(const char *content, const char *pattern, const char 
 
     char *dest = result;
     size_t dest_len = 0;
-    size_t repl_len = strlen(replacement);
 
-    while (regexec(&regex, src, 1, &match, 0) == 0) {
+    while (regexec(&regex, src, MAX_MATCHES, matches, 0) == 0) {
         (*replace_count)++;
 
         // Copy text before match
-        size_t prefix_len = (size_t)match.rm_so;
-        if (dest_len + prefix_len + repl_len >= result_capacity) {
+        size_t prefix_len = (size_t)matches[0].rm_so;
+        if (dest_len + prefix_len >= result_capacity) {
             result_capacity *= 2;
             char *new_result = realloc(result, result_capacity);
             if (!new_result) {
@@ -2843,12 +2920,33 @@ static char* regex_replace(const char *content, const char *pattern, const char 
         dest += prefix_len;
         dest_len += prefix_len;
 
-        // Copy replacement
-        memcpy(dest, replacement, repl_len);
-        dest += repl_len;
-        dest_len += repl_len;
+        // Expand backreferences in replacement string
+        char *expanded = expand_backreferences(replacement, src, matches, MAX_MATCHES);
+        if (expanded) {
+            size_t expanded_len = strlen(expanded);
 
-        src += match.rm_eo;
+            // Ensure buffer has enough space
+            if (dest_len + expanded_len >= result_capacity) {
+                result_capacity = (dest_len + expanded_len + 1) * 2;
+                char *new_result = realloc(result, result_capacity);
+                if (!new_result) {
+                    free(expanded);
+                    free(result);
+                    regfree(&regex);
+                    *error_msg = strdup("Out of memory");
+                    return NULL;
+                }
+                result = new_result;
+                dest = result + dest_len;
+            }
+
+            memcpy(dest, expanded, expanded_len);
+            dest += expanded_len;
+            dest_len += expanded_len;
+            free(expanded);
+        }
+
+        src += matches[0].rm_eo;
 
         if (!replace_all) break;
     }
@@ -2879,6 +2977,14 @@ static char* regex_replace(const char *content, const char *pattern, const char 
     }
 
     return result;
+    #undef MAX_MATCHES
+}
+
+// Wrapper for backward compatibility (no flags)
+__attribute__((unused))
+static char* regex_replace(const char *content, const char *pattern, const char *replacement,
+                          int replace_all, int *replace_count, char **error_msg) {
+    return regex_replace_ex(content, pattern, replacement, replace_all, 0, replace_count, error_msg);
 }
 
 // === Helpers for Edit tool (file-scope) ===
@@ -2945,6 +3051,7 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
     const cJSON *new_json = cJSON_GetObjectItem(params, "new_string");
     const cJSON *replace_all_json = cJSON_GetObjectItem(params, "replace_all");
     const cJSON *use_regex_json = cJSON_GetObjectItem(params, "use_regex");
+    const cJSON *regex_flags_json = cJSON_GetObjectItem(params, "regex_flags"); // string: "i" for case-insensitive, "m" for multiline, "im" for both
     // Extended insert parameters (optional, backward compatible)
     const cJSON *insert_mode_json = cJSON_GetObjectItem(params, "insert_mode");
     const cJSON *anchor_json = cJSON_GetObjectItem(params, "anchor");
@@ -2989,6 +3096,20 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
                           cJSON_IsTrue(anchor_is_regex_json) : 0;
     int fallback_to_eof = fallback_to_eof_json && cJSON_IsBool(fallback_to_eof_json) ?
                           cJSON_IsTrue(fallback_to_eof_json) : 0;
+
+    // Parse regex flags
+    int regex_flags = 0;
+    if (regex_flags_json && cJSON_IsString(regex_flags_json)) {
+        const char *flags_str = regex_flags_json->valuestring;
+        for (const char *p = flags_str; *p; p++) {
+            if (*p == 'i' || *p == 'I') {
+                regex_flags |= REG_ICASE;
+            } else if (*p == 'm' || *p == 'M') {
+                regex_flags |= REG_NEWLINE;
+            }
+            // Additional flags can be added here (e.g., 's' for single-line mode if supported)
+        }
+    }
 
     char *resolved_path = resolve_path(path_json->valuestring, state->working_dir);
     if (!resolved_path) {
@@ -3119,8 +3240,8 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
         new_content = buf;
         replace_count = 1;
     } else if (use_regex) {
-        // Regex-based replacement
-        new_content = regex_replace(content, old_str, new_str, replace_all, &replace_count, &error_msg);
+        // Regex-based replacement with optional flags
+        new_content = regex_replace_ex(content, old_str, new_str, replace_all, regex_flags, &replace_count, &error_msg);
     } else if (replace_all) {
         // Simple string multi-replace
         if (!old_str) {
@@ -4011,6 +4132,21 @@ static cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationStat
     // Try built-in tools first
     for (int i = 0; i < num_tools; i++) {
         if (strcmp(tools[i].name, tool_name) == 0) {
+            // Check if we're running as a subagent and exclude subagent-related tools to prevent recursion
+            const char *is_subagent_env = getenv("KLAWED_IS_SUBAGENT");
+            int is_subagent = is_subagent_env && (strcmp(is_subagent_env, "1") == 0 || 
+                                                 strcasecmp(is_subagent_env, "true") == 0 ||
+                                                 strcasecmp(is_subagent_env, "yes") == 0);
+            
+            if (is_subagent && (strcmp(tool_name, "Subagent") == 0 || 
+                               strcmp(tool_name, "CheckSubagentProgress") == 0 || 
+                               strcmp(tool_name, "InterruptSubagent") == 0)) {
+                cJSON *error = cJSON_CreateObject();
+                cJSON_AddStringToObject(error, "error", "Subagent-related tools are disabled when running as a subagent to prevent recursion");
+                result = error;
+                break;
+            }
+            
             LOG_DEBUG("execute_tool: Found built-in tool '%s' at index %d", tool_name, i);
             result = tools[i].handler(input, state);
             break;
@@ -4189,7 +4325,14 @@ static cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationStat
 cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON *tool_array = cJSON_CreateArray();
     int plan_mode = state ? state->plan_mode : 0;
-    LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d", plan_mode);
+    
+    // Check if we're running as a subagent - if so, exclude the Subagent tool to prevent recursion
+    const char *is_subagent_env = getenv("KLAWED_IS_SUBAGENT");
+    int is_subagent = is_subagent_env && (strcmp(is_subagent_env, "1") == 0 || 
+                                         strcasecmp(is_subagent_env, "true") == 0 ||
+                                         strcasecmp(is_subagent_env, "yes") == 0);
+    
+    LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d, is_subagent=%d", plan_mode, is_subagent);
     // Sleep tool
     cJSON *sleep_tool = cJSON_CreateObject();
     cJSON_AddStringToObject(sleep_tool, "type", "function");
@@ -4282,8 +4425,9 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToObject(bash, "function", bash_func);
         cJSON_AddItemToArray(tool_array, bash);
 
-        // Subagent tool
-        cJSON *subagent = cJSON_CreateObject();
+        // Subagent tool - exclude if running as subagent to prevent recursion
+        if (!is_subagent) {
+            cJSON *subagent = cJSON_CreateObject();
         cJSON_AddStringToObject(subagent, "type", "function");
         cJSON *subagent_func = cJSON_CreateObject();
         cJSON_AddStringToObject(subagent_func, "name", "Subagent");
@@ -4321,8 +4465,9 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToArray(subagent_req, cJSON_CreateString("prompt"));
         cJSON_AddItemToObject(subagent_params, "required", subagent_req);
         cJSON_AddItemToObject(subagent_func, "parameters", subagent_params);
-        cJSON_AddItemToObject(subagent, "function", subagent_func);
-        cJSON_AddItemToArray(tool_array, subagent);
+            cJSON_AddItemToObject(subagent, "function", subagent_func);
+            cJSON_AddItemToArray(tool_array, subagent);
+        }
 
         // Write tool
         cJSON *write = cJSON_CreateObject();
@@ -4356,7 +4501,16 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON *edit_func = cJSON_CreateObject();
         cJSON_AddStringToObject(edit_func, "name", "Edit");
         cJSON_AddStringToObject(edit_func, "description",
-            "Performs string replacements in files with optional regex and multi-replace support");
+            "Performs string replacements in files with three operation modes: "
+            "(1) Simple text replacement - literal string matching, "
+            "(2) Regex replacement - POSIX extended regex with capture groups (\\\\0-\\\\9) "
+            "and backreferences, supports flags 'i' (case-insensitive) and 'm' (multiline), "
+            "(3) Patch format - unified diff format for context-aware edits with verification. "
+            "Automatically detects mode: patch format if old_string starts with '---', "
+            "regex if use_regex=true, otherwise simple text. Use simple mode for exact matches, "
+            "regex for patterns (e.g., date reformatting with '([0-9]{2})/([0-9]{2})/([0-9]{4})' "
+            "to '\\\\3-\\\\1-\\\\2'), and patch format for precise edits with context verification. "
+            "See docs/edit-tool.md for comprehensive examples and migration guide.");
         cJSON *edit_params = cJSON_CreateObject();
         cJSON_AddStringToObject(edit_params, "type", "object");
         cJSON *edit_props = cJSON_CreateObject();
@@ -4367,22 +4521,43 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON *old_str = cJSON_CreateObject();
         cJSON_AddStringToObject(old_str, "type", "string");
         cJSON_AddStringToObject(old_str, "description",
-            "String or regex pattern to search for (use_regex must be true for regex)");
+            "String, regex pattern, or patch format to search for. "
+            "For simple mode: exact text to find. "
+            "For regex mode: POSIX extended regex pattern (use_regex must be true). "
+            "Supports capture groups () and backreferences \\\\1-\\\\9 in new_string. "
+            "For patch mode: unified diff format starting with '---' (new_string should be empty). "
+            "Examples: 'TODO' (simple), '([0-9]+)-([0-9]+)' (regex), '--- file.txt\\n+++ file.txt\\n@@ -1,3 +1,3 @@...' (patch)");
         cJSON_AddItemToObject(edit_props, "old_string", old_str);
         cJSON *new_str = cJSON_CreateObject();
         cJSON_AddStringToObject(new_str, "type", "string");
-        cJSON_AddStringToObject(new_str, "description", "Replacement string");
+        cJSON_AddStringToObject(new_str, "description",
+            "Replacement string. For simple/regex modes: the text to replace with. "
+            "For regex mode: supports backreferences \\\\0 (full match), \\\\1-\\\\9 (capture groups), "
+            "and \\\\\\\\ (literal backslash). Example: '\\\\2-\\\\1' swaps two captured groups. "
+            "For patch mode: leave empty (patch contains both old and new content).");
         cJSON_AddItemToObject(edit_props, "new_string", new_str);
         cJSON *replace_all = cJSON_CreateObject();
         cJSON_AddStringToObject(replace_all, "type", "boolean");
         cJSON_AddStringToObject(replace_all, "description",
-            "If true, replace all occurrences; if false, replace only first occurrence (default: false)");
+            "If true, replace all occurrences; if false, replace only first occurrence. "
+            "Default: false. Only applies to simple and regex modes. Ignored in patch mode.");
         cJSON_AddItemToObject(edit_props, "replace_all", replace_all);
         cJSON *use_regex = cJSON_CreateObject();
         cJSON_AddStringToObject(use_regex, "type", "boolean");
         cJSON_AddStringToObject(use_regex, "description",
-            "If true, treat old_string as POSIX extended regex pattern (default: false)");
+            "If true, treat old_string as POSIX extended regex pattern with capture group support. "
+            "Default: false. Enables backreferences in new_string. Use with regex_flags for "
+            "case-insensitive or multiline matching. Automatically false for patch mode.");
         cJSON_AddItemToObject(edit_props, "use_regex", use_regex);
+        cJSON *regex_flags = cJSON_CreateObject();
+        cJSON_AddStringToObject(regex_flags, "type", "string");
+        cJSON_AddStringToObject(regex_flags, "description",
+            "Optional regex flags (only when use_regex=true). Supported flags: "
+            "'i' or 'I' = case-insensitive matching (REG_ICASE), "
+            "'m' or 'M' = multiline mode where ^ and $ match line boundaries (REG_NEWLINE). "
+            "Combine flags as needed: 'im' for both. Default: empty (case-sensitive, single-line). "
+            "Examples: 'i' to match 'TODO', 'todo', 'ToDo'; 'm' to match '^Line' at start of each line.");
+        cJSON_AddItemToObject(edit_props, "regex_flags", regex_flags);
         cJSON_AddItemToObject(edit_params, "properties", edit_props);
         cJSON *edit_req = cJSON_CreateArray();
         cJSON_AddItemToArray(edit_req, cJSON_CreateString("file_path"));
@@ -5442,7 +5617,7 @@ char* build_system_prompt(ConversationState *state) {
         offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
             "\n<system-reminder>\n"
             "As you answer the user's questions, you can use the following context:\n"
-            "# claudeMd\n"
+            "# klawedMd\n"
             "Codebase and user instructions are shown below. Be sure to adhere to these instructions. "
             "IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n\n"
             "Contents of %s/KLAWED.md (project instructions, checked into the codebase):\n\n"
@@ -5804,18 +5979,31 @@ static int check_todo_write_executed(InternalContent *results, int count) {
     return 0;
 }
 
-static void add_tool_results(ConversationState *state, InternalContent *results, int count) {
+// Returns 0 on success, -1 on failure
+static int add_tool_results(ConversationState *state, InternalContent *results, int count) {
+    LOG_DEBUG("add_tool_results: Adding %d tool results to conversation", count);
+
     if (conversation_state_lock(state) != 0) {
+        LOG_ERROR("add_tool_results: Failed to acquire conversation lock");
         free_internal_contents(results, count);
-        return;
+        return -1;
     }
 
     if (state->count >= MAX_MESSAGES) {
-        LOG_ERROR("Maximum message count reached");
+        LOG_ERROR("add_tool_results: Cannot add results - maximum message count (%d) reached", MAX_MESSAGES);
         // Free results since they won't be added to state
         free_internal_contents(results, count);
         conversation_state_unlock(state);
-        return;
+        return -1;
+    }
+
+    // Log each tool result being added
+    for (int i = 0; i < count; i++) {
+        InternalContent *result = &results[i];
+        LOG_DEBUG("add_tool_results: result[%d]: tool_id=%s, tool_name=%s, is_error=%d",
+                  i, result->tool_id ? result->tool_id : "NULL",
+                  result->tool_name ? result->tool_name : "NULL",
+                  result->is_error);
     }
 
     InternalMessage *msg = &state->messages[state->count++];
@@ -5823,7 +6011,10 @@ static void add_tool_results(ConversationState *state, InternalContent *results,
     msg->contents = results;
     msg->content_count = count;
 
+    LOG_INFO("add_tool_results: Successfully added %d tool results as msg[%d]", count, state->count - 1);
+
     conversation_state_unlock(state);
+    return 0;
 }
 
 // ============================================================================
@@ -5946,6 +6137,15 @@ static void process_response(ConversationState *state,
     if (tool_count > 0) {
 
         LOG_INFO("Processing %d tool call(s)", tool_count);
+
+        // Log details of each tool call
+        for (int i = 0; i < tool_count; i++) {
+            ToolCall *tool = &tool_calls_array[i];
+            LOG_DEBUG("Tool call[%d]: id=%s, name=%s, has_params=%d",
+                      i, tool->id ? tool->id : "NULL",
+                      tool->name ? tool->name : "NULL",
+                      tool->parameters != NULL);
+        }
 
         struct timespec tool_start, tool_end;
         clock_gettime(CLOCK_MONOTONIC, &tool_start);
@@ -6227,6 +6427,15 @@ static void process_response(ConversationState *state,
             tool_tracker_destroy(&tracker);
         }
 
+        // Log summary of all tool results
+        LOG_DEBUG("Tool execution summary: %d results collected", tool_count);
+        for (int i = 0; i < tool_count; i++) {
+            LOG_DEBUG("Result[%d]: tool_id=%s, tool_name=%s, is_error=%d",
+                      i, results[i].tool_id ? results[i].tool_id : "NULL",
+                      results[i].tool_name ? results[i].tool_name : "NULL",
+                      results[i].is_error);
+        }
+
         int has_error = 0;
         for (int i = 0; i < tool_count; i++) {
             if (results[i].is_error) {
@@ -6284,7 +6493,11 @@ static void process_response(ConversationState *state,
 
         // Record tool results even in the interrupt path so that every tool_call
         // has a corresponding tool_result. This prevents 400s due to missing results.
-        add_tool_results(state, results, tool_count);
+        if (add_tool_results(state, results, tool_count) != 0) {
+            LOG_ERROR("Failed to add tool results to conversation state");
+            // Results were already freed by add_tool_results
+            results = NULL;
+        }
 
         if (todo_write_executed && state->todo_list && state->todo_list->count > 0) {
             // For TUI without queue, use colored rendering
@@ -6816,7 +7029,16 @@ static int process_single_command_response(ConversationState *state, ApiResponse
     ToolCall *tool_calls_array = response->tools;
 
     if (tool_count > 0) {
-        LOG_INFO("Processing %d tool call(s)", tool_count);
+        LOG_INFO("Processing %d tool call(s) in single-command mode", tool_count);
+
+        // Log details of each tool call
+        for (int i = 0; i < tool_count; i++) {
+            ToolCall *tool = &tool_calls_array[i];
+            LOG_DEBUG("Tool call[%d]: id=%s, name=%s, has_params=%d",
+                      i, tool->id ? tool->id : "NULL",
+                      tool->name ? tool->name : "NULL",
+                      tool->parameters != NULL);
+        }
 
         InternalContent *results = calloc((size_t)tool_count, sizeof(InternalContent));
         if (!results) {
@@ -6937,9 +7159,22 @@ static int process_single_command_response(ConversationState *state, ApiResponse
                 cJSON_Delete(input);
             }
 
+            // Log summary of all tool results before adding to conversation
+            LOG_DEBUG("Single-command mode: Collected %d tool results", tool_count);
+            for (int i = 0; i < tool_count; i++) {
+                LOG_DEBUG("Result[%d]: tool_id=%s, tool_name=%s, is_error=%d",
+                          i, results[i].tool_id ? results[i].tool_id : "NULL",
+                          results[i].tool_name ? results[i].tool_name : "NULL",
+                          results[i].is_error);
+            }
+
             // Add tool results to conversation
             // Note: add_tool_results takes ownership of the results array and its contents
-            add_tool_results(state, results, tool_count);
+            if (add_tool_results(state, results, tool_count) != 0) {
+                LOG_ERROR("Failed to add tool results to conversation - cannot proceed");
+                // Results were already freed by add_tool_results, don't free again
+                return 1;
+            }
 
             // Call API again with tool results and process recursively
             ApiResponse *next_response = call_api(state);
@@ -7123,7 +7358,7 @@ static void cleanup_socket(SocketIPC *socket_ipc) {
 
 // Advanced input handler with readline-like keybindings, driven by non-blocking event loop
 static void interactive_mode(ConversationState *state, int socket_ipc_enabled, const char *socket_path) {
-    const char *prompt = ">";
+    const char *prompt = ">>>";
 
     // Initialize TUI
     TUIState tui = {0};
@@ -7540,8 +7775,8 @@ int main(int argc, char *argv[]) {
         printf("    AWS credentials        Required: Configure via AWS CLI or environment\n\n");
         printf("  Logging and Persistence:\n");
         printf("    KLAWED_LOG_PATH    Optional: Full path to log file\n");
-        printf("    KLAWED_LOG_DIR     Optional: Directory for logs (uses claude.log filename)\n");
-        printf("    CLAUDE_LOG_LEVEL     Optional: Log level (DEBUG, INFO, WARN, ERROR)\n");
+        printf("    KLAWED_LOG_DIR     Optional: Directory for logs (uses klawed.log filename)\n");
+        printf("    KLAWED_LOG_LEVEL     Optional: Log level (DEBUG, INFO, WARN, ERROR)\n");
         printf("    KLAWED_DB_PATH     Optional: Path to SQLite database for API history\n");
         printf("                         Default: ~/.local/share/klawed/api_calls.db\n");
         printf("    KLAWED_MAX_RETRY_DURATION_MS  Optional: Maximum retry duration in milliseconds\n");
@@ -7708,7 +7943,7 @@ int main(int argc, char *argv[]) {
     log_set_rotation(10, 5);
 
     // Set log level from environment or default to INFO
-    const char *log_level_env = getenv("CLAUDE_LOG_LEVEL");
+    const char *log_level_env = getenv("KLAWED_LOG_LEVEL");
     if (log_level_env) {
         if (strcmp(log_level_env, "DEBUG") == 0) {
             log_set_level(LOG_LEVEL_DEBUG);

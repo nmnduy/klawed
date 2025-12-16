@@ -9,14 +9,14 @@
  *
  * Environment Variables:
  *   KLAWED_LOG_PATH - Full path to log file (e.g., /tmp/myapp.log)
- *   KLAWED_LOG_DIR  - Directory for logs (uses claude.log as filename)
- *   CLAUDE_LOG_LEVEL  - Minimum log level: DEBUG, INFO, WARN, ERROR
- *   CLAUDE_LOG_FLUSH  - Flush mode: "buffered" (default) or "always"
+ *   KLAWED_LOG_DIR  - Directory for logs (uses klawed.log as filename)
+ *   KLAWED_LOG_LEVEL  - Minimum log level: DEBUG, INFO, WARN, ERROR
+ *   KLAWED_LOG_FLUSH  - Flush mode: "buffered" (default) or "always"
  *                       "buffered" = better performance, "always" = immediate visibility
  *
  * Default Log Location Priority:
  *   1. $KLAWED_LOG_PATH (if set)
- *   2. $KLAWED_LOG_DIR/claude.log (if set)
+ *   2. $KLAWED_LOG_DIR/klawed.log (if set)
  *   3. ./.klawed/logs/klawed.log (project-local, created automatically)
  *   4. ~/.local/share/klawed/logs/klawed.log
  *   5. /tmp/klawed.log (fallback)

@@ -8,8 +8,8 @@ echo "=== Thread Cancellation Integration Test ==="
 echo ""
 
 # Build if not already built
-if [ ! -f build/claude-c ]; then
-    echo "Building claude-c..."
+if [ ! -f build/klawed ]; then
+    echo "Building klawed..."
     make clean && make
 fi
 
@@ -18,14 +18,14 @@ echo ""
 
 # Test 1: Verify thread cancellation mechanisms are in place
 echo "Test 1: Checking for thread cancellation code..."
-if grep -q "pthread_cancel(threads\[" src/claude.c; then
+if grep -q "pthread_cancel(threads\[" src/klawed.c; then
     echo "✓ Found pthread_cancel() calls in thread loop"
 else
     echo "✗ Missing pthread_cancel() in main execution loop"
     exit 1
 fi
 
-if grep -q "pthread_testcancel()" src/claude.c; then
+if grep -q "pthread_testcancel()" src/klawed.c; then
     echo "✓ Found pthread_testcancel() in tool implementations"
 else
     echo "✗ Missing pthread_testcancel() cancellation points"
@@ -36,7 +36,7 @@ echo ""
 
 # Test 2: Check cleanup handler safety
 echo "Test 2: Checking cleanup handler safety..."
-if grep -q "should_write_result.*!t->notified" src/claude.c; then
+if grep -q "should_write_result.*!t->notified" src/klawed.c; then
     echo "✓ Cleanup handler checks notified flag under mutex"
 else
     echo "✗ Cleanup handler may have race condition"
@@ -47,7 +47,7 @@ echo ""
 
 # Test 3: Check partial thread creation cleanup
 echo "Test 3: Checking partial thread creation cleanup..."
-if grep -q "Cancel already-started threads on failure" src/claude.c; then
+if grep -q "Cancel already-started threads on failure" src/klawed.c; then
     echo "✓ Partial thread creation cleanup is present"
 else
     echo "✗ Missing partial thread creation cleanup"

@@ -664,7 +664,7 @@ int mcp_connect_server(MCPServer *server) {
             // Each iteration is 100ms, so iterations = timeout * 10
             max_iterations = server->init_timeout * 10;
         }
-        
+
         for (int i = 0; i < max_iterations; i++) {
             // Read any stderr output during initialization
             mcp_read_stderr(server);
@@ -853,7 +853,7 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
         // Each iteration is 100ms, so iterations = timeout * 10
         max_iterations = server->request_timeout * 10;
     }
-    
+
     for (int i = 0; i < max_iterations; i++) {
         // Read any stderr output (for logging/debugging)
         mcp_read_stderr(server);

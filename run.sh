@@ -1,6 +1,6 @@
 set -xe
-make && CLAUDE_C_THEME=${CLAUDE_C_THEME:-kitty-default} \
-  ./build/claude-c
+make && KLAWED_THEME=${KLAWED_THEME:-kitty-default} \
+  ./build/klawed
 
 # examples config:
 # export OPENAI_API_KEY="$OPENROUTER_API_KEY"

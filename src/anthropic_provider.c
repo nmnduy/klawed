@@ -597,6 +597,9 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
         result.is_retryable = 0;
         return result;
     }
+    
+    LOG_DEBUG("Anthropic: Built OpenAI-format request, converting to Anthropic format");
+    
     char *openai_req = cJSON_PrintUnformatted(openai_req_obj);
     cJSON_Delete(openai_req_obj);
     if (!openai_req) {
@@ -606,6 +609,8 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
     }
 
     char *anth_req = openai_to_anthropic_request(openai_req);
+    LOG_DEBUG("Anthropic: Converted to Anthropic format, request length: %zu bytes",
+              anth_req ? strlen(anth_req) : 0);
     if (!anth_req) {
         result.error_message = strdup("Failed to convert request to Anthropic format");
         result.is_retryable = 0;

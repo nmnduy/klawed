@@ -222,7 +222,7 @@ int log_init(void) {
     }
 
     // Check for flush mode environment variable
-    const char *flush_mode_env = getenv("CLAUDE_LOG_FLUSH");
+    const char *flush_mode_env = getenv("KLAWED_LOG_FLUSH");
     if (flush_mode_env && strcmp(flush_mode_env, "always") == 0) {
         g_always_flush = 1;
     } else {
