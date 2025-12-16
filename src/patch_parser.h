@@ -11,6 +11,11 @@ typedef struct {
     char *new_content;    // Replacement content
     char *context_before; // Context lines before the change (optional)
     char *context_after;  // Context lines after the change (optional)
+    char *function_context; // Function/class context from @@ marker (optional)
+    int old_start_line;   // Starting line number for old content (optional, -1 if not specified)
+    int old_line_count;   // Number of lines in old content (optional, -1 if not specified)
+    int new_start_line;   // Starting line number for new content (optional, -1 if not specified)
+    int new_line_count;   // Number of lines in new content (optional, -1 if not specified)
 } PatchOperation;
 
 // Represents a parsed patch

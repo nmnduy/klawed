@@ -81,13 +81,206 @@ static char* create_error_with_line(const char *message, int line_number) {
     return strdup(message);
 }
 
-// Helper: search for pattern with context
+// Helper: parse @@ marker with optional line numbers and function context
+// Format: @@ -old_start,old_count +new_start,new_count @@ function_name
+// Returns 1 if parsed successfully, 0 otherwise
+static int parse_at_marker(const char *line, PatchOperation *op) {
+    if (!line || !op) return 0;
+    
+    // Initialize with defaults
+    op->old_start_line = -1;
+    op->old_line_count = -1; 
+    op->new_start_line = -1;
+    op->new_line_count = -1;
+    op->function_context = NULL;
+    
+    // Skip initial @@
+    const char *p = line;
+    while (*p && *p != '@') p++;
+    if (!*p) return 0;
+    p++; // Skip first @
+    while (*p && *p == '@') p++;
+    
+    // Skip whitespace
+    while (*p && isspace((unsigned char)*p)) p++;
+    
+    // Try to parse line numbers if present
+    if (*p == '-') {
+        p++; // Skip -
+        char *endptr;
+        long old_start = strtol(p, &endptr, 10);
+        if (endptr > p) {
+            op->old_start_line = (int)old_start;
+            p = endptr;
+            
+            // Check for comma and count
+            if (*p == ',') {
+                p++; // Skip comma
+                long old_count = strtol(p, &endptr, 10);
+                if (endptr > p) {
+                    op->old_line_count = (int)old_count;
+                    p = endptr;
+                }
+            } else {
+                op->old_line_count = 1; // Default to 1 line if no count specified
+            }
+        }
+        
+        // Skip whitespace
+        while (*p && isspace((unsigned char)*p)) p++;
+        
+        // Parse new line info if present
+        if (*p == '+') {
+            p++; // Skip +
+            long new_start = strtol(p, &endptr, 10);
+            if (endptr > p) {
+                op->new_start_line = (int)new_start;
+                p = endptr;
+                
+                // Check for comma and count
+                if (*p == ',') {
+                    p++; // Skip comma
+                    long new_count = strtol(p, &endptr, 10);
+                    if (endptr > p) {
+                        op->new_line_count = (int)new_count;
+                        p = endptr;
+                    }
+                } else {
+                    op->new_line_count = 1; // Default to 1 line if no count specified
+                }
+            }
+        }
+        
+        // Skip whitespace
+        while (*p && isspace((unsigned char)*p)) p++;
+    }
+    
+    // Skip whitespace
+    while (*p && isspace((unsigned char)*p)) p++;
+    
+    // Look for closing @@ and function context
+    // Two cases: 
+    // 1. "@@ -line,count +line,count @@ function_context"
+    // 2. "@@ function_context @@"
+    
+    // Check if we're already at @@ markers (case 1: after line number parsing)
+    if (*p == '@' && *(p+1) == '@') {
+        // We're at the closing @@ after line numbers, look for function context after it
+        const char *check_close = p;
+        while (*check_close && *check_close == '@') check_close++;
+        
+        // Skip whitespace after @@
+        while (*check_close && isspace((unsigned char)*check_close)) check_close++;
+        
+        // If there's content, extract it until the final @@
+        if (*check_close && *check_close != '\n' && *check_close != '\r') {
+            const char *context_start = check_close;
+            const char *context_end = context_start;
+            
+            // Find the final @@
+            while (*context_end && strncmp(context_end, "@@", 2) != 0) {
+                context_end++;
+            }
+            
+            if (context_end > context_start) {
+                size_t context_len = (size_t)(context_end - context_start);
+                op->function_context = malloc(context_len + 1);
+                if (op->function_context) {
+                    memcpy(op->function_context, context_start, context_len);
+                    op->function_context[context_len] = '\0';
+                    
+                    // Trim trailing whitespace
+                    char *trim_end = op->function_context + context_len - 1;
+                    while (trim_end >= op->function_context && isspace((unsigned char)*trim_end)) {
+                        *trim_end = '\0';
+                        trim_end--;
+                    }
+                }
+            }
+        }
+    } else {
+        // Find the next @@ (case 2: function context before closing @@)
+        const char *next_at = p;
+        while (*next_at && *next_at != '@') next_at++;
+        
+        if (*next_at == '@' && next_at > p) {
+            // Format: "@@ function_context @@" - extract content between current p and next_at
+            const char *context_start = p;
+            const char *context_end = next_at;
+            
+            size_t context_len = (size_t)(context_end - context_start);
+            if (context_len > 0) {
+                op->function_context = malloc(context_len + 1);
+                if (op->function_context) {
+                    memcpy(op->function_context, context_start, context_len);
+                    op->function_context[context_len] = '\0';
+                    
+                    // Trim trailing whitespace
+                    char *trim_end = op->function_context + context_len - 1;
+                    while (trim_end >= op->function_context && isspace((unsigned char)*trim_end)) {
+                        *trim_end = '\0';
+                        trim_end--;
+                    }
+                    
+                    // Trim leading whitespace
+                    char *trim_start = op->function_context;
+                    while (*trim_start && isspace((unsigned char)*trim_start)) {
+                        trim_start++;
+                    }
+                    
+                    // Move trimmed content to beginning if needed
+                    if (trim_start > op->function_context) {
+                        size_t trimmed_len = strlen(trim_start);
+                        memmove(op->function_context, trim_start, trimmed_len + 1);
+                    }
+                }
+            }
+        }
+    }
+    
+    return 1; // Successfully parsed (even if no line numbers found)
+}
+
+// Helper: search for pattern with context and function context
 // Returns position of old_content within the match, or NULL if not found
 static char* search_with_context(char *content, 
                                  const char *context_before,
                                  const char *old_content,
-                                 const char *context_after) {
+                                 const char *context_after,
+                                 const char *function_context) {
     if (!content || !old_content) return NULL;
+    
+    // If we have function context, try to use it for better matching
+    if (function_context && function_context[0] != '\0') {
+        // Look for the function context in the file first
+        char *func_pos = strstr(content, function_context);
+        if (func_pos) {
+            // Search for old_content near the function context
+            // Look within a reasonable range (e.g., 500 characters before and after)
+            const size_t search_range = 500;
+            char *search_start = func_pos > content + search_range ? func_pos - search_range : content;
+            char *func_end = func_pos + strlen(function_context);
+            size_t remaining = strlen(func_end);
+            char *search_end = remaining > search_range ? func_end + search_range : func_end + remaining;
+            
+            // Create a temporary null-terminated substring for searching
+            size_t search_len = (size_t)(search_end - search_start);
+            char *search_area = malloc(search_len + 1);
+            if (search_area) {
+                memcpy(search_area, search_start, search_len);
+                search_area[search_len] = '\0';
+                
+                char *found_in_area = strstr(search_area, old_content);
+                if (found_in_area) {
+                    char *result = search_start + (found_in_area - search_area);
+                    free(search_area);
+                    return result;
+                }
+                free(search_area);
+            }
+        }
+        // If function context search fails, fall back to normal search
+    }
     
     // If no context, just use strstr
     if ((!context_before || context_before[0] == '\0') && 
@@ -221,6 +414,19 @@ static PatchOperation parse_operation(const char *block, int *error_line, char *
         free(op.file_path);
         op.file_path = NULL;
         return op;
+    }
+
+    // Parse the @@ marker for line numbers and function context
+    const char *marker_line_end = strchr(old_marker, '\n');
+    if (marker_line_end) {
+        size_t marker_len = (size_t)(marker_line_end - old_marker);
+        char *marker_line = malloc(marker_len + 1);
+        if (marker_line) {
+            memcpy(marker_line, old_marker, marker_len);
+            marker_line[marker_len] = '\0';
+            parse_at_marker(marker_line, &op);
+            free(marker_line);
+        }
     }
 
     // Skip the opening @@
@@ -414,8 +620,9 @@ static PatchOperation parse_operation(const char *block, int *error_line, char *
     op.context_before = before_buf;
     op.context_after = after_buf;
 
-    LOG_DEBUG("Parsed operation: file=%s, old_len=%zu, new_len=%zu, before_len=%zu, after_len=%zu", 
-              op.file_path, old_len, new_len, before_len, after_len);
+    LOG_DEBUG("Parsed operation: file=%s, old_len=%zu, new_len=%zu, before_len=%zu, after_len=%zu, function_context=%s", 
+              op.file_path, old_len, new_len, before_len, after_len, 
+              op.function_context ? op.function_context : "none");
 
     return op;
 }
@@ -534,6 +741,7 @@ void free_parsed_patch(ParsedPatch *patch) {
             free(patch->operations[i].new_content);
             free(patch->operations[i].context_before);
             free(patch->operations[i].context_after);
+            free(patch->operations[i].function_context);
         }
         free(patch->operations);
     }
@@ -583,11 +791,12 @@ cJSON* apply_patch(ParsedPatch *patch, ConversationState *state) {
         }
 
         // Find and replace old content with new content
-        // Use context lines if available for more robust matching
+        // Use context lines and function context if available for more robust matching
         char *pos = search_with_context(current_content, 
                                         op->context_before,
                                         op->old_content,
-                                        op->context_after);
+                                        op->context_after,
+                                        op->function_context);
         if (!pos) {
             LOG_ERROR("Old content not found in file: %s", resolved_path);
             free(current_content);
