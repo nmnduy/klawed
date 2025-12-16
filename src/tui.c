@@ -861,8 +861,8 @@ static int resize_input_window(TUIState *tui, int desired_lines) {
         int h, w;
         getmaxyx(tui->wm.input_win, h, w);
         tui->input_buffer->win = tui->wm.input_win;
-        tui->input_buffer->win_width = w - 2;
-        tui->input_buffer->win_height = h - 2;
+        tui->input_buffer->win_width = w;  // No borders
+        tui->input_buffer->win_height = h;
     }
 
     // Ensure content lines are up to date before refresh
@@ -908,8 +908,8 @@ static int input_init(TUIState *tui) {
     // Get window dimensions
     int h, w;
     getmaxyx(tui->wm.input_win, h, w);
-    input->win_width = w - 2;  // Account for borders
-    input->win_height = h - 2;
+    input->win_width = w;  // No borders
+    input->win_height = h;
 
     tui->input_buffer = input;
     return 0;
@@ -1231,7 +1231,8 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     // Clear the window
     werase(win);
 
-    // Draw box with accent color if colors are available
+    // Draw box with accent color if colors are available (commented out - no border)
+    /*
     if (has_colors()) {
         wattron(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
         box(win, 0, 0);
@@ -1239,6 +1240,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     } else {
         box(win, 0, 0);
     }
+    */
 
     // Draw prompt on first visible line (if we're not scrolled past it)
     // In command mode, show command buffer instead of normal prompt
@@ -2060,8 +2062,8 @@ void tui_handle_resize(TUIState *tui) {
         int h, w;
         getmaxyx(tui->wm.input_win, h, w);
         tui->input_buffer->win = tui->wm.input_win;
-        tui->input_buffer->win_width = w - 2;
-        tui->input_buffer->win_height = h - 2;
+        tui->input_buffer->win_width = w;  // No borders
+        tui->input_buffer->win_height = h;
         LOG_DEBUG("[TUI] Updated input buffer window pointer after resize");
     }
 
