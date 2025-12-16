@@ -4472,7 +4472,16 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON *edit_func = cJSON_CreateObject();
         cJSON_AddStringToObject(edit_func, "name", "Edit");
         cJSON_AddStringToObject(edit_func, "description",
-            "Performs string replacements in files with optional regex and multi-replace support");
+            "Performs string replacements in files with three operation modes: "
+            "(1) Simple text replacement - literal string matching, "
+            "(2) Regex replacement - POSIX extended regex with capture groups (\\\\0-\\\\9) "
+            "and backreferences, supports flags 'i' (case-insensitive) and 'm' (multiline), "
+            "(3) Patch format - unified diff format for context-aware edits with verification. "
+            "Automatically detects mode: patch format if old_string starts with '---', "
+            "regex if use_regex=true, otherwise simple text. Use simple mode for exact matches, "
+            "regex for patterns (e.g., date reformatting with '([0-9]{2})/([0-9]{2})/([0-9]{4})' "
+            "to '\\\\3-\\\\1-\\\\2'), and patch format for precise edits with context verification. "
+            "See docs/edit-tool.md for comprehensive examples and migration guide.");
         cJSON *edit_params = cJSON_CreateObject();
         cJSON_AddStringToObject(edit_params, "type", "object");
         cJSON *edit_props = cJSON_CreateObject();
@@ -4483,22 +4492,43 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON *old_str = cJSON_CreateObject();
         cJSON_AddStringToObject(old_str, "type", "string");
         cJSON_AddStringToObject(old_str, "description",
-            "String or regex pattern to search for (use_regex must be true for regex)");
+            "String, regex pattern, or patch format to search for. "
+            "For simple mode: exact text to find. "
+            "For regex mode: POSIX extended regex pattern (use_regex must be true). "
+            "Supports capture groups () and backreferences \\\\1-\\\\9 in new_string. "
+            "For patch mode: unified diff format starting with '---' (new_string should be empty). "
+            "Examples: 'TODO' (simple), '([0-9]+)-([0-9]+)' (regex), '--- file.txt\\n+++ file.txt\\n@@ -1,3 +1,3 @@...' (patch)");
         cJSON_AddItemToObject(edit_props, "old_string", old_str);
         cJSON *new_str = cJSON_CreateObject();
         cJSON_AddStringToObject(new_str, "type", "string");
-        cJSON_AddStringToObject(new_str, "description", "Replacement string");
+        cJSON_AddStringToObject(new_str, "description",
+            "Replacement string. For simple/regex modes: the text to replace with. "
+            "For regex mode: supports backreferences \\\\0 (full match), \\\\1-\\\\9 (capture groups), "
+            "and \\\\\\\\ (literal backslash). Example: '\\\\2-\\\\1' swaps two captured groups. "
+            "For patch mode: leave empty (patch contains both old and new content).");
         cJSON_AddItemToObject(edit_props, "new_string", new_str);
         cJSON *replace_all = cJSON_CreateObject();
         cJSON_AddStringToObject(replace_all, "type", "boolean");
         cJSON_AddStringToObject(replace_all, "description",
-            "If true, replace all occurrences; if false, replace only first occurrence (default: false)");
+            "If true, replace all occurrences; if false, replace only first occurrence. "
+            "Default: false. Only applies to simple and regex modes. Ignored in patch mode.");
         cJSON_AddItemToObject(edit_props, "replace_all", replace_all);
         cJSON *use_regex = cJSON_CreateObject();
         cJSON_AddStringToObject(use_regex, "type", "boolean");
         cJSON_AddStringToObject(use_regex, "description",
-            "If true, treat old_string as POSIX extended regex pattern (default: false)");
+            "If true, treat old_string as POSIX extended regex pattern with capture group support. "
+            "Default: false. Enables backreferences in new_string. Use with regex_flags for "
+            "case-insensitive or multiline matching. Automatically false for patch mode.");
         cJSON_AddItemToObject(edit_props, "use_regex", use_regex);
+        cJSON *regex_flags = cJSON_CreateObject();
+        cJSON_AddStringToObject(regex_flags, "type", "string");
+        cJSON_AddStringToObject(regex_flags, "description",
+            "Optional regex flags (only when use_regex=true). Supported flags: "
+            "'i' or 'I' = case-insensitive matching (REG_ICASE), "
+            "'m' or 'M' = multiline mode where ^ and $ match line boundaries (REG_NEWLINE). "
+            "Combine flags as needed: 'im' for both. Default: empty (case-sensitive, single-line). "
+            "Examples: 'i' to match 'TODO', 'todo', 'ToDo'; 'm' to match '^Line' at start of each line.");
+        cJSON_AddItemToObject(edit_props, "regex_flags", regex_flags);
         cJSON_AddItemToObject(edit_params, "properties", edit_props);
         cJSON *edit_req = cJSON_CreateArray();
         cJSON_AddItemToArray(edit_req, cJSON_CreateString("file_path"));
