@@ -7269,7 +7269,7 @@ static void cleanup_socket(SocketIPC *socket_ipc) {
 
 // Advanced input handler with readline-like keybindings, driven by non-blocking event loop
 static void interactive_mode(ConversationState *state, int socket_ipc_enabled, const char *socket_path) {
-    const char *prompt = ">";
+    const char *prompt = ">>>";
 
     // Initialize TUI
     TUIState tui = {0};
