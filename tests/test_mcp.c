@@ -394,7 +394,7 @@ static void test_load_config_with_timeouts(void) {
     MCPServer *server_with_timeouts = NULL;
     MCPServer *server_no_timeouts = NULL;
     MCPServer *server_zero_timeout = NULL;
-    
+
     for (int i = 0; i < config->server_count; i++) {
         MCPServer *s = config->servers[i];
         if (strcmp(s->name, "server_with_timeouts") == 0) {

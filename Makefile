@@ -114,6 +114,7 @@ endif
 BUILD_DIR = build
 TARGET = $(BUILD_DIR)/klawed
 TEST_EDIT_TARGET = $(BUILD_DIR)/test_edit
+TEST_EDIT_REGEX_TARGET = $(BUILD_DIR)/test_edit_regex_enhancements
 TEST_READ_TARGET = $(BUILD_DIR)/test_read
 TEST_TODO_TARGET = $(BUILD_DIR)/test_todo
 TEST_TODO_WRITE_TARGET = $(BUILD_DIR)/test_todo_write
@@ -195,6 +196,7 @@ BASE64_OBJ = $(BUILD_DIR)/base64.o
 SESSION_SRC = src/session.c
 SESSION_OBJ = $(BUILD_DIR)/session.o
 TEST_EDIT_SRC = tests/test_edit.c
+TEST_EDIT_REGEX_SRC = tests/test_edit_regex_enhancements.c
 TEST_READ_SRC = tests/test_read.c
 TEST_TODO_SRC = tests/test_todo.c
 TEST_TODO_WRITE_SRC = tests/test_todo_write.c
@@ -257,6 +259,12 @@ test-edit: check-deps $(TEST_EDIT_TARGET)
 	@echo "Running Edit tool tests..."
 	@echo ""
 	@./$(TEST_EDIT_TARGET)
+
+test-edit-regex: check-deps $(TEST_EDIT_REGEX_TARGET)
+	@echo ""
+	@echo "Running Edit tool regex enhancement tests..."
+	@echo ""
+	@./$(TEST_EDIT_REGEX_TARGET)
 
 test-read: check-deps $(TEST_READ_TARGET)
 	@echo ""
@@ -872,6 +880,19 @@ $(TEST_EDIT_TARGET): $(SRC) $(TEST_EDIT_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(
 	@$(CC) -o $(TEST_EDIT_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Edit tool test build successful!"
+	@echo ""
+
+# Test target for Edit tool regex enhancements
+$(TEST_EDIT_REGEX_TARGET): $(SRC) $(TEST_EDIT_REGEX_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling claude.c for testing (renaming main)..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_test.o $(SRC)
+	@echo "Compiling Edit tool regex enhancement test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_edit_regex.o $(TEST_EDIT_REGEX_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_EDIT_REGEX_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit_regex.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Edit tool regex enhancement test build successful!"
 	@echo ""
 
 # Test target for Read tool - compiles test suite with claude.c functions

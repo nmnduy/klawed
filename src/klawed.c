@@ -2793,13 +2793,84 @@ static char* str_replace_all(const char *content, const char *old_str, const cha
     return result;
 }
 
-// Helper function for regex replacement
-static char* regex_replace(const char *content, const char *pattern, const char *replacement,
-                          int replace_all, int *replace_count, char **error_msg) {
+// Helper to expand backreferences in replacement string
+// Supports \1 through \9 for capture groups, and \0 for full match
+static char* expand_backreferences(const char *replacement, const char *src,
+                                   const regmatch_t *matches, int num_matches) {
+    if (!replacement || !src || !matches) return NULL;
+
+    // Calculate required buffer size
+    size_t buf_size = 256;
+    char *result = malloc(buf_size);
+    if (!result) return NULL;
+
+    size_t result_len = 0;
+    const char *p = replacement;
+
+    while (*p) {
+        if (*p == '\\' && *(p + 1) >= '0' && *(p + 1) <= '9') {
+            // Backreference found
+            int group_num = *(p + 1) - '0';
+            p += 2;
+
+            if (group_num < num_matches && matches[group_num].rm_so != -1) {
+                size_t group_len = (size_t)(matches[group_num].rm_eo - matches[group_num].rm_so);
+
+                // Ensure buffer has enough space
+                if (result_len + group_len >= buf_size) {
+                    buf_size = (result_len + group_len + 1) * 2;
+                    char *new_result = realloc(result, buf_size);
+                    if (!new_result) {
+                        free(result);
+                        return NULL;
+                    }
+                    result = new_result;
+                }
+
+                memcpy(result + result_len, src + matches[group_num].rm_so, group_len);
+                result_len += group_len;
+            }
+        } else if (*p == '\\' && *(p + 1) == '\\') {
+            // Escaped backslash
+            if (result_len + 1 >= buf_size) {
+                buf_size *= 2;
+                char *new_result = realloc(result, buf_size);
+                if (!new_result) {
+                    free(result);
+                    return NULL;
+                }
+                result = new_result;
+            }
+            result[result_len++] = '\\';
+            p += 2;
+        } else {
+            // Regular character
+            if (result_len + 1 >= buf_size) {
+                buf_size *= 2;
+                char *new_result = realloc(result, buf_size);
+                if (!new_result) {
+                    free(result);
+                    return NULL;
+                }
+                result = new_result;
+            }
+            result[result_len++] = *p++;
+        }
+    }
+
+    result[result_len] = '\0';
+    return result;
+}
+
+// Helper function for regex replacement with capture group and flags support
+// regex_flags: bitwise OR of REG_ICASE, REG_NEWLINE, etc.
+static char* regex_replace_ex(const char *content, const char *pattern, const char *replacement,
+                              int replace_all, int regex_flags, int *replace_count, char **error_msg) {
     *replace_count = 0;
 
     regex_t regex;
-    int ret = regcomp(&regex, pattern, REG_EXTENDED);
+    int cflags = REG_EXTENDED | regex_flags;
+    int ret = regcomp(&regex, pattern, cflags);
     if (ret != 0) {
         char err_buf[256];
         regerror(ret, &regex, err_buf, sizeof(err_buf));
@@ -2807,7 +2878,9 @@ static char* regex_replace(const char *content, const char *pattern, const char 
         return NULL;
     }
 
-    regmatch_t match;
+    // Support up to 10 capture groups (0 = full match, 1-9 = groups)
+    #define MAX_MATCHES 10
+    regmatch_t matches[MAX_MATCHES];
     const char *src = content;
     size_t result_capacity = strlen(content) * 2;
     char *result = malloc(result_capacity);
@@ -2819,14 +2892,13 @@ static char* regex_replace(const char *content, const char *pattern, const char 
 
     char *dest = result;
     size_t dest_len = 0;
-    size_t repl_len = strlen(replacement);
 
-    while (regexec(&regex, src, 1, &match, 0) == 0) {
+    while (regexec(&regex, src, MAX_MATCHES, matches, 0) == 0) {
         (*replace_count)++;
 
         // Copy text before match
-        size_t prefix_len = (size_t)match.rm_so;
-        if (dest_len + prefix_len + repl_len >= result_capacity) {
+        size_t prefix_len = (size_t)matches[0].rm_so;
+        if (dest_len + prefix_len >= result_capacity) {
             result_capacity *= 2;
             char *new_result = realloc(result, result_capacity);
             if (!new_result) {
@@ -2843,12 +2915,33 @@ static char* regex_replace(const char *content, const char *pattern, const char 
         dest += prefix_len;
         dest_len += prefix_len;
 
-        // Copy replacement
-        memcpy(dest, replacement, repl_len);
-        dest += repl_len;
-        dest_len += repl_len;
+        // Expand backreferences in replacement string
+        char *expanded = expand_backreferences(replacement, src, matches, MAX_MATCHES);
+        if (expanded) {
+            size_t expanded_len = strlen(expanded);
 
-        src += match.rm_eo;
+            // Ensure buffer has enough space
+            if (dest_len + expanded_len >= result_capacity) {
+                result_capacity = (dest_len + expanded_len + 1) * 2;
+                char *new_result = realloc(result, result_capacity);
+                if (!new_result) {
+                    free(expanded);
+                    free(result);
+                    regfree(&regex);
+                    *error_msg = strdup("Out of memory");
+                    return NULL;
+                }
+                result = new_result;
+                dest = result + dest_len;
+            }
+
+            memcpy(dest, expanded, expanded_len);
+            dest += expanded_len;
+            dest_len += expanded_len;
+            free(expanded);
+        }
+
+        src += matches[0].rm_eo;
 
         if (!replace_all) break;
     }
@@ -2879,6 +2972,14 @@ static char* regex_replace(const char *content, const char *pattern, const char 
     }
 
     return result;
+    #undef MAX_MATCHES
+}
+
+// Wrapper for backward compatibility (no flags)
+__attribute__((unused))
+static char* regex_replace(const char *content, const char *pattern, const char *replacement,
+                          int replace_all, int *replace_count, char **error_msg) {
+    return regex_replace_ex(content, pattern, replacement, replace_all, 0, replace_count, error_msg);
 }
 
 // === Helpers for Edit tool (file-scope) ===
@@ -2945,6 +3046,7 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
     const cJSON *new_json = cJSON_GetObjectItem(params, "new_string");
     const cJSON *replace_all_json = cJSON_GetObjectItem(params, "replace_all");
     const cJSON *use_regex_json = cJSON_GetObjectItem(params, "use_regex");
+    const cJSON *regex_flags_json = cJSON_GetObjectItem(params, "regex_flags"); // string: "i" for case-insensitive, "m" for multiline, "im" for both
     // Extended insert parameters (optional, backward compatible)
     const cJSON *insert_mode_json = cJSON_GetObjectItem(params, "insert_mode");
     const cJSON *anchor_json = cJSON_GetObjectItem(params, "anchor");
@@ -2989,6 +3091,20 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
                           cJSON_IsTrue(anchor_is_regex_json) : 0;
     int fallback_to_eof = fallback_to_eof_json && cJSON_IsBool(fallback_to_eof_json) ?
                           cJSON_IsTrue(fallback_to_eof_json) : 0;
+
+    // Parse regex flags
+    int regex_flags = 0;
+    if (regex_flags_json && cJSON_IsString(regex_flags_json)) {
+        const char *flags_str = regex_flags_json->valuestring;
+        for (const char *p = flags_str; *p; p++) {
+            if (*p == 'i' || *p == 'I') {
+                regex_flags |= REG_ICASE;
+            } else if (*p == 'm' || *p == 'M') {
+                regex_flags |= REG_NEWLINE;
+            }
+            // Additional flags can be added here (e.g., 's' for single-line mode if supported)
+        }
+    }
 
     char *resolved_path = resolve_path(path_json->valuestring, state->working_dir);
     if (!resolved_path) {
@@ -3119,8 +3235,8 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
         new_content = buf;
         replace_count = 1;
     } else if (use_regex) {
-        // Regex-based replacement
-        new_content = regex_replace(content, old_str, new_str, replace_all, &replace_count, &error_msg);
+        // Regex-based replacement with optional flags
+        new_content = regex_replace_ex(content, old_str, new_str, replace_all, regex_flags, &replace_count, &error_msg);
     } else if (replace_all) {
         // Simple string multi-replace
         if (!old_str) {

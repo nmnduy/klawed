@@ -77,7 +77,7 @@ static void test_parse_at_marker_with_function_context(void) {
     assert(patch != NULL);
     assert(patch->is_valid == 1);
     assert(patch->operation_count == 1);
-    
+
     PatchOperation *op = &patch->operations[0];
     assert(strcmp(op->file_path, "src/test.c") == 0);
     assert(op->old_start_line == 15);
@@ -109,7 +109,7 @@ static void test_parse_at_marker_function_only(void) {
     assert(patch != NULL);
     assert(patch->is_valid == 1);
     assert(patch->operation_count == 1);
-    
+
     PatchOperation *op = &patch->operations[0];
     assert(op->old_start_line == -1);  // No line numbers
     assert(op->old_line_count == -1);
@@ -141,7 +141,7 @@ static void test_parse_at_marker_lines_only(void) {
     assert(patch != NULL);
     assert(patch->is_valid == 1);
     assert(patch->operation_count == 1);
-    
+
     PatchOperation *op = &patch->operations[0];
     assert(op->old_start_line == 20);
     assert(op->old_line_count == 2);
@@ -203,23 +203,23 @@ static void test_apply_patch_with_function_context(void) {
     // Verify file was modified correctly - only main() should be changed
     char *new_content = read_test_file(TEST_FILE_1);
     assert(new_content != NULL);
-    
+
     // Count occurrences of "hello" and "world"
     char *pos = new_content;
     int hello_count = 0;
     int world_count = 0;
-    
+
     while ((pos = strstr(pos, "hello")) != NULL) {
         hello_count++;
         pos += 5; // length of "hello"
     }
-    
+
     pos = new_content;
     while ((pos = strstr(pos, "world")) != NULL) {
         world_count++;
         pos += 5; // length of "world"
     }
-    
+
     // Should have 2 "hello" (in foo and bar) and 1 "world" (in main)
     assert(hello_count == 2);
     assert(world_count == 1);
@@ -302,7 +302,7 @@ static void test_parse_class_context(void) {
     assert(patch != NULL);
     assert(patch->is_valid == 1);
     assert(patch->operation_count == 1);
-    
+
     PatchOperation *op = &patch->operations[0];
     assert(op->old_start_line == 100);
     assert(op->old_line_count == 1);
