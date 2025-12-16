@@ -7206,17 +7206,23 @@ static int process_single_command_response(ConversationState *state, ApiResponse
 
 // Create and bind Unix domain socket
 static int create_unix_socket(const char *socket_path) {
+    LOG_DEBUG("create_unix_socket: Starting socket creation for path: %s", socket_path);
+    
     // Remove existing socket file if it exists
+    LOG_DEBUG("create_unix_socket: Removing existing socket file (if any)");
     unlink(socket_path);
 
     // Create socket
+    LOG_DEBUG("create_unix_socket: Creating AF_UNIX socket with SOCK_STREAM");
     int server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (server_fd < 0) {
         LOG_ERROR("Failed to create socket: %s", strerror(errno));
         return -1;
     }
+    LOG_DEBUG("create_unix_socket: Socket created successfully, fd: %d", server_fd);
 
     // Set socket to non-blocking
+    LOG_DEBUG("create_unix_socket: Setting socket to non-blocking mode");
     int flags = fcntl(server_fd, F_GETFL, 0);
     if (flags < 0) {
         LOG_ERROR("Failed to get socket flags: %s", strerror(errno));
@@ -7228,8 +7234,10 @@ static int create_unix_socket(const char *socket_path) {
         close(server_fd);
         return -1;
     }
+    LOG_DEBUG("create_unix_socket: Socket set to non-blocking mode");
 
     // Bind socket
+    LOG_DEBUG("create_unix_socket: Binding socket to path: %s", socket_path);
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
@@ -7240,8 +7248,10 @@ static int create_unix_socket(const char *socket_path) {
         close(server_fd);
         return -1;
     }
+    LOG_DEBUG("create_unix_socket: Socket bound successfully");
 
     // Listen for connections
+    LOG_DEBUG("create_unix_socket: Listening for connections (backlog: 1)");
     if (listen(server_fd, 1) < 0) {
         LOG_ERROR("Failed to listen on socket: %s", strerror(errno));
         close(server_fd);
@@ -7250,11 +7260,14 @@ static int create_unix_socket(const char *socket_path) {
     }
 
     LOG_INFO("Socket created and listening on: %s", socket_path);
+    LOG_DEBUG("create_unix_socket: Socket setup complete, returning fd: %d", server_fd);
     return server_fd;
 }
 
 // Accept incoming connection
 static int accept_socket_connection(int server_fd) {
+    LOG_DEBUG("accept_socket_connection: Attempting to accept connection on server fd: %d", server_fd);
+    
     struct sockaddr_un addr;
     socklen_t addr_len = sizeof(addr);
 
@@ -7262,96 +7275,164 @@ static int accept_socket_connection(int server_fd) {
     if (client_fd < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
             LOG_ERROR("Failed to accept connection: %s", strerror(errno));
+        } else {
+            LOG_DEBUG("accept_socket_connection: No pending connections (EAGAIN/EWOULDBLOCK)");
         }
         return -1;
     }
 
+    LOG_DEBUG("accept_socket_connection: Connection accepted, client fd: %d", client_fd);
+
     // Set client socket to non-blocking
+    LOG_DEBUG("accept_socket_connection: Setting client socket to non-blocking mode");
     int flags = fcntl(client_fd, F_GETFL, 0);
     if (flags >= 0) {
         fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
+        LOG_DEBUG("accept_socket_connection: Client socket set to non-blocking");
+    } else {
+        LOG_WARN("accept_socket_connection: Failed to get client socket flags, continuing anyway");
     }
 
-    LOG_INFO("Accepted socket connection");
+    LOG_INFO("Accepted socket connection (client fd: %d)", client_fd);
+    LOG_DEBUG("accept_socket_connection: Returning client fd: %d", client_fd);
     return client_fd;
 }
 
 // Read input from socket
 static int read_socket_input(int client_fd, char *buffer, size_t buffer_size) {
+    LOG_DEBUG("read_socket_input: Attempting to read from client fd: %d, buffer size: %zu", 
+              client_fd, buffer_size);
+    
     ssize_t bytes_read = read(client_fd, buffer, buffer_size - 1);
     if (bytes_read < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
             LOG_ERROR("Failed to read from socket: %s", strerror(errno));
+            LOG_DEBUG("read_socket_input: Read error, returning -1");
             return -1;
         }
+        LOG_DEBUG("read_socket_input: No data available (EAGAIN/EWOULDBLOCK), returning 0");
         return 0; // No data available
     } else if (bytes_read == 0) {
-        LOG_INFO("Socket client disconnected");
+        LOG_INFO("Socket client disconnected (fd: %d)", client_fd);
+        LOG_DEBUG("read_socket_input: Client disconnected, returning -1");
         return -1; // Client disconnected
     }
 
     buffer[bytes_read] = '\0';
+    LOG_DEBUG("read_socket_input: Read %zd bytes from socket fd: %d", bytes_read, client_fd);
+    LOG_DEBUG("read_socket_input: Data: \"%.*s\"", (int)bytes_read > 50 ? 50 : (int)bytes_read, buffer);
     return (int)bytes_read;
 }
 
 // Check if socket has data available
 static int socket_has_data(int fd) {
+    LOG_DEBUG("socket_has_data: Checking if fd %d has data", fd);
     struct pollfd pfd = { .fd = fd, .events = POLLIN, .revents = 0 };
     int result = poll(&pfd, 1, 0); // Non-blocking poll
-    return result > 0 && (pfd.revents & POLLIN);
+    int has_data = result > 0 && (pfd.revents & POLLIN);
+    LOG_DEBUG("socket_has_data: poll result: %d, revents: 0x%x, has_data: %d", 
+              result, pfd.revents, has_data);
+    return has_data;
 }
 
 // External input callback for socket IPC
 static int socket_external_input_callback(void *user_data, char *buffer, int buffer_size) {
+    LOG_DEBUG("socket_external_input_callback: Called with buffer_size: %d", buffer_size);
+    
     InteractiveContext *ctx = (InteractiveContext *)user_data;
-    if (!ctx || !ctx->socket_ipc.enabled) {
+    if (!ctx) {
+        LOG_DEBUG("socket_external_input_callback: ctx is NULL, returning 0");
+        return 0;
+    }
+    
+    if (!ctx->socket_ipc.enabled) {
+        LOG_DEBUG("socket_external_input_callback: Socket IPC not enabled, returning 0");
         return 0;
     }
 
     SocketIPC *socket_ipc = &ctx->socket_ipc;
+    LOG_DEBUG("socket_external_input_callback: Socket state - server_fd: %d, client_fd: %d, path: %s",
+              socket_ipc->server_fd, socket_ipc->client_fd,
+              socket_ipc->socket_path ? socket_ipc->socket_path : "(null)");
 
     // Accept new connection if none
     if (socket_ipc->client_fd < 0) {
+        LOG_DEBUG("socket_external_input_callback: No client connected, attempting to accept new connection");
         socket_ipc->client_fd = accept_socket_connection(socket_ipc->server_fd);
-    }
-
-    // Read from socket if connected
-    if (socket_ipc->client_fd >= 0 && socket_has_data(socket_ipc->client_fd)) {
-        int bytes = read_socket_input(socket_ipc->client_fd, buffer, (size_t)buffer_size - 1);
-        if (bytes > 0) {
-            return bytes;
-        } else if (bytes < 0) {
-            // Client disconnected
-            close(socket_ipc->client_fd);
-            socket_ipc->client_fd = -1;
-            return 0;
+        if (socket_ipc->client_fd >= 0) {
+            LOG_DEBUG("socket_external_input_callback: New client connected, fd: %d", socket_ipc->client_fd);
+        } else {
+            LOG_DEBUG("socket_external_input_callback: No pending connections to accept");
         }
     }
 
+    // Read from socket if connected
+    if (socket_ipc->client_fd >= 0) {
+        LOG_DEBUG("socket_external_input_callback: Checking if client fd %d has data", socket_ipc->client_fd);
+        if (socket_has_data(socket_ipc->client_fd)) {
+            LOG_DEBUG("socket_external_input_callback: Data available on client fd %d, reading...", socket_ipc->client_fd);
+            int bytes = read_socket_input(socket_ipc->client_fd, buffer, (size_t)buffer_size - 1);
+            if (bytes > 0) {
+                LOG_DEBUG("socket_external_input_callback: Read %d bytes from socket, returning", bytes);
+                return bytes;
+            } else if (bytes < 0) {
+                // Client disconnected
+                LOG_DEBUG("socket_external_input_callback: Client disconnected, closing fd %d", socket_ipc->client_fd);
+                close(socket_ipc->client_fd);
+                socket_ipc->client_fd = -1;
+                LOG_DEBUG("socket_external_input_callback: Client fd closed, returning 0");
+                return 0;
+            } else {
+                LOG_DEBUG("socket_external_input_callback: No data read (bytes = 0)");
+            }
+        } else {
+            LOG_DEBUG("socket_external_input_callback: No data available on client fd %d", socket_ipc->client_fd);
+        }
+    } else {
+        LOG_DEBUG("socket_external_input_callback: No client connected");
+    }
+
+    LOG_DEBUG("socket_external_input_callback: No input available, returning 0");
     return 0;
 }
 
 // Cleanup socket resources
 static void cleanup_socket(SocketIPC *socket_ipc) {
-    if (!socket_ipc) return;
+    LOG_DEBUG("cleanup_socket: Starting socket cleanup");
+    if (!socket_ipc) {
+        LOG_DEBUG("cleanup_socket: socket_ipc is NULL, returning");
+        return;
+    }
+
+    LOG_DEBUG("cleanup_socket: Socket IPC state - enabled: %d, server_fd: %d, client_fd: %d, path: %s",
+              socket_ipc->enabled, socket_ipc->server_fd, socket_ipc->client_fd,
+              socket_ipc->socket_path ? socket_ipc->socket_path : "(null)");
 
     if (socket_ipc->client_fd >= 0) {
+        LOG_DEBUG("cleanup_socket: Closing client fd: %d", socket_ipc->client_fd);
         close(socket_ipc->client_fd);
         socket_ipc->client_fd = -1;
+        LOG_DEBUG("cleanup_socket: Client fd closed");
     }
 
     if (socket_ipc->server_fd >= 0) {
+        LOG_DEBUG("cleanup_socket: Closing server fd: %d", socket_ipc->server_fd);
         close(socket_ipc->server_fd);
         socket_ipc->server_fd = -1;
+        LOG_DEBUG("cleanup_socket: Server fd closed");
     }
 
     if (socket_ipc->socket_path) {
+        LOG_DEBUG("cleanup_socket: Removing socket file: %s", socket_ipc->socket_path);
         unlink(socket_ipc->socket_path);
+        LOG_DEBUG("cleanup_socket: Freeing socket path memory");
         free(socket_ipc->socket_path);
         socket_ipc->socket_path = NULL;
+        LOG_DEBUG("cleanup_socket: Socket path cleaned up");
     }
 
     socket_ipc->enabled = 0;
+    LOG_DEBUG("cleanup_socket: Socket cleanup complete");
 }
 
 
@@ -7442,15 +7523,22 @@ static void interactive_mode(ConversationState *state, int socket_ipc_enabled, c
     // Initialize socket IPC if enabled
     SocketIPC socket_ipc = {0};
     if (socket_ipc_enabled && socket_path) {
+        LOG_DEBUG("interactive_mode: Socket IPC enabled, creating socket at path: %s", socket_path);
         socket_ipc.server_fd = create_unix_socket(socket_path);
         if (socket_ipc.server_fd < 0) {
             LOG_ERROR("Failed to create socket, continuing without socket IPC");
             socket_ipc.enabled = 0;
+            LOG_DEBUG("interactive_mode: Socket creation failed, socket IPC disabled");
         } else {
             socket_ipc.client_fd = -1;
             socket_ipc.socket_path = strdup(socket_path);
             socket_ipc.enabled = 1;
+            LOG_DEBUG("interactive_mode: Socket IPC initialized successfully - server_fd: %d, path: %s",
+                      socket_ipc.server_fd, socket_ipc.socket_path);
         }
+    } else {
+        LOG_DEBUG("interactive_mode: Socket IPC not enabled (socket_ipc_enabled: %d, socket_path: %s)",
+                  socket_ipc_enabled, socket_path ? socket_path : "(null)");
     }
 
     InteractiveContext ctx = {
@@ -7833,6 +7921,7 @@ int main(int argc, char *argv[]) {
     int socket_ipc_enabled = 0;
     char *socket_path = NULL;
     if ((argc == 2 || argc == 3) && (strcmp(argv[1], "-s") == 0 || strcmp(argv[1], "--socket") == 0)) {
+        LOG_DEBUG("main: Socket IPC flag detected, argc: %d", argc);
         if (argc != 3) {
             fprintf(stderr, "Error: Socket path required with --socket option\n");
             fprintf(stderr, "Usage: %s --socket /path/to/socket\n", argv[0]);
@@ -7841,6 +7930,10 @@ int main(int argc, char *argv[]) {
         socket_ipc_enabled = 1;
         socket_path = argv[2];
         LOG_INFO("Socket IPC enabled, path: %s", socket_path);
+        LOG_DEBUG("main: Socket IPC configuration - enabled: %d, path: %s", 
+                  socket_ipc_enabled, socket_path);
+    } else {
+        LOG_DEBUG("main: Socket IPC flag not detected or not in correct position");
     }
 
     // Handle list sessions mode
