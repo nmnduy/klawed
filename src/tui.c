@@ -1737,9 +1737,31 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
     LOG_DEBUG("[TUI] Added line, total_lines now %d (estimated %d, actual %d)",
               cur_y, estimated_lines, cur_y - start_line);
 
-    // Auto-scroll to bottom only in INSERT mode (preserve scroll position in NORMAL mode)
+    // Auto-scroll logic:
+    // - In INSERT mode: always auto-scroll
+    // - In NORMAL/COMMAND mode: auto-scroll only if we're at 100% scroll height
+    //   (so it doesn't jump while we're reading)
     if (tui->mode == TUI_MODE_INSERT) {
         window_manager_scroll_to_bottom(&tui->wm);
+    } else if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
+        // Check if we're already at 100% scroll height
+        int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
+        int max_scroll = window_manager_get_max_scroll(&tui->wm);
+        int content_lines = window_manager_get_content_lines(&tui->wm);
+        
+        // Calculate if we're at 100% (bottom)
+        int at_bottom = 0;
+        if (content_lines == 0 || max_scroll <= 0) {
+            // No content or everything fits in viewport
+            at_bottom = 1;
+        } else if (scroll_offset >= max_scroll) {
+            // Already at bottom
+            at_bottom = 1;
+        }
+        
+        if (at_bottom) {
+            window_manager_scroll_to_bottom(&tui->wm);
+        }
     }
     window_manager_refresh_conversation(&tui->wm);
 
@@ -1804,9 +1826,31 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
         add_conversation_entry(tui, "", text, COLOR_PAIR_ASSISTANT);
     }
 
-    // Auto-scroll to bottom only in INSERT mode
+    // Auto-scroll logic:
+    // - In INSERT mode: always auto-scroll
+    // - In NORMAL/COMMAND mode: auto-scroll only if we're at 100% scroll height
+    //   (so it doesn't jump while we're reading)
     if (tui->mode == TUI_MODE_INSERT) {
         window_manager_scroll_to_bottom(&tui->wm);
+    } else if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
+        // Check if we're already at 100% scroll height
+        int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
+        int max_scroll = window_manager_get_max_scroll(&tui->wm);
+        int content_lines = window_manager_get_content_lines(&tui->wm);
+        
+        // Calculate if we're at 100% (bottom)
+        int at_bottom = 0;
+        if (content_lines == 0 || max_scroll <= 0) {
+            // No content or everything fits in viewport
+            at_bottom = 1;
+        } else if (scroll_offset >= max_scroll) {
+            // Already at bottom
+            at_bottom = 1;
+        }
+        
+        if (at_bottom) {
+            window_manager_scroll_to_bottom(&tui->wm);
+        }
     }
     window_manager_refresh_conversation(&tui->wm);
 
