@@ -5612,6 +5612,20 @@ char* build_system_prompt(ConversationState *state) {
         offset += snprintf(prompt + offset, prompt_size - (size_t)offset, "\n%s\n", git_status);
     }
 
+    // Add SKILLS directory information if it exists
+    char skills_path[PATH_MAX];
+    snprintf(skills_path, sizeof(skills_path), "%s/SKILLS", working_dir);
+    if (access(skills_path, F_OK) == 0 && offset < (int)prompt_size) {
+        offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
+            "\nSKILLS Directory: The SKILLS/ directory contains documentation, scripts, and resources that can help you complete tasks more effectively. "
+            "When working on tasks, explore the SKILLS/ directory to find:\n"
+            "- Documentation and guides for specific technologies or workflows\n"
+            "- Helper scripts and automation tools\n"
+            "- Templates and examples\n"
+            "- Best practices and coding standards\n"
+            "Use the Read, Glob, and Grep tools to explore SKILLS/ contents when they might be relevant to your current task.\n");
+    }
+
     // Add KLAWED.md content if available
     if (klawed_md && offset < (int)prompt_size) {
         offset += snprintf(prompt + offset, prompt_size - (size_t)offset,

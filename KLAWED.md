@@ -259,6 +259,11 @@ cp examples/mcp_servers.json ~/.config/klawed/
 **Git information** (when in repo):
 - Current branch, status (clean/modified), last 5 commits
 
+**SKILLS directory:**
+- Auto-detected if `SKILLS/` exists in working directory
+- Informs agent about available documentation, scripts, and resources
+- Encourages exploration of SKILLS/ contents for task-relevant materials
+
 **KLAWED.md injection:**
 - Auto-reads from working directory if present
 - Wrapped in `<system-reminder>` tags
