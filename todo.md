@@ -1,3 +1,11 @@
+- [ ] log WARN when finish_reason is 'length'
+- [ ] reasoning effort
+    - [ ] providers API diff
+        - [ ] deepseek
+        - [ ] moonshot
+        - [ ] aws bedrock
+        - [ ] anthropic
+    - [ ] toggle
 - [ ] puter@puter /tmp/is-sessions/70865b53-e42f-4dd6-a36e-9bb81c217ab3
 - $ tail -f ./.klawed/logs/klawed.log
 - [2025-12-16 23:39:53] [sess_1765903032_06dc9f56] INFO  [klawed.c:5225] call_api_with_retries: API call succeeded (duration: 6766 ms, provider duration: 6764 ms, attempts: 1, auth_refreshed: no, plan_mode: no)
