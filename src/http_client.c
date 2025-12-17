@@ -587,7 +587,7 @@ struct curl_slist* http_headers_deep_copy(const struct curl_slist *headers) {
 
     struct curl_slist *new_list = NULL;
     const struct curl_slist *current = headers;
-    
+
     while (current) {
         if (current->data) {
             struct curl_slist *new_item = curl_slist_append(new_list, current->data);
@@ -599,7 +599,7 @@ struct curl_slist* http_headers_deep_copy(const struct curl_slist *headers) {
         }
         current = current->next;
     }
-    
+
     return new_list;
 }
 

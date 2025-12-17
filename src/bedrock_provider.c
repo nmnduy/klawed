@@ -702,7 +702,7 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
     char *bedrock_json = bedrock_convert_request(openai_json);
     free(openai_json);
-    
+
     LOG_DEBUG("Bedrock: Converted to Bedrock format, request length: %zu bytes",
               bedrock_json ? strlen(bedrock_json) : 0);
 

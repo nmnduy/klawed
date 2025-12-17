@@ -310,7 +310,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
 
     char *openai_json = cJSON_PrintUnformatted(request);
     cJSON_Delete(request);
-    
+
     LOG_DEBUG("OpenAI: Request serialized, length: %zu bytes", openai_json ? strlen(openai_json) : 0);
 
     if (!openai_json) {

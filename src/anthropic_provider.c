@@ -426,7 +426,7 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
                 // Add assistant prefix with empty text - streaming will fill it in
                 tui_add_conversation_line(ctx->state->tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
             }
-            
+
             break;
 
         case SSE_EVENT_CONTENT_BLOCK_START: {
@@ -607,9 +607,9 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
         result.is_retryable = 0;
         return result;
     }
-    
+
     LOG_DEBUG("Anthropic: Built OpenAI-format request, converting to Anthropic format");
-    
+
     char *openai_req = cJSON_PrintUnformatted(openai_req_obj);
     cJSON_Delete(openai_req_obj);
     if (!openai_req) {

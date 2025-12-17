@@ -330,12 +330,12 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
     int msg_count = cJSON_GetArraySize(messages_array);
     int tool_call_count = 0;
     int tool_result_count = 0;
-    
+
     for (int i = 0; i < msg_count; i++) {
         cJSON *msg = cJSON_GetArrayItem(messages_array, i);
         cJSON *role = cJSON_GetObjectItem(msg, "role");
         if (!role || !cJSON_IsString(role)) continue;
-        
+
         if (strcmp(role->valuestring, "assistant") == 0) {
             cJSON *tool_calls = cJSON_GetObjectItem(msg, "tool_calls");
             if (tool_calls && cJSON_IsArray(tool_calls)) {
@@ -361,10 +361,10 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
             }
         }
     }
-    
-    LOG_INFO("Request validation: %d messages, %d tool_calls, %d tool_results", 
+
+    LOG_INFO("Request validation: %d messages, %d tool_calls, %d tool_results",
              msg_count, tool_call_count, tool_result_count);
-    
+
     if (tool_call_count > tool_result_count) {
         LOG_WARN("Request may be invalid: %d tool_calls but only %d tool_results",
                  tool_call_count, tool_result_count);

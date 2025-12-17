@@ -23,7 +23,7 @@
 
 int uds_create_unix_socket(const char *socket_path) {
     LOG_DEBUG("uds_create_unix_socket: Starting socket creation for path: %s", socket_path);
-    
+
     // Remove existing socket file if it exists
     LOG_DEBUG("uds_create_unix_socket: Removing existing socket file (if any)");
     unlink(socket_path);
@@ -82,7 +82,7 @@ int uds_create_unix_socket(const char *socket_path) {
 
 int uds_accept_connection(int server_fd) {
     LOG_DEBUG("uds_accept_connection: Attempting to accept connection on server fd: %d", server_fd);
-    
+
     struct sockaddr_un addr;
     socklen_t addr_len = sizeof(addr);
 
@@ -115,7 +115,7 @@ int uds_accept_connection(int server_fd) {
 
 void uds_cleanup(SocketIPC *socket_ipc) {
     LOG_DEBUG("uds_cleanup: Starting socket cleanup");
-    
+
     if (!socket_ipc) {
         LOG_DEBUG("uds_cleanup: socket_ipc is NULL, returning");
         return;
@@ -155,30 +155,30 @@ void uds_cleanup(SocketIPC *socket_ipc) {
 // ============================================================================
 
 int uds_read_input(int client_fd, char *buffer, size_t buffer_size) {
-    LOG_DEBUG("uds_read_input: Attempting to read from client fd: %d, buffer size: %zu", 
+    LOG_DEBUG("uds_read_input: Attempting to read from client fd: %d, buffer size: %zu",
               client_fd, buffer_size);
-    
+
     // First check if there's data available with a short timeout
     struct pollfd pfd = {0};
     pfd.fd = client_fd;
     pfd.events = POLLIN;
-    
+
     int poll_result = poll(&pfd, 1, 100); // 100ms timeout for poll
     if (poll_result < 0) {
         LOG_ERROR("Poll failed while reading from socket: %s", strerror(errno));
         return -1;
     }
-    
+
     if (poll_result == 0) {
         LOG_DEBUG("uds_read_input: No data available within timeout");
         return 0; // No data available
     }
-    
+
     if (!(pfd.revents & POLLIN)) {
         LOG_DEBUG("uds_read_input: Socket not ready for reading (revents: 0x%x)", pfd.revents);
         return 0;
     }
-    
+
     ssize_t bytes_read = read(client_fd, buffer, buffer_size - 1);
     if (bytes_read < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
@@ -202,7 +202,7 @@ int uds_read_input(int client_fd, char *buffer, size_t buffer_size) {
 
 int uds_write_output(int client_fd, const char *data, size_t data_len) {
     LOG_DEBUG("uds_write_output: Attempting to write %zu bytes to client fd: %d", data_len, client_fd);
-    
+
     if (client_fd < 0) {
         LOG_DEBUG("uds_write_output: Invalid client fd, returning -1");
         return -1;
@@ -214,7 +214,7 @@ int uds_write_output(int client_fd, const char *data, size_t data_len) {
     const int write_timeout_ms = 5000; // 5 second timeout for write operations
 
     time_t start_time = time(NULL);
-    
+
     while (total_written < data_len && retries < max_retries) {
         // Check for timeout
         time_t current_time = time(NULL);
@@ -222,7 +222,7 @@ int uds_write_output(int client_fd, const char *data, size_t data_len) {
             LOG_ERROR("Write operation timed out after %ld seconds", (long)(current_time - start_time));
             return -1;
         }
-        
+
         ssize_t bytes_written = write(client_fd, data + total_written, data_len - total_written);
         if (bytes_written < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -250,35 +250,35 @@ int uds_write_output(int client_fd, const char *data, size_t data_len) {
 // Check if socket connection is still alive by attempting a non-blocking write test
 int uds_check_connection(int client_fd) {
     LOG_DEBUG("uds_check_connection: Checking connection health for fd: %d", client_fd);
-    
+
     if (client_fd < 0) {
         LOG_DEBUG("uds_check_connection: Invalid fd, returning 0");
         return 0;
     }
-    
+
     // Try to write a zero-length buffer (just checks if socket is writable)
     struct pollfd pfd = {0};
     pfd.fd = client_fd;
     pfd.events = POLLOUT | POLLERR | POLLHUP;
     pfd.revents = 0;
-    
+
     int result = poll(&pfd, 1, 0); // Non-blocking poll
     if (result < 0) {
         LOG_ERROR("Poll failed while checking connection: %s", strerror(errno));
         return 0;
     }
-    
+
     if (result == 0) {
         LOG_DEBUG("uds_check_connection: Socket is writable (no errors)");
         return 1; // Socket is writable
     }
-    
+
     // Check for errors
     if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
         LOG_WARN("Socket connection has error or hung up (revents: 0x%x)", pfd.revents);
         return 0;
     }
-    
+
     LOG_DEBUG("uds_check_connection: Socket is healthy (revents: 0x%x)", pfd.revents);
     return 1;
 }
@@ -286,29 +286,29 @@ int uds_check_connection(int client_fd) {
 // Send a ping/heartbeat message to keep connection alive
 int uds_send_ping(int client_fd) {
     LOG_DEBUG("uds_send_ping: Sending ping to client fd: %d", client_fd);
-    
+
     if (client_fd < 0) {
         LOG_DEBUG("uds_send_ping: Invalid fd, returning -1");
         return -1;
     }
-    
+
     cJSON *ping_json = cJSON_CreateObject();
     if (!ping_json) {
         LOG_ERROR("Failed to create ping JSON object");
         return -1;
     }
-    
+
     cJSON_AddStringToObject(ping_json, "type", "ping");
     cJSON_AddNumberToObject(ping_json, "timestamp", (double)(long)time(NULL));
-    
+
     int result = uds_write_json(client_fd, ping_json);
     cJSON_Delete(ping_json);
-    
+
     if (result < 0) {
         LOG_WARN("Failed to send ping to socket");
         return -1;
     }
-    
+
     LOG_DEBUG("uds_send_ping: Ping sent successfully");
     return 0;
 }
@@ -316,26 +316,26 @@ int uds_send_ping(int client_fd) {
 // Attempt to gracefully handle write failures by checking connection and optionally reconnecting
 int uds_handle_write_failure(int client_fd, SocketIPC *socket_ipc) {
     LOG_DEBUG("uds_handle_write_failure: Handling write failure for fd: %d", client_fd);
-    
+
     if (client_fd < 0 || !socket_ipc) {
         LOG_DEBUG("uds_handle_write_failure: Invalid parameters");
         return -1;
     }
-    
+
     // First check if connection is still alive
     if (uds_check_connection(client_fd)) {
         LOG_DEBUG("uds_handle_write_failure: Connection appears healthy, write failure may be temporary");
         return 0; // Connection is fine, failure might be temporary
     }
-    
+
     LOG_WARN("Write failure due to broken connection, attempting to clean up");
-    
+
     // Close the broken connection
     if (socket_ipc->client_fd >= 0) {
         close(socket_ipc->client_fd);
         socket_ipc->client_fd = -1;
     }
-    
+
     // Try to accept a new connection if server is still running
     if (socket_ipc->server_fd >= 0) {
         LOG_INFO("Attempting to accept new connection after write failure");
@@ -346,14 +346,14 @@ int uds_handle_write_failure(int client_fd, SocketIPC *socket_ipc) {
             return 1; // New connection established
         }
     }
-    
+
     LOG_DEBUG("uds_handle_write_failure: No new connection available");
     return -1; // Could not recover
 }
 
 int uds_has_data(int fd) {
     LOG_DEBUG("uds_has_data: Checking if fd %d has data", fd);
-    
+
     if (fd < 0) {
         LOG_DEBUG("uds_has_data: Invalid fd, returning 0");
         return 0;
@@ -383,22 +383,22 @@ void uds_send_event(ConversationState *state, const char *event_type, cJSON *eve
     if (!state || state->socket_streaming_fd < 0 || !event_type || !event_data) {
         return;
     }
-    
+
     cJSON *event_json = cJSON_CreateObject();
     if (!event_json) {
         return;
     }
-    
+
     cJSON_AddStringToObject(event_json, "type", event_type);
     cJSON_AddItemToObject(event_json, "data", cJSON_Duplicate(event_data, 1));
-    
+
     char *json_str = cJSON_PrintUnformatted(event_json);
     if (json_str) {
         size_t len = strlen(json_str);
         size_t total_written = 0;
         int retries = 0;
         const int max_retries = 10;
-        
+
         // Write JSON
         while (total_written < len && retries < max_retries) {
             ssize_t bytes_written = write(state->socket_streaming_fd, json_str + total_written, len - total_written);
@@ -415,11 +415,11 @@ void uds_send_event(ConversationState *state, const char *event_type, cJSON *eve
             total_written += (size_t)bytes_written;
             retries = 0;
         }
-        
+
         if (total_written < len) {
             LOG_ERROR("uds_send_event: Failed to write all JSON data: wrote %zu of %zu bytes", total_written, len);
         }
-        
+
         // Write newline
         retries = 0;
         size_t newline_written = 0;
@@ -437,10 +437,10 @@ void uds_send_event(ConversationState *state, const char *event_type, cJSON *eve
             }
             newline_written += (size_t)bytes;
         }
-        
+
         free(json_str);
     }
-    
+
     cJSON_Delete(event_json);
 }
 
@@ -448,22 +448,22 @@ void uds_send_error(int client_fd, const char *error_message) {
     if (client_fd < 0 || !error_message) {
         return;
     }
-    
+
     cJSON *error_json = cJSON_CreateObject();
     if (!error_json) {
         return;
     }
-    
+
     cJSON_AddStringToObject(error_json, "type", "error");
     cJSON_AddStringToObject(error_json, "message", error_message);
-    
+
     char *json_str = cJSON_PrintUnformatted(error_json);
     if (json_str) {
         uds_write_output(client_fd, json_str, strlen(json_str));
         uds_write_output(client_fd, "\n", 1);
         free(json_str);
     }
-    
+
     cJSON_Delete(error_json);
 }
 
@@ -473,23 +473,23 @@ void uds_send_error(int client_fd, const char *error_message) {
 
 void uds_streaming_context_init(SocketStreamingContext *ctx, int client_fd) {
     if (!ctx) return;
-    
+
     memset(ctx, 0, sizeof(*ctx));
     ctx->client_fd = client_fd;
-    
+
     // Initialize buffers with reasonable defaults
     ctx->accumulated_capacity = 4096;
     ctx->accumulated_text = malloc(ctx->accumulated_capacity);
     if (ctx->accumulated_text) {
         ctx->accumulated_text[0] = '\0';
     }
-    
+
     ctx->tool_input_capacity = 4096;
     ctx->tool_input_json = malloc(ctx->tool_input_capacity);
     if (ctx->tool_input_json) {
         ctx->tool_input_json[0] = '\0';
     }
-    
+
     ctx->content_block_index = -1;
     ctx->content_block_type = NULL;
     ctx->tool_use_id = NULL;
@@ -500,18 +500,18 @@ void uds_streaming_context_init(SocketStreamingContext *ctx, int client_fd) {
 
 void uds_streaming_context_free(SocketStreamingContext *ctx) {
     if (!ctx) return;
-    
+
     free(ctx->accumulated_text);
     free(ctx->tool_input_json);
     free(ctx->content_block_type);
     free(ctx->tool_use_id);
     free(ctx->tool_use_name);
     free(ctx->stop_reason);
-    
+
     if (ctx->message_start_data) {
         cJSON_Delete(ctx->message_start_data);
     }
-    
+
     memset(ctx, 0, sizeof(*ctx));
 }
 
@@ -523,17 +523,17 @@ int uds_write_json(int client_fd, cJSON *json_obj) {
     if (client_fd < 0 || !json_obj) {
         return -1;
     }
-    
+
     char *json_str = cJSON_PrintUnformatted(json_obj);
     if (!json_str) {
         return -1;
     }
-    
+
     int result = uds_write_output(client_fd, json_str, strlen(json_str));
     if (result == 0) {
         result = uds_write_output(client_fd, "\n", 1);
     }
-    
+
     free(json_str);
     return result;
 }

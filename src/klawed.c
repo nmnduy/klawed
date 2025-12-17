@@ -1910,7 +1910,7 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         if (setenv("KLAWED_IS_SUBAGENT", "1", 1) != 0) {
             fprintf(stderr, "Warning: Failed to set KLAWED_IS_SUBAGENT environment variable: %s\n", strerror(errno));
         }
-        
+
         // Execute the command
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);
         // If we get here, exec failed
@@ -4137,19 +4137,19 @@ static cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationStat
         if (strcmp(tools[i].name, tool_name) == 0) {
             // Check if we're running as a subagent and exclude subagent-related tools to prevent recursion
             const char *is_subagent_env = getenv("KLAWED_IS_SUBAGENT");
-            int is_subagent = is_subagent_env && (strcmp(is_subagent_env, "1") == 0 || 
+            int is_subagent = is_subagent_env && (strcmp(is_subagent_env, "1") == 0 ||
                                                  strcasecmp(is_subagent_env, "true") == 0 ||
                                                  strcasecmp(is_subagent_env, "yes") == 0);
-            
-            if (is_subagent && (strcmp(tool_name, "Subagent") == 0 || 
-                               strcmp(tool_name, "CheckSubagentProgress") == 0 || 
+
+            if (is_subagent && (strcmp(tool_name, "Subagent") == 0 ||
+                               strcmp(tool_name, "CheckSubagentProgress") == 0 ||
                                strcmp(tool_name, "InterruptSubagent") == 0)) {
                 cJSON *error = cJSON_CreateObject();
                 cJSON_AddStringToObject(error, "error", "Subagent-related tools are disabled when running as a subagent to prevent recursion");
                 result = error;
                 break;
             }
-            
+
             LOG_DEBUG("execute_tool: Found built-in tool '%s' at index %d", tool_name, i);
             result = tools[i].handler(input, state);
             break;
@@ -4328,13 +4328,13 @@ static cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationStat
 cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON *tool_array = cJSON_CreateArray();
     int plan_mode = state ? state->plan_mode : 0;
-    
+
     // Check if we're running as a subagent - if so, exclude the Subagent tool to prevent recursion
     const char *is_subagent_env = getenv("KLAWED_IS_SUBAGENT");
-    int is_subagent = is_subagent_env && (strcmp(is_subagent_env, "1") == 0 || 
+    int is_subagent = is_subagent_env && (strcmp(is_subagent_env, "1") == 0 ||
                                          strcasecmp(is_subagent_env, "true") == 0 ||
                                          strcasecmp(is_subagent_env, "yes") == 0);
-    
+
     LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d, is_subagent=%d", plan_mode, is_subagent);
     // Sleep tool
     cJSON *sleep_tool = cJSON_CreateObject();
@@ -7231,13 +7231,13 @@ static int process_single_command_response(ConversationState *state, ApiResponse
 // External input callback for socket IPC
 static int socket_external_input_callback(void *user_data, char *buffer, int buffer_size) {
     LOG_DEBUG("socket_external_input_callback: Called with buffer_size: %d", buffer_size);
-    
+
     InteractiveContext *ctx = (InteractiveContext *)user_data;
     if (!ctx) {
         LOG_DEBUG("socket_external_input_callback: ctx is NULL, returning 0");
         return 0;
     }
-    
+
     if (!ctx->socket_ipc.enabled) {
         LOG_DEBUG("socket_external_input_callback: Socket IPC not enabled, returning 0");
         return 0;
@@ -7326,25 +7326,25 @@ __attribute__((unused)) static void socket_streaming_context_free(SocketStreamin
 // Socket streaming event handler - sends streaming data to socket
 static int socket_streaming_event_handler(StreamEvent *event, void *userdata) {
     SocketStreamingContext *ctx = (SocketStreamingContext *)userdata;
-    
+
     if (!event || !event->data) {
         // Ping or invalid event
         return 0;
     }
-    
+
     // Create a JSON object for the streaming event
     cJSON *event_json = cJSON_CreateObject();
     if (!event_json) {
         return 0;
     }
-    
+
     // Add event type
     const char *event_type_str = sse_event_type_to_name(event->type);
     cJSON_AddStringToObject(event_json, "type", event_type_str);
-    
+
     // Add event data
     cJSON_AddItemToObject(event_json, "data", cJSON_Duplicate(event->data, 1));
-    
+
     // Convert to JSON string
     char *json_str = cJSON_PrintUnformatted(event_json);
     if (json_str) {
@@ -7353,14 +7353,14 @@ static int socket_streaming_event_handler(StreamEvent *event, void *userdata) {
         uds_write_output(ctx->client_fd, "\n", 1);
         free(json_str);
     }
-    
+
     cJSON_Delete(event_json);
     return 0;
 }
 
 // Wrapper streaming event handler that calls both the original handler and socket handler
-__attribute__((unused)) static int socket_streaming_wrapper_handler(StreamEvent *event, void *userdata, 
-                                           HttpStreamCallback original_handler, 
+__attribute__((unused)) static int socket_streaming_wrapper_handler(StreamEvent *event, void *userdata,
+                                           HttpStreamCallback original_handler,
                                            void *original_userdata,
                                            SocketStreamingContext *socket_ctx) {
     (void)userdata;  // Unused parameter
@@ -7371,12 +7371,12 @@ __attribute__((unused)) static int socket_streaming_wrapper_handler(StreamEvent 
             return result; // Abort if original handler says to
         }
     }
-    
+
     // Then send to socket
     if (socket_ctx && socket_ctx->client_fd >= 0) {
         return socket_streaming_event_handler(event, socket_ctx);
     }
-    
+
     return 0;
 }
 
@@ -7385,13 +7385,13 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
     if (!response) {
         return -1; // Invalid response
     }
-    
+
     // Handle API call errors (network errors, etc.)
     if (response->error_message) {
         // Create a simple error JSON
         cJSON *error_json = cJSON_CreateObject();
         int write_success = 0;
-        
+
         if (error_json) {
             cJSON_AddStringToObject(error_json, "error", response->error_message);
             char *json_str = cJSON_PrintUnformatted(error_json);
@@ -7404,7 +7404,7 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
             }
             cJSON_Delete(error_json);
         }
-        
+
         if (!write_success) {
             // Fallback to plain text error
             char error_buf[512];
@@ -7415,7 +7415,7 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
         }
         return 0; // Error message sent successfully
     }
-    
+
     // Check if we have a raw response
     if (!response->raw_response) {
         char error_buf[] = "{\"error\": \"No response data available\"}\n";
@@ -7424,7 +7424,7 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
         }
         return 0;
     }
-    
+
     // Check if streaming is enabled - if so, don't send the complete response
     // because streaming events have already been sent
     int streaming_enabled = 0;
@@ -7432,7 +7432,7 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
     if (streaming_env && (strcmp(streaming_env, "1") == 0 || strcasecmp(streaming_env, "true") == 0)) {
         streaming_enabled = 1;
     }
-    
+
     // Only send complete JSON response if streaming is NOT enabled
     if (!streaming_enabled) {
         // Convert the entire raw response to JSON string
@@ -7445,25 +7445,25 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
             }
             return 0;
         }
-        
+
         // Send the JSON response through socket
         if (uds_write_output(client_fd, json_str, strlen(json_str)) < 0) {
             free(json_str);
             return -1; // Write failed
         }
-        
+
         // Add newline after JSON for readability
         if (uds_write_output(client_fd, "\n", 1) < 0) {
             free(json_str);
             return -1; // Write failed
         }
-        
+
         // Free the JSON string
         free(json_str);
     } else {
         LOG_DEBUG("Streaming enabled, skipping complete JSON response in socket mode");
     }
-    
+
     // Add to conversation history (still needed for multi-turn conversations)
     cJSON *choices = cJSON_GetObjectItem(response->raw_response, "choices");
     if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
@@ -7473,7 +7473,7 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
             add_assistant_message_openai(state, message);
         }
     }
-    
+
     // Process tool calls if any exist
     int tool_count = response->tool_count;
     ToolCall *tool_calls_array = response->tools;
@@ -7534,7 +7534,7 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
                             cJSON_AddItemToObject(data_obj, "result", cJSON_Duplicate(tool_result, 1));
                             cJSON_AddItemToObject(tool_response_json, "data", data_obj);
                         }
-                        
+
                         char *tool_json_str = cJSON_PrintUnformatted(tool_response_json);
                         if (tool_json_str) {
                             uds_write_output(client_fd, tool_json_str, strlen(tool_json_str));
@@ -7609,7 +7609,7 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
 // Socket-only mode: runs as a daemon listening on socket, no TUI
 static void socket_only_mode(ConversationState *state, const char *socket_path) {
     LOG_INFO("Starting socket-only mode on path: %s", socket_path);
-    
+
     // Create socket
     SocketIPC socket_ipc = {0};
     socket_ipc.server_fd = uds_create_unix_socket(socket_path);
@@ -7617,20 +7617,20 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
         LOG_ERROR("Failed to create socket for socket-only mode");
         return;
     }
-    
+
     socket_ipc.client_fd = -1;
     socket_ipc.socket_path = strdup(socket_path);
     socket_ipc.enabled = 1;
-    
+
     LOG_INFO("Socket-only mode ready, listening on: %s", socket_path);
-    
+
     // Main event loop for socket-only mode
     int running = 1;
     time_t last_ping_time = 0;
     const time_t PING_INTERVAL = 30; // Send ping every 30 seconds
     const time_t CLIENT_TIMEOUT = 60; // Close idle client after 60 seconds
     time_t last_activity_time = time(NULL);
-    
+
     while (running) {
         // Accept new connection if none
         if (socket_ipc.client_fd < 0) {
@@ -7643,7 +7643,7 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
                 setenv("KLAWED_ENABLE_STREAMING", "1", 1);
             }
         }
-        
+
         // Read from socket if connected
         if (socket_ipc.client_fd >= 0) {
             // Check connection health before attempting any operations
@@ -7654,20 +7654,20 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
                 state->socket_streaming_fd = -1;
                 continue;
             }
-            
+
             char buffer[4096];
             if (uds_has_data(socket_ipc.client_fd)) {
                 int bytes = uds_read_input(socket_ipc.client_fd, buffer, sizeof(buffer));
                 if (bytes > 0) {
                     LOG_INFO("Received %d bytes from socket", bytes);
                     last_activity_time = time(NULL); // Update activity time
-                    
+
                     // Process the input
                     buffer[bytes] = '\0';
-                    
+
                     // Add user message to conversation (but don't display it)
                     add_user_message(state, buffer);
-                    
+
                     // Call API synchronously
                     ApiResponse *response = call_api(state);
                     if (response) {
@@ -7697,7 +7697,7 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
                             last_activity_time = time(NULL); // Update activity time on successful write
                         }
                     }
-                    
+
                 } else if (bytes < 0) {
                     // Client disconnected
                     LOG_INFO("Client disconnected in socket-only mode");
@@ -7707,11 +7707,11 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
                 }
             }
         }
-        
+
         // Handle ping and timeout for connected client
         if (socket_ipc.client_fd >= 0) {
             time_t now = time(NULL);
-            
+
             // Send periodic ping to keep connection alive
             if (now - last_ping_time >= PING_INTERVAL) {
                 if (uds_send_ping(socket_ipc.client_fd) < 0) {
@@ -7720,10 +7720,10 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
                 }
                 last_ping_time = now;
             }
-            
+
             // Check for client timeout (no activity)
             if (now - last_activity_time >= CLIENT_TIMEOUT) {
-                LOG_INFO("Client timeout after %ld seconds of inactivity, closing connection", 
+                LOG_INFO("Client timeout after %ld seconds of inactivity, closing connection",
                         (long)(now - last_activity_time));
                 close(socket_ipc.client_fd);
                 socket_ipc.client_fd = -1;
@@ -7731,11 +7731,11 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
                 last_activity_time = now; // Reset for next client
             }
         }
-        
+
         // Small sleep to prevent busy waiting
         usleep(10000); // 10ms
     }
-    
+
     // Cleanup
     uds_cleanup(&socket_ipc);
     LOG_INFO("Socket-only mode exiting");
@@ -8234,7 +8234,7 @@ int main(int argc, char *argv[]) {
         socket_ipc_enabled = 1;
         socket_path = argv[2];
         LOG_INFO("Socket IPC enabled, path: %s", socket_path);
-        LOG_DEBUG("main: Socket IPC configuration - enabled: %d, path: %s", 
+        LOG_DEBUG("main: Socket IPC configuration - enabled: %d, path: %s",
                   socket_ipc_enabled, socket_path);
     } else {
         LOG_DEBUG("main: Socket IPC flag not detected or not in correct position");
