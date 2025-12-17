@@ -1489,7 +1489,7 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
 
     // Verbose logging for Bash tool
     if (tool_verbose >= 1) {
-        printf("[TOOL VERBOSE] Bash tool executing command: %s\n", command);
+        LOG_DEBUG("[TOOL VERBOSE] Bash tool executing command: %s", command);
     }
 
     // Get timeout from parameter, environment, or use default (30 seconds)
@@ -2218,7 +2218,7 @@ STATIC cJSON* tool_read(cJSON *params, ConversationState *state) {
 
     // Verbose logging for Read tool
     if (tool_verbose >= 1) {
-        printf("[TOOL VERBOSE] Read tool reading file: %s\n", file_path);
+        LOG_DEBUG("[TOOL VERBOSE] Read tool reading file: %s", file_path);
     }
 
     // Get optional line range parameters
@@ -2236,7 +2236,7 @@ STATIC cJSON* tool_read(cJSON *params, ConversationState *state) {
             return error;
         }
         if (tool_verbose >= 2) {
-            printf("[TOOL VERBOSE] Reading from line %d\n", start_line);
+            LOG_DEBUG("[TOOL VERBOSE] Reading from line %d", start_line);
         }
     }
 
@@ -2248,7 +2248,7 @@ STATIC cJSON* tool_read(cJSON *params, ConversationState *state) {
             return error;
         }
         if (tool_verbose >= 2) {
-            printf("[TOOL VERBOSE] Reading to line %d\n", end_line);
+            LOG_DEBUG("[TOOL VERBOSE] Reading to line %d", end_line);
         }
     }
 
@@ -2413,14 +2413,14 @@ STATIC cJSON* tool_write(cJSON *params, ConversationState *state) {
 
     // Verbose logging for Write tool
     if (tool_verbose >= 1) {
-        printf("[TOOL VERBOSE] Write tool writing to file: %s\n", file_path);
+        LOG_DEBUG("[TOOL VERBOSE] Write tool writing to file: %s", file_path);
         if (tool_verbose >= 2) {
             size_t content_len = strlen(content);
-            printf("[TOOL VERBOSE] Content length: %zu bytes\n", content_len);
+            LOG_DEBUG("[TOOL VERBOSE] Content length: %zu bytes", content_len);
             if (content_len > 0 && content_len <= 200) {
-                printf("[TOOL VERBOSE] Content preview (first 200 chars):\n%.200s\n", content);
+                LOG_DEBUG("[TOOL VERBOSE] Content preview (first 200 chars):\n%.200s", content);
             } else if (content_len > 200) {
-                printf("[TOOL VERBOSE] Content preview (first 200 chars):\n%.200s...\n", content);
+                LOG_DEBUG("[TOOL VERBOSE] Content preview (first 200 chars):\n%.200s...", content);
             }
         }
     }
@@ -2429,7 +2429,7 @@ STATIC cJSON* tool_write(cJSON *params, ConversationState *state) {
     if (is_patch_format(content)) {
         LOG_INFO("Detected patch format in Write tool, parsing and applying...");
         if (tool_verbose >= 1) {
-            printf("[TOOL VERBOSE] Detected patch format, applying as patch\n");
+            LOG_DEBUG("[TOOL VERBOSE] Detected patch format, applying as patch");
         }
 
         // Parse the patch
@@ -4120,13 +4120,13 @@ static cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationStat
               tool_name, input_str ? input_str : "null");
     if (input_str) free(input_str);
 
-    // Verbose logging: print to stdout if enabled
+    // Verbose logging: print to log file if enabled
     if (tool_verbose >= 1) {
-        printf("\n[TOOL VERBOSE] Executing tool: %s\n", tool_name);
+        LOG_DEBUG("[TOOL VERBOSE] Executing tool: %s", tool_name);
         if (tool_verbose >= 2) {
             char *formatted_input = cJSON_Print(input);
             if (formatted_input) {
-                printf("[TOOL VERBOSE] Input parameters:\n%s\n", formatted_input);
+                LOG_DEBUG("[TOOL VERBOSE] Input parameters:\n%s", formatted_input);
                 free(formatted_input);
             }
         }
@@ -4303,13 +4303,13 @@ static cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationStat
 
     LOG_INFO("Tool '%s' executed in %ld ms", tool_name, duration_ms);
 
-    // Verbose logging: print result summary if enabled
+    // Verbose logging: print result summary to log file if enabled
     if (tool_verbose >= 1) {
-        printf("[TOOL VERBOSE] Tool '%s' completed in %ld ms\n", tool_name, duration_ms);
+        LOG_DEBUG("[TOOL VERBOSE] Tool '%s' completed in %ld ms", tool_name, duration_ms);
         if (tool_verbose >= 2) {
             char *formatted_result = cJSON_Print(result);
             if (formatted_result) {
-                printf("[TOOL VERBOSE] Result:\n%s\n", formatted_result);
+                LOG_DEBUG("[TOOL VERBOSE] Result:\n%s", formatted_result);
                 free(formatted_result);
             }
         }
