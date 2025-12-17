@@ -4477,7 +4477,10 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddStringToObject(write, "type", "function");
         cJSON *write_func = cJSON_CreateObject();
         cJSON_AddStringToObject(write_func, "name", "Write");
-        cJSON_AddStringToObject(write_func, "description", "Writes content to a file");
+        cJSON_AddStringToObject(write_func, "description",
+            "Writes content to a file. IMPORTANT: Some models cannot produce outputs larger than 4096 tokens. "
+            "To avoid hitting this limit, make smaller changes and call the Write tool multiple times with focused content instead of writing entire files at once. "
+            "Break large operations into logical chunks (e.g., write a single function at a time, one section at a time).");
         cJSON *write_params = cJSON_CreateObject();
         cJSON_AddStringToObject(write_params, "type", "object");
         cJSON *write_props = cJSON_CreateObject();
@@ -4513,6 +4516,9 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
             "regex if use_regex=true, otherwise simple text. Use simple mode for exact matches, "
             "regex for patterns (e.g., date reformatting with '([0-9]{2})/([0-9]{2})/([0-9]{4})' "
             "to '\\\\3-\\\\1-\\\\2'), and patch format for precise edits with context verification. "
+            "IMPORTANT: Some models cannot produce outputs larger than 4096 tokens. "
+            "To avoid hitting this limit, make smaller changes and call the Edit tool multiple times with focused edits instead of making massive changes in a single call. "
+            "Break large operations into logical chunks (e.g., edit one function at a time, one section at a time). "
             "See docs/edit-tool.md for comprehensive examples and migration guide.");
         cJSON *edit_params = cJSON_CreateObject();
         cJSON_AddStringToObject(edit_params, "type", "object");
