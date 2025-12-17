@@ -121,10 +121,10 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
     // Send to socket if in socket mode (for all event types except tool calls)
     if (ctx->state && ctx->state->socket_streaming_fd >= 0) {
         const char *event_type_str = sse_event_type_to_name(event->type);
-        
+
         // Check if this event contains tool call information
         int is_tool_event = 0;
-        
+
         if (event->type == SSE_EVENT_CONTENT_BLOCK_START) {
             cJSON *content_block = cJSON_GetObjectItem(event->data, "content_block");
             if (content_block) {
@@ -145,7 +145,7 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
                 }
             }
         }
-        
+
         if (!is_tool_event) {
             uds_send_event(ctx->state, event_type_str, event->data);
         }

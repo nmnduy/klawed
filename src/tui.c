@@ -1748,7 +1748,7 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
         int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
         int max_scroll = window_manager_get_max_scroll(&tui->wm);
         int content_lines = window_manager_get_content_lines(&tui->wm);
-        
+
         // Calculate if we're at 100% (bottom)
         int at_bottom = 0;
         if (content_lines == 0 || max_scroll <= 0) {
@@ -1758,7 +1758,7 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
             // Already at bottom
             at_bottom = 1;
         }
-        
+
         if (at_bottom) {
             window_manager_scroll_to_bottom(&tui->wm);
         }
@@ -1837,7 +1837,7 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
         int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
         int max_scroll = window_manager_get_max_scroll(&tui->wm);
         int content_lines = window_manager_get_content_lines(&tui->wm);
-        
+
         // Calculate if we're at 100% (bottom)
         int at_bottom = 0;
         if (content_lines == 0 || max_scroll <= 0) {
@@ -1847,7 +1847,7 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
             // Already at bottom
             at_bottom = 1;
         }
-        
+
         if (at_bottom) {
             window_manager_scroll_to_bottom(&tui->wm);
         }

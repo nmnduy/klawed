@@ -7395,10 +7395,8 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
 
     // Check if we have a raw response
     if (!response->raw_response) {
-        char error_buf[] = "{\"error\": \"No response data available\"}\n";
-        if (uds_write_output(client_fd, error_buf, strlen(error_buf)) < 0) {
-            return -1; // Write failed
-        }
+        // In simplified socket mode, don't send error messages
+        LOG_WARN("No response data available (not sent to socket)");
         return 0;
     }
 
@@ -7618,12 +7616,8 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
                         }
                         api_response_free(response);
                     } else {
-                        const char *error_msg = "Error: Failed to get response from API\n";
-                        if (uds_write_output(socket_ipc.client_fd, error_msg, strlen(error_msg)) < 0) {
-                            LOG_WARN("Failed to send error message to socket");
-                        } else {
-                            last_activity_time = time(NULL); // Update activity time on successful write
-                        }
+                        // In simplified socket mode, don't send error messages
+                        LOG_WARN("Failed to get response from API (not sent to socket)");
                     }
 
                 } else if (bytes < 0) {

@@ -396,10 +396,10 @@ static int uds_send_message_internal(int client_fd, const char *message_type, cJ
 
     cJSON_AddStringToObject(message_json, "messageType", message_type);
     cJSON_AddItemToObject(message_json, "content", content);
-    
+
     // Add timestamp if available
     // Could add: cJSON_AddStringToObject(message_json, "timestamp", iso_timestamp);
-    
+
     char *json_str = cJSON_PrintUnformatted(message_json);
     if (!json_str) {
         cJSON_Delete(message_json);
@@ -420,41 +420,40 @@ static int uds_send_message_internal(int client_fd, const char *message_type, cJ
 // ============================================================================
 
 void uds_send_event(ConversationState *state, const char *event_type, cJSON *event_data) {
+    // In simplified socket mode, we don't send streaming events
+    // However, we might want to extract text from text_delta events
     if (!state || state->socket_streaming_fd < 0 || !event_type || !event_data) {
         return;
     }
 
-    // Create streaming event wrapper
-    cJSON *event_wrapper = cJSON_CreateObject();
-    if (!event_wrapper) {
-        return;
+    // Check if this is a text_delta event that we should forward as TEXT
+    if (strcmp(event_type, "content_block_delta") == 0) {
+        cJSON *data_type = cJSON_GetObjectItem(event_data, "type");
+        if (data_type && cJSON_IsString(data_type) && strcmp(data_type->valuestring, "text_delta") == 0) {
+            cJSON *text = cJSON_GetObjectItem(event_data, "text");
+            if (text && cJSON_IsString(text) && text->valuestring[0] != '\0') {
+                // Send text delta as TEXT message
+                cJSON *text_content = cJSON_CreateString(text->valuestring);
+                if (text_content) {
+                    uds_send_message_internal(state->socket_streaming_fd, "TEXT", text_content);
+                    cJSON_Delete(text_content);
+                }
+            }
+        }
     }
-
-    cJSON_AddStringToObject(event_wrapper, "type", event_type);
-    cJSON_AddItemToObject(event_wrapper, "data", cJSON_Duplicate(event_data, 1));
-
-    // Send with new message format
-    uds_send_message_internal(state->socket_streaming_fd, "streamingEvent", event_wrapper);
+    // For other event types, don't send anything
 }
 
 /**
  * Send an error message
+ * Note: In simplified socket mode, errors are not sent to socket
  */
 void uds_send_error(int client_fd, const char *error_message) {
-    if (client_fd < 0 || !error_message) {
-        return;
-    }
-
-    cJSON *error_json = cJSON_CreateObject();
-    if (!error_json) {
-        return;
-    }
-
-    // Create error content object
-    cJSON *error_content = cJSON_CreateObject();
-    if (error_content) {
-        cJSON_AddStringToObject(error_content, "error", error_message);
-        uds_send_message_internal(client_fd, "error", error_content);
+    // In simplified socket mode, we don't send error messages
+    // Just log them internally
+    (void)client_fd; // Unused parameter
+    if (error_message) {
+        LOG_DEBUG("Socket error (not sent): %s", error_message);
     }
 }
 
@@ -462,84 +461,93 @@ void uds_send_error(int client_fd, const char *error_message) {
 
 /**
  * Send complete API response in new format
+ * In simplified socket mode, extract text content and send as TEXT message
  */
 int uds_send_api_response(int client_fd, cJSON *response) {
     if (client_fd < 0 || !response) {
         return -1;
     }
-    return uds_send_message_internal(client_fd, "apiResponse", response);
+
+    // In simplified socket mode, extract text content from API response
+    // and send as TEXT message instead of full apiResponse
+
+    // Try to extract text from Anthropic format
+    cJSON *content_array = cJSON_GetObjectItem(response, "content");
+    if (content_array && cJSON_IsArray(content_array)) {
+        cJSON *content_item = NULL;
+        cJSON_ArrayForEach(content_item, content_array) {
+            cJSON *type = cJSON_GetObjectItem(content_item, "type");
+            if (type && cJSON_IsString(type) && strcmp(type->valuestring, "text") == 0) {
+                cJSON *text = cJSON_GetObjectItem(content_item, "text");
+                if (text && cJSON_IsString(text)) {
+                    // Found text content, send as TEXT message
+                    cJSON *text_content = cJSON_CreateString(text->valuestring);
+                    if (text_content) {
+                        int result = uds_send_message_internal(client_fd, "TEXT", text_content);
+                        cJSON_Delete(text_content);
+                        return result;
+                    }
+                }
+            }
+        }
+    }
+
+    // Try OpenAI format
+    cJSON *choices = cJSON_GetObjectItem(response, "choices");
+    if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
+        cJSON *choice = cJSON_GetArrayItem(choices, 0);
+        cJSON *message = cJSON_GetObjectItem(choice, "message");
+        if (message) {
+            cJSON *content = cJSON_GetObjectItem(message, "content");
+            if (content && cJSON_IsString(content)) {
+                // Found text content, send as TEXT message
+                cJSON *text_content = cJSON_CreateString(content->valuestring);
+                if (text_content) {
+                    int result = uds_send_message_internal(client_fd, "TEXT", text_content);
+                    cJSON_Delete(text_content);
+                    return result;
+                }
+            }
+        }
+    }
+
+    // If no text content found, don't send anything
+    LOG_DEBUG("uds_send_api_response: No text content found in API response");
+    return 0;
 }
 
 /**
  * Send tool call(s) request
+ * Note: In simplified socket mode, tool calls are not sent to socket
  */
 int uds_send_tool_call(int client_fd, ToolCall *tools, int tool_count) {
-    if (client_fd < 0 || !tools || tool_count <= 0) {
-        return -1;
-    }
-
-    cJSON *tool_calls_array = cJSON_CreateArray();
-    if (!tool_calls_array) {
-        return -1;
-    }
-
-    for (int i = 0; i < tool_count; i++) {
-        ToolCall *tool = &tools[i];
-        cJSON *tool_obj = cJSON_CreateObject();
-        if (!tool_obj) {
-            continue;
+    // In simplified socket mode, we don't send tool calls to socket
+    // Just log them internally
+    (void)client_fd; // Unused parameter
+    if (tools && tool_count > 0) {
+        LOG_DEBUG("Socket tool calls (not sent): %d tool(s)", tool_count);
+        for (int i = 0; i < tool_count; i++) {
+            ToolCall *tool = &tools[i];
+            LOG_DEBUG("  Tool[%d]: %s (id: %s)", i,
+                     tool->name ? tool->name : "NULL",
+                     tool->id ? tool->id : "NULL");
         }
-
-        cJSON_AddStringToObject(tool_obj, "id", tool->id);
-        cJSON_AddStringToObject(tool_obj, "name", tool->name);
-        
-        if (tool->parameters) {
-            // Clone the parameters JSON
-            cJSON *params = cJSON_Duplicate(tool->parameters, 1);
-            if (params) {
-                cJSON_AddItemToObject(tool_obj, "parameters", params);
-            }
-        } else {
-            cJSON_AddNullToObject(tool_obj, "parameters");
-        }
-
-        cJSON_AddItemToArray(tool_calls_array, tool_obj);
     }
-
-    cJSON *content = cJSON_CreateObject();
-    if (!content) {
-        cJSON_Delete(tool_calls_array);
-        return -1;
-    }
-
-    cJSON_AddItemToObject(content, "tools", tool_calls_array);
-    int result = uds_send_message_internal(client_fd, "toolCall", content);
-    cJSON_Delete(content);
-    
-    return result;
+    return 0;
 }
 
 /**
  * Send tool execution result
  */
 int uds_send_tool_result(int client_fd, const char *tool_call_id, const char *tool_name, cJSON *result) {
-    if (client_fd < 0 || !tool_call_id || !tool_name || !result) {
-        return -1;
-    }
-
-    cJSON *content = cJSON_CreateObject();
-    if (!content) {
-        return -1;
-    }
-
-    cJSON_AddStringToObject(content, "toolCallId", tool_call_id);
-    cJSON_AddStringToObject(content, "toolName", tool_name);
-    cJSON_AddItemToObject(content, "result", cJSON_Duplicate(result, 1));
-    
-    int result_code = uds_send_message_internal(client_fd, "toolResult", content);
-    cJSON_Delete(content);
-    
-    return result_code;
+    // In simplified socket mode, we don't send tool results to socket
+    // Just log them internally
+    (void)client_fd; // Unused parameter
+    (void)result;    // Unused parameter
+    LOG_DEBUG("Socket tool result (not sent): %s -> %s",
+             tool_name ? tool_name : "NULL",
+             tool_call_id ? tool_call_id : "NULL");
+    return 0;
 }
 
 /**
@@ -554,10 +562,10 @@ int uds_send_final_response(int client_fd, const char *text_response) {
     if (!content) {
         return -1;
     }
-    
-    int result = uds_send_message_internal(client_fd, "finalResponse", content);
+
+    int result = uds_send_message_internal(client_fd, "TEXT", content);
     cJSON_Delete(content);
-    
+
     return result;
 }
 
