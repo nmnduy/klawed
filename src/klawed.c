@@ -7388,32 +7388,9 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
 
     // Handle API call errors (network errors, etc.)
     if (response->error_message) {
-        // Create a simple error JSON
-        cJSON *error_json = cJSON_CreateObject();
-        int write_success = 0;
-
-        if (error_json) {
-            cJSON_AddStringToObject(error_json, "error", response->error_message);
-            char *json_str = cJSON_PrintUnformatted(error_json);
-            if (json_str) {
-                if (uds_write_output(client_fd, json_str, strlen(json_str)) == 0) {
-                    uds_write_output(client_fd, "\n", 1);
-                    write_success = 1;
-                }
-                free(json_str);
-            }
-            cJSON_Delete(error_json);
-        }
-
-        if (!write_success) {
-            // Fallback to plain text error
-            char error_buf[512];
-            snprintf(error_buf, sizeof(error_buf), "{\"error\": \"%s\"}\n", response->error_message);
-            if (uds_write_output(client_fd, error_buf, strlen(error_buf)) < 0) {
-                return -1; // Write failed
-            }
-        }
-        return 0; // Error message sent successfully
+        // Use new error format
+        uds_send_error(client_fd, response->error_message);
+        return 0; // Error message sent (void function, assume success)
     }
 
     // Check if we have a raw response
@@ -7423,45 +7400,6 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
             return -1; // Write failed
         }
         return 0;
-    }
-
-    // Check if streaming is enabled - if so, don't send the complete response
-    // because streaming events have already been sent
-    int streaming_enabled = 0;
-    const char *streaming_env = getenv("KLAWED_ENABLE_STREAMING");
-    if (streaming_env && (strcmp(streaming_env, "1") == 0 || strcasecmp(streaming_env, "true") == 0)) {
-        streaming_enabled = 1;
-    }
-
-    // Only send complete JSON response if streaming is NOT enabled
-    if (!streaming_enabled) {
-        // Convert the entire raw response to JSON string
-        char *json_str = cJSON_PrintUnformatted(response->raw_response);
-        if (!json_str) {
-            LOG_ERROR("Failed to serialize JSON response for socket mode");
-            char error_buf[] = "{\"error\": \"Failed to serialize JSON response\"}\n";
-            if (uds_write_output(client_fd, error_buf, strlen(error_buf)) < 0) {
-                return -1; // Write failed
-            }
-            return 0;
-        }
-
-        // Send the JSON response through socket
-        if (uds_write_output(client_fd, json_str, strlen(json_str)) < 0) {
-            free(json_str);
-            return -1; // Write failed
-        }
-
-        // Add newline after JSON for readability
-        if (uds_write_output(client_fd, "\n", 1) < 0) {
-            free(json_str);
-            return -1; // Write failed
-        }
-
-        // Free the JSON string
-        free(json_str);
-    } else {
-        LOG_DEBUG("Streaming enabled, skipping complete JSON response in socket mode");
     }
 
     // Add to conversation history (still needed for multi-turn conversations)
@@ -7479,7 +7417,7 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
     ToolCall *tool_calls_array = response->tools;
 
     if (tool_count > 0) {
-        LOG_INFO("Processing %d tool call(s) in socket mode", tool_count);
+        LOG_INFO("Processing %d tool call(s) in socket mode (not sending to socket)", tool_count);
 
         // Log details of each tool call
         for (int i = 0; i < tool_count; i++) {
@@ -7505,7 +7443,7 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
         }
 
         if (valid_tool_calls > 0) {
-            // Execute tools (socket mode)
+            // Execute tools (socket mode) - but don't send tool calls or results to socket
             for (int i = 0; i < tool_count; i++) {
                 ToolCall *tool = &tool_calls_array[i];
                 if (!tool->name || !tool->id) {
@@ -7521,29 +7459,6 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
 
                 // Execute tool synchronously
                 cJSON *tool_result = execute_tool(tool->name, input, state);
-
-                // Send tool result to socket immediately
-                if (client_fd >= 0 && tool_result) {
-                    cJSON *tool_response_json = cJSON_CreateObject();
-                    if (tool_response_json) {
-                        cJSON_AddStringToObject(tool_response_json, "type", "tool_response");
-                        cJSON *data_obj = cJSON_CreateObject();
-                        if (data_obj) {
-                            cJSON_AddStringToObject(data_obj, "tool_id", tool->id);
-                            cJSON_AddStringToObject(data_obj, "tool_name", tool->name);
-                            cJSON_AddItemToObject(data_obj, "result", cJSON_Duplicate(tool_result, 1));
-                            cJSON_AddItemToObject(tool_response_json, "data", data_obj);
-                        }
-
-                        char *tool_json_str = cJSON_PrintUnformatted(tool_response_json);
-                        if (tool_json_str) {
-                            uds_write_output(client_fd, tool_json_str, strlen(tool_json_str));
-                            uds_write_output(client_fd, "\n", 1);
-                            free(tool_json_str);
-                        }
-                        cJSON_Delete(tool_response_json);
-                    }
-                }
 
                 // Convert result to InternalContent
                 results[i].type = INTERNAL_TOOL_RESPONSE;
@@ -7600,9 +7515,22 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
             // No valid tool calls, free the allocated results array
             free(results);
         }
+    } else {
+        // No tool calls - send the assistant's text response to socket
+        if (response->message.text && response->message.text[0] != '\0') {
+            // Skip whitespace-only content
+            const char *p = response->message.text;
+            while (*p && isspace((unsigned char)*p)) p++;
+
+            if (*p != '\0') {  // Has non-whitespace content
+                if (uds_send_final_response(client_fd, response->message.text) < 0) {
+                    LOG_WARN("Failed to send final response to socket");
+                }
+            }
+        }
     }
 
-    // No tool calls - conversation is complete
+    // Conversation is complete
     return 0;
 }
 
