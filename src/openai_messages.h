@@ -21,9 +21,10 @@
  *
  * @param state - Conversation state with internal messages
  * @param enable_caching - Whether to add Anthropic cache_control markers (for compatible APIs)
+ * @param base_url - The API base URL (used to detect DeepSeek API)
  * @return JSON object with OpenAI request (caller must free), or NULL on error
  */
-cJSON* build_openai_request(ConversationState *state, int enable_caching);
+cJSON* build_openai_request(ConversationState *state, int enable_caching, const char *base_url);
 
 /**
  * Parse OpenAI response into internal message format

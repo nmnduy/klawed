@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <bsd/stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 /**
  * Ensure all tool calls have matching tool results.
@@ -158,7 +159,7 @@ void ensure_tool_results(ConversationState *state) {
 /**
  * Build OpenAI request JSON from internal message format
  */
-cJSON* build_openai_request(ConversationState *state, int enable_caching) {
+cJSON* build_openai_request(ConversationState *state, int enable_caching, const char *base_url) {
     if (!state) {
         LOG_ERROR("ConversationState is NULL");
         return NULL;
@@ -182,6 +183,23 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
 
     cJSON_AddStringToObject(request, "model", state->model);
     cJSON_AddNumberToObject(request, "max_completion_tokens", MAX_TOKENS);
+    
+    // DeepSeek API requires max_tokens parameter (not just max_completion_tokens)
+    // Check case-insensitively for "deepseek" in the URL
+    if (base_url) {
+        // Create a lowercase copy for case-insensitive comparison
+        char *lower_url = strdup(base_url);
+        if (lower_url) {
+            for (char *p = lower_url; *p; ++p) {
+                *p = (char)tolower((unsigned char)*p);
+            }
+            if (strstr(lower_url, "deepseek") != NULL) {
+                cJSON_AddNumberToObject(request, "max_tokens", MAX_TOKENS);
+                LOG_DEBUG("Added max_tokens parameter for DeepSeek API");
+            }
+            free(lower_url);
+        }
+    }
 
     cJSON *messages_array = cJSON_CreateArray();
     if (!messages_array) {

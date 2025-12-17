@@ -314,7 +314,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
 
     // Build request JSON using OpenAI message format
     int enable_caching = is_prompt_caching_enabled();
-    cJSON *request = build_openai_request(state, enable_caching);
+    cJSON *request = build_openai_request(state, enable_caching, config->base_url);
     if (!request) {
         result.error_message = strdup("Failed to build request JSON");
         result.is_retryable = 0;
