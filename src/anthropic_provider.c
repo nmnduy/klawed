@@ -628,7 +628,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
         enable_caching = 0;
     }
 
-    cJSON *openai_req_obj = build_openai_request(state, enable_caching, config->base_url);
+    cJSON *openai_req_obj = build_openai_request(state, enable_caching);
     if (!openai_req_obj) {
         result.error_message = strdup("Failed to build request JSON");
         result.is_retryable = 0;
