@@ -15,8 +15,11 @@
 #include <string.h>
 #include <strings.h>  // for strcasecmp
 #include <time.h>
+#include <errno.h>
 #include <unistd.h>  // for usleep
 #include <curl/curl.h>
+#include "uds_socket.h"  // For unified socket operations
+#include "retry_logic.h"  // For common retry logic
 
 // ============================================================================
 // CURL Helpers
@@ -85,6 +88,9 @@ static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, Convers
     }
 }
 
+// Helper function to send streaming event to socket
+
+
 static void bedrock_streaming_context_free(BedrockStreamingContext *ctx) {
     if (!ctx) return;
     free(ctx->accumulated_text);
@@ -110,6 +116,12 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
     if (!event || !event->data) {
         // Ping or invalid event
         return 0;
+    }
+
+    // Send to socket if in socket mode (for all event types)
+    if (ctx->state && ctx->state->socket_streaming_fd >= 0) {
+        const char *event_type_str = sse_event_type_to_name(event->type);
+        uds_send_event(ctx->state, event_type_str, event->data);
     }
 
     // Bedrock uses the same Anthropic Messages API streaming format
@@ -574,9 +586,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
     }
 
     // HTTP error
-    result.is_retryable = (result.http_status == 429 ||
-                           result.http_status == 408 ||
-                           result.http_status >= 500);
+    result.is_retryable = is_http_error_retryable(result.http_status);
 
     // Extract error message from response if JSON
     cJSON *error_json = cJSON_Parse(result.raw_response);
@@ -586,15 +596,9 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             const char *msg_text = message->valuestring;
 
             // Check for context length overflow errors (after OpenAI conversion)
-            if ((strstr(msg_text, "maximum context length") != NULL) ||
-                (strstr(msg_text, "context length") != NULL && strstr(msg_text, "tokens") != NULL) ||
-                (strstr(msg_text, "too many tokens") != NULL)) {
-
+            if (is_context_length_error(msg_text, NULL)) {
                 // Provide user-friendly context length error message
-                result.error_message = strdup(
-                    "Context length exceeded. The conversation has grown too large for the model's memory. "
-                    "Try starting a new conversation or reduce the amount of code/files being discussed."
-                );
+                result.error_message = get_context_length_error_message();
                 result.is_retryable = 0;  // Context length errors are not retryable
             } else {
                 // Use the original error message for other types of errors

@@ -16,8 +16,11 @@
 #include <string.h>
 #include <strings.h>
 #include <time.h>
+#include <errno.h>
 #include <curl/curl.h>
 #include <bsd/string.h>
+#include "uds_socket.h"  // For unified socket operations
+#include "retry_logic.h"  // For common retry logic
 
 #define DEFAULT_ANTHROPIC_URL "https://api.anthropic.com/v1/messages"
 #define ANTHROPIC_VERSION_HEADER "anthropic-version: 2023-06-01"
@@ -403,6 +406,12 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
         return 0;
     }
 
+    // Send to socket if in socket mode (for all event types)
+    if (ctx->state && ctx->state->socket_streaming_fd >= 0) {
+        const char *event_type_str = sse_event_type_to_name(event->type);
+        uds_send_event(ctx->state, event_type_str, event->data);
+    }
+
     switch (event->type) {
         case SSE_EVENT_MESSAGE_START:
             // Store message metadata (model, usage, etc.)
@@ -417,6 +426,7 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
                 // Add assistant prefix with empty text - streaming will fill it in
                 tui_add_conversation_line(ctx->state->tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
             }
+            
             break;
 
         case SSE_EVENT_CONTENT_BLOCK_START: {
@@ -897,7 +907,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
     }
 
     // HTTP error handling
-    result.is_retryable = (result.http_status == 429 || result.http_status == 408 || result.http_status >= 500);
+    result.is_retryable = is_http_error_retryable(result.http_status);
 
     // Try to extract message
     cJSON *err = cJSON_Parse(result.raw_response);
@@ -910,8 +920,8 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
             if (msg && cJSON_IsString(msg)) {
                 const char *txt = msg->valuestring;
                 const char *type_txt = (type && cJSON_IsString(type)) ? type->valuestring : "";
-                if (strstr(txt, "maximum context length") || strstr(txt, "too many tokens") || (strcmp(type_txt, "invalid_request_error") == 0 && strstr(txt, "tokens"))) {
-                    result.error_message = strdup("Context length exceeded. The conversation has grown too large for the model's memory. Try starting a new conversation or reduce the amount of code/files being discussed.");
+                if (is_context_length_error(txt, type_txt)) {
+                    result.error_message = get_context_length_error_message();
                     result.is_retryable = 0;
                 } else {
                     result.error_message = strdup(txt);

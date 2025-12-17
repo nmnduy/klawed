@@ -6,6 +6,7 @@
 
 #include "http_client.h"
 #include "logger.h"
+#include "retry_logic.h"  // For common retry logic
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -187,6 +188,34 @@ static StreamEventType sse_event_name_to_type(const char *name, const char *data
     }
 
     return SSE_EVENT_PING;  // Unknown/empty events treated as ping
+}
+
+// Map event type enum to string name
+const char* sse_event_type_to_name(StreamEventType event_type) {
+    switch (event_type) {
+        case SSE_EVENT_MESSAGE_START:
+            return "message_start";
+        case SSE_EVENT_CONTENT_BLOCK_START:
+            return "content_block_start";
+        case SSE_EVENT_CONTENT_BLOCK_DELTA:
+            return "content_block_delta";
+        case SSE_EVENT_CONTENT_BLOCK_STOP:
+            return "content_block_stop";
+        case SSE_EVENT_MESSAGE_DELTA:
+            return "message_delta";
+        case SSE_EVENT_MESSAGE_STOP:
+            return "message_stop";
+        case SSE_EVENT_ERROR:
+            return "error";
+        case SSE_EVENT_PING:
+            return "ping";
+        case SSE_EVENT_OPENAI_CHUNK:
+            return "openai_chunk";
+        case SSE_EVENT_OPENAI_DONE:
+            return "openai_done";
+        default:
+            return "unknown";
+    }
 }
 
 // Dispatch event to callback
@@ -476,14 +505,7 @@ HttpResponse* http_client_execute(const HttpRequest *req,
             // - Timeouts (OPERATION_TIMEDOUT)
             // - SSL issues (SSL_CONNECT_ERROR)
             // - HTTP2/HTTP3 protocol layer issues (HTTP2, HTTP2_STREAM)
-            resp->is_retryable = (res == CURLE_COULDNT_CONNECT ||
-                                 res == CURLE_OPERATION_TIMEDOUT ||
-                                 res == CURLE_RECV_ERROR ||
-                                 res == CURLE_SEND_ERROR ||
-                                 res == CURLE_SSL_CONNECT_ERROR ||
-                                 res == CURLE_GOT_NOTHING ||
-                                 res == CURLE_HTTP2 ||
-                                 res == CURLE_HTTP2_STREAM);
+            resp->is_retryable = is_curl_error_retryable(res);
         }
 
         // Clean up buffers on error
@@ -556,6 +578,29 @@ char* http_headers_to_json(struct curl_slist *headers) {
     char *json_str = cJSON_PrintUnformatted(headers_array);
     cJSON_Delete(headers_array);
     return json_str;
+}
+
+struct curl_slist* http_headers_deep_copy(const struct curl_slist *headers) {
+    if (!headers) {
+        return NULL;
+    }
+
+    struct curl_slist *new_list = NULL;
+    const struct curl_slist *current = headers;
+    
+    while (current) {
+        if (current->data) {
+            struct curl_slist *new_item = curl_slist_append(new_list, current->data);
+            if (!new_item) {
+                curl_slist_free_all(new_list);
+                return NULL;
+            }
+            new_list = new_item;
+        }
+        current = current->next;
+    }
+    
+    return new_list;
 }
 
 struct curl_slist* http_copy_headers(struct curl_slist *headers) {
@@ -704,14 +749,7 @@ HttpResponse* http_client_execute_stream(const HttpRequest *req,
             resp->is_retryable = 0;
         } else {
             resp->error_message = strdup(curl_easy_strerror(res));
-            resp->is_retryable = (res == CURLE_COULDNT_CONNECT ||
-                                 res == CURLE_OPERATION_TIMEDOUT ||
-                                 res == CURLE_RECV_ERROR ||
-                                 res == CURLE_SEND_ERROR ||
-                                 res == CURLE_SSL_CONNECT_ERROR ||
-                                 res == CURLE_GOT_NOTHING ||
-                                 res == CURLE_HTTP2 ||
-                                 res == CURLE_HTTP2_STREAM);
+            resp->is_retryable = is_curl_error_retryable(res);
         }
     }
 

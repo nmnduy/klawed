@@ -207,6 +207,9 @@ typedef struct ConversationState {
     // TUI reference for streaming updates (NULL if not using TUI)
     TUIState *tui;                  // TUI state for real-time streaming display
 
+    // Socket streaming support (for socket-only mode)
+    int socket_streaming_fd;        // Socket file descriptor for streaming (-1 if not in socket mode)
+
     // Subagent process management
     SubagentManager *subagent_manager;  // Tracks running subagent processes
 } ConversationState;

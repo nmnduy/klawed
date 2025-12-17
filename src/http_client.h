@@ -148,6 +148,16 @@ char* http_headers_to_json(struct curl_slist *headers);
  * Create a deep copy of curl_slist headers
  * Returns: New headers list (caller must free with curl_slist_free_all) or NULL
  */
+struct curl_slist* http_headers_deep_copy(const struct curl_slist *headers);
+
+/**
+ * Convert SSE event type enum to string representation
+ * 
+ * @param event_type - The StreamEventType enum value
+ * @return const char* - String representation of the event type
+ *                      Returns "unknown" for invalid event types
+ */
+const char* sse_event_type_to_name(StreamEventType event_type);
 struct curl_slist* http_copy_headers(struct curl_slist *headers);
 
 /**

@@ -33,6 +33,7 @@
 #include <libgen.h>
 #include <dirent.h>
 #include <ctype.h>
+#include <strings.h>
 #include <signal.h>
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -42,10 +43,12 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <poll.h>
+#include "uds_socket.h"  // Unified socket utilities
 #include "colorscheme.h"
 #include "fallback_colors.h"
 #include "patch_parser.h"
 #include "tool_utils.h"
+#include "http_client.h"  // For StreamEvent and HttpStreamCallback
 #ifndef TEST_BUILD
 #include "openai_messages.h"
 #endif
@@ -5672,6 +5675,7 @@ int conversation_state_init(ConversationState *state) {
 
     state->conv_mutex_initialized = 1;
     state->interrupt_requested = 0;  // Initialize interrupt flag
+    state->socket_streaming_fd = -1; // Initialize socket streaming fd to -1 (not in socket mode)
 
     // Initialize subagent manager
     state->subagent_manager = malloc(sizeof(SubagentManager));
@@ -6637,12 +6641,7 @@ static void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstructi
 
 
 // Socket IPC context
-typedef struct {
-    int server_fd;           // Listening socket file descriptor
-    int client_fd;           // Connected client file descriptor (-1 if none)
-    char *socket_path;       // Path to Unix domain socket
-    int enabled;             // Whether socket IPC is enabled
-} SocketIPC;
+
 
 typedef struct {
     ConversationState *state;
@@ -7219,155 +7218,15 @@ static int process_single_command_response(ConversationState *state, ApiResponse
 // ============================================================================
 
 // Create and bind Unix domain socket
-static int create_unix_socket(const char *socket_path) {
-    LOG_DEBUG("create_unix_socket: Starting socket creation for path: %s", socket_path);
-    
-    // Remove existing socket file if it exists
-    LOG_DEBUG("create_unix_socket: Removing existing socket file (if any)");
-    unlink(socket_path);
 
-    // Create socket
-    LOG_DEBUG("create_unix_socket: Creating AF_UNIX socket with SOCK_STREAM");
-    int server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (server_fd < 0) {
-        LOG_ERROR("Failed to create socket: %s", strerror(errno));
-        return -1;
-    }
-    LOG_DEBUG("create_unix_socket: Socket created successfully, fd: %d", server_fd);
 
-    // Set socket to non-blocking
-    LOG_DEBUG("create_unix_socket: Setting socket to non-blocking mode");
-    int flags = fcntl(server_fd, F_GETFL, 0);
-    if (flags < 0) {
-        LOG_ERROR("Failed to get socket flags: %s", strerror(errno));
-        close(server_fd);
-        return -1;
-    }
-    if (fcntl(server_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-        LOG_ERROR("Failed to set socket non-blocking: %s", strerror(errno));
-        close(server_fd);
-        return -1;
-    }
-    LOG_DEBUG("create_unix_socket: Socket set to non-blocking mode");
 
-    // Bind socket
-    LOG_DEBUG("create_unix_socket: Binding socket to path: %s", socket_path);
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strlcpy(addr.sun_path, socket_path, sizeof(addr.sun_path));
 
-    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        LOG_ERROR("Failed to bind socket: %s", strerror(errno));
-        close(server_fd);
-        return -1;
-    }
-    LOG_DEBUG("create_unix_socket: Socket bound successfully");
 
-    // Listen for connections
-    LOG_DEBUG("create_unix_socket: Listening for connections (backlog: 1)");
-    if (listen(server_fd, 1) < 0) {
-        LOG_ERROR("Failed to listen on socket: %s", strerror(errno));
-        close(server_fd);
-        unlink(socket_path);
-        return -1;
-    }
 
-    LOG_INFO("Socket created and listening on: %s", socket_path);
-    LOG_DEBUG("create_unix_socket: Socket setup complete, returning fd: %d", server_fd);
-    return server_fd;
-}
 
-// Accept incoming connection
-static int accept_socket_connection(int server_fd) {
-    LOG_DEBUG("accept_socket_connection: Attempting to accept connection on server fd: %d", server_fd);
-    
-    struct sockaddr_un addr;
-    socklen_t addr_len = sizeof(addr);
 
-    int client_fd = accept(server_fd, (struct sockaddr*)&addr, &addr_len);
-    if (client_fd < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            LOG_ERROR("Failed to accept connection: %s", strerror(errno));
-        } else {
-            LOG_DEBUG("accept_socket_connection: No pending connections (EAGAIN/EWOULDBLOCK)");
-        }
-        return -1;
-    }
 
-    LOG_DEBUG("accept_socket_connection: Connection accepted, client fd: %d", client_fd);
-
-    // Set client socket to non-blocking
-    LOG_DEBUG("accept_socket_connection: Setting client socket to non-blocking mode");
-    int flags = fcntl(client_fd, F_GETFL, 0);
-    if (flags >= 0) {
-        fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
-        LOG_DEBUG("accept_socket_connection: Client socket set to non-blocking");
-    } else {
-        LOG_WARN("accept_socket_connection: Failed to get client socket flags, continuing anyway");
-    }
-
-    LOG_INFO("Accepted socket connection (client fd: %d)", client_fd);
-    LOG_DEBUG("accept_socket_connection: Returning client fd: %d", client_fd);
-    return client_fd;
-}
-
-// Read input from socket
-static int read_socket_input(int client_fd, char *buffer, size_t buffer_size) {
-    LOG_DEBUG("read_socket_input: Attempting to read from client fd: %d, buffer size: %zu", 
-              client_fd, buffer_size);
-    
-    ssize_t bytes_read = read(client_fd, buffer, buffer_size - 1);
-    if (bytes_read < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            LOG_ERROR("Failed to read from socket: %s", strerror(errno));
-            LOG_DEBUG("read_socket_input: Read error, returning -1");
-            return -1;
-        }
-        LOG_DEBUG("read_socket_input: No data available (EAGAIN/EWOULDBLOCK), returning 0");
-        return 0; // No data available
-    } else if (bytes_read == 0) {
-        LOG_INFO("Socket client disconnected (fd: %d)", client_fd);
-        LOG_DEBUG("read_socket_input: Client disconnected, returning -1");
-        return -1; // Client disconnected
-    }
-
-    buffer[bytes_read] = '\0';
-    LOG_DEBUG("read_socket_input: Read %zd bytes from socket fd: %d", bytes_read, client_fd);
-    LOG_DEBUG("read_socket_input: Data: \"%.*s\"", (int)bytes_read > 50 ? 50 : (int)bytes_read, buffer);
-    return (int)bytes_read;
-}
-
-// Write output to socket
-static int write_socket_output(int client_fd, const char *data, size_t data_len) {
-    LOG_DEBUG("write_socket_output: Attempting to write %zu bytes to client fd: %d", data_len, client_fd);
-    
-    if (client_fd < 0) {
-        LOG_DEBUG("write_socket_output: Invalid client fd, returning -1");
-        return -1;
-    }
-    
-    ssize_t bytes_written = write(client_fd, data, data_len);
-    if (bytes_written < 0) {
-        LOG_ERROR("Failed to write to socket: %s", strerror(errno));
-        LOG_DEBUG("write_socket_output: Write error, returning -1");
-        return -1;
-    }
-    
-    LOG_DEBUG("write_socket_output: Wrote %zd bytes to socket fd: %d", bytes_written, client_fd);
-    return (int)bytes_written;
-}
-
-// Check if socket has data available
-static int socket_has_data(int fd) {
-    LOG_DEBUG("socket_has_data: Checking if fd %d has data", fd);
-    struct pollfd pfd = { .fd = fd, .events = POLLIN, .revents = 0 };
-    int result = poll(&pfd, 1, 0); // Non-blocking poll
-    int has_data = result > 0 && (pfd.revents & POLLIN);
-    LOG_DEBUG("socket_has_data: poll result: %d, revents: 0x%x, has_data: %d", 
-              result, pfd.revents, has_data);
-    return has_data;
-}
 
 // External input callback for socket IPC
 static int socket_external_input_callback(void *user_data, char *buffer, int buffer_size) {
@@ -7392,7 +7251,7 @@ static int socket_external_input_callback(void *user_data, char *buffer, int buf
     // Accept new connection if none
     if (socket_ipc->client_fd < 0) {
         LOG_DEBUG("socket_external_input_callback: No client connected, attempting to accept new connection");
-        socket_ipc->client_fd = accept_socket_connection(socket_ipc->server_fd);
+        socket_ipc->client_fd = uds_accept_connection(socket_ipc->server_fd);
         if (socket_ipc->client_fd >= 0) {
             LOG_DEBUG("socket_external_input_callback: New client connected, fd: %d", socket_ipc->client_fd);
         } else {
@@ -7403,9 +7262,9 @@ static int socket_external_input_callback(void *user_data, char *buffer, int buf
     // Read from socket if connected
     if (socket_ipc->client_fd >= 0) {
         LOG_DEBUG("socket_external_input_callback: Checking if client fd %d has data", socket_ipc->client_fd);
-        if (socket_has_data(socket_ipc->client_fd)) {
+        if (uds_has_data(socket_ipc->client_fd)) {
             LOG_DEBUG("socket_external_input_callback: Data available on client fd %d, reading...", socket_ipc->client_fd);
-            int bytes = read_socket_input(socket_ipc->client_fd, buffer, (size_t)buffer_size - 1);
+            int bytes = uds_read_input(socket_ipc->client_fd, buffer, (size_t)buffer_size - 1);
             if (bytes > 0) {
                 LOG_DEBUG("socket_external_input_callback: Read %d bytes from socket, returning", bytes);
                 return bytes;
@@ -7431,96 +7290,179 @@ static int socket_external_input_callback(void *user_data, char *buffer, int buf
 }
 
 // Cleanup socket resources
-static void cleanup_socket(SocketIPC *socket_ipc) {
-    LOG_DEBUG("cleanup_socket: Starting socket cleanup");
-    if (!socket_ipc) {
-        LOG_DEBUG("cleanup_socket: socket_ipc is NULL, returning");
-        return;
+
+
+// Initialize socket streaming context
+__attribute__((unused)) static void socket_streaming_context_init(SocketStreamingContext *ctx, int client_fd) {
+    memset(ctx, 0, sizeof(SocketStreamingContext));
+    ctx->client_fd = client_fd;
+    ctx->content_block_index = -1;
+    ctx->accumulated_capacity = 4096;
+    ctx->accumulated_text = malloc(ctx->accumulated_capacity);
+    if (ctx->accumulated_text) {
+        ctx->accumulated_text[0] = '\0';
     }
-
-    LOG_DEBUG("cleanup_socket: Socket IPC state - enabled: %d, server_fd: %d, client_fd: %d, path: %s",
-              socket_ipc->enabled, socket_ipc->server_fd, socket_ipc->client_fd,
-              socket_ipc->socket_path ? socket_ipc->socket_path : "(null)");
-
-    if (socket_ipc->client_fd >= 0) {
-        LOG_DEBUG("cleanup_socket: Closing client fd: %d", socket_ipc->client_fd);
-        close(socket_ipc->client_fd);
-        socket_ipc->client_fd = -1;
-        LOG_DEBUG("cleanup_socket: Client fd closed");
+    ctx->tool_input_capacity = 4096;
+    ctx->tool_input_json = malloc(ctx->tool_input_capacity);
+    if (ctx->tool_input_json) {
+        ctx->tool_input_json[0] = '\0';
     }
+}
 
-    if (socket_ipc->server_fd >= 0) {
-        LOG_DEBUG("cleanup_socket: Closing server fd: %d", socket_ipc->server_fd);
-        close(socket_ipc->server_fd);
-        socket_ipc->server_fd = -1;
-        LOG_DEBUG("cleanup_socket: Server fd closed");
+// Free socket streaming context
+__attribute__((unused)) static void socket_streaming_context_free(SocketStreamingContext *ctx) {
+    if (!ctx) return;
+    free(ctx->accumulated_text);
+    free(ctx->content_block_type);
+    free(ctx->tool_use_id);
+    free(ctx->tool_use_name);
+    free(ctx->tool_input_json);
+    free(ctx->stop_reason);
+    if (ctx->message_start_data) {
+        cJSON_Delete(ctx->message_start_data);
     }
+}
 
-    if (socket_ipc->socket_path) {
-        LOG_DEBUG("cleanup_socket: Removing socket file: %s", socket_ipc->socket_path);
-        unlink(socket_ipc->socket_path);
-        LOG_DEBUG("cleanup_socket: Freeing socket path memory");
-        free(socket_ipc->socket_path);
-        socket_ipc->socket_path = NULL;
-        LOG_DEBUG("cleanup_socket: Socket path cleaned up");
+// Socket streaming event handler - sends streaming data to socket
+static int socket_streaming_event_handler(StreamEvent *event, void *userdata) {
+    SocketStreamingContext *ctx = (SocketStreamingContext *)userdata;
+    
+    if (!event || !event->data) {
+        // Ping or invalid event
+        return 0;
     }
+    
+    // Create a JSON object for the streaming event
+    cJSON *event_json = cJSON_CreateObject();
+    if (!event_json) {
+        return 0;
+    }
+    
+    // Add event type
+    const char *event_type_str = sse_event_type_to_name(event->type);
+    cJSON_AddStringToObject(event_json, "type", event_type_str);
+    
+    // Add event data
+    cJSON_AddItemToObject(event_json, "data", cJSON_Duplicate(event->data, 1));
+    
+    // Convert to JSON string
+    char *json_str = cJSON_PrintUnformatted(event_json);
+    if (json_str) {
+        // Send to socket
+        uds_write_output(ctx->client_fd, json_str, strlen(json_str));
+        uds_write_output(ctx->client_fd, "\n", 1);
+        free(json_str);
+    }
+    
+    cJSON_Delete(event_json);
+    return 0;
+}
 
-    socket_ipc->enabled = 0;
-    LOG_DEBUG("cleanup_socket: Socket cleanup complete");
+// Wrapper streaming event handler that calls both the original handler and socket handler
+__attribute__((unused)) static int socket_streaming_wrapper_handler(StreamEvent *event, void *userdata, 
+                                           HttpStreamCallback original_handler, 
+                                           void *original_userdata,
+                                           SocketStreamingContext *socket_ctx) {
+    (void)userdata;  // Unused parameter
+    // Call original handler first (for accumulation)
+    if (original_handler) {
+        int result = original_handler(event, original_userdata);
+        if (result != 0) {
+            return result; // Abort if original handler says to
+        }
+    }
+    
+    // Then send to socket
+    if (socket_ctx && socket_ctx->client_fd >= 0) {
+        return socket_streaming_event_handler(event, socket_ctx);
+    }
+    
+    return 0;
 }
 
 // Process API response for socket mode (handles tool calls recursively)
 static int process_response_for_socket_mode(ConversationState *state, ApiResponse *response, int client_fd) {
     if (!response) {
-        return 1;
+        return -1; // Invalid response
     }
     
     // Handle API call errors (network errors, etc.)
     if (response->error_message) {
         // Create a simple error JSON
         cJSON *error_json = cJSON_CreateObject();
+        int write_success = 0;
+        
         if (error_json) {
             cJSON_AddStringToObject(error_json, "error", response->error_message);
             char *json_str = cJSON_PrintUnformatted(error_json);
             if (json_str) {
-                write_socket_output(client_fd, json_str, strlen(json_str));
-                write_socket_output(client_fd, "\n", 1);
+                if (uds_write_output(client_fd, json_str, strlen(json_str)) == 0) {
+                    uds_write_output(client_fd, "\n", 1);
+                    write_success = 1;
+                }
                 free(json_str);
             }
             cJSON_Delete(error_json);
-        } else {
+        }
+        
+        if (!write_success) {
             // Fallback to plain text error
             char error_buf[512];
             snprintf(error_buf, sizeof(error_buf), "{\"error\": \"%s\"}\n", response->error_message);
-            write_socket_output(client_fd, error_buf, strlen(error_buf));
+            if (uds_write_output(client_fd, error_buf, strlen(error_buf)) < 0) {
+                return -1; // Write failed
+            }
         }
-        return 1;
+        return 0; // Error message sent successfully
     }
     
     // Check if we have a raw response
     if (!response->raw_response) {
         char error_buf[] = "{\"error\": \"No response data available\"}\n";
-        write_socket_output(client_fd, error_buf, strlen(error_buf));
-        return 1;
+        if (uds_write_output(client_fd, error_buf, strlen(error_buf)) < 0) {
+            return -1; // Write failed
+        }
+        return 0;
     }
     
-    // Convert the entire raw response to JSON string
-    char *json_str = cJSON_PrintUnformatted(response->raw_response);
-    if (!json_str) {
-        LOG_ERROR("Failed to serialize JSON response for socket mode");
-        char error_buf[] = "{\"error\": \"Failed to serialize JSON response\"}\n";
-        write_socket_output(client_fd, error_buf, strlen(error_buf));
-        return 1;
+    // Check if streaming is enabled - if so, don't send the complete response
+    // because streaming events have already been sent
+    int streaming_enabled = 0;
+    const char *streaming_env = getenv("KLAWED_ENABLE_STREAMING");
+    if (streaming_env && (strcmp(streaming_env, "1") == 0 || strcasecmp(streaming_env, "true") == 0)) {
+        streaming_enabled = 1;
     }
     
-    // Send the JSON response through socket
-    write_socket_output(client_fd, json_str, strlen(json_str));
-    
-    // Add newline after JSON for readability
-    write_socket_output(client_fd, "\n", 1);
-    
-    // Free the JSON string
-    free(json_str);
+    // Only send complete JSON response if streaming is NOT enabled
+    if (!streaming_enabled) {
+        // Convert the entire raw response to JSON string
+        char *json_str = cJSON_PrintUnformatted(response->raw_response);
+        if (!json_str) {
+            LOG_ERROR("Failed to serialize JSON response for socket mode");
+            char error_buf[] = "{\"error\": \"Failed to serialize JSON response\"}\n";
+            if (uds_write_output(client_fd, error_buf, strlen(error_buf)) < 0) {
+                return -1; // Write failed
+            }
+            return 0;
+        }
+        
+        // Send the JSON response through socket
+        if (uds_write_output(client_fd, json_str, strlen(json_str)) < 0) {
+            free(json_str);
+            return -1; // Write failed
+        }
+        
+        // Add newline after JSON for readability
+        if (uds_write_output(client_fd, "\n", 1) < 0) {
+            free(json_str);
+            return -1; // Write failed
+        }
+        
+        // Free the JSON string
+        free(json_str);
+    } else {
+        LOG_DEBUG("Streaming enabled, skipping complete JSON response in socket mode");
+    }
     
     // Add to conversation history (still needed for multi-turn conversations)
     cJSON *choices = cJSON_GetObjectItem(response->raw_response, "choices");
@@ -7580,6 +7522,29 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
                 // Execute tool synchronously
                 cJSON *tool_result = execute_tool(tool->name, input, state);
 
+                // Send tool result to socket immediately
+                if (client_fd >= 0 && tool_result) {
+                    cJSON *tool_response_json = cJSON_CreateObject();
+                    if (tool_response_json) {
+                        cJSON_AddStringToObject(tool_response_json, "type", "tool_response");
+                        cJSON *data_obj = cJSON_CreateObject();
+                        if (data_obj) {
+                            cJSON_AddStringToObject(data_obj, "tool_id", tool->id);
+                            cJSON_AddStringToObject(data_obj, "tool_name", tool->name);
+                            cJSON_AddItemToObject(data_obj, "result", cJSON_Duplicate(tool_result, 1));
+                            cJSON_AddItemToObject(tool_response_json, "data", data_obj);
+                        }
+                        
+                        char *tool_json_str = cJSON_PrintUnformatted(tool_response_json);
+                        if (tool_json_str) {
+                            uds_write_output(client_fd, tool_json_str, strlen(tool_json_str));
+                            uds_write_output(client_fd, "\n", 1);
+                            free(tool_json_str);
+                        }
+                        cJSON_Delete(tool_response_json);
+                    }
+                }
+
                 // Convert result to InternalContent
                 results[i].type = INTERNAL_TOOL_RESPONSE;
                 results[i].tool_id = strdup(tool->id);
@@ -7626,7 +7591,7 @@ static int process_response_for_socket_mode(ConversationState *state, ApiRespons
             } else {
                 LOG_ERROR("Failed to get response after tool execution in socket mode");
                 char error_buf[] = "{\"error\": \"Failed to get response after tool execution\"}\n";
-                write_socket_output(client_fd, error_buf, strlen(error_buf));
+                uds_write_output(client_fd, error_buf, strlen(error_buf));
                 return 1;
             }
 
@@ -7647,7 +7612,7 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
     
     // Create socket
     SocketIPC socket_ipc = {0};
-    socket_ipc.server_fd = create_unix_socket(socket_path);
+    socket_ipc.server_fd = uds_create_unix_socket(socket_path);
     if (socket_ipc.server_fd < 0) {
         LOG_ERROR("Failed to create socket for socket-only mode");
         return;
@@ -7661,22 +7626,41 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
     
     // Main event loop for socket-only mode
     int running = 1;
+    time_t last_ping_time = 0;
+    const time_t PING_INTERVAL = 30; // Send ping every 30 seconds
+    const time_t CLIENT_TIMEOUT = 60; // Close idle client after 60 seconds
+    time_t last_activity_time = time(NULL);
+    
     while (running) {
         // Accept new connection if none
         if (socket_ipc.client_fd < 0) {
-            socket_ipc.client_fd = accept_socket_connection(socket_ipc.server_fd);
+            socket_ipc.client_fd = uds_accept_connection(socket_ipc.server_fd);
             if (socket_ipc.client_fd >= 0) {
                 LOG_INFO("Client connected in socket-only mode");
+                // Set socket streaming fd and enable streaming
+                state->socket_streaming_fd = socket_ipc.client_fd;
+                // Enable streaming for socket mode
+                setenv("KLAWED_ENABLE_STREAMING", "1", 1);
             }
         }
         
         // Read from socket if connected
         if (socket_ipc.client_fd >= 0) {
+            // Check connection health before attempting any operations
+            if (!uds_check_connection(socket_ipc.client_fd)) {
+                LOG_WARN("Socket connection appears broken, closing connection");
+                close(socket_ipc.client_fd);
+                socket_ipc.client_fd = -1;
+                state->socket_streaming_fd = -1;
+                continue;
+            }
+            
             char buffer[4096];
-            if (socket_has_data(socket_ipc.client_fd)) {
-                int bytes = read_socket_input(socket_ipc.client_fd, buffer, sizeof(buffer));
+            if (uds_has_data(socket_ipc.client_fd)) {
+                int bytes = uds_read_input(socket_ipc.client_fd, buffer, sizeof(buffer));
                 if (bytes > 0) {
                     LOG_INFO("Received %d bytes from socket", bytes);
+                    last_activity_time = time(NULL); // Update activity time
                     
                     // Process the input
                     buffer[bytes] = '\0';
@@ -7688,11 +7672,30 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
                     ApiResponse *response = call_api(state);
                     if (response) {
                         // Process response and send output through socket
-                        process_response_for_socket_mode(state, response, socket_ipc.client_fd);
+                        int write_result = process_response_for_socket_mode(state, response, socket_ipc.client_fd);
+                        if (write_result < 0) {
+                            LOG_WARN("Failed to send response to socket, attempting error recovery");
+                            // Try to handle the write failure
+                            int recovery_result = uds_handle_write_failure(socket_ipc.client_fd, &socket_ipc);
+                            if (recovery_result > 0) {
+                                LOG_INFO("Successfully recovered from write failure with new connection");
+                                state->socket_streaming_fd = socket_ipc.client_fd;
+                                last_activity_time = time(NULL); // Reset activity time for new connection
+                            } else if (recovery_result < 0) {
+                                LOG_WARN("Could not recover from write failure, connection will be closed");
+                                // Connection will be cleaned up in next iteration
+                            }
+                        } else {
+                            last_activity_time = time(NULL); // Update activity time on successful write
+                        }
                         api_response_free(response);
                     } else {
                         const char *error_msg = "Error: Failed to get response from API\n";
-                        write_socket_output(socket_ipc.client_fd, error_msg, strlen(error_msg));
+                        if (uds_write_output(socket_ipc.client_fd, error_msg, strlen(error_msg)) < 0) {
+                            LOG_WARN("Failed to send error message to socket");
+                        } else {
+                            last_activity_time = time(NULL); // Update activity time on successful write
+                        }
                     }
                     
                 } else if (bytes < 0) {
@@ -7700,7 +7703,32 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
                     LOG_INFO("Client disconnected in socket-only mode");
                     close(socket_ipc.client_fd);
                     socket_ipc.client_fd = -1;
+                    state->socket_streaming_fd = -1;
                 }
+            }
+        }
+        
+        // Handle ping and timeout for connected client
+        if (socket_ipc.client_fd >= 0) {
+            time_t now = time(NULL);
+            
+            // Send periodic ping to keep connection alive
+            if (now - last_ping_time >= PING_INTERVAL) {
+                if (uds_send_ping(socket_ipc.client_fd) < 0) {
+                    LOG_WARN("Failed to send ping, connection may be broken");
+                    // Connection check will handle this in next iteration
+                }
+                last_ping_time = now;
+            }
+            
+            // Check for client timeout (no activity)
+            if (now - last_activity_time >= CLIENT_TIMEOUT) {
+                LOG_INFO("Client timeout after %ld seconds of inactivity, closing connection", 
+                        (long)(now - last_activity_time));
+                close(socket_ipc.client_fd);
+                socket_ipc.client_fd = -1;
+                state->socket_streaming_fd = -1;
+                last_activity_time = now; // Reset for next client
             }
         }
         
@@ -7709,7 +7737,7 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
     }
     
     // Cleanup
-    cleanup_socket(&socket_ipc);
+    uds_cleanup(&socket_ipc);
     LOG_INFO("Socket-only mode exiting");
 }
 
@@ -7800,7 +7828,7 @@ static void interactive_mode(ConversationState *state, int socket_ipc_enabled, c
     SocketIPC socket_ipc = {0};
     if (socket_ipc_enabled && socket_path) {
         LOG_DEBUG("interactive_mode: Socket IPC enabled, creating socket at path: %s", socket_path);
-        socket_ipc.server_fd = create_unix_socket(socket_path);
+        socket_ipc.server_fd = uds_create_unix_socket(socket_path);
         if (socket_ipc.server_fd < 0) {
             LOG_ERROR("Failed to create socket, continuing without socket IPC");
             socket_ipc.enabled = 0;
@@ -7847,7 +7875,7 @@ static void interactive_mode(ConversationState *state, int socket_ipc_enabled, c
     }
 
     // Cleanup socket IPC
-    cleanup_socket(&socket_ipc);
+    uds_cleanup(&socket_ipc);
 
     // Disable TUI mode for commands before cleanup
     commands_set_tui_mode(0);
