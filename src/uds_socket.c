@@ -378,72 +378,68 @@ int uds_has_data(int fd) {
 // ============================================================================
 // Socket Event Streaming
 // ============================================================================
+// Socket Message Formatting (New Interface)
+// ============================================================================
+
+/**
+ * Send a message with the standard format: {"messageType": "...", "content": ...}
+ */
+static int uds_send_message_internal(int client_fd, const char *message_type, cJSON *content) {
+    if (client_fd < 0 || !message_type || !content) {
+        return -1;
+    }
+
+    cJSON *message_json = cJSON_CreateObject();
+    if (!message_json) {
+        return -1;
+    }
+
+    cJSON_AddStringToObject(message_json, "messageType", message_type);
+    cJSON_AddItemToObject(message_json, "content", content);
+    
+    // Add timestamp if available
+    // Could add: cJSON_AddStringToObject(message_json, "timestamp", iso_timestamp);
+    
+    char *json_str = cJSON_PrintUnformatted(message_json);
+    if (!json_str) {
+        cJSON_Delete(message_json);
+        return -1;
+    }
+
+    int result = uds_write_output(client_fd, json_str, strlen(json_str));
+    if (result == 0) {
+        // Add newline separator
+        uds_write_output(client_fd, "\n", 1);
+    }
+
+    free(json_str);
+    cJSON_Delete(message_json);
+    return result;
+}
+
+// ============================================================================
 
 void uds_send_event(ConversationState *state, const char *event_type, cJSON *event_data) {
     if (!state || state->socket_streaming_fd < 0 || !event_type || !event_data) {
         return;
     }
 
-    cJSON *event_json = cJSON_CreateObject();
-    if (!event_json) {
+    // Create streaming event wrapper
+    cJSON *event_wrapper = cJSON_CreateObject();
+    if (!event_wrapper) {
         return;
     }
 
-    cJSON_AddStringToObject(event_json, "type", event_type);
-    cJSON_AddItemToObject(event_json, "data", cJSON_Duplicate(event_data, 1));
+    cJSON_AddStringToObject(event_wrapper, "type", event_type);
+    cJSON_AddItemToObject(event_wrapper, "data", cJSON_Duplicate(event_data, 1));
 
-    char *json_str = cJSON_PrintUnformatted(event_json);
-    if (json_str) {
-        size_t len = strlen(json_str);
-        size_t total_written = 0;
-        int retries = 0;
-        const int max_retries = 10;
-
-        // Write JSON
-        while (total_written < len && retries < max_retries) {
-            ssize_t bytes_written = write(state->socket_streaming_fd, json_str + total_written, len - total_written);
-            if (bytes_written < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    retries++;
-                    usleep(1000); // 1ms
-                    continue;
-                } else {
-                    LOG_ERROR("uds_send_event: Failed to write to socket: %s", strerror(errno));
-                    break;
-                }
-            }
-            total_written += (size_t)bytes_written;
-            retries = 0;
-        }
-
-        if (total_written < len) {
-            LOG_ERROR("uds_send_event: Failed to write all JSON data: wrote %zu of %zu bytes", total_written, len);
-        }
-
-        // Write newline
-        retries = 0;
-        size_t newline_written = 0;
-        while (newline_written < 1 && retries < max_retries) {
-            ssize_t bytes = write(state->socket_streaming_fd, "\n", 1);
-            if (bytes < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    retries++;
-                    usleep(1000);
-                    continue;
-                } else {
-                    LOG_ERROR("uds_send_event: Failed to write newline: %s", strerror(errno));
-                    break;
-                }
-            }
-            newline_written += (size_t)bytes;
-        }
-
-        free(json_str);
-    }
-
-    cJSON_Delete(event_json);
+    // Send with new message format
+    uds_send_message_internal(state->socket_streaming_fd, "streamingEvent", event_wrapper);
 }
 
+/**
+ * Send an error message
+ */
 void uds_send_error(int client_fd, const char *error_message) {
     if (client_fd < 0 || !error_message) {
         return;
@@ -454,17 +450,115 @@ void uds_send_error(int client_fd, const char *error_message) {
         return;
     }
 
-    cJSON_AddStringToObject(error_json, "type", "error");
-    cJSON_AddStringToObject(error_json, "message", error_message);
+    // Create error content object
+    cJSON *error_content = cJSON_CreateObject();
+    if (error_content) {
+        cJSON_AddStringToObject(error_content, "error", error_message);
+        uds_send_message_internal(client_fd, "error", error_content);
+    }
+}
 
-    char *json_str = cJSON_PrintUnformatted(error_json);
-    if (json_str) {
-        uds_write_output(client_fd, json_str, strlen(json_str));
-        uds_write_output(client_fd, "\n", 1);
-        free(json_str);
+
+
+/**
+ * Send complete API response in new format
+ */
+int uds_send_api_response(int client_fd, cJSON *response) {
+    if (client_fd < 0 || !response) {
+        return -1;
+    }
+    return uds_send_message_internal(client_fd, "apiResponse", response);
+}
+
+/**
+ * Send tool call(s) request
+ */
+int uds_send_tool_call(int client_fd, ToolCall *tools, int tool_count) {
+    if (client_fd < 0 || !tools || tool_count <= 0) {
+        return -1;
     }
 
-    cJSON_Delete(error_json);
+    cJSON *tool_calls_array = cJSON_CreateArray();
+    if (!tool_calls_array) {
+        return -1;
+    }
+
+    for (int i = 0; i < tool_count; i++) {
+        ToolCall *tool = &tools[i];
+        cJSON *tool_obj = cJSON_CreateObject();
+        if (!tool_obj) {
+            continue;
+        }
+
+        cJSON_AddStringToObject(tool_obj, "id", tool->id);
+        cJSON_AddStringToObject(tool_obj, "name", tool->name);
+        
+        if (tool->parameters) {
+            // Clone the parameters JSON
+            cJSON *params = cJSON_Duplicate(tool->parameters, 1);
+            if (params) {
+                cJSON_AddItemToObject(tool_obj, "parameters", params);
+            }
+        } else {
+            cJSON_AddNullToObject(tool_obj, "parameters");
+        }
+
+        cJSON_AddItemToArray(tool_calls_array, tool_obj);
+    }
+
+    cJSON *content = cJSON_CreateObject();
+    if (!content) {
+        cJSON_Delete(tool_calls_array);
+        return -1;
+    }
+
+    cJSON_AddItemToObject(content, "tools", tool_calls_array);
+    int result = uds_send_message_internal(client_fd, "toolCall", content);
+    cJSON_Delete(content);
+    
+    return result;
+}
+
+/**
+ * Send tool execution result
+ */
+int uds_send_tool_result(int client_fd, const char *tool_call_id, const char *tool_name, cJSON *result) {
+    if (client_fd < 0 || !tool_call_id || !tool_name || !result) {
+        return -1;
+    }
+
+    cJSON *content = cJSON_CreateObject();
+    if (!content) {
+        return -1;
+    }
+
+    cJSON_AddStringToObject(content, "toolCallId", tool_call_id);
+    cJSON_AddStringToObject(content, "toolName", tool_name);
+    cJSON_AddItemToObject(content, "result", cJSON_Duplicate(result, 1));
+    
+    int result_code = uds_send_message_internal(client_fd, "toolResult", content);
+    cJSON_Delete(content);
+    
+    return result_code;
+}
+
+/**
+ * Send final response text (after all tool executions)
+ */
+int uds_send_final_response(int client_fd, const char *text_response) {
+    if (client_fd < 0 || !text_response) {
+        return -1;
+    }
+
+    cJSON *content = cJSON_CreateString(text_response);
+    if (!content) {
+        return -1;
+    }
+    
+    int result = uds_send_message_internal(client_fd, "finalResponse", content);
+    cJSON_Delete(content);
+    
+    return result;
 }
 
 // ============================================================================

@@ -13,6 +13,8 @@
 #include <poll.h>
 #include <cjson/cJSON.h>
 
+#include "klawed_internal.h"
+
 // Forward declarations
 typedef struct ConversationState ConversationState;
 
@@ -54,6 +56,12 @@ int uds_has_data(int fd);
 // Socket event streaming
 void uds_send_event(ConversationState *state, const char *event_type, cJSON *event_data);
 void uds_send_error(int client_fd, const char *error_message);
+
+// New socket message interface
+int uds_send_api_response(int client_fd, cJSON *response);
+int uds_send_tool_call(int client_fd, ToolCall *tools, int tool_count);
+int uds_send_tool_result(int client_fd, const char *tool_call_id, const char *tool_name, cJSON *result);
+int uds_send_final_response(int client_fd, const char *text_response);
 
 // Socket streaming context management
 void uds_streaming_context_init(SocketStreamingContext *ctx, int client_fd);
