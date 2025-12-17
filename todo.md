@@ -10,6 +10,7 @@
 - [2025-12-16 23:39:53] [sess_1765903032_06dc9f56] WARN  [openai_messages.c:370] build_openai_request: Request may be invalid: 14 tool_calls but only 0 tool_results
 - [2025-12-16 23:40:07] [sess_1765903032_06dc9f56] INFO  [klawed.c:5225] call_api_with_retries: API call succeeded (duration: 13873 ms, provider duration: 13870 ms, attempts: 1, auth_refreshed: no, plan_mode: no)
 - [2025-12-16 23:40:07] [sess_1765903032_06dc9f56] ERROR [klawed.c:7352] write_socket_output: Failed to write to socket: Resource temporarily unavailable
+- [ ] read api_calls.db for token per second stats
 - [ ] log more about tool to the log files
 $ tail -f ./.klawed/logs/klawed.log
 [2025-12-16 23:39:53] [sess_1765903032_06dc9f56] INFO  [klawed.c:4301] execute_tool: Tool 'TodoWrite' executed in 0 ms
