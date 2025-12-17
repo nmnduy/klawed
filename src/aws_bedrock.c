@@ -7,6 +7,7 @@
 
 #include "aws_bedrock.h"
 #include "logger.h"
+#include "klawed_internal.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1028,7 +1029,7 @@ char* bedrock_convert_request(const char *openai_request) {
     if (max_tokens && cJSON_IsNumber(max_tokens)) {
         cJSON_AddNumberToObject(anthropic_json, "max_tokens", max_tokens->valueint);
     } else {
-        cJSON_AddNumberToObject(anthropic_json, "max_tokens", 8192);
+        cJSON_AddNumberToObject(anthropic_json, "max_tokens", MAX_TOKENS);
     }
 
     // Convert messages from OpenAI to Anthropic format

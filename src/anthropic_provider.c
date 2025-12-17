@@ -68,7 +68,7 @@ static char* openai_to_anthropic_request(const char *openai_req) {
     if (model && cJSON_IsString(model)) {
         cJSON_AddStringToObject(anth, "model", model->valuestring);
     }
-    cJSON_AddNumberToObject(anth, "max_tokens", (max_tokens && cJSON_IsNumber(max_tokens)) ? max_tokens->valueint : 8192);
+    cJSON_AddNumberToObject(anth, "max_tokens", (max_tokens && cJSON_IsNumber(max_tokens)) ? max_tokens->valueint : MAX_TOKENS);
 
     // Separate system and content messages
     cJSON *anth_msgs = cJSON_CreateArray();
