@@ -92,6 +92,8 @@ make              # Build: output to build/klawed
 make test         # Run unit tests (tests/ directory)
 ```
 
+`make test` can take a while, most likely more than the default bash command timeout. So increase timeout value if required.
+
 **Running:**
 ```bash
 export OPENAI_API_KEY="your-api-key"
