@@ -45,6 +45,11 @@
 #include "patch_parser.h"
 #include "tool_utils.h"
 #include "http_client.h"  // For StreamEvent and HttpStreamCallback
+
+#ifdef HAVE_ZMQ
+#include "zmq_socket.h"
+#include <zmq.h>
+#endif
 #ifndef TEST_BUILD
 #include "openai_messages.h"
 #endif
@@ -7645,7 +7650,10 @@ int main(int argc, char *argv[]) {
         printf("  %s -r, --resume [ID]             Resume a previous conversation session\n", argv[0]);
         printf("                                      (defaults to most recent session if no ID given)\n");
         printf("  %s -l, --list-sessions [N]       List available sessions (N = max to show)\n", argv[0]);
-        // Socket support removed - will be reimplemented with ZMQ
+#ifdef HAVE_ZMQ
+        printf("  %s -z, --zmq ENDPOINT           Run in ZMQ daemon mode (e.g., tcp://127.0.0.1:5555)\n", argv[0]);
+        printf("  %s --zmq-pub ENDPOINT           Run in ZMQ publish mode (broadcast events)\n", argv[0]);
+#endif
         printf("  %s -h, --help                     Show this help message\n", argv[0]);
         printf("  %s --version                      Show version information\n\n", argv[0]);
         printf("Environment Variables:\n");
@@ -7671,6 +7679,11 @@ int main(int argc, char *argv[]) {
         printf("                                     Default: 600000 (10 minutes)\n\n");
         printf("  UI Customization:\n");
         printf("    KLAWED_THEME       Optional: Path to Kitty theme file\n\n");
+#ifdef HAVE_ZMQ
+        printf("  ZMQ Socket Mode:\n");
+        printf("    KLAWED_ZMQ_ENDPOINT  Optional: ZMQ endpoint (e.g., tcp://127.0.0.1:5555)\n");
+        printf("    KLAWED_ZMQ_MODE      Optional: ZMQ mode (daemon, pub, req)\n\n");
+#endif
 
         printf("Interactive Tips:\n");
         printf("  Esc/Ctrl+[ to enter Normal mode (vim-style), 'i' to insert\n");
@@ -7717,7 +7730,37 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
-    // Socket IPC flag removed - will be reimplemented with ZMQ
+    // Check for ZMQ daemon mode
+#ifdef HAVE_ZMQ
+    int zmq_daemon_mode = 0;
+    int zmq_pub_mode = 0;
+    const char *zmq_endpoint = NULL;
+    
+    if (argc == 3 && (strcmp(argv[1], "-z") == 0 || strcmp(argv[1], "--zmq") == 0)) {
+        zmq_daemon_mode = 1;
+        zmq_endpoint = argv[2];
+        LOG_INFO("ZMQ daemon mode enabled, endpoint: %s", zmq_endpoint);
+    }
+    
+    if (argc == 3 && strcmp(argv[1], "--zmq-pub") == 0) {
+        zmq_pub_mode = 1;
+        zmq_endpoint = argv[2];
+        LOG_INFO("ZMQ publish mode enabled, endpoint: %s", zmq_endpoint);
+    }
+    
+    // Also check environment variable for ZMQ endpoint
+    if (!zmq_endpoint) {
+        zmq_endpoint = getenv("KLAWED_ZMQ_ENDPOINT");
+        if (zmq_endpoint) {
+            const char *zmq_mode = getenv("KLAWED_ZMQ_MODE");
+            if (zmq_mode && strcmp(zmq_mode, "daemon") == 0) {
+                zmq_daemon_mode = 1;
+            } else if (zmq_mode && strcmp(zmq_mode, "pub") == 0) {
+                zmq_pub_mode = 1;
+            }
+        }
+    }
+#endif
 
     // Handle list sessions mode
 #ifndef TEST_BUILD
@@ -7738,7 +7781,11 @@ int main(int argc, char *argv[]) {
     // Check for single command mode: ./klawed "prompt"
     int is_single_command_mode = 0;
     char *single_command = NULL;
-    int socket_ipc_enabled = 0;  // Socket support removed - will be reimplemented with ZMQ
+#ifdef HAVE_ZMQ
+    int socket_ipc_enabled = zmq_daemon_mode || zmq_pub_mode;
+#else
+    int socket_ipc_enabled = 0;
+#endif
 
     if (argc == 2 && !resume_session && !list_sessions && !socket_ipc_enabled) {
         // Single argument provided - treat as prompt for single command mode
@@ -8065,6 +8112,34 @@ int main(int argc, char *argv[]) {
 
     // Run in appropriate mode
     int exit_code = 0;
+#ifdef HAVE_ZMQ
+    if (zmq_daemon_mode) {
+        // ZMQ daemon mode
+        LOG_INFO("Starting ZMQ daemon mode on %s", zmq_endpoint);
+        ZMQContext *zmq_ctx = zmq_socket_init(zmq_endpoint, ZMQ_REP);
+        if (!zmq_ctx) {
+            LOG_ERROR("Failed to initialize ZMQ socket");
+            exit_code = 1;
+        } else {
+            exit_code = zmq_socket_daemon_mode(zmq_ctx, &state);
+            zmq_socket_cleanup(zmq_ctx);
+        }
+    } else if (zmq_pub_mode) {
+        // ZMQ publish mode
+        LOG_INFO("Starting ZMQ publish mode on %s", zmq_endpoint);
+        ZMQContext *zmq_ctx = zmq_socket_init(zmq_endpoint, ZMQ_PUB);
+        if (!zmq_ctx) {
+            LOG_ERROR("Failed to initialize ZMQ socket");
+            exit_code = 1;
+        } else {
+            // For now, just run interactive mode with ZMQ publishing
+            // In the future, we could hook into streaming events
+            state.zmq_context = zmq_ctx;
+            interactive_mode(&state);
+            zmq_socket_cleanup(zmq_ctx);
+        }
+    } else 
+#endif
     if (is_single_command_mode) {
         exit_code = single_command_mode(&state, single_command);
     } else {

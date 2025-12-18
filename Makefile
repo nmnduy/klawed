@@ -79,6 +79,9 @@ WHISPER_GGML_BLAS_LIB = $(WHISPER_BUILD_DIR)/ggml/src/ggml-blas/libggml-blas.a
 WHISPER_METAL_LIB = $(WHISPER_BUILD_DIR)/ggml/src/ggml-metal/libggml-metal.a
 DEFAULT_MODEL = whisper_models/ggml-small.en.bin
 
+# Optional ZeroMQ socket support (ZMQ=auto|1|0)
+ZMQ ?= auto
+
 ifeq ($(VOICE),1)
     # Explicitly enable voice with whisper.cpp
     CFLAGS += -DHAVE_WHISPER=1 -I$(WHISPER_DIR)/include -I$(WHISPER_DIR)/ggml/include
@@ -111,6 +114,36 @@ else
     VOICE_LIBS =
 endif
 
+# ZeroMQ socket support configuration
+ifeq ($(ZMQ),1)
+    # Explicitly enable ZMQ
+    CFLAGS += -DHAVE_ZMQ=1
+    ZMQ_SOCKET_SRC = src/zmq_socket.c
+    ZMQ_LIBS = -lzmq
+    LDFLAGS += $(ZMQ_LIBS)
+    DEBUG_LDFLAGS += $(ZMQ_LIBS)
+else ifeq ($(ZMQ),0)
+    # Explicitly disable ZMQ
+    CFLAGS += -DDISABLE_ZMQ=1
+    ZMQ_SOCKET_SRC = src/zmq_socket_stub.c
+    ZMQ_LIBS =
+else
+    # Default: auto-detect
+    # Check if libzmq is available via pkg-config
+    ifeq ($(shell pkg-config --exists libzmq && echo yes),yes)
+        CFLAGS += -DHAVE_ZMQ=1 $(shell pkg-config --cflags libzmq)
+        ZMQ_SOCKET_SRC = src/zmq_socket.c
+        ZMQ_LIBS = $(shell pkg-config --libs libzmq)
+        LDFLAGS += $(ZMQ_LIBS)
+        DEBUG_LDFLAGS += $(ZMQ_LIBS)
+    else
+        # ZMQ not available, disable it
+        CFLAGS += -DDISABLE_ZMQ=1
+        ZMQ_SOCKET_SRC = src/zmq_socket_stub.c
+        ZMQ_LIBS =
+    endif
+endif
+
 BUILD_DIR = build
 TARGET = $(BUILD_DIR)/klawed
 TEST_EDIT_TARGET = $(BUILD_DIR)/test_edit
@@ -138,6 +171,7 @@ TEST_TOOL_RESULTS_REGRESSION_TARGET = $(BUILD_DIR)/test_tool_results_regression
 TEST_ARRAY_RESIZE_TARGET = $(BUILD_DIR)/test_array_resize
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
+TEST_ZMQ_SOCKET_TARGET = $(BUILD_DIR)/test_zmq_socket
 QUERY_TOOL = $(BUILD_DIR)/query_logs
 SRC = src/klawed.c
 ARRAY_RESIZE_SRC = src/array_resize.c
@@ -180,6 +214,8 @@ AI_WORKER_SRC = src/ai_worker.c
 AI_WORKER_OBJ = $(BUILD_DIR)/ai_worker.o
 VOICE_INPUT_SRC = src/voice_input.c
 VOICE_INPUT_OBJ = $(BUILD_DIR)/voice_input.o
+ZMQ_SOCKET_SRC = src/zmq_socket.c
+ZMQ_SOCKET_OBJ = $(BUILD_DIR)/zmq_socket.o
 MCP_SRC = src/mcp.c
 MCP_OBJ = $(BUILD_DIR)/mcp.o
 MCP_TEST_OBJ = $(BUILD_DIR)/mcp_test.o
@@ -241,6 +277,7 @@ TEST_TOOL_DETAILS_SRC = tests/test_tool_details_simple.c
 TEST_ARRAY_RESIZE_SRC = tests/test_array_resize.c
 TEST_TOKEN_USAGE_SRC = tests/test_token_usage.c
 TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
+TEST_ZMQ_SOCKET_SRC = tests/test_zmq_socket.c
 # Socket test removed - will be reimplemented with ZMQ
 
 .PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
@@ -256,7 +293,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tool-details test-array-resize test-token-usage test-http-client
+test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket
 
 test-edit: check-deps $(TEST_EDIT_TARGET)
 	@echo ""
@@ -457,11 +494,17 @@ test-http-client: check-deps $(TEST_HTTP_CLIENT_TARGET)
 	@echo ""
 	@./$(TEST_HTTP_CLIENT_TARGET)
 
+test-zmq-socket: check-deps $(TEST_ZMQ_SOCKET_TARGET)
+	@echo ""
+	@echo "Running ZMQ Socket tests..."
+	@echo ""
+	@./$(TEST_ZMQ_SOCKET_TARGET)
+
 # Socket test removed - will be reimplemented with ZMQ
 
-$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
+$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Build successful!"
 	@echo "Version: $(VERSION)"
@@ -486,6 +529,11 @@ $(BUILD_DIR)/uds_socket.o: src/uds_socket.c src/uds_socket.h
 $(BUILD_DIR)/retry_logic.o: src/retry_logic.c src/retry_logic.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/retry_logic.o src/retry_logic.c
+
+# Build ZMQ socket object
+$(BUILD_DIR)/zmq_socket.o: $(ZMQ_SOCKET_SRC) src/zmq_socket.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_socket.o $(ZMQ_SOCKET_SRC)
 
 # Generate version.h from VERSION file
 $(VERSION_H): $(VERSION_FILE)
@@ -1253,6 +1301,12 @@ check-deps:
 	@pkg-config --exists openssl 2>/dev/null || { echo "Error: OpenSSL not found. Install with: brew install openssl (macOS) or apt-get install libssl-dev (Linux)"; exit 1; }
 	@pkg-config --exists libcjson 2>/dev/null || { echo "Error: cJSON not found. Install with: brew install cjson (macOS) or apt-get install libcjson-dev (Linux)"; exit 1; }
 	@pkg-config --exists libbsd 2>/dev/null || { echo "Error: libbsd not found. Install with: brew install libbsd (macOS) or apt-get install libbsd-dev (Linux)"; exit 1; }
+	@# Check for ZMQ if explicitly enabled
+	@if [ "$(ZMQ)" = "1" ]; then \
+		echo "Checking for ZeroMQ (ZMQ=1 specified)..."; \
+		pkg-config --exists libzmq 2>/dev/null || { echo "Error: libzmq not found. Install with: brew install zeromq (macOS) or apt-get install libzmq3-dev (Linux)"; exit 1; }; \
+		echo "✓ ZeroMQ found"; \
+	fi
 	@echo "✓ All dependencies found"
 	@echo ""
 
@@ -1317,14 +1371,21 @@ help:
 	@echo "  - libbsd (for safer C functions)"
 	@echo "  - pthread (usually included with OS)"
 	@echo "  - valgrind (optional, for memory leak detection)"
+	@echo "  - libzmq (optional, for ZMQ socket support)"
 	@echo ""
 	@echo "macOS installation:"
 	@echo "  brew install curl cjson sqlite3 openssl libbsd valgrind"
+	@echo "  # For ZMQ support:"
+	@echo "  brew install zeromq"
 	@echo ""
 	@echo "Linux installation:"
 	@echo "  apt-get install libcurl4-openssl-dev libcjson-dev libsqlite3-dev libssl-dev libbsd-dev valgrind"
+	@echo "  # For ZMQ support:"
+	@echo "  apt-get install libzmq3-dev"
 	@echo "  or"
 	@echo "  yum install libcurl-devel cjson-devel sqlite-devel openssl-devel libbsd-devel valgrind"
+	@echo "  # For ZMQ support:"
+	@echo "  yum install zeromq-devel"
 	@echo ""
 	@echo "AWS Bedrock Configuration:"
 	@echo "  export CLAUDE_CODE_USE_BEDROCK=true"
@@ -1528,6 +1589,9 @@ $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET): $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC)
 
 $(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_HTTP_CLIENT_TARGET) $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
+
+$(TEST_ZMQ_SOCKET_TARGET): $(TEST_ZMQ_SOCKET_SRC) $(ZMQ_SOCKET_OBJ) $(LOGGER_OBJ)
+	@$(CC) $(CFLAGS) -o $(TEST_ZMQ_SOCKET_TARGET) $(TEST_ZMQ_SOCKET_SRC) $(ZMQ_SOCKET_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
 
 # Socket test build rule removed - will be reimplemented with ZMQ
 

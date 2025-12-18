@@ -12,6 +12,10 @@
 #include <signal.h>
 #include "version.h"
 
+#ifdef HAVE_ZMQ
+#include "zmq_socket.h"
+#endif
+
 // ============================================================================
 // Configuration Constants
 // ============================================================================
@@ -207,7 +211,10 @@ typedef struct ConversationState {
     // TUI reference for streaming updates (NULL if not using TUI)
     TUIState *tui;                  // TUI state for real-time streaming display
 
-    // Socket streaming support removed - will be reimplemented with ZMQ
+#ifdef HAVE_ZMQ
+    // ZMQ socket context for IPC communication
+    struct ZMQContext *zmq_context; // ZMQ socket context (NULL if not using ZMQ)
+#endif
 
     // Subagent process management
     SubagentManager *subagent_manager;  // Tracks running subagent processes

@@ -92,6 +92,14 @@ make              # Build: output to build/klawed
 make test         # Run unit tests (tests/ directory)
 ```
 
+**With ZMQ support:**
+```bash
+make ZMQ=1        # Build with ZeroMQ socket support (requires libzmq)
+make ZMQ=0        # Explicitly disable ZMQ support
+# Or let it auto-detect (default):
+make              # Will auto-detect libzmq if available
+```
+
 `make test` can take a while, most likely more than the default bash command timeout. So increase timeout value if required.
 
 **Running:**
@@ -128,6 +136,8 @@ export OPENAI_API_KEY="your-api-key"
 - **MCP**: `KLAWED_MCP_ENABLED=1` to enable (disabled by default), `KLAWED_MCP_CONFIG` for config path
   - `KLAWED_MCP_INIT_TIMEOUT` - Timeout for MCP server initialization in seconds (default: 10, 0=no timeout, overrides config file)
   - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
+- **ZMQ Socket**: `KLAWED_ZMQ_ENDPOINT` - ZMQ endpoint (e.g., "tcp://127.0.0.1:5555" or "ipc:///tmp/klawed.sock")
+  - `KLAWED_ZMQ_MODE` - ZMQ mode ("daemon", "pub", or "req")
 
 **Defaults:**
 - Logs: `./.klawed/logs/klawed.log` (project-local)
@@ -251,6 +261,54 @@ cp examples/mcp_servers.json ~/.config/klawed/
 - Resources include metadata: server, uri, name, description, mimeType
 - Supports text-based resources (binary blob support planned)
 
+## ZMQ Socket Mode
+
+**Purpose**: IPC communication via ZeroMQ sockets for external integration
+**Implementation**: `src/zmq_socket.h`, `src/zmq_socket.c`
+**Build option**: `make ZMQ=1` (auto-detected by default if libzmq available)
+
+**Key features:**
+- Request-reply pattern (ZMQ_REP/ZMQ_REQ) for daemon mode
+- Publish-subscribe pattern (ZMQ_PUB/ZMQ_SUB) for event broadcasting
+- Multiple transport types: TCP, IPC, inproc
+- JSON message format compatibility
+
+**Quick start:**
+```bash
+# Build with ZMQ support
+make ZMQ=1
+
+# Run in ZMQ daemon mode (listen for requests)
+./build/klawed --zmq tcp://127.0.0.1:5555
+
+# Or using environment variables
+export KLAWED_ZMQ_ENDPOINT="tcp://127.0.0.1:5555"
+export KLAWED_ZMQ_MODE="daemon"
+./build/klawed
+```
+
+**Message format:**
+```json
+{
+  "messageType": "TEXT",
+  "content": "Your prompt here"
+}
+```
+
+**Response format:**
+```json
+{
+  "status": "received",
+  "message": "Processing: Your prompt here",
+  "timestamp": 1734547200
+}
+```
+
+**Available modes:**
+- `daemon` (ZMQ_REP): Listen for requests and respond
+- `pub` (ZMQ_PUB): Publish events (e.g., streaming updates)
+- `req` (ZMQ_REQ): Connect to a ZMQ server as client
+
 ## Context Building
 
 **Automatic context injection** (matches official TypeScript CLI):
@@ -285,6 +343,7 @@ cp examples/mcp_servers.json ~/.config/klawed/
 - **ncurses** - Terminal UI (scrolling, mouse support)
 - **libbsd** - Safe string functions and overflow-safe allocation (strlcpy, strlcat, reallocarray, etc.)
 - **POSIX** - File ops, glob, process management
+- **libzmq** - ZeroMQ socket support (optional, for IPC communication)
 
 Verify: `make check-deps`
 
