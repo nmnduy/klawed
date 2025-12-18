@@ -17,7 +17,7 @@
 #include <errno.h>
 #include <curl/curl.h>
 #include <bsd/string.h>
-#include "uds_socket.h"  // For unified socket operations
+// Socket support removed - will be reimplemented with ZMQ
 #include "retry_logic.h"  // For common retry logic
 
 // Default Anthropic API URL
@@ -118,32 +118,7 @@ static int openai_streaming_event_handler(StreamEvent *event, void *userdata) {
         return 0;
     }
 
-    // Send to socket if in socket mode (for all event types except tool calls)
-    if (ctx->state && ctx->state->socket_streaming_fd >= 0) {
-        const char *event_type_str = sse_event_type_to_name(event->type);
-
-        // Check if this event contains tool call information
-        int is_tool_event = 0;
-
-        if (event->type == SSE_EVENT_OPENAI_CHUNK) {
-            cJSON *choices = cJSON_GetObjectItem(event->data, "choices");
-            if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
-                cJSON *choice = cJSON_GetArrayItem(choices, 0);
-                cJSON *delta = cJSON_GetObjectItem(choice, "delta");
-                if (delta) {
-                    cJSON *tool_calls = cJSON_GetObjectItem(delta, "tool_calls");
-                    if (tool_calls && cJSON_IsArray(tool_calls) && cJSON_GetArraySize(tool_calls) > 0) {
-                        is_tool_event = 1;
-                        LOG_DEBUG("OpenAI stream: Skipping tool_calls event for socket");
-                    }
-                }
-            }
-        }
-
-        if (!is_tool_event) {
-            uds_send_event(ctx->state, event_type_str, event->data);
-        }
-    }
+    // Socket streaming support removed - will be reimplemented with ZMQ
 
     // OpenAI chunk format: { "id": "...", "object": "chat.completion.chunk", "choices": [...], ... }
     if (event->type == SSE_EVENT_OPENAI_CHUNK) {

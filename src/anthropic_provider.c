@@ -19,7 +19,7 @@
 #include <errno.h>
 #include <curl/curl.h>
 #include <bsd/string.h>
-#include "uds_socket.h"  // For unified socket operations
+// Socket support removed - will be reimplemented with ZMQ
 #include "retry_logic.h"  // For common retry logic
 
 #define DEFAULT_ANTHROPIC_URL "https://api.anthropic.com/v1/messages"
@@ -406,38 +406,7 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
         return 0;
     }
 
-    // Send to socket if in socket mode (for all event types except tool calls)
-    if (ctx->state && ctx->state->socket_streaming_fd >= 0) {
-        const char *event_type_str = sse_event_type_to_name(event->type);
-
-        // Check if this event contains tool call information
-        int is_tool_event = 0;
-
-        if (event->type == SSE_EVENT_CONTENT_BLOCK_START) {
-            cJSON *content_block = cJSON_GetObjectItem(event->data, "content_block");
-            if (content_block) {
-                cJSON *type = cJSON_GetObjectItem(content_block, "type");
-                if (type && cJSON_IsString(type) && strcmp(type->valuestring, "tool_use") == 0) {
-                    is_tool_event = 1;
-                    LOG_DEBUG("Stream: Skipping tool_use event for socket");
-                }
-            }
-        } else if (event->type == SSE_EVENT_CONTENT_BLOCK_DELTA) {
-            // Check if this is tool input delta
-            cJSON *delta = cJSON_GetObjectItem(event->data, "delta");
-            if (delta) {
-                cJSON *type = cJSON_GetObjectItem(delta, "type");
-                if (type && cJSON_IsString(type) && strcmp(type->valuestring, "input_json_delta") == 0) {
-                    is_tool_event = 1;
-                    LOG_DEBUG("Stream: Skipping input_json_delta event for socket");
-                }
-            }
-        }
-
-        if (!is_tool_event) {
-            uds_send_event(ctx->state, event_type_str, event->data);
-        }
-    }
+    // Socket streaming support removed - will be reimplemented with ZMQ
 
     switch (event->type) {
         case SSE_EVENT_MESSAGE_START:

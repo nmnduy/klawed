@@ -39,11 +39,7 @@
 #include <mach-o/dyld.h>
 #endif
 
-// Socket IPC support
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <poll.h>
-#include "uds_socket.h"  // Unified socket utilities
+// Socket support removed - will be reimplemented with ZMQ
 #include "colorscheme.h"
 #include "fallback_colors.h"
 #include "patch_parser.h"
@@ -202,115 +198,6 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
  *   - JSON missing required fields (messageType or content)
  *   - messageType is not "TEXT"
  */
-static char* parse_socket_input_strict(const char *input) {
-    if (!input || !input[0]) {
-        LOG_WARN("Socket input is NULL or empty");
-        return NULL;
-    }
-    
-    // Parse as JSON
-    cJSON *json = cJSON_Parse(input);
-    if (!json) {
-        LOG_WARN("Socket input is not valid JSON: %s", input);
-        return NULL;
-    }
-    
-    cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
-    cJSON *content = cJSON_GetObjectItem(json, "content");
-    
-    if (!message_type || !cJSON_IsString(message_type) ||
-        !content || !cJSON_IsString(content)) {
-        LOG_WARN("Socket input JSON missing required fields (messageType or content)");
-        cJSON_Delete(json);
-        return NULL;
-    }
-    
-    // Check if messageType is "TEXT"
-    if (strcmp(message_type->valuestring, "TEXT") != 0) {
-        LOG_WARN("Socket input has unexpected messageType: %s (expected: TEXT)", 
-                 message_type->valuestring);
-        cJSON_Delete(json);
-        return NULL;
-    }
-    
-    char *result = strdup(content->valuestring);
-    cJSON_Delete(json);
-    return result;
-}
-
-/**
- * Parse input which may be:
- * 1. JSON with messageType: "TEXT" and content (socket input)
- * 2. Plain text (TUI/keyboard input)
- * 
- * Returns a newly allocated string with the extracted content.
- * Caller must free the returned string.
- * 
- * Returns:
- * - Extracted content if valid JSON with messageType: "TEXT"
- * - Original input if not JSON (plain text mode for TUI)
- * - NULL if:
- *   - Input is NULL or empty
- *   - Input starts with '{' but is invalid JSON
- *   - JSON missing required fields (messageType or content)
- *   - messageType is not "TEXT"
- */
-static char* parse_socket_input(const char *input) {
-    if (!input || !input[0]) {
-        LOG_WARN("Input is NULL or empty");
-        return NULL;
-    }
-    
-    // Check if input looks like JSON (starts with '{')
-    // This helps distinguish between socket JSON and TUI plain text
-    int looks_like_json = (input[0] == '{');
-    
-    // Try to parse as JSON
-    cJSON *json = cJSON_Parse(input);
-    if (json) {
-        cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
-        cJSON *content = cJSON_GetObjectItem(json, "content");
-        
-        if (message_type && cJSON_IsString(message_type) &&
-            content && cJSON_IsString(content)) {
-            
-            // Check if messageType is "TEXT"
-            if (strcmp(message_type->valuestring, "TEXT") == 0) {
-                char *result = strdup(content->valuestring);
-                cJSON_Delete(json);
-                return result;
-            } else {
-                LOG_WARN("Input has unexpected messageType: %s (expected: TEXT)", 
-                         message_type->valuestring);
-                cJSON_Delete(json);
-                return NULL;
-            }
-        } else {
-            // JSON but missing required fields
-            LOG_WARN("Input JSON missing required fields (messageType or content)");
-            cJSON_Delete(json);
-            return NULL;
-        }
-    } else {
-        // Not valid JSON
-        if (looks_like_json) {
-            // Input starts with '{' but is invalid JSON
-            LOG_WARN("Input looks like JSON but is invalid: %s", input);
-            return NULL;
-        } else {
-            // Doesn't look like JSON, treat as plain text (TUI input)
-            LOG_DEBUG("Input is plain text (not JSON)");
-            return strdup(input);
-        }
-    }
-}
-
-// ============================================================================
-// Output Helpers
-// ============================================================================
-
-
-
 static void print_assistant(const char *text) {
     // Use accent color for role name, foreground for main text
     char role_color_code[32];
@@ -5803,7 +5690,7 @@ int conversation_state_init(ConversationState *state) {
 
     state->conv_mutex_initialized = 1;
     state->interrupt_requested = 0;  // Initialize interrupt flag
-    state->socket_streaming_fd = -1; // Initialize socket streaming fd to -1 (not in socket mode)
+    // Socket streaming support removed - will be reimplemented with ZMQ
 
     // Initialize subagent manager
     state->subagent_manager = malloc(sizeof(SubagentManager));
@@ -6778,7 +6665,6 @@ typedef struct {
     AIInstructionQueue *instruction_queue;
     TUIMessageQueue *tui_queue;
     int instruction_queue_capacity;
-    SocketIPC socket_ipc;    // Socket IPC support
 } InteractiveContext;
 
 // Interrupt callback invoked by the TUI event loop when the user presses Ctrl+C in INSERT mode
@@ -6836,16 +6722,10 @@ static int submit_input_callback(const char *input, void *user_data) {
     // Reset interrupt flag when new input is submitted
     state->interrupt_requested = 0;
 
-    // Parse input (may be JSON with messageType: "TEXT" from socket or plain text from TUI)
-    char *parsed_input = parse_socket_input(input);
-    char *input_copy;
-    
-    if (parsed_input) {
-        // Successfully parsed JSON with messageType: "TEXT" or plain text
-        input_copy = parsed_input;
-    } else {
-        // parse_socket_input returns NULL for invalid JSON or wrong messageType
-        LOG_WARN("Ignoring invalid input");
+    // Socket support removed - use input directly
+    char *input_copy = strdup(input);
+    if (!input_copy) {
+        LOG_ERROR("Failed to allocate memory for input copy");
         return 0;
     }
     
@@ -7364,489 +7244,22 @@ static int process_single_command_response(ConversationState *state, ApiResponse
 
 
 // External input callback for socket IPC
-static int socket_external_input_callback(void *user_data, char *buffer, int buffer_size) {
-    LOG_DEBUG("socket_external_input_callback: Called with buffer_size: %d", buffer_size);
-
-    InteractiveContext *ctx = (InteractiveContext *)user_data;
-    if (!ctx) {
-        LOG_DEBUG("socket_external_input_callback: ctx is NULL, returning 0");
-        return 0;
-    }
-
-    if (!ctx->socket_ipc.enabled) {
-        LOG_DEBUG("socket_external_input_callback: Socket IPC not enabled, returning 0");
-        return 0;
-    }
-
-    SocketIPC *socket_ipc = &ctx->socket_ipc;
-    LOG_DEBUG("socket_external_input_callback: Socket state - server_fd: %d, client_fd: %d, path: %s",
-              socket_ipc->server_fd, socket_ipc->client_fd,
-              socket_ipc->socket_path ? socket_ipc->socket_path : "(null)");
-
-    // Accept new connection if none
-    if (socket_ipc->client_fd < 0) {
-        LOG_DEBUG("socket_external_input_callback: No client connected, attempting to accept new connection");
-        socket_ipc->client_fd = uds_accept_connection(socket_ipc->server_fd);
-        if (socket_ipc->client_fd >= 0) {
-            LOG_DEBUG("socket_external_input_callback: New client connected, fd: %d", socket_ipc->client_fd);
-        } else {
-            LOG_DEBUG("socket_external_input_callback: No pending connections to accept");
-        }
-    }
-
-    // Read from socket if connected
-    if (socket_ipc->client_fd >= 0) {
-        LOG_DEBUG("socket_external_input_callback: Checking if client fd %d has data", socket_ipc->client_fd);
-        if (uds_has_data(socket_ipc->client_fd)) {
-            LOG_DEBUG("socket_external_input_callback: Data available on client fd %d, reading...", socket_ipc->client_fd);
-            
-            // Read into temporary buffer first to validate JSON
-            char temp_buffer[4096];
-            int bytes = uds_read_input(socket_ipc->client_fd, temp_buffer, sizeof(temp_buffer) - 1);
-            if (bytes > 0) {
-                temp_buffer[bytes] = '\0';
-                LOG_DEBUG("socket_external_input_callback: Read %d bytes from socket: %s", bytes, temp_buffer);
-                
-                // Parse and validate JSON
-                cJSON *json = cJSON_Parse(temp_buffer);
-                if (json) {
-                    cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
-                    cJSON *content = cJSON_GetObjectItem(json, "content");
-                    
-                    if (message_type && cJSON_IsString(message_type) &&
-                        content && cJSON_IsString(content) &&
-                        strcmp(message_type->valuestring, "TEXT") == 0) {
-                        
-                        // Valid JSON with messageType: "TEXT", extract content
-                        const char *content_str = content->valuestring;
-                        size_t content_len = strlen(content_str);
-                        
-                        if (content_len < (size_t)buffer_size - 1) {
-                            strlcpy(buffer, content_str, (size_t)buffer_size);
-                            cJSON_Delete(json);
-                            LOG_DEBUG("socket_external_input_callback: Extracted content, returning %zu bytes", content_len);
-                            return (int)content_len;
-                        } else {
-                            LOG_WARN("Socket input content too large for buffer: %zu bytes (max: %d)", 
-                                     content_len, buffer_size - 1);
-                            cJSON_Delete(json);
-                            return 0;
-                        }
-                    } else {
-                        LOG_WARN("Socket input missing required fields or wrong messageType");
-                        cJSON_Delete(json);
-                        return 0;
-                    }
-                } else {
-                    LOG_WARN("Socket input is not valid JSON: %s", temp_buffer);
-                    return 0;
-                }
-            } else if (bytes < 0) {
-                // Client disconnected
-                LOG_DEBUG("socket_external_input_callback: Client disconnected, closing fd %d", socket_ipc->client_fd);
-                close(socket_ipc->client_fd);
-                socket_ipc->client_fd = -1;
-                LOG_DEBUG("socket_external_input_callback: Client fd closed, returning 0");
-                return 0;
-            } else {
-                LOG_DEBUG("socket_external_input_callback: No data read (bytes = 0)");
-            }
-        } else {
-            LOG_DEBUG("socket_external_input_callback: No data available on client fd %d", socket_ipc->client_fd);
-        }
-    } else {
-        LOG_DEBUG("socket_external_input_callback: No client connected");
-    }
-
-    LOG_DEBUG("socket_external_input_callback: No input available, returning 0");
-    return 0;
-}
 
 // Cleanup socket resources
 
 
 // Initialize socket streaming context
-__attribute__((unused)) static void socket_streaming_context_init(SocketStreamingContext *ctx, int client_fd) {
-    memset(ctx, 0, sizeof(SocketStreamingContext));
-    ctx->client_fd = client_fd;
-    ctx->content_block_index = -1;
-    ctx->accumulated_capacity = 4096;
-    ctx->accumulated_text = malloc(ctx->accumulated_capacity);
-    if (ctx->accumulated_text) {
-        ctx->accumulated_text[0] = '\0';
-    }
-    ctx->tool_input_capacity = 4096;
-    ctx->tool_input_json = malloc(ctx->tool_input_capacity);
-    if (ctx->tool_input_json) {
-        ctx->tool_input_json[0] = '\0';
-    }
-}
-
-// Free socket streaming context
-__attribute__((unused)) static void socket_streaming_context_free(SocketStreamingContext *ctx) {
-    if (!ctx) return;
-    free(ctx->accumulated_text);
-    free(ctx->content_block_type);
-    free(ctx->tool_use_id);
-    free(ctx->tool_use_name);
-    free(ctx->tool_input_json);
-    free(ctx->stop_reason);
-    if (ctx->message_start_data) {
-        cJSON_Delete(ctx->message_start_data);
-    }
-}
 
 // Socket streaming event handler - sends streaming data to socket
-static int socket_streaming_event_handler(StreamEvent *event, void *userdata) {
-    SocketStreamingContext *ctx = (SocketStreamingContext *)userdata;
-
-    if (!event || !event->data) {
-        // Ping or invalid event
-        return 0;
-    }
-
-    // Create a JSON object for the streaming event
-    cJSON *event_json = cJSON_CreateObject();
-    if (!event_json) {
-        return 0;
-    }
-
-    // Add event type
-    const char *event_type_str = sse_event_type_to_name(event->type);
-    cJSON_AddStringToObject(event_json, "type", event_type_str);
-
-    // Add event data
-    cJSON_AddItemToObject(event_json, "data", cJSON_Duplicate(event->data, 1));
-
-    // Convert to JSON string
-    char *json_str = cJSON_PrintUnformatted(event_json);
-    if (json_str) {
-        // Send to socket
-        uds_write_output(ctx->client_fd, json_str, strlen(json_str));
-        uds_write_output(ctx->client_fd, "\n", 1);
-        free(json_str);
-    }
-
-    cJSON_Delete(event_json);
-    return 0;
-}
 
 // Wrapper streaming event handler that calls both the original handler and socket handler
-__attribute__((unused)) static int socket_streaming_wrapper_handler(StreamEvent *event, void *userdata,
-                                           HttpStreamCallback original_handler,
-                                           void *original_userdata,
-                                           SocketStreamingContext *socket_ctx) {
-    (void)userdata;  // Unused parameter
-    // Call original handler first (for accumulation)
-    if (original_handler) {
-        int result = original_handler(event, original_userdata);
-        if (result != 0) {
-            return result; // Abort if original handler says to
-        }
-    }
-
-    // Then send to socket
-    if (socket_ctx && socket_ctx->client_fd >= 0) {
-        return socket_streaming_event_handler(event, socket_ctx);
-    }
-
-    return 0;
-}
 
 // Process API response for socket mode (handles tool calls recursively)
-static int process_response_for_socket_mode(ConversationState *state, ApiResponse *response, int client_fd) {
-    if (!response) {
-        return -1; // Invalid response
-    }
-
-    // Handle API call errors (network errors, etc.)
-    if (response->error_message) {
-        // Use new error format
-        uds_send_error(client_fd, response->error_message);
-        return 0; // Error message sent (void function, assume success)
-    }
-
-    // Check if we have a raw response
-    if (!response->raw_response) {
-        // In simplified socket mode, don't send error messages
-        LOG_WARN("No response data available (not sent to socket)");
-        return 0;
-    }
-
-    // Add to conversation history (still needed for multi-turn conversations)
-    cJSON *choices = cJSON_GetObjectItem(response->raw_response, "choices");
-    if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
-        cJSON *choice = cJSON_GetArrayItem(choices, 0);
-        cJSON *message = cJSON_GetObjectItem(choice, "message");
-        if (message) {
-            add_assistant_message_openai(state, message);
-        }
-    }
-
-    // Process tool calls if any exist
-    int tool_count = response->tool_count;
-    ToolCall *tool_calls_array = response->tools;
-
-    if (tool_count > 0) {
-        LOG_INFO("Processing %d tool call(s) in socket mode (not sending to socket)", tool_count);
-
-        // Log details of each tool call
-        for (int i = 0; i < tool_count; i++) {
-            ToolCall *tool = &tool_calls_array[i];
-            LOG_DEBUG("Socket mode tool call[%d]: id=%s, name=%s, has_params=%d",
-                      i, tool->id ? tool->id : "NULL",
-                      tool->name ? tool->name : "NULL",
-                      tool->parameters != NULL);
-        }
-
-        InternalContent *results = calloc((size_t)tool_count, sizeof(InternalContent));
-        if (!results) {
-            LOG_ERROR("Failed to allocate tool result buffer in socket mode");
-            return 1;
-        }
-
-        int valid_tool_calls = 0;
-        for (int i = 0; i < tool_count; i++) {
-            ToolCall *tool = &tool_calls_array[i];
-            if (tool->name && tool->id) {
-                valid_tool_calls++;
-            }
-        }
-
-        if (valid_tool_calls > 0) {
-            // Execute tools (socket mode) - but don't send tool calls or results to socket
-            for (int i = 0; i < tool_count; i++) {
-                ToolCall *tool = &tool_calls_array[i];
-                if (!tool->name || !tool->id) {
-                    continue;
-                }
-
-                LOG_DEBUG("Socket mode: Executing tool: %s", tool->name);
-
-                // Convert ToolCall to execute_tool parameters
-                cJSON *input = tool->parameters
-                    ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
-                    : cJSON_CreateObject();
-
-                // Execute tool synchronously
-                cJSON *tool_result = execute_tool(tool->name, input, state);
-
-                // Convert result to InternalContent
-                results[i].type = INTERNAL_TOOL_RESPONSE;
-                results[i].tool_id = strdup(tool->id);
-                results[i].tool_name = strdup(tool->name);
-                results[i].tool_output = tool_result;
-                results[i].is_error = tool_result ? cJSON_HasObjectItem(tool_result, "error") : 1;
-
-                cJSON_Delete(input);
-            }
-
-            // Log summary of all tool results before adding to conversation
-            LOG_DEBUG("Socket mode: Collected %d tool results", tool_count);
-            for (int i = 0; i < tool_count; i++) {
-                LOG_DEBUG("Socket mode result[%d]: tool_id=%s, tool_name=%s, is_error=%d",
-                          i, results[i].tool_id ? results[i].tool_id : "NULL",
-                          results[i].tool_name ? results[i].tool_name : "NULL",
-                          results[i].is_error);
-            }
-
-            // Extract TodoWrite information BEFORE transferring ownership to add_tool_results
-            int todo_write_executed = check_todo_write_executed(results, tool_count);
-
-            // Add tool results to conversation
-            // Note: add_tool_results takes ownership of the results array and its contents
-            if (add_tool_results(state, results, tool_count) != 0) {
-                LOG_ERROR("Failed to add tool results to conversation in socket mode - cannot proceed");
-                // Results were already freed by add_tool_results, don't free again
-                return 1;
-            }
-
-            // Update TODO list display if TodoWrite was executed
-            if (todo_write_executed) {
-                // In socket mode, we don't have TUI, so just log the TODO update
-                LOG_INFO("TODO list updated via TodoWrite tool in socket mode");
-            }
-
-            // Call API again with tool results and process recursively
-            ApiResponse *next_response = call_api(state);
-            if (next_response) {
-                // Recursively process the next response (may contain more tool calls)
-                int result = process_response_for_socket_mode(state, next_response, client_fd);
-                api_response_free(next_response);
-                return result;
-            } else {
-                LOG_ERROR("Failed to get response after tool execution in socket mode");
-                char error_buf[] = "{\"error\": \"Failed to get response after tool execution\"}\n";
-                uds_write_output(client_fd, error_buf, strlen(error_buf));
-                return 1;
-            }
-
-            // Do NOT free results here - add_tool_results() took ownership
-        } else {
-            // No valid tool calls, free the allocated results array
-            free(results);
-        }
-    } else {
-        // No tool calls - send the assistant's text response to socket
-        if (response->message.text && response->message.text[0] != '\0') {
-            // Skip whitespace-only content
-            const char *p = response->message.text;
-            while (*p && isspace((unsigned char)*p)) p++;
-
-            if (*p != '\0') {  // Has non-whitespace content
-                if (uds_send_final_response(client_fd, response->message.text) < 0) {
-                    LOG_WARN("Failed to send final response to socket");
-                }
-            }
-        }
-    }
-
-    // Conversation is complete
-    return 0;
-}
 
 // Socket-only mode: runs as a daemon listening on socket, no TUI
-static void socket_only_mode(ConversationState *state, const char *socket_path) {
-    LOG_INFO("Starting socket-only mode on path: %s", socket_path);
-
-    // Create socket
-    SocketIPC socket_ipc = {0};
-    socket_ipc.server_fd = uds_create_unix_socket(socket_path);
-    if (socket_ipc.server_fd < 0) {
-        LOG_ERROR("Failed to create socket for socket-only mode");
-        return;
-    }
-
-    socket_ipc.client_fd = -1;
-    socket_ipc.socket_path = strdup(socket_path);
-    socket_ipc.enabled = 1;
-
-    LOG_INFO("Socket-only mode ready, listening on: %s", socket_path);
-
-    // Main event loop for socket-only mode
-    int running = 1;
-    time_t last_ping_time = 0;
-    const time_t PING_INTERVAL = 30; // Send ping every 30 seconds
-    const time_t CLIENT_TIMEOUT = 60; // Close idle client after 60 seconds
-    time_t last_activity_time = time(NULL);
-
-    while (running) {
-        // Accept new connection if none
-        if (socket_ipc.client_fd < 0) {
-            socket_ipc.client_fd = uds_accept_connection(socket_ipc.server_fd);
-            if (socket_ipc.client_fd >= 0) {
-                LOG_INFO("Client connected in socket-only mode");
-                // Set socket streaming fd and enable streaming
-                state->socket_streaming_fd = socket_ipc.client_fd;
-                // Enable streaming for socket mode
-                setenv("KLAWED_ENABLE_STREAMING", "1", 1);
-            }
-        }
-
-        // Read from socket if connected
-        if (socket_ipc.client_fd >= 0) {
-            // Check connection health before attempting any operations
-            if (!uds_check_connection(socket_ipc.client_fd)) {
-                LOG_WARN("Socket connection appears broken, closing connection");
-                close(socket_ipc.client_fd);
-                socket_ipc.client_fd = -1;
-                state->socket_streaming_fd = -1;
-                continue;
-            }
-
-            char buffer[4096];
-            if (uds_has_data(socket_ipc.client_fd)) {
-                int bytes = uds_read_input(socket_ipc.client_fd, buffer, sizeof(buffer));
-                if (bytes > 0) {
-                    LOG_INFO("Received %d bytes from socket", bytes);
-                    last_activity_time = time(NULL); // Update activity time
-
-                    // Process the input
-                    buffer[bytes] = '\0';
-
-                    // Parse socket input (must be JSON with messageType: "TEXT")
-                    char *parsed_input = parse_socket_input_strict(buffer);
-                    if (!parsed_input) {
-                        // parse_socket_input_strict returns NULL for invalid JSON or wrong messageType
-                        LOG_WARN("Ignoring invalid socket input (must be JSON with messageType: TEXT)");
-                        continue;
-                    }
-
-                    // Add user message to conversation (but don't display it)
-                    add_user_message(state, parsed_input);
-                    free(parsed_input);
-
-                    // Call API synchronously
-                    ApiResponse *response = call_api(state);
-                    if (response) {
-                        // Process response and send output through socket
-                        int write_result = process_response_for_socket_mode(state, response, socket_ipc.client_fd);
-                        if (write_result < 0) {
-                            LOG_WARN("Failed to send response to socket, attempting error recovery");
-                            // Try to handle the write failure
-                            int recovery_result = uds_handle_write_failure(socket_ipc.client_fd, &socket_ipc);
-                            if (recovery_result > 0) {
-                                LOG_INFO("Successfully recovered from write failure with new connection");
-                                state->socket_streaming_fd = socket_ipc.client_fd;
-                                last_activity_time = time(NULL); // Reset activity time for new connection
-                            } else if (recovery_result < 0) {
-                                LOG_WARN("Could not recover from write failure, connection will be closed");
-                                // Connection will be cleaned up in next iteration
-                            }
-                        } else {
-                            last_activity_time = time(NULL); // Update activity time on successful write
-                        }
-                        api_response_free(response);
-                    } else {
-                        // In simplified socket mode, don't send error messages
-                        LOG_WARN("Failed to get response from API (not sent to socket)");
-                    }
-
-                } else if (bytes < 0) {
-                    // Client disconnected
-                    LOG_INFO("Client disconnected in socket-only mode");
-                    close(socket_ipc.client_fd);
-                    socket_ipc.client_fd = -1;
-                    state->socket_streaming_fd = -1;
-                }
-            }
-        }
-
-        // Handle ping and timeout for connected client
-        if (socket_ipc.client_fd >= 0) {
-            time_t now = time(NULL);
-
-            // Send periodic ping to keep connection alive
-            if (now - last_ping_time >= PING_INTERVAL) {
-                if (uds_send_ping(socket_ipc.client_fd) < 0) {
-                    LOG_WARN("Failed to send ping, connection may be broken");
-                    // Connection check will handle this in next iteration
-                }
-                last_ping_time = now;
-            }
-
-            // Check for client timeout (no activity)
-            if (now - last_activity_time >= CLIENT_TIMEOUT) {
-                LOG_INFO("Client timeout after %ld seconds of inactivity, closing connection",
-                        (long)(now - last_activity_time));
-                close(socket_ipc.client_fd);
-                socket_ipc.client_fd = -1;
-                state->socket_streaming_fd = -1;
-                last_activity_time = now; // Reset for next client
-            }
-        }
-
-        // Small sleep to prevent busy waiting
-        usleep(10000); // 10ms
-    }
-
-    // Cleanup
-    uds_cleanup(&socket_ipc);
-    LOG_INFO("Socket-only mode exiting");
-}
-
+// Socket-only mode removed - will be reimplemented with ZMQ
 // Advanced input handler with readline-like keybindings, driven by non-blocking event loop
-static void interactive_mode(ConversationState *state, int socket_ipc_enabled, const char *socket_path) {
+static void interactive_mode(ConversationState *state) {
     const char *prompt = ">>>";
 
     // Initialize TUI
@@ -7928,26 +7341,7 @@ static void interactive_mode(ConversationState *state, int socket_ipc_enabled, c
         }
     }
 
-    // Initialize socket IPC if enabled
-    SocketIPC socket_ipc = {0};
-    if (socket_ipc_enabled && socket_path) {
-        LOG_DEBUG("interactive_mode: Socket IPC enabled, creating socket at path: %s", socket_path);
-        socket_ipc.server_fd = uds_create_unix_socket(socket_path);
-        if (socket_ipc.server_fd < 0) {
-            LOG_ERROR("Failed to create socket, continuing without socket IPC");
-            socket_ipc.enabled = 0;
-            LOG_DEBUG("interactive_mode: Socket creation failed, socket IPC disabled");
-        } else {
-            socket_ipc.client_fd = -1;
-            socket_ipc.socket_path = strdup(socket_path);
-            socket_ipc.enabled = 1;
-            LOG_DEBUG("interactive_mode: Socket IPC initialized successfully - server_fd: %d, path: %s",
-                      socket_ipc.server_fd, socket_ipc.socket_path);
-        }
-    } else {
-        LOG_DEBUG("interactive_mode: Socket IPC not enabled (socket_ipc_enabled: %d, socket_path: %s)",
-                  socket_ipc_enabled, socket_path ? socket_path : "(null)");
-    }
+    // Socket IPC removed - will be reimplemented with ZMQ
 
     InteractiveContext ctx = {
         .state = state,
@@ -7956,12 +7350,11 @@ static void interactive_mode(ConversationState *state, int socket_ipc_enabled, c
         .instruction_queue = instruction_queue_initialized ? &instruction_queue : NULL,
         .tui_queue = tui_queue_initialized ? &tui_queue : NULL,
         .instruction_queue_capacity = instruction_queue_initialized ? (int)AI_QUEUE_CAPACITY : 0,
-        .socket_ipc = socket_ipc,
     };
 
     void *event_loop_queue = tui_queue_initialized ? (void *)&tui_queue : NULL;
     tui_event_loop(&tui, prompt, submit_input_callback, interrupt_callback, NULL,
-                   socket_ipc.enabled ? socket_external_input_callback : NULL,
+                   NULL,  // No socket external input callback
                    &ctx, event_loop_queue);
 
     if (worker_started) {
@@ -7978,8 +7371,7 @@ static void interactive_mode(ConversationState *state, int socket_ipc_enabled, c
         tui_msg_queue_free(&tui_queue);
     }
 
-    // Cleanup socket IPC
-    uds_cleanup(&socket_ipc);
+    // Socket IPC removed - will be reimplemented with ZMQ
 
     // Disable TUI mode for commands before cleanup
     commands_set_tui_mode(0);
@@ -8253,7 +7645,7 @@ int main(int argc, char *argv[]) {
         printf("  %s -r, --resume [ID]             Resume a previous conversation session\n", argv[0]);
         printf("                                      (defaults to most recent session if no ID given)\n");
         printf("  %s -l, --list-sessions [N]       List available sessions (N = max to show)\n", argv[0]);
-        printf("  %s -s, --socket PATH             Enable IPC socket at PATH for remote input\n", argv[0]);
+        // Socket support removed - will be reimplemented with ZMQ
         printf("  %s -h, --help                     Show this help message\n", argv[0]);
         printf("  %s --version                      Show version information\n\n", argv[0]);
         printf("Environment Variables:\n");
@@ -8325,24 +7717,7 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
-    // Check for socket IPC flag
-    int socket_ipc_enabled = 0;
-    char *socket_path = NULL;
-    if ((argc == 2 || argc == 3) && (strcmp(argv[1], "-s") == 0 || strcmp(argv[1], "--socket") == 0)) {
-        LOG_DEBUG("main: Socket IPC flag detected, argc: %d", argc);
-        if (argc != 3) {
-            fprintf(stderr, "Error: Socket path required with --socket option\n");
-            fprintf(stderr, "Usage: %s --socket /path/to/socket\n", argv[0]);
-            return 1;
-        }
-        socket_ipc_enabled = 1;
-        socket_path = argv[2];
-        LOG_INFO("Socket IPC enabled, path: %s", socket_path);
-        LOG_DEBUG("main: Socket IPC configuration - enabled: %d, path: %s",
-                  socket_ipc_enabled, socket_path);
-    } else {
-        LOG_DEBUG("main: Socket IPC flag not detected or not in correct position");
-    }
+    // Socket IPC flag removed - will be reimplemented with ZMQ
 
     // Handle list sessions mode
 #ifndef TEST_BUILD
@@ -8363,6 +7738,7 @@ int main(int argc, char *argv[]) {
     // Check for single command mode: ./klawed "prompt"
     int is_single_command_mode = 0;
     char *single_command = NULL;
+    int socket_ipc_enabled = 0;  // Socket support removed - will be reimplemented with ZMQ
 
     if (argc == 2 && !resume_session && !list_sessions && !socket_ipc_enabled) {
         // Single argument provided - treat as prompt for single command mode
@@ -8374,8 +7750,6 @@ int main(int argc, char *argv[]) {
         LOG_ERROR("Unexpected arguments provided");
         printf("Try '%s --help' for usage information.\n", argv[0]);
         return 1;
-    } else if (argc > 3 && socket_ipc_enabled) {
-        LOG_WARN("Extra arguments provided with -s flag, ignoring them (socket-only mode)");
     }
 
 #ifndef TEST_BUILD
@@ -8691,13 +8065,10 @@ int main(int argc, char *argv[]) {
 
     // Run in appropriate mode
     int exit_code = 0;
-    if (socket_ipc_enabled) {
-        // Socket-only mode: no TUI, only communicate via socket
-        socket_only_mode(&state, socket_path);
-    } else if (is_single_command_mode) {
+    if (is_single_command_mode) {
         exit_code = single_command_mode(&state, single_command);
     } else {
-        interactive_mode(&state, socket_ipc_enabled, socket_path);
+        interactive_mode(&state);
     }
 
     // Cleanup conversation messages
