@@ -15,10 +15,12 @@ The socket accepts connections and reads JSON-formatted messages line by line (n
 
 ## Message Format
 
-All messages sent TO the socket should be:
+All messages sent TO the socket must be valid JSON with the following format:
 ```json
-{ "messageType": "prompt", "content": "Your prompt here" }
+{ "messageType": "TEXT", "content": "Your prompt here" }
 ```
+
+**Note**: Plain text input is no longer supported for socket communication. Clients must send JSON with `messageType: "TEXT"`.
 
 All messages sent FROM the socket follow this simplified JSON schema:
 
@@ -67,7 +69,7 @@ def call_klawed(prompt: str, socket_path: str):
     
     # Send prompt
     message = {
-        "messageType": "prompt",
+        "messageType": "TEXT",
         "content": prompt
     }
     sock.sendall(json.dumps(message).encode() + b'\n')

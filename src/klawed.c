@@ -184,6 +184,128 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 
 // Version
 // ============================================================================
+// Socket Input Parsing
+// ============================================================================
+
+/**
+ * Parse socket input (must be JSON with messageType: "TEXT" and content)
+ * Strict mode: requires valid JSON, no plain text fallback
+ * 
+ * Returns a newly allocated string with the extracted content.
+ * Caller must free the returned string.
+ * 
+ * Returns:
+ * - Extracted content if valid JSON with messageType: "TEXT"
+ * - NULL if:
+ *   - Input is NULL or empty
+ *   - Not valid JSON
+ *   - JSON missing required fields (messageType or content)
+ *   - messageType is not "TEXT"
+ */
+static char* parse_socket_input_strict(const char *input) {
+    if (!input || !input[0]) {
+        LOG_WARN("Socket input is NULL or empty");
+        return NULL;
+    }
+    
+    // Parse as JSON
+    cJSON *json = cJSON_Parse(input);
+    if (!json) {
+        LOG_WARN("Socket input is not valid JSON: %s", input);
+        return NULL;
+    }
+    
+    cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
+    cJSON *content = cJSON_GetObjectItem(json, "content");
+    
+    if (!message_type || !cJSON_IsString(message_type) ||
+        !content || !cJSON_IsString(content)) {
+        LOG_WARN("Socket input JSON missing required fields (messageType or content)");
+        cJSON_Delete(json);
+        return NULL;
+    }
+    
+    // Check if messageType is "TEXT"
+    if (strcmp(message_type->valuestring, "TEXT") != 0) {
+        LOG_WARN("Socket input has unexpected messageType: %s (expected: TEXT)", 
+                 message_type->valuestring);
+        cJSON_Delete(json);
+        return NULL;
+    }
+    
+    char *result = strdup(content->valuestring);
+    cJSON_Delete(json);
+    return result;
+}
+
+/**
+ * Parse input which may be:
+ * 1. JSON with messageType: "TEXT" and content (socket input)
+ * 2. Plain text (TUI/keyboard input)
+ * 
+ * Returns a newly allocated string with the extracted content.
+ * Caller must free the returned string.
+ * 
+ * Returns:
+ * - Extracted content if valid JSON with messageType: "TEXT"
+ * - Original input if not JSON (plain text mode for TUI)
+ * - NULL if:
+ *   - Input is NULL or empty
+ *   - Input starts with '{' but is invalid JSON
+ *   - JSON missing required fields (messageType or content)
+ *   - messageType is not "TEXT"
+ */
+static char* parse_socket_input(const char *input) {
+    if (!input || !input[0]) {
+        LOG_WARN("Input is NULL or empty");
+        return NULL;
+    }
+    
+    // Check if input looks like JSON (starts with '{')
+    // This helps distinguish between socket JSON and TUI plain text
+    int looks_like_json = (input[0] == '{');
+    
+    // Try to parse as JSON
+    cJSON *json = cJSON_Parse(input);
+    if (json) {
+        cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
+        cJSON *content = cJSON_GetObjectItem(json, "content");
+        
+        if (message_type && cJSON_IsString(message_type) &&
+            content && cJSON_IsString(content)) {
+            
+            // Check if messageType is "TEXT"
+            if (strcmp(message_type->valuestring, "TEXT") == 0) {
+                char *result = strdup(content->valuestring);
+                cJSON_Delete(json);
+                return result;
+            } else {
+                LOG_WARN("Input has unexpected messageType: %s (expected: TEXT)", 
+                         message_type->valuestring);
+                cJSON_Delete(json);
+                return NULL;
+            }
+        } else {
+            // JSON but missing required fields
+            LOG_WARN("Input JSON missing required fields (messageType or content)");
+            cJSON_Delete(json);
+            return NULL;
+        }
+    } else {
+        // Not valid JSON
+        if (looks_like_json) {
+            // Input starts with '{' but is invalid JSON
+            LOG_WARN("Input looks like JSON but is invalid: %s", input);
+            return NULL;
+        } else {
+            // Doesn't look like JSON, treat as plain text (TUI input)
+            LOG_DEBUG("Input is plain text (not JSON)");
+            return strdup(input);
+        }
+    }
+}
+
+// ============================================================================
 // Output Helpers
 // ============================================================================
 
@@ -6714,12 +6836,19 @@ static int submit_input_callback(const char *input, void *user_data) {
     // Reset interrupt flag when new input is submitted
     state->interrupt_requested = 0;
 
-    char *input_copy = strdup(input);
-    if (!input_copy) {
-        ui_show_error(tui, queue, "Memory allocation failed");
+    // Parse input (may be JSON with messageType: "TEXT" from socket or plain text from TUI)
+    char *parsed_input = parse_socket_input(input);
+    char *input_copy;
+    
+    if (parsed_input) {
+        // Successfully parsed JSON with messageType: "TEXT" or plain text
+        input_copy = parsed_input;
+    } else {
+        // parse_socket_input returns NULL for invalid JSON or wrong messageType
+        LOG_WARN("Ignoring invalid input");
         return 0;
     }
-
+    
     if (input_copy[0] == '/') {
         ui_append_line(tui, queue, "[User]", input_copy, COLOR_PAIR_USER);
 
@@ -7270,10 +7399,48 @@ static int socket_external_input_callback(void *user_data, char *buffer, int buf
         LOG_DEBUG("socket_external_input_callback: Checking if client fd %d has data", socket_ipc->client_fd);
         if (uds_has_data(socket_ipc->client_fd)) {
             LOG_DEBUG("socket_external_input_callback: Data available on client fd %d, reading...", socket_ipc->client_fd);
-            int bytes = uds_read_input(socket_ipc->client_fd, buffer, (size_t)buffer_size - 1);
+            
+            // Read into temporary buffer first to validate JSON
+            char temp_buffer[4096];
+            int bytes = uds_read_input(socket_ipc->client_fd, temp_buffer, sizeof(temp_buffer) - 1);
             if (bytes > 0) {
-                LOG_DEBUG("socket_external_input_callback: Read %d bytes from socket, returning", bytes);
-                return bytes;
+                temp_buffer[bytes] = '\0';
+                LOG_DEBUG("socket_external_input_callback: Read %d bytes from socket: %s", bytes, temp_buffer);
+                
+                // Parse and validate JSON
+                cJSON *json = cJSON_Parse(temp_buffer);
+                if (json) {
+                    cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
+                    cJSON *content = cJSON_GetObjectItem(json, "content");
+                    
+                    if (message_type && cJSON_IsString(message_type) &&
+                        content && cJSON_IsString(content) &&
+                        strcmp(message_type->valuestring, "TEXT") == 0) {
+                        
+                        // Valid JSON with messageType: "TEXT", extract content
+                        const char *content_str = content->valuestring;
+                        size_t content_len = strlen(content_str);
+                        
+                        if (content_len < (size_t)buffer_size - 1) {
+                            strlcpy(buffer, content_str, (size_t)buffer_size);
+                            cJSON_Delete(json);
+                            LOG_DEBUG("socket_external_input_callback: Extracted content, returning %zu bytes", content_len);
+                            return (int)content_len;
+                        } else {
+                            LOG_WARN("Socket input content too large for buffer: %zu bytes (max: %d)", 
+                                     content_len, buffer_size - 1);
+                            cJSON_Delete(json);
+                            return 0;
+                        }
+                    } else {
+                        LOG_WARN("Socket input missing required fields or wrong messageType");
+                        cJSON_Delete(json);
+                        return 0;
+                    }
+                } else {
+                    LOG_WARN("Socket input is not valid JSON: %s", temp_buffer);
+                    return 0;
+                }
             } else if (bytes < 0) {
                 // Client disconnected
                 LOG_DEBUG("socket_external_input_callback: Client disconnected, closing fd %d", socket_ipc->client_fd);
@@ -7597,8 +7764,17 @@ static void socket_only_mode(ConversationState *state, const char *socket_path) 
                     // Process the input
                     buffer[bytes] = '\0';
 
+                    // Parse socket input (must be JSON with messageType: "TEXT")
+                    char *parsed_input = parse_socket_input_strict(buffer);
+                    if (!parsed_input) {
+                        // parse_socket_input_strict returns NULL for invalid JSON or wrong messageType
+                        LOG_WARN("Ignoring invalid socket input (must be JSON with messageType: TEXT)");
+                        continue;
+                    }
+
                     // Add user message to conversation (but don't display it)
-                    add_user_message(state, buffer);
+                    add_user_message(state, parsed_input);
+                    free(parsed_input);
 
                     // Call API synchronously
                     ApiResponse *response = call_api(state);
