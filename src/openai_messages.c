@@ -344,7 +344,7 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
                 LOG_DEBUG("Validation: Message[%d] (assistant) has %d tool_calls", i, calls_in_msg);
             }
         } else if (strcmp(role->valuestring, "user") == 0) {
-            // Count tool response content blocks
+            // Count tool response content blocks (Anthropic format: user messages with type="tool_result")
             cJSON *content = cJSON_GetObjectItem(msg, "content");
             if (content && cJSON_IsArray(content)) {
                 int content_count = cJSON_GetArraySize(content);
@@ -353,12 +353,17 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
                     cJSON *type = cJSON_GetObjectItem(item, "type");
                     if (type && cJSON_IsString(type) && strcmp(type->valuestring, "tool_result") == 0) {
                         tool_result_count++;
+                        LOG_DEBUG("Validation: Message[%d] (user) has tool_result content block", i);
                     }
                 }
                 if (content_count > 0) {
                     LOG_DEBUG("Validation: Message[%d] (user) has %d content blocks", i, content_count);
                 }
             }
+        } else if (strcmp(role->valuestring, "tool") == 0) {
+            // OpenAI format: separate tool messages
+            tool_result_count++;
+            LOG_DEBUG("Validation: Message[%d] (tool) counted as tool result", i);
         }
     }
 
