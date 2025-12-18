@@ -35,3 +35,5 @@ $ tail -f ./.klawed/logs/klawed.log
 ---
 
 - [ ] ctrl + c doesn't terminate the running tool
+
+- [ ] [2025-12-18 11:57:36] [sess_1766033195_15b39516] WARN  [openai_messages.c:370] build_openai_request: Request may be invalid: 60 tool_calls but only 0 tool_results
