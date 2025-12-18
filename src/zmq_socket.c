@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <time.h>
 
 // Include ZMQ headers if available
 #ifdef HAVE_ZMQ
@@ -289,12 +290,86 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
                 (int)(strlen(content->valuestring) > 200 ? 200 : strlen(content->valuestring)), 
                 content->valuestring);
         
-        // TODO: Actually process the message through the AI
-        // For now, just echo back
-        LOG_DEBUG("ZMQ: Creating echo response for TEXT message");
-        snprintf(response, sizeof(response), 
-                "{\"status\": \"received\", \"message\": \"Processing: %s\", \"timestamp\": %ld}",
-                content->valuestring, time(NULL));
+        // Clear previous conversation (keep system message)
+        LOG_DEBUG("ZMQ: Clearing previous conversation");
+        clear_conversation(state);
+        
+        // Add user message to conversation
+        LOG_DEBUG("ZMQ: Adding user message to conversation");
+        add_user_message(state, content->valuestring);
+        
+        // Call AI API
+        LOG_INFO("ZMQ: Calling AI API for inference");
+        ApiResponse *api_response = call_api_with_retries(state);
+        
+        if (!api_response) {
+            LOG_ERROR("ZMQ: Failed to get response from AI API");
+            snprintf(response, sizeof(response), 
+                    "{\"error\": \"AI inference failed\", \"message\": \"Failed to get response from AI\", \"timestamp\": %ld}",
+                    time(NULL));
+        } else if (api_response->error_message) {
+            LOG_ERROR("ZMQ: AI API returned error: %s", api_response->error_message);
+            snprintf(response, sizeof(response), 
+                    "{\"error\": \"AI inference error\", \"message\": \"%s\", \"timestamp\": %ld}",
+                    api_response->error_message, time(NULL));
+            api_response_free(api_response);
+        } else {
+            // Success! Get the assistant's text response
+            LOG_INFO("ZMQ: AI inference successful");
+            const char *assistant_text = api_response->message.text;
+            if (!assistant_text || strlen(assistant_text) == 0) {
+                LOG_WARN("ZMQ: AI response is empty");
+                assistant_text = "(No text response from AI)";
+            }
+            
+            LOG_DEBUG("ZMQ: Assistant response (first 200 chars): %.*s", 
+                     (int)(strlen(assistant_text) > 200 ? 200 : strlen(assistant_text)), 
+                     assistant_text);
+            
+            // Create JSON response with the AI's text
+            // We need to escape the JSON string properly
+            cJSON *response_json = cJSON_CreateObject();
+            cJSON_AddStringToObject(response_json, "status", "success");
+            cJSON_AddStringToObject(response_json, "message", assistant_text);
+            cJSON_AddNumberToObject(response_json, "timestamp", time(NULL));
+            
+            // Add tool call info if any
+            if (api_response->tool_count > 0) {
+                cJSON_AddNumberToObject(response_json, "tool_count", api_response->tool_count);
+                cJSON *tools_array = cJSON_CreateArray();
+                for (int i = 0; i < api_response->tool_count; i++) {
+                    cJSON *tool_obj = cJSON_CreateObject();
+                    cJSON_AddStringToObject(tool_obj, "name", api_response->tools[i].name);
+                    cJSON_AddItemToArray(tools_array, tool_obj);
+                }
+                cJSON_AddItemToObject(response_json, "tools", tools_array);
+            }
+            
+            char *response_str = cJSON_PrintUnformatted(response_json);
+            if (response_str) {
+                size_t response_len = strlen(response_str);
+                if (response_len < sizeof(response)) {
+                    strlcpy(response, response_str, sizeof(response));
+                } else {
+                    LOG_WARN("ZMQ: Response too large (%zu bytes), truncating to %zu bytes", 
+                            response_len, sizeof(response) - 1);
+                    strlcpy(response, response_str, sizeof(response));
+                    // Add truncation warning
+                    response[sizeof(response) - 1] = '\0';
+                    // Note: The JSON might be malformed due to truncation
+                    // In a production system, we'd want to handle this better
+                }
+                free(response_str);
+            } else {
+                LOG_ERROR("ZMQ: Failed to serialize response JSON");
+                snprintf(response, sizeof(response), 
+                        "{\"error\": \"JSON serialization failed\", \"timestamp\": %ld}",
+                        time(NULL));
+            }
+            
+            cJSON_Delete(response_json);
+            api_response_free(api_response);
+        }
                 
     } else if (action && cJSON_IsString(action)) {
         // Process action

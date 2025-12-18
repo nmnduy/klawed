@@ -5151,7 +5151,7 @@ void api_response_free(ApiResponse *response) {
  * Handles exponential backoff for retryable errors
  * Returns: ApiResponse or NULL on error
  */
-static ApiResponse* call_api_with_retries(ConversationState *state) {
+ApiResponse* call_api_with_retries(ConversationState *state) {
     if (!state) {
         LOG_ERROR("Invalid conversation state");
         return NULL;

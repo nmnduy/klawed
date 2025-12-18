@@ -311,5 +311,16 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching);
  *   raw_response: Raw JSON response string from API
  */
 
+/**
+ * Call API with retry logic (generic wrapper around provider->call_api)
+ * Handles rate limiting, network errors, and other transient failures
+ *
+ * Parameters:
+ *   state: Conversation state with messages and provider configuration
+ * Returns: ApiResponse* on success (caller must free with api_response_free),
+ *          NULL on fatal error
+ */
+ApiResponse* call_api_with_retries(ConversationState *state);
+
 
 #endif // KLAWED_INTERNAL_H
