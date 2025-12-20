@@ -1,4 +1,4 @@
-- [ ] log WARN when finish_reason is 'length'
+- [x] log WARN when finish_reason is 'length' (implemented in klawed.c:6170 and klawed.c:7068)
 - [ ] reasoning effort
     - [ ] providers API diff
         - [ ] deepseek

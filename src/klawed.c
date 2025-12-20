@@ -6162,6 +6162,15 @@ static void process_response(ConversationState *state,
     cJSON *choices = cJSON_GetObjectItem(response->raw_response, "choices");
     if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
         cJSON *choice = cJSON_GetArrayItem(choices, 0);
+        
+        // Check for finish_reason and log WARNING if it's 'length'
+        cJSON *finish_reason = cJSON_GetObjectItem(choice, "finish_reason");
+        if (finish_reason && cJSON_IsString(finish_reason) && finish_reason->valuestring) {
+            if (strcmp(finish_reason->valuestring, "length") == 0) {
+                LOG_WARN("API response stopped due to token limit (finish_reason: 'length')");
+            }
+        }
+        
         cJSON *message = cJSON_GetObjectItem(choice, "message");
         if (message) {
             add_assistant_message_openai(state, message);
@@ -7051,6 +7060,15 @@ static int process_single_command_response(ConversationState *state, ApiResponse
     cJSON *choices = cJSON_GetObjectItem(response->raw_response, "choices");
     if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
         cJSON *choice = cJSON_GetArrayItem(choices, 0);
+        
+        // Check for finish_reason and log WARNING if it's 'length'
+        cJSON *finish_reason = cJSON_GetObjectItem(choice, "finish_reason");
+        if (finish_reason && cJSON_IsString(finish_reason) && finish_reason->valuestring) {
+            if (strcmp(finish_reason->valuestring, "length") == 0) {
+                LOG_WARN("API response stopped due to token limit (finish_reason: 'length')");
+            }
+        }
+        
         cJSON *message = cJSON_GetObjectItem(choice, "message");
         if (message) {
             add_assistant_message_openai(state, message);
