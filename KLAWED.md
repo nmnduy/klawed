@@ -298,11 +298,12 @@ export KLAWED_ZMQ_MODE="daemon"
 **Response format:**
 ```json
 {
-  "status": "received",
-  "message": "Processing: Your prompt here",
-  "timestamp": 1734547200
+  "messageType": "TEXT",
+  "content": "AI-generated response text"
 }
 ```
+
+**Detailed message format documentation:** See `docs/zmq_input_output.md` for complete specification of message types (TEXT and ERROR).
 
 **Available modes:**
 - `daemon` (ZMQ_REP): Listen for requests and respond

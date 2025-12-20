@@ -76,15 +76,6 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
 int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state);
 
 /**
- * Send streaming update via ZMQ socket (for publish-subscribe pattern)
- * @param ctx ZMQ context (should be ZMQ_PUB socket)
- * @param event_type Type of event (e.g., "text", "tool_call", "tool_result")
- * @param data Event data as JSON string
- * @return 0 on success, -1 on failure
- */
-int zmq_socket_send_event(ZMQContext *ctx, const char *event_type, const char *data);
-
-/**
  * Check if ZMQ is available at compile time
  * @return true if ZMQ support is compiled in, false otherwise
  */

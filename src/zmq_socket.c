@@ -264,7 +264,7 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
         LOG_WARN("ZMQ: Sending JSON parse error response");
         char error_response[256];
         snprintf(error_response, sizeof(error_response), 
-                "{\"error\": \"Invalid JSON\", \"message\": \"Failed to parse request\"}");
+                "{\"messageType\": \"ERROR\", \"content\": \"Invalid JSON\"}");
         zmq_socket_send(ctx, error_response, strlen(error_response));
         return -1;
     }
@@ -275,7 +275,6 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
     LOG_DEBUG("ZMQ: Extracting message fields from JSON");
     cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
     cJSON *content = cJSON_GetObjectItem(json, "content");
-    cJSON *action = cJSON_GetObjectItem(json, "action");
     
     char response[ZMQ_BUFFER_SIZE];
     response[0] = '\0';
@@ -305,13 +304,11 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
         if (!api_response) {
             LOG_ERROR("ZMQ: Failed to get response from AI API");
             snprintf(response, sizeof(response), 
-                    "{\"error\": \"AI inference failed\", \"message\": \"Failed to get response from AI\", \"timestamp\": %ld}",
-                    time(NULL));
+                    "{\"messageType\": \"ERROR\", \"content\": \"AI inference failed\"}");
         } else if (api_response->error_message) {
             LOG_ERROR("ZMQ: AI API returned error: %s", api_response->error_message);
             snprintf(response, sizeof(response), 
-                    "{\"error\": \"AI inference error\", \"message\": \"%s\", \"timestamp\": %ld}",
-                    api_response->error_message, time(NULL));
+                    "{\"messageType\": \"ERROR\", \"content\": \"AI inference error\"}");
             api_response_free(api_response);
         } else {
             // Success! Get the assistant's text response
@@ -329,21 +326,8 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
             // Create JSON response with the AI's text
             // We need to escape the JSON string properly
             cJSON *response_json = cJSON_CreateObject();
-            cJSON_AddStringToObject(response_json, "status", "success");
-            cJSON_AddStringToObject(response_json, "message", assistant_text);
-            cJSON_AddNumberToObject(response_json, "timestamp", time(NULL));
-            
-            // Add tool call info if any
-            if (api_response->tool_count > 0) {
-                cJSON_AddNumberToObject(response_json, "tool_count", api_response->tool_count);
-                cJSON *tools_array = cJSON_CreateArray();
-                for (int i = 0; i < api_response->tool_count; i++) {
-                    cJSON *tool_obj = cJSON_CreateObject();
-                    cJSON_AddStringToObject(tool_obj, "name", api_response->tools[i].name);
-                    cJSON_AddItemToArray(tools_array, tool_obj);
-                }
-                cJSON_AddItemToObject(response_json, "tools", tools_array);
-            }
+            cJSON_AddStringToObject(response_json, "messageType", "TEXT");
+            cJSON_AddStringToObject(response_json, "content", assistant_text);
             
             char *response_str = cJSON_PrintUnformatted(response_json);
             if (response_str) {
@@ -363,40 +347,20 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
             } else {
                 LOG_ERROR("ZMQ: Failed to serialize response JSON");
                 snprintf(response, sizeof(response), 
-                        "{\"error\": \"JSON serialization failed\", \"timestamp\": %ld}",
-                        time(NULL));
+                        "{\"messageType\": \"ERROR\", \"content\": \"JSON serialization failed\"}");
             }
             
             cJSON_Delete(response_json);
             api_response_free(api_response);
         }
                 
-    } else if (action && cJSON_IsString(action)) {
-        // Process action
-        LOG_INFO("ZMQ: Processing ACTION message: %s", action->valuestring);
-        
-        if (strcmp(action->valuestring, "ping") == 0) {
-            LOG_DEBUG("ZMQ: Handling ping action");
-            snprintf(response, sizeof(response), 
-                    "{\"status\": \"ok\", \"action\": \"pong\", \"timestamp\": %ld}", time(NULL));
-        } else if (strcmp(action->valuestring, "status") == 0) {
-            LOG_DEBUG("ZMQ: Handling status action");
-            snprintf(response, sizeof(response), 
-                    "{\"status\": \"ok\", \"mode\": \"zmq\", \"endpoint\": \"%s\", \"timestamp\": %ld}",
-                    ctx->endpoint, time(NULL));
-        } else {
-            LOG_WARN("ZMQ: Unknown action requested: %s", action->valuestring);
-            snprintf(response, sizeof(response), 
-                    "{\"error\": \"Unknown action\", \"action\": \"%s\"}", action->valuestring);
-        }
     } else {
         LOG_WARN("ZMQ: Invalid message format received");
-        LOG_DEBUG("ZMQ: Available fields - messageType: %s, content: %s, action: %s",
+        LOG_DEBUG("ZMQ: Available fields - messageType: %s, content: %s",
                  message_type ? "present" : "missing",
-                 content ? "present" : "missing",
-                 action ? "present" : "missing");
+                 content ? "present" : "missing");
         snprintf(response, sizeof(response), 
-                "{\"error\": \"Invalid message format\", \"required\": \"messageType: TEXT and content or action field\"}");
+                "{\"messageType\": \"ERROR\", \"content\": \"Invalid message format\"}");
     }
     
     cJSON_Delete(json);
@@ -488,64 +452,6 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     return -1;
 #endif
 }
-
-int zmq_socket_send_event(ZMQContext *ctx, const char *event_type, const char *data) {
-#ifdef HAVE_ZMQ
-    if (!ctx || !ctx->socket || !event_type || !data) {
-        LOG_ERROR("ZMQ: Invalid parameters for send_event");
-        return -1;
-    }
-    
-    if (ctx->socket_type != ZMQ_PUB) {
-        LOG_ERROR("ZMQ: send_event requires ZMQ_PUB socket type");
-        return -1;
-    }
-    
-    LOG_DEBUG("ZMQ: Creating event: %s", event_type);
-    LOG_DEBUG("ZMQ: Event data (first 200 chars): %.*s", 
-             (int)(strlen(data) > 200 ? 200 : strlen(data)), data);
-    
-    cJSON *event = cJSON_CreateObject();
-    if (!event) {
-        LOG_ERROR("ZMQ: Failed to create JSON object for event");
-        return -1;
-    }
-    LOG_DEBUG("ZMQ: Created JSON object for event");
-    
-    cJSON_AddStringToObject(event, "event", event_type);
-    cJSON_AddStringToObject(event, "data", data);
-    cJSON_AddNumberToObject(event, "timestamp", time(NULL));
-    LOG_DEBUG("ZMQ: Added fields to event JSON");
-    
-    char *json_str = cJSON_PrintUnformatted(event);
-    if (!json_str) {
-        LOG_ERROR("ZMQ: Failed to serialize event to JSON");
-        cJSON_Delete(event);
-        return -1;
-    }
-    LOG_DEBUG("ZMQ: Serialized event to JSON (length: %zu)", strlen(json_str));
-    
-    int rc = zmq_socket_send(ctx, json_str, strlen(json_str));
-    if (rc == 0) {
-        LOG_INFO("ZMQ: Event '%s' sent successfully", event_type);
-    } else {
-        LOG_ERROR("ZMQ: Failed to send event '%s'", event_type);
-    }
-    
-    free(json_str);
-    cJSON_Delete(event);
-    LOG_DEBUG("ZMQ: Cleaned up event resources");
-    
-    return rc;
-#else
-    (void)ctx;
-    (void)event_type;
-    (void)data;
-    return -1;
-#endif
-}
-
-
 
 bool zmq_socket_available(void) {
 #ifdef HAVE_ZMQ

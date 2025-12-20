@@ -51,9 +51,6 @@ int main(void) {
     result = zmq_socket_daemon_mode(NULL, &state);
     printf("zmq_socket_daemon_mode returned: %d\n", result);
     
-    result = zmq_socket_send_event(NULL, "test", "data");
-    printf("zmq_socket_send_event returned: %d\n", result);
-    
     free(state.session_id);
     
     printf("All ZMQ socket tests passed!\n");

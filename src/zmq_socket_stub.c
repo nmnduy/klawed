@@ -44,13 +44,6 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     return -1;
 }
 
-int zmq_socket_send_event(ZMQContext *ctx, const char *event_type, const char *data) {
-    (void)ctx;
-    (void)event_type;
-    (void)data;
-    return -1;
-}
-
 bool zmq_socket_available(void) {
     return false;
 }
