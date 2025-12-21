@@ -250,6 +250,29 @@ void conversation_free(ConversationState *state);
 char* build_system_prompt(ConversationState *state);
 
 /**
+ * Add tool results to conversation state
+ * Returns: 0 on success, -1 on error
+ */
+int add_tool_results(ConversationState *state, InternalContent *results, int count);
+
+/**
+ * Check if a tool is allowed (present in the tools list sent to API)
+ * Returns: 1 if allowed, 0 if not allowed
+ */
+int is_tool_allowed(const char *tool_name, ConversationState *state);
+
+/**
+ * Execute a tool with given input
+ * Returns: JSON result object (caller must free with cJSON_Delete)
+ */
+cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *state);
+
+/**
+ * Add assistant message from OpenAI format JSON
+ */
+void add_assistant_message_openai(ConversationState *state, cJSON *message);
+
+/**
  * Check for ESC key press without blocking
  * Returns: 1 if ESC was pressed, 0 otherwise
  */

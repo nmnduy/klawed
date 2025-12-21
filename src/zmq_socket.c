@@ -9,15 +9,22 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <time.h>
+#include <ctype.h>
 
 // Include ZMQ headers if available
 #ifdef HAVE_ZMQ
 #include <zmq.h>
 #include <cjson/cJSON.h>
+#include <ctype.h>
 #endif
 
 // Default buffer size for ZMQ messages
 #define ZMQ_BUFFER_SIZE 65536
+
+// Forward declaration
+#ifdef HAVE_ZMQ
+static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *state, const char *user_input);
+#endif
 
 ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
 #ifdef HAVE_ZMQ
@@ -283,75 +290,27 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
         strcmp(message_type->valuestring, "TEXT") == 0 && 
         content && cJSON_IsString(content)) {
         
-        // Process text message
-        LOG_INFO("ZMQ: Processing TEXT message (length: %zu)", strlen(content->valuestring));
+        // Process text message with interactive tool call support
+        LOG_INFO("ZMQ: Processing TEXT message with interactive mode (length: %zu)", strlen(content->valuestring));
         LOG_DEBUG("ZMQ: Message content: %.*s", 
                 (int)(strlen(content->valuestring) > 200 ? 200 : strlen(content->valuestring)), 
                 content->valuestring);
         
-        // Clear previous conversation (keep system message)
-        LOG_DEBUG("ZMQ: Clearing previous conversation");
-        clear_conversation(state);
+        // Don't clear conversation - maintain context across messages in daemon mode
+        // This allows multi-turn conversations like interactive mode
         
-        // Add user message to conversation
-        LOG_DEBUG("ZMQ: Adding user message to conversation");
-        add_user_message(state, content->valuestring);
+        // Process interactively (handles tool calls recursively)
+        int interactive_result = zmq_process_interactive(ctx, state, content->valuestring);
         
-        // Call AI API
-        LOG_INFO("ZMQ: Calling AI API for inference");
-        ApiResponse *api_response = call_api_with_retries(state);
-        
-        if (!api_response) {
-            LOG_ERROR("ZMQ: Failed to get response from AI API");
+        if (interactive_result != 0) {
+            LOG_ERROR("ZMQ: Interactive processing failed");
             snprintf(response, sizeof(response), 
-                    "{\"messageType\": \"ERROR\", \"content\": \"AI inference failed\"}");
-        } else if (api_response->error_message) {
-            LOG_ERROR("ZMQ: AI API returned error: %s", api_response->error_message);
-            snprintf(response, sizeof(response), 
-                    "{\"messageType\": \"ERROR\", \"content\": \"AI inference error\"}");
-            api_response_free(api_response);
+                    "{\"messageType\": \"ERROR\", \"content\": \"Interactive processing failed\"}");
         } else {
-            // Success! Get the assistant's text response
-            LOG_INFO("ZMQ: AI inference successful");
-            const char *assistant_text = api_response->message.text;
-            if (!assistant_text || strlen(assistant_text) == 0) {
-                LOG_WARN("ZMQ: AI response is empty");
-                assistant_text = "(No text response from AI)";
-            }
-            
-            LOG_DEBUG("ZMQ: Assistant response (first 200 chars): %.*s", 
-                     (int)(strlen(assistant_text) > 200 ? 200 : strlen(assistant_text)), 
-                     assistant_text);
-            
-            // Create JSON response with the AI's text
-            // We need to escape the JSON string properly
-            cJSON *response_json = cJSON_CreateObject();
-            cJSON_AddStringToObject(response_json, "messageType", "TEXT");
-            cJSON_AddStringToObject(response_json, "content", assistant_text);
-            
-            char *response_str = cJSON_PrintUnformatted(response_json);
-            if (response_str) {
-                size_t response_len = strlen(response_str);
-                if (response_len < sizeof(response)) {
-                    strlcpy(response, response_str, sizeof(response));
-                } else {
-                    LOG_WARN("ZMQ: Response too large (%zu bytes), truncating to %zu bytes", 
-                            response_len, sizeof(response) - 1);
-                    strlcpy(response, response_str, sizeof(response));
-                    // Add truncation warning
-                    response[sizeof(response) - 1] = '\0';
-                    // Note: The JSON might be malformed due to truncation
-                    // In a production system, we'd want to handle this better
-                }
-                free(response_str);
-            } else {
-                LOG_ERROR("ZMQ: Failed to serialize response JSON");
-                snprintf(response, sizeof(response), 
-                        "{\"messageType\": \"ERROR\", \"content\": \"JSON serialization failed\"}");
-            }
-            
-            cJSON_Delete(response_json);
-            api_response_free(api_response);
+            // Success - responses are sent during interactive processing
+            // Send a final completion message
+            snprintf(response, sizeof(response), 
+                    "{\"messageType\": \"COMPLETED\", \"content\": \"Interactive processing completed successfully\"}");
         }
                 
     } else {
@@ -388,6 +347,310 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
     (void)ctx;
     (void)state;
     (void)tui;
+    return -1;
+#endif
+}
+
+// Helper function to send a JSON response
+static int zmq_send_json_response(ZMQContext *ctx, const char *message_type, const char *content) {
+#ifdef HAVE_ZMQ
+    if (!ctx || !message_type) {
+        LOG_ERROR("ZMQ: Invalid parameters for send_json_response");
+        return -1;
+    }
+    
+    cJSON *response_json = cJSON_CreateObject();
+    if (!response_json) {
+        LOG_ERROR("ZMQ: Failed to create response JSON object");
+        return -1;
+    }
+    
+    cJSON_AddStringToObject(response_json, "messageType", message_type);
+    if (content) {
+        cJSON_AddStringToObject(response_json, "content", content);
+    }
+    
+    char *response_str = cJSON_PrintUnformatted(response_json);
+    if (!response_str) {
+        LOG_ERROR("ZMQ: Failed to serialize response JSON");
+        cJSON_Delete(response_json);
+        return -1;
+    }
+    
+    int result = zmq_socket_send(ctx, response_str, strlen(response_str));
+    free(response_str);
+    cJSON_Delete(response_json);
+    
+    return result;
+#else
+    (void)ctx;
+    (void)message_type;
+    (void)content;
+    return -1;
+#endif
+}
+
+// Helper function to send a tool result response
+static int zmq_send_tool_result(ZMQContext *ctx, const char *tool_name, const char *tool_id, cJSON *tool_output, int is_error) {
+#ifdef HAVE_ZMQ
+    if (!ctx || !tool_name || !tool_id) {
+        LOG_ERROR("ZMQ: Invalid parameters for send_tool_result");
+        return -1;
+    }
+    
+    cJSON *response_json = cJSON_CreateObject();
+    if (!response_json) {
+        LOG_ERROR("ZMQ: Failed to create tool result JSON object");
+        return -1;
+    }
+    
+    cJSON_AddStringToObject(response_json, "messageType", "TOOL_RESULT");
+    cJSON_AddStringToObject(response_json, "toolName", tool_name);
+    cJSON_AddStringToObject(response_json, "toolId", tool_id);
+    
+    if (tool_output) {
+        cJSON_AddItemToObject(response_json, "toolOutput", cJSON_Duplicate(tool_output, 1));
+    } else {
+        cJSON_AddNullToObject(response_json, "toolOutput");
+    }
+    
+    cJSON_AddBoolToObject(response_json, "isError", is_error ? 1 : 0);
+    
+    char *response_str = cJSON_PrintUnformatted(response_json);
+    if (!response_str) {
+        LOG_ERROR("ZMQ: Failed to serialize tool result JSON");
+        cJSON_Delete(response_json);
+        return -1;
+    }
+    
+    int result = zmq_socket_send(ctx, response_str, strlen(response_str));
+    free(response_str);
+    cJSON_Delete(response_json);
+    
+    return result;
+#else
+    (void)ctx;
+    (void)tool_name;
+    (void)tool_id;
+    (void)tool_output;
+    (void)is_error;
+    return -1;
+#endif
+}
+
+// Helper function to send a user prompt request
+__attribute__((unused)) static int zmq_send_user_prompt(ZMQContext *ctx, const char *prompt) {
+#ifdef HAVE_ZMQ
+    if (!ctx) {
+        LOG_ERROR("ZMQ: Invalid parameters for send_user_prompt");
+        return -1;
+    }
+    
+    cJSON *response_json = cJSON_CreateObject();
+    if (!response_json) {
+        LOG_ERROR("ZMQ: Failed to create user prompt JSON object");
+        return -1;
+    }
+    
+    cJSON_AddStringToObject(response_json, "messageType", "USER_PROMPT");
+    if (prompt) {
+        cJSON_AddStringToObject(response_json, "content", prompt);
+    } else {
+        cJSON_AddStringToObject(response_json, "content", "Please provide additional information or confirm the action:");
+    }
+    
+    char *response_str = cJSON_PrintUnformatted(response_json);
+    if (!response_str) {
+        LOG_ERROR("ZMQ: Failed to serialize user prompt JSON");
+        cJSON_Delete(response_json);
+        return -1;
+    }
+    
+    int result = zmq_socket_send(ctx, response_str, strlen(response_str));
+    free(response_str);
+    cJSON_Delete(response_json);
+    
+    return result;
+#else
+    (void)ctx;
+    (void)prompt;
+    return -1;
+#endif
+}
+
+// Process ZMQ message with interactive tool call support
+static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *state, const char *user_input) {
+#ifdef HAVE_ZMQ
+    if (!ctx || !state || !user_input) {
+        LOG_ERROR("ZMQ: Invalid parameters for process_interactive");
+        return -1;
+    }
+    
+    LOG_INFO("ZMQ: Processing interactive message: %.*s", 
+             (int)(strlen(user_input) > 200 ? 200 : strlen(user_input)), user_input);
+    
+    // Add user message to conversation
+    add_user_message(state, user_input);
+    
+    // Main interactive loop
+    int iteration = 0;
+    const int MAX_ITERATIONS = 50; // Safety limit
+    
+    while (iteration < MAX_ITERATIONS) {
+        iteration++;
+        LOG_DEBUG("ZMQ: Interactive loop iteration %d", iteration);
+        
+        // Call AI API
+        LOG_INFO("ZMQ: Calling AI API");
+        ApiResponse *api_response = call_api_with_retries(state);
+        
+        if (!api_response) {
+            LOG_ERROR("ZMQ: Failed to get response from AI API");
+            zmq_send_json_response(ctx, "ERROR", "AI inference failed");
+            return -1;
+        }
+        
+        if (api_response->error_message) {
+            LOG_ERROR("ZMQ: AI API returned error: %s", api_response->error_message);
+            zmq_send_json_response(ctx, "ERROR", api_response->error_message);
+            api_response_free(api_response);
+            return -1;
+        }
+        
+        // Send assistant's text response if present
+        if (api_response->message.text && api_response->message.text[0] != '\0') {
+            // Skip whitespace-only content
+            const char *p = api_response->message.text;
+            while (*p && isspace((unsigned char)*p)) p++;
+            
+            if (*p != '\0') {  // Has non-whitespace content
+                LOG_INFO("ZMQ: Sending assistant text response");
+                zmq_send_json_response(ctx, "TEXT", p);
+            }
+        }
+        
+        // Add assistant message to conversation history
+        if (api_response->raw_response) {
+            cJSON *choices = cJSON_GetObjectItem(api_response->raw_response, "choices");
+            if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
+                cJSON *choice = cJSON_GetArrayItem(choices, 0);
+                cJSON *message = cJSON_GetObjectItem(choice, "message");
+                if (message) {
+                    add_assistant_message_openai(state, message);
+                }
+            }
+        }
+        
+        // Process tool calls
+        int tool_count = api_response->tool_count;
+        ToolCall *tool_calls_array = api_response->tools;
+        
+        if (tool_count > 0) {
+            LOG_INFO("ZMQ: Processing %d tool call(s)", tool_count);
+            
+            // Allocate results array
+            InternalContent *results = calloc((size_t)tool_count, sizeof(InternalContent));
+            if (!results) {
+                LOG_ERROR("ZMQ: Failed to allocate tool result buffer");
+                zmq_send_json_response(ctx, "ERROR", "Failed to allocate tool result buffer");
+                api_response_free(api_response);
+                return -1;
+            }
+            
+            // Execute tools synchronously
+            for (int i = 0; i < tool_count; i++) {
+                ToolCall *tool = &tool_calls_array[i];
+                if (!tool->name || !tool->id) {
+                    LOG_WARN("ZMQ: Tool call missing name or id, skipping");
+                    results[i].type = INTERNAL_TOOL_RESPONSE;
+                    results[i].tool_id = tool->id ? strdup(tool->id) : strdup("unknown");
+                    results[i].tool_name = tool->name ? strdup(tool->name) : strdup("tool");
+                    results[i].tool_output = cJSON_CreateObject();
+                    cJSON_AddStringToObject(results[i].tool_output, "error", "Tool call missing name or id");
+                    results[i].is_error = 1;
+                    continue;
+                }
+                
+                LOG_INFO("ZMQ: Executing tool: %s (id: %s)", tool->name, tool->id);
+                
+                // Validate that the tool is in the allowed tools list (prevent hallucination)
+                if (!is_tool_allowed(tool->name, state)) {
+                    LOG_ERROR("ZMQ: Tool validation failed: '%s' was not provided in tools list", tool->name);
+                    results[i].type = INTERNAL_TOOL_RESPONSE;
+                    results[i].tool_id = strdup(tool->id);
+                    results[i].tool_name = strdup(tool->name);
+                    results[i].tool_output = cJSON_CreateObject();
+                    char error_msg[512];
+                    snprintf(error_msg, sizeof(error_msg),
+                             "ERROR: Tool '%s' does not exist or was not provided to you. "
+                             "Please check the list of available tools and try again with a valid tool name.",
+                             tool->name);
+                    cJSON_AddStringToObject(results[i].tool_output, "error", error_msg);
+                    results[i].is_error = 1;
+                    
+                    // Send error response
+                    zmq_send_tool_result(ctx, tool->name, tool->id, results[i].tool_output, 1);
+                    continue;
+                }
+                
+                // Convert ToolCall to execute_tool parameters
+                cJSON *input = tool->parameters
+                    ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
+                    : cJSON_CreateObject();
+                
+                // Execute tool synchronously
+                cJSON *tool_result = execute_tool(tool->name, input, state);
+                
+                // Send tool result response
+                zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
+                
+                // Store tool result
+                results[i].type = INTERNAL_TOOL_RESPONSE;
+                results[i].tool_id = strdup(tool->id);
+                results[i].tool_name = strdup(tool->name);
+                results[i].tool_output = tool_result ? cJSON_Duplicate(tool_result, 1) : cJSON_CreateObject();
+                results[i].is_error = 0;
+                
+                // Clean up
+                if (input) cJSON_Delete(input);
+                if (tool_result) cJSON_Delete(tool_result);
+            }
+            
+            // Add tool results to conversation
+            if (add_tool_results(state, results, tool_count) != 0) {
+                LOG_ERROR("ZMQ: Failed to add tool results to conversation");
+                // Results were already freed by add_tool_results
+                results = NULL;
+                zmq_send_json_response(ctx, "ERROR", "Failed to add tool results to conversation");
+                api_response_free(api_response);
+                return -1;
+            }
+            
+            // Continue loop to process next AI response with tool results
+            api_response_free(api_response);
+            continue;
+        }
+        
+        // Check if we need user input (e.g., assistant is asking a question)
+        // For now, we'll just finish after processing all tool calls
+        // In the future, we could analyze the response to detect questions
+        
+        api_response_free(api_response);
+        break;
+    }
+    
+    if (iteration >= MAX_ITERATIONS) {
+        LOG_WARN("ZMQ: Reached maximum iterations (%d), stopping interactive loop", MAX_ITERATIONS);
+        zmq_send_json_response(ctx, "ERROR", "Maximum iteration limit reached");
+        return -1;
+    }
+    
+    LOG_INFO("ZMQ: Interactive processing completed successfully");
+    return 0;
+#else
+    (void)ctx;
+    (void)state;
+    (void)user_input;
     return -1;
 #endif
 }

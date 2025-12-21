@@ -12,7 +12,7 @@ All messages are JSON objects with at least a `messageType` field that indicates
 
 ### Common Fields
 
-- `messageType` (string, required): Type of message ("TEXT" or "ERROR")
+- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL_RESULT", "USER_PROMPT", or "COMPLETED")
 - `content` (string, optional): Primary content/message text
 
 ## Input Messages (Client → Klawed)
@@ -54,7 +54,7 @@ Response to a TEXT request with AI-generated content.
 ```
 
 **Fields:**
-- `messageType`: Always "TEXT" for successful responses
+- `messageType`: Always "TEXT" for text responses
 - `content`: The AI-generated response text
 
 **Example:**
@@ -65,7 +65,87 @@ Response to a TEXT request with AI-generated content.
 }
 ```
 
-### 2. Error Response
+### 2. Tool Result Response
+
+Sent when a tool execution completes during interactive processing.
+
+```json
+{
+  "messageType": "TOOL_RESULT",
+  "toolName": "ToolName",
+  "toolId": "tool_call_abc123",
+  "toolOutput": {
+    "result": "tool output data"
+  },
+  "isError": false
+}
+```
+
+**Fields:**
+- `messageType`: Always "TOOL_RESULT"
+- `toolName`: Name of the tool that was executed
+- `toolId`: ID of the tool call (matches the tool call ID from the AI)
+- `toolOutput`: JSON object containing the tool execution results
+- `isError`: Boolean indicating if the tool execution resulted in an error
+
+**Example (successful tool execution):**
+```json
+{
+  "messageType": "TOOL_RESULT",
+  "toolName": "Read",
+  "toolId": "tool_call_abc123",
+  "toolOutput": {
+    "content": "File contents here...",
+    "file_path": "/path/to/file.txt"
+  },
+  "isError": false
+}
+```
+
+**Example (tool error):**
+```json
+{
+  "messageType": "TOOL_RESULT",
+  "toolName": "Read",
+  "toolId": "tool_call_abc123",
+  "toolOutput": {
+    "error": "File not found: /path/to/nonexistent.txt"
+  },
+  "isError": true
+}
+```
+
+### 3. User Prompt Response
+
+Sent when the AI needs additional information from the user (not currently used, reserved for future use).
+
+```json
+{
+  "messageType": "USER_PROMPT",
+  "content": "Please provide additional information"
+}
+```
+
+**Fields:**
+- `messageType`: Always "USER_PROMPT"
+- `content`: Prompt text asking for user input
+
+### 4. Completion Response
+
+Sent when interactive processing is complete.
+
+```json
+{
+  "messageType": "COMPLETED",
+  "content": "Interactive processing completed successfully"
+}
+```
+
+**Fields:**
+- `messageType`: Always "COMPLETED"
+- `content`: Status message
+
+### 5. Error Response
 
 Error messages for various failure conditions.
 
@@ -104,7 +184,7 @@ Error messages for various failure conditions.
 
 ## Message Flow Examples
 
-### Successful Text Processing
+### Simple Text Processing
 
 **Client sends:**
 ```json
@@ -121,6 +201,76 @@ Error messages for various failure conditions.
   "content": "2+2 equals 4."
 }
 ```
+
+### Interactive Processing with Tool Calls
+
+**Client sends:**
+```json
+{
+  "messageType": "TEXT",
+  "content": "Read the file README.md and tell me what it says"
+}
+```
+
+**Klawed responds with multiple messages:**
+
+1. First, the AI might decide to use a tool:
+```json
+{
+  "messageType": "TOOL_RESULT",
+  "toolName": "Read",
+  "toolId": "tool_call_abc123",
+  "toolOutput": {
+    "content": "# My Project\n\nThis is a sample README file...",
+    "file_path": "README.md"
+  },
+  "isError": false
+}
+```
+
+2. Then the AI processes the tool result and responds:
+```json
+{
+  "messageType": "TEXT",
+  "content": "The README.md file contains: '# My Project\\n\\nThis is a sample README file...'"
+}
+```
+
+3. Finally, when processing is complete:
+```json
+{
+  "messageType": "COMPLETED",
+  "content": "Interactive processing completed successfully"
+}
+```
+
+### Multi-turn Conversation
+
+**First client message:**
+```json
+{
+  "messageType": "TEXT",
+  "content": "What's in the current directory?"
+}
+```
+
+**Klawed responds (after possible tool calls):**
+```json
+{
+  "messageType": "TEXT",
+  "content": "The current directory contains: README.md, src/, tests/"
+}
+```
+
+**Client sends follow-up (conversation context is maintained):**
+```json
+{
+  "messageType": "TEXT",
+  "content": "Now read the README.md file"
+}
+```
+
+**Klawed responds with tool result and text response as above.**
 
 ### Error Case
 
@@ -163,7 +313,7 @@ Error messages for various failure conditions.
 
 ## Usage Examples
 
-### Python Client Example
+### Python Client Example (Simple)
 
 ```python
 import zmq
@@ -188,6 +338,56 @@ if response_data.get("messageType") == "TEXT":
     print("AI Response:", response_data.get("content"))
 elif response_data.get("messageType") == "ERROR":
     print("Error:", response_data.get("content"))
+```
+
+### Python Client Example (Interactive with Tool Calls)
+
+```python
+import zmq
+import json
+
+context = zmq.Context()
+socket = context.socket(zmq.REQ)
+socket.connect("tcp://127.0.0.1:5555")
+
+def send_and_receive(request):
+    """Send request and handle multiple response types"""
+    socket.send(json.dumps(request).encode('utf-8'))
+    
+    while True:
+        response = socket.recv()
+        response_data = json.loads(response.decode('utf-8'))
+        msg_type = response_data.get("messageType")
+        
+        if msg_type == "TEXT":
+            print(f"AI: {response_data.get('content')}")
+        elif msg_type == "TOOL_RESULT":
+            tool_name = response_data.get("toolName")
+            is_error = response_data.get("isError", False)
+            if is_error:
+                print(f"Tool {tool_name} error: {response_data.get('toolOutput', {}).get('error', 'Unknown error')}")
+            else:
+                print(f"Tool {tool_name} executed successfully")
+        elif msg_type == "COMPLETED":
+            print(f"Completed: {response_data.get('content')}")
+            break
+        elif msg_type == "ERROR":
+            print(f"Error: {response_data.get('content')}")
+            break
+        elif msg_type == "USER_PROMPT":
+            # Not currently used, but could prompt user for input
+            user_input = input(f"{response_data.get('content')} ")
+            send_and_receive({
+                "messageType": "TEXT",
+                "content": user_input
+            })
+            break
+
+# Send initial request
+send_and_receive({
+    "messageType": "TEXT",
+    "content": "Read the README.md file and summarize it"
+})
 ```
 
 ## Best Practices

@@ -2553,7 +2553,7 @@ STATIC cJSON* tool_write(cJSON *params, ConversationState *state) {
 // ============================================================================
 
 // Forward declaration
-static cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *state);
+
 
 typedef void (*ToolCompletionCallback)(const ToolCompletion *completion, void *user_data);
 
@@ -4077,7 +4077,7 @@ static const int num_tools = sizeof(tools) / sizeof(Tool);
 
 // Validate that a tool name is in the provided tools list
 // Returns 1 if valid, 0 if invalid (hallucinated)
-static int is_tool_allowed(const char *tool_name, ConversationState *state) {
+int is_tool_allowed(const char *tool_name, ConversationState *state) {
     if (!tool_name || !state) {
         return 0;
     }
@@ -4112,7 +4112,7 @@ static int is_tool_allowed(const char *tool_name, ConversationState *state) {
     return found;
 }
 
-static cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *state) {
+cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *state) {
     // Time the tool execution
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
@@ -5845,7 +5845,7 @@ void add_user_message(ConversationState *state, const char *text) {
 }
 
 // Parse OpenAI message format and add to conversation
-static void add_assistant_message_openai(ConversationState *state, cJSON *message) {
+void add_assistant_message_openai(ConversationState *state, cJSON *message) {
     if (conversation_state_lock(state) != 0) {
         return;
     }
@@ -6018,7 +6018,7 @@ static int check_todo_write_executed(InternalContent *results, int count) {
 }
 
 // Returns 0 on success, -1 on failure
-static int add_tool_results(ConversationState *state, InternalContent *results, int count) {
+int add_tool_results(ConversationState *state, InternalContent *results, int count) {
     LOG_DEBUG("add_tool_results: Adding %d tool results to conversation", count);
 
     if (conversation_state_lock(state) != 0) {
