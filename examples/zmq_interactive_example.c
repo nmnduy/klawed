@@ -89,10 +89,18 @@ int main() {
     
     zmq_send(socket, request_str2, strlen(request_str2), 0);
     
-    // Handle multiple responses
+    // Handle multiple responses with timeout
+    int timeout_ms = 5000; // Initial timeout: 5 seconds
+    zmq_setsockopt(socket, ZMQ_RCVTIMEO, &timeout_ms, sizeof(timeout_ms));
+    
     while (1) {
         bytes = zmq_recv(socket, buffer, BUFFER_SIZE - 1, 0);
-        if (bytes <= 0) break;
+        if (bytes <= 0) {
+            if (bytes == -1 && errno == EAGAIN) {
+                printf("No more messages (timeout)\\n");
+            }
+            break;
+        }
         
         buffer[bytes] = '\0';
         cJSON *response = cJSON_Parse(buffer);
@@ -125,10 +133,6 @@ int main() {
                     printf("Tool %s executed successfully\n", tool_name->valuestring);
                 }
             }
-        } else if (strcmp(type, "COMPLETED") == 0) {
-            printf("Processing completed\n");
-            cJSON_Delete(response);
-            break;
         } else if (strcmp(type, "ERROR") == 0) {
             cJSON *content = cJSON_GetObjectItem(response, "content");
             if (content && cJSON_IsString(content)) {
@@ -139,6 +143,10 @@ int main() {
         }
         
         cJSON_Delete(response);
+        
+        // Reduce timeout for subsequent messages (shorter wait)
+        timeout_ms = 1000; // 1 second timeout for next message
+        zmq_setsockopt(socket, ZMQ_RCVTIMEO, &timeout_ms, sizeof(timeout_ms));
     }
     
     free(request_str2);
