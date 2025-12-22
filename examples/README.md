@@ -121,7 +121,7 @@ cd .. && ./build/klawed --zmq tcp://127.0.0.1:5555
 
 ## Notes
 
-1. **Current Implementation**: The ZMQ implementation in Klawed supports request-reply pattern for daemon mode and can process messages through the AI.
+1. **Current Implementation**: The ZMQ implementation in Klawed uses PAIR socket pattern (peer-to-peer) for daemon mode and can process messages through the AI.
 
 2. **Endpoints**: You can use different transport types:
    - `tcp://127.0.0.1:5555` - TCP socket (default)

@@ -2,7 +2,7 @@
  * zmq_socket.h - ZeroMQ socket interface for Klawed
  *
  * Provides IPC communication via ZeroMQ sockets for external integration.
- * Supports both request-reply and publish-subscribe patterns.
+ * Uses PAIR socket pattern for peer-to-peer communication.
  */
 
 #ifndef ZMQ_SOCKET_H
@@ -39,7 +39,7 @@ typedef struct ZMQContext {
     void *context;      // ZMQ context
     void *socket;       // ZMQ socket
     char *endpoint;     // Socket endpoint (e.g., "tcp://127.0.0.1:5555")
-    int socket_type;    // ZMQ socket type (ZMQ_PAIR, ZMQ_PUB, etc.)
+    int socket_type;    // ZMQ socket type (ZMQ_PAIR only)
     bool enabled;       // Whether ZMQ mode is enabled
     bool daemon_mode;   // Whether running in daemon mode (listen for requests)
     
@@ -62,7 +62,7 @@ typedef struct ZMQContext {
     bool heartbeat_enabled;
     bool reconnect_enabled;
     
-    // Reliable message queues (for PUB/SUB pattern)
+    // Reliable message queues (reserved for future use)
     ZMQMessageQueue *send_queue;    // Queue for outgoing messages
     ZMQMessageQueue *receive_queue; // Queue for incoming messages (future use)
     
