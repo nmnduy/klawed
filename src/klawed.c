@@ -5586,6 +5586,21 @@ char* build_system_prompt(ConversationState *state) {
         prompt_size += strlen(state->additional_dirs[i]) + 4; // path + ", " separator
     }
 
+    // Add space for DeepSeek instruction if needed (case-insensitive check)
+    if (state->api_url) {
+        // Case-insensitive check for "deepseek" in API URL
+        char *url_lower = strdup(state->api_url);
+        if (url_lower) {
+            for (char *p = url_lower; *p; p++) {
+                *p = (char)tolower((unsigned char)*p);
+            }
+            if (strstr(url_lower, "deepseek") != NULL) {
+                prompt_size += 512; // Extra space for DeepSeek instruction
+            }
+            free(url_lower);
+        }
+    }
+
     char *prompt = malloc(prompt_size);
     if (!prompt) {
         free(date);
@@ -5647,6 +5662,24 @@ char* build_system_prompt(ConversationState *state) {
             "- Templates and examples\n"
             "- Best practices and coding standards\n"
             "Use the Read, Glob, and Grep tools to explore SKILLS/ contents when they might be relevant to your current task.\n");
+    }
+
+    // Add DeepSeek-specific instruction if API URL contains "deepseek" (case-insensitive)
+    if (state->api_url && offset < (int)prompt_size) {
+        // Case-insensitive check for "deepseek" in API URL
+        char *url_lower = strdup(state->api_url);
+        if (url_lower) {
+            for (char *p = url_lower; *p; p++) {
+                *p = (char)tolower((unsigned char)*p);
+            }
+            if (strstr(url_lower, "deepseek") != NULL) {
+                offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
+                    "\nDeepSeek API Note: You are using the DeepSeek API which has a maximum output token limit of 4096 tokens. "
+                    "When generating responses, please be mindful of this limit and ensure your output stays under 4096 x 2 tokens (8192 characters as a rough estimate). "
+                    "If you need to produce longer content, consider breaking it into multiple responses or using tools to write to files.\n");
+            }
+            free(url_lower);
+        }
     }
 
     // Add KLAWED.md content if available
