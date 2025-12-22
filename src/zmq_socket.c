@@ -485,9 +485,8 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
                     "{\"messageType\": \"ERROR\", \"content\": \"Interactive processing failed\"}");
         } else {
             // Success - responses are sent during interactive processing
-            // Send a final completion message
-            snprintf(response, sizeof(response), 
-                    "{\"messageType\": \"COMPLETED\", \"content\": \"Interactive processing completed successfully\"}");
+            // No completion message needed - final TEXT response indicates completion
+            response[0] = '\0'; // Empty response - nothing to send
         }
                 
     } else {
@@ -782,45 +781,7 @@ static const char* zmq_error_to_string(ZMQErrorCode error_code) {
     }
 }
 
-// Helper function to send a user prompt request
-__attribute__((unused)) static int zmq_send_user_prompt(ZMQContext *ctx, const char *prompt) {
-#ifdef HAVE_ZMQ
-    if (!ctx) {
-        LOG_ERROR("ZMQ: Invalid parameters for send_user_prompt");
-        return -1;
-    }
-    
-    cJSON *response_json = cJSON_CreateObject();
-    if (!response_json) {
-        LOG_ERROR("ZMQ: Failed to create user prompt JSON object");
-        return -1;
-    }
-    
-    cJSON_AddStringToObject(response_json, "messageType", "USER_PROMPT");
-    if (prompt) {
-        cJSON_AddStringToObject(response_json, "content", prompt);
-    } else {
-        cJSON_AddStringToObject(response_json, "content", "Please provide additional information or confirm the action:");
-    }
-    
-    char *response_str = cJSON_PrintUnformatted(response_json);
-    if (!response_str) {
-        LOG_ERROR("ZMQ: Failed to serialize user prompt JSON");
-        cJSON_Delete(response_json);
-        return -1;
-    }
-    
-    int result = zmq_socket_send(ctx, response_str, strlen(response_str));
-    free(response_str);
-    cJSON_Delete(response_json);
-    
-    return result;
-#else
-    (void)ctx;
-    (void)prompt;
-    return -1;
-#endif
-}
+
 
 // Process ZMQ message with interactive tool call support
 static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *state, const char *user_input) {

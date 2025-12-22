@@ -12,7 +12,7 @@ All messages are JSON objects with at least a `messageType` field that indicates
 
 ### Common Fields
 
-- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL_RESULT", "USER_PROMPT", or "COMPLETED")
+- `messageType` (string, required): Type of message ("TEXT", "ERROR", or "TOOL_RESULT")
 - `content` (string, optional): Primary content/message text
 
 ## Input Messages (Client → Klawed)
@@ -115,37 +115,8 @@ Sent when a tool execution completes during interactive processing.
 }
 ```
 
-### 3. User Prompt Response
 
-Sent when the AI needs additional information from the user (not currently used, reserved for future use).
-
-```json
-{
-  "messageType": "USER_PROMPT",
-  "content": "Please provide additional information"
-}
-```
-
-**Fields:**
-- `messageType`: Always "USER_PROMPT"
-- `content`: Prompt text asking for user input
-
-### 4. Completion Response
-
-Sent when interactive processing is complete.
-
-```json
-{
-  "messageType": "COMPLETED",
-  "content": "Interactive processing completed successfully"
-}
-```
-
-**Fields:**
-- `messageType`: Always "COMPLETED"
-- `content`: Status message
-
-### 5. Error Response
+### 4. Error Response
 
 Error messages for various failure conditions.
 
@@ -236,13 +207,7 @@ Error messages for various failure conditions.
 }
 ```
 
-3. Finally, when processing is complete:
-```json
-{
-  "messageType": "COMPLETED",
-  "content": "Interactive processing completed successfully"
-}
-```
+
 
 ### Multi-turn Conversation
 
@@ -354,33 +319,35 @@ def send_and_receive(request):
     """Send request and handle multiple response types"""
     socket.send(json.dumps(request).encode('utf-8'))
     
+    # Set a timeout for receiving responses (5 seconds)
+    socket.RCVTIMEO = 5000
+    
     while True:
-        response = socket.recv()
-        response_data = json.loads(response.decode('utf-8'))
-        msg_type = response_data.get("messageType")
-        
-        if msg_type == "TEXT":
-            print(f"AI: {response_data.get('content')}")
-        elif msg_type == "TOOL_RESULT":
-            tool_name = response_data.get("toolName")
-            is_error = response_data.get("isError", False)
-            if is_error:
-                print(f"Tool {tool_name} error: {response_data.get('toolOutput', {}).get('error', 'Unknown error')}")
-            else:
-                print(f"Tool {tool_name} executed successfully")
-        elif msg_type == "COMPLETED":
-            print(f"Completed: {response_data.get('content')}")
-            break
-        elif msg_type == "ERROR":
-            print(f"Error: {response_data.get('content')}")
-            break
-        elif msg_type == "USER_PROMPT":
-            # Not currently used, but could prompt user for input
-            user_input = input(f"{response_data.get('content')} ")
-            send_and_receive({
-                "messageType": "TEXT",
-                "content": user_input
-            })
+        try:
+            response = socket.recv()
+            response_data = json.loads(response.decode('utf-8'))
+            msg_type = response_data.get("messageType")
+            
+            if msg_type == "TEXT":
+                print(f"AI: {response_data.get('content')}")
+                # After receiving a TEXT response, wait a bit more in case there are more messages
+                # but reset timeout for next receive
+                socket.RCVTIMEO = 2000  # Shorter timeout for subsequent messages
+            elif msg_type == "TOOL_RESULT":
+                tool_name = response_data.get("toolName")
+                is_error = response_data.get("isError", False)
+                if is_error:
+                    print(f"Tool {tool_name} error: {response_data.get('toolOutput', {}).get('error', 'Unknown error')}")
+                else:
+                    print(f"Tool {tool_name} executed successfully")
+                # Reset timeout for next message
+                socket.RCVTIMEO = 2000
+            elif msg_type == "ERROR":
+                print(f"Error: {response_data.get('content')}")
+                break
+        except zmq.Again:
+            # Timeout reached - no more messages
+            print("Processing completed (timeout)")
             break
 
 # Send initial request
