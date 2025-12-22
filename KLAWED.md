@@ -85,6 +85,8 @@ libbsd is a newly introduced to this codebase. We will slowly transition to it. 
 
 ## Building and Testing
 
+**Note for macOS users:** If you encounter errors like "invalid option -- 2" or "invalid option -- 0" when running `make`, you may have an old version of make (3.81) that has issues parsing paths with underscores. Install a newer version with `brew install make` and use `gmake` instead of `make`, or use the provided wrapper script `./make_wrapper.sh`.
+
 **Quick start:**
 ```bash
 make check-deps   # Verify dependencies (libcurl, cJSON, pthread)

@@ -71,7 +71,9 @@ int session_load_from_db(PersistenceDB *db, const char *session_id, Conversation
     }
 
     sqlite3_bind_text(stmt, 1, target_session_id, -1, SQLITE_TRANSIENT);
+    fprintf(stderr, "DEBUG: session_load_from_db: statement bound\n");
 
+    fprintf(stderr, "DEBUG: session_load_from_db: calling clear_conversation\n");
     // Clear existing conversation state (except system message)
     clear_conversation(state);
 
@@ -80,52 +82,76 @@ int session_load_from_db(PersistenceDB *db, const char *session_id, Conversation
         free(state->session_id);
     }
     state->session_id = target_session_id;
+    fprintf(stderr, "DEBUG: session_load_from_db: session_id set\n");
 
+    fprintf(stderr, "DEBUG: session_load_from_db: about to execute query\n");
     // Process each API call in the session
     int call_num = 0;
+    fprintf(stderr, "DEBUG: session_load_from_db: calling sqlite3_step\n");
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
         call_num++;
+        fprintf(stderr, "DEBUG: session_load_from_db: got row %d\n", call_num);
+        fprintf(stderr, "DEBUG: session_load_from_db: getting column data\n");
 
         const char *request_json = (const char *)sqlite3_column_text(stmt, 0);
         const char *response_json = (const char *)sqlite3_column_text(stmt, 1);
         const char *model = (const char *)sqlite3_column_text(stmt, 2);
         const char *status = (const char *)sqlite3_column_text(stmt, 3);
+        fprintf(stderr, "DEBUG: session_load_from_db: got column data\n");
 
+        fprintf(stderr, "DEBUG: session_load_from_db: checking column completeness\n");
         if (!request_json || !response_json || !model || !status) {
             LOG_WARN("Skipping incomplete API call #%d in session", call_num);
             continue;
         }
 
+        fprintf(stderr, "DEBUG: session_load_from_db: checking status\n");
         if (strcmp(status, "error") == 0) {
             LOG_WARN("Skipping failed API call #%d in session", call_num);
             continue;
         }
+        fprintf(stderr, "DEBUG: session_load_from_db: status OK\n");
 
+        fprintf(stderr, "DEBUG: session_load_from_db: parsing request JSON\n");
         // Parse request to extract user message
         cJSON *request = cJSON_Parse(request_json);
+        fprintf(stderr, "DEBUG: session_load_from_db: cJSON_Parse returned %p\n", (void*)request);
         if (!request) {
             LOG_WARN("Failed to parse request JSON for call #%d", call_num);
             continue;
         }
+        fprintf(stderr, "DEBUG: session_load_from_db: request parsed successfully\n");
 
+        fprintf(stderr, "DEBUG: session_load_from_db: getting messages array\n");
         cJSON *messages = cJSON_GetObjectItem(request, "messages");
+        fprintf(stderr, "DEBUG: session_load_from_db: messages = %p\n", (void*)messages);
         if (!messages || !cJSON_IsArray(messages)) {
             LOG_WARN("No messages array in request for call #%d", call_num);
             cJSON_Delete(request);
             continue;
         }
+        fprintf(stderr, "DEBUG: session_load_from_db: messages is array, size = %d\n", cJSON_GetArraySize(messages));
 
+        fprintf(stderr, "DEBUG: session_load_from_db: finding last user message\n");
         // Find the last user message in the request (this is what triggered the API call)
         cJSON *last_user_message = NULL;
         int msg_count = cJSON_GetArraySize(messages);
+        fprintf(stderr, "DEBUG: session_load_from_db: msg_count = %d\n", msg_count);
         for (int i = msg_count - 1; i >= 0; i--) {
+            fprintf(stderr, "DEBUG: session_load_from_db: checking message %d\n", i);
             cJSON *msg = cJSON_GetArrayItem(messages, i);
+            if (!msg) {
+                fprintf(stderr, "DEBUG: session_load_from_db: msg is NULL at index %d\n", i);
+                continue;
+            }
             cJSON *role = cJSON_GetObjectItem(msg, "role");
             if (role && cJSON_IsString(role) && strcmp(role->valuestring, "user") == 0) {
                 last_user_message = msg;
+                fprintf(stderr, "DEBUG: session_load_from_db: found user message at index %d\n", i);
                 break;
             }
         }
+        fprintf(stderr, "DEBUG: session_load_from_db: last_user_message = %p\n", (void*)last_user_message);
 
         if (!last_user_message) {
             LOG_WARN("No user message found in request for call #%d", call_num);
@@ -133,18 +159,23 @@ int session_load_from_db(PersistenceDB *db, const char *session_id, Conversation
             continue;
         }
 
+        fprintf(stderr, "DEBUG: session_load_from_db: extracting content\n");
         // Extract user message content
         cJSON *content = cJSON_GetObjectItem(last_user_message, "content");
+        fprintf(stderr, "DEBUG: session_load_from_db: content = %p\n", (void*)content);
         if (!content) {
             LOG_WARN("No content in user message for call #%d", call_num);
             cJSON_Delete(request);
             continue;
         }
 
+        fprintf(stderr, "DEBUG: session_load_from_db: checking content type\n");
         // Handle different content formats
         if (cJSON_IsString(content)) {
+            fprintf(stderr, "DEBUG: session_load_from_db: content is string, adding user message\n");
             // Simple text message
             add_user_message(state, content->valuestring);
+            fprintf(stderr, "DEBUG: session_load_from_db: user message added\n");
         } else if (cJSON_IsArray(content)) {
             // Complex content array (text + tool results)
             // For now, extract text content
@@ -163,23 +194,33 @@ int session_load_from_db(PersistenceDB *db, const char *session_id, Conversation
         }
 
         cJSON_Delete(request);
+        fprintf(stderr, "DEBUG: session_load_from_db: request deleted\n");
 
+        fprintf(stderr, "DEBUG: session_load_from_db: parsing response JSON\n");
         // Parse response to extract assistant message and tool calls
         cJSON *response = cJSON_Parse(response_json);
+        fprintf(stderr, "DEBUG: session_load_from_db: response = %p\n", (void*)response);
         if (!response) {
             LOG_WARN("Failed to parse response JSON for call #%d", call_num);
             continue;
         }
 
+        fprintf(stderr, "DEBUG: session_load_from_db: calling parse_openai_response\n");
         // Parse OpenAI response into internal message format
         InternalMessage assistant_msg = parse_openai_response(response);
+        fprintf(stderr, "DEBUG: session_load_from_db: parse_openai_response returned, content_count = %d\n", assistant_msg.content_count);
 
+        fprintf(stderr, "DEBUG: session_load_from_db: adding assistant message to conversation\n");
         // Add assistant message to conversation
         if (assistant_msg.content_count > 0) {
+            fprintf(stderr, "DEBUG: session_load_from_db: locking conversation state\n");
             if (conversation_state_lock(state) == 0) {
+                fprintf(stderr, "DEBUG: session_load_from_db: locked, state->count = %d\n", state->count);
                 if (state->count < MAX_MESSAGES) {
+                    fprintf(stderr, "DEBUG: session_load_from_db: assigning message to array\n");
                     state->messages[state->count] = assistant_msg;
                     state->count++;
+                    fprintf(stderr, "DEBUG: session_load_from_db: message assigned, new count = %d\n", state->count);
                 } else {
                     LOG_WARN("Conversation buffer full, cannot add more messages");
                     // Free the message contents

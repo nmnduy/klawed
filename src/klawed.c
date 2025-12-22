@@ -988,6 +988,11 @@ static cJSON* tool_upload_image(cJSON *params, ConversationState *state) {
     }
 
     // Resolve the path relative to working directory
+    if (!state) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Internal error: null state");
+        return error;
+    }
     char *resolved_path = resolve_path(cleaned_path, state->working_dir);
     if (!resolved_path) {
         cJSON *error = cJSON_CreateObject();
@@ -1037,19 +1042,34 @@ static cJSON* tool_upload_image(cJSON *params, ConversationState *state) {
             if (src && dst) {
                 char buffer[8192];
                 size_t bytes;
+                int copy_success = 1;
+                
                 while ((bytes = fread(buffer, 1, sizeof(buffer), src)) > 0) {
-                    fwrite(buffer, 1, bytes, dst);
+                    if (fwrite(buffer, 1, bytes, dst) != bytes) {
+                        copy_success = 0;
+                        break;
+                    }
+                }
+                
+                // Check for read/write errors
+                if (ferror(src) || ferror(dst)) {
+                    copy_success = 0;
                 }
 
-                fclose(src);
-                fclose(dst);
+                if (copy_success) {
+                    LOG_DEBUG("Copied macOS temporary screenshot from '%s' to '%s'",
+                             resolved_path, temp_copy_path);
 
-                LOG_DEBUG("Copied macOS temporary screenshot from '%s' to '%s'",
-                         resolved_path, temp_copy_path);
-
-                // Use the temp copy for reading
-                path_to_read = temp_copy_path;
-                created_temp_copy = 1;
+                    // Use the temp copy for reading
+                    path_to_read = temp_copy_path;
+                    created_temp_copy = 1;
+                } else {
+                    LOG_WARN("Failed to copy macOS temporary screenshot");
+                    unlink(temp_copy_path); // Clean up failed copy
+                    free(temp_copy_path);
+                    temp_copy_path = NULL;
+                    // Continue with original path
+                }
             } else {
                 if (src) fclose(src);
                 if (dst) fclose(dst);
@@ -1826,6 +1846,11 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     }
 
     // Create unique log file in .klawed/subagent/ directory
+    if (!state) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Internal error: null state");
+        return error;
+    }
     char log_dir[PATH_MAX];
     snprintf(log_dir, sizeof(log_dir), "%s/.klawed/subagent", state->working_dir);
 
@@ -1867,7 +1892,7 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
             cJSON_AddStringToObject(error, "error", "Failed to determine executable path");
             return error;
         }
-        len = (ssize_t)strlen(exe_path);
+        // len is not used in this branch
 #else
         // Try argv[0] as fallback
         const char *fallback = "./build/klawed";
@@ -2057,6 +2082,12 @@ STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *sta
 
             // Read the tail content
             rewind(log_fp);
+            if (ferror(log_fp)) {
+                fclose(log_fp);
+                cJSON *error = cJSON_CreateObject();
+                cJSON_AddStringToObject(error, "error", "Failed to rewind log file");
+                return error;
+            }
             int current_line = 0;
 
             while (fgets(line, sizeof(line), log_fp)) {
@@ -3416,7 +3447,7 @@ static cJSON* tool_grep(cJSON *params, ConversationState *state) {
 
     // Determine which grep tool to use (prefer rg > ag > grep)
     const char *grep_tool = "grep";
-    const char *exclusions = "";
+    const char *exclusions;
 
     if (command_exists("rg")) {
         grep_tool = "rg";
@@ -5274,6 +5305,10 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
             free(result.raw_response);
             free(result.request_json);
             free(result.error_message);
+            if (last_error) {
+                free(last_error);
+                last_error = NULL;
+            }
             return result.response;
         }
 
@@ -6123,11 +6158,17 @@ void clear_conversation(ConversationState *state) {
 
     // Clear todo list
     if (state->todo_list) {
+        fprintf(stderr, "DEBUG: clear_conversation: calling todo_free\n");
         todo_free(state->todo_list);
-        todo_init(state->todo_list);
+        if (todo_init(state->todo_list) != 0) {
+            LOG_ERROR("Failed to reinitialize todo list after clear");
+            // The list is in a safe empty state (todo_free zeroed it)
+        }
+        fprintf(stderr, "DEBUG: clear_conversation: todo_init done\n");
         LOG_DEBUG("Todo list cleared and reinitialized");
     }
 
+    fprintf(stderr, "DEBUG: clear_conversation: calling conversation_state_unlock\n");
     conversation_state_unlock(state);
 }
 
@@ -7602,7 +7643,7 @@ static int dump_conversation_from_db(const char *session_id) {
 
         // Parse and display response
         fprintf(stdout, "\nRESPONSE:\n");
-        if (strcmp(status, "error") == 0 && error_msg) {
+        if (status && strcmp(status, "error") == 0 && error_msg) {
             fprintf(stdout, "  [ERROR] %s\n", error_msg);
         } else if (response_json) {
             cJSON *response = cJSON_Parse(response_json);
@@ -8000,10 +8041,15 @@ int main(int argc, char *argv[]) {
     state.max_retry_duration_ms = get_env_int_retry("KLAWED_MAX_RETRY_DURATION_MS", MAX_RETRY_DURATION_MS);
 
     // Initialize todo list
-    state.todo_list = malloc(sizeof(TodoList));
+    state.todo_list = calloc(1, sizeof(TodoList));  // Use calloc to zero-initialize
     if (state.todo_list) {
-        todo_init(state.todo_list);
-        LOG_DEBUG("Todo list initialized");
+        if (todo_init(state.todo_list) == 0) {
+            LOG_DEBUG("Todo list initialized");
+        } else {
+            LOG_ERROR("Failed to initialize todo list");
+            // todo_list is in a safe state (zero-initialized from calloc)
+            // but we should probably exit or handle this error
+        }
     } else {
         LOG_ERROR("Failed to allocate memory for todo list");
     }
@@ -8025,7 +8071,7 @@ int main(int argc, char *argv[]) {
             // Update the local session_id variable to match the loaded session
             if (session_id && state.session_id && strcmp(session_id, state.session_id) != 0) {
                 free(session_id);
-                session_id = strdup(state.session_id);
+                session_id = state.session_id;
             }
         } else {
             LOG_ERROR("Failed to resume session");

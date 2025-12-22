@@ -29,11 +29,15 @@ static char* str_dup(const char *str) {
 int todo_init(TodoList *list) {
     if (!list) return -1;
 
-    list->items = malloc(INITIAL_CAPACITY * sizeof(TodoItem));
-    if (!list->items) return -1;
-
+    // Initialize count and capacity first (even if allocation fails)
     list->count = 0;
     list->capacity = INITIAL_CAPACITY;
+
+    list->items = malloc(INITIAL_CAPACITY * sizeof(TodoItem));
+    if (!list->items) {
+        // Allocation failed, but count and capacity are already set to safe values
+        return -1;
+    }
 
     return 0;
 }
@@ -54,6 +58,16 @@ void todo_free(TodoList *list) {
 
 int todo_add(TodoList *list, const char *content, const char *active_form, TodoStatus status) {
     if (!list || !content || !active_form) return -1;
+
+    // Allocate items array if it's NULL (e.g., after a failed todo_init)
+    if (!list->items) {
+        // Ensure capacity is at least INITIAL_CAPACITY
+        if (list->capacity < INITIAL_CAPACITY) {
+            list->capacity = INITIAL_CAPACITY;
+        }
+        list->items = reallocarray(NULL, list->capacity, sizeof(TodoItem));
+        if (!list->items) return -1;
+    }
 
     // Expand capacity if needed
     if (list->count >= list->capacity) {
@@ -82,14 +96,14 @@ int todo_add(TodoList *list, const char *content, const char *active_form, TodoS
 }
 
 int todo_update_status(TodoList *list, size_t index, TodoStatus status) {
-    if (!list || index >= list->count) return -1;
+    if (!list || !list->items || index >= list->count) return -1;
 
     list->items[index].status = status;
     return 0;
 }
 
 int todo_update_by_content(TodoList *list, const char *content, TodoStatus status) {
-    if (!list || !content) return -1;
+    if (!list || !content || !list->items) return -1;
 
     for (size_t i = 0; i < list->count; i++) {
         if (strcmp(list->items[i].content, content) == 0) {
@@ -102,7 +116,7 @@ int todo_update_by_content(TodoList *list, const char *content, TodoStatus statu
 }
 
 int todo_remove(TodoList *list, size_t index) {
-    if (!list || index >= list->count) return -1;
+    if (!list || !list->items || index >= list->count) return -1;
 
     // Free the item being removed
     free(list->items[index].content);
@@ -118,7 +132,7 @@ int todo_remove(TodoList *list, size_t index) {
 }
 
 void todo_clear(TodoList *list) {
-    if (!list) return;
+    if (!list || !list->items) return;
 
     for (size_t i = 0; i < list->count; i++) {
         free(list->items[i].content);
@@ -129,7 +143,7 @@ void todo_clear(TodoList *list) {
 }
 
 size_t todo_count_by_status(const TodoList *list, TodoStatus status) {
-    if (!list) return 0;
+    if (!list || !list->items) return 0;
 
     size_t count = 0;
     for (size_t i = 0; i < list->count; i++) {
