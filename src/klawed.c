@@ -4907,13 +4907,7 @@ char* build_request_json_from_state(ConversationState *state) {
     }
 
     cJSON_AddStringToObject(request, "model", state->model);
-    
-    // Use max_tokens for DeepSeek API, max_completion_tokens for others
-    if (state->api_url && strstr(state->api_url, "deepseek") != NULL) {
-        cJSON_AddNumberToObject(request, "max_tokens", MAX_TOKENS);
-    } else {
-        cJSON_AddNumberToObject(request, "max_completion_tokens", MAX_TOKENS);
-    }
+    cJSON_AddNumberToObject(request, "max_completion_tokens", MAX_TOKENS);
 
     // Add messages in OpenAI format
     cJSON *messages_array = cJSON_CreateArray();
