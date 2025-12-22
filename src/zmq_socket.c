@@ -422,6 +422,10 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
     LOG_DEBUG("ZMQ: Raw message (first 500 chars): %.*s", 
              (int)(received > 500 ? 500 : received), buffer);
     
+    // Print to console
+    printf("ZMQ: Received %d bytes\n", received);
+    fflush(stdout);
+    
     // Parse JSON message
     LOG_DEBUG("ZMQ: Parsing JSON message");
     cJSON *json = cJSON_Parse(buffer);
@@ -461,6 +465,14 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
                 (int)(strlen(content->valuestring) > 200 ? 200 : strlen(content->valuestring)), 
                 content->valuestring);
         
+        // Print to console
+        printf("ZMQ: Processing TEXT message (length: %zu)\n", strlen(content->valuestring));
+        // Print first 100 chars of the message
+        int preview_len = (int)(strlen(content->valuestring) > 100 ? 100 : strlen(content->valuestring));
+        printf("Message preview: %.*s%s\n", preview_len, content->valuestring,
+               strlen(content->valuestring) > 100 ? "..." : "");
+        fflush(stdout);
+        
         // Don't clear conversation - maintain context across messages in daemon mode
         // This allows multi-turn conversations like interactive mode
         
@@ -496,14 +508,24 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
         LOG_DEBUG("ZMQ: Response content: %.*s", 
                  (int)(strlen(response) > 200 ? 200 : strlen(response)), response);
         
+        // Print to console
+        printf("ZMQ: Sending response (length: %zu)\n", strlen(response));
+        fflush(stdout);
+        
         int send_result = zmq_socket_send(ctx, response, strlen(response));
         if (send_result == 0) {
             LOG_INFO("ZMQ: Response sent successfully");
+            printf("ZMQ: Response sent successfully\n");
+            fflush(stdout);
         } else {
             LOG_ERROR("ZMQ: Failed to send response");
+            printf("ZMQ: Failed to send response\n");
+            fflush(stdout);
         }
     } else {
         LOG_ERROR("ZMQ: Empty response generated, not sending");
+        printf("ZMQ: Empty response generated, not sending\n");
+        fflush(stdout);
     }
     
     LOG_INFO("ZMQ: Message processing completed");
@@ -847,6 +869,15 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
             
             if (*p != '\0') {  // Has non-whitespace content
                 LOG_INFO("ZMQ: Sending assistant text response");
+                
+                // Print to console
+                printf("\n--- AI Response ---\n");
+                // Print first 200 chars of the response
+                int preview_len = (int)(strlen(p) > 200 ? 200 : strlen(p));
+                printf("%.*s%s\n", preview_len, p, strlen(p) > 200 ? "..." : "");
+                printf("--- End of AI Response ---\n");
+                fflush(stdout);
+                
                 zmq_send_json_response(ctx, "TEXT", p);
             }
         }
@@ -894,6 +925,10 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                 }
                 
                 LOG_INFO("ZMQ: Executing tool: %s (id: %s)", tool->name, tool->id);
+                
+                // Print to console
+                printf("ZMQ: Executing tool: %s\n", tool->name);
+                fflush(stdout);
                 
                 // Validate that the tool is in the allowed tools list (prevent hallucination)
                 if (!is_tool_allowed(tool->name, state)) {
@@ -1002,6 +1037,11 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     LOG_INFO("ZMQ: Buffer size: %d bytes", ZMQ_BUFFER_SIZE);
     LOG_INFO("ZMQ: =========================================");
     
+    // Print to console as well
+    printf("ZMQ daemon started on %s\n", ctx->endpoint);
+    printf("Waiting for connections...\n");
+    fflush(stdout);
+    
     int message_count = 0;
     int error_count = 0;
     
@@ -1016,6 +1056,7 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
             // Check if we should continue or exit
             if (error_count > 10) {
                 LOG_ERROR("ZMQ: Too many consecutive errors (%d), stopping daemon", error_count);
+                printf("ZMQ: Too many consecutive errors (%d), stopping daemon\n", error_count);
                 break;
             }
             
@@ -1028,6 +1069,8 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
         message_count++;
         error_count = 0; // Reset error count on successful processing
         LOG_DEBUG("ZMQ: Successfully processed message #%d", message_count);
+        printf("ZMQ: Successfully processed message #%d\n", message_count);
+        fflush(stdout);
     }
     
     LOG_INFO("ZMQ: =========================================");
@@ -1035,6 +1078,12 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     LOG_INFO("ZMQ: Total messages processed: %d", message_count);
     LOG_INFO("ZMQ: Total errors: %d", error_count);
     LOG_INFO("ZMQ: =========================================");
+    
+    // Print to console as well
+    printf("\nZMQ daemon stopped\n");
+    printf("Total messages processed: %d\n", message_count);
+    printf("Total errors: %d\n", error_count);
+    fflush(stdout);
     
     return 0;
 #else
