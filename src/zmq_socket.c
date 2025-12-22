@@ -18,8 +18,10 @@
 #ifdef HAVE_ZMQ
 #include <zmq.h>
 #include <cjson/cJSON.h>
-#include <ctype.h>
 #endif
+
+// Forward declaration
+static const char* zmq_error_to_string(ZMQErrorCode error_code);
 
 // Default buffer size for ZMQ messages
 #define ZMQ_BUFFER_SIZE 65536
@@ -35,6 +37,8 @@ static const char* zmq_error_to_string(ZMQErrorCode error_code);
 #endif
 
 ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
+    (void)endpoint;  // Unused when HAVE_ZMQ is not defined
+    (void)socket_type;  // Unused when HAVE_ZMQ is not defined
 #ifdef HAVE_ZMQ
     if (!endpoint) {
         LOG_ERROR("ZMQ: Endpoint cannot be NULL");

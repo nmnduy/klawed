@@ -6090,11 +6090,17 @@ void clear_conversation(ConversationState *state) {
 
     // Clear todo list
     if (state->todo_list) {
+        fprintf(stderr, "DEBUG: clear_conversation: calling todo_free\n");
         todo_free(state->todo_list);
-        todo_init(state->todo_list);
+        if (todo_init(state->todo_list) != 0) {
+            LOG_ERROR("Failed to reinitialize todo list after clear");
+            // The list is in a safe empty state (todo_free zeroed it)
+        }
+        fprintf(stderr, "DEBUG: clear_conversation: todo_init done\n");
         LOG_DEBUG("Todo list cleared and reinitialized");
     }
 
+    fprintf(stderr, "DEBUG: clear_conversation: calling conversation_state_unlock\n");
     conversation_state_unlock(state);
 }
 
@@ -7977,10 +7983,15 @@ int main(int argc, char *argv[]) {
     state.max_retry_duration_ms = get_env_int_retry("KLAWED_MAX_RETRY_DURATION_MS", MAX_RETRY_DURATION_MS);
 
     // Initialize todo list
-    state.todo_list = malloc(sizeof(TodoList));
+    state.todo_list = calloc(1, sizeof(TodoList));  // Use calloc to zero-initialize
     if (state.todo_list) {
-        todo_init(state.todo_list);
-        LOG_DEBUG("Todo list initialized");
+        if (todo_init(state.todo_list) == 0) {
+            LOG_DEBUG("Todo list initialized");
+        } else {
+            LOG_ERROR("Failed to initialize todo list");
+            // todo_list is in a safe state (zero-initialized from calloc)
+            // but we should probably exit or handle this error
+        }
     } else {
         LOG_ERROR("Failed to allocate memory for todo list");
     }
