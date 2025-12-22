@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    // Create REQ socket
+    // Create PAIR socket (peer-to-peer communication)
     void *socket = zmq_socket(context, ZMQ_PAIR);
     if (!socket) {
         fprintf(stderr, "Error creating ZMQ socket: %s\n", zmq_strerror(errno));

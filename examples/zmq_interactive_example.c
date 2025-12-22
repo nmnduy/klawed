@@ -24,7 +24,7 @@ int main() {
         return 1;
     }
     
-    // Create REQ socket
+    // Create PAIR socket (peer-to-peer communication)
     void *socket = zmq_socket(context, ZMQ_PAIR);
     if (!socket) {
         fprintf(stderr, "Failed to create ZMQ socket\n");

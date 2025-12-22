@@ -725,9 +725,6 @@ static int zmq_attempt_reconnect(ZMQContext *ctx) {
 #endif
 }
 
-// Helper function to flush queued messages for PUB sockets
-
-
 // Helper function to set error state
 __attribute__((format(printf, 3, 4)))
 static void zmq_set_error(ZMQContext *ctx, ZMQErrorCode error_code, const char *format, ...) {
