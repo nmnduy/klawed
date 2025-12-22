@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
     }
     
     // Create REQ socket
-    void *socket = zmq_socket(context, ZMQ_REQ);
+    void *socket = zmq_socket(context, ZMQ_PAIR);
     if (!socket) {
         fprintf(stderr, "Error creating ZMQ socket: %s\n", zmq_strerror(errno));
         zmq_ctx_term(context);

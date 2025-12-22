@@ -151,7 +151,7 @@ void test_timeout_handling() {
     printf("\n=== Test 2: Timeout Handling ===\n");
     
     void *context = zmq_ctx_new();
-    void *req_socket = zmq_socket(context, ZMQ_REQ);
+    void *req_socket = zmq_socket(context, ZMQ_PAIR);
     
     // Set very short timeout
     int timeout = 100; // 100ms timeout

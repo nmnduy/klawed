@@ -39,7 +39,7 @@ typedef struct ZMQContext {
     void *context;      // ZMQ context
     void *socket;       // ZMQ socket
     char *endpoint;     // Socket endpoint (e.g., "tcp://127.0.0.1:5555")
-    int socket_type;    // ZMQ socket type (ZMQ_REP, ZMQ_PUB, etc.)
+    int socket_type;    // ZMQ socket type (ZMQ_PAIR, ZMQ_PUB, etc.)
     bool enabled;       // Whether ZMQ mode is enabled
     bool daemon_mode;   // Whether running in daemon mode (listen for requests)
     
@@ -75,7 +75,7 @@ typedef struct ZMQContext {
 /**
  * Initialize ZMQ context and socket
  * @param endpoint Socket endpoint (e.g., "tcp://127.0.0.1:5555" or "ipc:///tmp/klawed.sock")
- * @param socket_type ZMQ socket type (ZMQ_REP for server, ZMQ_REQ for client)
+ * @param socket_type ZMQ socket type (ZMQ_PAIR for peer-to-peer communication)
  * @return Initialized ZMQContext or NULL on failure
  */
 ZMQContext* zmq_socket_init(const char *endpoint, int socket_type);
@@ -129,7 +129,7 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
 
 /**
  * Run ZMQ daemon mode - listen for requests and process them
- * @param ctx ZMQ context (should be ZMQ_REP socket)
+ * @param ctx ZMQ context (should be ZMQ_PAIR socket)
  * @param state Conversation state
  * @return 0 on success, -1 on failure
  */

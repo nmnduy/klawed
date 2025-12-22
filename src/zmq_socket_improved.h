@@ -17,10 +17,10 @@ struct TUIState;
 
 // ZMQ socket modes
 typedef enum {
-    ZMQ_MODE_DAEMON = 0,    // Request-Reply server (ZMQ_REP)
+    ZMQ_MODE_DAEMON = 0,    // Peer-to-peer server (ZMQ_PAIR)
     ZMQ_MODE_PUBLISHER,     // Publish events (ZMQ_PUB)
     ZMQ_MODE_SUBSCRIBER,    // Subscribe to events (ZMQ_SUB)
-    ZMQ_MODE_CLIENT         // Request client (ZMQ_REQ)
+    ZMQ_MODE_CLIENT         // Peer-to-peer client (ZMQ_PAIR)
 } ZMQMode;
 
 // Connection state

@@ -142,8 +142,8 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     
     // Bind or connect based on socket type
     int rc;
-    if (socket_type == ZMQ_REP || socket_type == ZMQ_PUB || socket_type == ZMQ_PUSH) {
-        // Server/binding sockets
+    if (socket_type == ZMQ_PAIR || socket_type == ZMQ_PUB || socket_type == ZMQ_PUSH) {
+        // Server/binding sockets (PAIR can bind or connect, but typically one side binds)
         LOG_DEBUG("ZMQ: Binding socket to endpoint: %s", endpoint);
         rc = zmq_bind(ctx->socket, endpoint);
         if (rc != 0) {
@@ -180,7 +180,7 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     
     ctx->socket_type = socket_type;
     ctx->enabled = true;
-    ctx->daemon_mode = (socket_type == ZMQ_REP);
+    ctx->daemon_mode = (socket_type == ZMQ_PAIR);
     
     // Initialize reliable queues for PUB/SUB pattern
     if (socket_type == ZMQ_PUB || socket_type == ZMQ_SUB) {
@@ -775,7 +775,7 @@ static int zmq_attempt_reconnect(ZMQContext *ctx) {
     
     // Reconnect or rebind
     int rc;
-    if (ctx->socket_type == ZMQ_REP || ctx->socket_type == ZMQ_PUB || ctx->socket_type == ZMQ_PUSH) {
+    if (ctx->socket_type == ZMQ_PAIR || ctx->socket_type == ZMQ_PUB || ctx->socket_type == ZMQ_PUSH) {
         rc = zmq_bind(ctx->socket, ctx->endpoint);
     } else {
         rc = zmq_connect(ctx->socket, ctx->endpoint);
@@ -1043,8 +1043,10 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                     cJSON_AddStringToObject(results[i].tool_output, "error", error_msg);
                     results[i].is_error = 1;
                     
-                    // Send error response
-                    zmq_send_tool_result(ctx, tool->name, tool->id, results[i].tool_output, 1);
+                    // Send error response (only if not ZMQ_PAIR socket in daemon mode)
+                    if (ctx->socket_type != ZMQ_PAIR || !ctx->daemon_mode) {
+                        zmq_send_tool_result(ctx, tool->name, tool->id, results[i].tool_output, 1);
+                    }
                     continue;
                 }
                 
@@ -1056,8 +1058,10 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                 // Execute tool synchronously
                 cJSON *tool_result = execute_tool(tool->name, input, state);
                 
-                // Send tool result response
-                zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
+                // Send tool result response (only if not ZMQ_PAIR socket in daemon mode)
+                if (ctx->socket_type != ZMQ_PAIR || !ctx->daemon_mode) {
+                    zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
+                }
                 
                 // Store tool result
                 results[i].type = INTERNAL_TOOL_RESPONSE;
@@ -1076,7 +1080,9 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                 LOG_ERROR("ZMQ: Failed to add tool results to conversation");
                 // Results were already freed by add_tool_results
                 results = NULL;
-                zmq_send_json_response(ctx, "ERROR", "Failed to add tool results to conversation");
+                if (ctx->socket_type != ZMQ_PAIR || !ctx->daemon_mode) {
+                    zmq_send_json_response(ctx, "ERROR", "Failed to add tool results to conversation");
+                }
                 api_response_free(api_response);
                 return -1;
             }
@@ -1117,15 +1123,15 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
         return -1;
     }
     
-    if (ctx->socket_type != ZMQ_REP) {
-        LOG_ERROR("ZMQ: Daemon mode requires ZMQ_REP socket type");
+    if (ctx->socket_type != ZMQ_PAIR) {
+        LOG_ERROR("ZMQ: Daemon mode requires ZMQ_PAIR socket type");
         return -1;
     }
     
     LOG_INFO("ZMQ: =========================================");
     LOG_INFO("ZMQ: Starting ZMQ daemon mode");
     LOG_INFO("ZMQ: Endpoint: %s", ctx->endpoint);
-    LOG_INFO("ZMQ: Socket type: ZMQ_REP (Reply)");
+    LOG_INFO("ZMQ: Socket type: ZMQ_PAIR (Peer-to-peer)");
     LOG_INFO("ZMQ: Buffer size: %d bytes", ZMQ_BUFFER_SIZE);
     LOG_INFO("ZMQ: =========================================");
     
@@ -1189,8 +1195,7 @@ int zmq_socket_get_status(ZMQContext *ctx, char *buffer, size_t buffer_size) {
     const char *socket_type_str = "UNKNOWN";
     
     switch (ctx->socket_type) {
-        case ZMQ_REP: socket_type_str = "REP"; break;
-        case ZMQ_REQ: socket_type_str = "REQ"; break;
+        case ZMQ_PAIR: socket_type_str = "PAIR"; break;
         case ZMQ_PUB: socket_type_str = "PUB"; break;
         case ZMQ_SUB: socket_type_str = "SUB"; break;
         case ZMQ_PUSH: socket_type_str = "PUSH"; break;

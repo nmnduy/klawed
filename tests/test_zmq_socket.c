@@ -30,7 +30,7 @@ int main(void) {
     
     // Test 2: Try to initialize ZMQ context (should fail without actual ZMQ library in test)
     // Note: This test doesn't actually run ZMQ, just tests the interface
-    ZMQContext *ctx = zmq_socket_init("tcp://127.0.0.1:5555", ZMQ_REP);
+    ZMQContext *ctx = zmq_socket_init("tcp://127.0.0.1:5555", ZMQ_PAIR);
     if (ctx) {
         printf("ZMQ context initialized successfully\n");
         

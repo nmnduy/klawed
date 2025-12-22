@@ -4,7 +4,7 @@ This document describes the JSON message format for ZeroMQ communication in Klaw
 
 ## Overview
 
-Klawed uses a simple JSON message format for both input (requests) and output (responses) when communicating via ZeroMQ sockets. The format is designed to be minimal and self-describing.
+Klawed uses a simple JSON message format for both input (requests) and output (responses) when communicating via ZeroMQ sockets using the PAIR socket pattern (exclusive peer-to-peer communication). The format is designed to be minimal and self-describing.
 
 ## Message Structure
 
@@ -320,7 +320,7 @@ import zmq
 import json
 
 context = zmq.Context()
-socket = context.socket(zmq.REQ)
+socket = context.socket(zmq.PAIR)
 socket.connect("tcp://127.0.0.1:5555")
 
 # Send text request
@@ -347,7 +347,7 @@ import zmq
 import json
 
 context = zmq.Context()
-socket = context.socket(zmq.REQ)
+socket = context.socket(zmq.PAIR)
 socket.connect("tcp://127.0.0.1:5555")
 
 def send_and_receive(request):
