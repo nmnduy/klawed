@@ -4,7 +4,6 @@
 
 #include "zmq_socket.h"
 #include "zmq_config.h"
-#include "zmq_reliable_queue.h"
 #include "klawed_internal.h"
 #include "logger.h"
 #include <string.h>
@@ -30,7 +29,7 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
 static void zmq_set_error(ZMQContext *ctx, ZMQErrorCode error_code, const char *format, ...);
 static int zmq_check_connection_health(ZMQContext *ctx);
 static int zmq_attempt_reconnect(ZMQContext *ctx);
-static int zmq_flush_queued_messages(ZMQContext *ctx);
+
 static const char* zmq_error_to_string(ZMQErrorCode error_code);
 #endif
 
@@ -142,7 +141,7 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     
     // Bind or connect based on socket type
     int rc;
-    if (socket_type == ZMQ_PAIR || socket_type == ZMQ_PUB || socket_type == ZMQ_PUSH) {
+    if (socket_type == ZMQ_PAIR) {
         // Server/binding sockets (PAIR can bind or connect, but typically one side binds)
         LOG_DEBUG("ZMQ: Binding socket to endpoint: %s", endpoint);
         rc = zmq_bind(ctx->socket, endpoint);
@@ -182,31 +181,6 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     ctx->enabled = true;
     ctx->daemon_mode = (socket_type == ZMQ_PAIR);
     
-    // Initialize reliable queues for PUB/SUB pattern
-    if (socket_type == ZMQ_PUB || socket_type == ZMQ_SUB) {
-        // For PUB sockets, we need a send queue to store messages when no subscribers
-        // For SUB sockets, we need a receive queue to store messages when disconnected
-        size_t max_queue_size = (size_t)ctx->send_queue_size;
-        size_t max_queue_bytes = 10 * 1024 * 1024; // 10MB default
-        time_t max_queue_age = 300; // 5 minutes default
-        
-        if (socket_type == ZMQ_PUB) {
-            ctx->send_queue = zmq_reliable_queue_init(max_queue_size, max_queue_bytes, max_queue_age);
-            if (!ctx->send_queue) {
-                LOG_WARN("ZMQ: Failed to initialize send queue for PUB socket");
-            } else {
-                LOG_DEBUG("ZMQ: Send queue initialized for PUB socket (size: %zu)", max_queue_size);
-            }
-        } else { // ZMQ_SUB
-            ctx->receive_queue = zmq_reliable_queue_init(max_queue_size, max_queue_bytes, max_queue_age);
-            if (!ctx->receive_queue) {
-                LOG_WARN("ZMQ: Failed to initialize receive queue for SUB socket");
-            } else {
-                LOG_DEBUG("ZMQ: Receive queue initialized for SUB socket (size: %zu)", max_queue_size);
-            }
-        }
-    }
-    
     LOG_INFO("ZMQ: Socket initialization completed successfully");
     LOG_DEBUG("ZMQ: Context enabled: %s", ctx->enabled ? "true" : "false");
     LOG_DEBUG("ZMQ: Daemon mode: %s", ctx->daemon_mode ? "true" : "false");
@@ -223,19 +197,6 @@ void zmq_socket_cleanup(ZMQContext *ctx) {
     if (!ctx) return;
     
     LOG_INFO("ZMQ: Cleaning up ZMQ context for endpoint: %s", ctx->endpoint ? ctx->endpoint : "unknown");
-    
-    // Clean up reliable queues
-    if (ctx->send_queue) {
-        LOG_DEBUG("ZMQ: Freeing send queue");
-        zmq_reliable_queue_free(ctx->send_queue);
-        ctx->send_queue = NULL;
-    }
-    
-    if (ctx->receive_queue) {
-        LOG_DEBUG("ZMQ: Freeing receive queue");
-        zmq_reliable_queue_free(ctx->receive_queue);
-        ctx->receive_queue = NULL;
-    }
     
     if (ctx->socket) {
         LOG_DEBUG("ZMQ: Closing socket");
@@ -270,35 +231,6 @@ int zmq_socket_send(ZMQContext *ctx, const char *message, size_t message_len) {
         return ZMQ_ERROR_INVALID_PARAM;
     }
     
-    // For PUB sockets with reliable queue, we can queue messages when no subscribers
-    if (ctx->socket_type == ZMQ_PUB && ctx->send_queue) {
-        // Try to send immediately first
-        if (ctx->socket) {
-            // Update last activity time
-            ctx->last_activity = time(NULL);
-            
-            int rc = zmq_send(ctx->socket, message, message_len, ZMQ_DONTWAIT);
-            if (rc >= 0) {
-                LOG_DEBUG("ZMQ: Successfully sent %zu bytes via PUB socket (return code: %d)", message_len, rc);
-                return 0;
-            }
-            
-            // If send failed with EAGAIN (no subscribers), queue the message
-            if (errno == EAGAIN) {
-                LOG_DEBUG("ZMQ: No subscribers available, queuing message (size: %zu)", message_len);
-                if (zmq_reliable_queue_push(ctx->send_queue, message, message_len)) {
-                    LOG_DEBUG("ZMQ: Message queued successfully (queue size: %zu)", 
-                             zmq_reliable_queue_count(ctx->send_queue));
-                    return ZMQ_ERROR_NONE;
-                } else {
-                    zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL, "Failed to queue message (queue full)");
-                    return ZMQ_ERROR_QUEUE_FULL;
-                }
-            }
-        }
-    }
-    
-    // For other socket types or when queueing fails/not available
     // Check connection health
     if (ctx->socket) {
         int health = zmq_check_connection_health(ctx);
@@ -678,14 +610,6 @@ static int zmq_check_connection_health(ZMQContext *ctx) {
         return -1;
     }
     
-    // For PUB sockets with queued messages, try to flush them
-    if (ctx->socket_type == ZMQ_PUB && ctx->send_queue && 
-        !zmq_reliable_queue_is_empty(ctx->send_queue)) {
-        LOG_DEBUG("ZMQ: PUB socket has %zu queued messages, attempting to flush",
-                 zmq_reliable_queue_count(ctx->send_queue));
-        zmq_flush_queued_messages(ctx);
-    }
-    
     if (!ctx->socket) {
         return -1;
     }
@@ -775,7 +699,7 @@ static int zmq_attempt_reconnect(ZMQContext *ctx) {
     
     // Reconnect or rebind
     int rc;
-    if (ctx->socket_type == ZMQ_PAIR || ctx->socket_type == ZMQ_PUB || ctx->socket_type == ZMQ_PUSH) {
+    if (ctx->socket_type == ZMQ_PAIR) {
         rc = zmq_bind(ctx->socket, ctx->endpoint);
     } else {
         rc = zmq_connect(ctx->socket, ctx->endpoint);
@@ -802,61 +726,7 @@ static int zmq_attempt_reconnect(ZMQContext *ctx) {
 }
 
 // Helper function to flush queued messages for PUB sockets
-static int zmq_flush_queued_messages(ZMQContext *ctx) {
-#ifdef HAVE_ZMQ
-    if (!ctx || !ctx->send_queue || ctx->socket_type != ZMQ_PUB) {
-        return 0;
-    }
-    
-    if (!ctx->socket) {
-        LOG_DEBUG("ZMQ: Cannot flush queue - no socket");
-        return -1;
-    }
-    
-    size_t flushed = 0;
-    size_t failed = 0;
-    
-    while (!zmq_reliable_queue_is_empty(ctx->send_queue)) {
-        const char *message_data;
-        size_t message_size;
-        
-        if (!zmq_reliable_queue_peek(ctx->send_queue, &message_data, &message_size)) {
-            break;
-        }
-        
-        // Try to send with non-blocking flag
-        int rc = zmq_send(ctx->socket, message_data, message_size, ZMQ_DONTWAIT);
-        if (rc >= 0) {
-            // Successfully sent, remove from queue
-            zmq_reliable_queue_pop(ctx->send_queue);
-            flushed++;
-            LOG_DEBUG("ZMQ: Flushed queued message (size: %zu, remaining: %zu)", 
-                     message_size, zmq_reliable_queue_count(ctx->send_queue));
-        } else if (errno == EAGAIN) {
-            // Still no subscribers, stop trying
-            LOG_DEBUG("ZMQ: Still no subscribers, stopping flush (queued: %zu)", 
-                     zmq_reliable_queue_count(ctx->send_queue));
-            break;
-        } else {
-            // Other error
-            LOG_WARN("ZMQ: Failed to flush queued message: %s", zmq_strerror(errno));
-            failed++;
-            
-            // Remove failed message from queue to prevent infinite retry
-            zmq_reliable_queue_pop(ctx->send_queue);
-        }
-    }
-    
-    if (flushed > 0) {
-        LOG_INFO("ZMQ: Flushed %zu queued messages (%zu failed)", flushed, failed);
-    }
-    
-    return (failed == 0) ? 0 : -1;
-#else
-    (void)ctx;
-    return -1;
-#endif
-}
+
 
 // Helper function to set error state
 __attribute__((format(printf, 3, 4)))
@@ -1196,10 +1066,6 @@ int zmq_socket_get_status(ZMQContext *ctx, char *buffer, size_t buffer_size) {
     
     switch (ctx->socket_type) {
         case ZMQ_PAIR: socket_type_str = "PAIR"; break;
-        case ZMQ_PUB: socket_type_str = "PUB"; break;
-        case ZMQ_SUB: socket_type_str = "SUB"; break;
-        case ZMQ_PUSH: socket_type_str = "PUSH"; break;
-        case ZMQ_PULL: socket_type_str = "PULL"; break;
         default: socket_type_str = "UNKNOWN"; break;
     }
     
@@ -1215,11 +1081,6 @@ int zmq_socket_get_status(ZMQContext *ctx, char *buffer, size_t buffer_size) {
         }
     }
     
-    // Get queue stats
-    size_t send_q_count = 0, send_q_bytes = 0;
-    size_t recv_q_count = 0, recv_q_bytes = 0;
-    zmq_socket_get_queue_stats(ctx, &send_q_count, &send_q_bytes, &recv_q_count, &recv_q_bytes);
-    
     // Format status string
     snprintf(buffer, buffer_size,
              "ZMQ Status:\n"
@@ -1228,8 +1089,6 @@ int zmq_socket_get_status(ZMQContext *ctx, char *buffer, size_t buffer_size) {
              "  Connection: %s\n"
              "  Last Activity: %ld seconds ago\n"
              "  Reconnect Attempts: %d/%d\n"
-             "  Send Queue: %zu messages (%zu bytes)\n"
-             "  Receive Queue: %zu messages (%zu bytes)\n"
              "  Heartbeat: %s\n"
              "  Auto-reconnect: %s",
              ctx->endpoint ? ctx->endpoint : "unknown",
@@ -1237,8 +1096,6 @@ int zmq_socket_get_status(ZMQContext *ctx, char *buffer, size_t buffer_size) {
              connection_state,
              now - ctx->last_activity,
              ctx->reconnect_attempts, ctx->max_reconnect_attempts,
-             send_q_count, send_q_bytes,
-             recv_q_count, recv_q_bytes,
              ctx->heartbeat_enabled ? "enabled" : "disabled",
              ctx->reconnect_enabled ? "enabled" : "disabled");
     
@@ -1260,19 +1117,19 @@ int zmq_socket_get_queue_stats(ZMQContext *ctx,
     }
     
     if (send_queue_count) {
-        *send_queue_count = ctx->send_queue ? zmq_reliable_queue_count(ctx->send_queue) : 0;
+        *send_queue_count = 0;
     }
     
     if (send_queue_bytes) {
-        *send_queue_bytes = ctx->send_queue ? zmq_reliable_queue_bytes(ctx->send_queue) : 0;
+        *send_queue_bytes = 0;
     }
     
     if (recv_queue_count) {
-        *recv_queue_count = ctx->receive_queue ? zmq_reliable_queue_count(ctx->receive_queue) : 0;
+        *recv_queue_count = 0;
     }
     
     if (recv_queue_bytes) {
-        *recv_queue_bytes = ctx->receive_queue ? zmq_reliable_queue_bytes(ctx->receive_queue) : 0;
+        *recv_queue_bytes = 0;
     }
     
     return 0;
