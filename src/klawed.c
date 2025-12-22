@@ -7733,7 +7733,7 @@ int main(int argc, char *argv[]) {
 #ifdef HAVE_ZMQ
         printf("  ZMQ Socket Mode:\n");
         printf("    KLAWED_ZMQ_ENDPOINT  Optional: ZMQ endpoint (e.g., tcp://127.0.0.1:5555)\n");
-        printf("    KLAWED_ZMQ_MODE      Optional: ZMQ mode (daemon, pub, req)\n\n");
+        printf("    KLAWED_ZMQ_MODE      Optional: ZMQ mode (daemon, pub)\n\n");
 #endif
 
         printf("Interactive Tips:\n");
@@ -8167,7 +8167,7 @@ int main(int argc, char *argv[]) {
     if (zmq_daemon_mode) {
         // ZMQ daemon mode
         LOG_INFO("Starting ZMQ daemon mode on %s", zmq_endpoint);
-        ZMQContext *zmq_ctx = zmq_socket_init(zmq_endpoint, ZMQ_REP);
+        ZMQContext *zmq_ctx = zmq_socket_init(zmq_endpoint, ZMQ_PAIR);
         if (!zmq_ctx) {
             LOG_ERROR("Failed to initialize ZMQ socket");
             exit_code = 1;

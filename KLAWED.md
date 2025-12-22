@@ -137,7 +137,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_MCP_INIT_TIMEOUT` - Timeout for MCP server initialization in seconds (default: 10, 0=no timeout, overrides config file)
   - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
 - **ZMQ Socket**: `KLAWED_ZMQ_ENDPOINT` - ZMQ endpoint (e.g., "tcp://127.0.0.1:5555" or "ipc:///tmp/klawed.sock")
-  - `KLAWED_ZMQ_MODE` - ZMQ mode ("daemon", "pub", or "req")
+  - `KLAWED_ZMQ_MODE` - ZMQ mode ("daemon", "pub", or "pair")
 
 **Defaults:**
 - Logs: `./.klawed/logs/klawed.log` (project-local)
@@ -268,8 +268,8 @@ cp examples/mcp_servers.json ~/.config/klawed/
 **Build option**: `make ZMQ=1` (auto-detected by default if libzmq available)
 
 **Key features:**
-- Request-reply pattern (ZMQ_REP/ZMQ_REQ) for daemon mode
-- Publish-subscribe pattern (ZMQ_PUB/ZMQ_SUB) for event broadcasting
+- Peer-to-peer pattern (ZMQ_PAIR) for daemon mode (exclusive connection)
+- Publish pattern (ZMQ_PUB) for event broadcasting
 - Multiple transport types: TCP, IPC, inproc
 - JSON message format compatibility
 
@@ -306,9 +306,8 @@ export KLAWED_ZMQ_MODE="daemon"
 **Detailed message format documentation:** See `docs/zmq_input_output.md` for complete specification of message types (TEXT and ERROR).
 
 **Available modes:**
-- `daemon` (ZMQ_REP): Listen for requests and respond
+- `daemon` (ZMQ_PAIR): Listen for requests and respond (peer-to-peer)
 - `pub` (ZMQ_PUB): Publish events (e.g., streaming updates)
-- `req` (ZMQ_REQ): Connect to a ZMQ server as client
 
 ## Context Building
 

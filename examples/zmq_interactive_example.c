@@ -25,7 +25,7 @@ int main() {
     }
     
     // Create REQ socket
-    void *socket = zmq_socket(context, ZMQ_REQ);
+    void *socket = zmq_socket(context, ZMQ_PAIR);
     if (!socket) {
         fprintf(stderr, "Failed to create ZMQ socket\n");
         zmq_ctx_term(context);
