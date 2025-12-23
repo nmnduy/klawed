@@ -50,6 +50,8 @@
 #include "zmq_socket.h"
 #include <zmq.h>
 #endif
+
+#include "sqlite_queue.h"
 #ifndef TEST_BUILD
 #include "openai_messages.h"
 #endif
@@ -7775,6 +7777,9 @@ int main(int argc, char *argv[]) {
         printf("    KLAWED_ZMQ_ENDPOINT  Optional: ZMQ endpoint (e.g., tcp://127.0.0.1:5555)\n");
         printf("    KLAWED_ZMQ_MODE      Optional: ZMQ mode (daemon)\n\n");
 #endif
+        printf("  SQLite Queue Mode:\n");
+        printf("    KLAWED_SQLITE_DB_PATH  Optional: Path to SQLite database for message queue\n");
+        printf("    KLAWED_SQLITE_SENDER   Optional: Sender name for messages (default: klawed)\n\n");
 
         printf("Interactive Tips:\n");
         printf("  Esc/Ctrl+[ to enter Normal mode (vim-style), 'i' to insert\n");
@@ -7825,13 +7830,13 @@ int main(int argc, char *argv[]) {
 #ifdef HAVE_ZMQ
     int zmq_daemon_mode = 0;
     const char *zmq_endpoint = NULL;
-    
+
     if (argc == 3 && (strcmp(argv[1], "-z") == 0 || strcmp(argv[1], "--zmq") == 0)) {
         zmq_daemon_mode = 1;
         zmq_endpoint = argv[2];
         LOG_INFO("ZMQ daemon mode enabled, endpoint: %s", zmq_endpoint);
     }
-    
+
     // Also check environment variable for ZMQ endpoint
     if (!zmq_endpoint) {
         zmq_endpoint = getenv("KLAWED_ZMQ_ENDPOINT");
@@ -7843,6 +7848,34 @@ int main(int argc, char *argv[]) {
         }
     }
 #endif
+
+    // Check for SQLite queue daemon mode
+    int sqlite_daemon_mode = 0;
+    const char *sqlite_db_path = NULL;
+    const char *sqlite_sender_name = NULL;
+
+    if (argc == 3 && (strcmp(argv[1], "--sqlite-queue") == 0)) {
+        sqlite_daemon_mode = 1;
+        sqlite_db_path = argv[2];
+        LOG_INFO("SQLite queue daemon mode enabled, database: %s", sqlite_db_path);
+    }
+
+    // Also check environment variable for SQLite queue
+    if (!sqlite_db_path) {
+        sqlite_db_path = getenv("KLAWED_SQLITE_DB_PATH");
+        if (sqlite_db_path) {
+            // If KLAWED_SQLITE_DB_PATH is set, automatically run in daemon mode
+            sqlite_daemon_mode = 1;
+        }
+    }
+
+    // Get sender name (default: klawed)
+    if (!sqlite_sender_name) {
+        sqlite_sender_name = getenv("KLAWED_SQLITE_SENDER");
+    }
+    if (!sqlite_sender_name) {
+        sqlite_sender_name = "klawed";
+    }
 
     // Handle list sessions mode
 #ifndef TEST_BUILD
@@ -7868,6 +7901,9 @@ int main(int argc, char *argv[]) {
 #else
     int socket_ipc_enabled = 0;
 #endif
+    if (sqlite_daemon_mode) {
+        socket_ipc_enabled = 1;
+    }
 
     if (argc == 2 && !resume_session && !list_sessions && !socket_ipc_enabled) {
         // Single argument provided - treat as prompt for single command mode
@@ -8199,8 +8235,21 @@ int main(int argc, char *argv[]) {
 
     // Run in appropriate mode
     int exit_code = 0;
+    if (sqlite_daemon_mode) {
+        // SQLite queue daemon mode
+        LOG_INFO("Starting SQLite queue daemon mode on %s", sqlite_db_path);
+        SQLiteQueueContext *sqlite_ctx = sqlite_queue_init(sqlite_db_path, sqlite_sender_name);
+        if (!sqlite_ctx) {
+            LOG_ERROR("Failed to initialize SQLite queue");
+            exit_code = 1;
+        } else {
+            sqlite_ctx->daemon_mode = true;
+            exit_code = sqlite_queue_daemon_mode(sqlite_ctx, &state);
+            sqlite_queue_cleanup(sqlite_ctx);
+        }
+    }
 #ifdef HAVE_ZMQ
-    if (zmq_daemon_mode) {
+    else if (zmq_daemon_mode) {
         // ZMQ daemon mode
         LOG_INFO("Starting ZMQ daemon mode on %s", zmq_endpoint);
         ZMQContext *zmq_ctx = zmq_socket_init(zmq_endpoint, ZMQ_PAIR);
@@ -8211,7 +8260,7 @@ int main(int argc, char *argv[]) {
             exit_code = zmq_socket_daemon_mode(zmq_ctx, &state);
             zmq_socket_cleanup(zmq_ctx);
         }
-    } else 
+    } else
 #endif
     if (is_single_command_mode) {
         exit_code = single_command_mode(&state, single_command);

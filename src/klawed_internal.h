@@ -16,6 +16,8 @@
 #include "zmq_socket.h"
 #endif
 
+#include "sqlite_queue.h"
+
 // ============================================================================
 // Configuration Constants
 // ============================================================================
@@ -215,6 +217,9 @@ typedef struct ConversationState {
     // ZMQ socket context for IPC communication
     struct ZMQContext *zmq_context; // ZMQ socket context (NULL if not using ZMQ)
 #endif
+
+    // SQLite queue context for IPC communication
+    SQLiteQueueContext *sqlite_queue_context; // SQLite queue context (NULL if not using SQLite queue)
 
     // Subagent process management
     SubagentManager *subagent_manager;  // Tracks running subagent processes

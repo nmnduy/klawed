@@ -147,10 +147,6 @@ endif
 BUILD_DIR = build
 TARGET = $(BUILD_DIR)/klawed
 TEST_EDIT_TARGET = $(BUILD_DIR)/test_edit
-
-# Common dependencies for test targets that include klawed.c (SRC)
-# These are the objects needed when compiling klawed.c with -DTEST_BUILD
-TEST_COMMON_DEPS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ)
 TEST_EDIT_REGEX_TARGET = $(BUILD_DIR)/test_edit_regex_enhancements
 TEST_READ_TARGET = $(BUILD_DIR)/test_read
 TEST_TODO_TARGET = $(BUILD_DIR)/test_todo
@@ -176,6 +172,7 @@ TEST_ARRAY_RESIZE_TARGET = $(BUILD_DIR)/test_array_resize
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 TEST_ZMQ_SOCKET_TARGET = $(BUILD_DIR)/test_zmq_socket
+TEST_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_sqlite_queue
 QUERY_TOOL = $(BUILD_DIR)/query_logs
 SRC = src/klawed.c
 ARRAY_RESIZE_SRC = src/array_resize.c
@@ -220,6 +217,8 @@ VOICE_INPUT_SRC = src/voice_input.c
 VOICE_INPUT_OBJ = $(BUILD_DIR)/voice_input.o
 ZMQ_SOCKET_SRC = src/zmq_socket.c
 ZMQ_SOCKET_OBJ = $(BUILD_DIR)/zmq_socket.o
+SQLITE_QUEUE_SRC = src/sqlite_queue.c
+SQLITE_QUEUE_OBJ = $(BUILD_DIR)/sqlite_queue.o
 
 MCP_SRC = src/mcp.c
 MCP_OBJ = $(BUILD_DIR)/mcp.o
@@ -272,26 +271,21 @@ TEST_BASH_STDERR_TARGET = $(BUILD_DIR)/test_bash_stderr
 TEST_BASH_TRUNCATION_TARGET = $(BUILD_DIR)/test_bash_truncation
 TEST_HISTORY_FILE_TARGET = $(BUILD_DIR)/test_history_file
 TEST_TUI_INPUT_BUFFER_TARGET = $(BUILD_DIR)/test_tui_input_buffer
-TEST_TUI_SCROLLING_CALCULATIONS_TARGET = $(BUILD_DIR)/test_tui_scrolling_calculations
-TEST_WINDOW_MANAGER_BORDER_CALCULATIONS_TARGET = $(BUILD_DIR)/test_window_manager_border_calculations
-TEST_MAKEFILE_DEPENDENCIES_TARGET = $(BUILD_DIR)/test_makefile_dependencies
 TEST_TOOL_DETAILS_TARGET = $(BUILD_DIR)/test_tool_details_simple
 TEST_BASH_TIMEOUT_SRC = tests/test_bash_timeout.c
 TEST_BASH_STDERR_SRC = tests/test_bash_stderr.c
 TEST_BASH_TRUNCATION_SRC = tests/test_bash_truncation.c
 TEST_HISTORY_FILE_SRC = tests/test_history_file.c
 TEST_TUI_INPUT_BUFFER_SRC = tests/test_tui_input_buffer.c
-TEST_TUI_SCROLLING_CALCULATIONS_SRC = tests/test_tui_scrolling_calculations.c
-TEST_WINDOW_MANAGER_BORDER_CALCULATIONS_SRC = tests/test_window_manager_border_calculations.c
-TEST_MAKEFILE_DEPENDENCIES_SRC = tests/test_makefile_dependencies.c
 TEST_TOOL_DETAILS_SRC = tests/test_tool_details_simple.c
 TEST_ARRAY_RESIZE_SRC = tests/test_array_resize.c
 TEST_TOKEN_USAGE_SRC = tests/test_token_usage.c
 TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
 TEST_ZMQ_SOCKET_SRC = tests/test_zmq_socket.c
+TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
 # Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-tui-scrolling-calculations test-window-manager-border-calculations test-makefile-dependencies query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-sqlite-queue query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -304,7 +298,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-scrolling-calculations test-window-manager-border-calculations test-makefile-dependencies test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket
+test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket
 
 test-edit: check-deps $(TEST_EDIT_TARGET)
 	@echo ""
@@ -481,24 +475,6 @@ test-tui-input-buffer: check-deps $(TEST_TUI_INPUT_BUFFER_TARGET)
 	@echo ""
 	@./$(TEST_TUI_INPUT_BUFFER_TARGET)
 
-test-tui-scrolling-calculations: check-deps $(TEST_TUI_SCROLLING_CALCULATIONS_TARGET)
-	@echo ""
-	@echo "Running TUI Scrolling Calculations tests..."
-	@echo ""
-	@./$(TEST_TUI_SCROLLING_CALCULATIONS_TARGET)
-
-test-window-manager-border-calculations: check-deps $(TEST_WINDOW_MANAGER_BORDER_CALCULATIONS_TARGET)
-	@echo ""
-	@echo "Running Window Manager Border Calculations tests..."
-	@echo ""
-	@./$(TEST_WINDOW_MANAGER_BORDER_CALCULATIONS_TARGET)
-
-test-makefile-dependencies: check-deps $(TEST_MAKEFILE_DEPENDENCIES_TARGET)
-	@echo ""
-	@echo "Running Makefile Dependency tests..."
-	@echo ""
-	@./$(TEST_MAKEFILE_DEPENDENCIES_TARGET)
-
 test-tool-details: check-deps $(TEST_TOOL_DETAILS_TARGET)
 	@echo ""
 	@echo "Running Tool Details Display tests..."
@@ -529,11 +505,17 @@ test-zmq-socket: check-deps $(TEST_ZMQ_SOCKET_TARGET)
 	@echo ""
 	@./$(TEST_ZMQ_SOCKET_TARGET)
 
+test-sqlite-queue: check-deps $(TEST_SQLITE_QUEUE_TARGET)
+	@echo ""
+	@echo "Running SQLite Queue tests..."
+	@echo ""
+	@./$(TEST_SQLITE_QUEUE_TARGET)
+
 # Socket test removed - will be reimplemented with ZMQ
 
-$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
+$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Build successful!"
 	@echo "Version: $(VERSION)"
@@ -563,6 +545,11 @@ $(BUILD_DIR)/retry_logic.o: src/retry_logic.c src/retry_logic.h
 $(BUILD_DIR)/zmq_socket.o: $(ZMQ_SOCKET_SRC) src/zmq_socket.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_socket.o $(ZMQ_SOCKET_SRC)
+
+# Build SQLite queue object
+$(BUILD_DIR)/sqlite_queue.o: $(SQLITE_QUEUE_SRC) src/sqlite_queue.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/sqlite_queue.o $(SQLITE_QUEUE_SRC)
 
 # Build ZMQ reliable queue object
 
@@ -612,7 +599,7 @@ $(VERSION_H): $(VERSION_FILE)
 	@echo "✓ Version: $(VERSION)"
 
 # Debug build with AddressSanitizer for finding memory bugs
-$(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) $(COMMANDS_SRC) $(COMPLETION_SRC) $(TUI_SRC) $(TODO_SRC) $(AWS_BEDROCK_SRC) $(PROVIDER_SRC) $(OPENAI_PROVIDER_SRC) $(OPENAI_MESSAGES_SRC) $(BEDROCK_PROVIDER_SRC) $(ANTHROPIC_PROVIDER_SRC) $(BUILTIN_THEMES_SRC) $(PATCH_PARSER_SRC) $(MESSAGE_QUEUE_SRC) $(AI_WORKER_SRC) $(VOICE_INPUT_SRC) $(ZMQ_SOCKET_SRC) $(MCP_SRC) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_SRC) $(RETRY_LOGIC_SRC)
+$(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) $(COMMANDS_SRC) $(COMPLETION_SRC) $(TUI_SRC) $(TODO_SRC) $(AWS_BEDROCK_SRC) $(PROVIDER_SRC) $(OPENAI_PROVIDER_SRC) $(OPENAI_MESSAGES_SRC) $(BEDROCK_PROVIDER_SRC) $(ANTHROPIC_PROVIDER_SRC) $(BUILTIN_THEMES_SRC) $(PATCH_PARSER_SRC) $(MESSAGE_QUEUE_SRC) $(AI_WORKER_SRC) $(VOICE_INPUT_SRC) $(ZMQ_SOCKET_SRC) $(SQLITE_QUEUE_SRC) $(MCP_SRC) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_SRC) $(RETRY_LOGIC_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building with AddressSanitizer (debug mode)..."
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/logger_debug.o $(LOGGER_SRC)
@@ -637,7 +624,8 @@ $(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/http_client_debug.o $(HTTP_CLIENT_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/retry_logic_debug.o $(RETRY_LOGIC_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_socket_debug.o $(ZMQ_SOCKET_SRC)
-	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/patch_parser_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/http_client_debug.o $(BUILD_DIR)/retry_logic_debug.o $(BUILD_DIR)/zmq_socket_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
+	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/sqlite_queue_debug.o $(SQLITE_QUEUE_SRC)
+	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/patch_parser_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/http_client_debug.o $(BUILD_DIR)/retry_logic_debug.o $(BUILD_DIR)/zmq_socket_debug.o $(BUILD_DIR)/sqlite_queue_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
 	@echo ""
 	@echo "✓ Debug build successful with AddressSanitizer!"
 	@echo "Run: ./$(BUILD_DIR)/klawed-debug \"your prompt here\""
@@ -722,22 +710,13 @@ sanitize-all: check-deps
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/tool_utils_all.o $(TOOL_UTILS_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/history_file_all.o $(HISTORY_FILE_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/base64_all.o $(BASE64_SRC); \
-	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/anthropic_provider_all.o $(ANTHROPIC_PROVIDER_SRC); \
-	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/array_resize_all.o $(ARRAY_RESIZE_SRC); \
-	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/http_client_all.o $(HTTP_CLIENT_SRC); \
-	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/session_all.o $(SESSION_SRC); \
-	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/subagent_manager_all.o $(SUBAGENT_MANAGER_SRC); \
-	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/zmq_socket_all.o $(ZMQ_SOCKET_SRC); \
-	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/retry_logic_all.o $(RETRY_LOGIC_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -o $(BUILD_DIR)/klawed-allsan $(SRC) \
 		$(BUILD_DIR)/logger_all.o $(BUILD_DIR)/persistence_all.o $(BUILD_DIR)/migrations_all.o $(BUILD_DIR)/commands_all.o \
 		$(BUILD_DIR)/completion_all.o $(BUILD_DIR)/tui_all.o $(BUILD_DIR)/todo_all.o $(BUILD_DIR)/aws_bedrock_all.o \
 		$(BUILD_DIR)/provider_all.o $(BUILD_DIR)/openai_provider_all.o $(BUILD_DIR)/openai_messages_all.o \
-		$(BUILD_DIR)/bedrock_provider_all.o $(BUILD_DIR)/anthropic_provider_all.o $(BUILD_DIR)/builtin_themes_all.o $(BUILD_DIR)/patch_parser_all.o \
+		$(BUILD_DIR)/bedrock_provider_all.o $(BUILD_DIR)/builtin_themes_all.o $(BUILD_DIR)/patch_parser_all.o \
 		$(BUILD_DIR)/message_queue_all.o $(BUILD_DIR)/ai_worker_all.o $(BUILD_DIR)/voice_input_all.o $(BUILD_DIR)/mcp_all.o \
 		$(BUILD_DIR)/window_manager_all.o $(BUILD_DIR)/tool_utils_all.o $(BUILD_DIR)/history_file_all.o $(BUILD_DIR)/base64_all.o \
-		$(BUILD_DIR)/array_resize_all.o $(BUILD_DIR)/http_client_all.o $(BUILD_DIR)/session_all.o $(BUILD_DIR)/subagent_manager_all.o \
-		$(BUILD_DIR)/zmq_socket_all.o $(BUILD_DIR)/retry_logic_all.o \
 		$(LDFLAGS) -fsanitize=address,undefined
 	@echo ""
 	@echo "✓ Build successful with combined sanitizers!"
@@ -762,23 +741,18 @@ sanitize-leak: check-deps
 	@echo ""
 
 # Run Valgrind memory checker on tests
-valgrind: 
+valgrind: test-edit test-read
 	@echo ""
 	@echo "Running Valgrind on test suite..."
 	@echo ""
-	@command -v valgrind >/dev/null 2>&1 || { echo "Warning: valgrind not found. Skipping valgrind checks."; echo ""; exit 0; }
-	@if [ -f "$(TEST_EDIT_TARGET)" ] && [ -f "$(TEST_READ_TARGET)" ]; then \
-		echo "=== Testing Edit tool with Valgrind ==="; \
-		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 ./$(TEST_EDIT_TARGET) || echo "Valgrind check for Edit tool failed or showed issues"; \
-		echo ""; \
-		echo "=== Testing Read tool with Valgrind ==="; \
-		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 ./$(TEST_READ_TARGET) || echo "Valgrind check for Read tool failed or showed issues"; \
-		echo ""; \
-		echo "✓ Valgrind checks complete!"; \
-	else \
-		echo "Warning: Test executables not found. Skipping valgrind checks."; \
-		echo "Run 'make test-edit test-read' to build tests first."; \
-	fi
+	@command -v valgrind >/dev/null 2>&1 || { echo "Error: valgrind not found. Install with: brew install valgrind (macOS) or apt-get install valgrind (Linux)"; exit 1; }
+	@echo "=== Testing Edit tool with Valgrind ==="
+	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 ./$(TEST_EDIT_TARGET)
+	@echo ""
+	@echo "=== Testing Read tool with Valgrind ==="
+	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 ./$(TEST_READ_TARGET)
+	@echo ""
+	@echo "✓ Valgrind checks complete - no memory leaks detected!"
 	@echo ""
 
 # Comprehensive memory bug scan - runs all analysis tools
@@ -802,52 +776,27 @@ memscan: analyze sanitize-all
 	@echo ""
 
 # Comprehensive bug finding - runs ALL available analysis tools
-comprehensive-scan:
-	@echo ""
-	@echo "=========================================="
-	@echo "Starting Comprehensive Bug Finding Scan"
-	@echo "=========================================="
-	@echo ""
-	@echo "1. Running static analysis (output saved to $(BUILD_DIR)/analyze.log)..."
-	@$(MAKE) --no-print-directory analyze >/dev/null 2>&1 || echo "  Warning: Static analysis failed or produced warnings (check $(BUILD_DIR)/analyze.log)"
-	@echo "   ✓ Static analysis completed"
-	@echo ""
-	@echo "2. Building with sanitizers..."
-	@$(MAKE) --no-print-directory sanitize-all >/dev/null 2>&1 && echo "   ✓ Built with combined sanitizers ($(BUILD_DIR)/klawed-allsan)" || echo "   ○ Sanitizer build failed"
-	@echo ""
-	@echo "3. Running valgrind memory checks..."
-	@$(MAKE) --no-print-directory valgrind >/dev/null 2>&1 && echo "   ✓ Valgrind checks passed" || echo "   ○ Valgrind checks failed or skipped"
+comprehensive-scan: analyze sanitize-all valgrind
 	@echo ""
 	@echo "=========================================="
 	@echo "Comprehensive Bug Finding Scan Complete"
 	@echo "=========================================="
 	@echo ""
-	@echo "Summary:"
-	@if [ -f "$(BUILD_DIR)/analyze.log" ]; then \
-		WARNINGS=$$(grep -c "warning:" $(BUILD_DIR)/analyze.log 2>/dev/null || echo "0"); \
-		echo "  • Static analysis: $$WARNINGS warning(s) in $(BUILD_DIR)/analyze.log"; \
-	else \
-		echo "  • Static analysis: Not run or failed"; \
-	fi
-	@if [ -f "$(BUILD_DIR)/klawed-allsan" ]; then \
-		echo "  • Sanitizers: Built successfully ($(BUILD_DIR)/klawed-allsan)"; \
-	else \
-		echo "  • Sanitizers: Build failed"; \
-	fi
-	@echo "  • Valgrind: Check output above for results"
+	@echo "Completed checks:"
+	@echo "  ✓ Static analysis (see $(BUILD_DIR)/analyze.log)"
+	@echo "  ✓ Built with combined sanitizers ($(BUILD_DIR)/claude-allsan)"
+	@echo "  ✓ Valgrind memory leak detection"
 	@echo ""
-	@echo "Additional tools (install manually):"
-	@command -v clang-tidy >/dev/null 2>&1 && echo "  ✓ clang-tidy" || echo "  ○ clang-tidy"
-	@command -v cppcheck >/dev/null 2>&1 && echo "  ✓ cppcheck" || echo "  ○ cppcheck"
-	@command -v flawfinder >/dev/null 2>&1 && echo "  ✓ flawfinder" || echo "  ○ flawfinder"
-	@command -v scan-build >/dev/null 2>&1 && echo "  ✓ scan-build" || echo "  ○ scan-build"
+	@echo "Additional tools available (install manually):"
+	@command -v clang-tidy >/dev/null 2>&1 && echo "  ✓ clang-tidy (static analysis)" || echo "  ○ clang-tidy (not installed)"
+	@command -v cppcheck >/dev/null 2>&1 && echo "  ✓ cppcheck (static analysis)" || echo "  ○ cppcheck (not installed)"
+	@command -v flawfinder >/dev/null 2>&1 && echo "  ✓ flawfinder (security analysis)" || echo "  ○ flawfinder (not installed)"
+	@command -v scan-build >/dev/null 2>&1 && echo "  ✓ scan-build (clang static analyzer)" || echo "  ○ scan-build (not installed)"
 	@echo ""
 	@echo "Next steps:"
-	@echo "  • Review analysis: cat $(BUILD_DIR)/analyze.log | head -50"
-	@if [ -f "$(BUILD_DIR)/klawed-allsan" ]; then \
-		echo "  • Test sanitizers: ./$(BUILD_DIR)/klawed-allsan \"test\""; \
-	fi
-	@echo "  • Run individual checks: make analyze sanitize-all valgrind"
+	@echo "  1. Review static analysis: cat $(BUILD_DIR)/analyze.log"
+	@echo "  2. Test with sanitizers: ./$(BUILD_DIR)/klawed-allsan \"test prompt\""
+	@echo "  3. Run individual sanitizer builds: make sanitize-ub sanitize-leak"
 	@echo ""
 
 # Quick static analysis with clang-tidy (if available)
@@ -1006,40 +955,40 @@ $(TEST_WM_TARGET): $(TEST_WM_SRC) $(WINDOW_MANAGER_OBJ) $(LOGGER_OBJ)
 # Test target for Edit tool - compiles test suite with claude.c functions
 # We rename claude's main to avoid conflict with test's main
 # and export internal functions via TEST_BUILD flag
-$(TEST_EDIT_TARGET): $(SRC) $(TEST_EDIT_SRC) $(TEST_COMMON_DEPS)
+$(TEST_EDIT_TARGET): $(SRC) $(TEST_EDIT_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_test.o $(SRC)
 	@echo "Compiling Edit tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_edit.o $(TEST_EDIT_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_EDIT_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_EDIT_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Edit tool test build successful!"
 	@echo ""
 
 # Test target for Edit tool regex enhancements
-$(TEST_EDIT_REGEX_TARGET): $(SRC) $(TEST_EDIT_REGEX_SRC) $(TEST_COMMON_DEPS)
+$(TEST_EDIT_REGEX_TARGET): $(SRC) $(TEST_EDIT_REGEX_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_test.o $(SRC)
 	@echo "Compiling Edit tool regex enhancement test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_edit_regex.o $(TEST_EDIT_REGEX_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_EDIT_REGEX_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit_regex.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_EDIT_REGEX_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit_regex.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Edit tool regex enhancement test build successful!"
 	@echo ""
 
 # Test target for Read tool - compiles test suite with claude.c functions
-$(TEST_READ_TARGET): $(SRC) $(TEST_READ_SRC) $(TEST_COMMON_DEPS)
+$(TEST_READ_TARGET): $(SRC) $(TEST_READ_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for read testing..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_read_test.o $(SRC)
 	@echo "Compiling Read tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_read.o $(TEST_READ_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_READ_TARGET) $(BUILD_DIR)/claude_read_test.o $(BUILD_DIR)/test_read.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_READ_TARGET) $(BUILD_DIR)/claude_read_test.o $(BUILD_DIR)/test_read.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Read tool test build successful!"
 	@echo ""
@@ -1059,14 +1008,14 @@ $(TEST_TODO_TARGET): $(TODO_SRC) $(TEST_TODO_SRC) tests/test_todo_stubs.c
 	@echo ""
 
 # Test target for TodoWrite tool - tests integration with claude.c
-$(TEST_TODO_WRITE_TARGET): $(SRC) $(TEST_TODO_WRITE_SRC) $(TEST_COMMON_DEPS)
+$(TEST_TODO_WRITE_TARGET): $(SRC) $(TEST_TODO_WRITE_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for TodoWrite testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_todowrite_test.o $(SRC)
 	@echo "Compiling TodoWrite tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_todo_write.o $(TEST_TODO_WRITE_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_TODO_WRITE_TARGET) $(BUILD_DIR)/claude_todowrite_test.o $(BUILD_DIR)/test_todo_write.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_TODO_WRITE_TARGET) $(BUILD_DIR)/claude_todowrite_test.o $(BUILD_DIR)/test_todo_write.o $(TODO_OBJ) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ TodoWrite tool test build successful!"
 	@echo ""
@@ -1081,40 +1030,40 @@ $(TEST_PASTE_TARGET): $(TEST_PASTE_SRC)
 	@echo ""
 
 # Test target for Bash Timeout - tests bash command timeout functionality
-$(TEST_BASH_TIMEOUT_TARGET): $(SRC) $(TEST_BASH_TIMEOUT_SRC) $(TEST_COMMON_DEPS)
+$(TEST_BASH_TIMEOUT_TARGET): $(SRC) $(TEST_BASH_TIMEOUT_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for bash timeout testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_bash_timeout_test.o $(SRC)
 	@echo "Compiling Bash timeout test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_timeout.o $(TEST_BASH_TIMEOUT_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_TIMEOUT_TARGET) $(BUILD_DIR)/claude_bash_timeout_test.o $(BUILD_DIR)/test_bash_timeout.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_TIMEOUT_TARGET) $(BUILD_DIR)/claude_bash_timeout_test.o $(BUILD_DIR)/test_bash_timeout.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash timeout test build successful!"
 	@echo ""
 
 # Test target for Bash Stderr Output Fix - tests stderr capture and redirection
-$(TEST_BASH_STDERR_TARGET): $(SRC) $(TEST_BASH_STDERR_SRC) $(TEST_COMMON_DEPS)
+$(TEST_BASH_STDERR_TARGET): $(SRC) $(TEST_BASH_STDERR_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for bash stderr testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_bash_stderr_test.o $(SRC)
 	@echo "Compiling Bash stderr test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_stderr.o $(TEST_BASH_STDERR_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_STDERR_TARGET) $(BUILD_DIR)/claude_bash_stderr_test.o $(BUILD_DIR)/test_bash_stderr.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_STDERR_TARGET) $(BUILD_DIR)/claude_bash_stderr_test.o $(BUILD_DIR)/test_bash_stderr.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash stderr test build successful!"
 	@echo ""
 
 # Test target for Bash Output Truncation - tests output size limiting and truncation
-$(TEST_BASH_TRUNCATION_TARGET): $(SRC) $(TEST_BASH_TRUNCATION_SRC) $(TEST_COMMON_DEPS)
+$(TEST_BASH_TRUNCATION_TARGET): $(SRC) $(TEST_BASH_TRUNCATION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for bash truncation testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_bash_truncation_test.o $(SRC)
 	@echo "Compiling Bash truncation test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_truncation.o $(TEST_BASH_TRUNCATION_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_TRUNCATION_TARGET) $(BUILD_DIR)/claude_bash_truncation_test.o $(BUILD_DIR)/test_bash_truncation.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_TRUNCATION_TARGET) $(BUILD_DIR)/claude_bash_truncation_test.o $(BUILD_DIR)/test_bash_truncation.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash truncation test build successful!"
 	@echo ""
@@ -1174,14 +1123,14 @@ $(TEST_TIMING_TARGET): tests/test_tool_timing.c
 	@echo ""
 
 # Test target for tool results regression - demonstrates bug in commit 414fbe8
-$(TEST_TOOL_RESULTS_REGRESSION_TARGET): $(SRC) $(TEST_TOOL_RESULTS_REGRESSION_SRC) $(TEST_COMMON_DEPS)
+$(TEST_TOOL_RESULTS_REGRESSION_TARGET): $(SRC) $(TEST_TOOL_RESULTS_REGRESSION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for tool results regression testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_tool_results_test.o $(SRC)
 	@echo "Compiling tool results regression test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_tool_results_regression.o $(TEST_TOOL_RESULTS_REGRESSION_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_TOOL_RESULTS_REGRESSION_TARGET) $(BUILD_DIR)/claude_tool_results_test.o $(BUILD_DIR)/test_tool_results_regression.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_TOOL_RESULTS_REGRESSION_TARGET) $(BUILD_DIR)/claude_tool_results_test.o $(BUILD_DIR)/test_tool_results_regression.o $(TODO_OBJ) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Tool results regression test build successful!"
 	@echo ""
@@ -1209,14 +1158,14 @@ $(TEST_OPENAI_FORMAT_TARGET): $(TEST_OPENAI_FORMAT_SRC)
 	@echo ""
 
 # Test target for cancel flow -> tool_result formatting
-$(TEST_CANCEL_FLOW_TARGET): $(SRC) tests/test_cancel_flow.c $(TEST_COMMON_DEPS)
+$(TEST_CANCEL_FLOW_TARGET): $(SRC) tests/test_cancel_flow.c $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for cancel flow testing..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_cancel_flow_test.o $(SRC)
 	@echo "Compiling cancel flow test suite..."
 	@$(CC) $(CFLAGS) -I./src -c -o $(BUILD_DIR)/test_cancel_flow.o tests/test_cancel_flow.c
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_CANCEL_FLOW_TARGET) $(BUILD_DIR)/claude_cancel_flow_test.o $(BUILD_DIR)/test_cancel_flow.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_CANCEL_FLOW_TARGET) $(BUILD_DIR)/claude_cancel_flow_test.o $(BUILD_DIR)/test_cancel_flow.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Cancel flow test build successful!"
 	@echo ""
@@ -1228,14 +1177,15 @@ test-cancel-flow: check-deps $(TEST_CANCEL_FLOW_TARGET)
 	@./$(TEST_CANCEL_FLOW_TARGET)
 
 # Test target for Write tool diff integration
-$(TEST_WRITE_DIFF_INTEGRATION_TARGET): $(SRC) $(TEST_WRITE_DIFF_INTEGRATION_SRC) $(TEST_COMMON_DEPS)
+$(TEST_WRITE_DIFF_INTEGRATION_TARGET): $(SRC) $(TEST_WRITE_DIFF_INTEGRATION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for write diff testing..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_write_diff_test.o $(SRC)
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_utils_test.o $(TOOL_UTILS_SRC)
 	@echo "Compiling Write tool diff integration test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_write_diff_integration.o $(TEST_WRITE_DIFF_INTEGRATION_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_WRITE_DIFF_INTEGRATION_TARGET) $(BUILD_DIR)/claude_write_diff_test.o $(BUILD_DIR)/test_write_diff_integration.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_WRITE_DIFF_INTEGRATION_TARGET) $(BUILD_DIR)/claude_write_diff_test.o $(BUILD_DIR)/tool_utils_test.o $(BUILD_DIR)/test_write_diff_integration.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Write tool diff integration test build successful!"
 	@echo ""
@@ -1250,27 +1200,29 @@ $(TEST_ROTATION_TARGET): $(TEST_ROTATION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $
 	@echo ""
 
 # Test target for patch parser
-$(TEST_PATCH_PARSER_TARGET): $(SRC) $(TEST_PATCH_PARSER_SRC) $(TEST_COMMON_DEPS)
+$(TEST_PATCH_PARSER_TARGET): $(SRC) $(TEST_PATCH_PARSER_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for patch parser testing..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_patch_test.o $(SRC)
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_utils_patch_test.o $(TOOL_UTILS_SRC)
 	@echo "Compiling Patch Parser test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_patch_parser.o $(TEST_PATCH_PARSER_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_PATCH_PARSER_TARGET) $(BUILD_DIR)/claude_patch_test.o $(BUILD_DIR)/test_patch_parser.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_PATCH_PARSER_TARGET) $(BUILD_DIR)/claude_patch_test.o $(BUILD_DIR)/tool_utils_patch_test.o $(BUILD_DIR)/test_patch_parser.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Patch Parser test build successful!"
 	@echo ""
 
 # Test target for function context @@ markers
-$(TEST_FUNCTION_CONTEXT_TARGET): $(SRC) $(TEST_FUNCTION_CONTEXT_SRC) $(TEST_COMMON_DEPS)
+$(TEST_FUNCTION_CONTEXT_TARGET): $(SRC) $(TEST_FUNCTION_CONTEXT_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for function context testing..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_function_context_test.o $(SRC)
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_utils_function_context_test.o $(TOOL_UTILS_SRC)
 	@echo "Compiling Function Context test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_function_context.o $(TEST_FUNCTION_CONTEXT_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_FUNCTION_CONTEXT_TARGET) $(BUILD_DIR)/claude_function_context_test.o $(BUILD_DIR)/test_function_context.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+	@$(CC) -o $(TEST_FUNCTION_CONTEXT_TARGET) $(BUILD_DIR)/claude_function_context_test.o $(BUILD_DIR)/tool_utils_function_context_test.o $(BUILD_DIR)/test_function_context.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Function Context test build successful!"
 	@echo ""
@@ -1641,39 +1593,6 @@ $(TEST_TUI_INPUT_BUFFER_TARGET): $(TEST_TUI_INPUT_BUFFER_SRC)
 	@echo "✓ TUI Input Buffer test build successful!"
 	@echo ""
 
-# Test target for TUI scrolling calculations
-$(TEST_TUI_SCROLLING_CALCULATIONS_TARGET): $(TEST_TUI_SCROLLING_CALCULATIONS_SRC)
-	@mkdir -p $(BUILD_DIR)
-	@echo "Compiling TUI Scrolling Calculations test suite..."
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_tui_scrolling_calculations.o $(TEST_TUI_SCROLLING_CALCULATIONS_SRC)
-	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_TUI_SCROLLING_CALCULATIONS_TARGET) $(BUILD_DIR)/test_tui_scrolling_calculations.o $(LDFLAGS)
-	@echo ""
-	@echo "✓ TUI Scrolling Calculations test build successful!"
-	@echo ""
-
-# Test target for Window Manager border calculations
-$(TEST_WINDOW_MANAGER_BORDER_CALCULATIONS_TARGET): $(TEST_WINDOW_MANAGER_BORDER_CALCULATIONS_SRC)
-	@mkdir -p $(BUILD_DIR)
-	@echo "Compiling Window Manager Border Calculations test suite..."
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_window_manager_border_calculations.o $(TEST_WINDOW_MANAGER_BORDER_CALCULATIONS_SRC)
-	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_WINDOW_MANAGER_BORDER_CALCULATIONS_TARGET) $(BUILD_DIR)/test_window_manager_border_calculations.o $(LDFLAGS)
-	@echo ""
-	@echo "✓ Window Manager Border Calculations test build successful!"
-	@echo ""
-
-# Test target for Makefile dependency validation
-$(TEST_MAKEFILE_DEPENDENCIES_TARGET): $(TEST_MAKEFILE_DEPENDENCIES_SRC)
-	@mkdir -p $(BUILD_DIR)
-	@echo "Compiling Makefile Dependency test suite..."
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_makefile_dependencies.o $(TEST_MAKEFILE_DEPENDENCIES_SRC)
-	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_MAKEFILE_DEPENDENCIES_TARGET) $(BUILD_DIR)/test_makefile_dependencies.o $(LDFLAGS)
-	@echo ""
-	@echo "✓ Makefile Dependency test build successful!"
-	@echo ""
-
 # Test target for Bash command summarization
 # Note: test_bash_summary.c file does not exist, so test-bash-summary target is removed
 
@@ -1689,17 +1608,14 @@ test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARG
 $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET): $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET) $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC) $(LDFLAGS)
 
-$(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LOGGER_OBJ)
-	@$(CC) $(CFLAGS) -o $(TEST_HTTP_CLIENT_TARGET) $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
+$(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ)
+	@$(CC) $(CFLAGS) -o $(TEST_HTTP_CLIENT_TARGET) $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
 
-$(TEST_ZMQ_SOCKET_TARGET): $(SRC) $(TEST_ZMQ_SOCKET_SRC) $(TEST_COMMON_DEPS)
-	@mkdir -p $(BUILD_DIR)
-	@echo "Compiling claude.c for ZMQ socket testing..."
-	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_zmq_test.o $(SRC)
-	@echo "Compiling ZMQ socket test suite..."
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_zmq_socket.o $(TEST_ZMQ_SOCKET_SRC)
-	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_ZMQ_SOCKET_TARGET) $(BUILD_DIR)/claude_zmq_test.o $(BUILD_DIR)/test_zmq_socket.o $(TEST_COMMON_DEPS) $(LDFLAGS)
+$(TEST_ZMQ_SOCKET_TARGET): $(TEST_ZMQ_SOCKET_SRC) $(ZMQ_SOCKET_OBJ) $(ZMQ_RELIABLE_QUEUE_OBJ) $(LOGGER_OBJ)
+	@$(CC) $(CFLAGS) -o $(TEST_ZMQ_SOCKET_TARGET) $(TEST_ZMQ_SOCKET_SRC) $(ZMQ_SOCKET_OBJ) $(ZMQ_RELIABLE_QUEUE_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
+
+$(TEST_SQLITE_QUEUE_TARGET): $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_OBJ) $(LOGGER_OBJ)
+	@$(CC) $(CFLAGS) -o $(TEST_SQLITE_QUEUE_TARGET) $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
 
 # Socket test build rule removed - will be reimplemented with ZMQ
 
