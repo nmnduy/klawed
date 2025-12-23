@@ -1052,8 +1052,58 @@ static int sqlite_queue_open_db(SQLiteQueueContext *ctx) {
         return SQLITE_QUEUE_ERROR_DB_OPEN_FAILED;
     }
     
+    // Apply pragma settings for better concurrency and performance
+    char *errmsg = NULL;
+    
+    // 1. Enable WAL mode for better concurrency (CRITICAL)
+    rc = sqlite3_exec(db, "PRAGMA journal_mode=WAL;", NULL, NULL, &errmsg);
+    if (rc != SQLITE_OK) {
+        LOG_WARN("SQLite Queue: Failed to enable WAL mode: %s", errmsg ? errmsg : sqlite3_errmsg(db));
+        if (errmsg) sqlite3_free(errmsg);
+        errmsg = NULL;
+        // Non-fatal, continue with default journal mode
+    } else {
+        LOG_DEBUG("SQLite Queue: WAL mode enabled");
+    }
+    
+    // 2. Set synchronous mode to NORMAL (RECOMMENDED)
+    rc = sqlite3_exec(db, "PRAGMA synchronous=NORMAL;", NULL, NULL, &errmsg);
+    if (rc != SQLITE_OK) {
+        LOG_WARN("SQLite Queue: Failed to set synchronous mode: %s", errmsg ? errmsg : sqlite3_errmsg(db));
+        if (errmsg) sqlite3_free(errmsg);
+        errmsg = NULL;
+    } else {
+        LOG_DEBUG("SQLite Queue: Synchronous mode set to NORMAL");
+    }
+    
+    // 3. Set busy timeout to 5 seconds (ESSENTIAL)
+    sqlite3_busy_timeout(db, 5000);
+    LOG_DEBUG("SQLite Queue: Busy timeout set to 5000ms");
+    
+    // Optional performance pragmas
+    // Set cache size to ~2MB (2000 pages of 1KB each)
+    rc = sqlite3_exec(db, "PRAGMA cache_size=-2000;", NULL, NULL, &errmsg);
+    if (rc != SQLITE_OK && errmsg) {
+        sqlite3_free(errmsg);
+        errmsg = NULL;
+    }
+    
+    // Store temporary tables/indexes in memory
+    rc = sqlite3_exec(db, "PRAGMA temp_store=MEMORY;", NULL, NULL, &errmsg);
+    if (rc != SQLITE_OK && errmsg) {
+        sqlite3_free(errmsg);
+        errmsg = NULL;
+    }
+    
+    // Limit WAL file size to prevent unbounded growth
+    rc = sqlite3_exec(db, "PRAGMA journal_size_limit=67108864;", NULL, NULL, &errmsg);
+    if (rc != SQLITE_OK && errmsg) {
+        sqlite3_free(errmsg);
+        errmsg = NULL;
+    }
+    
     ctx->db_handle = db;
-    LOG_DEBUG("SQLite Queue: Database opened: %s", ctx->db_path);
+    LOG_DEBUG("SQLite Queue: Database opened with pragma settings: %s", ctx->db_path);
     
     return SQLITE_QUEUE_ERROR_NONE;
 }
