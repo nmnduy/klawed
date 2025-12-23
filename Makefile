@@ -584,7 +584,7 @@ $(VERSION_H): $(VERSION_FILE)
 	@echo "✓ Version: $(VERSION)"
 
 # Debug build with AddressSanitizer for finding memory bugs
-$(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) $(COMMANDS_SRC) $(COMPLETION_SRC) $(TUI_SRC) $(TODO_SRC) $(AWS_BEDROCK_SRC) $(PROVIDER_SRC) $(OPENAI_PROVIDER_SRC) $(OPENAI_MESSAGES_SRC) $(BEDROCK_PROVIDER_SRC) $(ANTHROPIC_PROVIDER_SRC) $(BUILTIN_THEMES_SRC) $(PATCH_PARSER_SRC) $(MESSAGE_QUEUE_SRC) $(AI_WORKER_SRC) $(VOICE_INPUT_SRC) $(ZMQ_SOCKET_SRC) $(ZMQ_RELIABLE_QUEUE_SRC) $(MCP_SRC) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_SRC) $(RETRY_LOGIC_SRC)
+$(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) $(COMMANDS_SRC) $(COMPLETION_SRC) $(TUI_SRC) $(TODO_SRC) $(AWS_BEDROCK_SRC) $(PROVIDER_SRC) $(OPENAI_PROVIDER_SRC) $(OPENAI_MESSAGES_SRC) $(BEDROCK_PROVIDER_SRC) $(ANTHROPIC_PROVIDER_SRC) $(BUILTIN_THEMES_SRC) $(PATCH_PARSER_SRC) $(MESSAGE_QUEUE_SRC) $(AI_WORKER_SRC) $(VOICE_INPUT_SRC) $(ZMQ_SOCKET_SRC) $(MCP_SRC) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_SRC) $(RETRY_LOGIC_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building with AddressSanitizer (debug mode)..."
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/logger_debug.o $(LOGGER_SRC)
@@ -700,7 +700,6 @@ sanitize-all: check-deps
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/session_all.o $(SESSION_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/subagent_manager_all.o $(SUBAGENT_MANAGER_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/zmq_socket_all.o $(ZMQ_SOCKET_SRC); \
-	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/zmq_reliable_queue_all.o $(ZMQ_RELIABLE_QUEUE_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/retry_logic_all.o $(RETRY_LOGIC_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -o $(BUILD_DIR)/klawed-allsan $(SRC) \
 		$(BUILD_DIR)/logger_all.o $(BUILD_DIR)/persistence_all.o $(BUILD_DIR)/migrations_all.o $(BUILD_DIR)/commands_all.o \
@@ -710,7 +709,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/message_queue_all.o $(BUILD_DIR)/ai_worker_all.o $(BUILD_DIR)/voice_input_all.o $(BUILD_DIR)/mcp_all.o \
 		$(BUILD_DIR)/window_manager_all.o $(BUILD_DIR)/tool_utils_all.o $(BUILD_DIR)/history_file_all.o $(BUILD_DIR)/base64_all.o \
 		$(BUILD_DIR)/array_resize_all.o $(BUILD_DIR)/http_client_all.o $(BUILD_DIR)/session_all.o $(BUILD_DIR)/subagent_manager_all.o \
-		$(BUILD_DIR)/zmq_socket_all.o $(BUILD_DIR)/zmq_reliable_queue_all.o $(BUILD_DIR)/retry_logic_all.o \
+		$(BUILD_DIR)/zmq_socket_all.o $(BUILD_DIR)/retry_logic_all.o \
 		$(LDFLAGS) -fsanitize=address,undefined
 	@echo ""
 	@echo "✓ Build successful with combined sanitizers!"
@@ -1635,8 +1634,8 @@ $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET): $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC)
 $(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_HTTP_CLIENT_TARGET) $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
 
-$(TEST_ZMQ_SOCKET_TARGET): $(TEST_ZMQ_SOCKET_SRC) $(ZMQ_SOCKET_OBJ) $(ZMQ_RELIABLE_QUEUE_OBJ) $(LOGGER_OBJ)
-	@$(CC) $(CFLAGS) -o $(TEST_ZMQ_SOCKET_TARGET) $(TEST_ZMQ_SOCKET_SRC) $(ZMQ_SOCKET_OBJ) $(ZMQ_RELIABLE_QUEUE_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
+$(TEST_ZMQ_SOCKET_TARGET): $(TEST_ZMQ_SOCKET_SRC) $(ZMQ_SOCKET_OBJ) $(LOGGER_OBJ)
+	@$(CC) $(CFLAGS) -o $(TEST_ZMQ_SOCKET_TARGET) $(TEST_ZMQ_SOCKET_SRC) $(ZMQ_SOCKET_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
 
 # Socket test build rule removed - will be reimplemented with ZMQ
 
