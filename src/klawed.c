@@ -193,10 +193,10 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 /**
  * Parse socket input (must be JSON with messageType: "TEXT" and content)
  * Strict mode: requires valid JSON, no plain text fallback
- * 
+ *
  * Returns a newly allocated string with the extracted content.
  * Caller must free the returned string.
- * 
+ *
  * Returns:
  * - Extracted content if valid JSON with messageType: "TEXT"
  * - NULL if:
@@ -1045,14 +1045,14 @@ static cJSON* tool_upload_image(cJSON *params, ConversationState *state) {
                 char buffer[8192];
                 size_t bytes;
                 int copy_success = 1;
-                
+
                 while ((bytes = fread(buffer, 1, sizeof(buffer), src)) > 0) {
                     if (fwrite(buffer, 1, bytes, dst) != bytes) {
                         copy_success = 0;
                         break;
                     }
                 }
-                
+
                 // Check for read/write errors
                 if (ferror(src) || ferror(dst)) {
                     copy_success = 0;
@@ -6238,7 +6238,7 @@ static void process_response(ConversationState *state,
     cJSON *choices = cJSON_GetObjectItem(response->raw_response, "choices");
     if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
         cJSON *choice = cJSON_GetArrayItem(choices, 0);
-        
+
         // Check for finish_reason and log WARNING if it's 'length'
         cJSON *finish_reason = cJSON_GetObjectItem(choice, "finish_reason");
         if (finish_reason && cJSON_IsString(finish_reason) && finish_reason->valuestring) {
@@ -6246,7 +6246,7 @@ static void process_response(ConversationState *state,
                 LOG_WARN("API response stopped due to token limit (finish_reason: 'length')");
             }
         }
-        
+
         cJSON *message = cJSON_GetObjectItem(choice, "message");
         if (message) {
             add_assistant_message_openai(state, message);
@@ -6818,7 +6818,7 @@ static int submit_input_callback(const char *input, void *user_data) {
         LOG_ERROR("Failed to allocate memory for input copy");
         return 0;
     }
-    
+
     if (input_copy[0] == '/') {
         ui_append_line(tui, queue, "[User]", input_copy, COLOR_PAIR_USER);
 
@@ -7136,7 +7136,7 @@ static int process_single_command_response(ConversationState *state, ApiResponse
     cJSON *choices = cJSON_GetObjectItem(response->raw_response, "choices");
     if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
         cJSON *choice = cJSON_GetArrayItem(choices, 0);
-        
+
         // Check for finish_reason and log WARNING if it's 'length'
         cJSON *finish_reason = cJSON_GetObjectItem(choice, "finish_reason");
         if (finish_reason && cJSON_IsString(finish_reason) && finish_reason->valuestring) {
@@ -7144,7 +7144,7 @@ static int process_single_command_response(ConversationState *state, ApiResponse
                 LOG_WARN("API response stopped due to token limit (finish_reason: 'length')");
             }
         }
-        
+
         cJSON *message = cJSON_GetObjectItem(choice, "message");
         if (message) {
             add_assistant_message_openai(state, message);

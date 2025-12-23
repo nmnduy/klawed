@@ -42,7 +42,7 @@ typedef struct ZMQContext {
     int socket_type;    // ZMQ socket type (ZMQ_PAIR only)
     bool enabled;       // Whether ZMQ mode is enabled
     bool daemon_mode;   // Whether running in daemon mode (listen for requests)
-    
+
     // Timeout configuration (in milliseconds)
     int receive_timeout;
     int send_timeout;
@@ -50,22 +50,22 @@ typedef struct ZMQContext {
     int heartbeat_interval;
     int reconnect_interval;
     int max_reconnect_attempts;
-    
+
     // Queue sizes
     int send_queue_size;
     int receive_queue_size;
-    
+
     // State tracking
     int reconnect_attempts;
     time_t last_heartbeat;
     time_t last_activity;
     bool heartbeat_enabled;
     bool reconnect_enabled;
-    
+
     // Reliable message queues (reserved for future use)
     ZMQMessageQueue *send_queue;    // Queue for outgoing messages
     ZMQMessageQueue *receive_queue; // Queue for incoming messages (future use)
-    
+
     // Error tracking
     ZMQErrorCode last_error;
     char error_message[256];
@@ -159,7 +159,7 @@ int zmq_socket_get_status(ZMQContext *ctx, char *buffer, size_t buffer_size);
  * @param recv_queue_bytes Output for receive queue byte count (can be NULL)
  * @return 0 on success, -1 on failure
  */
-int zmq_socket_get_queue_stats(ZMQContext *ctx, 
+int zmq_socket_get_queue_stats(ZMQContext *ctx,
                                size_t *send_queue_count, size_t *send_queue_bytes,
                                size_t *recv_queue_count, size_t *recv_queue_bytes);
 

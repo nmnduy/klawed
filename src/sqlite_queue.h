@@ -37,26 +37,26 @@ typedef struct SQLiteQueueContext {
     char *sender_name;       // Name of this sender (default: "klawed")
     bool enabled;            // Whether SQLite queue mode is enabled
     bool daemon_mode;        // Whether running in daemon mode (poll for messages)
-    
+
     // Polling configuration (in milliseconds)
     int poll_interval;
     int poll_timeout;
     int max_retries;
-    
+
     // Message configuration
     size_t max_message_size;
     int max_queue_size;
-    
+
     // State tracking
     time_t last_poll;
     int retry_count;
     bool initialized;
-    
+
     // Error tracking
     SQLiteQueueErrorCode last_error;
     char error_message[256];
     time_t error_time;
-    
+
     // Internal database handle (opened on demand)
     void *db_handle;  // sqlite3* but we don't want to expose sqlite3.h in header
 } SQLiteQueueContext;
@@ -160,7 +160,7 @@ int sqlite_queue_get_status(SQLiteQueueContext *ctx, char *buffer, size_t buffer
  * @param unread_count Output for unread message count for this sender (can be NULL)
  * @return 0 on success, -1 on failure
  */
-int sqlite_queue_get_stats(SQLiteQueueContext *ctx, 
+int sqlite_queue_get_stats(SQLiteQueueContext *ctx,
                           int *pending_count, int *total_count, int *unread_count);
 
 /**
