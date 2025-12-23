@@ -38,7 +38,7 @@
 
 #define INITIAL_CONV_CAPACITY 1000
 #define INPUT_BUFFER_SIZE 8192
-#define INPUT_WIN_MIN_HEIGHT 3  // Min height for input window (1 line + 2 borders)
+#define INPUT_WIN_MIN_HEIGHT 2  // Min height for input window (content lines, no borders)
 #define INPUT_WIN_MAX_HEIGHT_PERCENT 20  // Max height as percentage of viewport
 #define CONV_WIN_PADDING 0      // No padding between conv window and input window
 #define STATUS_WIN_HEIGHT 1     // Single-line status window
@@ -1185,7 +1185,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
     int prompt_len = (int)strlen(prompt) + 1;  // +1 for space after prompt
 
-    // Calculate available width for text (window width - borders - prompt)
+    // Calculate available width for text (window width - prompt)
     int available_width = input->win_width - prompt_len;
     if (available_width < 10) available_width = 10;
 
@@ -1251,10 +1251,10 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
         if (tui->mode == TUI_MODE_COMMAND && tui->command_buffer) {
             // Show command buffer
-            mvwprintw(win, 1, 1, "%s", tui->command_buffer);
+            mvwprintw(win, 0, 0, "%s", tui->command_buffer);
         } else {
             // Show normal prompt
-            mvwprintw(win, 1, 1, "%s ", prompt);
+            mvwprintw(win, 0, 0, "%s ", prompt);
         }
 
         if (has_colors()) {
@@ -1268,10 +1268,10 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     }
 
     int current_line = 0;
-    int screen_y = 1;
-    int screen_x = (current_line == 0) ? prompt_len + 1 : 1;
+    int screen_y = 0;
+    int screen_x = (current_line == 0) ? prompt_len : 0;
 
-    for (int i = 0; i < input->length && screen_y <= input->win_height; i++) {
+    for (int i = 0; i < input->length && screen_y < input->win_height; i++) {
         // Skip lines before scroll offset
         if (current_line < input->line_scroll_offset) {
             if (input->buffer[i] == '\n') {
@@ -1292,7 +1292,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         if (c == '\n') {
             screen_y++;
             current_line++;
-            screen_x = 1;  // Reset to left edge (after border)
+            screen_x = 0;  // Reset to left edge (no border)
         } else {
             // Cast to unsigned char then to chtype to avoid sign-conversion warnings
             mvwaddch(win, screen_y, screen_x, (chtype)(unsigned char)c);
@@ -1307,7 +1307,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             if (screen_x > line_width) {
                 screen_y++;
                 current_line++;
-                screen_x = 1;
+                screen_x = 0;
             }
         }
     }
@@ -1317,8 +1317,8 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     }
 
     // Position cursor (adjusted for scroll)
-    int cursor_screen_y = cursor_line - input->line_scroll_offset + 1;
-    int cursor_screen_x = cursor_col + 1;  // +1 for border
+    int cursor_screen_y = cursor_line - input->line_scroll_offset;
+    int cursor_screen_x = cursor_col;  // No border offset
 
     // Recalculate cursor_col relative to its line
     int temp_line = 0;
@@ -1336,11 +1336,11 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             }
         }
     }
-    cursor_screen_x = temp_col + 1;
+    cursor_screen_x = temp_col;
 
     // Bounds check for cursor position
-    if (cursor_screen_y >= 1 && cursor_screen_y <= input->win_height &&
-        cursor_screen_x >= 1 && cursor_screen_x <= input->win_width) {
+    if (cursor_screen_y >= 0 && cursor_screen_y < input->win_height &&
+        cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
         wmove(win, cursor_screen_y, cursor_screen_x);
     }
 
@@ -1419,7 +1419,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
 
     // Calculate max input height as 20% of screen height
     // Formula: max_height = (screen_height * percentage / 100)
-    // Minimum of INPUT_WIN_MIN_HEIGHT to ensure at least 1 line + borders
+    // Minimum of INPUT_WIN_MIN_HEIGHT to ensure at least some content lines
     int calculated_max_height = (screen_height * INPUT_WIN_MAX_HEIGHT_PERCENT) / 100;
     if (calculated_max_height < INPUT_WIN_MIN_HEIGHT) {
         calculated_max_height = INPUT_WIN_MIN_HEIGHT;

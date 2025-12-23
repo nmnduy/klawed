@@ -12,8 +12,8 @@
 // Default configuration values
 const WindowManagerConfig DEFAULT_WINDOW_CONFIG = {
     .min_conv_height = 5,
-    .min_input_height = 3,  // 1 line + 2 borders
-    .max_input_height = 5,  // 3 lines + 2 borders
+    .min_input_height = 2,  // Minimum content lines (no borders)
+    .max_input_height = 5,  // Maximum content lines (no borders)
     .status_height = 1,
     // No gap between status and input by default
     .padding = 0,
@@ -413,8 +413,8 @@ int window_manager_resize_input(WindowManager *wm, int desired_content_lines) {
         return -1;
     }
 
-    // Calculate desired window height (content + borders)
-    int new_height = desired_content_lines + 2;  // +2 for borders
+    // Calculate desired window height (content only - no borders)
+    int new_height = desired_content_lines;
 
     // Clamp to min/max
     if (new_height < wm->config.min_input_height) {
