@@ -73,9 +73,20 @@ static int on_input_submit(const char *input, void *user_data) {
 }
 
 int main(void) {
+    // Initialize ConversationState (simplified for test)
+    ConversationState state = {0};
+    state.todo_list = NULL;
+    state.persistence_db = NULL;
+    state.provider = NULL;
+    state.mcp_config = NULL;
+    state.subagent_manager = NULL;
+#ifdef HAVE_ZMQ
+    state.zmq_context = NULL;
+#endif
+    
     // Initialize TUI
     TUIState tui = {0};
-    if (tui_init(&tui) != 0) {
+    if (tui_init(&tui, &state) != 0) {
         fprintf(stderr, "Failed to initialize TUI\n");
         return 1;
     }
@@ -109,7 +120,11 @@ int main(void) {
     printf("\nStarting non-blocking event loop...\n");
     sleep(1);  // Give user time to see the message
 
-    int result = tui_event_loop(&tui, "Input", on_input_submit, &worker, &msg_queue);
+    int result = tui_event_loop(&tui, "Input", on_input_submit, 
+                                NULL,  // interrupt_callback
+                                NULL,  // keypress_callback
+                                NULL,  // external_input_callback
+                                &worker, &msg_queue);
 
     // Cleanup
     worker.running = 0;

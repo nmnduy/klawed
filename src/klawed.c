@@ -1529,24 +1529,36 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     }
 
     // Get timeout from parameter, environment, or use default (30 seconds)
+    // Zero timeout is prohibited to prevent indefinite blocking
     int timeout_seconds = 30;  // Default timeout
 
     // First check if timeout parameter is provided
     const cJSON *timeout_json = cJSON_GetObjectItem(params, "timeout");
     if (timeout_json && cJSON_IsNumber(timeout_json)) {
-        timeout_seconds = timeout_json->valueint;
-        if (timeout_seconds < 0) {
-            timeout_seconds = 0;  // Negative values treated as 0 (no timeout)
+        int timeout_val = timeout_json->valueint;
+        // Reject zero and negative timeouts - use default instead
+        if (timeout_val > 0) {
+            timeout_seconds = timeout_val;
         }
+        // If timeout_val <= 0, keep default (30 seconds)
     } else {
         // Fall back to environment variable
         const char *timeout_env = getenv("KLAWED_BASH_TIMEOUT");
         if (timeout_env) {
             int timeout_val = atoi(timeout_env);
-            if (timeout_val >= 0) {
+            // Reject zero and negative timeouts - use default instead
+            if (timeout_val > 0) {
                 timeout_seconds = timeout_val;
             }
+            // If timeout_val <= 0, keep default (30 seconds)
         }
+    }
+
+    // Warn if timeout is > 60 seconds
+    if (timeout_seconds > 60 && g_active_tool_queue) {
+        char warning[128];
+        snprintf(warning, sizeof(warning), "[Warning] Bash timeout set to %d seconds (unusually long)", timeout_seconds);
+        post_tui_message(g_active_tool_queue, TUI_MSG_ADD_LINE, warning);
     }
 
     // Execute command and capture both stdout and stderr
@@ -1828,12 +1840,25 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     }
 
     // Get optional timeout parameter (default: 300 seconds = 5 minutes)
+    // Zero timeout is prohibited to prevent indefinite blocking
     int timeout_seconds = 300;
     const cJSON *timeout_json = cJSON_GetObjectItem(params, "timeout");
     if (timeout_json && cJSON_IsNumber(timeout_json)) {
-        timeout_seconds = timeout_json->valueint;
-        if (timeout_seconds < 0) {
-            timeout_seconds = 0;  // 0 = no timeout
+        int timeout_val = timeout_json->valueint;
+        // Reject zero and negative timeouts - use default instead
+        if (timeout_val > 0) {
+            timeout_seconds = timeout_val;
+        }
+        // If timeout_val <= 0, keep default (300 seconds)
+    }
+
+    // Warn if timeout is > 15 minutes (900 seconds)
+    if (timeout_seconds > 900) {
+        LOG_WARN("Subagent timeout set to %d seconds (unusually long, > 15 minutes)", timeout_seconds);
+        if (g_active_tool_queue) {
+            char warning[128];
+            snprintf(warning, sizeof(warning), "[Warning] Subagent timeout set to %d seconds (unusually long)", timeout_seconds);
+            post_tui_message(g_active_tool_queue, TUI_MSG_ADD_LINE, warning);
         }
     }
 
