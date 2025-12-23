@@ -147,6 +147,10 @@ endif
 BUILD_DIR = build
 TARGET = $(BUILD_DIR)/klawed
 TEST_EDIT_TARGET = $(BUILD_DIR)/test_edit
+
+# Common dependencies for test targets that include klawed.c (SRC)
+# These are the objects needed when compiling klawed.c with -DTEST_BUILD
+TEST_COMMON_DEPS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ)
 TEST_EDIT_REGEX_TARGET = $(BUILD_DIR)/test_edit_regex_enhancements
 TEST_READ_TARGET = $(BUILD_DIR)/test_read
 TEST_TODO_TARGET = $(BUILD_DIR)/test_todo
@@ -1002,40 +1006,40 @@ $(TEST_WM_TARGET): $(TEST_WM_SRC) $(WINDOW_MANAGER_OBJ) $(LOGGER_OBJ)
 # Test target for Edit tool - compiles test suite with claude.c functions
 # We rename claude's main to avoid conflict with test's main
 # and export internal functions via TEST_BUILD flag
-$(TEST_EDIT_TARGET): $(SRC) $(TEST_EDIT_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ)
+$(TEST_EDIT_TARGET): $(SRC) $(TEST_EDIT_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_test.o $(SRC)
 	@echo "Compiling Edit tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_edit.o $(TEST_EDIT_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_EDIT_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_EDIT_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Edit tool test build successful!"
 	@echo ""
 
 # Test target for Edit tool regex enhancements
-$(TEST_EDIT_REGEX_TARGET): $(SRC) $(TEST_EDIT_REGEX_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ)
+$(TEST_EDIT_REGEX_TARGET): $(SRC) $(TEST_EDIT_REGEX_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_test.o $(SRC)
 	@echo "Compiling Edit tool regex enhancement test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_edit_regex.o $(TEST_EDIT_REGEX_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_EDIT_REGEX_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit_regex.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_EDIT_REGEX_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit_regex.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Edit tool regex enhancement test build successful!"
 	@echo ""
 
 # Test target for Read tool - compiles test suite with claude.c functions
-$(TEST_READ_TARGET): $(SRC) $(TEST_READ_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ)
+$(TEST_READ_TARGET): $(SRC) $(TEST_READ_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for read testing..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_read_test.o $(SRC)
 	@echo "Compiling Read tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_read.o $(TEST_READ_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_READ_TARGET) $(BUILD_DIR)/claude_read_test.o $(BUILD_DIR)/test_read.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_READ_TARGET) $(BUILD_DIR)/claude_read_test.o $(BUILD_DIR)/test_read.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Read tool test build successful!"
 	@echo ""
@@ -1055,14 +1059,14 @@ $(TEST_TODO_TARGET): $(TODO_SRC) $(TEST_TODO_SRC) tests/test_todo_stubs.c
 	@echo ""
 
 # Test target for TodoWrite tool - tests integration with claude.c
-$(TEST_TODO_WRITE_TARGET): $(SRC) $(TEST_TODO_WRITE_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
+$(TEST_TODO_WRITE_TARGET): $(SRC) $(TEST_TODO_WRITE_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for TodoWrite testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_todowrite_test.o $(SRC)
 	@echo "Compiling TodoWrite tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_todo_write.o $(TEST_TODO_WRITE_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_TODO_WRITE_TARGET) $(BUILD_DIR)/claude_todowrite_test.o $(BUILD_DIR)/test_todo_write.o $(TODO_OBJ) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_TODO_WRITE_TARGET) $(BUILD_DIR)/claude_todowrite_test.o $(BUILD_DIR)/test_todo_write.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ TodoWrite tool test build successful!"
 	@echo ""
@@ -1077,40 +1081,40 @@ $(TEST_PASTE_TARGET): $(TEST_PASTE_SRC)
 	@echo ""
 
 # Test target for Bash Timeout - tests bash command timeout functionality
-$(TEST_BASH_TIMEOUT_TARGET): $(SRC) $(TEST_BASH_TIMEOUT_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
+$(TEST_BASH_TIMEOUT_TARGET): $(SRC) $(TEST_BASH_TIMEOUT_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for bash timeout testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_bash_timeout_test.o $(SRC)
 	@echo "Compiling Bash timeout test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_timeout.o $(TEST_BASH_TIMEOUT_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_TIMEOUT_TARGET) $(BUILD_DIR)/claude_bash_timeout_test.o $(BUILD_DIR)/test_bash_timeout.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_TIMEOUT_TARGET) $(BUILD_DIR)/claude_bash_timeout_test.o $(BUILD_DIR)/test_bash_timeout.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash timeout test build successful!"
 	@echo ""
 
 # Test target for Bash Stderr Output Fix - tests stderr capture and redirection
-$(TEST_BASH_STDERR_TARGET): $(SRC) $(TEST_BASH_STDERR_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
+$(TEST_BASH_STDERR_TARGET): $(SRC) $(TEST_BASH_STDERR_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for bash stderr testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_bash_stderr_test.o $(SRC)
 	@echo "Compiling Bash stderr test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_stderr.o $(TEST_BASH_STDERR_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_STDERR_TARGET) $(BUILD_DIR)/claude_bash_stderr_test.o $(BUILD_DIR)/test_bash_stderr.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_STDERR_TARGET) $(BUILD_DIR)/claude_bash_stderr_test.o $(BUILD_DIR)/test_bash_stderr.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash stderr test build successful!"
 	@echo ""
 
 # Test target for Bash Output Truncation - tests output size limiting and truncation
-$(TEST_BASH_TRUNCATION_TARGET): $(SRC) $(TEST_BASH_TRUNCATION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
+$(TEST_BASH_TRUNCATION_TARGET): $(SRC) $(TEST_BASH_TRUNCATION_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for bash truncation testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_bash_truncation_test.o $(SRC)
 	@echo "Compiling Bash truncation test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_truncation.o $(TEST_BASH_TRUNCATION_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_TRUNCATION_TARGET) $(BUILD_DIR)/claude_bash_truncation_test.o $(BUILD_DIR)/test_bash_truncation.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_TRUNCATION_TARGET) $(BUILD_DIR)/claude_bash_truncation_test.o $(BUILD_DIR)/test_bash_truncation.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash truncation test build successful!"
 	@echo ""
@@ -1170,14 +1174,14 @@ $(TEST_TIMING_TARGET): tests/test_tool_timing.c
 	@echo ""
 
 # Test target for tool results regression - demonstrates bug in commit 414fbe8
-$(TEST_TOOL_RESULTS_REGRESSION_TARGET): $(SRC) $(TEST_TOOL_RESULTS_REGRESSION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
+$(TEST_TOOL_RESULTS_REGRESSION_TARGET): $(SRC) $(TEST_TOOL_RESULTS_REGRESSION_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for tool results regression testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_tool_results_test.o $(SRC)
 	@echo "Compiling tool results regression test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_tool_results_regression.o $(TEST_TOOL_RESULTS_REGRESSION_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_TOOL_RESULTS_REGRESSION_TARGET) $(BUILD_DIR)/claude_tool_results_test.o $(BUILD_DIR)/test_tool_results_regression.o $(TODO_OBJ) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_TOOL_RESULTS_REGRESSION_TARGET) $(BUILD_DIR)/claude_tool_results_test.o $(BUILD_DIR)/test_tool_results_regression.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Tool results regression test build successful!"
 	@echo ""
@@ -1205,14 +1209,14 @@ $(TEST_OPENAI_FORMAT_TARGET): $(TEST_OPENAI_FORMAT_SRC)
 	@echo ""
 
 # Test target for cancel flow -> tool_result formatting
-$(TEST_CANCEL_FLOW_TARGET): $(SRC) tests/test_cancel_flow.c $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
+$(TEST_CANCEL_FLOW_TARGET): $(SRC) tests/test_cancel_flow.c $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for cancel flow testing..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_cancel_flow_test.o $(SRC)
 	@echo "Compiling cancel flow test suite..."
 	@$(CC) $(CFLAGS) -I./src -c -o $(BUILD_DIR)/test_cancel_flow.o tests/test_cancel_flow.c
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_CANCEL_FLOW_TARGET) $(BUILD_DIR)/claude_cancel_flow_test.o $(BUILD_DIR)/test_cancel_flow.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_CANCEL_FLOW_TARGET) $(BUILD_DIR)/claude_cancel_flow_test.o $(BUILD_DIR)/test_cancel_flow.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Cancel flow test build successful!"
 	@echo ""
@@ -1224,15 +1228,14 @@ test-cancel-flow: check-deps $(TEST_CANCEL_FLOW_TARGET)
 	@./$(TEST_CANCEL_FLOW_TARGET)
 
 # Test target for Write tool diff integration
-$(TEST_WRITE_DIFF_INTEGRATION_TARGET): $(SRC) $(TEST_WRITE_DIFF_INTEGRATION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
+$(TEST_WRITE_DIFF_INTEGRATION_TARGET): $(SRC) $(TEST_WRITE_DIFF_INTEGRATION_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for write diff testing..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_write_diff_test.o $(SRC)
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_utils_test.o $(TOOL_UTILS_SRC)
 	@echo "Compiling Write tool diff integration test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_write_diff_integration.o $(TEST_WRITE_DIFF_INTEGRATION_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_WRITE_DIFF_INTEGRATION_TARGET) $(BUILD_DIR)/claude_write_diff_test.o $(BUILD_DIR)/tool_utils_test.o $(BUILD_DIR)/test_write_diff_integration.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_WRITE_DIFF_INTEGRATION_TARGET) $(BUILD_DIR)/claude_write_diff_test.o $(BUILD_DIR)/test_write_diff_integration.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Write tool diff integration test build successful!"
 	@echo ""
@@ -1247,29 +1250,27 @@ $(TEST_ROTATION_TARGET): $(TEST_ROTATION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $
 	@echo ""
 
 # Test target for patch parser
-$(TEST_PATCH_PARSER_TARGET): $(SRC) $(TEST_PATCH_PARSER_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
+$(TEST_PATCH_PARSER_TARGET): $(SRC) $(TEST_PATCH_PARSER_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for patch parser testing..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_patch_test.o $(SRC)
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_utils_patch_test.o $(TOOL_UTILS_SRC)
 	@echo "Compiling Patch Parser test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_patch_parser.o $(TEST_PATCH_PARSER_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_PATCH_PARSER_TARGET) $(BUILD_DIR)/claude_patch_test.o $(BUILD_DIR)/tool_utils_patch_test.o $(BUILD_DIR)/test_patch_parser.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_PATCH_PARSER_TARGET) $(BUILD_DIR)/claude_patch_test.o $(BUILD_DIR)/test_patch_parser.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Patch Parser test build successful!"
 	@echo ""
 
 # Test target for function context @@ markers
-$(TEST_FUNCTION_CONTEXT_TARGET): $(SRC) $(TEST_FUNCTION_CONTEXT_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ)
+$(TEST_FUNCTION_CONTEXT_TARGET): $(SRC) $(TEST_FUNCTION_CONTEXT_SRC) $(TEST_COMMON_DEPS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for function context testing..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_function_context_test.o $(SRC)
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_utils_function_context_test.o $(TOOL_UTILS_SRC)
 	@echo "Compiling Function Context test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_function_context.o $(TEST_FUNCTION_CONTEXT_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_FUNCTION_CONTEXT_TARGET) $(BUILD_DIR)/claude_function_context_test.o $(BUILD_DIR)/tool_utils_function_context_test.o $(BUILD_DIR)/test_function_context.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_FUNCTION_CONTEXT_TARGET) $(BUILD_DIR)/claude_function_context_test.o $(BUILD_DIR)/test_function_context.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Function Context test build successful!"
 	@echo ""
@@ -1688,11 +1689,17 @@ test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARG
 $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET): $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET) $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC) $(LDFLAGS)
 
-$(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ)
-	@$(CC) $(CFLAGS) -o $(TEST_HTTP_CLIENT_TARGET) $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
+$(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LOGGER_OBJ)
+	@$(CC) $(CFLAGS) -o $(TEST_HTTP_CLIENT_TARGET) $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
 
-$(TEST_ZMQ_SOCKET_TARGET): $(TEST_ZMQ_SOCKET_SRC) $(ZMQ_SOCKET_OBJ) $(LOGGER_OBJ)
-	@$(CC) $(CFLAGS) -o $(TEST_ZMQ_SOCKET_TARGET) $(TEST_ZMQ_SOCKET_SRC) $(ZMQ_SOCKET_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
+$(TEST_ZMQ_SOCKET_TARGET): $(SRC) $(TEST_ZMQ_SOCKET_SRC) $(TEST_COMMON_DEPS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling claude.c for ZMQ socket testing..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_zmq_test.o $(SRC)
+	@echo "Compiling ZMQ socket test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_zmq_socket.o $(TEST_ZMQ_SOCKET_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_ZMQ_SOCKET_TARGET) $(BUILD_DIR)/claude_zmq_test.o $(BUILD_DIR)/test_zmq_socket.o $(TEST_COMMON_DEPS) $(LDFLAGS)
 
 # Socket test build rule removed - will be reimplemented with ZMQ
 
