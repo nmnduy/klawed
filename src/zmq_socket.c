@@ -485,9 +485,9 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
                     "{\"messageType\": \"ERROR\", \"content\": \"Interactive processing failed\"}");
         } else {
             // Success - responses are sent during interactive processing
-            // Send a final completion message
-            snprintf(response, sizeof(response), 
-                    "{\"messageType\": \"COMPLETED\", \"content\": \"Interactive processing completed successfully\"}");
+            // No completion message - client detects completion when no pending TOOL messages
+            // without corresponding TOOL_RESULT messages
+            response[0] = '\0';  // Empty response
         }
                 
     } else {
