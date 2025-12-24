@@ -530,8 +530,615 @@ send_and_receive({
 4. **Use appropriate timeouts** for network operations
 5. **Log message exchanges** for debugging complex interactions
 
+### Java Client Examples
+
+#### Simple Java Client (Minimal)
+
+For quick testing or simple integrations:
+
+```java
+import org.zeromq.SocketType;
+import org.zeromq.ZMQ;
+import org.zeromq.ZContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
+
+/**
+ * Simple Java ZMQ client for Klawed - minimal implementation.
+ */
+public class SimpleKlawedClient {
+    public static void main(String[] args) throws Exception {
+        String endpoint = "tcp://127.0.0.1:5555";
+        ObjectMapper mapper = new ObjectMapper();
+        
+        try (ZContext context = new ZContext()) {
+            ZMQ.Socket socket = context.createSocket(SocketType.PAIR);
+            socket.setReceiveTimeOut(30000); // 30 second timeout
+            socket.connect(endpoint);
+            
+            // Send text request
+            String request = mapper.writeValueAsString(Map.of(
+                "messageType", "TEXT",
+                "content", "Write a hello world program in Java"
+            ));
+            
+            if (!socket.send(request)) {
+                System.err.println("Failed to send message");
+                return;
+            }
+            
+            // Receive response
+            byte[] responseBytes = socket.recv();
+            if (responseBytes == null) {
+                System.err.println("No response received (timeout)");
+                return;
+            }
+            
+            String responseStr = new String(responseBytes);
+            Map<String, Object> response = mapper.readValue(responseStr, Map.class);
+            
+            String messageType = (String) response.get("messageType");
+            if ("TEXT".equals(messageType)) {
+                System.out.println("Response: " + response.get("content"));
+            } else if ("ERROR".equals(messageType)) {
+                System.err.println("Error: " + response.get("content"));
+            } else {
+                System.err.println("Unknown message type: " + messageType);
+            }
+        }
+    }
+}
+```
+
+#### Robust Java Client (Production-Ready with Reconnection)
+
+```java
+import org.zeromq.SocketType;
+import org.zeromq.ZMQ;
+import org.zeromq.ZContext;
+import org.zeromq.ZMQException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * Robust Java ZMQ client for Klawed with automatic reconnection,
+ * heartbeat monitoring, and message queuing.
+ */
+public class KlawedZMQClient {
+    private static final String ENDPOINT = "tcp://127.0.0.1:5555";
+    private static final int HEARTBEAT_INTERVAL_MS = 5000;
+    private static final int HEARTBEAT_TIMEOUT_MS = 15000;
+    private static final int RECONNECT_BASE_MS = 1000;
+    private static final int MAX_RECONNECT_MS = 30000;
+    private static final int MAX_RECONNECT_ATTEMPTS = 10;
+    private static final int SEND_TIMEOUT_MS = 10000;
+    private static final int RECV_TIMEOUT_MS = 30000;
+    
+    private final ZContext context;
+    private ZMQ.Socket socket;
+    private final ObjectMapper objectMapper;
+    private final ScheduledExecutorService scheduler;
+    private final AtomicBoolean connected;
+    private final ReentrantLock socketLock;
+    private final BlockingQueue<String> messageQueue;
+    private ScheduledFuture<?> heartbeatFuture;
+    private long lastHeartbeatResponse;
+    
+    public KlawedZMQClient() {
+        this.context = new ZContext();
+        this.objectMapper = new ObjectMapper();
+        this.scheduler = Executors.newScheduledThreadPool(2);
+        this.connected = new AtomicBoolean(false);
+        this.socketLock = new ReentrantLock();
+        this.messageQueue = new LinkedBlockingQueue<>(100);
+        this.lastHeartbeatResponse = System.currentTimeMillis();
+        
+        // Start connection manager
+        scheduler.scheduleAtFixedRate(this::connectionManager, 0, 1, TimeUnit.SECONDS);
+        
+        // Start message queue processor
+        scheduler.scheduleAtFixedRate(this::processMessageQueue, 0, 100, TimeUnit.MILLISECONDS);
+    }
+    
+    /**
+     * Connection manager that handles reconnection and heartbeat monitoring
+     */
+    private void connectionManager() {
+        try {
+            if (!connected.get()) {
+                attemptReconnect();
+            } else {
+                // Check heartbeat timeout
+                long now = System.currentTimeMillis();
+                if (now - lastHeartbeatResponse > HEARTBEAT_TIMEOUT_MS) {
+                    System.err.println("Heartbeat timeout, reconnecting...");
+                    connected.set(false);
+                    closeSocket();
+                    attemptReconnect();
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Connection manager error: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Attempt reconnection with exponential backoff
+     */
+    private void attemptReconnect() {
+        int attempt = 0;
+        while (attempt < MAX_RECONNECT_ATTEMPTS && !connected.get()) {
+            try {
+                socketLock.lock();
+                try {
+                    if (socket != null) {
+                        socket.close();
+                    }
+                    
+                    socket = context.createSocket(SocketType.PAIR);
+                    socket.setSendTimeOut(SEND_TIMEOUT_MS);
+                    socket.setReceiveTimeOut(RECV_TIMEOUT_MS);
+                    socket.setLinger(0); // Don't linger on close
+                    
+                    System.out.println("Attempting connection to " + ENDPOINT + " (attempt " + (attempt + 1) + ")");
+                    socket.connect(ENDPOINT);
+                    
+                    // Test connection with a heartbeat ping
+                    if (sendHeartbeatPing()) {
+                        connected.set(true);
+                        System.out.println("Connected successfully to " + ENDPOINT);
+                        
+                        // Start heartbeat monitoring
+                        startHeartbeat();
+                        return;
+                    }
+                } finally {
+                    socketLock.unlock();
+                }
+            } catch (Exception e) {
+                System.err.println("Connection attempt " + (attempt + 1) + " failed: " + e.getMessage());
+            }
+            
+            // Exponential backoff
+            int backoffMs = Math.min(RECONNECT_BASE_MS * (1 << attempt), MAX_RECONNECT_MS);
+            attempt++;
+            
+            if (attempt < MAX_RECONNECT_ATTEMPTS) {
+                try {
+                    Thread.sleep(backoffMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        
+        if (!connected.get()) {
+            System.err.println("Failed to connect after " + MAX_RECONNECT_ATTEMPTS + " attempts");
+        }
+    }
+    
+    /**
+     * Send a heartbeat ping to test connection
+     */
+    private boolean sendHeartbeatPing() {
+        try {
+            String pingMessage = objectMapper.writeValueAsString(
+                java.util.Map.of(
+                    "messageType", "HEARTBEAT_PING",
+                    "timestamp", System.currentTimeMillis()
+                )
+            );
+            
+            socketLock.lock();
+            try {
+                if (socket.send(pingMessage, ZMQ.DONTWAIT)) {
+                    byte[] response = socket.recv(ZMQ.DONTWAIT);
+                    if (response != null) {
+                        JsonNode responseJson = objectMapper.readTree(new String(response));
+                        if ("HEARTBEAT_PONG".equals(responseJson.get("messageType").asText())) {
+                            lastHeartbeatResponse = System.currentTimeMillis();
+                            return true;
+                        }
+                    }
+                }
+            } finally {
+                socketLock.unlock();
+            }
+        } catch (Exception e) {
+            System.err.println("Heartbeat ping failed: " + e.getMessage());
+        }
+        return false;
+    }
+    
+    /**
+     * Start periodic heartbeat monitoring
+     */
+    private void startHeartbeat() {
+        if (heartbeatFuture != null) {
+            heartbeatFuture.cancel(false);
+        }
+        
+        heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
+            if (connected.get()) {
+                if (!sendHeartbeatPing()) {
+                    System.err.println("Heartbeat failed, marking as disconnected");
+                    connected.set(false);
+                }
+            }
+        }, HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS, TimeUnit.MILLISECONDS);
+    }
+    
+    /**
+     * Send a text message to Klawed
+     */
+    public CompletableFuture<String> sendTextMessage(String content) {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        
+        try {
+            String message = objectMapper.writeValueAsString(
+                java.util.Map.of(
+                    "messageType", "TEXT",
+                    "content", content
+                )
+            );
+            
+            // Queue the message for sending
+            if (!messageQueue.offer(message)) {
+                future.completeExceptionally(new RuntimeException("Message queue full"));
+                return future;
+            }
+            
+            // Process the response asynchronously
+            scheduler.submit(() -> {
+                try {
+                    String response = waitForTextResponse();
+                    future.complete(response);
+                } catch (Exception e) {
+                    future.completeExceptionally(e);
+                }
+            });
+            
+        } catch (Exception e) {
+            future.completeExceptionally(e);
+        }
+        
+        return future;
+    }
+    
+    /**
+     * Process messages from the queue
+     */
+    private void processMessageQueue() {
+        if (!connected.get() || messageQueue.isEmpty()) {
+            return;
+        }
+        
+        String message = messageQueue.peek();
+        if (message == null) {
+            return;
+        }
+        
+        try {
+            socketLock.lock();
+            try {
+                if (socket.send(message, ZMQ.DONTWAIT)) {
+                    // Message sent successfully, remove from queue
+                    messageQueue.poll();
+                    System.out.println("Message sent successfully");
+                } else {
+                    System.err.println("Failed to send message, will retry");
+                    connected.set(false);
+                }
+            } finally {
+                socketLock.unlock();
+            }
+        } catch (Exception e) {
+            System.err.println("Error sending message: " + e.getMessage());
+            connected.set(false);
+        }
+    }
+    
+    /**
+     * Wait for a text response from Klawed
+     */
+    private String waitForTextResponse() throws Exception {
+        long startTime = System.currentTimeMillis();
+        StringBuilder fullResponse = new StringBuilder();
+        boolean receivedTextResponse = false;
+        
+        while (System.currentTimeMillis() - startTime < RECV_TIMEOUT_MS) {
+            if (!connected.get()) {
+                throw new RuntimeException("Disconnected while waiting for response");
+            }
+            
+            byte[] responseBytes = null;
+            socketLock.lock();
+            try {
+                responseBytes = socket.recv(ZMQ.DONTWAIT);
+            } finally {
+                socketLock.unlock();
+            }
+            
+            if (responseBytes == null) {
+                // No message available, check if we've received a text response
+                if (receivedTextResponse) {
+                    // We got a text response and now there are no more messages
+                    break;
+                }
+                
+                // Wait a bit before checking again
+                Thread.sleep(100);
+                continue;
+            }
+            
+            String responseStr = new String(responseBytes);
+            JsonNode responseJson = objectMapper.readTree(responseStr);
+            String messageType = responseJson.get("messageType").asText();
+            
+            switch (messageType) {
+                case "TEXT":
+                    String content = responseJson.get("content").asText();
+                    fullResponse.append(content);
+                    receivedTextResponse = true;
+                    // Don't break immediately - there might be more messages
+                    break;
+                    
+                case "TOOL_RESULT":
+                    String toolName = responseJson.get("toolName").asText();
+                    boolean isError = responseJson.get("isError").asBoolean();
+                    if (isError) {
+                        String error = responseJson.get("toolOutput").get("error").asText();
+                        System.out.println("Tool " + toolName + " error: " + error);
+                    } else {
+                        System.out.println("Tool " + toolName + " executed successfully");
+                    }
+                    break;
+                    
+                case "ERROR":
+                    String errorContent = responseJson.get("content").asText();
+                    throw new RuntimeException("Klawed error: " + errorContent);
+                    
+                case "HEARTBEAT_PONG":
+                    lastHeartbeatResponse = System.currentTimeMillis();
+                    break;
+                    
+                default:
+                    System.err.println("Unknown message type: " + messageType);
+            }
+        }
+        
+        if (!receivedTextResponse) {
+            throw new RuntimeException("No text response received within timeout");
+        }
+        
+        return fullResponse.toString();
+    }
+    
+    /**
+     * Close the socket and cleanup
+     */
+    private void closeSocket() {
+        socketLock.lock();
+        try {
+            if (socket != null) {
+                socket.close();
+                socket = null;
+            }
+        } finally {
+            socketLock.unlock();
+        }
+    }
+    
+    /**
+     * Shutdown the client
+     */
+    public void shutdown() {
+        connected.set(false);
+        
+        if (heartbeatFuture != null) {
+            heartbeatFuture.cancel(false);
+        }
+        
+        scheduler.shutdown();
+        try {
+            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                scheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            scheduler.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        
+        closeSocket();
+        context.close();
+    }
+    
+    /**
+     * Example usage
+     */
+    public static void main(String[] args) throws Exception {
+        KlawedZMQClient client = new KlawedZMQClient();
+        
+        // Wait for connection
+        Thread.sleep(2000);
+        
+        if (!client.connected.get()) {
+            System.err.println("Failed to connect, exiting");
+            client.shutdown();
+            return;
+        }
+        
+        // Send a message and get response
+        CompletableFuture<String> future = client.sendTextMessage(
+            "Write a hello world program in Java"
+        );
+        
+        try {
+            String response = future.get(60, TimeUnit.SECONDS);
+            System.out.println("Response received:");
+            System.out.println(response);
+        } catch (TimeoutException e) {
+            System.err.println("Request timed out");
+        } catch (Exception e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+        
+        // Send another message
+        future = client.sendTextMessage(
+            "Now write a function to calculate factorial"
+        );
+        
+        try {
+            String response = future.get(60, TimeUnit.SECONDS);
+            System.out.println("Second response:");
+            System.out.println(response);
+        } catch (Exception e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+        
+        client.shutdown();
+    }
+}
+```
+
+**Dependencies (Maven pom.xml):**
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.zeromq</groupId>
+        <artifactId>jeromq</artifactId>
+        <version>0.5.3</version>
+    </dependency>
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>2.15.2</version>
+    </dependency>
+</dependencies>
+```
+
+**Key Features of the Java Client:**
+
+1. **Automatic Reconnection**: Exponential backoff with configurable limits
+2. **Heartbeat Monitoring**: Periodic pings to detect dead connections
+3. **Message Queuing**: Messages are queued when disconnected and sent when reconnected
+4. **Thread-Safe Operations**: Proper locking for socket operations
+5. **Comprehensive Error Handling**: Graceful degradation and recovery
+6. **Asynchronous API**: `CompletableFuture` for non-blocking operations
+7. **Multiple Message Type Support**: Handles TEXT, TOOL_RESULT, ERROR, and HEARTBEAT messages
+8. **Timeout Management**: Configurable send/receive timeouts
+
+**Best Practices Implemented:**
+
+1. **Circuit Breaker Pattern**: Stops sending when connection is down
+2. **Exponential Backoff**: Prevents overwhelming the server during reconnection
+3. **Connection Health Monitoring**: Heartbeat system detects stale connections
+4. **Resource Cleanup**: Proper shutdown sequence
+5. **Non-Blocking Operations**: Uses ZMQ.DONTWAIT for better control
+6. **Message Persistence**: Queue prevents message loss during disconnections
+
+**Ensuring Reliable Message Delivery:**
+
+To ensure client messages are received by Klawed and Klawed's messages are received by the client:
+
+1. **Client → Klawed (Sending):**
+   - Use `send()` with timeout and check return value
+   - Queue messages when disconnected
+   - Implement retry logic with exponential backoff
+   - Verify delivery with acknowledgment (heartbeat response)
+
+2. **Klawed → Client (Receiving):**
+   - Use non-blocking `recv()` with timeout
+   - Handle multiple message types in a loop
+   - Process TOOL_RESULT messages even when waiting for TEXT
+   - Reset timeout after each received message
+
+3. **Bidirectional Reliability:**
+   - Heartbeat system monitors both directions
+   - Automatic reconnection on failure
+   - Message queuing during disconnections
+   - Thread-safe socket operations
+
+## Java Client Implementation Notes
+
+### Building and Running
+
+**Compilation:**
+```bash
+# With Maven
+mvn compile
+
+# Manual compilation
+javac -cp "jeromq-0.5.3.jar:jackson-databind-2.15.2.jar" *.java
+```
+
+**Running:**
+```bash
+# Simple client
+java -cp ".:jeromq-0.5.3.jar:jackson-databind-2.15.2.jar" SimpleKlawedClient
+
+# Robust client
+java -cp ".:jeromq-0.5.3.jar:jackson-databind-2.15.2.jar" RobustKlawedClient
+```
+
+### Testing Message Flow
+
+To verify that messages are properly sent and received:
+
+1. **Start Klawed in ZMQ daemon mode:**
+   ```bash
+   ./build/klawed --zmq tcp://127.0.0.1:5555
+   ```
+
+2. **Run the Java client:**
+   ```bash
+   cd examples/java
+   java -cp ".:dependencies/*" RobustKlawedClient
+   ```
+
+3. **Monitor the output:**
+   - Connection established message
+   - Request sent confirmation
+   - Response received and displayed
+   - Any error messages
+
+### Debugging Tips
+
+1. **Enable verbose logging** in the Java client by setting system properties:
+   ```java
+   System.setProperty("org.zeromq.ZMQ.debug", "true");
+   ```
+
+2. **Check ZMQ version compatibility:**
+   ```java
+   System.out.println("ZMQ version: " + ZMQ.getVersionString());
+   ```
+
+3. **Monitor network traffic** with tools like `tcpdump` or Wireshark.
+
+4. **Test with a simple echo server** to verify ZMQ setup:
+   ```java
+   // Simple ZMQ echo server for testing
+   try (ZContext context = new ZContext()) {
+       ZMQ.Socket socket = context.createSocket(SocketType.PAIR);
+       socket.bind("tcp://127.0.0.1:5556");
+       while (!Thread.currentThread().isInterrupted()) {
+           byte[] msg = socket.recv();
+           if (msg != null) {
+               socket.send(msg);
+           }
+       }
+   }
+   ```
+
 ## See Also
 
 - [ZMQ Socket Implementation](../src/zmq_socket.c)
 - [ZMQ Header File](../src/zmq_socket.h)
 - [Main ZMQ Integration](../src/klawed.c) (lines ~8134-8143)
+- [Java Examples](../examples/java/) - Complete working examples
+- [Java README](../examples/java/README.md) - Build and usage instructions
