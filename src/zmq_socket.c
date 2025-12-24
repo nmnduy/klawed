@@ -639,48 +639,71 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
     char response[ZMQ_BUFFER_SIZE];
     response[0] = '\0';
 
-    if (message_type && cJSON_IsString(message_type) &&
-        strcmp(message_type->valuestring, "TEXT") == 0 &&
-        content && cJSON_IsString(content)) {
+    if (message_type && cJSON_IsString(message_type)) {
+        if (strcmp(message_type->valuestring, "TEXT") == 0 &&
+            content && cJSON_IsString(content)) {
 
-        // Process text message with interactive tool call support
-        LOG_INFO("ZMQ: Processing TEXT message with interactive mode (length: %zu)", strlen(content->valuestring));
-        LOG_DEBUG("ZMQ: Message content: %.*s",
-                (int)(strlen(content->valuestring) > 200 ? 200 : strlen(content->valuestring)),
-                content->valuestring);
+            // Process text message with interactive tool call support
+            LOG_INFO("ZMQ: Processing TEXT message with interactive mode (length: %zu)", strlen(content->valuestring));
+            LOG_DEBUG("ZMQ: Message content: %.*s",
+                    (int)(strlen(content->valuestring) > 200 ? 200 : strlen(content->valuestring)),
+                    content->valuestring);
 
-        // Print to console
-        printf("ZMQ: Processing TEXT message (length: %zu)\n", strlen(content->valuestring));
-        // Print first 100 chars of the message
-        int preview_len = (int)(strlen(content->valuestring) > 100 ? 100 : strlen(content->valuestring));
-        printf("Message preview: %.*s%s\n", preview_len, content->valuestring,
-               strlen(content->valuestring) > 100 ? "..." : "");
-        fflush(stdout);
+            // Print to console
+            printf("ZMQ: Processing TEXT message (length: %zu)\n", strlen(content->valuestring));
+            // Print first 100 chars of the message
+            int preview_len = (int)(strlen(content->valuestring) > 100 ? 100 : strlen(content->valuestring));
+            printf("Message preview: %.*s%s\n", preview_len, content->valuestring,
+                   strlen(content->valuestring) > 100 ? "..." : "");
+            fflush(stdout);
 
-        // Don't clear conversation - maintain context across messages in daemon mode
-        // This allows multi-turn conversations like interactive mode
+            // Don't clear conversation - maintain context across messages in daemon mode
+            // This allows multi-turn conversations like interactive mode
 
-        // Process interactively (handles tool calls recursively)
-        int interactive_result = zmq_process_interactive(ctx, state, content->valuestring);
+            // Process interactively (handles tool calls recursively)
+            int interactive_result = zmq_process_interactive(ctx, state, content->valuestring);
 
-        if (interactive_result != 0) {
-            LOG_ERROR("ZMQ: Interactive processing failed");
+            if (interactive_result != 0) {
+                LOG_ERROR("ZMQ: Interactive processing failed");
+                snprintf(response, sizeof(response),
+                        "{\"messageType\": \"ERROR\", \"content\": \"Interactive processing failed\"}");
+            } else {
+                // Success - responses are sent during interactive processing
+                // No completion message - client detects completion when no pending TOOL messages
+                // without corresponding TOOL_RESULT messages
+                response[0] = '\0';  // Empty response
+            }
+
+        } else if (strcmp(message_type->valuestring, ZMQ_HEARTBEAT_PING) == 0) {
+            // Handle heartbeat ping
+            LOG_INFO("ZMQ: Processing HEARTBEAT_PING message");
+            
+            // Get timestamp from the ping
+            cJSON *timestamp = cJSON_GetObjectItem(json, "timestamp");
+            time_t ping_time = time(NULL);
+            if (timestamp && cJSON_IsNumber(timestamp)) {
+                ping_time = (time_t)timestamp->valuedouble;
+            }
+            
+            // Send heartbeat pong response
             snprintf(response, sizeof(response),
-                    "{\"messageType\": \"ERROR\", \"content\": \"Interactive processing failed\"}");
+                    "{\"messageType\": \"%s\", \"pingTimestamp\": %ld}",
+                    ZMQ_HEARTBEAT_PONG, (long)ping_time);
+            
+            LOG_DEBUG("ZMQ: Sending HEARTBEAT_PONG response with timestamp %ld", (long)ping_time);
+            
         } else {
-            // Success - responses are sent during interactive processing
-            // No completion message - client detects completion when no pending TOOL messages
-            // without corresponding TOOL_RESULT messages
-            response[0] = '\0';  // Empty response
+            LOG_WARN("ZMQ: Unsupported message type received: %s", message_type->valuestring);
+            LOG_DEBUG("ZMQ: Available fields - messageType: %s, content: %s",
+                     message_type ? "present" : "missing",
+                     content ? "present" : "missing");
+            snprintf(response, sizeof(response),
+                    "{\"messageType\": \"ERROR\", \"content\": \"Unsupported message type\"}");
         }
-
     } else {
-        LOG_WARN("ZMQ: Invalid message format received");
-        LOG_DEBUG("ZMQ: Available fields - messageType: %s, content: %s",
-                 message_type ? "present" : "missing",
-                 content ? "present" : "missing");
+        LOG_WARN("ZMQ: Invalid message format received - missing messageType");
         snprintf(response, sizeof(response),
-                "{\"messageType\": \"ERROR\", \"content\": \"Invalid message format\"}");
+                "{\"messageType\": \"ERROR\", \"content\": \"Invalid message format - missing messageType\"}");
     }
 
     cJSON_Delete(json);
