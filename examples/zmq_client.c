@@ -68,13 +68,23 @@ void print_usage(const char *program_name) {
     printf("\nAvailable endpoints:\n");
     printf("  tcp://127.0.0.1:5555  - TCP socket on localhost port 5555\n");
     printf("  ipc:///tmp/klawed.sock - IPC socket file\n");
+    printf("\nFeatures:\n");
+    printf("  • Handles TOOL and TOOL_RESULT messages for interactive sessions\n");
+    printf("  • Processes multiple response messages\n");
+    printf("  • Displays formatted output for all message types\n");
     printf("\nCommands in interactive mode:\n");
     printf("  /help     - Show this help\n");
     printf("  /quit     - Exit the program\n");
     printf("  /clear    - Clear screen\n");
     printf("  /ping     - Send a test ping to check connection\n");
     printf("  /status   - Show connection status\n");
-    printf("  <text>    - Send text message to Klawed\n");
+    printf("  <text>    - Send text message to Klawed (supports tool calls)\n");
+    printf("\nMessage types displayed:\n");
+    printf("  TEXT          - AI text responses\n");
+    printf("  TOOL          - Tool execution requests\n");
+    printf("  TOOL_RESULT   - Tool execution results\n");
+    printf("  ERROR         - Error messages\n");
+    printf("  HEARTBEAT_PONG - Connection health responses\n");
 }
 
 int initialize_connection(ConnectionState *conn, const ClientConfig *config) {
@@ -284,6 +294,96 @@ int send_message_with_retry(ConnectionState *conn, const ClientConfig *config,
     return -1;
 }
 
+// Function to process different message types
+static void process_message_response(const char *response) {
+    cJSON *json = cJSON_Parse(response);
+    if (!json) {
+        printf("Response (raw): %s\n", response);
+        return;
+    }
+    
+    cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
+    if (!message_type || !cJSON_IsString(message_type)) {
+        printf("Invalid response format (missing messageType): %s\n", response);
+        cJSON_Delete(json);
+        return;
+    }
+    
+    const char *msg_type = message_type->valuestring;
+    
+    if (strcmp(msg_type, "TEXT") == 0) {
+        cJSON *content = cJSON_GetObjectItem(json, "content");
+        if (content && cJSON_IsString(content)) {
+            printf("\n=== AI Response ===\n%s\n=== End of AI Response ===\n", content->valuestring);
+        } else {
+            printf("TEXT message missing content\n");
+        }
+    }
+    else if (strcmp(msg_type, "TOOL") == 0) {
+        cJSON *tool_name = cJSON_GetObjectItem(json, "toolName");
+        cJSON *tool_id = cJSON_GetObjectItem(json, "toolId");
+        cJSON *tool_params = cJSON_GetObjectItem(json, "toolParameters");
+        
+        printf("\n=== TOOL Execution Request ===\n");
+        if (tool_name && cJSON_IsString(tool_name)) {
+            printf("Tool: %s\n", tool_name->valuestring);
+        }
+        if (tool_id && cJSON_IsString(tool_id)) {
+            printf("ID: %s\n", tool_id->valuestring);
+        }
+        if (tool_params) {
+            char *params_str = cJSON_Print(tool_params);
+            printf("Parameters: %s\n", params_str);
+            free(params_str);
+        }
+        printf("=== Tool will be executed ===\n");
+    }
+    else if (strcmp(msg_type, "TOOL_RESULT") == 0) {
+        cJSON *tool_name = cJSON_GetObjectItem(json, "toolName");
+        cJSON *tool_id = cJSON_GetObjectItem(json, "toolId");
+        cJSON *tool_output = cJSON_GetObjectItem(json, "toolOutput");
+        cJSON *is_error = cJSON_GetObjectItem(json, "isError");
+        
+        printf("\n=== TOOL Execution Result ===\n");
+        if (tool_name && cJSON_IsString(tool_name)) {
+            printf("Tool: %s\n", tool_name->valuestring);
+        }
+        if (tool_id && cJSON_IsString(tool_id)) {
+            printf("ID: %s\n", tool_id->valuestring);
+        }
+        if (is_error && cJSON_IsBool(is_error)) {
+            printf("Status: %s\n", is_error->valueint ? "ERROR" : "SUCCESS");
+        }
+        if (tool_output) {
+            char *output_str = cJSON_Print(tool_output);
+            printf("Output: %s\n", output_str);
+            free(output_str);
+        }
+        printf("=== End of Tool Result ===\n");
+    }
+    else if (strcmp(msg_type, "ERROR") == 0) {
+        cJSON *content = cJSON_GetObjectItem(json, "content");
+        if (content && cJSON_IsString(content)) {
+            printf("\n=== ERROR ===\n%s\n=== End of Error ===\n", content->valuestring);
+        } else {
+            printf("ERROR message received\n");
+        }
+    }
+    else if (strcmp(msg_type, "HEARTBEAT_PONG") == 0) {
+        // Silently handle heartbeat pongs
+        printf("Heartbeat pong received\n");
+    }
+    else {
+        printf("Unknown message type: %s\n", msg_type);
+        char *pretty = cJSON_Print(json);
+        printf("Full message: %s\n", pretty);
+        free(pretty);
+    }
+    
+    cJSON_Delete(json);
+}
+
+// Enhanced function to send message and handle multiple responses
 void send_text_message_robust(ConnectionState *conn, const ClientConfig *config, const char *text) {
     cJSON *message = cJSON_CreateObject();
     cJSON_AddStringToObject(message, "messageType", "TEXT");
@@ -291,22 +391,53 @@ void send_text_message_robust(ConnectionState *conn, const ClientConfig *config,
     
     char *json_str = cJSON_PrintUnformatted(message);
     
+    printf("Sending message...\n");
+    
+    // Send the message
     char response[BUFFER_SIZE];
     int rc = send_message_with_retry(conn, config, json_str, response, sizeof(response));
     
     if (rc >= 0) {
-        printf("✓ Message sent and response received\n");
+        printf("✓ Message sent successfully\n");
         
-        // Parse and pretty-print JSON response
-        cJSON *json = cJSON_Parse(response);
-        if (json) {
-            char *pretty = cJSON_Print(json);
-            printf("Response:\n%s\n", pretty);
-            free(pretty);
-            cJSON_Delete(json);
-        } else {
-            printf("Response (raw): %s\n", response);
+        // Process the first response
+        process_message_response(response);
+        
+        // Now check for additional responses (non-blocking)
+        printf("\nWaiting for additional responses (if any)...\n");
+        
+        // Set non-blocking mode for subsequent receives
+        int original_timeout;
+        size_t timeout_size = sizeof(original_timeout);
+        zmq_getsockopt(conn->socket, ZMQ_RCVTIMEO, &original_timeout, &timeout_size);
+        
+        int nonblocking_timeout = 2000; // 2 second timeout for additional messages
+        zmq_setsockopt(conn->socket, ZMQ_RCVTIMEO, &nonblocking_timeout, sizeof(nonblocking_timeout));
+        
+        int response_count = 1;
+        while (1) {
+            rc = zmq_recv(conn->socket, response, sizeof(response) - 1, 0);
+            if (rc < 0) {
+                if (errno == EAGAIN) {
+                    // Timeout - no more messages
+                    printf("No more responses (timeout after %dms)\n", nonblocking_timeout);
+                    break;
+                } else {
+                    printf("Error receiving additional response: %s\n", zmq_strerror(errno));
+                    break;
+                }
+            }
+            
+            response[rc] = '\0';
+            response_count++;
+            printf("\n=== Response #%d ===\n", response_count);
+            process_message_response(response);
         }
+        
+        // Restore original timeout
+        zmq_setsockopt(conn->socket, ZMQ_RCVTIMEO, &original_timeout, sizeof(original_timeout));
+        
+        printf("\n✓ Total responses received: %d\n", response_count);
     } else {
         printf("✗ Failed to send message\n");
     }
