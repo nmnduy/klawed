@@ -584,7 +584,7 @@ $(VERSION_H): $(VERSION_FILE)
 	rm -f /tmp/version_num.tmp; \
 	{ \
 	echo "/*"; \
-	echo " * version.h - Central version management for Claude C"; \
+	echo " * version.h - Central version management for Klawed"; \
 	echo " *"; \
 	echo " * This file provides a single source of truth for version information."; \
 	echo " * It's automatically generated from the VERSION file during build."; \
@@ -594,21 +594,21 @@ $(VERSION_H): $(VERSION_FILE)
 	echo "#define VERSION_H"; \
 	echo ""; \
 	echo "// Version string (e.g., \"0.0.2\", \"1.0.0\", \"1.2.3-beta.1\")"; \
-	echo "#define CLAUDE_C_VERSION \"$(VERSION)\""; \
+	echo "#define KLAWED_VERSION \"$(VERSION)\""; \
 	echo ""; \
 	echo "// Version components for programmatic use"; \
-	echo "#define CLAUDE_C_VERSION_MAJOR $$VERSION_MAJOR"; \
-	echo "#define CLAUDE_C_VERSION_MINOR $$VERSION_MINOR"; \
-	echo "#define CLAUDE_C_VERSION_PATCH $$VERSION_PATCH"; \
+	echo "#define KLAWED_VERSION_MAJOR $$VERSION_MAJOR"; \
+	echo "#define KLAWED_VERSION_MINOR $$VERSION_MINOR"; \
+	echo "#define KLAWED_VERSION_PATCH $$VERSION_PATCH"; \
 	echo ""; \
 	echo "// Version as numeric value for comparisons (e.g., 0x000002)"; \
-	echo "#define CLAUDE_C_VERSION_NUMBER $$VERSION_HEX"; \
+	echo "#define KLAWED_VERSION_NUMBER $$VERSION_HEX"; \
 	echo ""; \
 	echo "// Build timestamp (automatically generated)"; \
-	echo "#define CLAUDE_C_BUILD_TIMESTAMP \"$(BUILD_DATE)\""; \
+	echo "#define KLAWED_BUILD_TIMESTAMP \"$(BUILD_DATE)\""; \
 	echo ""; \
 	echo "// Full version string with build info"; \
-	echo "#define CLAUDE_C_VERSION_FULL \"$(VERSION) (built $(BUILD_DATE))\""; \
+	echo "#define KLAWED_VERSION_FULL \"$(VERSION) (built $(BUILD_DATE))\""; \
 	echo ""; \
 	echo "#endif // VERSION_H"; \
 	} > $(VERSION_H)
