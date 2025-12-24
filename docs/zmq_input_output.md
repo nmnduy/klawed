@@ -12,7 +12,7 @@ All messages are JSON objects with at least a `messageType` field that indicates
 
 ### Common Fields
 
-- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL_RESULT", "HEARTBEAT_PING", or "HEARTBEAT_PONG")
+- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL", "TOOL_RESULT", "HEARTBEAT_PING", or "HEARTBEAT_PONG")
 - `content` (string, optional): Primary content/message text
 
 ## Input Messages (Client → Klawed)
@@ -65,7 +65,29 @@ Response to a TEXT request with AI-generated content.
 }
 ```
 
-### 2. Tool Result Response
+### 2. Tool Request Response
+
+Sent when a tool is about to be executed during interactive processing.
+
+```json
+{
+  "messageType": "TOOL",
+  "toolName": "ToolName",
+  "toolId": "tool_call_abc123",
+  "toolParameters": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}
+```
+
+**Fields:**
+- `messageType`: Always "TOOL"
+- `toolName`: Name of the tool that will be executed
+- `toolId`: ID of the tool call (matches the tool call ID from the AI)
+- `toolParameters`: JSON object containing the tool input parameters (can be null)
+
+### 3. Tool Result Response
 
 Sent when a tool execution completes during interactive processing.
 
@@ -116,7 +138,7 @@ Sent when a tool execution completes during interactive processing.
 ```
 
 
-### 4. Error Response
+### 5. Error Response
 
 Error messages for various failure conditions.
 
@@ -185,7 +207,19 @@ Error messages for various failure conditions.
 
 **Klawed responds with multiple messages:**
 
-1. First, the AI might decide to use a tool:
+1. First, Klawed sends a TOOL message indicating the tool will be executed:
+```json
+{
+  "messageType": "TOOL",
+  "toolName": "Read",
+  "toolId": "tool_call_abc123",
+  "toolParameters": {
+    "file_path": "README.md"
+  }
+}
+```
+
+2. Then Klawed executes the tool and sends the result:
 ```json
 {
   "messageType": "TOOL_RESULT",
@@ -199,7 +233,7 @@ Error messages for various failure conditions.
 }
 ```
 
-2. Then the AI processes the tool result and responds:
+3. Then the AI processes the tool result and responds:
 ```json
 {
   "messageType": "TEXT",
@@ -498,6 +532,12 @@ def send_and_receive(request):
                 # After receiving a TEXT response, wait a bit more in case there are more messages
                 # but reset timeout for next receive
                 socket.RCVTIMEO = 2000  # Shorter timeout for subsequent messages
+            elif msg_type == "TOOL":
+                tool_name = response_data.get("toolName")
+                tool_id = response_data.get("toolId")
+                print(f"Tool {tool_name} (id: {tool_id}) will be executed")
+                # Reset timeout for next message
+                socket.RCVTIMEO = 2000
             elif msg_type == "TOOL_RESULT":
                 tool_name = response_data.get("toolName")
                 is_error = response_data.get("isError", False)
@@ -887,8 +927,14 @@ public class KlawedZMQClient {
                     // Don't break immediately - there might be more messages
                     break;
                     
-                case "TOOL_RESULT":
+                case "TOOL":
                     String toolName = responseJson.get("toolName").asText();
+                    String toolId = responseJson.get("toolId").asText();
+                    System.out.println("Tool " + toolName + " (id: " + toolId + ") will be executed");
+                    break;
+                    
+                case "TOOL_RESULT":
+                    toolName = responseJson.get("toolName").asText();
                     boolean isError = responseJson.get("isError").asBoolean();
                     if (isError) {
                         String error = responseJson.get("toolOutput").get("error").asText();

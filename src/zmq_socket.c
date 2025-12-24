@@ -809,6 +809,53 @@ static int zmq_send_tool_result(ZMQContext *ctx, const char *tool_name, const ch
 #endif
 }
 
+// Helper function to send a tool execution request
+static int zmq_send_tool_request(ZMQContext *ctx, const char *tool_name, const char *tool_id,
+                                 cJSON *tool_parameters) {
+#ifdef HAVE_ZMQ
+    if (!ctx || !tool_name || !tool_id) {
+        LOG_ERROR("ZMQ: Invalid parameters for send_tool_request");
+        return -1;
+    }
+    
+    cJSON *request_json = cJSON_CreateObject();
+    if (!request_json) {
+        LOG_ERROR("ZMQ: Failed to create tool request JSON object");
+        return -1;
+    }
+    
+    cJSON_AddStringToObject(request_json, "messageType", "TOOL");
+    cJSON_AddStringToObject(request_json, "toolName", tool_name);
+    cJSON_AddStringToObject(request_json, "toolId", tool_id);
+    
+    if (tool_parameters) {
+        cJSON_AddItemToObject(request_json, "toolParameters", cJSON_Duplicate(tool_parameters, 1));
+    } else {
+        cJSON_AddNullToObject(request_json, "toolParameters");
+    }
+    
+    char *request_str = cJSON_PrintUnformatted(request_json);
+    if (!request_str) {
+        LOG_ERROR("ZMQ: Failed to serialize tool request JSON");
+        cJSON_Delete(request_json);
+        return -1;
+    }
+    
+    LOG_INFO("ZMQ: Sending TOOL request for %s (id: %s)", tool_name, tool_id);
+    int result = zmq_socket_send(ctx, request_str, strlen(request_str));
+    free(request_str);
+    cJSON_Delete(request_json);
+    
+    return result;
+#else
+    (void)ctx;
+    (void)tool_name;
+    (void)tool_id;
+    (void)tool_parameters;
+    return -1;
+#endif
+}
+
 // Helper function to check connection health
 static int zmq_check_connection_health(ZMQContext *ctx) {
 #ifdef HAVE_ZMQ
@@ -1105,6 +1152,14 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                     results[i].tool_output = cJSON_CreateObject();
                     cJSON_AddStringToObject(results[i].tool_output, "error", "Tool call missing name or id");
                     results[i].is_error = 1;
+                    
+                    // Send TOOL request message (even though it will fail)
+                    zmq_send_tool_request(ctx, tool->name ? tool->name : "unknown", 
+                                         tool->id ? tool->id : "unknown", NULL);
+                    
+                    // Send error response
+                    zmq_send_tool_result(ctx, tool->name ? tool->name : "unknown",
+                                        tool->id ? tool->id : "unknown", results[i].tool_output, 1);
                     continue;
                 }
 
@@ -1129,10 +1184,11 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                     cJSON_AddStringToObject(results[i].tool_output, "error", error_msg);
                     results[i].is_error = 1;
 
-                    // Send error response (only if not ZMQ_PAIR socket in daemon mode)
-                    if (ctx->socket_type != ZMQ_PAIR || !ctx->daemon_mode) {
-                        zmq_send_tool_result(ctx, tool->name, tool->id, results[i].tool_output, 1);
-                    }
+                    // Send TOOL request message (even though it will fail)
+                    zmq_send_tool_request(ctx, tool->name, tool->id, NULL);
+
+                    // Send error response
+                    zmq_send_tool_result(ctx, tool->name, tool->id, results[i].tool_output, 1);
                     continue;
                 }
 
@@ -1141,13 +1197,14 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                     ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
                     : cJSON_CreateObject();
 
+                // Send TOOL request message before execution
+                zmq_send_tool_request(ctx, tool->name, tool->id, input);
+
                 // Execute tool synchronously
                 cJSON *tool_result = execute_tool(tool->name, input, state);
 
-                // Send tool result response (only if not ZMQ_PAIR socket in daemon mode)
-                if (ctx->socket_type != ZMQ_PAIR || !ctx->daemon_mode) {
-                    zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
-                }
+                // Send tool result response
+                zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
 
                 // Store tool result
                 results[i].type = INTERNAL_TOOL_RESPONSE;
@@ -1166,9 +1223,7 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                 LOG_ERROR("ZMQ: Failed to add tool results to conversation");
                 // Results were already freed by add_tool_results
                 results = NULL;
-                if (ctx->socket_type != ZMQ_PAIR || !ctx->daemon_mode) {
-                    zmq_send_json_response(ctx, "ERROR", "Failed to add tool results to conversation");
-                }
+                zmq_send_json_response(ctx, "ERROR", "Failed to add tool results to conversation");
                 api_response_free(api_response);
                 return -1;
             }
