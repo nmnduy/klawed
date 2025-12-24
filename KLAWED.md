@@ -20,15 +20,36 @@ ABSOLUTELY!! DO NOT write to any markdown files unless specifically ASKED TO DO 
 
 **Current tasks**: `./todo.md`
 **Main implementation**: `src/klawed.c` (core agent loop, API calls)
-**Tools**: Built-in tools in `src/klawed.c`, MCP support in `src/mcp.h`, `src/mcp.c`
-**Subagent**: `docs/subagent.md` (task delegation with fresh context)
-**MCP integration**: `docs/mcp.md` (external tool servers)
-**TODO system**: `src/todo.h`, `src/todo.c`
-**TUI & Normal Mode**: `src/tui.h`, `src/tui.c`, `docs/normal-mode.md`
-**Color themes**: `src/colorscheme.h`, `src/builtin_themes.h`, `src/builtin_themes.c`
-**Token usage tracking**: `docs/token-usage.md`, `src/persistence.c`
-**Streaming**: `docs/streaming.md` (real-time response display for Anthropic, OpenAI, and Bedrock)
-**Tests**: `tests/test_*.c`
+
+**Core Systems:**
+- **API providers**: `src/openai_provider.c`, `src/anthropic_provider.c`, `src/bedrock_provider.c`, `src/aws_bedrock.c`
+- **Tools**: Built-in tools in `src/klawed.c`, common utilities in `src/tool_utils.c`
+- **Subagent**: `src/subagent_manager.c`, `docs/subagent.md` (task delegation with fresh context)
+- **MCP**: `src/mcp.c`, `src/mcp.h`, `docs/mcp.md` (external tool servers)
+- **TODO system**: `src/todo.c`, `src/todo.h`
+- **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/normal-mode.md`
+
+**Data & State:**
+- **Database/Persistence**: `src/persistence.c`, `src/sqlite_queue.c`, `docs/sqlite-queue.md`
+- **HTTP client**: `src/http_client.c`, `src/http_client.h`
+- **Session management**: `src/session.c`, `src/session.h`
+- **History**: `src/history_file.c`, `src/history_file.h`
+- **Migration system**: `src/migrations.c`, `src/migrations.h`
+- **Retry logic**: `src/retry_logic.c`, `src/retry_logic.h`
+
+**User Interfaces:**
+- **Color themes**: `src/colorscheme.h`, `src/builtin_themes.c`, `docs/COLOR_THEMES.md`
+- **Token usage tracking**: `src/persistence.c`, `docs/token-usage.md`
+- **Window management**: `src/window_manager.c`, `src/window_manager.h`, `docs/window-management-refactor.md`
+- **Voice mode**: `src/voice_input.c`, `src/voice_stub.c`, `docs/voice-mode.md`
+- **Chat input**: `src/ncurses_input.c`, `src/ncurses_input.h`
+- **Streaming**: `docs/streaming.md` (real-time response display)
+
+**Network & Communication:**
+- **ZMQ socket**: `src/zmq_socket.c`, `src/zmq_socket.h`, `docs/zmq_input_output.md`
+- **Examples**: `examples/zmq_client.c`, `examples/sqlite_queue_client.c`
+
+**Tests**: `tests/test_*.c` (unit tests for all major components)
 **Build**: `Makefile`
 
 ## Project Overview
@@ -146,9 +167,3 @@ export OPENAI_API_KEY="your-api-key"
 - Database: `./.klawed/api_calls.db` (project-local)
 - Prompt caching: Enabled
 - Token usage tracking: Enabled (stores in `token_usage` table)
-
-## Documentation
-
-Most documentation is in `docs/`
-
-Do not write documentation or markdown files unless explicitly instructed to.
