@@ -48,7 +48,9 @@ typedef struct ZMQContext {
     int send_timeout;
     int connect_timeout;
     int heartbeat_interval;
+    int heartbeat_timeout;
     int reconnect_interval;
+    int max_reconnect_interval;
     int max_reconnect_attempts;
 
     // Queue sizes
@@ -58,9 +60,11 @@ typedef struct ZMQContext {
     // State tracking
     int reconnect_attempts;
     time_t last_heartbeat;
+    time_t last_heartbeat_response;
     time_t last_activity;
     bool heartbeat_enabled;
     bool reconnect_enabled;
+    bool message_queue_enabled;
 
     // Reliable message queues (reserved for future use)
     ZMQMessageQueue *send_queue;    // Queue for outgoing messages
@@ -162,5 +166,13 @@ int zmq_socket_get_status(ZMQContext *ctx, char *buffer, size_t buffer_size);
 int zmq_socket_get_queue_stats(ZMQContext *ctx,
                                size_t *send_queue_count, size_t *send_queue_bytes,
                                size_t *recv_queue_count, size_t *recv_queue_bytes);
+
+/**
+ * Test connection by sending a ping and waiting for pong
+ * @param ctx ZMQ context
+ * @param timeout_ms Timeout in milliseconds for the test
+ * @return 0 on success (connection healthy), -1 on failure
+ */
+int zmq_socket_test_connection(ZMQContext *ctx, int timeout_ms);
 
 #endif // ZMQ_SOCKET_H

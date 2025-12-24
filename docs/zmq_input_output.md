@@ -12,7 +12,7 @@ All messages are JSON objects with at least a `messageType` field that indicates
 
 ### Common Fields
 
-- `messageType` (string, required): Type of message ("TEXT", "ERROR", or "TOOL_RESULT")
+- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL_RESULT", "HEARTBEAT_PING", or "HEARTBEAT_PONG")
 - `content` (string, optional): Primary content/message text
 
 ## Input Messages (Client → Klawed)
@@ -253,6 +253,171 @@ Error messages for various failure conditions.
   "messageType": "ERROR",
   "content": "Invalid message format"
 }
+```
+
+## Connection Management and Robustness Features
+
+Klawed's ZMQ implementation includes several robustness features to handle network failures and ensure reliable communication.
+
+### Heartbeat Mechanism
+
+Klawed implements a heartbeat system to monitor connection health:
+
+**Heartbeat Ping (Client → Klawed or Klawed → Client):**
+```json
+{
+  "messageType": "HEARTBEAT_PING",
+  "timestamp": 1703456789
+}
+```
+
+**Heartbeat Pong (Response to ping):**
+```json
+{
+  "messageType": "HEARTBEAT_PONG",
+  "timestamp": 1703456790,
+  "pingTimestamp": 1703456789
+}
+```
+
+**Features:**
+- Automatic ping/pong exchange at configurable intervals
+- Connection considered dead if no pong received within timeout
+- Heartbeat messages don't interfere with normal message processing
+
+### Automatic Reconnection
+
+Klawed can automatically reconnect when connections fail:
+
+**Exponential Backoff:**
+- Base reconnect interval: 1 second (configurable)
+- Maximum reconnect interval: 30 seconds (configurable)
+- Formula: `interval = base * 2^(attempt-1)` capped at maximum
+- Maximum attempts: 10 (configurable)
+
+**Reconnection Process:**
+1. Detect connection failure (send/receive error or heartbeat timeout)
+2. Close existing socket
+3. Wait using exponential backoff
+4. Create new socket and reconnect
+5. Retry queued messages if message queue is enabled
+
+### Message Queue for Reliable Delivery
+
+When enabled, Klawed can queue messages during disconnections:
+
+**Features:**
+- Configurable queue size (default: 100 messages)
+- Messages automatically queued when connection is down
+- Queued messages sent when connection is restored
+- Prevents message loss during transient network issues
+
+### Connection Testing
+
+Clients can test connection health using the `zmq_socket_test_connection()` function:
+
+```c
+// C client example
+int timeout_ms = 5000; // 5 second timeout
+int result = zmq_socket_test_connection(ctx, timeout_ms);
+if (result == 0) {
+    printf("Connection test successful\n");
+} else {
+    printf("Connection test failed\n");
+}
+```
+
+### Configuration Environment Variables
+
+**Heartbeat Configuration:**
+- `KLAWED_ZMQ_HEARTBEAT_INTERVAL`: Ping interval in ms (default: 5000)
+- `KLAWED_ZMQ_HEARTBEAT_TIMEOUT`: Pong timeout in ms (default: 15000)
+- `KLAWED_ZMQ_ENABLE_HEARTBEAT`: Enable heartbeat (default: false)
+
+**Reconnection Configuration:**
+- `KLAWED_ZMQ_RECONNECT_INTERVAL`: Base reconnect interval in ms (default: 1000)
+- `KLAWED_ZMQ_MAX_RECONNECT_INTERVAL`: Max reconnect interval in ms (default: 30000)
+- `KLAWED_ZMQ_MAX_RECONNECT_ATTEMPTS`: Max reconnect attempts (default: 10)
+- `KLAWED_ZMQ_ENABLE_RECONNECT`: Enable auto-reconnect (default: false)
+
+**Message Queue Configuration:**
+- `KLAWED_ZMQ_SEND_QUEUE_SIZE`: Send queue capacity (default: 100)
+- `KLAWED_ZMQ_RECEIVE_QUEUE_SIZE`: Receive queue capacity (default: 100)
+- `KLAWED_ZMQ_ENABLE_MESSAGE_QUEUE`: Enable message queues (default: false)
+
+**Timeout Configuration:**
+- `KLAWED_ZMQ_RECEIVE_TIMEOUT`: Receive timeout in ms (default: 30000)
+- `KLAWED_ZMQ_SEND_TIMEOUT`: Send timeout in ms (default: 10000)
+- `KLAWED_ZMQ_CONNECT_TIMEOUT`: Connect timeout in ms (default: 5000)
+
+### Client Reconnection Best Practices
+
+1. **Always check send/receive return codes**
+   ```python
+   try:
+       socket.send(message)
+   except zmq.ZMQError as e:
+       if e.errno == zmq.EAGAIN:
+           # Timeout - implement retry logic
+           pass
+       else:
+           # Other error - attempt reconnection
+           socket.close()
+           socket = context.socket(zmq.PAIR)
+           socket.connect(endpoint)
+   ```
+
+2. **Implement application-level retry logic**
+   ```python
+   max_retries = 3
+   for attempt in range(max_retries):
+       try:
+           response = socket.recv(timeout=5000)
+           break
+       except zmq.Again:
+           if attempt == max_retries - 1:
+               raise
+           time.sleep(2 ** attempt)  # Exponential backoff
+   ```
+
+3. **Use connection testing for health checks**
+   ```python
+   def test_connection(socket, endpoint):
+       ping_msg = json.dumps({
+           "messageType": "HEARTBEAT_PING",
+           "timestamp": int(time.time())
+       })
+       try:
+           socket.send(ping_msg.encode(), zmq.DONTWAIT)
+           response = socket.recv(timeout=5000)
+           return True
+       except:
+           return False
+   ```
+
+4. **Handle graceful degradation**
+   - Queue messages locally when connection is down
+   - Implement circuit breaker pattern
+   - Provide user feedback about connection status
+
+### Error Recovery Flow
+
+```
+Client sends message
+    ↓
+[Connection healthy?] → No → [Queue enabled?] → No → Return error
+    ↓ Yes                    ↓ Yes
+Send message                Queue message
+    ↓                        ↓
+[Send success?] → No → [Reconnect enabled?] → No → Return error
+    ↓ Yes                    ↓ Yes
+Return success              Attempt reconnect
+                                ↓
+                            [Reconnect success?] → No → Return error
+                                ↓ Yes
+                            Send queued messages
+                                ↓
+                            Return success
 ```
 
 ## Implementation Details

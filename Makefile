@@ -172,6 +172,8 @@ TEST_ARRAY_RESIZE_TARGET = $(BUILD_DIR)/test_array_resize
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 TEST_ZMQ_SOCKET_TARGET = $(BUILD_DIR)/test_zmq_socket
+TEST_ZMQ_MESSAGE_QUEUE_TARGET = $(BUILD_DIR)/test_zmq_message_queue
+TEST_ZMQ_CONNECTION_TARGET = $(BUILD_DIR)/test_zmq_connection
 TEST_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_sqlite_queue
 QUERY_TOOL = $(BUILD_DIR)/query_logs
 SRC = src/klawed.c
@@ -282,10 +284,12 @@ TEST_ARRAY_RESIZE_SRC = tests/test_array_resize.c
 TEST_TOKEN_USAGE_SRC = tests/test_token_usage.c
 TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
 TEST_ZMQ_SOCKET_SRC = tests/test_zmq_socket.c
+TEST_ZMQ_MESSAGE_QUEUE_SRC = tests/test_zmq_message_queue.c
+TEST_ZMQ_CONNECTION_SRC = tests/test_zmq_connection.c
 TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
 # Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-sqlite-queue query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -298,7 +302,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket
+test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection
 
 test-edit: check-deps $(TEST_EDIT_TARGET)
 	@echo ""
@@ -504,6 +508,18 @@ test-zmq-socket: check-deps $(TEST_ZMQ_SOCKET_TARGET)
 	@echo "Running ZMQ Socket tests..."
 	@echo ""
 	@./$(TEST_ZMQ_SOCKET_TARGET)
+
+test-zmq-message-queue: check-deps $(TEST_ZMQ_MESSAGE_QUEUE_TARGET)
+	@echo ""
+	@echo "Running ZMQ Message Queue tests..."
+	@echo ""
+	@./$(TEST_ZMQ_MESSAGE_QUEUE_TARGET)
+
+test-zmq-connection: check-deps $(TEST_ZMQ_CONNECTION_TARGET)
+	@echo ""
+	@echo "Running ZMQ Connection tests..."
+	@echo ""
+	@./$(TEST_ZMQ_CONNECTION_TARGET)
 
 test-sqlite-queue: check-deps $(TEST_SQLITE_QUEUE_TARGET)
 	@echo ""
@@ -1620,6 +1636,20 @@ $(TEST_ZMQ_SOCKET_TARGET): $(SRC) $(TEST_ZMQ_SOCKET_SRC) $(TEST_COMMON_OBJS)
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_zmq_socket.o $(TEST_ZMQ_SOCKET_SRC)
 	@echo "Linking test executable..."
 	@$(CC) -o $(TEST_ZMQ_SOCKET_TARGET) $(BUILD_DIR)/claude_zmq_test.o $(BUILD_DIR)/test_zmq_socket.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+
+$(TEST_ZMQ_MESSAGE_QUEUE_TARGET): $(TEST_ZMQ_MESSAGE_QUEUE_SRC) $(LOGGER_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling ZMQ message queue test..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/test_zmq_message_queue.o $(TEST_ZMQ_MESSAGE_QUEUE_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_ZMQ_MESSAGE_QUEUE_TARGET) $(BUILD_DIR)/test_zmq_message_queue.o $(LOGGER_OBJ) $(LDFLAGS)
+
+$(TEST_ZMQ_CONNECTION_TARGET): $(TEST_ZMQ_CONNECTION_SRC) $(LOGGER_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling ZMQ connection test..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/test_zmq_connection.o $(TEST_ZMQ_CONNECTION_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_ZMQ_CONNECTION_TARGET) $(BUILD_DIR)/test_zmq_connection.o $(LOGGER_OBJ) $(LDFLAGS)
 
 $(TEST_SQLITE_QUEUE_TARGET): $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_OBJ) $(LOGGER_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_SQLITE_QUEUE_TARGET) $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
