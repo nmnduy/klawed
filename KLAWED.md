@@ -2,8 +2,6 @@
 
 Project instructions for Klawed when working with this codebase.
 
-ABSOLUTELY!! DO NOT write to any markdown files unless specifically ASKED TO DO SO!!!
-
 ## Guidelines for This Document
 
 **Purpose**: High-level executive overview and table of contents for the codebase.
