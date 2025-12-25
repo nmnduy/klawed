@@ -4,7 +4,7 @@ The TUI uses **Kitty terminal's theme format** - a simple, dependency-free confi
 
 ## Built-in Themes
 
-Six themes are embedded in the binary (no external files needed):
+Seven themes are embedded in the binary (no external files needed):
 
 - `tender` - Warm and soft, easy on the eyes (default)
 - `kitty-default` - Classic high contrast black & white
@@ -12,6 +12,7 @@ Six themes are embedded in the binary (no external files needed):
 - `gruvbox-dark` - Warm retro with low contrast
 - `solarized-dark` - Blue-tinted, carefully balanced
 - `black-metal` - Pure black with grayscale tones
+- `molokai` - Dark theme with vibrant colors, popular in Vim
 
 ## Configuration
 
