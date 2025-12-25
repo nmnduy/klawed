@@ -40,8 +40,13 @@
 static int mcp_initialized = 0;
 static int mcp_enabled = 0;
 
-// Buffer size for MCP responses (256KB to handle base64 images or large text)
-#define MCP_RESPONSE_BUFFER_SIZE 262144
+// Initial buffer size for MCP responses (4KB, grows as needed)
+#define MCP_INITIAL_BUFFER_SIZE 4096
+// Maximum buffer size for MCP responses (16MB to handle very large base64 images)
+#define MCP_MAX_BUFFER_SIZE (16 * 1024 * 1024)
+
+// Forward declarations
+static int is_complete_json(const char *buf, size_t len);
 
 /*
  * Create directory recursively (like mkdir -p)
@@ -658,56 +663,86 @@ int mcp_connect_server(MCPServer *server) {
         free(request_str);
 
         // Read initialize response
-        char buffer[65536] = {0};
+        size_t buffer_size = MCP_INITIAL_BUFFER_SIZE;
+        char *buffer = malloc(buffer_size);
         size_t total_read = 0;
+        int got_response = 0;
 
-        // Wait for response (with timeout)
-        int max_iterations = 50;  // Default: 5 seconds (50 * 100ms)
-        if (server->init_timeout > 0) {
-            // Calculate iterations based on init_timeout (in seconds)
-            // Each iteration is 100ms, so iterations = timeout * 10
-            max_iterations = server->init_timeout * 10;
-        }
+        if (!buffer) {
+            LOG_ERROR("MCP: Failed to allocate initialization buffer");
+            // Continue without reading response
+        } else {
+            // Wait for response (with timeout)
+            int max_iterations = 50;  // Default: 5 seconds (50 * 100ms)
+            if (server->init_timeout > 0) {
+                // Calculate iterations based on init_timeout (in seconds)
+                // Each iteration is 100ms, so iterations = timeout * 10
+                max_iterations = server->init_timeout * 10;
+            }
 
-        for (int i = 0; i < max_iterations; i++) {
-            // Read any stderr output during initialization
-            mcp_read_stderr(server);
+            for (int i = 0; i < max_iterations; i++) {
+                // Read any stderr output during initialization
+                mcp_read_stderr(server);
 
-            ssize_t n = read(server->stdout_fd, buffer + total_read, MCP_RESPONSE_BUFFER_SIZE - total_read - 1);
-            if (n > 0) {
-                total_read += (size_t)n;
+                // Check if we need to grow buffer (unlikely for init, but be safe)
+                if (total_read >= buffer_size - 1) {
+                    size_t new_size = buffer_size * 2;
+                    if (new_size > MCP_MAX_BUFFER_SIZE) {
+                        LOG_ERROR("MCP: Initialization response too large");
+                        break;
+                    }
+                    
+                    char *new_buffer = realloc(buffer, new_size);
+                    if (!new_buffer) {
+                        LOG_ERROR("MCP: Failed to grow initialization buffer");
+                        break;
+                    }
+                    buffer = new_buffer;
+                    buffer_size = new_size;
+                }
 
-                // Check if we have a complete line
-                if (strchr(buffer, '\n')) {
+                ssize_t n = read(server->stdout_fd, buffer + total_read, buffer_size - total_read - 1);
+                if (n > 0) {
+                    total_read += (size_t)n;
+                    
+                    // Check if we have a complete JSON object
+                    if (is_complete_json(buffer, total_read)) {
+                        got_response = 1;
+                        break;
+                    }
+                } else if (n == 0) {
+                    // EOF
                     break;
                 }
+                usleep(100000);  // 100ms
             }
-            usleep(100000);  // 100ms
-        }
 
-        // Read any remaining stderr after initialization
-        mcp_read_stderr(server);
+            // Read any remaining stderr after initialization
+            mcp_read_stderr(server);
 
-        if (total_read > 0) {
-            buffer[total_read] = '\0';
-            LOG_DEBUG("MCP: Initialize response: %s", buffer);
+            if (got_response) {
+                buffer[total_read] = '\0';
+                LOG_DEBUG("MCP: Initialize response: %s", buffer);
 
-            // Send "initialized" notification to complete handshake
-            cJSON *notification = cJSON_CreateObject();
-            cJSON_AddStringToObject(notification, "jsonrpc", "2.0");
-            cJSON_AddStringToObject(notification, "method", "notifications/initialized");
-            cJSON_AddItemToObject(notification, "params", cJSON_CreateObject());
+                // Send "initialized" notification to complete handshake
+                cJSON *notification = cJSON_CreateObject();
+                cJSON_AddStringToObject(notification, "jsonrpc", "2.0");
+                cJSON_AddStringToObject(notification, "method", "notifications/initialized");
+                cJSON_AddItemToObject(notification, "params", cJSON_CreateObject());
 
-            char *notif_str = cJSON_PrintUnformatted(notification);
-            cJSON_Delete(notification);
+                char *notif_str = cJSON_PrintUnformatted(notification);
+                cJSON_Delete(notification);
 
-            if (notif_str) {
-                dprintf(server->stdin_fd, "%s\n", notif_str);
-                free(notif_str);
-                LOG_DEBUG("MCP: Sent initialized notification");
+                if (notif_str) {
+                    dprintf(server->stdin_fd, "%s\n", notif_str);
+                    free(notif_str);
+                    LOG_DEBUG("MCP: Sent initialized notification");
+                }
+            } else {
+                LOG_WARN("MCP: No initialize response received from server '%s'", server->name);
             }
-        } else {
-            LOG_WARN("MCP: No initialize response received from server '%s'", server->name);
+            
+            free(buffer);
         }
     }
 
@@ -885,7 +920,8 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
     free(request_str);
 
     // Read response (line-delimited JSON)
-    char *buffer = malloc(MCP_RESPONSE_BUFFER_SIZE);
+    size_t buffer_size = MCP_INITIAL_BUFFER_SIZE;
+    char *buffer = malloc(buffer_size);
     if (!buffer) {
         LOG_ERROR("MCP: Failed to allocate response buffer");
         return NULL;
@@ -904,7 +940,28 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
         // Read any stderr output (for logging/debugging)
         mcp_read_stderr(server);
 
-        ssize_t n = read(server->stdout_fd, buffer + total_read, sizeof(buffer) - total_read - 1);
+        // Check if we need to grow buffer
+        if (total_read >= buffer_size - 1) {
+            // Double buffer size, but cap at maximum
+            size_t new_size = buffer_size * 2;
+            if (new_size > MCP_MAX_BUFFER_SIZE) {
+                LOG_ERROR("MCP: Response too large (max %d bytes)", (int)MCP_MAX_BUFFER_SIZE);
+                free(buffer);
+                return NULL;
+            }
+            
+            char *new_buffer = realloc(buffer, new_size);
+            if (!new_buffer) {
+                LOG_ERROR("MCP: Failed to grow response buffer to %zu bytes", new_size);
+                free(buffer);
+                return NULL;
+            }
+            buffer = new_buffer;
+            buffer_size = new_size;
+        }
+
+        // Read chunk
+        ssize_t n = read(server->stdout_fd, buffer + total_read, buffer_size - total_read - 1);
         if (n > 0) {
             total_read += (size_t)n;
             
@@ -914,6 +971,10 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
             }
         } else if (n == 0) {
             // EOF
+            break;
+        } else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+            // Read error (not just would-block)
+            LOG_ERROR("MCP: Read error from server '%s': %s", server->name, strerror(errno));
             break;
         }
         usleep(100000);  // 100ms
@@ -929,7 +990,14 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
     }
 
     buffer[total_read] = '\0';
-    LOG_DEBUG("MCP: Received response from '%s': %s", server->name, buffer);
+    LOG_DEBUG("MCP: Received %zu bytes from '%s'", total_read, server->name);
+    
+    // Only log full response if it's small enough
+    if (total_read < 1024) {
+        LOG_DEBUG("MCP: Response: %s", buffer);
+    } else {
+        LOG_DEBUG("MCP: First 1KB of response: %.1024s...", buffer);
+    }
 
     // Parse response
     cJSON *response = cJSON_Parse(buffer);
