@@ -208,6 +208,12 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     ctx->socket_type = socket_type;
     ctx->enabled = true;
     ctx->daemon_mode = (socket_type == ZMQ_PAIR);
+    
+    // For daemon mode, set infinite receive timeout to wait indefinitely for messages
+    if (ctx->daemon_mode) {
+        ctx->receive_timeout = -1; // Infinite timeout in ZMQ
+        LOG_DEBUG("ZMQ: Daemon mode detected, setting infinite receive timeout");
+    }
 
     // Create message queues if enabled
     if (ctx->message_queue_enabled) {
@@ -546,12 +552,25 @@ int zmq_socket_receive(ZMQContext *ctx, char *buffer, size_t buffer_size, int ti
     }
 
     // Use provided timeout or context default
-    int actual_timeout = (timeout_ms >= 0) ? timeout_ms : ctx->receive_timeout;
+    // Special case: -1 means infinite timeout in ZMQ
+    int actual_timeout;
+    if (timeout_ms == -1) {
+        actual_timeout = -1; // Infinite timeout in ZMQ
+    } else if (timeout_ms >= 0) {
+        actual_timeout = timeout_ms;
+    } else {
+        actual_timeout = ctx->receive_timeout;
+    }
     LOG_DEBUG("ZMQ: Using timeout: %d ms (provided: %d, default: %d)",
               actual_timeout, timeout_ms, ctx->receive_timeout);
 
-    LOG_INFO("ZMQ: Waiting for message on endpoint: %s (timeout: %d ms, buffer size: %zu)",
-              ctx->endpoint ? ctx->endpoint : "unknown", actual_timeout, buffer_size);
+    if (actual_timeout == -1) {
+        LOG_INFO("ZMQ: Waiting for message on endpoint: %s (timeout: infinite, buffer size: %zu)",
+                  ctx->endpoint ? ctx->endpoint : "unknown", buffer_size);
+    } else {
+        LOG_INFO("ZMQ: Waiting for message on endpoint: %s (timeout: %d ms, buffer size: %zu)",
+                  ctx->endpoint ? ctx->endpoint : "unknown", actual_timeout, buffer_size);
+    }
 
     // Set timeout
     LOG_DEBUG("ZMQ: Setting socket receive timeout to %d ms", actual_timeout);
@@ -562,9 +581,15 @@ int zmq_socket_receive(ZMQContext *ctx, char *buffer, size_t buffer_size, int ti
     if (rc < 0) {
         int err = errno;
         if (err == EAGAIN) {
-            LOG_WARN("ZMQ: Receive timeout after %d ms (EAGAIN)", actual_timeout);
-            zmq_set_error(ctx, ZMQ_ERROR_TIMEOUT, "Receive timeout after %d ms", actual_timeout);
-            LOG_DEBUG("ZMQ: Receive timeout after %d ms", actual_timeout);
+            // For infinite timeout (-1), EAGAIN should never happen, but handle it just in case
+            if (actual_timeout == -1) {
+                LOG_WARN("ZMQ: Unexpected timeout with infinite wait (EAGAIN)");
+                zmq_set_error(ctx, ZMQ_ERROR_TIMEOUT, "Unexpected timeout with infinite wait");
+            } else {
+                LOG_WARN("ZMQ: Receive timeout after %d ms (EAGAIN)", actual_timeout);
+                zmq_set_error(ctx, ZMQ_ERROR_TIMEOUT, "Receive timeout after %d ms", actual_timeout);
+                LOG_DEBUG("ZMQ: Receive timeout after %d ms", actual_timeout);
+            }
         } else {
             LOG_ERROR("ZMQ: Failed to receive message: %s (errno=%d, endpoint: %s)",
                      zmq_strerror(err), err, ctx->endpoint ? ctx->endpoint : "unknown");
@@ -646,7 +671,8 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
     LOG_DEBUG("ZMQ: Waiting for incoming message on endpoint: %s", ctx->endpoint ? ctx->endpoint : "unknown");
 
     char buffer[ZMQ_BUFFER_SIZE];
-    int received = zmq_socket_receive(ctx, buffer, sizeof(buffer), -1); // Blocking receive
+    // Use infinite timeout (-1) for daemon mode to wait indefinitely
+    int received = zmq_socket_receive(ctx, buffer, sizeof(buffer), -1); // Blocking receive with infinite timeout
     if (received <= 0) {
         LOG_WARN("ZMQ: Failed to receive message or connection closed");
         return -1;
@@ -780,8 +806,8 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
             fflush(stdout);
         }
     } else {
-        LOG_ERROR("ZMQ: Empty response generated, not sending");
-        printf("ZMQ: Empty response generated, not sending\n");
+        LOG_DEBUG("ZMQ: Empty response generated (expected for interactive processing), not sending");
+        printf("ZMQ: Empty response generated (expected for interactive processing), not sending\n");
         fflush(stdout);
     }
 
@@ -1766,11 +1792,16 @@ int zmq_socket_test_connection(ZMQContext *ctx, int timeout_ms) {
     int original_receive_timeout = ctx->receive_timeout;
     int original_send_timeout = ctx->send_timeout;
 
-    // Use test timeout
-    ctx->receive_timeout = timeout_ms;
-    ctx->send_timeout = timeout_ms;
-    zmq_setsockopt(ctx->socket, ZMQ_RCVTIMEO, &timeout_ms, sizeof(timeout_ms));
-    zmq_setsockopt(ctx->socket, ZMQ_SNDTIMEO, &timeout_ms, sizeof(timeout_ms));
+    // Use test timeout (ensure it's not -1 for connection test)
+    int test_timeout = timeout_ms;
+    if (test_timeout == -1) {
+        test_timeout = 5000; // Default 5 seconds for connection test
+        LOG_DEBUG("ZMQ: Converting infinite timeout to %d ms for connection test", test_timeout);
+    }
+    ctx->receive_timeout = test_timeout;
+    ctx->send_timeout = test_timeout;
+    zmq_setsockopt(ctx->socket, ZMQ_RCVTIMEO, &test_timeout, sizeof(test_timeout));
+    zmq_setsockopt(ctx->socket, ZMQ_SNDTIMEO, &test_timeout, sizeof(test_timeout));
 
     // Send ping
     time_t start_time = time(NULL);
