@@ -165,3 +165,7 @@ export OPENAI_API_KEY="your-api-key"
 - Database: `./.klawed/api_calls.db` (project-local)
 - Prompt caching: Enabled
 - Token usage tracking: Enabled (stores in `token_usage` table)
+
+## Write and Edit tool responses
+
+You must create small write and edit tool choice responses. Why? You have a limit of 4096 tokens in your response output. Creating smaller writes will force you to write cleaner code and more modular code. Also, when you create huge payloads that exceed this token limit, the tool responses are partial and will be discarded. That would be a waste of energy for no reason.
