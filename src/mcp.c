@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -38,6 +39,9 @@
 // Global MCP state
 static int mcp_initialized = 0;
 static int mcp_enabled = 0;
+
+// Buffer size for MCP responses (256KB to handle base64 images or large text)
+#define MCP_RESPONSE_BUFFER_SIZE 262144
 
 /*
  * Create directory recursively (like mkdir -p)
@@ -669,7 +673,7 @@ int mcp_connect_server(MCPServer *server) {
             // Read any stderr output during initialization
             mcp_read_stderr(server);
 
-            ssize_t n = read(server->stdout_fd, buffer + total_read, sizeof(buffer) - total_read - 1);
+            ssize_t n = read(server->stdout_fd, buffer + total_read, MCP_RESPONSE_BUFFER_SIZE - total_read - 1);
             if (n > 0) {
                 total_read += (size_t)n;
 
@@ -808,6 +812,44 @@ void mcp_disconnect_server(MCPServer *server) {
 }
 
 /*
+ * Check if a buffer contains a complete JSON object
+ */
+static int is_complete_json(const char *buf, size_t len) {
+    int brace_depth = 0;
+    int bracket_depth = 0;
+    bool in_string = false;
+    bool escape = false;
+    
+    for (size_t i = 0; i < len; i++) {
+        char c = buf[i];
+        
+        if (escape) {
+            escape = false;
+            continue;
+        }
+        
+        if (c == '\\') {
+            escape = true;
+            continue;
+        }
+        
+        if (c == '"' && !escape) {
+            in_string = !in_string;
+            continue;
+        }
+        
+        if (!in_string) {
+            if (c == '{') brace_depth++;
+            else if (c == '}') brace_depth--;
+            else if (c == '[') bracket_depth++;
+            else if (c == ']') bracket_depth--;
+        }
+    }
+    
+    return (brace_depth == 0 && bracket_depth == 0 && !in_string && !escape);
+}
+
+/*
  * Send JSON-RPC request and read response
  */
 static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *params) {
@@ -843,7 +885,11 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
     free(request_str);
 
     // Read response (line-delimited JSON)
-    char buffer[65536] = {0};
+    char *buffer = malloc(MCP_RESPONSE_BUFFER_SIZE);
+    if (!buffer) {
+        LOG_ERROR("MCP: Failed to allocate response buffer");
+        return NULL;
+    }
     size_t total_read = 0;
 
     // Wait for response (with timeout)
@@ -861,11 +907,14 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
         ssize_t n = read(server->stdout_fd, buffer + total_read, sizeof(buffer) - total_read - 1);
         if (n > 0) {
             total_read += (size_t)n;
-
-            // Check if we have a complete line
-            if (strchr(buffer, '\n')) {
+            
+            // Check if we have a complete JSON object
+            if (is_complete_json(buffer, total_read)) {
                 break;
             }
+        } else if (n == 0) {
+            // EOF
+            break;
         }
         usleep(100000);  // 100ms
     }
@@ -875,6 +924,7 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
 
     if (total_read == 0) {
         LOG_ERROR("MCP: No response from server '%s'", server->name);
+        free(buffer);
         return NULL;
     }
 
@@ -883,14 +933,18 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
 
     // Parse response
     cJSON *response = cJSON_Parse(buffer);
+    
     if (!response) {
         // Show first 200 chars of response for debugging
         char preview[201];
         snprintf(preview, sizeof(preview), "%.200s", buffer);
         LOG_ERROR("MCP: Failed to parse JSON response from '%s'. First 200 chars: %s%s",
                  server->name, preview, total_read > 200 ? "..." : "");
+        free(buffer);
         return NULL;
     }
+    
+    free(buffer);  // Free buffer after parsing - cJSON creates its own copy
 
     // Check for JSON-RPC error
     cJSON *error = cJSON_GetObjectItem(response, "error");
