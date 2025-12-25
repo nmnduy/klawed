@@ -726,6 +726,14 @@ sanitize-all: check-deps
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/tool_utils_all.o $(TOOL_UTILS_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/history_file_all.o $(HISTORY_FILE_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/base64_all.o $(BASE64_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/anthropic_provider_all.o $(ANTHROPIC_PROVIDER_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/array_resize_all.o $(ARRAY_RESIZE_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/http_client_all.o $(HTTP_CLIENT_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/session_all.o $(SESSION_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/sqlite_queue_all.o $(SQLITE_QUEUE_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/subagent_manager_all.o $(SUBAGENT_MANAGER_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/zmq_socket_all.o $(ZMQ_SOCKET_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/retry_logic_all.o $(RETRY_LOGIC_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -o $(BUILD_DIR)/klawed-allsan $(SRC) \
 		$(BUILD_DIR)/logger_all.o $(BUILD_DIR)/persistence_all.o $(BUILD_DIR)/migrations_all.o $(BUILD_DIR)/commands_all.o \
 		$(BUILD_DIR)/completion_all.o $(BUILD_DIR)/tui_all.o $(BUILD_DIR)/todo_all.o $(BUILD_DIR)/aws_bedrock_all.o \
@@ -733,6 +741,9 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/bedrock_provider_all.o $(BUILD_DIR)/builtin_themes_all.o $(BUILD_DIR)/patch_parser_all.o \
 		$(BUILD_DIR)/message_queue_all.o $(BUILD_DIR)/ai_worker_all.o $(BUILD_DIR)/voice_input_all.o $(BUILD_DIR)/mcp_all.o \
 		$(BUILD_DIR)/window_manager_all.o $(BUILD_DIR)/tool_utils_all.o $(BUILD_DIR)/history_file_all.o $(BUILD_DIR)/base64_all.o \
+		$(BUILD_DIR)/anthropic_provider_all.o $(BUILD_DIR)/array_resize_all.o $(BUILD_DIR)/http_client_all.o \
+		$(BUILD_DIR)/session_all.o $(BUILD_DIR)/sqlite_queue_all.o $(BUILD_DIR)/subagent_manager_all.o \
+		$(BUILD_DIR)/zmq_socket_all.o $(BUILD_DIR)/retry_logic_all.o \
 		$(LDFLAGS) -fsanitize=address,undefined
 	@echo ""
 	@echo "✓ Build successful with combined sanitizers!"
@@ -761,15 +772,21 @@ valgrind: test-edit test-read
 	@echo ""
 	@echo "Running Valgrind on test suite..."
 	@echo ""
-	@command -v valgrind >/dev/null 2>&1 || { echo "Error: valgrind not found. Install with: brew install valgrind (macOS) or apt-get install valgrind (Linux)"; exit 1; }
-	@echo "=== Testing Edit tool with Valgrind ==="
-	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 ./$(TEST_EDIT_TARGET)
-	@echo ""
-	@echo "=== Testing Read tool with Valgrind ==="
-	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 ./$(TEST_READ_TARGET)
-	@echo ""
-	@echo "✓ Valgrind checks complete - no memory leaks detected!"
-	@echo ""
+	@if command -v valgrind >/dev/null 2>&1; then \
+		echo "=== Testing Edit tool with Valgrind ==="; \
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 ./$(TEST_EDIT_TARGET); \
+		echo ""; \
+		echo "=== Testing Read tool with Valgrind ==="; \
+		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 ./$(TEST_READ_TARGET); \
+		echo ""; \
+		echo "✓ Valgrind checks complete - no memory leaks detected!"; \
+		echo ""; \
+	else \
+		echo "⚠ Warning: valgrind not found. Skipping memory leak detection."; \
+		echo "  Install with: brew install valgrind (macOS) or apt-get install valgrind (Linux)"; \
+		echo "  Note: On macOS, valgrind may have limited support."; \
+		echo ""; \
+	fi
 
 # Comprehensive memory bug scan - runs all analysis tools
 memscan: analyze sanitize-all
@@ -800,8 +817,12 @@ comprehensive-scan: analyze sanitize-all valgrind
 	@echo ""
 	@echo "Completed checks:"
 	@echo "  ✓ Static analysis (see $(BUILD_DIR)/analyze.log)"
-	@echo "  ✓ Built with combined sanitizers ($(BUILD_DIR)/claude-allsan)"
-	@echo "  ✓ Valgrind memory leak detection"
+	@echo "  ✓ Built with combined sanitizers ($(BUILD_DIR)/klawed-allsan)"
+	@if command -v valgrind >/dev/null 2>&1; then \
+		echo "  ✓ Valgrind memory leak detection"; \
+	else \
+		echo "  ○ Valgrind memory leak detection (valgrind not installed)"; \
+	fi
 	@echo ""
 	@echo "Additional tools available (install manually):"
 	@command -v clang-tidy >/dev/null 2>&1 && echo "  ✓ clang-tidy (static analysis)" || echo "  ○ clang-tidy (not installed)"
