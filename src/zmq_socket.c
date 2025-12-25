@@ -208,7 +208,7 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     ctx->socket_type = socket_type;
     ctx->enabled = true;
     ctx->daemon_mode = (socket_type == ZMQ_PAIR);
-    
+
     // For daemon mode, set infinite receive timeout to wait indefinitely for messages
     if (ctx->daemon_mode) {
         ctx->receive_timeout = -1; // Infinite timeout in ZMQ
@@ -223,7 +223,7 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
             // Continue without message queue
             ctx->message_queue_enabled = false;
         }
-        
+
         ctx->receive_queue = zmq_message_queue_create((size_t)ctx->receive_queue_size);
         if (!ctx->receive_queue) {
             LOG_WARN("ZMQ: Failed to create receive message queue");
@@ -234,9 +234,9 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
             }
             ctx->message_queue_enabled = false;
         }
-        
+
         if (ctx->message_queue_enabled) {
-            LOG_DEBUG("ZMQ: Message queues created (send: %d, receive: %d)", 
+            LOG_DEBUG("ZMQ: Message queues created (send: %d, receive: %d)",
                      ctx->send_queue_size, ctx->receive_queue_size);
         }
     }
@@ -276,7 +276,7 @@ void zmq_socket_cleanup(ZMQContext *ctx) {
         zmq_message_queue_free(ctx->send_queue);
         ctx->send_queue = NULL;
     }
-    
+
     if (ctx->receive_queue) {
         LOG_DEBUG("ZMQ: Freeing receive message queue");
         zmq_message_queue_free(ctx->receive_queue);
@@ -306,7 +306,7 @@ int zmq_socket_send(ZMQContext *ctx, const char *message, size_t message_len) {
 
     // Check if we should queue the message
     bool should_queue = ctx->message_queue_enabled && ctx->send_queue;
-    
+
     // Check connection health
     if (ctx->socket) {
         int health = zmq_check_connection_health(ctx);
@@ -316,19 +316,19 @@ int zmq_socket_send(ZMQContext *ctx, const char *message, size_t message_len) {
                 // Reconnect failed, queue message if enabled
                 if (should_queue) {
                     if (zmq_message_queue_push(ctx->send_queue, message, message_len) == 0) {
-                        LOG_INFO("ZMQ: Message queued (queue size: %zu)", 
+                        LOG_INFO("ZMQ: Message queued (queue size: %zu)",
                                  zmq_message_queue_size(ctx->send_queue));
-                        zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL, 
+                        zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL,
                                      "Connection failed, message queued for later delivery");
                         return ZMQ_ERROR_QUEUE_FULL; // Special error code for queued messages
                     } else {
                         LOG_ERROR("ZMQ: Failed to queue message, queue may be full");
-                        zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL, 
+                        zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL,
                                      "Connection failed and queue is full");
                         return ZMQ_ERROR_QUEUE_FULL;
                     }
                 } else {
-                    zmq_set_error(ctx, ZMQ_ERROR_RECONNECT_FAILED, 
+                    zmq_set_error(ctx, ZMQ_ERROR_RECONNECT_FAILED,
                                  "Reconnect failed, cannot send message");
                     return ZMQ_ERROR_RECONNECT_FAILED;
                 }
@@ -343,19 +343,19 @@ int zmq_socket_send(ZMQContext *ctx, const char *message, size_t message_len) {
             // Reconnect failed, queue message if enabled
             if (should_queue) {
                 if (zmq_message_queue_push(ctx->send_queue, message, message_len) == 0) {
-                    LOG_INFO("ZMQ: Message queued (queue size: %zu)", 
+                    LOG_INFO("ZMQ: Message queued (queue size: %zu)",
                              zmq_message_queue_size(ctx->send_queue));
-                    zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL, 
+                    zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL,
                                  "No socket, message queued for later delivery");
                     return ZMQ_ERROR_QUEUE_FULL;
                 } else {
                     LOG_ERROR("ZMQ: Failed to queue message, queue may be full");
-                    zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL, 
+                    zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL,
                                  "No socket and queue is full");
                     return ZMQ_ERROR_QUEUE_FULL;
                 }
             } else {
-                zmq_set_error(ctx, ZMQ_ERROR_NO_SOCKET, 
+                zmq_set_error(ctx, ZMQ_ERROR_NO_SOCKET,
                              "Cannot send message - no socket and reconnect failed");
                 return ZMQ_ERROR_NO_SOCKET;
             }
@@ -365,19 +365,19 @@ int zmq_socket_send(ZMQContext *ctx, const char *message, size_t message_len) {
         // No reconnect enabled
         if (should_queue) {
             if (zmq_message_queue_push(ctx->send_queue, message, message_len) == 0) {
-                LOG_INFO("ZMQ: Message queued (queue size: %zu)", 
+                LOG_INFO("ZMQ: Message queued (queue size: %zu)",
                          zmq_message_queue_size(ctx->send_queue));
-                zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL, 
+                zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL,
                              "No socket available, message queued");
                 return ZMQ_ERROR_QUEUE_FULL;
             } else {
                 LOG_ERROR("ZMQ: Failed to queue message, queue may be full");
-                zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL, 
+                zmq_set_error(ctx, ZMQ_ERROR_QUEUE_FULL,
                              "No socket available and queue is full");
                 return ZMQ_ERROR_QUEUE_FULL;
             }
         } else {
-            zmq_set_error(ctx, ZMQ_ERROR_NO_SOCKET, 
+            zmq_set_error(ctx, ZMQ_ERROR_NO_SOCKET,
                          "No socket available and reconnect disabled");
             return ZMQ_ERROR_NO_SOCKET;
         }
@@ -385,18 +385,18 @@ int zmq_socket_send(ZMQContext *ctx, const char *message, size_t message_len) {
 
     // Try to send queued messages first if we have any
     if (should_queue && zmq_message_queue_size(ctx->send_queue) > 0) {
-        LOG_DEBUG("ZMQ: Attempting to send %zu queued messages", 
+        LOG_DEBUG("ZMQ: Attempting to send %zu queued messages",
                  zmq_message_queue_size(ctx->send_queue));
-        
+
         while (zmq_message_queue_size(ctx->send_queue) > 0) {
             size_t queued_msg_len;
             char *queued_msg = zmq_message_queue_pop(ctx->send_queue, &queued_msg_len);
             if (!queued_msg) break;
-            
+
             LOG_DEBUG("ZMQ: Sending queued message (%zu bytes)", queued_msg_len);
             int rc = zmq_send(ctx->socket, queued_msg, queued_msg_len, 0);
             free(queued_msg);
-            
+
             if (rc < 0) {
                 int err = errno;
                 if (err == EAGAIN) {
@@ -413,7 +413,7 @@ int zmq_socket_send(ZMQContext *ctx, const char *message, size_t message_len) {
                     // Queue the current message and exit
                     if (zmq_message_queue_push(ctx->send_queue, message, message_len) == 0) {
                         LOG_INFO("ZMQ: Current message queued after send failure");
-                        zmq_set_error(ctx, ZMQ_ERROR_SEND_FAILED, 
+                        zmq_set_error(ctx, ZMQ_ERROR_SEND_FAILED,
                                      "Send failed, message queued");
                         return ZMQ_ERROR_SEND_FAILED;
                     }
@@ -441,7 +441,7 @@ int zmq_socket_send(ZMQContext *ctx, const char *message, size_t message_len) {
             zmq_set_error(ctx, ZMQ_ERROR_TIMEOUT, "Send timeout after %dms: %s",
                          ctx->send_timeout, zmq_strerror(err));
             LOG_WARN("ZMQ: Send timeout after %dms", ctx->send_timeout);
-            
+
             // Queue message if enabled
             if (should_queue) {
                 if (zmq_message_queue_push(ctx->send_queue, message, message_len) == 0) {
@@ -452,7 +452,7 @@ int zmq_socket_send(ZMQContext *ctx, const char *message, size_t message_len) {
         } else {
             zmq_set_error(ctx, ZMQ_ERROR_SEND_FAILED, "Failed to send message: %s (endpoint: %s)",
                          zmq_strerror(err), ctx->endpoint ? ctx->endpoint : "unknown");
-            
+
             // Queue message if enabled
             if (should_queue) {
                 if (zmq_message_queue_push(ctx->send_queue, message, message_len) == 0) {
@@ -622,7 +622,7 @@ int zmq_socket_receive(ZMQContext *ctx, char *buffer, size_t buffer_size, int ti
         strncpy(preview, buffer, preview_len);
         preview[preview_len] = '\0';
         LOG_DEBUG("ZMQ: Received data preview (first %zu chars): %s", preview_len, preview);
-        
+
         // Also log message type if it's JSON
         if (rc > 10 && buffer[0] == '{') {
             // Try to parse just enough to get messageType
@@ -753,21 +753,21 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
         } else if (strcmp(message_type->valuestring, ZMQ_HEARTBEAT_PING) == 0) {
             // Handle heartbeat ping
             LOG_INFO("ZMQ: Processing HEARTBEAT_PING message");
-            
+
             // Get timestamp from the ping
             cJSON *timestamp = cJSON_GetObjectItem(json, "timestamp");
             time_t ping_time = time(NULL);
             if (timestamp && cJSON_IsNumber(timestamp)) {
                 ping_time = (time_t)timestamp->valuedouble;
             }
-            
+
             // Send heartbeat pong response
             snprintf(response, sizeof(response),
                     "{\"messageType\": \"%s\", \"pingTimestamp\": %ld}",
                     ZMQ_HEARTBEAT_PONG, (long)ping_time);
-            
+
             LOG_DEBUG("ZMQ: Sending HEARTBEAT_PONG response with timestamp %ld", (long)ping_time);
-            
+
         } else {
             LOG_WARN("ZMQ: Unsupported message type received: %s", message_type->valuestring);
             LOG_DEBUG("ZMQ: Available fields - messageType: %s, content: %s",
@@ -916,35 +916,35 @@ static int zmq_send_tool_request(ZMQContext *ctx, const char *tool_name, const c
         LOG_ERROR("ZMQ: Invalid parameters for send_tool_request");
         return -1;
     }
-    
+
     cJSON *request_json = cJSON_CreateObject();
     if (!request_json) {
         LOG_ERROR("ZMQ: Failed to create tool request JSON object");
         return -1;
     }
-    
+
     cJSON_AddStringToObject(request_json, "messageType", "TOOL");
     cJSON_AddStringToObject(request_json, "toolName", tool_name);
     cJSON_AddStringToObject(request_json, "toolId", tool_id);
-    
+
     if (tool_parameters) {
         cJSON_AddItemToObject(request_json, "toolParameters", cJSON_Duplicate(tool_parameters, 1));
     } else {
         cJSON_AddNullToObject(request_json, "toolParameters");
     }
-    
+
     char *request_str = cJSON_PrintUnformatted(request_json);
     if (!request_str) {
         LOG_ERROR("ZMQ: Failed to serialize tool request JSON");
         cJSON_Delete(request_json);
         return -1;
     }
-    
+
     LOG_INFO("ZMQ: Sending TOOL request for %s (id: %s)", tool_name, tool_id);
     int result = zmq_socket_send(ctx, request_str, strlen(request_str));
     free(request_str);
     cJSON_Delete(request_json);
-    
+
     return result;
 #else
     (void)ctx;
@@ -977,10 +977,10 @@ static int zmq_check_connection_health(ZMQContext *ctx) {
     // Check if heartbeat is needed
     time_t time_since_last_heartbeat = now - ctx->last_heartbeat;
     int heartbeat_interval_seconds = ctx->heartbeat_interval / 1000;
-    
+
     LOG_DEBUG("ZMQ: Heartbeat check - time since last: %lds, interval: %ds, enabled: %d",
               time_since_last_heartbeat, heartbeat_interval_seconds, ctx->heartbeat_enabled);
-    
+
     if (ctx->heartbeat_enabled &&
         time_since_last_heartbeat * 1000 >= ctx->heartbeat_interval) {
 
@@ -1014,10 +1014,10 @@ static int zmq_check_connection_health(ZMQContext *ctx) {
     // Check if connection is stale (no activity for 2x heartbeat interval)
     time_t time_since_last_activity = now - ctx->last_activity;
     int stale_threshold_seconds = (ctx->heartbeat_interval * 2) / 1000;
-    
+
     LOG_DEBUG("ZMQ: Stale check - time since last activity: %lds, threshold: %ds",
               time_since_last_activity, stale_threshold_seconds);
-    
+
     if (ctx->heartbeat_enabled &&
         time_since_last_activity * 1000 > ctx->heartbeat_interval * 2) {
         LOG_WARN("ZMQ: Connection appears stale (no activity for %ld seconds, threshold: %d seconds)",
@@ -1098,10 +1098,10 @@ static int zmq_attempt_reconnect(ZMQContext *ctx) {
     int linger = 1000;
     zmq_setsockopt(ctx->socket, ZMQ_LINGER, &linger, sizeof(linger));
     LOG_DEBUG("ZMQ: Set ZMQ_LINGER to %d ms", linger);
-    
+
     zmq_setsockopt(ctx->socket, ZMQ_RCVTIMEO, &ctx->receive_timeout, sizeof(ctx->receive_timeout));
     LOG_DEBUG("ZMQ: Set ZMQ_RCVTIMEO to %d ms", ctx->receive_timeout);
-    
+
     zmq_setsockopt(ctx->socket, ZMQ_SNDTIMEO, &ctx->send_timeout, sizeof(ctx->send_timeout));
     LOG_DEBUG("ZMQ: Set ZMQ_SNDTIMEO to %d ms", ctx->send_timeout);
 
@@ -1133,7 +1133,7 @@ static int zmq_attempt_reconnect(ZMQContext *ctx) {
 
     LOG_INFO("ZMQ: Reconnect successful to %s", ctx->endpoint);
     ctx->reconnect_attempts = 0;
-    
+
     time_t now = time(NULL);
     ctx->last_activity = now;
     ctx->last_heartbeat = now;
@@ -1322,11 +1322,11 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                     results[i].tool_output = cJSON_CreateObject();
                     cJSON_AddStringToObject(results[i].tool_output, "error", "Tool call missing name or id");
                     results[i].is_error = 1;
-                    
+
                     // Send TOOL request message (even though it will fail)
-                    zmq_send_tool_request(ctx, tool->name ? tool->name : "unknown", 
+                    zmq_send_tool_request(ctx, tool->name ? tool->name : "unknown",
                                          tool->id ? tool->id : "unknown", NULL);
-                    
+
                     // Send error response
                     zmq_send_tool_result(ctx, tool->name ? tool->name : "unknown",
                                         tool->id ? tool->id : "unknown", results[i].tool_output, 1);
@@ -1637,7 +1637,7 @@ static void zmq_message_queue_free(ZMQMessageQueue *queue) {
         return;
     }
 
-    LOG_INFO("ZMQ: Freeing message queue (size: %zu/%zu, bytes: %zu, head: %zu, tail: %zu)", 
+    LOG_INFO("ZMQ: Freeing message queue (size: %zu/%zu, bytes: %zu, head: %zu, tail: %zu)",
               queue->size, queue->capacity, queue->total_bytes, queue->head, queue->tail);
 
     if (queue->size > 0) {
@@ -1656,7 +1656,7 @@ static void zmq_message_queue_free(ZMQMessageQueue *queue) {
               (void*)queue->messages, (void*)queue->message_sizes);
     free(queue->messages);
     free(queue->message_sizes);
-    
+
     LOG_DEBUG("ZMQ: Freeing queue structure at %p", (void*)queue);
     free(queue);
     LOG_DEBUG("ZMQ: Message queue freed successfully");
@@ -1665,7 +1665,7 @@ static void zmq_message_queue_free(ZMQMessageQueue *queue) {
 static int zmq_message_queue_push(ZMQMessageQueue *queue, const char *message, size_t message_len) {
     LOG_DEBUG("ZMQ: Attempting to push message to queue (queue=%p, message_len=%zu)",
               (void*)queue, message_len);
-    
+
     if (!queue || !message) {
         LOG_ERROR("ZMQ: Invalid parameters for queue push (queue=%p, message=%p)",
                   (void*)queue, (const void*)message);
@@ -1676,7 +1676,7 @@ static int zmq_message_queue_push(ZMQMessageQueue *queue, const char *message, s
               queue->size, queue->capacity, queue->head, queue->tail, queue->total_bytes);
 
     if (queue->size >= queue->capacity) {
-        LOG_WARN("ZMQ: Message queue full (size: %zu, capacity: %zu)", 
+        LOG_WARN("ZMQ: Message queue full (size: %zu, capacity: %zu)",
                  queue->size, queue->capacity);
         return -1;
     }
@@ -1697,7 +1697,7 @@ static int zmq_message_queue_push(ZMQMessageQueue *queue, const char *message, s
     LOG_DEBUG("ZMQ: Storing message at tail index %zu", queue->tail);
     queue->messages[queue->tail] = message_copy;
     queue->message_sizes[queue->tail] = message_len;
-    
+
     size_t old_tail = queue->tail;
     queue->tail = (queue->tail + 1) % queue->capacity;
     queue->size++;
@@ -1707,7 +1707,7 @@ static int zmq_message_queue_push(ZMQMessageQueue *queue, const char *message, s
               message_len, queue->size, queue->capacity, queue->total_bytes);
     LOG_DEBUG("ZMQ: Queue state after push - tail: %zu->%zu, size: %zu, total_bytes: %zu",
               old_tail, queue->tail, queue->size, queue->total_bytes);
-    
+
     // Log message preview if it's small
     if (message_len > 0 && message_len < 200) {
         char preview[256];
@@ -1716,15 +1716,15 @@ static int zmq_message_queue_push(ZMQMessageQueue *queue, const char *message, s
         preview[preview_len] = '\0';
         LOG_DEBUG("ZMQ: Message preview: %s", preview);
     }
-    
+
     return 0;
 }
 
 static char* zmq_message_queue_pop(ZMQMessageQueue *queue, size_t *message_len) {
     LOG_DEBUG("ZMQ: Attempting to pop message from queue (queue=%p)", (void*)queue);
-    
+
     if (!queue || queue->size == 0) {
-        LOG_DEBUG("ZMQ: Queue empty or invalid (queue=%p, size=%zu)", 
+        LOG_DEBUG("ZMQ: Queue empty or invalid (queue=%p, size=%zu)",
                   (void*)queue, queue ? queue->size : 0);
         if (message_len) *message_len = 0;
         return NULL;
@@ -1753,7 +1753,7 @@ static char* zmq_message_queue_pop(ZMQMessageQueue *queue, size_t *message_len) 
               len, queue->size, queue->capacity, queue->total_bytes);
     LOG_DEBUG("ZMQ: Queue state after pop - head: %zu->%zu, size: %zu, total_bytes: %zu",
               old_head, queue->head, queue->size, queue->total_bytes);
-    
+
     // Log message preview if it's small
     if (len > 0 && len < 200 && message) {
         char preview[256];
@@ -1762,7 +1762,7 @@ static char* zmq_message_queue_pop(ZMQMessageQueue *queue, size_t *message_len) 
         preview[preview_len] = '\0';
         LOG_DEBUG("ZMQ: Popped message preview: %s", preview);
     }
-    
+
     return message;
 }
 
@@ -1785,7 +1785,7 @@ int zmq_socket_test_connection(ZMQContext *ctx, int timeout_ms) {
         return -1;
     }
 
-    LOG_INFO("ZMQ: Testing connection to %s (timeout: %d ms)", 
+    LOG_INFO("ZMQ: Testing connection to %s (timeout: %d ms)",
              ctx->endpoint ? ctx->endpoint : "unknown", timeout_ms);
 
     // Save current timeout settings
@@ -1825,7 +1825,7 @@ int zmq_socket_test_connection(ZMQContext *ctx, int timeout_ms) {
     // Wait for pong response
     char buffer[ZMQ_BUFFER_SIZE];
     rc = zmq_recv(ctx->socket, buffer, sizeof(buffer) - 1, 0);
-    
+
     // Restore original timeouts
     ctx->receive_timeout = original_receive_timeout;
     ctx->send_timeout = original_send_timeout;
@@ -1842,7 +1842,7 @@ int zmq_socket_test_connection(ZMQContext *ctx, int timeout_ms) {
     }
 
     buffer[rc] = '\0';
-    
+
     // Parse response
     cJSON *json = cJSON_Parse(buffer);
     if (!json) {
@@ -1852,14 +1852,14 @@ int zmq_socket_test_connection(ZMQContext *ctx, int timeout_ms) {
 
     cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
     cJSON *ping_timestamp = cJSON_GetObjectItem(json, "pingTimestamp");
-    
+
     int success = 0;
     if (message_type && cJSON_IsString(message_type) &&
         strcmp(message_type->valuestring, ZMQ_HEARTBEAT_PONG) == 0 &&
         ping_timestamp && cJSON_IsNumber(ping_timestamp) &&
         (long)ping_timestamp->valuedouble == start_time) {
-        
-        LOG_INFO("ZMQ: Connection test successful (round-trip: %ld ms)", 
+
+        LOG_INFO("ZMQ: Connection test successful (round-trip: %ld ms)",
                  (long)(time(NULL) - start_time) * 1000);
         success = 0;
     } else {

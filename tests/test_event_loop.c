@@ -83,7 +83,7 @@ int main(void) {
 #ifdef HAVE_ZMQ
     state.zmq_context = NULL;
 #endif
-    
+
     // Initialize TUI
     TUIState tui = {0};
     if (tui_init(&tui, &state) != 0) {
@@ -120,7 +120,7 @@ int main(void) {
     printf("\nStarting non-blocking event loop...\n");
     sleep(1);  // Give user time to see the message
 
-    int result = tui_event_loop(&tui, "Input", on_input_submit, 
+    int result = tui_event_loop(&tui, "Input", on_input_submit,
                                 NULL,  // interrupt_callback
                                 NULL,  // keypress_callback
                                 NULL,  // external_input_callback
