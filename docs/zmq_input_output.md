@@ -12,7 +12,7 @@ All messages are JSON objects with at least a `messageType` field that indicates
 
 ### Common Fields
 
-- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL", "TOOL_RESULT", "HEARTBEAT_PING", or "HEARTBEAT_PONG")
+- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL", or "TOOL_RESULT")
 - `content` (string, optional): Primary content/message text
 
 ## Input Messages (Client → Klawed)
@@ -101,26 +101,6 @@ Error messages for various failure conditions.
 }
 ```
 
-### 5. Heartbeat Messages
-
-For connection health monitoring:
-
-**Ping:**
-```json
-{
-  "messageType": "HEARTBEAT_PING",
-  "timestamp": 1703456789
-}
-```
-
-**Pong:**
-```json
-{
-  "messageType": "HEARTBEAT_PONG",
-  "pingTimestamp": 1703456789
-}
-```
-
 ## Message Flow Examples
 
 ### Simple Text Processing
@@ -189,84 +169,40 @@ For connection health monitoring:
 
 ## Connection Management
 
-Klawed's ZMQ implementation includes robustness features for network reliability.
+Klawed's ZMQ implementation is simplified and focuses on basic peer-to-peer communication.
 
-### Heartbeat Mechanism
+### Socket Configuration
 
-Monitor connection health with ping/pong messages:
+The implementation uses ZMQ_PAIR sockets with the following settings:
+- **LINGER**: 1000ms (1 second) for clean shutdown
+- **TCP keepalive**: Enabled with idle=60s, interval=5s, count=3
+- **Receive timeout**: Configurable via function parameter (default: infinite for daemon mode)
+- **Buffer size**: 65536 bytes (configurable via `ZMQ_BUFFER_SIZE` in code)
 
-**Ping:**
-```json
-{
-  "messageType": "HEARTBEAT_PING",
-  "timestamp": 1703456789
-}
-```
+### Environment Variables
 
-**Pong:**
-```json
-{
-  "messageType": "HEARTBEAT_PONG",
-  "pingTimestamp": 1703456789
-}
-```
+Only basic environment variables are supported:
 
-### Automatic Reconnection
+- `KLAWED_ZMQ_ENDPOINT`: ZMQ endpoint (e.g., "tcp://127.0.0.1:5555" or "ipc:///tmp/klawed.sock")
+- `KLAWED_ZMQ_MODE`: ZMQ mode ("daemon")
 
-When connections fail, Klawed can automatically reconnect with exponential backoff:
-- Base interval: 1 second (configurable)
-- Maximum attempts: 10 (configurable)
-
-### Message Queue
-
-Messages can be queued during disconnections to prevent loss:
-- Configurable queue size (default: 100 messages)
-- Queued messages sent when connection is restored
-
-### Configuration
-
-Environment variables for tuning:
-
-**Heartbeat:**
-- `KLAWED_ZMQ_HEARTBEAT_INTERVAL`: Ping interval in ms (default: 5000)
-- `KLAWED_ZMQ_ENABLE_HEARTBEAT`: Enable heartbeat (default: false)
-
-**Reconnection:**
-- `KLAWED_ZMQ_RECONNECT_INTERVAL`: Base reconnect interval in ms (default: 1000)
-- `KLAWED_ZMQ_MAX_RECONNECT_ATTEMPTS`: Max reconnect attempts (default: 10)
-- `KLAWED_ZMQ_ENABLE_RECONNECT`: Enable auto-reconnect (default: false)
-
-**Message Queue:**
-- `KLAWED_ZMQ_SEND_QUEUE_SIZE`: Send queue capacity (default: 100)
-- `KLAWED_ZMQ_RECEIVE_QUEUE_SIZE`: Receive queue capacity (default: 100)
-
-**Timeouts:**
-- `KLAWED_ZMQ_RECEIVE_TIMEOUT`: Receive timeout in ms (default: 30000)
-- `KLAWED_ZMQ_SEND_TIMEOUT`: Send timeout in ms (default: 10000)
-- `KLAWED_ZMQ_CONNECT_TIMEOUT`: Connect timeout in ms (default: 5000)
-
-**Buffers:**
-- `KLAWED_ZMQ_BUFFER_SIZE`: Buffer size in bytes (default: 65536)
-- `KLAWED_ZMQ_MAX_MESSAGE_SIZE`: Maximum message size in bytes (default: 1048576 = 1MB)
+**Note**: Previous versions supported many configuration options (heartbeat, reconnection, message queues, etc.), but these have been removed in the simplified implementation. The `src/zmq_config.h` file contains legacy configuration constants that are no longer used.
 
 ## Implementation Details
 
 ### Code Location
-- Input parsing: `src/zmq_socket.c` - `zmq_socket_process_message()` function
-- Response generation: Same function, various response creation sections
+- Main implementation: `src/zmq_socket.c` - Simplified ZMQ socket handling
+- Header: `src/zmq_socket.h` - Interface definitions
+- Example client: `examples/zmq_client.c` - Simple interactive client
 
 ### Message Type Constants
 - `"TEXT"`: Text processing request and successful response
 - `"ERROR"`: Error response
 - `"TOOL"`: Tool execution request (sent before tool execution)
 - `"TOOL_RESULT"`: Tool execution result (sent after tool execution)
-- `"HEARTBEAT_PING"`: Connection health check ping
-- `"HEARTBEAT_PONG"`: Connection health check pong response
 
 ### Buffer Sizes
-- Input buffer: `ZMQ_BUFFER_SIZE` (65536 bytes, configurable via `KLAWED_ZMQ_BUFFER_SIZE`)
-- Response buffer: Same size
-- Maximum message size: `ZMQ_MAX_MESSAGE_SIZE` (1048576 bytes = 1MB, configurable via `KLAWED_ZMQ_MAX_MESSAGE_SIZE`)
+- Default buffer size: `ZMQ_BUFFER_SIZE` (65536 bytes, defined in code)
 - Messages larger than buffer will be truncated (with warning logged)
 
 ### Message Framing
@@ -303,7 +239,7 @@ ZeroMQ handles message framing internally:
 8. **If there is no more TOOL without a TOOL_RESULT, you can consider that the agent has completed its turn. This can be used as a signal for continuing to wait**
 
 ### Connection Management
-9. **Implement reconnection logic** for network failures
-10. **Use heartbeats** for connection health monitoring
-11. **Queue messages during outages** for reliable delivery
+9. **Handle connection failures gracefully** - the simplified implementation doesn't include automatic reconnection
+10. **Monitor connection state** - implement basic keepalive in your client if needed
+11. **Clean up resources** - ensure proper cleanup of ZMQ contexts and sockets
 12. **Reuse connections** when possible for performance
