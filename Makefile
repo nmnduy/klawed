@@ -808,6 +808,8 @@ comprehensive-scan: analyze sanitize-all valgrind
 		echo "  ✓ Valgrind memory leak detection"; \
 	else \
 		echo "  ○ Valgrind memory leak detection (valgrind not installed)"; \
+		echo "    Note: On Apple Silicon (M1/M2/M3), valgrind may not work properly."; \
+		echo "    Consider using sanitizers instead: make sanitize-all"; \
 	fi
 	@echo ""
 	@echo "Additional tools available (install manually):"
@@ -815,6 +817,19 @@ comprehensive-scan: analyze sanitize-all valgrind
 	@command -v cppcheck >/dev/null 2>&1 && echo "  ✓ cppcheck (static analysis)" || echo "  ○ cppcheck (not installed)"
 	@command -v flawfinder >/dev/null 2>&1 && echo "  ✓ flawfinder (security analysis)" || echo "  ○ flawfinder (not installed)"
 	@command -v scan-build >/dev/null 2>&1 && echo "  ✓ scan-build (clang static analyzer)" || echo "  ○ scan-build (not installed)"
+	@echo ""
+	@echo "Installation commands:"
+	@echo "  macOS: brew install llvm cppcheck flawfinder"
+	@echo "  Linux: sudo apt-get install clang-tidy cppcheck flawfinder valgrind"
+	@echo ""
+	@echo "Or run the setup script:"
+	@echo "  ./setup-analysis-tools.sh"
+	@echo ""
+	@echo "Note: On macOS, after installing llvm, you may need to add to PATH:"
+	@echo "  export PATH=\"/opt/homebrew/opt/llvm/bin:\$$PATH\""
+	@echo "  or create symlinks:"
+	@echo "  ln -s /opt/homebrew/opt/llvm/bin/clang-tidy /opt/homebrew/bin/"
+	@echo "  ln -s /opt/homebrew/opt/llvm/bin/scan-build /opt/homebrew/bin/"
 	@echo ""
 	@echo "Next steps:"
 	@echo "  1. Review static analysis: cat $(BUILD_DIR)/analyze.log"
@@ -824,7 +839,36 @@ comprehensive-scan: analyze sanitize-all valgrind
 
 # Quick static analysis with clang-tidy (if available)
 clang-tidy:
-	@command -v clang-tidy >/dev/null 2>&1 || { echo "Error: clang-tidy not found. Install with: sudo apt-get install clang-tidy"; exit 1; }
+	@# Check for clang-tidy in PATH or common Homebrew locations
+	@if command -v clang-tidy >/dev/null 2>&1; then \
+		: ; \
+	elif [ -f "/opt/homebrew/opt/llvm/bin/clang-tidy" ]; then \
+		echo "Error: clang-tidy found at /opt/homebrew/opt/llvm/bin/clang-tidy but not in PATH."; \
+		echo "Add to PATH or create symlink:"; \
+		echo "  export PATH=\"/opt/homebrew/opt/llvm/bin:\$$PATH\""; \
+		echo "  or"; \
+		echo "  ln -s /opt/homebrew/opt/llvm/bin/clang-tidy /opt/homebrew/bin/"; \
+		echo ""; \
+		echo "Run: ./setup-analysis-tools.sh to set up automatically."; \
+		exit 1; \
+	elif [ -f "/usr/local/opt/llvm/bin/clang-tidy" ]; then \
+		echo "Error: clang-tidy found at /usr/local/opt/llvm/bin/clang-tidy but not in PATH."; \
+		echo "Add to PATH or create symlink:"; \
+		echo "  export PATH=\"/usr/local/opt/llvm/bin:\$$PATH\""; \
+		echo "  or"; \
+		echo "  ln -s /usr/local/opt/llvm/bin/clang-tidy /usr/local/bin/"; \
+		echo ""; \
+		echo "Run: ./setup-analysis-tools.sh to set up automatically."; \
+		exit 1; \
+	else \
+		echo "Error: clang-tidy not found."; \
+		echo "Install with:"; \
+		echo "  macOS: brew install llvm (clang-tidy is in llvm package)"; \
+		echo "  Linux: sudo apt-get install clang-tidy"; \
+		echo ""; \
+		echo "Then run: ./setup-analysis-tools.sh to set up automatically."; \
+		exit 1; \
+	fi
 	@echo "Running clang-tidy static analysis..."
 	@clang-tidy $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) -- $(CFLAGS) 2>&1 | tee $(BUILD_DIR)/clang-tidy.log || true
 	@echo ""
@@ -833,7 +877,7 @@ clang-tidy:
 
 # Security-focused static analysis with cppcheck (if available)
 cppcheck:
-	@command -v cppcheck >/dev/null 2>&1 || { echo "Error: cppcheck not found. Install with: sudo apt-get install cppcheck"; exit 1; }
+	@command -v cppcheck >/dev/null 2>&1 || { echo "Error: cppcheck not found."; echo "Install with:"; echo "  macOS: brew install cppcheck"; echo "  Linux: sudo apt-get install cppcheck"; exit 1; }
 	@echo "Running cppcheck security analysis..."
 	@cppcheck --enable=all --inconclusive --suppress=missingIncludeSystem $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) 2>&1 | tee $(BUILD_DIR)/cppcheck.log || true
 	@echo ""
@@ -842,7 +886,7 @@ cppcheck:
 
 # Security vulnerability scanning with flawfinder (if available)
 flawfinder:
-	@command -v flawfinder >/dev/null 2>&1 || { echo "Error: flawfinder not found. Install with: sudo apt-get install flawfinder"; exit 1; }
+	@command -v flawfinder >/dev/null 2>&1 || { echo "Error: flawfinder not found."; echo "Install with:"; echo "  macOS: brew install flawfinder"; echo "  Linux: sudo apt-get install flawfinder"; exit 1; }
 	@echo "Running flawfinder security analysis..."
 	@flawfinder $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) 2>&1 | tee $(BUILD_DIR)/flawfinder.log || true
 	@echo ""
@@ -1429,6 +1473,10 @@ help:
 	@echo "  yum install libcurl-devel cjson-devel sqlite-devel openssl-devel libbsd-devel valgrind"
 	@echo "  # For ZMQ support:"
 	@echo "  yum install zeromq-devel"
+	@echo ""
+	@echo "Static Analysis Tools (optional):"
+	@echo "  macOS: brew install llvm cppcheck flawfinder"
+	@echo "  Linux: sudo apt-get install clang-tidy cppcheck flawfinder"
 	@echo ""
 	@echo "AWS Bedrock Configuration:"
 	@echo "  export CLAUDE_CODE_USE_BEDROCK=true"
