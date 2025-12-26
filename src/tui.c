@@ -166,7 +166,7 @@ static void render_status_window(TUIState *tui) {
         int max_scroll = window_manager_get_max_scroll(&tui->wm);
         int content_lines = window_manager_get_content_lines(&tui->wm);
 
-        // Calculate percentage
+        // Calculate percentage with rounding
         int percentage;
         if (content_lines == 0 || max_scroll <= 0) {
             // No content or everything fits in viewport
@@ -176,7 +176,12 @@ static void render_status_window(TUIState *tui) {
         } else if (scroll_offset >= max_scroll) {
             percentage = 100;
         } else {
-            percentage = (scroll_offset * 100) / max_scroll;
+            // Use rounding instead of truncation for better accuracy
+            // (scroll_offset * 100 + max_scroll/2) / max_scroll gives proper rounding
+            percentage = (scroll_offset * 100 + max_scroll / 2) / max_scroll;
+            // Clamp to 0-100 just in case
+            if (percentage < 0) percentage = 0;
+            if (percentage > 100) percentage = 100;
         }
 
         snprintf(scroll_str, sizeof(scroll_str), " %d%% ", percentage);
@@ -1754,13 +1759,20 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
         if (content_lines == 0 || max_scroll <= 0) {
             // No content or everything fits in viewport
             at_bottom = 1;
+            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=1 (no content or fits in viewport)");
         } else if (scroll_offset >= max_scroll) {
             // Already at bottom
             at_bottom = 1;
+            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=1 (scroll_offset=%d >= max_scroll=%d)", 
+                     scroll_offset, max_scroll);
+        } else {
+            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=0 (scroll_offset=%d < max_scroll=%d, content_lines=%d)", 
+                     scroll_offset, max_scroll, content_lines);
         }
 
         if (at_bottom) {
             window_manager_scroll_to_bottom(&tui->wm);
+            LOG_DEBUG("[TUI] Auto-scroll: scrolling to bottom");
         }
     }
     window_manager_refresh_conversation(&tui->wm);
@@ -1843,13 +1855,20 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
         if (content_lines == 0 || max_scroll <= 0) {
             // No content or everything fits in viewport
             at_bottom = 1;
+            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=1 (no content or fits in viewport)");
         } else if (scroll_offset >= max_scroll) {
             // Already at bottom
             at_bottom = 1;
+            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=1 (scroll_offset=%d >= max_scroll=%d)", 
+                     scroll_offset, max_scroll);
+        } else {
+            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=0 (scroll_offset=%d < max_scroll=%d, content_lines=%d)", 
+                     scroll_offset, max_scroll, content_lines);
         }
 
         if (at_bottom) {
             window_manager_scroll_to_bottom(&tui->wm);
+            LOG_DEBUG("[TUI] Auto-scroll (update): scrolling to bottom");
         }
     }
     window_manager_refresh_conversation(&tui->wm);
