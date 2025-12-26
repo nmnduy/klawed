@@ -1046,10 +1046,13 @@ static cJSON* tool_upload_image(cJSON *params, ConversationState *state) {
                 size_t bytes;
                 int copy_success = 1;
 
-                while ((bytes = fread(buffer, 1, sizeof(buffer), src)) > 0) {
-                    if (fwrite(buffer, 1, bytes, dst) != bytes) {
-                        copy_success = 0;
-                        break;
+                while (!feof(src) && !ferror(src)) {
+                    bytes = fread(buffer, 1, sizeof(buffer), src);
+                    if (bytes > 0) {
+                        if (fwrite(buffer, 1, bytes, dst) != bytes) {
+                            copy_success = 0;
+                            break;
+                        }
                     }
                 }
 
@@ -1057,6 +1060,10 @@ static cJSON* tool_upload_image(cJSON *params, ConversationState *state) {
                 if (ferror(src) || ferror(dst)) {
                     copy_success = 0;
                 }
+
+                // Always close the streams
+                fclose(src);
+                fclose(dst);
 
                 if (copy_success) {
                     LOG_DEBUG("Copied macOS temporary screenshot from '%s' to '%s'",
@@ -1862,13 +1869,14 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         }
     }
 
-    // Get optional tail_lines parameter (default: 100 lines from end)
-    int tail_lines = 100;
+    // Note: tail_lines parameter is not used in this function
+    // It's only used in tool_check_subagent_progress
+    // We parse it here for API consistency but don't store it
     const cJSON *tail_json = cJSON_GetObjectItem(params, "tail_lines");
     if (tail_json && cJSON_IsNumber(tail_json)) {
-        tail_lines = tail_json->valueint;
+        int tail_lines = tail_json->valueint;
         if (tail_lines < 0) {
-            tail_lines = 100;  // Default to 100 if negative
+            // Default to 100 if negative (not used, just for consistency)
         }
     }
 
@@ -2109,12 +2117,17 @@ STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *sta
 
             // Read the tail content
             rewind(log_fp);
-            if (ferror(log_fp)) {
+            // Check rewind error by checking if ftell returns -1
+            // Save errno before ftell to avoid overwriting
+            int saved_errno = errno;
+            errno = 0;
+            if (ftell(log_fp) == -1 && errno != 0) {
                 fclose(log_fp);
                 cJSON *error = cJSON_CreateObject();
                 cJSON_AddStringToObject(error, "error", "Failed to rewind log file");
                 return error;
             }
+            errno = saved_errno;
             int current_line = 0;
 
             while (fgets(line, sizeof(line), log_fp)) {
@@ -7594,7 +7607,8 @@ static int dump_conversation_from_db(const char *session_id) {
     fprintf(stdout, "=================================================================\n\n");
 
     int call_num = 0;
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+    int step_rc;
+    while ((step_rc = sqlite3_step(stmt)) == SQLITE_ROW) {
         call_num++;
 
         const char *timestamp = (const char *)sqlite3_column_text(stmt, 0);
@@ -7705,6 +7719,11 @@ static int dump_conversation_from_db(const char *session_id) {
         }
 
         fprintf(stdout, "\n");
+    }
+
+    // Check for SQLite errors
+    if (step_rc != SQLITE_DONE) {
+        fprintf(stderr, "Error: SQLite error while reading rows: %s\n", sqlite3_errmsg(db->db));
     }
 
     if (call_num == 0) {
@@ -8132,7 +8151,7 @@ int main(int argc, char *argv[]) {
             // Update the local session_id variable to match the loaded session
             if (session_id && state.session_id && strcmp(session_id, state.session_id) != 0) {
                 free(session_id);
-                session_id = state.session_id;
+                session_id = NULL;  // state.session_id is now the active session ID
             }
         } else {
             LOG_ERROR("Failed to resume session");
