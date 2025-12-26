@@ -93,7 +93,6 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     // Initialize state tracking
     ctx->reconnect_attempts = 0;
     ctx->last_heartbeat = time(NULL);
-    ctx->last_heartbeat_response = time(NULL);
     ctx->last_activity = time(NULL);
 
     // Initialize error state
@@ -987,8 +986,12 @@ static int zmq_check_connection_health(ZMQContext *ctx) {
         LOG_INFO("ZMQ: Sending heartbeat ping (last heartbeat %ld seconds ago)",
                  time_since_last_heartbeat);
 
-        // Try to send a small ping message
-        const char *ping_msg = "PING";
+        // Send heartbeat ping as JSON message
+        char ping_msg[256];
+        snprintf(ping_msg, sizeof(ping_msg),
+                 "{\"messageType\":\"%s\",\"timestamp\":%ld}",
+                 ZMQ_HEARTBEAT_PING, (long)now);
+        
         LOG_DEBUG("ZMQ: Sending heartbeat ping message: %s", ping_msg);
         int rc = zmq_send(ctx->socket, ping_msg, strlen(ping_msg), ZMQ_DONTWAIT);
 
@@ -1183,45 +1186,7 @@ static const char* zmq_error_to_string(ZMQErrorCode error_code) {
     }
 }
 
-// Helper function to send a user prompt request
-__attribute__((unused)) static int zmq_send_user_prompt(ZMQContext *ctx, const char *prompt) {
-#ifdef HAVE_ZMQ
-    if (!ctx) {
-        LOG_ERROR("ZMQ: Invalid parameters for send_user_prompt");
-        return -1;
-    }
 
-    cJSON *response_json = cJSON_CreateObject();
-    if (!response_json) {
-        LOG_ERROR("ZMQ: Failed to create user prompt JSON object");
-        return -1;
-    }
-
-    cJSON_AddStringToObject(response_json, "messageType", "USER_PROMPT");
-    if (prompt) {
-        cJSON_AddStringToObject(response_json, "content", prompt);
-    } else {
-        cJSON_AddStringToObject(response_json, "content", "Please provide additional information or confirm the action:");
-    }
-
-    char *response_str = cJSON_PrintUnformatted(response_json);
-    if (!response_str) {
-        LOG_ERROR("ZMQ: Failed to serialize user prompt JSON");
-        cJSON_Delete(response_json);
-        return -1;
-    }
-
-    int result = zmq_socket_send(ctx, response_str, strlen(response_str));
-    free(response_str);
-    cJSON_Delete(response_json);
-
-    return result;
-#else
-    (void)ctx;
-    (void)prompt;
-    return -1;
-#endif
-}
 
 // Process ZMQ message with interactive tool call support
 static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *state, const char *user_input) {

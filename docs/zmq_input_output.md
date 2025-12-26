@@ -215,7 +215,6 @@ Monitor connection health with ping/pong messages:
 
 When connections fail, Klawed can automatically reconnect with exponential backoff:
 - Base interval: 1 second (configurable)
-- Maximum interval: 30 seconds (configurable)
 - Maximum attempts: 10 (configurable)
 
 ### Message Queue

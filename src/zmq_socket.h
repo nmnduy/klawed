@@ -48,9 +48,7 @@ typedef struct ZMQContext {
     int send_timeout;
     int connect_timeout;
     int heartbeat_interval;
-    int heartbeat_timeout;
     int reconnect_interval;
-    int max_reconnect_interval;
     int max_reconnect_attempts;
 
     // Queue sizes
@@ -60,7 +58,6 @@ typedef struct ZMQContext {
     // State tracking
     int reconnect_attempts;
     time_t last_heartbeat;
-    time_t last_heartbeat_response;
     time_t last_activity;
     bool heartbeat_enabled;
     bool reconnect_enabled;
