@@ -66,7 +66,6 @@ Pure C implementation of a coding agent using AI APIs (OpenAI, Anthropic, AWS Be
 
 **Key principles:**
 - Initialize all pointers to NULL
-- Use goto cleanup pattern for resource management
 - Zero-initialize structs with `= {0}`
 - Check all malloc/calloc returns
 
@@ -101,6 +100,23 @@ libbsd is a newly introduced to this codebase. We will slowly transition to it. 
 - All tests pass with sanitizers enabled
 - See `Makefile` for test targets
 - Run `make fmt-whitespace` once after making code changes.
+
+## NASA C Coding Standards
+
+1. **Simple control flow** - Avoid `goto`, `setjmp`/`longjmp`, and recursion where possible
+2. **Bounded loops** - All loops should have reasonable upper bounds
+3. **Minimize dynamic memory** - Use stack allocation when feasible
+4. **Function length limit** - Keep functions under ~60 lines where possible
+5. **Assertion density** - Add assertions for critical invariants
+6. **Minimal scope** - Declare at smallest possible scope
+7. **Return value & parameter checking** - Always check returns and validate parameters ✓
+8. **Limited preprocessor** - Only header includes and simple macros ✓
+9. **Careful pointer use** - Be mindful of pointer complexity
+10. **Zero warnings** - Compile with all warnings, pass static analysis ✓
+
+**Note:** These rules were discovered after the project has somewhat matured. You might see code that violates them. That's fine, we will incrementally refactor following the rules above.
+
+**Full details:** `docs/nasa_c_coding_standards.md`
 
 ## Building and Testing
 
