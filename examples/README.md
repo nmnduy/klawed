@@ -7,6 +7,7 @@ This directory contains examples for interacting with Klawed running in ZMQ daem
 1. **Start Klawed in ZMQ daemon mode** (in one terminal):
    ```bash
    cd /Users/puter/git/klawedspace
+   make ZMQ=1  # Build with ZMQ support
    ./build/klawed --zmq tcp://127.0.0.1:5555
    ```
 
@@ -22,7 +23,7 @@ This directory contains examples for interacting with Klawed running in ZMQ daem
 ### 1. `zmq_client.c` - C Interactive Client
 - **Language**: C
 - **Dependencies**: `libzmq`, `libcjson`
-- **Features**: Native C implementation, low overhead, interactive prompt with JSON parsing
+- **Features**: Native C implementation, low overhead, interactive prompt with JSON parsing, handles TEXT, TOOL, TOOL_RESULT, and ERROR messages
 - **Compile**: `make` or `gcc -o zmq_client zmq_client.c -lzmq -lcjson`
 - **Usage**: `./zmq_client tcp://127.0.0.1:5555`
 
@@ -55,35 +56,28 @@ The Makefile automatically handles platform-specific paths for macOS (Homebrew) 
 ### Basic Interaction
 ```
 $ ./zmq_client tcp://127.0.0.1:5555
-Connecting to tcp://127.0.0.1:5555...
-✓ Connected to tcp://127.0.0.1:5555
+[INFO] Using endpoint: tcp://127.0.0.1:5555 (timeout: 120000 ms)
+[INFO] Connecting to tcp://127.0.0.1:5555...
+[INFO] Connected to tcp://127.0.0.1:5555
 
-Type messages to send to Klawed.
-Commands:
-  /help     - Show this help
-  /quit     - Exit the program
-  /clear    - Clear screen
-  <text>    - Send text message to Klawed
+Connected to tcp://127.0.0.1:5555
+Type your messages (or /help for commands)
 --------------------------------------------------
 
 > Hello Klawed!
-✓ Message sent
 
-Response:
-{
-  "messageType": "TEXT",
-  "content": "Hello Klawed!"
-}
+=== AI Response ===
+Hello! I'm Klawed, your AI coding assistant.
+=== End of AI Response ===
 
 > /quit
-Exiting...
+Goodbye!
 ```
 
 ### Available Commands
 - **`/help`** - Show help message
 - **`/quit`** or **`/exit`** - Exit the client
-- **`/clear`** - Clear screen
-- **Any other text** - Send as a message to Klawed for processing
+- **Any other text** - Send as a message to Klawed for processing (supports tool calls)
 
 ## Message Format
 
