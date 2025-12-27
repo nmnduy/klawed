@@ -3,6 +3,7 @@
     - [ ] oracle
         - can think hard
         - has web search
+- [ ] sometimes cursor placement is incorrect. maybe after some alt + <key> movements
 - [ ] make sure timeout is implemented
 - [ ] can open vim and when exits go back to the bot
 - [ ] reasoning effort
