@@ -26,8 +26,9 @@ typedef enum {
     ZMQ_ERROR_INVALID_PARAM = -1,
     ZMQ_ERROR_SEND_FAILED = -2,
     ZMQ_ERROR_RECEIVE_FAILED = -3,
-    ZMQ_ERROR_NOT_SUPPORTED = -4,
-    ZMQ_ERROR_NOMEM = -5
+    ZMQ_ERROR_RECEIVE_TIMEOUT = -4,  // Timeout, no message available
+    ZMQ_ERROR_NOT_SUPPORTED = -5,
+    ZMQ_ERROR_NOMEM = -6
 } ZMQErrorCode;
 
 // Forward declarations

@@ -28,7 +28,7 @@ int zmq_socket_receive(ZMQContext *ctx, char *buffer, size_t buffer_size, int ti
     (void)buffer;
     (void)buffer_size;
     (void)timeout_ms;
-    return -1;
+    return ZMQ_ERROR_NOT_SUPPORTED;
 }
 
 int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state, struct TUIState *tui) {
