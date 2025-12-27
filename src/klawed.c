@@ -7767,7 +7767,6 @@ static void zmq_client_send_text_message(ZMQClientConnectionState *conn, const c
                 
                 if (strcmp(user_input, "/interrupt") == 0 || strcmp(user_input, "/cancel") == 0) {
                     printf("\n=== Conversation interrupted by user ===\n");
-                    in_conversation = 0;
                     break;
                 } else if (strcmp(user_input, "/help") == 0) {
                     printf("\n=== Available commands during conversation ===\n");
@@ -7782,7 +7781,6 @@ static void zmq_client_send_text_message(ZMQClientConnectionState *conn, const c
             } else if (input_result == -1) {
                 // Error reading input
                 LOG_ERROR("Error checking user input");
-                in_conversation = 0;
                 break;
             }
             
@@ -7790,13 +7788,11 @@ static void zmq_client_send_text_message(ZMQClientConnectionState *conn, const c
             if (consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
                 LOG_DEBUG("No messages received for %d consecutive polls, assuming conversation complete",
                          consecutive_timeouts);
-                in_conversation = 0;
                 break;
             }
         } else {
             // Error (not timeout)
             LOG_ERROR("Error receiving message: %s", zmq_strerror(errno));
-            in_conversation = 0;
             break;
         }
     }
