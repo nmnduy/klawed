@@ -1763,10 +1763,10 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
         } else if (scroll_offset >= max_scroll) {
             // Already at bottom
             at_bottom = 1;
-            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=1 (scroll_offset=%d >= max_scroll=%d)", 
+            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=1 (scroll_offset=%d >= max_scroll=%d)",
                      scroll_offset, max_scroll);
         } else {
-            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=0 (scroll_offset=%d < max_scroll=%d, content_lines=%d)", 
+            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=0 (scroll_offset=%d < max_scroll=%d, content_lines=%d)",
                      scroll_offset, max_scroll, content_lines);
         }
 
@@ -1859,10 +1859,10 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
         } else if (scroll_offset >= max_scroll) {
             // Already at bottom
             at_bottom = 1;
-            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=1 (scroll_offset=%d >= max_scroll=%d)", 
+            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=1 (scroll_offset=%d >= max_scroll=%d)",
                      scroll_offset, max_scroll);
         } else {
-            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=0 (scroll_offset=%d < max_scroll=%d, content_lines=%d)", 
+            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=0 (scroll_offset=%d < max_scroll=%d, content_lines=%d)",
                      scroll_offset, max_scroll, content_lines);
         }
 

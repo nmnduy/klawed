@@ -85,7 +85,7 @@ void zmq_message_context_cleanup(ZMQMessageContext *ctx);
  * @param message_len Length of message data
  * @return 0 on success, -1 on failure
  */
-int zmq_track_message(ZMQMessageContext *ctx, const char *message_id, 
+int zmq_track_message(ZMQMessageContext *ctx, const char *message_id,
                       const char *message_data, size_t message_len);
 
 /**
@@ -111,7 +111,7 @@ int zmq_check_retry_messages(ZMQMessageContext *ctx, time_t current_time);
  * @param message_len Output: length of message data
  * @return Message ID or NULL if no messages need retry
  */
-const char* zmq_get_next_retry_message(ZMQMessageContext *ctx, 
+const char* zmq_get_next_retry_message(ZMQMessageContext *ctx,
                                        const char **message_data, size_t *message_len);
 
 /**
@@ -121,7 +121,7 @@ const char* zmq_get_next_retry_message(ZMQMessageContext *ctx,
  * @param message_id Message ID (if NULL, will be generated)
  * @return JSON string (must be freed by caller) or NULL on failure
  */
-char* zmq_create_message_with_id(ZMQMessageType message_type, const char *content, 
+char* zmq_create_message_with_id(ZMQMessageType message_type, const char *content,
                                  const char *message_id);
 
 /**

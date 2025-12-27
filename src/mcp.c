@@ -691,7 +691,7 @@ int mcp_connect_server(MCPServer *server) {
                         LOG_ERROR("MCP: Initialization response too large");
                         break;
                     }
-                    
+
                     char *new_buffer = realloc(buffer, new_size);
                     if (!new_buffer) {
                         LOG_ERROR("MCP: Failed to grow initialization buffer");
@@ -704,7 +704,7 @@ int mcp_connect_server(MCPServer *server) {
                 ssize_t n = read(server->stdout_fd, buffer + total_read, buffer_size - total_read - 1);
                 if (n > 0) {
                     total_read += (size_t)n;
-                    
+
                     // Check if we have a complete JSON object
                     if (is_complete_json(buffer, total_read)) {
                         got_response = 1;
@@ -741,7 +741,7 @@ int mcp_connect_server(MCPServer *server) {
             } else {
                 LOG_WARN("MCP: No initialize response received from server '%s'", server->name);
             }
-            
+
             free(buffer);
         }
     }
@@ -854,25 +854,25 @@ static int is_complete_json(const char *buf, size_t len) {
     int bracket_depth = 0;
     bool in_string = false;
     bool escape = false;
-    
+
     for (size_t i = 0; i < len; i++) {
         char c = buf[i];
-        
+
         if (escape) {
             escape = false;
             continue;
         }
-        
+
         if (c == '\\') {
             escape = true;
             continue;
         }
-        
+
         if (c == '"' && !escape) {
             in_string = !in_string;
             continue;
         }
-        
+
         if (!in_string) {
             if (c == '{') brace_depth++;
             else if (c == '}') brace_depth--;
@@ -880,7 +880,7 @@ static int is_complete_json(const char *buf, size_t len) {
             else if (c == ']') bracket_depth--;
         }
     }
-    
+
     return (brace_depth == 0 && bracket_depth == 0 && !in_string && !escape);
 }
 
@@ -949,7 +949,7 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
                 free(buffer);
                 return NULL;
             }
-            
+
             char *new_buffer = realloc(buffer, new_size);
             if (!new_buffer) {
                 LOG_ERROR("MCP: Failed to grow response buffer to %zu bytes", new_size);
@@ -964,7 +964,7 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
         ssize_t n = read(server->stdout_fd, buffer + total_read, buffer_size - total_read - 1);
         if (n > 0) {
             total_read += (size_t)n;
-            
+
             // Check if we have a complete JSON object
             if (is_complete_json(buffer, total_read)) {
                 break;
@@ -991,7 +991,7 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
 
     buffer[total_read] = '\0';
     LOG_DEBUG("MCP: Received %zu bytes from '%s'", total_read, server->name);
-    
+
     // Only log full response if it's small enough
     if (total_read < 1024) {
         LOG_DEBUG("MCP: Response: %s", buffer);
@@ -1001,7 +1001,7 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
 
     // Parse response
     cJSON *response = cJSON_Parse(buffer);
-    
+
     if (!response) {
         // Show first 200 chars of response for debugging
         char preview[201];
@@ -1011,7 +1011,7 @@ static cJSON* mcp_send_request(MCPServer *server, const char *method, cJSON *par
         free(buffer);
         return NULL;
     }
-    
+
     free(buffer);  // Free buffer after parsing - cJSON creates its own copy
 
     // Check for JSON-RPC error

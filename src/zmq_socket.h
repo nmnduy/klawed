@@ -61,7 +61,7 @@ typedef struct ZMQContext {
     char *endpoint;     // Socket endpoint (e.g., "tcp://127.0.0.1:5555")
     int socket_type;    // ZMQ socket type (ZMQ_PAIR only)
     bool enabled;       // Whether ZMQ mode is enabled
-    
+
     // Message ID/ACK system
     ZMQPendingQueue pending_queue;   // Queue of messages waiting for ACK
     uint32_t salt;                   // Random salt for message ID generation
