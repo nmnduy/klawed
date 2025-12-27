@@ -4055,7 +4055,22 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
                                          strcasecmp(is_subagent_env, "true") == 0 ||
                                          strcasecmp(is_subagent_env, "yes") == 0);
 
-    LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d, is_subagent=%d", plan_mode, is_subagent);
+    // Check if API URL contains "deepseek" (case-insensitive)
+    int is_deepseek_api = 0;
+    if (state && state->api_url) {
+        char *url_lower = strdup(state->api_url);
+        if (url_lower) {
+            for (char *p = url_lower; *p; p++) {
+                *p = (char)tolower((unsigned char)*p);
+            }
+            if (strstr(url_lower, "deepseek") != NULL) {
+                is_deepseek_api = 1;
+            }
+            free(url_lower);
+        }
+    }
+
+    LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d, is_subagent=%d, is_deepseek_api=%d", plan_mode, is_subagent, is_deepseek_api);
     // Sleep tool
     cJSON *sleep_tool = cJSON_CreateObject();
     cJSON_AddStringToObject(sleep_tool, "type", "function");
@@ -4197,10 +4212,18 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddStringToObject(write, "type", "function");
         cJSON *write_func = cJSON_CreateObject();
         cJSON_AddStringToObject(write_func, "name", "Write");
-        cJSON_AddStringToObject(write_func, "description",
-            "Writes content to a file. IMPORTANT: Some models cannot produce outputs larger than 4096 tokens. "
-            "To avoid hitting this limit, make smaller changes and call the Write tool multiple times with focused content instead of writing entire files at once. "
-            "Break large operations into logical chunks (e.g., write a single function at a time, one section at a time).");
+        // Write tool description with DeepSeek-specific warning if needed
+        if (is_deepseek_api) {
+            cJSON_AddStringToObject(write_func, "description",
+                "Writes content to a file. IMPORTANT: You are using the DeepSeek API which has a maximum output token limit of 4096 tokens. "
+                "To avoid hitting this limit, make smaller changes and call the Write tool multiple times with focused content instead of writing entire files at once. "
+                "Break large operations into logical chunks (e.g., write a single function at a time, one section at a time).");
+        } else {
+            cJSON_AddStringToObject(write_func, "description",
+                "Writes content to a file. IMPORTANT: Some models cannot produce outputs larger than 4096 tokens. "
+                "To avoid hitting this limit, make smaller changes and call the Write tool multiple times with focused content instead of writing entire files at once. "
+                "Break large operations into logical chunks (e.g., write a single function at a time, one section at a time).");
+        }
         cJSON *write_params = cJSON_CreateObject();
         cJSON_AddStringToObject(write_params, "type", "object");
         cJSON *write_props = cJSON_CreateObject();
@@ -4226,11 +4249,20 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddStringToObject(edit, "type", "function");
         cJSON *edit_func = cJSON_CreateObject();
         cJSON_AddStringToObject(edit_func, "name", "Edit");
-        cJSON_AddStringToObject(edit_func, "description",
-            "Performs simple string replacement in files. Replaces the first occurrence of old_string with new_string. "
-            "IMPORTANT: Some models cannot produce outputs larger than 4096 tokens. "
-            "To avoid hitting this limit, make smaller changes and call the Edit tool multiple times with focused edits instead of making massive changes in a single call. "
-            "Break large operations into logical chunks (e.g., edit one function at a time, one section at a time).");
+        // Edit tool description with DeepSeek-specific warning if needed
+        if (is_deepseek_api) {
+            cJSON_AddStringToObject(edit_func, "description",
+                "Performs simple string replacement in files. Replaces the first occurrence of old_string with new_string. "
+                "IMPORTANT: You are using the DeepSeek API which has a maximum output token limit of 4096 tokens. "
+                "To avoid hitting this limit, make smaller changes and call the Edit tool multiple times with focused edits instead of making massive changes in a single call. "
+                "Break large operations into logical chunks (e.g., edit one function at a time, one section at a time).");
+        } else {
+            cJSON_AddStringToObject(edit_func, "description",
+                "Performs simple string replacement in files. Replaces the first occurrence of old_string with new_string. "
+                "IMPORTANT: Some models cannot produce outputs larger than 4096 tokens. "
+                "To avoid hitting this limit, make smaller changes and call the Edit tool multiple times with focused edits instead of making massive changes in a single call. "
+                "Break large operations into logical chunks (e.g., edit one function at a time, one section at a time).");
+        }
         cJSON *edit_params = cJSON_CreateObject();
         cJSON_AddStringToObject(edit_params, "type", "object");
         cJSON *edit_props = cJSON_CreateObject();
@@ -4263,10 +4295,20 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddStringToObject(multiedit, "type", "function");
         cJSON *multiedit_func = cJSON_CreateObject();
         cJSON_AddStringToObject(multiedit_func, "name", "MultiEdit");
-        cJSON_AddStringToObject(multiedit_func, "description",
-            "Performs multiple string replacements in a file. Applies edits sequentially in the order provided. "
-            "Each edit replaces the first occurrence of old_string with new_string. "
-            "Returns counts of successful and failed edits.");
+        // MultiEdit tool description with DeepSeek-specific warning if needed
+        if (is_deepseek_api) {
+            cJSON_AddStringToObject(multiedit_func, "description",
+                "Performs multiple string replacements in a file. Applies edits sequentially in the order provided. "
+                "Each edit replaces the first occurrence of old_string with new_string. "
+                "Returns counts of successful and failed edits. "
+                "IMPORTANT: You are using the DeepSeek API which has a maximum output token limit of 4096 tokens. "
+                "To avoid hitting this limit, make smaller changes and break large operations into logical chunks.");
+        } else {
+            cJSON_AddStringToObject(multiedit_func, "description",
+                "Performs multiple string replacements in a file. Applies edits sequentially in the order provided. "
+                "Each edit replaces the first occurrence of old_string with new_string. "
+                "Returns counts of successful and failed edits.");
+        }
         cJSON *multiedit_params = cJSON_CreateObject();
         cJSON_AddStringToObject(multiedit_params, "type", "object");
         cJSON *multiedit_props = cJSON_CreateObject();
