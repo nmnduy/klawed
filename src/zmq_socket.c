@@ -1,9 +1,10 @@
 /*
  * zmq_socket.c - Simple ZeroMQ socket implementation for Klawed
  *
- * Simplified implementation:
+ * Implementation:
  * - ZMQ_PAIR socket with bind/connect
- * - Blocking receive (zmq_recv with infinite timeout)
+ * - Message ID/ACK system for reliability
+ * - Time-sharing loop for user input and message processing
  * - LINGER option for clean shutdown
  * - TCP keepalive enabled
  * - Basic error handling (exit on fatal errors)
@@ -17,7 +18,10 @@
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
+#include <bsd/string.h>
 #include <ctype.h>
+#include <sys/time.h>
+#include <sys/select.h>
 
 // Include ZMQ headers if available
 #ifdef HAVE_ZMQ
@@ -27,6 +31,207 @@
 
 // Default buffer size for ZMQ messages
 #define ZMQ_BUFFER_SIZE 65536
+
+// Message ID constants
+#define MESSAGE_ID_HEX_LENGTH 33  // 128 bits = 32 hex chars + null terminator
+#define HASH_SAMPLE_SIZE 256      // Number of characters to sample from message for hash
+
+// Pending queue defaults
+#define DEFAULT_MAX_PENDING 50
+#define DEFAULT_ACK_TIMEOUT_MS 3000    // 3 seconds
+#define DEFAULT_MAX_RETRIES 5
+
+// Time-sharing loop constants
+#define DEFAULT_TIMESLICE_MS 100       // Check user input for 100ms, messages for 100ms
+
+/**
+ * Get current time in milliseconds
+ */
+static int64_t get_current_time_ms(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (int64_t)tv.tv_sec * 1000 + (int64_t)tv.tv_usec / 1000;
+}
+
+/**
+ * Simple hash function combining timestamp, message sample, and salt
+ * Uses FNV-1a-like algorithm with additional mixing
+ */
+static void hash_message_id(int64_t timestamp, const char *message, size_t message_len,
+                            uint32_t salt, uint8_t out_hash[16]) {
+    // Combine timestamp and salt into 128-bit seed
+    uint64_t seed1 = (uint64_t)timestamp ^ ((uint64_t)salt << 32);
+    uint64_t seed2 = (uint64_t)timestamp * (uint64_t)salt;
+    
+    // Initialize with seeds
+    uint64_t h1 = seed1;
+    uint64_t h2 = seed2;
+    
+    // Sample first HASH_SAMPLE_SIZE characters (or entire message if shorter)
+    size_t sample_len = message_len < HASH_SAMPLE_SIZE ? message_len : HASH_SAMPLE_SIZE;
+    
+    // Process message sample
+    for (size_t i = 0; i < sample_len; i++) {
+        uint8_t c = (uint8_t)message[i];
+        
+        // FNV-1a style mixing on both 64-bit parts
+        h1 ^= (uint64_t)c;
+        h1 *= 1099511628211ULL;  // FNV prime
+        
+        // Mix into second half with different pattern
+        h2 ^= (uint64_t)c << (i % 8);
+        h2 *= 16777619ULL;  // Smaller FNV prime
+    }
+    
+    // Add some additional mixing using salt
+    h1 ^= salt;
+    h2 ^= salt << 16;
+    
+    // Final mixing
+    h1 ^= h1 >> 33;
+    h1 *= 0xff51afd7ed558ccdULL;
+    h1 ^= h1 >> 33;
+    
+    h2 ^= h2 >> 33;
+    h2 *= 0xc4ceb9fe1a85ec53ULL;
+    h2 ^= h2 >> 33;
+    
+    // Combine into 128-bit output
+    memcpy(&out_hash[0], &h1, 8);
+    memcpy(&out_hash[8], &h2, 8);
+}
+
+/**
+ * Convert 128-bit hash to hex string
+ */
+static void hash_to_hex(const uint8_t hash[16], char *out_hex, size_t out_hex_size) {
+    if (out_hex_size < MESSAGE_ID_HEX_LENGTH) {
+        return;
+    }
+    
+    const char hex_chars[] = "0123456789abcdef";
+    for (int i = 0; i < 16; i++) {
+        out_hex[i * 2] = hex_chars[hash[i] >> 4];
+        out_hex[i * 2 + 1] = hex_chars[hash[i] & 0x0f];
+    }
+    out_hex[32] = '\0';
+}
+
+/**
+ * Initialize pending message queue
+ */
+static void init_pending_queue(ZMQContext *ctx) {
+    ctx->pending_queue.head = NULL;
+    ctx->pending_queue.tail = NULL;
+    ctx->pending_queue.count = 0;
+    ctx->pending_queue.max_pending = DEFAULT_MAX_PENDING;
+    ctx->pending_queue.timeout_ms = DEFAULT_ACK_TIMEOUT_MS;
+    ctx->pending_queue.max_retries = DEFAULT_MAX_RETRIES;
+}
+
+/**
+ * Free a pending message node
+ */
+static void free_pending_message(ZMQPendingMessage *msg) {
+    if (!msg) return;
+    
+    if (msg->message_id) {
+        free(msg->message_id);
+    }
+    if (msg->message_json) {
+        free(msg->message_json);
+    }
+    free(msg);
+}
+
+/**
+ * Add message to pending queue
+ */
+static int add_to_pending_queue(ZMQContext *ctx, const char *message_id, 
+                                const char *message_json, int64_t sent_time_ms) {
+    // Check if queue is full
+    if (ctx->pending_queue.count >= ctx->pending_queue.max_pending) {
+        LOG_WARN("ZMQ: Pending queue full (max %d), cannot add message",
+                 ctx->pending_queue.max_pending);
+        return ZMQ_ERROR_NOMEM;
+    }
+    
+    ZMQPendingMessage *pending = calloc(1, sizeof(ZMQPendingMessage));
+    if (!pending) {
+        LOG_ERROR("ZMQ: Failed to allocate pending message");
+        return ZMQ_ERROR_NOMEM;
+    }
+    
+    pending->message_id = strdup(message_id);
+    if (!pending->message_id) {
+        free(pending);
+        return ZMQ_ERROR_NOMEM;
+    }
+    
+    pending->message_json = strdup(message_json);
+    if (!pending->message_json) {
+        free(pending->message_id);
+        free(pending);
+        return ZMQ_ERROR_NOMEM;
+    }
+    
+    pending->sent_time_ms = sent_time_ms;
+    pending->retry_count = 0;
+    pending->next = NULL;
+    
+    // Add to tail of queue
+    if (ctx->pending_queue.tail) {
+        ctx->pending_queue.tail->next = pending;
+    }
+    ctx->pending_queue.tail = pending;
+    
+    if (!ctx->pending_queue.head) {
+        ctx->pending_queue.head = pending;
+    }
+    
+    ctx->pending_queue.count++;
+    
+    LOG_DEBUG("ZMQ: Added message %s to pending queue (count: %d)",
+              message_id, ctx->pending_queue.count);
+    
+    return ZMQ_ERROR_NONE;
+}
+
+/**
+ * Remove message from pending queue by ID
+ */
+static int remove_from_pending_queue(ZMQContext *ctx, const char *message_id) {
+    ZMQPendingMessage *prev = NULL;
+    ZMQPendingMessage *curr = ctx->pending_queue.head;
+    
+    while (curr) {
+        if (strcmp(curr->message_id, message_id) == 0) {
+            // Found it, remove from list
+            if (prev) {
+                prev->next = curr->next;
+            } else {
+                ctx->pending_queue.head = curr->next;
+            }
+            
+            if (curr == ctx->pending_queue.tail) {
+                ctx->pending_queue.tail = prev;
+            }
+            
+            ctx->pending_queue.count--;
+            LOG_DEBUG("ZMQ: Removed message %s from pending queue (count: %d)",
+                      message_id, ctx->pending_queue.count);
+            
+            free_pending_message(curr);
+            return 0;
+        }
+        
+        prev = curr;
+        curr = curr->next;
+    }
+    
+    LOG_WARN("ZMQ: Message %s not found in pending queue", message_id);
+    return -1;
+}
 
 // Forward declarations
 #ifdef HAVE_ZMQ
@@ -40,6 +245,9 @@ static int zmq_send_tool_request(ZMQContext *ctx, const char *tool_name, const c
 
 ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
 #ifdef HAVE_ZMQ
+    struct timespec timestamp = {0};
+    clock_gettime(CLOCK_REALTIME, &timestamp);
+    
     if (!endpoint) {
         LOG_ERROR("ZMQ: Endpoint cannot be NULL");
         return NULL;
@@ -128,6 +336,27 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
 
     ctx->socket_type = socket_type;
     ctx->enabled = true;
+    
+    // Initialize message ID/ACK system
+    init_pending_queue(ctx);
+    
+    // Generate random salt for message ID generation
+    FILE *urandom = fopen("/dev/urandom", "rb");
+    if (urandom) {
+        size_t n = fread(&ctx->salt, sizeof(ctx->salt), 1, urandom);
+        if (n != 1) {
+            // Fallback to time-based salt
+            ctx->salt = (uint32_t)get_current_time_ms();
+        }
+        fclose(urandom);
+    } else {
+        // Fallback to time-based salt
+        ctx->salt = (uint32_t)get_current_time_ms();
+    }
+    
+    ctx->message_sequence = 0;
+    
+    LOG_INFO("ZMQ: Message ID/ACK system initialized (salt: 0x%08x)", ctx->salt);
 
     LOG_INFO("ZMQ: Socket initialization completed successfully");
     return ctx;
@@ -142,6 +371,17 @@ void zmq_socket_cleanup(ZMQContext *ctx) {
     if (!ctx) return;
 
     LOG_INFO("ZMQ: Cleaning up ZMQ context for endpoint: %s", ctx->endpoint ? ctx->endpoint : "unknown");
+
+    // Clean up pending message queue
+    ZMQPendingMessage *curr = ctx->pending_queue.head;
+    while (curr) {
+        ZMQPendingMessage *next = curr->next;
+        free_pending_message(curr);
+        curr = next;
+    }
+    ctx->pending_queue.head = NULL;
+    ctx->pending_queue.tail = NULL;
+    ctx->pending_queue.count = 0;
 
     if (ctx->socket) {
         zmq_close(ctx->socket);
@@ -161,6 +401,26 @@ void zmq_socket_cleanup(ZMQContext *ctx) {
     free(ctx);
 #else
     (void)ctx; // Unused parameter
+#endif
+}
+
+void zmq_cleanup_pending_queue(ZMQContext *ctx) {
+#ifdef HAVE_ZMQ
+    if (!ctx) return;
+
+    ZMQPendingMessage *curr = ctx->pending_queue.head;
+    while (curr) {
+        ZMQPendingMessage *next = curr->next;
+        free_pending_message(curr);
+        curr = next;
+    }
+    ctx->pending_queue.head = NULL;
+    ctx->pending_queue.tail = NULL;
+    ctx->pending_queue.count = 0;
+
+    LOG_DEBUG("ZMQ: Pending queue cleaned up");
+#else
+    (void)ctx;
 #endif
 }
 
@@ -246,6 +506,301 @@ bool zmq_socket_available(void) {
 #endif
 }
 
+/**
+ * Generate a unique message ID based on timestamp, partial content, and random salt
+ */
+int zmq_generate_message_id(ZMQContext *ctx, const char *message, size_t message_len,
+                           char *out_id, size_t out_id_size) {
+#ifdef HAVE_ZMQ
+    if (!ctx || !message || !out_id || out_id_size < MESSAGE_ID_HEX_LENGTH) {
+        return ZMQ_ERROR_INVALID_PARAM;
+    }
+
+    // Get current timestamp
+    int64_t timestamp_ms = get_current_time_ms();
+    
+    // Generate 128-bit hash
+    uint8_t hash[16];
+    hash_message_id(timestamp_ms, message, message_len, ctx->salt, hash);
+    
+    // Convert to hex string
+    hash_to_hex(hash, out_id, out_id_size);
+    
+    ctx->message_sequence++;
+    LOG_DEBUG("ZMQ: Generated message ID %s (seq: %d, ts: %lld)",
+              out_id, ctx->message_sequence, (long long)timestamp_ms);
+    
+    return ZMQ_ERROR_NONE;
+#else
+    (void)ctx;
+    (void)message;
+    (void)message_len;
+    (void)out_id;
+    (void)out_id_size;
+    return ZMQ_ERROR_NOT_SUPPORTED;
+#endif
+}
+
+/**
+ * Send message with ID and track for ACK
+ */
+int zmq_socket_send_with_id(ZMQContext *ctx, const char *message, size_t message_len,
+                           char *message_id_out, size_t message_id_out_size) {
+#ifdef HAVE_ZMQ
+    if (!ctx || !message) {
+        LOG_ERROR("ZMQ: Invalid parameters for send_with_id");
+        return ZMQ_ERROR_INVALID_PARAM;
+    }
+    
+    if (!ctx->socket) {
+        LOG_ERROR("ZMQ: No socket available for send");
+        return ZMQ_ERROR_SEND_FAILED;
+    }
+    
+    // Generate message ID
+    char message_id[MESSAGE_ID_HEX_LENGTH];
+    if (zmq_generate_message_id(ctx, message, message_len, message_id, sizeof(message_id)) != 0) {
+        LOG_ERROR("ZMQ: Failed to generate message ID");
+        return ZMQ_ERROR_SEND_FAILED;
+    }
+    
+    // Wrap message with ID field
+    cJSON *json = cJSON_Parse(message);
+    if (!json) {
+        LOG_ERROR("ZMQ: Failed to parse message JSON for wrapping");
+        return ZMQ_ERROR_SEND_FAILED;
+    }
+    
+    // Add messageId field
+    cJSON_AddStringToObject(json, "messageId", message_id);
+    
+    char *wrapped_message = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+    
+    if (!wrapped_message) {
+        LOG_ERROR("ZMQ: Failed to serialize wrapped message");
+        return ZMQ_ERROR_SEND_FAILED;
+    }
+    
+    // Send the wrapped message
+    int rc = zmq_send(ctx->socket, wrapped_message, strlen(wrapped_message), 0);
+    
+    if (rc >= 0) {
+        LOG_DEBUG("ZMQ: Sent message %s (%zu bytes wrapped -> %d bytes sent)",
+                  message_id, message_len, rc);
+        
+        // Add to pending queue
+        int64_t sent_time = get_current_time_ms();
+        if (add_to_pending_queue(ctx, message_id, wrapped_message, sent_time) == 0) {
+            // Return message ID to caller if requested
+            if (message_id_out && message_id_out_size >= MESSAGE_ID_HEX_LENGTH) {
+                strlcpy(message_id_out, message_id, message_id_out_size);
+            }
+            free(wrapped_message);
+            return ZMQ_ERROR_NONE;
+        } else {
+            LOG_WARN("ZMQ: Message sent but failed to track in pending queue");
+            free(wrapped_message);
+            return ZMQ_ERROR_NOMEM;
+        }
+    } else {
+        int err = errno;
+        LOG_ERROR("ZMQ: Failed to send message %s: %s", message_id, zmq_strerror(err));
+        free(wrapped_message);
+        return ZMQ_ERROR_SEND_FAILED;
+    }
+#else
+    (void)ctx;
+    (void)message;
+    (void)message_len;
+    (void)message_id_out;
+    (void)message_id_out_size;
+    return ZMQ_ERROR_NOT_SUPPORTED;
+#endif
+}
+
+/**
+ * Send ACK for a received message
+ */
+int zmq_send_ack(ZMQContext *ctx, const char *message_id) {
+#ifdef HAVE_ZMQ
+    if (!ctx || !message_id) {
+        return ZMQ_ERROR_INVALID_PARAM;
+    }
+    
+    if (!ctx->socket) {
+        return ZMQ_ERROR_SEND_FAILED;
+    }
+    
+    // Create ACK message
+    cJSON *json = cJSON_CreateObject();
+    if (!json) {
+        return ZMQ_ERROR_SEND_FAILED;
+    }
+    
+    cJSON_AddStringToObject(json, "messageType", "ACK");
+    cJSON_AddStringToObject(json, "messageId", message_id);
+    
+    char *ack_str = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+    
+    if (!ack_str) {
+        return ZMQ_ERROR_SEND_FAILED;
+    }
+    
+    int rc = zmq_send(ctx->socket, ack_str, strlen(ack_str), 0);
+    free(ack_str);
+    
+    if (rc >= 0) {
+        LOG_DEBUG("ZMQ: Sent ACK for message %s", message_id);
+        return ZMQ_ERROR_NONE;
+    } else {
+        LOG_ERROR("ZMQ: Failed to send ACK for message %s", message_id);
+        return ZMQ_ERROR_SEND_FAILED;
+    }
+#else
+    (void)ctx;
+    (void)message_id;
+    return ZMQ_ERROR_NOT_SUPPORTED;
+#endif
+}
+
+/**
+ * Process ACK message and remove from pending queue
+ */
+int zmq_process_ack(ZMQContext *ctx, const char *message_id) {
+#ifdef HAVE_ZMQ
+    if (!ctx || !message_id) {
+        return ZMQ_ERROR_INVALID_PARAM;
+    }
+    
+    return remove_from_pending_queue(ctx, message_id);
+#else
+    (void)ctx;
+    (void)message_id;
+    return ZMQ_ERROR_NOT_SUPPORTED;
+#endif
+}
+
+/**
+ * Check and resend pending messages that have timed out
+ */
+int zmq_check_and_resend_pending(ZMQContext *ctx, int64_t current_time_ms) {
+#ifdef HAVE_ZMQ
+    if (!ctx) {
+        return ZMQ_ERROR_INVALID_PARAM;
+    }
+    
+    if (!ctx->pending_queue.head) {
+        return 0; // No pending messages
+    }
+    
+    int resent_count = 0;
+    ZMQPendingMessage *curr = ctx->pending_queue.head;
+    ZMQPendingMessage *prev = NULL;
+    
+    while (curr) {
+        int64_t elapsed = current_time_ms - curr->sent_time_ms;
+        
+        if (elapsed >= ctx->pending_queue.timeout_ms) {
+            // Timeout exceeded, check retry count
+            if (curr->retry_count >= ctx->pending_queue.max_retries) {
+                // Max retries exceeded, give up and remove
+                LOG_ERROR("ZMQ: Message %s exceeded max retries (%d), dropping",
+                         curr->message_id, ctx->pending_queue.max_retries);
+                
+                ZMQPendingMessage *to_delete = curr;
+                if (prev) {
+                    prev->next = curr->next;
+                    curr = curr->next;
+                } else {
+                    ctx->pending_queue.head = curr->next;
+                    curr = curr->next;
+                }
+                
+                if (to_delete == ctx->pending_queue.tail) {
+                    ctx->pending_queue.tail = prev;
+                }
+                
+                ctx->pending_queue.count--;
+                free_pending_message(to_delete);
+                continue;
+            }
+            
+            // Retry sending
+            curr->retry_count++;
+            curr->sent_time_ms = current_time_ms;
+            
+            int rc = zmq_send(ctx->socket, curr->message_json,
+                             strlen(curr->message_json), 0);
+            
+            if (rc >= 0) {
+                LOG_INFO("ZMQ: Resent message %s (attempt %d/%d)",
+                        curr->message_id, curr->retry_count, ctx->pending_queue.max_retries);
+                resent_count++;
+            } else {
+                LOG_ERROR("ZMQ: Failed to resend message %s", curr->message_id);
+            }
+        }
+        
+        prev = curr;
+        curr = curr->next;
+    }
+    
+    return resent_count;
+#else
+    (void)ctx;
+    (void)current_time_ms;
+    return ZMQ_ERROR_NOT_SUPPORTED;
+#endif
+}
+
+/**
+ * Check for user input with timeout using select()
+ */
+int zmq_check_user_input(char *buffer, size_t buffer_size, int timeout_ms) {
+    fd_set readfds;
+    struct timeval tv;
+    int retval;
+    
+    if (!buffer || buffer_size == 0) {
+        return -1;
+    }
+    
+    // Set timeout
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    
+    // Watch stdin (file descriptor 0) to see when it has input
+    FD_ZERO(&readfds);
+    FD_SET(0, &readfds);
+    
+    // Wait for input with timeout
+    retval = select(1, &readfds, NULL, NULL, &tv);
+    
+    if (retval == -1) {
+        LOG_ERROR("select() error: %s", strerror(errno));
+        return -1;
+    } else if (retval == 0) {
+        // Timeout occurred
+        return 0;
+    } else {
+        // Data is available on stdin
+        if (FD_ISSET(0, &readfds)) {
+            if (fgets(buffer, (int)buffer_size, stdin)) {
+                // Remove newline
+                buffer[strcspn(buffer, "\n")] = '\0';
+                return 1;
+            } else {
+                // EOF or error
+                return -1;
+            }
+        }
+    }
+    
+    return 0;
+}
+
 int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state, struct TUIState *tui) {
 #ifdef HAVE_ZMQ
     if (!ctx || !state) {
@@ -290,9 +845,26 @@ int zmq_socket_process_message(ZMQContext *ctx, struct ConversationState *state,
         return -1;
     }
 
-    // Extract message type and content
+    // Extract message type and message ID
     cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
+    cJSON *message_id = cJSON_GetObjectItem(json, "messageId");
     cJSON *content = cJSON_GetObjectItem(json, "content");
+
+    // Handle ACK messages
+    if (message_type && cJSON_IsString(message_type) &&
+        strcmp(message_type->valuestring, "ACK") == 0) {
+        if (message_id && cJSON_IsString(message_id)) {
+            LOG_DEBUG("ZMQ: Received ACK for message %s", message_id->valuestring);
+            zmq_process_ack(ctx, message_id->valuestring);
+        }
+        cJSON_Delete(json);
+        return 0; // ACK processed successfully
+    }
+
+    // Send ACK for all non-ACK messages
+    if (message_id && cJSON_IsString(message_id)) {
+        zmq_send_ack(ctx, message_id->valuestring);
+    }
 
     char response[ZMQ_BUFFER_SIZE];
     response[0] = '\0';
@@ -697,41 +1269,99 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     LOG_INFO("ZMQ: Starting ZMQ daemon mode");
     LOG_INFO("ZMQ: Endpoint: %s", ctx->endpoint);
     LOG_INFO("ZMQ: Socket type: ZMQ_PAIR (Peer-to-peer)");
+    LOG_INFO("ZMQ: Time-sharing: user input=%dms, messages=%dms",
+             DEFAULT_TIMESLICE_MS, DEFAULT_TIMESLICE_MS);
     LOG_INFO("ZMQ: =========================================");
 
     printf("ZMQ daemon started on %s\n", ctx->endpoint);
-    printf("Waiting for connections...\n");
+    printf("Type '/help' for commands or '/quit' to exit\n");
+    printf("----------------------------------------\n");
     fflush(stdout);
 
     int message_count = 0;
     int error_count = 0;
+    int64_t last_resend_check = 0;
+    const int64_t RESEND_CHECK_INTERVAL_MS = 1000; // Check pending messages every second
 
+    // Time-sharing loop
     while (ctx->enabled) {
-        LOG_DEBUG("ZMQ: Waiting for next message (message #%d)", message_count + 1);
-
-        int result = zmq_socket_process_message(ctx, state, NULL);
-        if (result != 0) {
-            error_count++;
-            LOG_WARN("ZMQ: Message processing failed (error #%d)", error_count);
-
-            // Check if we should continue or exit
-            if (error_count > 10) {
-                LOG_ERROR("ZMQ: Too many consecutive errors (%d), stopping daemon", error_count);
-                printf("ZMQ: Too many consecutive errors (%d), stopping daemon\n", error_count);
-                break;
+        int64_t current_time = get_current_time_ms();
+        
+        // 1. Check and resend pending messages periodically
+        if (current_time - last_resend_check >= RESEND_CHECK_INTERVAL_MS) {
+            int resent = zmq_check_and_resend_pending(ctx, current_time);
+            if (resent > 0) {
+                LOG_INFO("ZMQ: Resent %d pending message(s)", resent);
             }
-
-            // Small delay before retrying to avoid tight loop on errors
-            struct timespec sleep_time = {0, 100000000}; // 100ms
-            nanosleep(&sleep_time, NULL);
-            continue;
+            last_resend_check = current_time;
         }
 
-        message_count++;
-        error_count = 0; // Reset error count on successful processing
-        LOG_DEBUG("ZMQ: Successfully processed message #%d", message_count);
-        printf("ZMQ: Successfully processed message #%d\n", message_count);
-        fflush(stdout);
+        // 2. Check for user input
+        char user_input[1024];
+        int input_result = zmq_check_user_input(user_input, sizeof(user_input),
+                                                DEFAULT_TIMESLICE_MS);
+        
+        if (input_result == 1) {
+            // User entered something
+            if (strlen(user_input) > 0) {
+                if (strcmp(user_input, "/quit") == 0 || strcmp(user_input, "/exit") == 0) {
+                    printf("Goodbye!\n");
+                    break;
+                } else if (strcmp(user_input, "/help") == 0) {
+                    printf("Available commands:\n");
+                    printf("  /quit, /exit - Stop the daemon\n");
+                    printf("  /status - Show pending messages and statistics\n");
+                    printf("  /help - Show this help message\n");
+                } else if (strcmp(user_input, "/status") == 0) {
+                    printf("=== ZMQ Daemon Status ===\n");
+                    printf("Total messages processed: %d\n", message_count);
+                    printf("Total errors: %d\n", error_count);
+                    printf("Pending messages: %d\n", ctx->pending_queue.count);
+                    printf("Endpoint: %s\n", ctx->endpoint);
+                } else {
+                    printf("Unknown command: %s\n", user_input);
+                    printf("Type /help for available commands\n");
+                }
+            }
+        } else if (input_result == -1) {
+            // Error reading input
+            LOG_ERROR("Error reading user input");
+            break;
+        }
+
+        // 3. Check for incoming messages
+        char buffer[ZMQ_BUFFER_SIZE];
+        int received = zmq_socket_receive(ctx, buffer, sizeof(buffer),
+                                         DEFAULT_TIMESLICE_MS);
+        
+        if (received > 0) {
+            message_count++;
+            error_count = 0; // Reset error count on successful receive
+            
+            LOG_INFO("ZMQ: Received %d bytes (message #%d)", received, message_count);
+            printf("> Received message #%d\n", message_count);
+            fflush(stdout);
+            
+            // Process the message
+            int result = zmq_socket_process_message(ctx, state, NULL);
+            if (result != 0) {
+                error_count++;
+                LOG_WARN("ZMQ: Message processing failed (error #%d)", error_count);
+                
+                if (error_count > 10) {
+                    LOG_ERROR("ZMQ: Too many consecutive errors (%d), stopping daemon",
+                              error_count);
+                    printf("ZMQ: Too many consecutive errors (%d), stopping daemon\n",
+                           error_count);
+                    break;
+                }
+            } else {
+                LOG_DEBUG("ZMQ: Successfully processed message #%d", message_count);
+            }
+        } else if (received == ZMQ_ERROR_RECEIVE_FAILED) {
+            // Timeout is expected in non-blocking mode, continue loop
+            continue;
+        }
     }
 
     LOG_INFO("ZMQ: =========================================");
