@@ -45,7 +45,6 @@ Project instructions for Klawed when working with this codebase.
 
 **Network & Communication:**
 - **ZMQ socket**: `src/zmq_socket.c`, `src/zmq_socket.h`, `docs/zmq_input_output.md`
-- **Examples**: `examples/zmq_client.c`, `examples/sqlite_queue_client.c`
 
 **Tests**: `tests/test_*.c` (unit tests for all major components)
 **Build**: `Makefile`
