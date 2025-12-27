@@ -183,4 +183,4 @@ export OPENAI_API_KEY="your-api-key"
 
 ## Write and Edit tool responses
 
-You must create small write and edit tool choice responses. Why? You have a limit of 4096 tokens in your response output. Creating smaller writes will force you to write cleaner code and more modular code. Also, when you create huge payloads that exceed this token limit, the tool responses are partial and will be discarded. That would be a waste of energy for no reason.
+You must create small Write and Edit tool responses. Why? You have a limit of 4096 tokens in your response output. Creating smaller writes will force you to write cleaner code and more modular code. Also, when you create huge payloads that exceed this token limit, the tool responses are partial and will be discarded. That would be a waste of energy for no reason.
