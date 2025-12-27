@@ -243,3 +243,4 @@ ZeroMQ handles message framing internally:
 10. **Monitor connection state** - implement basic keepalive in your client if needed
 11. **Clean up resources** - ensure proper cleanup of ZMQ contexts and sockets
 12. **Reuse connections** when possible for performance
+13. **Handle multiple messages per request** - The daemon may send multiple messages (TEXT, TOOL, TOOL_RESULT) for a single user request. Clients should keep receiving messages until the conversation is complete. The example client (`examples/zmq_client.c`) has been updated to handle this by receiving multiple messages with a timeout between messages.

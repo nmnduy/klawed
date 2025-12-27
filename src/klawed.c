@@ -49,6 +49,24 @@
 #ifdef HAVE_ZMQ
 #include "zmq_socket.h"
 #include <zmq.h>
+
+// ZMQ client connection state
+typedef struct {
+    void *context;
+    void *socket;
+    char *endpoint;
+    int is_connected;
+} ZMQClientConnectionState;
+
+// Function prototypes for ZMQ client
+static void zmq_client_print_usage(const char *program_name);
+static int zmq_client_initialize_connection(ZMQClientConnectionState *conn, const char *endpoint);
+static void zmq_client_cleanup_connection(ZMQClientConnectionState *conn);
+static int zmq_client_send_message(ZMQClientConnectionState *conn, const char *message);
+static int zmq_client_receive_message(ZMQClientConnectionState *conn, char *buffer, size_t buffer_size, int timeout_ms);
+static void zmq_client_process_message(const char *response);
+static void zmq_client_send_text_message(ZMQClientConnectionState *conn, const char *text);
+static int zmq_client_mode(const char *endpoint);
 #endif
 
 #include "sqlite_queue.h"
@@ -7765,6 +7783,351 @@ static char* generate_session_id(void) {
 
 
 // ============================================================================
+// ZMQ Client Functions
+#ifdef HAVE_ZMQ
+// ============================================================================
+
+#define ZMQ_CLIENT_BUFFER_SIZE 65536
+#define ZMQ_CLIENT_DEFAULT_TIMEOUT_MS 120000 // 2 minutes
+
+static void zmq_client_print_usage(const char *program_name) {
+    printf("Usage: %s <endpoint> [timeout_ms]\n", program_name);
+    printf("Example: %s tcp://127.0.0.1:5555\n", program_name);
+    printf("\nAvailable endpoints:\n");
+    printf("  tcp://127.0.0.1:5555  - TCP socket on localhost port 5555\n");
+    printf("  ipc:///tmp/klawed.sock - IPC socket file\n");
+    printf("\nMessage types displayed:\n");
+    printf("  TEXT          - AI text responses\n");
+    printf("  TOOL          - Tool execution requests\n");
+    printf("  TOOL_RESULT   - Tool execution results\n");
+    printf("  ERROR         - Error messages\n");
+    printf("\nCommands:\n");
+    printf("  /help  - Show this help\n");
+    printf("  /quit  - Exit the program\n");
+}
+
+static int zmq_client_initialize_connection(ZMQClientConnectionState *conn, const char *endpoint) {
+    if (!conn || !endpoint) {
+        LOG_ERROR("Invalid parameters");
+        return 0;
+    }
+    
+    // Clean up any existing connection
+    zmq_client_cleanup_connection(conn);
+    
+    // Initialize ZMQ context
+    LOG_DEBUG("Creating ZMQ context");
+    conn->context = zmq_ctx_new();
+    if (!conn->context) {
+        LOG_ERROR("Error creating ZMQ context: %s", zmq_strerror(errno));
+        return 0;
+    }
+    
+    // Create PAIR socket (peer-to-peer communication)
+    LOG_DEBUG("Creating ZMQ PAIR socket");
+    conn->socket = zmq_socket(conn->context, ZMQ_PAIR);
+    if (!conn->socket) {
+        LOG_ERROR("Error creating ZMQ socket: %s", zmq_strerror(errno));
+        zmq_ctx_term(conn->context);
+        conn->context = NULL;
+        return 0;
+    }
+    
+    // Set linger option for clean shutdown
+    int linger = 1000; // 1 second
+    zmq_setsockopt(conn->socket, ZMQ_LINGER, &linger, sizeof(linger));
+    LOG_DEBUG("Set ZMQ_LINGER to %d ms", linger);
+    
+    // Connect to endpoint
+    LOG_INFO("Connecting to %s...", endpoint);
+    int rc = zmq_connect(conn->socket, endpoint);
+    if (rc != 0) {
+        LOG_ERROR("Error connecting to %s: %s", endpoint, zmq_strerror(errno));
+        zmq_close(conn->socket);
+        zmq_ctx_term(conn->context);
+        conn->socket = NULL;
+        conn->context = NULL;
+        return 0;
+    }
+    
+    conn->endpoint = strdup(endpoint);
+    conn->is_connected = 1;
+    
+    LOG_INFO("Connected to %s", endpoint);
+    return 1;
+}
+
+static void zmq_client_cleanup_connection(ZMQClientConnectionState *conn) {
+    if (conn->socket) {
+        zmq_close(conn->socket);
+        conn->socket = NULL;
+    }
+    if (conn->context) {
+        zmq_ctx_term(conn->context);
+        conn->context = NULL;
+    }
+    if (conn->endpoint) {
+        free(conn->endpoint);
+        conn->endpoint = NULL;
+    }
+    conn->is_connected = 0;
+}
+
+static int zmq_client_send_message(ZMQClientConnectionState *conn, const char *message) {
+    if (!conn || !conn->is_connected || !conn->socket || !message) {
+        LOG_ERROR("Cannot send: connection not ready");
+        return -1;
+    }
+    
+    int rc = zmq_send(conn->socket, message, strlen(message), 0);
+    if (rc < 0) {
+        LOG_ERROR("Error sending message: %s", zmq_strerror(errno));
+        return -1;
+    }
+    
+    LOG_DEBUG("Sent %d bytes", rc);
+    return rc;
+}
+
+static int zmq_client_receive_message(ZMQClientConnectionState *conn, char *buffer, size_t buffer_size, int timeout_ms) {
+    if (!conn || !conn->is_connected || !conn->socket || !buffer) {
+        LOG_ERROR("Cannot receive: connection not ready");
+        return -1;
+    }
+    
+    // Set receive timeout
+    zmq_setsockopt(conn->socket, ZMQ_RCVTIMEO, &timeout_ms, sizeof(timeout_ms));
+    
+    int rc = zmq_recv(conn->socket, buffer, buffer_size - 1, 0);
+    if (rc < 0) {
+        if (errno == EAGAIN) {
+            LOG_DEBUG("Receive timeout after %d ms", timeout_ms);
+        } else {
+            LOG_ERROR("Error receiving message: %s", zmq_strerror(errno));
+        }
+        return -1;
+    }
+    
+    buffer[rc] = '\0';
+    LOG_DEBUG("Received %d bytes", rc);
+    return rc;
+}
+
+static void zmq_client_process_message(const char *response) {
+    if (!response) {
+        LOG_WARN("Received NULL message");
+        return;
+    }
+    
+    cJSON *json = cJSON_Parse(response);
+    if (!json) {
+        LOG_WARN("Failed to parse JSON response");
+        printf("Response (raw): %s\n", response);
+        return;
+    }
+    
+    cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
+    if (!message_type || !cJSON_IsString(message_type)) {
+        LOG_ERROR("Invalid response format (missing messageType)");
+        printf("Invalid response format: %s\n", response);
+        cJSON_Delete(json);
+        return;
+    }
+    
+    const char *msg_type = message_type->valuestring;
+    
+    if (strcmp(msg_type, "TEXT") == 0) {
+        cJSON *content = cJSON_GetObjectItem(json, "content");
+        if (content && cJSON_IsString(content)) {
+            printf("\n=== AI Response ===\n%s\n=== End of AI Response ===\n", 
+                   content->valuestring);
+        } else {
+            printf("TEXT message missing content\n");
+        }
+    }
+    else if (strcmp(msg_type, "TOOL") == 0) {
+        cJSON *tool_name = cJSON_GetObjectItem(json, "toolName");
+        cJSON *tool_id = cJSON_GetObjectItem(json, "toolId");
+        cJSON *tool_params = cJSON_GetObjectItem(json, "toolParameters");
+        
+        printf("\n=== TOOL Execution Request ===\n");
+        if (tool_name && cJSON_IsString(tool_name)) {
+            printf("Tool: %s\n", tool_name->valuestring);
+        }
+        if (tool_id && cJSON_IsString(tool_id)) {
+            printf("ID: %s\n", tool_id->valuestring);
+        }
+        if (tool_params) {
+            char *params_str = cJSON_Print(tool_params);
+            printf("Parameters: %s\n", params_str);
+            free(params_str);
+        }
+        printf("=== Tool will be executed ===\n");
+    }
+    else if (strcmp(msg_type, "TOOL_RESULT") == 0) {
+        cJSON *tool_name = cJSON_GetObjectItem(json, "toolName");
+        cJSON *tool_id = cJSON_GetObjectItem(json, "toolId");
+        cJSON *tool_output = cJSON_GetObjectItem(json, "toolOutput");
+        cJSON *is_error = cJSON_GetObjectItem(json, "isError");
+        
+        printf("\n=== TOOL Execution Result ===\n");
+        if (tool_name && cJSON_IsString(tool_name)) {
+            printf("Tool: %s\n", tool_name->valuestring);
+        }
+        if (tool_id && cJSON_IsString(tool_id)) {
+            printf("ID: %s\n", tool_id->valuestring);
+        }
+        if (is_error && cJSON_IsBool(is_error)) {
+            printf("Status: %s\n", is_error->valueint ? "ERROR" : "SUCCESS");
+        }
+        if (tool_output) {
+            char *output_str = cJSON_Print(tool_output);
+            printf("Output: %s\n", output_str);
+            free(output_str);
+        }
+        printf("=== End of Tool Result ===\n");
+    }
+    else if (strcmp(msg_type, "ERROR") == 0) {
+        cJSON *content = cJSON_GetObjectItem(json, "content");
+        if (content && cJSON_IsString(content)) {
+            printf("\n=== ERROR ===\n%s\n=== End of Error ===\n", 
+                   content->valuestring);
+        } else {
+            printf("ERROR message received\n");
+        }
+    }
+    else {
+        printf("Unknown message type: %s\n", msg_type);
+        char *pretty = cJSON_Print(json);
+        printf("Full message: %s\n", pretty);
+        free(pretty);
+    }
+    
+    cJSON_Delete(json);
+}
+
+static void zmq_client_send_text_message(ZMQClientConnectionState *conn, const char *text) {
+    if (!conn || !text) {
+        LOG_ERROR("Invalid parameters");
+        return;
+    }
+    
+    cJSON *message = cJSON_CreateObject();
+    cJSON_AddStringToObject(message, "messageType", "TEXT");
+    cJSON_AddStringToObject(message, "content", text);
+    
+    char *json_str = cJSON_PrintUnformatted(message);
+    LOG_DEBUG("Message JSON: %s", json_str);
+    
+    // Send the message
+    int rc = zmq_client_send_message(conn, json_str);
+    if (rc < 0) {
+        LOG_ERROR("Failed to send message");
+        free(json_str);
+        cJSON_Delete(message);
+        return;
+    }
+    
+    // Receive and process responses
+    // The daemon may send multiple messages (TEXT, TOOL, TOOL_RESULT, etc.)
+    // for a single user request, especially when tools are involved.
+    // We wait indefinitely for messages (-1 timeout in ZMQ means infinite wait).
+    // This ensures we never miss messages due to timeout.
+    // The user can interrupt with Ctrl+C if they want to cancel and send a new message.
+    int message_count = 0;
+    const int ZMQ_CLIENT_MAX_MESSAGES = 1000; // Safety limit
+    
+    while (message_count < ZMQ_CLIENT_MAX_MESSAGES) {
+        // Wait indefinitely for messages
+        char response[ZMQ_CLIENT_BUFFER_SIZE];
+        rc = zmq_client_receive_message(conn, response, sizeof(response), -1);
+        
+        if (rc >= 0) {
+            message_count++;
+            
+            // Process and display the message
+            zmq_client_process_message(response);
+            
+            // Continue waiting for more messages indefinitely
+            // The conversation is complete when the daemon stops sending messages
+            // (which means it has returned from processing this request)
+            // Since we wait indefinitely, we'll never timeout and miss messages
+        } else {
+            // Error (not timeout, since we use infinite timeout)
+            LOG_ERROR("Error receiving message: %s", zmq_strerror(errno));
+            break;
+        }
+    }
+    
+    if (message_count == 0) {
+        LOG_ERROR("Failed to receive response");
+    } else {
+        LOG_DEBUG("Received %d message(s)", message_count);
+    }
+    
+    free(json_str);
+    cJSON_Delete(message);
+}
+
+static int zmq_client_mode(const char *endpoint) {
+    ZMQClientConnectionState conn = {0};
+    
+    // Initialize connection
+    if (!zmq_client_initialize_connection(&conn, endpoint)) {
+        LOG_ERROR("Failed to connect to %s", endpoint);
+        printf("\nFailed to connect to %s\n", endpoint);
+        printf("Make sure Klawed is running with ZMQ enabled and listening on this endpoint.\n");
+        printf("Check: KLAWED_ZMQ_ENDPOINT=%s\n", endpoint);
+        return 1;
+    }
+    
+    printf("\nConnected to %s\n", endpoint);
+    printf("Type your messages (or /help for commands)\n");
+    printf("-----------------------------------------\n");
+    
+    // Interactive loop
+    char input[ZMQ_CLIENT_BUFFER_SIZE];
+    while (1) {
+        printf("\n> ");
+        fflush(stdout);
+        
+        if (!fgets(input, sizeof(input), stdin)) {
+            break; // EOF or error
+        }
+        
+        // Remove newline
+        input[strcspn(input, "\n")] = '\0';
+        
+        // Skip empty input
+        if (strlen(input) == 0) {
+            continue;
+        }
+        
+        // Check for commands
+        if (strcmp(input, "/quit") == 0 || strcmp(input, "/exit") == 0) {
+            printf("Goodbye!\n");
+            break;
+        } else if (strcmp(input, "/help") == 0) {
+            zmq_client_print_usage("klawed");
+        } else if (input[0] == '/') {
+            printf("Unknown command: %s\n", input);
+            printf("Type /help for available commands\n");
+        } else {
+            // Regular text message
+            zmq_client_send_text_message(&conn, input);
+        }
+    }
+    
+    // Cleanup
+    zmq_client_cleanup_connection(&conn);
+    
+    LOG_INFO("ZMQ Client exiting");
+    return 0;
+}
+
+#endif // HAVE_ZMQ
+
+// ============================================================================
 // Main Entry Point
 #ifndef TEST_BUILD
 // ============================================================================
@@ -7790,6 +8153,7 @@ int main(int argc, char *argv[]) {
         printf("  %s -l, --list-sessions [N]       List available sessions (N = max to show)\n", argv[0]);
 #ifdef HAVE_ZMQ
         printf("  %s -z, --zmq ENDPOINT           Run in ZMQ daemon mode (e.g., tcp://127.0.0.1:5555)\n", argv[0]);
+        printf("  %s -c, --zmq-client ENDPOINT    Run as ZMQ client (connect to daemon)\n", argv[0]);
 #endif
         printf("  %s -h, --help                     Show this help message\n", argv[0]);
         printf("  %s --version                      Show version information\n\n", argv[0]);
@@ -7891,6 +8255,16 @@ int main(int argc, char *argv[]) {
             }
         }
     }
+
+    // Check for ZMQ client mode
+    int zmq_client_mode_flag = 0;
+    const char *zmq_client_endpoint = NULL;
+    
+    if (argc == 3 && (strcmp(argv[1], "-c") == 0 || strcmp(argv[1], "--zmq-client") == 0)) {
+        zmq_client_mode_flag = 1;
+        zmq_client_endpoint = argv[2];
+        LOG_INFO("ZMQ client mode enabled, connecting to: %s", zmq_client_endpoint);
+    }
 #endif
 
     // Check for SQLite queue daemon mode
@@ -7941,7 +8315,7 @@ int main(int argc, char *argv[]) {
     int is_single_command_mode = 0;
     char *single_command = NULL;
 #ifdef HAVE_ZMQ
-    int socket_ipc_enabled = zmq_daemon_mode;
+    int socket_ipc_enabled = zmq_daemon_mode || zmq_client_mode_flag;
 #else
     int socket_ipc_enabled = 0;
 #endif
@@ -8293,6 +8667,10 @@ int main(int argc, char *argv[]) {
         }
     }
 #ifdef HAVE_ZMQ
+    else if (zmq_client_mode_flag) {
+        // ZMQ client mode
+        return zmq_client_mode(zmq_client_endpoint);
+    }
     else if (zmq_daemon_mode) {
         // ZMQ daemon mode
         LOG_INFO("Starting ZMQ daemon mode on %s", zmq_endpoint);

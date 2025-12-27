@@ -1,3 +1,8 @@
+- [ ] subagents
+    - [ ] explore
+    - [ ] oracle
+        - can think hard
+        - has web search
 - [ ] make sure timeout is implemented
 - [ ] can open vim and when exits go back to the bot
 - [ ] reasoning effort
