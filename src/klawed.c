@@ -67,6 +67,7 @@ static int zmq_client_receive_message(ZMQClientConnectionState *conn, char *buff
 static void zmq_client_process_message(const char *response);
 static void zmq_client_send_text_message(ZMQClientConnectionState *conn, const char *text);
 static int zmq_client_mode(const char *endpoint);
+static int zmq_client_check_user_input(char *buffer, size_t buffer_size, int timeout_ms);
 #endif
 
 #include "sqlite_queue.h"
@@ -7802,8 +7803,9 @@ static void zmq_client_print_usage(const char *program_name) {
     printf("  TOOL_RESULT   - Tool execution results\n");
     printf("  ERROR         - Error messages\n");
     printf("\nCommands:\n");
-    printf("  /help  - Show this help\n");
-    printf("  /quit  - Exit the program\n");
+    printf("  /help      - Show this help\n");
+    printf("  /quit      - Exit the program\n");
+    printf("  /interrupt - Cancel current conversation (when waiting for response)\n");
 }
 
 static int zmq_client_initialize_connection(ZMQClientConnectionState *conn, const char *endpoint) {
@@ -8006,6 +8008,47 @@ static void zmq_client_process_message(const char *response) {
     cJSON_Delete(json);
 }
 
+// Check for user input with timeout using select()
+// Returns: 1 if input available, 0 if timeout, -1 on error
+static int zmq_client_check_user_input(char *buffer, size_t buffer_size, int timeout_ms) {
+    fd_set readfds;
+    struct timeval tv;
+    int retval;
+    
+    // Set timeout
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    
+    // Watch stdin (file descriptor 0) to see when it has input
+    FD_ZERO(&readfds);
+    FD_SET(0, &readfds);
+    
+    // Wait for input with timeout
+    retval = select(1, &readfds, NULL, NULL, &tv);
+    
+    if (retval == -1) {
+        LOG_ERROR("select() error: %s", strerror(errno));
+        return -1;
+    } else if (retval == 0) {
+        // Timeout occurred
+        return 0;
+    } else {
+        // Data is available on stdin
+        if (FD_ISSET(0, &readfds)) {
+            if (fgets(buffer, (int)buffer_size, stdin)) {
+                // Remove newline
+                buffer[strcspn(buffer, "\n")] = '\0';
+                return 1;
+            } else {
+                // EOF or error
+                return -1;
+            }
+        }
+    }
+    
+    return 0;
+}
+
 static void zmq_client_send_text_message(ZMQClientConnectionState *conn, const char *text) {
     if (!conn || !text) {
         LOG_ERROR("Invalid parameters");
@@ -8028,39 +8071,96 @@ static void zmq_client_send_text_message(ZMQClientConnectionState *conn, const c
         return;
     }
     
-    // Receive and process responses
+    // Receive and process responses using time-sharing
     // The daemon may send multiple messages (TEXT, TOOL, TOOL_RESULT, etc.)
     // for a single user request, especially when tools are involved.
-    // We wait indefinitely for messages (-1 timeout in ZMQ means infinite wait).
-    // This ensures we never miss messages due to timeout.
-    // The user can interrupt with Ctrl+C if they want to cancel and send a new message.
+    // We use a polling approach to allow user to interrupt or send new input.
     int message_count = 0;
     const int ZMQ_CLIENT_MAX_MESSAGES = 1000; // Safety limit
+    const int ZMQ_POLL_TIMEOUT_MS = 500; // Check for ZMQ messages every 500ms
+    const int USER_INPUT_CHECK_TIMEOUT_MS = 100; // Check user input every 100ms
     
-    while (message_count < ZMQ_CLIENT_MAX_MESSAGES) {
-        // Wait indefinitely for messages
+    // Track if we're in an active conversation
+    int in_conversation = 1;
+    // Track consecutive timeouts to detect conversation end
+    int consecutive_timeouts = 0;
+    const int MAX_CONSECUTIVE_TIMEOUTS = 6; // ~3 seconds of no messages
+    // Track if we've shown the waiting prompt
+    int prompt_shown = 0;
+    
+    while (message_count < ZMQ_CLIENT_MAX_MESSAGES && in_conversation) {
+        // Try to receive message with short timeout
         char response[ZMQ_CLIENT_BUFFER_SIZE];
-        rc = zmq_client_receive_message(conn, response, sizeof(response), -1);
+        rc = zmq_client_receive_message(conn, response, sizeof(response), ZMQ_POLL_TIMEOUT_MS);
         
         if (rc >= 0) {
             message_count++;
+            consecutive_timeouts = 0; // Reset timeout counter
             
             // Process and display the message
             zmq_client_process_message(response);
             
-            // Continue waiting for more messages indefinitely
-            // The conversation is complete when the daemon stops sending messages
-            // (which means it has returned from processing this request)
-            // Since we wait indefinitely, we'll never timeout and miss messages
+            // Check if this message indicates conversation completion
+            // A TEXT message without pending tools usually means conversation is complete
+            // We'll continue polling for a bit to catch any late messages
+        } else if (errno == EAGAIN) {
+            // Timeout occurred - no message available
+            consecutive_timeouts++;
+            
+            // Check for user input during the timeout period
+            // Show a waiting prompt so user knows they can type
+            if (consecutive_timeouts == 1 && !prompt_shown) {
+                // Only show once to avoid spam
+                printf("\n[Waiting for response... Type '/interrupt' to cancel or '/help' for commands]\n");
+                fflush(stdout);
+                prompt_shown = 1;
+            }
+            
+            char user_input[ZMQ_CLIENT_BUFFER_SIZE];
+            int input_result = zmq_client_check_user_input(user_input, sizeof(user_input), USER_INPUT_CHECK_TIMEOUT_MS);
+            
+            if (input_result == 1) {
+                // User entered something
+                prompt_shown = 0; // Reset for next conversation
+                
+                if (strcmp(user_input, "/interrupt") == 0 || strcmp(user_input, "/cancel") == 0) {
+                    printf("\n=== Conversation interrupted by user ===\n");
+                    in_conversation = 0;
+                    break;
+                } else if (strcmp(user_input, "/help") == 0) {
+                    printf("\n=== Available commands during conversation ===\n");
+                    printf("/interrupt or /cancel - Stop current conversation and return to prompt\n");
+                    printf("/help - Show this help message\n");
+                    printf("Any other input will be ignored until current conversation completes\n");
+                } else {
+                    printf("\n=== Ignoring input during active conversation ===\n");
+                    printf("Type '/interrupt' to cancel current conversation\n");
+                    printf("Type '/help' for available commands\n");
+                }
+            } else if (input_result == -1) {
+                // Error reading input
+                LOG_ERROR("Error checking user input");
+                in_conversation = 0;
+                break;
+            }
+            
+            // Check if we've had too many consecutive timeouts
+            if (consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
+                LOG_DEBUG("No messages received for %d consecutive polls, assuming conversation complete",
+                         consecutive_timeouts);
+                in_conversation = 0;
+                break;
+            }
         } else {
-            // Error (not timeout, since we use infinite timeout)
+            // Error (not timeout)
             LOG_ERROR("Error receiving message: %s", zmq_strerror(errno));
+            in_conversation = 0;
             break;
         }
     }
     
     if (message_count == 0) {
-        LOG_ERROR("Failed to receive response");
+        LOG_DEBUG("No messages received (conversation may have ended or been interrupted)");
     } else {
         LOG_DEBUG("Received %d message(s)", message_count);
     }
