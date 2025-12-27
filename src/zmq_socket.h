@@ -186,4 +186,11 @@ int zmq_check_user_input(char *buffer, size_t buffer_size, int timeout_ms);
  */
 void zmq_cleanup_pending_queue(ZMQContext *ctx);
 
+/**
+ * Get file descriptor for ZMQ socket (for use with select/poll)
+ * @param ctx ZMQ context
+ * @return File descriptor on success, -1 on error
+ */
+int zmq_socket_get_fd(ZMQContext *ctx);
+
 #endif // ZMQ_SOCKET_H

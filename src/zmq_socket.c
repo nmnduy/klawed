@@ -756,6 +756,30 @@ int zmq_check_and_resend_pending(ZMQContext *ctx, int64_t current_time_ms) {
 }
 
 /**
+ * Get file descriptor for ZMQ socket (for use with select/poll)
+ */
+int zmq_socket_get_fd(ZMQContext *ctx) {
+#ifdef HAVE_ZMQ
+    if (!ctx || !ctx->socket) {
+        return -1;
+    }
+    
+    int fd = -1;
+    size_t fd_size = sizeof(fd);
+    if (zmq_getsockopt(ctx->socket, ZMQ_FD, &fd, &fd_size) != 0) {
+        LOG_ERROR("ZMQ: Failed to get socket file descriptor: %s", zmq_strerror(errno));
+        return -1;
+    }
+    
+    LOG_DEBUG("ZMQ: Socket file descriptor: %d", fd);
+    return fd;
+#else
+    (void)ctx;
+    return -1;
+#endif
+}
+
+/**
  * Check for user input with timeout using select()
  */
 int zmq_check_user_input(char *buffer, size_t buffer_size, int timeout_ms) {
@@ -1265,12 +1289,18 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
         return -1;
     }
 
+    // Get ZMQ socket file descriptor for select()
+    int zmq_fd = zmq_socket_get_fd(ctx);
+    if (zmq_fd < 0) {
+        LOG_ERROR("ZMQ: Failed to get socket file descriptor");
+        return -1;
+    }
+
     LOG_INFO("ZMQ: =========================================");
-    LOG_INFO("ZMQ: Starting ZMQ daemon mode");
+    LOG_INFO("ZMQ: Starting ZMQ daemon mode with select() multiplexing");
     LOG_INFO("ZMQ: Endpoint: %s", ctx->endpoint);
     LOG_INFO("ZMQ: Socket type: ZMQ_PAIR (Peer-to-peer)");
-    LOG_INFO("ZMQ: Time-sharing: user input=%dms, messages=%dms",
-             DEFAULT_TIMESLICE_MS, DEFAULT_TIMESLICE_MS);
+    LOG_INFO("ZMQ: Socket FD: %d", zmq_fd);
     LOG_INFO("ZMQ: =========================================");
 
     printf("ZMQ daemon started on %s\n", ctx->endpoint);
@@ -1282,8 +1312,9 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     int error_count = 0;
     int64_t last_resend_check = 0;
     const int64_t RESEND_CHECK_INTERVAL_MS = 1000; // Check pending messages every second
+    const int SELECT_TIMEOUT_MS = 100; // Check for events every 100ms
 
-    // Time-sharing loop
+    // Main event loop using select()
     while (ctx->enabled) {
         int64_t current_time = get_current_time_ms();
         
@@ -1296,71 +1327,115 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
             last_resend_check = current_time;
         }
 
-        // 2. Check for user input
-        char user_input[1024];
-        int input_result = zmq_check_user_input(user_input, sizeof(user_input),
-                                                DEFAULT_TIMESLICE_MS);
+        // 2. Set up file descriptor sets for select()
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(0, &readfds); // stdin (file descriptor 0)
+        FD_SET(zmq_fd, &readfds); // ZMQ socket
         
-        if (input_result == 1) {
-            // User entered something
-            if (strlen(user_input) > 0) {
-                if (strcmp(user_input, "/quit") == 0 || strcmp(user_input, "/exit") == 0) {
-                    printf("Goodbye!\n");
-                    break;
-                } else if (strcmp(user_input, "/help") == 0) {
-                    printf("Available commands:\n");
-                    printf("  /quit, /exit - Stop the daemon\n");
-                    printf("  /status - Show pending messages and statistics\n");
-                    printf("  /help - Show this help message\n");
-                } else if (strcmp(user_input, "/status") == 0) {
-                    printf("=== ZMQ Daemon Status ===\n");
-                    printf("Total messages processed: %d\n", message_count);
-                    printf("Total errors: %d\n", error_count);
-                    printf("Pending messages: %d\n", ctx->pending_queue.count);
-                    printf("Endpoint: %s\n", ctx->endpoint);
-                } else {
-                    printf("Unknown command: %s\n", user_input);
-                    printf("Type /help for available commands\n");
-                }
+        // Find the highest file descriptor for select()
+        int max_fd = (zmq_fd > 0) ? zmq_fd : 0;
+
+        // 3. Set timeout for select()
+        struct timeval tv;
+        tv.tv_sec = SELECT_TIMEOUT_MS / 1000;
+        tv.tv_usec = (SELECT_TIMEOUT_MS % 1000) * 1000;
+
+        // 4. Wait for events using select()
+        int select_result = select(max_fd + 1, &readfds, NULL, NULL, &tv);
+        
+        if (select_result == -1) {
+            // Error in select()
+            if (errno == EINTR) {
+                // Interrupted by signal, continue
+                continue;
             }
-        } else if (input_result == -1) {
-            // Error reading input
-            LOG_ERROR("Error reading user input");
+            LOG_ERROR("ZMQ: select() error: %s", strerror(errno));
             break;
+        } else if (select_result == 0) {
+            // Timeout, continue loop to check pending messages
+            continue;
         }
 
-        // 3. Check for incoming messages
-        char buffer[ZMQ_BUFFER_SIZE];
-        int received = zmq_socket_receive(ctx, buffer, sizeof(buffer),
-                                         DEFAULT_TIMESLICE_MS);
-        
-        if (received > 0) {
-            message_count++;
-            error_count = 0; // Reset error count on successful receive
-            
-            LOG_INFO("ZMQ: Received %d bytes (message #%d)", received, message_count);
-            printf("> Received message #%d\n", message_count);
-            fflush(stdout);
-            
-            // Process the message
-            int result = zmq_socket_process_message(ctx, state, NULL);
-            if (result != 0) {
-                error_count++;
-                LOG_WARN("ZMQ: Message processing failed (error #%d)", error_count);
+        // 5. Check for user input (stdin)
+        if (FD_ISSET(0, &readfds)) {
+            char user_input[1024];
+            if (fgets(user_input, sizeof(user_input), stdin)) {
+                // Remove newline
+                user_input[strcspn(user_input, "\n")] = '\0';
                 
-                if (error_count > 10) {
-                    LOG_ERROR("ZMQ: Too many consecutive errors (%d), stopping daemon",
-                              error_count);
-                    printf("ZMQ: Too many consecutive errors (%d), stopping daemon\n",
-                           error_count);
-                    break;
+                if (strlen(user_input) > 0) {
+                    if (strcmp(user_input, "/quit") == 0 || strcmp(user_input, "/exit") == 0) {
+                        printf("Goodbye!\n");
+                        break;
+                    } else if (strcmp(user_input, "/help") == 0) {
+                        printf("Available commands:\n");
+                        printf("  /quit, /exit - Stop the daemon\n");
+                        printf("  /status - Show pending messages and statistics\n");
+                        printf("  /help - Show this help message\n");
+                    } else if (strcmp(user_input, "/status") == 0) {
+                        printf("=== ZMQ Daemon Status ===\n");
+                        printf("Total messages processed: %d\n", message_count);
+                        printf("Total errors: %d\n", error_count);
+                        printf("Pending messages: %d\n", ctx->pending_queue.count);
+                        printf("Endpoint: %s\n", ctx->endpoint);
+                    } else {
+                        printf("Unknown command: %s\n", user_input);
+                        printf("Type /help for available commands\n");
+                    }
                 }
             } else {
-                LOG_DEBUG("ZMQ: Successfully processed message #%d", message_count);
+                // EOF or error on stdin
+                LOG_ERROR("ZMQ: Error reading from stdin");
+                break;
             }
-        } else if (received == ZMQ_ERROR_RECEIVE_FAILED) {
-            // Timeout is expected in non-blocking mode, continue loop
-            continue;
+        }
+
+        // 6. Check for ZMQ socket events
+        if (FD_ISSET(zmq_fd, &readfds)) {
+            // ZMQ socket is ready for reading
+            // First, we need to check the actual ZMQ events
+            int zmq_events = 0;
+            size_t events_size = sizeof(zmq_events);
+            if (zmq_getsockopt(ctx->socket, ZMQ_EVENTS, &zmq_events, &events_size) != 0) {
+                LOG_ERROR("ZMQ: Failed to get socket events: %s", zmq_strerror(errno));
+                continue;
+            }
+            
+            // Check if socket is readable
+            if (zmq_events & ZMQ_POLLIN) {
+                char buffer[ZMQ_BUFFER_SIZE];
+                int received = zmq_socket_receive(ctx, buffer, sizeof(buffer), 0); // Non-blocking
+                
+                if (received > 0) {
+                    message_count++;
+                    error_count = 0; // Reset error count on successful receive
+                    
+                    LOG_INFO("ZMQ: Received %d bytes (message #%d)", received, message_count);
+                    printf("> Received message #%d\n", message_count);
+                    fflush(stdout);
+                    
+                    // Process the message
+                    int result = zmq_socket_process_message(ctx, state, NULL);
+                    if (result != 0) {
+                        error_count++;
+                        LOG_WARN("ZMQ: Message processing failed (error #%d)", error_count);
+                        
+                        if (error_count > 10) {
+                            LOG_ERROR("ZMQ: Too many consecutive errors (%d), stopping daemon",
+                                      error_count);
+                            printf("ZMQ: Too many consecutive errors (%d), stopping daemon\n",
+                                   error_count);
+                            break;
+                        }
+                    } else {
+                        LOG_DEBUG("ZMQ: Successfully processed message #%d", message_count);
+                    }
+                } else if (received == ZMQ_ERROR_RECEIVE_FAILED) {
+                    // No message available despite POLLIN flag, continue
+                    LOG_DEBUG("ZMQ: No message available despite POLLIN flag");
+                }
+            }
         }
     }
 
