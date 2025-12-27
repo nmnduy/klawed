@@ -175,193 +175,9 @@ static void test_simple_single_replace(void) {
     cleanup_test_state(&state);
 }
 
-static void test_multi_replace(void) {
-    printf("\n%s[Test: Multi-Replace (replace_all=true)]%s\n", COLOR_CYAN, COLOR_RESET);
 
-    setup_test_file("This is a test file.\nThe word test appears multiple times.\nWe use test to test the edit tool.\nTest test test!");
 
-    ConversationState state;
-    init_test_state(&state);
 
-    cJSON *params = cJSON_CreateObject();
-    cJSON_AddStringToObject(params, "file_path", TEST_FILE);
-    cJSON_AddStringToObject(params, "old_string", "test");
-    cJSON_AddStringToObject(params, "new_string", "demo");
-    cJSON_AddBoolToObject(params, "replace_all", 1);
-
-    cJSON *result = tool_edit(params, &state);
-
-    assert_json_string_equals("Returns success status", result, "status", "success");
-    assert_json_number_equals("Replaces 6 occurrences", result, "replacements", 6);
-
-    // Verify all occurrences were replaced (6 lowercase "test")
-    char *content = read_test_file();
-    int has_test = (strstr(content, "test") != NULL);
-    int count = 0;
-    const char *pos = content;
-    while ((pos = strstr(pos, "demo")) != NULL) {
-        count++;
-        pos++;
-    }
-    free(content);
-
-    assert_true("File has no 'test' remaining", !has_test, "old string still present");
-    assert_true("File contains 6 'demo'", count == 6, "replacement count mismatch");
-
-    cJSON_Delete(params);
-    cJSON_Delete(result);
-    cleanup_test_file();
-    cleanup_test_state(&state);
-}
-
-static void test_regex_single_replace(void) {
-    printf("\n%s[Test: Regex Single Replace]%s\n", COLOR_CYAN, COLOR_RESET);
-
-    setup_test_file("int oldVar = 5;\nint oldVar2 = 10;\nprintf(\"Value: %d\", oldVar);");
-
-    ConversationState state;
-    init_test_state(&state);
-
-    cJSON *params = cJSON_CreateObject();
-    cJSON_AddStringToObject(params, "file_path", TEST_FILE);
-    cJSON_AddStringToObject(params, "old_string", "int oldVar[0-9]*");
-    cJSON_AddStringToObject(params, "new_string", "int newVar");
-    cJSON_AddBoolToObject(params, "use_regex", 1);
-
-    cJSON *result = tool_edit(params, &state);
-
-    assert_json_string_equals("Returns success status", result, "status", "success");
-    assert_json_number_equals("Replaces 1 occurrence", result, "replacements", 1);
-
-    // Verify only first match was replaced
-    char *content = read_test_file();
-    int has_first_match = (strstr(content, "int newVar = 5") != NULL);
-    int has_second_match = (strstr(content, "oldVar2") != NULL);
-    free(content);
-
-    assert_true("First match replaced", has_first_match, "first match not replaced");
-    assert_true("Second match preserved", has_second_match, "second match incorrectly replaced");
-
-    cJSON_Delete(params);
-    cJSON_Delete(result);
-    cleanup_test_file();
-    cleanup_test_state(&state);
-}
-
-static void test_regex_multi_replace(void) {
-    printf("\n%s[Test: Regex Multi-Replace]%s\n", COLOR_CYAN, COLOR_RESET);
-
-    setup_test_file("// TODO: Fix this bug\n// TODO: Add error handling\n// TODO: Optimize performance\nint x = 5;");
-
-    ConversationState state;
-    init_test_state(&state);
-
-    cJSON *params = cJSON_CreateObject();
-    cJSON_AddStringToObject(params, "file_path", TEST_FILE);
-    cJSON_AddStringToObject(params, "old_string", "// TODO:[^\n]*");
-    cJSON_AddStringToObject(params, "new_string", "// DONE");
-    cJSON_AddBoolToObject(params, "use_regex", 1);
-    cJSON_AddBoolToObject(params, "replace_all", 1);
-
-    cJSON *result = tool_edit(params, &state);
-
-    assert_json_string_equals("Returns success status", result, "status", "success");
-    assert_json_number_equals("Replaces 3 occurrences", result, "replacements", 3);
-
-    // Verify all TODOs were replaced
-    char *content = read_test_file();
-    int has_todo = (strstr(content, "TODO") != NULL);
-    int count = 0;
-    const char *pos = content;
-    while ((pos = strstr(pos, "// DONE")) != NULL) {
-        count++;
-        pos++;
-    }
-    free(content);
-
-    assert_true("No TODOs remaining", !has_todo, "TODO still present");
-    assert_true("File contains 3 DONE", count == 3, "replacement count mismatch");
-
-    cJSON_Delete(params);
-    cJSON_Delete(result);
-    cleanup_test_file();
-    cleanup_test_state(&state);
-}
-
-static void test_regex_word_boundary(void) {
-    printf("\n%s[Test: Regex with Space Boundaries]%s\n", COLOR_CYAN, COLOR_RESET);
-
-    setup_test_file("The oldVar variable and oldVar2 and myoldVar are different.");
-
-    ConversationState state;
-    init_test_state(&state);
-
-    cJSON *params = cJSON_CreateObject();
-    cJSON_AddStringToObject(params, "file_path", TEST_FILE);
-    cJSON_AddStringToObject(params, "old_string", " oldVar ");
-    cJSON_AddStringToObject(params, "new_string", " newVar ");
-    cJSON_AddBoolToObject(params, "use_regex", 1);
-    cJSON_AddBoolToObject(params, "replace_all", 1);
-
-    cJSON *result = tool_edit(params, &state);
-
-    assert_json_string_equals("Returns success status", result, "status", "success");
-    assert_json_number_equals("Replaces 1 occurrence", result, "replacements", 1);
-
-    // Verify only the space-bounded "oldVar" was replaced
-    char *content = read_test_file();
-    int has_newvar = (strstr(content, " newVar ") != NULL);
-    int has_oldvar2 = (strstr(content, "oldVar2") != NULL);
-    int has_myoldvar = (strstr(content, "myoldVar") != NULL);
-    free(content);
-
-    assert_true("Space-bounded word replaced", has_newvar, "word not replaced");
-    assert_true("oldVar2 preserved", has_oldvar2, "oldVar2 incorrectly replaced");
-    assert_true("myoldVar preserved", has_myoldvar, "myoldVar incorrectly replaced");
-
-    cJSON_Delete(params);
-    cJSON_Delete(result);
-    cleanup_test_file();
-    cleanup_test_state(&state);
-}
-
-static void test_replace_numbers(void) {
-    printf("\n%s[Test: Replace Numbers with Regex]%s\n", COLOR_CYAN, COLOR_RESET);
-
-    setup_test_file("Replace 123 with NUMBER\nReplace 456 with NUMBER\nReplace 789 with NUMBER");
-
-    ConversationState state;
-    init_test_state(&state);
-
-    cJSON *params = cJSON_CreateObject();
-    cJSON_AddStringToObject(params, "file_path", TEST_FILE);
-    cJSON_AddStringToObject(params, "old_string", "[0-9]+");
-    cJSON_AddStringToObject(params, "new_string", "XXX");
-    cJSON_AddBoolToObject(params, "use_regex", 1);
-    cJSON_AddBoolToObject(params, "replace_all", 1);
-
-    cJSON *result = tool_edit(params, &state);
-
-    assert_json_string_equals("Returns success status", result, "status", "success");
-    assert_json_number_equals("Replaces 3 numbers", result, "replacements", 3);
-
-    char *content = read_test_file();
-    int has_numbers = 0;
-    for (const char *p = content; *p; p++) {
-        if (*p >= '0' && *p <= '9') {
-            has_numbers = 1;
-            break;
-        }
-    }
-    free(content);
-
-    assert_true("No numbers remaining", !has_numbers, "numbers still present");
-
-    cJSON_Delete(params);
-    cJSON_Delete(result);
-    cleanup_test_file();
-    cleanup_test_state(&state);
-}
 
 static void test_string_not_found(void) {
     printf("\n%s[Test: String Not Found Error]%s\n", COLOR_CYAN, COLOR_RESET);
@@ -393,29 +209,7 @@ static void test_string_not_found(void) {
     cleanup_test_state(&state);
 }
 
-static void test_invalid_regex(void) {
-    printf("\n%s[Test: Invalid Regex Error]%s\n", COLOR_CYAN, COLOR_RESET);
 
-    setup_test_file("Some content");
-
-    ConversationState state;
-    init_test_state(&state);
-
-    cJSON *params = cJSON_CreateObject();
-    cJSON_AddStringToObject(params, "file_path", TEST_FILE);
-    cJSON_AddStringToObject(params, "old_string", "[invalid(regex");  // Unmatched bracket
-    cJSON_AddStringToObject(params, "new_string", "replacement");
-    cJSON_AddBoolToObject(params, "use_regex", 1);
-
-    cJSON *result = tool_edit(params, &state);
-
-    assert_json_has_field("Returns error", result, "error");
-
-    cJSON_Delete(params);
-    cJSON_Delete(result);
-    cleanup_test_file();
-    cleanup_test_state(&state);
-}
 
 static void test_missing_parameters(void) {
     printf("\n%s[Test: Missing Parameters Error]%s\n", COLOR_CYAN, COLOR_RESET);
@@ -440,7 +234,7 @@ static void test_missing_parameters(void) {
 static void test_empty_string_replacement(void) {
     printf("\n%s[Test: Replace with Empty String]%s\n", COLOR_CYAN, COLOR_RESET);
 
-    setup_test_file("Remove XXX from XXX this XXX text");
+    setup_test_file("Remove XXX from this text");
 
     ConversationState state;
     init_test_state(&state);
@@ -449,12 +243,11 @@ static void test_empty_string_replacement(void) {
     cJSON_AddStringToObject(params, "file_path", TEST_FILE);
     cJSON_AddStringToObject(params, "old_string", "XXX ");
     cJSON_AddStringToObject(params, "new_string", "");
-    cJSON_AddBoolToObject(params, "replace_all", 1);
 
     cJSON *result = tool_edit(params, &state);
 
     assert_json_string_equals("Returns success status", result, "status", "success");
-    assert_json_number_equals("Replaces 3 occurrences", result, "replacements", 3);
+    assert_json_number_equals("Replaces 1 occurrence", result, "replacements", 1);
 
     assert_file_equals("Empty string replacement works", "Remove from this text");
 
@@ -476,15 +269,14 @@ static void test_multiline_content(void) {
     cJSON_AddStringToObject(params, "file_path", TEST_FILE);
     cJSON_AddStringToObject(params, "old_string", "test");
     cJSON_AddStringToObject(params, "new_string", "result");
-    cJSON_AddBoolToObject(params, "replace_all", 1);
 
     cJSON *result = tool_edit(params, &state);
 
     assert_json_string_equals("Returns success status", result, "status", "success");
-    assert_json_number_equals("Replaces all occurrences", result, "replacements", 3);
+    assert_json_number_equals("Replaces first occurrence", result, "replacements", 1);
 
     assert_file_equals("Multi-line replacement works",
-                       "Line 1: result\nLine 2: result\nLine 3: result\n");
+                       "Line 1: result\nLine 2: test\nLine 3: test\n");
 
     cJSON_Delete(params);
     cJSON_Delete(result);
@@ -508,13 +300,7 @@ int main(int argc, char *argv[]) {
 
     // Run all tests
     test_simple_single_replace();
-    test_multi_replace();
-    test_regex_single_replace();
-    test_regex_multi_replace();
-    test_regex_word_boundary();
-    test_replace_numbers();
     test_string_not_found();
-    test_invalid_regex();
     test_missing_parameters();
     test_empty_string_replacement();
     test_multiline_content();

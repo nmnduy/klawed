@@ -24,7 +24,6 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <glob.h>
-#include <regex.h>
 #include <fcntl.h>
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
@@ -42,7 +41,6 @@
 // Socket support removed - will be reimplemented with ZMQ
 #include "colorscheme.h"
 #include "fallback_colors.h"
-#include "patch_parser.h"
 #include "tool_utils.h"
 #include "http_client.h"  // For StreamEvent and HttpStreamCallback
 
@@ -143,7 +141,7 @@ static int bedrock_handle_auth_error(BedrockConfig *config, long http_status, co
     return 0;
 }
 
-static void ensure_tool_results(ConversationState *state) {
+static void ensure_tool_results(struct ConversationState *state) {
     (void)state;
     // Stub for test builds
 }
@@ -826,6 +824,7 @@ static cJSON* tool_sleep(cJSON *params, ConversationState *state);
 static cJSON* tool_upload_image(cJSON *params, ConversationState *state);
 static cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *state);
 static cJSON* tool_interrupt_subagent(cJSON *params, ConversationState *state);
+static cJSON* tool_multiedit(cJSON *params, ConversationState *state);
 #else
 #define STATIC static
 // Forward declarations
@@ -2529,28 +2528,6 @@ STATIC cJSON* tool_write(cJSON *params, ConversationState *state) {
         }
     }
 
-    // Check if content is in patch format
-    if (is_patch_format(content)) {
-        LOG_INFO("Detected patch format in Write tool, parsing and applying...");
-        if (tool_verbose >= 1) {
-            LOG_DEBUG("[TOOL VERBOSE] Detected patch format, applying as patch");
-        }
-
-        // Parse the patch
-        ParsedPatch *patch = parse_patch_format(content);
-        if (!patch) {
-            cJSON *error = cJSON_CreateObject();
-            cJSON_AddStringToObject(error, "error", "Failed to parse patch format");
-            return error;
-        }
-
-        // Apply the patch
-        cJSON *result = apply_patch(patch, state);
-        free_parsed_patch(patch);
-
-        return result;
-    }
-
     char *resolved_path = resolve_path(path_json->valuestring, state->working_dir);
     if (!resolved_path) {
         cJSON *error = cJSON_CreateObject();
@@ -2865,357 +2842,21 @@ static void *tool_thread_func(void *arg) {
 }
 
 // Helper function for simple string multi-replace
-static char* str_replace_all(const char *content, const char *old_str, const char *new_str, int *replace_count) {
-    *replace_count = 0;
 
-    // Count occurrences
-    const char *pos = content;
-    while ((pos = strstr(pos, old_str)) != NULL) {
-        (*replace_count)++;
-        pos += strlen(old_str);
-    }
 
-    if (*replace_count == 0) {
-        return NULL;
-    }
 
-    size_t old_len = strlen(old_str);
-    size_t new_len = strlen(new_str);
-    size_t content_len = strlen(content);
-    size_t result_len = content_len + (size_t)(*replace_count) * (new_len - old_len);
 
-    char *result = malloc(result_len + 1);
-    if (!result) return NULL;
 
-    char *dest = result;
-    const char *src = content;
-
-    while ((pos = strstr(src, old_str)) != NULL) {
-        size_t len = (size_t)(pos - src);
-        memcpy(dest, src, len);
-        dest += len;
-        memcpy(dest, new_str, new_len);
-        dest += new_len;
-        src = pos + old_len;
-    }
-
-    // Calculate remaining space and use strlcpy for safety
-    size_t remaining_space = (size_t)((result + result_len + 1) - dest);
-    strlcpy(dest, src, remaining_space);
-    return result;
-}
-
-// Helper to expand backreferences in replacement string
-// Supports \1 through \9 for capture groups, and \0 for full match
-static char* expand_backreferences(const char *replacement, const char *src,
-                                   const regmatch_t *matches, int num_matches) {
-    if (!replacement || !src || !matches) return NULL;
-
-    // Calculate required buffer size
-    size_t buf_size = 256;
-    char *result = malloc(buf_size);
-    if (!result) return NULL;
-
-    size_t result_len = 0;
-    const char *p = replacement;
-
-    while (*p) {
-        if (*p == '\\' && *(p + 1) >= '0' && *(p + 1) <= '9') {
-            // Backreference found
-            int group_num = *(p + 1) - '0';
-            p += 2;
-
-            if (group_num < num_matches && matches[group_num].rm_so != -1) {
-                size_t group_len = (size_t)(matches[group_num].rm_eo - matches[group_num].rm_so);
-
-                // Ensure buffer has enough space
-                if (result_len + group_len >= buf_size) {
-                    buf_size = (result_len + group_len + 1) * 2;
-                    char *new_result = realloc(result, buf_size);
-                    if (!new_result) {
-                        free(result);
-                        return NULL;
-                    }
-                    result = new_result;
-                }
-
-                memcpy(result + result_len, src + matches[group_num].rm_so, group_len);
-                result_len += group_len;
-            }
-        } else if (*p == '\\' && *(p + 1) == '\\') {
-            // Escaped backslash
-            if (result_len + 1 >= buf_size) {
-                buf_size *= 2;
-                char *new_result = realloc(result, buf_size);
-                if (!new_result) {
-                    free(result);
-                    return NULL;
-                }
-                result = new_result;
-            }
-            result[result_len++] = '\\';
-            p += 2;
-        } else {
-            // Regular character
-            if (result_len + 1 >= buf_size) {
-                buf_size *= 2;
-                char *new_result = realloc(result, buf_size);
-                if (!new_result) {
-                    free(result);
-                    return NULL;
-                }
-                result = new_result;
-            }
-            result[result_len++] = *p++;
-        }
-    }
-
-    result[result_len] = '\0';
-    return result;
-}
-
-// Helper function for regex replacement with capture group and flags support
-// regex_flags: bitwise OR of REG_ICASE, REG_NEWLINE, etc.
-static char* regex_replace_ex(const char *content, const char *pattern, const char *replacement,
-                              int replace_all, int regex_flags, int *replace_count, char **error_msg) {
-    *replace_count = 0;
-
-    regex_t regex;
-    int cflags = REG_EXTENDED | regex_flags;
-    int ret = regcomp(&regex, pattern, cflags);
-    if (ret != 0) {
-        char err_buf[256];
-        regerror(ret, &regex, err_buf, sizeof(err_buf));
-        *error_msg = strdup(err_buf);
-        return NULL;
-    }
-
-    // Support up to 10 capture groups (0 = full match, 1-9 = groups)
-    #define MAX_MATCHES 10
-    regmatch_t matches[MAX_MATCHES];
-    const char *src = content;
-    size_t result_capacity = strlen(content) * 2;
-    char *result = malloc(result_capacity);
-    if (!result) {
-        regfree(&regex);
-        *error_msg = strdup("Out of memory");
-        return NULL;
-    }
-
-    char *dest = result;
-    size_t dest_len = 0;
-
-    while (regexec(&regex, src, MAX_MATCHES, matches, 0) == 0) {
-        (*replace_count)++;
-
-        // Copy text before match
-        size_t prefix_len = (size_t)matches[0].rm_so;
-        if (dest_len + prefix_len >= result_capacity) {
-            result_capacity *= 2;
-            char *new_result = realloc(result, result_capacity);
-            if (!new_result) {
-                free(result);
-                regfree(&regex);
-                *error_msg = strdup("Out of memory");
-                return NULL;
-            }
-            result = new_result;
-            dest = result + dest_len;
-        }
-
-        memcpy(dest, src, prefix_len);
-        dest += prefix_len;
-        dest_len += prefix_len;
-
-        // Expand backreferences in replacement string
-        char *expanded = expand_backreferences(replacement, src, matches, MAX_MATCHES);
-        if (expanded) {
-            size_t expanded_len = strlen(expanded);
-
-            // Ensure buffer has enough space
-            if (dest_len + expanded_len >= result_capacity) {
-                result_capacity = (dest_len + expanded_len + 1) * 2;
-                char *new_result = realloc(result, result_capacity);
-                if (!new_result) {
-                    free(expanded);
-                    free(result);
-                    regfree(&regex);
-                    *error_msg = strdup("Out of memory");
-                    return NULL;
-                }
-                result = new_result;
-                dest = result + dest_len;
-            }
-
-            memcpy(dest, expanded, expanded_len);
-            dest += expanded_len;
-            dest_len += expanded_len;
-            free(expanded);
-        }
-
-        src += matches[0].rm_eo;
-
-        if (!replace_all) break;
-    }
-
-    // Copy remaining text
-    size_t remaining = strlen(src);
-    if (dest_len + remaining >= result_capacity) {
-        result_capacity = dest_len + remaining + 1;
-        char *new_result = realloc(result, result_capacity);
-        if (!new_result) {
-            free(result);
-            regfree(&regex);
-            *error_msg = strdup("Out of memory");
-            return NULL;
-        }
-        result = new_result;
-        dest = result + dest_len;
-    }
-
-    // Use strlcpy for safety
-    size_t remaining_space = result_capacity - dest_len;
-    strlcpy(dest, src, remaining_space);
-    regfree(&regex);
-
-    if (*replace_count == 0) {
-        free(result);
-        return NULL;
-    }
-
-    return result;
-    #undef MAX_MATCHES
-}
-
-// Wrapper for backward compatibility (no flags)
-__attribute__((unused))
-static char* regex_replace(const char *content, const char *pattern, const char *replacement,
-                          int replace_all, int *replace_count, char **error_msg) {
-    return regex_replace_ex(content, pattern, replacement, replace_all, 0, replace_count, error_msg);
-}
-
-// === Helpers for Edit tool (file-scope) ===
-static char* find_last_occurrence(const char *haystack, const char *needle) {
-    if (!haystack || !needle || !*needle) return NULL;
-    const char *last = NULL;
-    const char *p = haystack;
-    size_t nlen = strlen(needle);
-    while ((p = strstr(p, needle)) != NULL) {
-        last = p;
-        p += nlen;
-    }
-    return (char*)last;
-}
-
-// Regex search supporting nth or last occurrence; if occurrence <= 0 => last
-static int regex_find_pos(const char *text, const char *pattern, int occurrence, regmatch_t *out_match) {
-    regex_t regex;
-    int rc = regcomp(&regex, pattern, REG_EXTENDED);
-    if (rc != 0) {
-        return -1; // invalid regex
-    }
-
-    int found_index = -1;
-    regmatch_t m;
-    int index = 0;
-    const char *cursor = text;
-    int last_start = -1;
-    regmatch_t last_m = (regmatch_t){0};
-    while (*cursor) {
-        if (regexec(&regex, cursor, 1, &m, 0) != 0) break;
-        index++;
-        int start = (int)(cursor - text) + (int)m.rm_so;
-        if (occurrence > 0 && index == occurrence) {
-            found_index = start;
-            if (out_match) {
-                out_match->rm_so = start;
-                out_match->rm_eo = (int)(cursor - text) + (int)m.rm_eo;
-            }
-            regfree(&regex);
-            return found_index;
-        }
-        // Save last
-        last_start = start;
-        last_m.rm_so = (int)(cursor - text) + (int)m.rm_so;
-        last_m.rm_eo = (int)(cursor - text) + (int)m.rm_eo;
-        // Advance cursor
-        cursor += (m.rm_eo > 0) ? m.rm_eo : 1;
-    }
-    regfree(&regex);
-    if (occurrence <= 0 && last_start >= 0) {
-        if (out_match) {
-            out_match->rm_so = last_m.rm_so;
-            out_match->rm_eo = last_m.rm_eo;
-        }
-        return last_start;
-    }
-    return -2; // not found
-}
 
 STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
     const cJSON *path_json = cJSON_GetObjectItem(params, "file_path");
     const cJSON *old_json = cJSON_GetObjectItem(params, "old_string");
     const cJSON *new_json = cJSON_GetObjectItem(params, "new_string");
-    const cJSON *replace_all_json = cJSON_GetObjectItem(params, "replace_all");
-    const cJSON *use_regex_json = cJSON_GetObjectItem(params, "use_regex");
-    const cJSON *regex_flags_json = cJSON_GetObjectItem(params, "regex_flags"); // string: "i" for case-insensitive, "m" for multiline, "im" for both
-    // Extended insert parameters (optional, backward compatible)
-    const cJSON *insert_mode_json = cJSON_GetObjectItem(params, "insert_mode");
-    const cJSON *anchor_json = cJSON_GetObjectItem(params, "anchor");
-    const cJSON *anchor_is_regex_json = cJSON_GetObjectItem(params, "anchor_is_regex");
-    const cJSON *insert_position_json = cJSON_GetObjectItem(params, "insert_position"); // "before" | "after"
-    const cJSON *occurrence_json = cJSON_GetObjectItem(params, "occurrence"); // "first" | "last" | int
-    const cJSON *fallback_to_eof_json = cJSON_GetObjectItem(params, "fallback_to_eof"); // bool
 
     if (!path_json || !new_json) {
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error", "Missing required parameters");
         return error;
-    }
-
-    // Check if new_string content is in patch format
-    const char *new_string_content = new_json->valuestring;
-    if (is_patch_format(new_string_content)) {
-        LOG_INFO("Detected patch format in Edit tool, parsing and applying...");
-
-        // Parse the patch
-        ParsedPatch *patch = parse_patch_format(new_string_content);
-        if (!patch) {
-            cJSON *error = cJSON_CreateObject();
-            cJSON_AddStringToObject(error, "error", "Failed to parse patch format");
-            return error;
-        }
-
-        // Apply the patch
-        cJSON *result = apply_patch(patch, state);
-        free_parsed_patch(patch);
-
-        return result;
-    }
-
-    int replace_all = replace_all_json && cJSON_IsBool(replace_all_json) ?
-                      cJSON_IsTrue(replace_all_json) : 0;
-    int use_regex = use_regex_json && cJSON_IsBool(use_regex_json) ?
-                    cJSON_IsTrue(use_regex_json) : 0;
-    int insert_mode = insert_mode_json && cJSON_IsBool(insert_mode_json) ?
-                      cJSON_IsTrue(insert_mode_json) : 0;
-    int anchor_is_regex = anchor_is_regex_json && cJSON_IsBool(anchor_is_regex_json) ?
-                          cJSON_IsTrue(anchor_is_regex_json) : 0;
-    int fallback_to_eof = fallback_to_eof_json && cJSON_IsBool(fallback_to_eof_json) ?
-                          cJSON_IsTrue(fallback_to_eof_json) : 0;
-
-    // Parse regex flags
-    int regex_flags = 0;
-    if (regex_flags_json && cJSON_IsString(regex_flags_json)) {
-        const char *flags_str = regex_flags_json->valuestring;
-        for (const char *p = flags_str; *p; p++) {
-            if (*p == 'i' || *p == 'I') {
-                regex_flags |= REG_ICASE;
-            } else if (*p == 'm' || *p == 'M') {
-                regex_flags |= REG_NEWLINE;
-            }
-            // Additional flags can be added here (e.g., 's' for single-line mode if supported)
-        }
     }
 
     char *resolved_path = resolve_path(path_json->valuestring, state->working_dir);
@@ -3247,133 +2888,22 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
     const char *new_str = new_json->valuestring;
     char *new_content = NULL;
     int replace_count = 0;
-    char *error_msg = NULL;
 
-    // (helpers moved to file scope)
-
-    if (insert_mode) {
-        // Insertion mode using anchor
-        const char *anchor = NULL;
-        if (anchor_json && cJSON_IsString(anchor_json)) anchor = anchor_json->valuestring;
-        // Default: if no anchor provided, fallback to old_string for convenience
-        if (!anchor) anchor = old_str;
-
-        if (!anchor) {
-            free(content);
-            free(original_content);
-            free(resolved_path);
-            cJSON *error = cJSON_CreateObject();
-            cJSON_AddStringToObject(error, "error", "insert_mode requires 'anchor' or 'old_string'");
-            return error;
-        }
-
-        int use_after = 0;
-        if (insert_position_json && cJSON_IsString(insert_position_json)) {
-            const char *pos_str = insert_position_json->valuestring;
-            if (strcmp(pos_str, "after") == 0) use_after = 1;
-        }
-
-        // Determine which occurrence to use
-        int which = 0; // 0 => last by default
-        if (occurrence_json) {
-            if (cJSON_IsString(occurrence_json)) {
-                const char *o = occurrence_json->valuestring;
-                if (strcmp(o, "first") == 0) which = 1;
-                else if (strcmp(o, "last") == 0) which = 0;
-            } else if (cJSON_IsNumber(occurrence_json)) {
-                which = occurrence_json->valueint;
-                if (which < 0) which = 0; // treat negative as last
-            }
-        }
-
-        size_t content_len = strlen(content);
-        size_t insert_at = (size_t)content_len; // default to EOF
-        size_t anchor_len = 0;
-        int found = 0;
-
-        if (anchor_is_regex) {
-            regmatch_t m = {0};
-            int pos = regex_find_pos(content, anchor, which, &m);
-            if (pos >= 0) {
-                found = 1;
-                insert_at = use_after ? (size_t)m.rm_eo : (size_t)m.rm_so;
-            }
-        } else {
-            const char *loc = NULL;
-            if (which <= 0) {
-                loc = find_last_occurrence(content, anchor);
-            } else {
-                // find nth occurrence
-                const char *p = content;
-                int idx = 0;
-                size_t nlen = strlen(anchor);
-                while ((p = strstr(p, anchor)) != NULL) {
-                    idx++;
-                    if (idx == which) { loc = p; break; }
-                    p += nlen;
-                }
-            }
-            if (loc) {
-                found = 1;
-                anchor_len = strlen(anchor);
-                insert_at = use_after ? (size_t)(loc - content) + anchor_len
-                                      : (size_t)(loc - content);
-            }
-        }
-
-        if (!found && !fallback_to_eof) {
-            free(content);
-            free(original_content);
-            free(resolved_path);
-            cJSON *error = cJSON_CreateObject();
-            cJSON_AddStringToObject(error, "error", "Anchor not found in file");
-            return error;
-        }
-
-        // Build new content: insert new_str at insert_at
-        size_t new_len = strlen(new_str);
-        char *buf = malloc(content_len + new_len + 1);
-        if (!buf) {
-            free(content);
-            free(original_content);
-            free(resolved_path);
-            cJSON *error = cJSON_CreateObject();
-            cJSON_AddStringToObject(error, "error", "Out of memory");
-            return error;
-        }
-        memcpy(buf, content, insert_at);
-        memcpy(buf + insert_at, new_str, new_len);
-        memcpy(buf + insert_at + new_len, content + insert_at, content_len - insert_at + 1);
-        new_content = buf;
+    // Simple string single replace (only mode supported now)
+    char *pos = old_str ? strstr(content, old_str) : NULL;
+    if (pos) {
         replace_count = 1;
-    } else if (use_regex) {
-        // Regex-based replacement with optional flags
-        new_content = regex_replace_ex(content, old_str, new_str, replace_all, regex_flags, &replace_count, &error_msg);
-    } else if (replace_all) {
-        // Simple string multi-replace
-        if (!old_str) {
-            error_msg = strdup("replace_all requires 'old_string'");
-            new_content = NULL;
-        } else {
-            new_content = str_replace_all(content, old_str, new_str, &replace_count);
-        }
-    } else {
-        // Simple string single replace (original behavior)
-        char *pos = old_str ? strstr(content, old_str) : NULL;
-        if (pos) {
-            replace_count = 1;
-            size_t old_len = strlen(old_str);
-            size_t new_len = strlen(new_str);
-            size_t content_len = strlen(content);
-            size_t offset = (size_t)(pos - content);
+        size_t old_len = strlen(old_str);
+        size_t new_len = strlen(new_str);
+        size_t content_len = strlen(content);
+        size_t offset = (size_t)(pos - content);
 
-            new_content = malloc(content_len - old_len + new_len + 1);
-            if (new_content) {
-                memcpy(new_content, content, offset);
-                memcpy(new_content + offset, new_str, new_len);
-                memcpy(new_content + offset + new_len, content + offset + old_len,
-                       content_len - offset - old_len + 1);
-            }
+        new_content = malloc(content_len - old_len + new_len + 1);
+        if (new_content) {
+            memcpy(new_content, content, offset);
+            memcpy(new_content + offset, new_str, new_len);
+            memcpy(new_content + offset + new_len, content + offset + old_len,
+                   content_len - offset - old_len + 1);
         }
     }
 
@@ -3382,12 +2912,8 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
         free(original_content);
         free(resolved_path);
         cJSON *error = cJSON_CreateObject();
-        if (error_msg) {
-            cJSON_AddStringToObject(error, "error", error_msg);
-            free(error_msg);
-        } else if (replace_count == 0) {
-            cJSON_AddStringToObject(error, "error",
-                (insert_mode ? "Anchor not found in file" : (use_regex ? "Pattern not found in file" : "String not found in file")));
+        if (replace_count == 0) {
+            cJSON_AddStringToObject(error, "error", "String not found in file");
         } else {
             cJSON_AddStringToObject(error, "error", "Out of memory");
         }
@@ -3415,6 +2941,113 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
     cJSON *result = cJSON_CreateObject();
     cJSON_AddStringToObject(result, "status", "success");
     cJSON_AddNumberToObject(result, "replacements", replace_count);
+    return result;
+}
+
+static cJSON* tool_multiedit(cJSON *params, ConversationState *state) {
+    const cJSON *path_json = cJSON_GetObjectItem(params, "file_path");
+    const cJSON *edits_json = cJSON_GetObjectItem(params, "edits");
+
+    if (!path_json || !edits_json || !cJSON_IsArray(edits_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Missing required parameters: file_path and edits array");
+        return error;
+    }
+
+    char *resolved_path = resolve_path(path_json->valuestring, state->working_dir);
+    if (!resolved_path) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to resolve path");
+        return error;
+    }
+
+    char *content = read_file(resolved_path);
+    if (!content) {
+        free(resolved_path);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to read file");
+        return error;
+    }
+
+    // Save original content for diff comparison
+    char *original_content = strdup(content);
+    if (!original_content) {
+        free(content);
+        free(resolved_path);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to allocate memory for diff");
+        return error;
+    }
+
+    char *current_content = content;
+    int total_replacements = 0;
+    int failed_edits = 0;
+    cJSON *edit_item = NULL;
+    cJSON_ArrayForEach(edit_item, edits_json) {
+        if (!cJSON_IsObject(edit_item)) {
+            failed_edits++;
+            continue;
+        }
+
+        const cJSON *old_json = cJSON_GetObjectItem(edit_item, "old_string");
+        const cJSON *new_json = cJSON_GetObjectItem(edit_item, "new_string");
+
+        if (!old_json || !new_json || !cJSON_IsString(old_json) || !cJSON_IsString(new_json)) {
+            failed_edits++;
+            continue;
+        }
+
+        const char *old_str = old_json->valuestring;
+        const char *new_str = new_json->valuestring;
+
+        char *pos = strstr(current_content, old_str);
+        if (!pos) {
+            failed_edits++;
+            continue;
+        }
+
+        size_t old_len = strlen(old_str);
+        size_t new_len = strlen(new_str);
+        size_t content_len = strlen(current_content);
+        size_t offset = (size_t)(pos - current_content);
+
+        char *new_content = malloc(content_len - old_len + new_len + 1);
+        if (!new_content) {
+            failed_edits++;
+            continue;
+        }
+
+        memcpy(new_content, current_content, offset);
+        memcpy(new_content + offset, new_str, new_len);
+        memcpy(new_content + offset + new_len, current_content + offset + old_len,
+               content_len - offset - old_len + 1);
+
+        free(current_content);
+        current_content = new_content;
+        total_replacements++;
+    }
+
+    int ret = write_file(resolved_path, current_content);
+
+    // Show diff if edit was successful
+    if (ret == 0) {
+        show_diff(resolved_path, original_content);
+    }
+
+    free(current_content);
+    free(original_content);
+    free(resolved_path);
+
+    if (ret != 0) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to write file");
+        return error;
+    }
+
+    cJSON *result = cJSON_CreateObject();
+    cJSON_AddStringToObject(result, "status", "success");
+    cJSON_AddNumberToObject(result, "total_replacements", total_replacements);
+    cJSON_AddNumberToObject(result, "failed_edits", failed_edits);
     return result;
 }
 
@@ -4152,6 +3785,7 @@ static Tool tools[] = {
     {"Read", tool_read},
     {"Write", tool_write},
     {"Edit", tool_edit},
+    {"MultiEdit", tool_multiedit},
     {"Glob", tool_glob},
     {"Grep", tool_grep},
     {"TodoWrite", tool_todo_write},
@@ -4605,25 +4239,16 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToObject(write, "function", write_func);
         cJSON_AddItemToArray(tool_array, write);
 
-        // Edit tool
+        // Edit tool (simplified - simple string replacement only)
         cJSON *edit = cJSON_CreateObject();
         cJSON_AddStringToObject(edit, "type", "function");
         cJSON *edit_func = cJSON_CreateObject();
         cJSON_AddStringToObject(edit_func, "name", "Edit");
         cJSON_AddStringToObject(edit_func, "description",
-            "Performs string replacements in files with three operation modes: "
-            "(1) Simple text replacement - literal string matching, "
-            "(2) Regex replacement - POSIX extended regex with capture groups (\\\\0-\\\\9) "
-            "and backreferences, supports flags 'i' (case-insensitive) and 'm' (multiline), "
-            "(3) Patch format - unified diff format for context-aware edits with verification. "
-            "Automatically detects mode: patch format if old_string starts with '---', "
-            "regex if use_regex=true, otherwise simple text. Use simple mode for exact matches, "
-            "regex for patterns (e.g., date reformatting with '([0-9]{2})/([0-9]{2})/([0-9]{4})' "
-            "to '\\\\3-\\\\1-\\\\2'), and patch format for precise edits with context verification. "
+            "Performs simple string replacement in files. Replaces the first occurrence of old_string with new_string. "
             "IMPORTANT: Some models cannot produce outputs larger than 4096 tokens. "
             "To avoid hitting this limit, make smaller changes and call the Edit tool multiple times with focused edits instead of making massive changes in a single call. "
-            "Break large operations into logical chunks (e.g., edit one function at a time, one section at a time). "
-            "See docs/edit-tool.md for comprehensive examples and migration guide.");
+            "Break large operations into logical chunks (e.g., edit one function at a time, one section at a time).");
         cJSON *edit_params = cJSON_CreateObject();
         cJSON_AddStringToObject(edit_params, "type", "object");
         cJSON *edit_props = cJSON_CreateObject();
@@ -4634,43 +4259,13 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON *old_str = cJSON_CreateObject();
         cJSON_AddStringToObject(old_str, "type", "string");
         cJSON_AddStringToObject(old_str, "description",
-            "String, regex pattern, or patch format to search for. "
-            "For simple mode: exact text to find. "
-            "For regex mode: POSIX extended regex pattern (use_regex must be true). "
-            "Supports capture groups () and backreferences \\\\1-\\\\9 in new_string. "
-            "For patch mode: unified diff format starting with '---' (new_string should be empty). "
-            "Examples: 'TODO' (simple), '([0-9]+)-([0-9]+)' (regex), '--- file.txt\\n+++ file.txt\\n@@ -1,3 +1,3 @@...' (patch)");
+            "Exact text to find and replace. Only simple string matching is supported.");
         cJSON_AddItemToObject(edit_props, "old_string", old_str);
         cJSON *new_str = cJSON_CreateObject();
         cJSON_AddStringToObject(new_str, "type", "string");
         cJSON_AddStringToObject(new_str, "description",
-            "Replacement string. For simple/regex modes: the text to replace with. "
-            "For regex mode: supports backreferences \\\\0 (full match), \\\\1-\\\\9 (capture groups), "
-            "and \\\\\\\\ (literal backslash). Example: '\\\\2-\\\\1' swaps two captured groups. "
-            "For patch mode: leave empty (patch contains both old and new content).");
+            "Replacement text. Will replace the first occurrence of old_string.");
         cJSON_AddItemToObject(edit_props, "new_string", new_str);
-        cJSON *replace_all = cJSON_CreateObject();
-        cJSON_AddStringToObject(replace_all, "type", "boolean");
-        cJSON_AddStringToObject(replace_all, "description",
-            "If true, replace all occurrences; if false, replace only first occurrence. "
-            "Default: false. Only applies to simple and regex modes. Ignored in patch mode.");
-        cJSON_AddItemToObject(edit_props, "replace_all", replace_all);
-        cJSON *use_regex = cJSON_CreateObject();
-        cJSON_AddStringToObject(use_regex, "type", "boolean");
-        cJSON_AddStringToObject(use_regex, "description",
-            "If true, treat old_string as POSIX extended regex pattern with capture group support. "
-            "Default: false. Enables backreferences in new_string. Use with regex_flags for "
-            "case-insensitive or multiline matching. Automatically false for patch mode.");
-        cJSON_AddItemToObject(edit_props, "use_regex", use_regex);
-        cJSON *regex_flags = cJSON_CreateObject();
-        cJSON_AddStringToObject(regex_flags, "type", "string");
-        cJSON_AddStringToObject(regex_flags, "description",
-            "Optional regex flags (only when use_regex=true). Supported flags: "
-            "'i' or 'I' = case-insensitive matching (REG_ICASE), "
-            "'m' or 'M' = multiline mode where ^ and $ match line boundaries (REG_NEWLINE). "
-            "Combine flags as needed: 'im' for both. Default: empty (case-sensitive, single-line). "
-            "Examples: 'i' to match 'TODO', 'todo', 'ToDo'; 'm' to match '^Line' at start of each line.");
-        cJSON_AddItemToObject(edit_props, "regex_flags", regex_flags);
         cJSON_AddItemToObject(edit_params, "properties", edit_props);
         cJSON *edit_req = cJSON_CreateArray();
         cJSON_AddItemToArray(edit_req, cJSON_CreateString("file_path"));
@@ -4680,6 +4275,53 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToObject(edit_func, "parameters", edit_params);
         cJSON_AddItemToObject(edit, "function", edit_func);
         cJSON_AddItemToArray(tool_array, edit);
+
+        // MultiEdit tool
+        cJSON *multiedit = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit, "type", "function");
+        cJSON *multiedit_func = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit_func, "name", "MultiEdit");
+        cJSON_AddStringToObject(multiedit_func, "description",
+            "Performs multiple string replacements in a file. Applies edits sequentially in the order provided. "
+            "Each edit replaces the first occurrence of old_string with new_string. "
+            "Returns counts of successful and failed edits.");
+        cJSON *multiedit_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit_params, "type", "object");
+        cJSON *multiedit_props = cJSON_CreateObject();
+        cJSON *multiedit_path = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit_path, "type", "string");
+        cJSON_AddStringToObject(multiedit_path, "description", "Path to the file to edit");
+        cJSON_AddItemToObject(multiedit_props, "file_path", multiedit_path);
+        cJSON *multiedit_edits = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit_edits, "type", "array");
+        cJSON_AddStringToObject(multiedit_edits, "description",
+            "Array of edit objects, each with old_string and new_string fields");
+        cJSON *multiedit_edit_items = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit_edit_items, "type", "object");
+        cJSON *multiedit_edit_props = cJSON_CreateObject();
+        cJSON *multiedit_old = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit_old, "type", "string");
+        cJSON_AddStringToObject(multiedit_old, "description", "Exact text to find and replace");
+        cJSON_AddItemToObject(multiedit_edit_props, "old_string", multiedit_old);
+        cJSON *multiedit_new = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit_new, "type", "string");
+        cJSON_AddStringToObject(multiedit_new, "description", "Replacement text");
+        cJSON_AddItemToObject(multiedit_edit_props, "new_string", multiedit_new);
+        cJSON_AddItemToObject(multiedit_edit_items, "properties", multiedit_edit_props);
+        cJSON *multiedit_edit_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(multiedit_edit_req, cJSON_CreateString("old_string"));
+        cJSON_AddItemToArray(multiedit_edit_req, cJSON_CreateString("new_string"));
+        cJSON_AddItemToObject(multiedit_edit_items, "required", multiedit_edit_req);
+        cJSON_AddItemToObject(multiedit_edits, "items", multiedit_edit_items);
+        cJSON_AddItemToObject(multiedit_props, "edits", multiedit_edits);
+        cJSON_AddItemToObject(multiedit_params, "properties", multiedit_props);
+        cJSON *multiedit_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(multiedit_req, cJSON_CreateString("file_path"));
+        cJSON_AddItemToArray(multiedit_req, cJSON_CreateString("edits"));
+        cJSON_AddItemToObject(multiedit_params, "required", multiedit_req);
+        cJSON_AddItemToObject(multiedit_func, "parameters", multiedit_params);
+        cJSON_AddItemToObject(multiedit, "function", multiedit_func);
+        cJSON_AddItemToArray(tool_array, multiedit);
     }
 
     // Glob tool

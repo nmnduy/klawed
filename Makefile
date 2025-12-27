@@ -157,7 +157,6 @@ TEST_RETRY_JITTER_TARGET = $(BUILD_DIR)/test_retry_jitter
 TEST_OPENAI_FORMAT_TARGET = $(BUILD_DIR)/test_openai_format
 TEST_WRITE_DIFF_INTEGRATION_TARGET = $(BUILD_DIR)/test_write_diff_integration
 TEST_ROTATION_TARGET = $(BUILD_DIR)/test_rotation
-TEST_PATCH_PARSER_TARGET = $(BUILD_DIR)/test_patch_parser
 TEST_FUNCTION_CONTEXT_TARGET = $(BUILD_DIR)/test_function_context
 TEST_THREAD_CANCEL_TARGET = $(BUILD_DIR)/test_thread_cancel
 TEST_AWS_CRED_ROTATION_TARGET = $(BUILD_DIR)/test_aws_credential_rotation
@@ -207,8 +206,6 @@ ANTHROPIC_PROVIDER_SRC = src/anthropic_provider.c
 ANTHROPIC_PROVIDER_OBJ = $(BUILD_DIR)/anthropic_provider.o
 BUILTIN_THEMES_SRC = src/builtin_themes.c
 BUILTIN_THEMES_OBJ = $(BUILD_DIR)/builtin_themes.o
-PATCH_PARSER_SRC = src/patch_parser.c
-PATCH_PARSER_OBJ = $(BUILD_DIR)/patch_parser.o
 MESSAGE_QUEUE_SRC = src/message_queue.c
 MESSAGE_QUEUE_OBJ = $(BUILD_DIR)/message_queue.o
 AI_WORKER_SRC = src/ai_worker.c
@@ -248,7 +245,6 @@ TEST_RETRY_JITTER_SRC = tests/test_retry_jitter.c
 TEST_OPENAI_FORMAT_SRC = tests/test_openai_format.c
 TEST_WRITE_DIFF_INTEGRATION_SRC = tests/test_write_diff_integration.c
 TEST_ROTATION_SRC = tests/test_rotation.c
-TEST_PATCH_PARSER_SRC = tests/test_patch_parser.c
 TEST_FUNCTION_CONTEXT_SRC = tests/test_function_context.c
 TEST_THREAD_CANCEL_SRC = tests/test_thread_cancel.c
 TEST_AWS_CRED_ROTATION_SRC = tests/test_aws_credential_rotation.c
@@ -285,7 +281,7 @@ TEST_ZMQ_SOCKET_SRC = tests/test_zmq_socket.c
 TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
 # Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -298,7 +294,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-patch-parser test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket
+test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket
 
 test-edit: check-deps $(TEST_EDIT_TARGET)
 	@echo ""
@@ -378,17 +374,9 @@ test-rotation: check-deps $(TEST_ROTATION_TARGET)
 	@echo ""
 	@./$(TEST_ROTATION_TARGET)
 
-test-patch-parser: check-deps $(TEST_PATCH_PARSER_TARGET)
-	@echo ""
-	@echo "Running Patch Parser tests..."
-	@echo ""
-	@./$(TEST_PATCH_PARSER_TARGET)
 
-test-function-context: check-deps $(TEST_FUNCTION_CONTEXT_TARGET)
-	@echo ""
-	@echo "Running Function Context @@ Marker tests..."
-	@echo ""
-	@./$(TEST_FUNCTION_CONTEXT_TARGET)
+
+
 
 test-thread-cancel: check-deps $(TEST_THREAD_CANCEL_TARGET)
 	@echo ""
@@ -618,7 +606,6 @@ $(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/bedrock_provider_debug.o $(BEDROCK_PROVIDER_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/anthropic_provider_debug.o $(ANTHROPIC_PROVIDER_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/builtin_themes_debug.o $(BUILTIN_THEMES_SRC)
-	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/patch_parser_debug.o $(PATCH_PARSER_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/message_queue_debug.o $(MESSAGE_QUEUE_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/ai_worker_debug.o $(AI_WORKER_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/voice_input_debug.o $(VOICE_INPUT_SRC)
@@ -627,7 +614,7 @@ $(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/retry_logic_debug.o $(RETRY_LOGIC_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_socket_debug.o $(ZMQ_SOCKET_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/sqlite_queue_debug.o $(SQLITE_QUEUE_SRC)
-	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/patch_parser_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/http_client_debug.o $(BUILD_DIR)/retry_logic_debug.o $(BUILD_DIR)/zmq_socket_debug.o $(BUILD_DIR)/sqlite_queue_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
+	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/http_client_debug.o $(BUILD_DIR)/retry_logic_debug.o $(BUILD_DIR)/zmq_socket_debug.o $(BUILD_DIR)/sqlite_queue_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
 	@echo ""
 	@echo "✓ Debug build successful with AddressSanitizer!"
 	@echo "Run: ./$(BUILD_DIR)/klawed-debug \"your prompt here\""
@@ -703,7 +690,6 @@ sanitize-all: check-deps
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/openai_messages_all.o $(OPENAI_MESSAGES_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/bedrock_provider_all.o $(BEDROCK_PROVIDER_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/builtin_themes_all.o $(BUILTIN_THEMES_SRC); \
-	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/patch_parser_all.o $(PATCH_PARSER_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/message_queue_all.o $(MESSAGE_QUEUE_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/ai_worker_all.o $(AI_WORKER_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/voice_input_all.o $(VOICE_INPUT_SRC); \
@@ -724,7 +710,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/logger_all.o $(BUILD_DIR)/persistence_all.o $(BUILD_DIR)/migrations_all.o $(BUILD_DIR)/commands_all.o \
 		$(BUILD_DIR)/completion_all.o $(BUILD_DIR)/tui_all.o $(BUILD_DIR)/todo_all.o $(BUILD_DIR)/aws_bedrock_all.o \
 		$(BUILD_DIR)/provider_all.o $(BUILD_DIR)/openai_provider_all.o $(BUILD_DIR)/openai_messages_all.o \
-		$(BUILD_DIR)/bedrock_provider_all.o $(BUILD_DIR)/builtin_themes_all.o $(BUILD_DIR)/patch_parser_all.o \
+		$(BUILD_DIR)/bedrock_provider_all.o $(BUILD_DIR)/builtin_themes_all.o \
 		$(BUILD_DIR)/message_queue_all.o $(BUILD_DIR)/ai_worker_all.o $(BUILD_DIR)/voice_input_all.o $(BUILD_DIR)/mcp_all.o \
 		$(BUILD_DIR)/window_manager_all.o $(BUILD_DIR)/tool_utils_all.o $(BUILD_DIR)/history_file_all.o $(BUILD_DIR)/base64_all.o \
 		$(BUILD_DIR)/anthropic_provider_all.o $(BUILD_DIR)/array_resize_all.o $(BUILD_DIR)/http_client_all.o \
@@ -973,10 +959,6 @@ $(BEDROCK_PROVIDER_OBJ): $(BEDROCK_PROVIDER_SRC) src/bedrock_provider.h src/prov
 $(BUILTIN_THEMES_OBJ): $(BUILTIN_THEMES_SRC) src/builtin_themes.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILTIN_THEMES_OBJ) $(BUILTIN_THEMES_SRC)
-
-$(PATCH_PARSER_OBJ): $(PATCH_PARSER_SRC) src/patch_parser.h src/klawed_internal.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(PATCH_PARSER_OBJ) $(PATCH_PARSER_SRC)
 
 $(MESSAGE_QUEUE_OBJ): $(MESSAGE_QUEUE_SRC) src/message_queue.h
 	@mkdir -p $(BUILD_DIR)
@@ -1265,18 +1247,7 @@ $(TEST_ROTATION_TARGET): $(TEST_ROTATION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $
 	@echo "✓ Rotation test build successful!"
 	@echo ""
 
-# Test target for patch parser
-$(TEST_PATCH_PARSER_TARGET): $(SRC) $(TEST_PATCH_PARSER_SRC) $(TEST_COMMON_OBJS)
-	@mkdir -p $(BUILD_DIR)
-	@echo "Compiling claude.c for patch parser testing..."
-	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_patch_test.o $(SRC)
-	@echo "Compiling Patch Parser test suite..."
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_patch_parser.o $(TEST_PATCH_PARSER_SRC)
-	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_PATCH_PARSER_TARGET) $(BUILD_DIR)/claude_patch_test.o $(BUILD_DIR)/test_patch_parser.o $(TEST_COMMON_OBJS) $(LDFLAGS)
-	@echo ""
-	@echo "✓ Patch Parser test build successful!"
-	@echo ""
+
 
 # Test target for function context @@ markers
 $(TEST_FUNCTION_CONTEXT_TARGET): $(SRC) $(TEST_FUNCTION_CONTEXT_SRC) $(TEST_COMMON_OBJS)
