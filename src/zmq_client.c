@@ -144,6 +144,8 @@ int zmq_client_send_message_with_id(ZMQClientContextThreaded *ctx, const char *m
     cJSON *json = cJSON_Parse(message);
     if (!json) {
         LOG_ERROR("ZMQ Client Threaded: Failed to parse JSON message");
+        printf("ZMQ Client: ERROR: Failed to parse JSON message\n");
+        fflush(stdout);
         return -1;
     }
     
@@ -152,6 +154,8 @@ int zmq_client_send_message_with_id(ZMQClientContextThreaded *ctx, const char *m
     if (zmq_client_generate_message_id(ctx, message, strlen(message), 
                                                message_id, sizeof(message_id)) != 0) {
         LOG_ERROR("ZMQ Client Threaded: Failed to generate message ID");
+        printf("ZMQ Client: ERROR: Failed to generate message ID\n");
+        fflush(stdout);
         cJSON_Delete(json);
         return -1;
     }
@@ -168,11 +172,15 @@ int zmq_client_send_message_with_id(ZMQClientContextThreaded *ctx, const char *m
     }
     
     LOG_DEBUG("ZMQ Client Threaded: Sending message with ID %s: %s", message_id, json_with_id);
+    printf("ZMQ Client: Sending message with ID %s\n", message_id);
+    fflush(stdout);
     
     // Send the message
-    int rc = zmq_send(ctx->zmq_socket, json_with_id, strlen(json_with_id), 0);
+    int rc = zmq_send(ctx->zmq_socket, json_with_id, strlen(json_with_id), ZMQ_DONTWAIT);
     if (rc < 0) {
         LOG_ERROR("ZMQ Client Threaded: Failed to send message: %s", zmq_strerror(errno));
+        printf("ZMQ Client: ERROR: Failed to send message: %s\n", zmq_strerror(errno));
+        fflush(stdout);
         free(json_with_id);
         cJSON_Delete(json);
         return -1;
@@ -182,6 +190,11 @@ int zmq_client_send_message_with_id(ZMQClientContextThreaded *ctx, const char *m
     int64_t sent_time = get_current_time_ms();
     if (add_to_pending_queue(ctx, message_id, json_with_id, sent_time) != 0) {
         LOG_WARN("ZMQ Client Threaded: Failed to add message to pending queue");
+        printf("ZMQ Client: WARNING: Failed to add message to pending queue\n");
+        fflush(stdout);
+    } else {
+        printf("ZMQ Client: Message %s added to pending queue\n", message_id);
+        fflush(stdout);
     }
     
     // Copy message ID to output buffer if requested
@@ -206,15 +219,21 @@ int zmq_client_process_ack(ZMQClientContextThreaded *ctx, const char *message_id
     }
     
     LOG_DEBUG("ZMQ Client Threaded: Processing ACK for message %s", message_id);
+    printf("ZMQ Client: Received ACK for message %s\n", message_id);
+    fflush(stdout);
     
     // Remove from pending queue
     if (remove_from_pending_queue(ctx, message_id) == 0) {
         LOG_DEBUG("ZMQ Client Threaded: Message %s acknowledged and removed from pending queue", 
                  message_id);
+        printf("ZMQ Client: Message %s acknowledged and removed from pending queue\n", message_id);
+        fflush(stdout);
         return 0;
     } else {
         LOG_DEBUG("ZMQ Client Threaded: Message %s not found in pending queue (may have timed out)", 
                  message_id);
+        printf("ZMQ Client: WARNING: Message %s not found in pending queue (may have timed out)\n", message_id);
+        fflush(stdout);
         return -1;
     }
 }
@@ -235,14 +254,21 @@ int zmq_client_send_ack(ZMQClientContextThreaded *ctx, const char *message_id) {
     
     char *json_str = cJSON_PrintUnformatted(ack);
     LOG_DEBUG("ZMQ Client Threaded: Sending ACK for message %s: %s", message_id, json_str);
+    printf("ZMQ Client: Sending ACK for message %s\n", message_id);
+    fflush(stdout);
     
-    int rc = zmq_send(ctx->zmq_socket, json_str, strlen(json_str), 0);
+    int rc = zmq_send(ctx->zmq_socket, json_str, strlen(json_str), ZMQ_DONTWAIT);
     if (rc < 0) {
         LOG_ERROR("ZMQ Client Threaded: Failed to send ACK: %s", zmq_strerror(errno));
+        printf("ZMQ Client: ERROR: Failed to send ACK: %s\n", zmq_strerror(errno));
+        fflush(stdout);
         free(json_str);
         cJSON_Delete(ack);
         return -1;
     }
+    
+    printf("ZMQ Client: ACK sent successfully for message %s\n", message_id);
+    fflush(stdout);
     
     free(json_str);
     cJSON_Delete(ack);
@@ -295,6 +321,8 @@ void zmq_client_process_message(ZMQClientContextThreaded *ctx, const char *respo
     cJSON *json = cJSON_Parse(response);
     if (!json) {
         LOG_ERROR("ZMQ Client Threaded: Failed to parse JSON response");
+        printf("ZMQ Client: ERROR: Failed to parse JSON response\n");
+        fflush(stdout);
         return;
     }
     
@@ -314,6 +342,8 @@ void zmq_client_process_message(ZMQClientContextThreaded *ctx, const char *respo
                 // Check for duplicate
                 if (is_duplicate_message(ctx, id_str)) {
                     LOG_DEBUG("ZMQ Client Threaded: Duplicate message %s, ignoring", id_str);
+                    printf("ZMQ Client: Duplicate message %s detected, ignoring\n", id_str);
+                    fflush(stdout);
                 } else {
                     // Add to seen messages
                     add_seen_message(ctx, id_str);
@@ -640,6 +670,11 @@ static void log_pending_queue_state(ZMQClientContextThreaded *ctx, const char *c
     LOG_DEBUG("ZMQ Client Threaded: Pending queue state (%s): %d messages pending", 
               context, ctx->pending_queue.count);
     
+    // Also log to stdout for user visibility
+    printf("ZMQ Client: Pending queue state (%s): %d messages pending\n", 
+           context, ctx->pending_queue.count);
+    fflush(stdout);
+    
     ZMQClientPendingMessage *msg = ctx->pending_queue.head;
     int i = 0;
     while (msg) {
@@ -729,10 +764,15 @@ static int add_to_pending_queue(ZMQClientContextThreaded *ctx, const char *messa
     if (ctx->pending_queue.count >= ctx->pending_queue.max_pending) {
         LOG_WARN("ZMQ Client Threaded: Pending queue full (%d messages), dropping oldest",
                  ctx->pending_queue.count);
+        printf("ZMQ Client: WARNING: Pending queue full (%d messages), dropping oldest\n",
+               ctx->pending_queue.count);
+        fflush(stdout);
         
         // Remove oldest message
         ZMQClientPendingMessage *oldest = ctx->pending_queue.head;
         if (oldest) {
+            printf("ZMQ Client: Dropping oldest message %s from pending queue\n", oldest->message_id);
+            fflush(stdout);
             ctx->pending_queue.head = oldest->next;
             if (!ctx->pending_queue.head) {
                 ctx->pending_queue.tail = NULL;
@@ -831,6 +871,8 @@ static void* receiver_thread_func(void *arg) {
         int rc = zmq_poll(items, 1, ZMQ_POLL_TIMEOUT_MS);
         if (rc < 0) {
             LOG_ERROR("ZMQ Client Threaded: Poll error: %s", zmq_strerror(errno));
+            printf("ZMQ Client: ERROR: Poll error: %s\n", zmq_strerror(errno));
+            fflush(stdout);
             break;
         }
         
@@ -839,6 +881,8 @@ static void* receiver_thread_func(void *arg) {
             int bytes = zmq_recv(ctx->zmq_socket, buffer, sizeof(buffer) - 1, 0);
             if (bytes < 0) {
                 LOG_ERROR("ZMQ Client Threaded: Receive error: %s", zmq_strerror(errno));
+                printf("ZMQ Client: ERROR: Receive error: %s\n", zmq_strerror(errno));
+                fflush(stdout);
                 ctx->errors++;
                 continue;
             }
@@ -847,6 +891,8 @@ static void* receiver_thread_func(void *arg) {
             ctx->messages_received++;
             
             LOG_DEBUG("ZMQ Client Threaded: Received %d bytes: %s", bytes, buffer);
+            printf("ZMQ Client: Received %d bytes from daemon\n", bytes);
+            fflush(stdout);
             
             // Process the message
             zmq_client_process_message(ctx, buffer);
@@ -877,6 +923,9 @@ static int check_and_resend_pending_internal(ZMQClientContextThreaded *ctx, int6
             if (msg->retry_count >= ctx->pending_queue.max_retries) {
                 LOG_WARN("ZMQ Client Threaded: Message %s exceeded max retries (%d), giving up",
                          msg->message_id, ctx->pending_queue.max_retries);
+                printf("ZMQ Client: WARNING: Message %s exceeded max retries (%d), giving up\n",
+                       msg->message_id, ctx->pending_queue.max_retries);
+                fflush(stdout);
                 
                 // Remove from queue
                 ZMQClientPendingMessage *to_remove = msg;
@@ -888,16 +937,24 @@ static int check_and_resend_pending_internal(ZMQClientContextThreaded *ctx, int6
             // Resend the message
             LOG_DEBUG("ZMQ Client Threaded: Resending message %s (retry %d, age %lld ms)",
                      msg->message_id, msg->retry_count + 1, age);
+            printf("ZMQ Client: Resending message %s (retry %d, age %lld ms)\n",
+                   msg->message_id, msg->retry_count + 1, age);
+            fflush(stdout);
             
-            int rc = zmq_send(ctx->zmq_socket, msg->message_json, strlen(msg->message_json), 0);
+            int rc = zmq_send(ctx->zmq_socket, msg->message_json, strlen(msg->message_json), ZMQ_DONTWAIT);
             if (rc < 0) {
                 LOG_ERROR("ZMQ Client Threaded: Failed to resend message: %s", zmq_strerror(errno));
+                printf("ZMQ Client: ERROR: Failed to resend message: %s\n", zmq_strerror(errno));
+                fflush(stdout);
                 ctx->errors++;
             } else {
                 msg->sent_time_ms = current_time_ms;
                 msg->retry_count++;
                 resent_count++;
                 ctx->messages_sent++; // Count resend as a new send
+                printf("ZMQ Client: Message %s resent successfully (retry %d)\n",
+                       msg->message_id, msg->retry_count);
+                fflush(stdout);
             }
         }
         
@@ -1051,12 +1108,19 @@ void zmq_client_get_stats(ZMQClientContextThreaded *ctx, uint64_t *messages_sent
 void zmq_client_stop(ZMQClientContextThreaded *ctx) {
     if (!ctx) return;
     
+    LOG_DEBUG("ZMQ Client Threaded: Stopping client");
+    printf("ZMQ Client: Stopping client\n");
+    fflush(stdout);
+    
     ctx->running = false;
     
     if (ctx->thread_started) {
         pthread_join(ctx->receiver_thread, NULL);
         ctx->thread_started = false;
     }
+    
+    printf("ZMQ Client: Client stopped\n");
+    fflush(stdout);
 }
 
 /**
@@ -1087,6 +1151,8 @@ int zmq_client_start(ZMQClientContextThreaded *ctx) {
     // Connect to socket
     if (zmq_connect(ctx->zmq_socket, ctx->endpoint) != 0) {
         LOG_ERROR("ZMQ Client Threaded: Failed to connect to %s: %s", ctx->endpoint, zmq_strerror(errno));
+        printf("ZMQ Client: ERROR: Failed to connect to %s: %s\n", ctx->endpoint, zmq_strerror(errno));
+        fflush(stdout);
         zmq_close(ctx->zmq_socket);
         zmq_ctx_destroy(ctx->zmq_context);
         ctx->zmq_socket = NULL;
@@ -1095,6 +1161,8 @@ int zmq_client_start(ZMQClientContextThreaded *ctx) {
     }
     
     LOG_INFO("ZMQ Client Threaded: Connected to %s", ctx->endpoint);
+    printf("ZMQ Client: Connected to %s\n", ctx->endpoint);
+    fflush(stdout);
     
     // Mark as running
     ctx->running = true;
