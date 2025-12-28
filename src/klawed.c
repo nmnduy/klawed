@@ -7082,7 +7082,7 @@ static int process_single_command_response(ConversationState *state, ApiResponse
 // Socket-only mode removed - will be reimplemented with ZMQ
 // Advanced input handler with readline-like keybindings, driven by non-blocking event loop
 static void interactive_mode(ConversationState *state) {
-    const char *prompt = ">>>";
+    const char *prompt = ">";
 
     // Initialize TUI
     TUIState tui = {0};
