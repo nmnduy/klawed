@@ -1218,7 +1218,8 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             cursor_col = 0;
         } else {
             cursor_col++;
-            if (cursor_col >= available_width + prompt_len) {
+            int line_width = available_width + ((cursor_line == 0) ? prompt_len : 0);
+            if (cursor_col >= line_width) {
                 cursor_line++;
                 cursor_col = 0;
             }
@@ -1309,7 +1310,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
                 line_width += prompt_len;  // First line includes prompt
             }
 
-            if (screen_x > line_width) {
+            if (screen_x >= line_width) {
                 screen_y++;
                 current_line++;
                 screen_x = 0;
