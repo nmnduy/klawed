@@ -214,17 +214,17 @@ VOICE_INPUT_SRC = src/voice_input.c
 VOICE_INPUT_OBJ = $(BUILD_DIR)/voice_input.o
 ZMQ_SOCKET_SRC = src/zmq_socket.c
 ZMQ_SOCKET_OBJ = $(BUILD_DIR)/zmq_socket.o
-ZMQ_CLIENT_SRC = src/zmq_client_threaded.c
-ZMQ_CLIENT_OBJ = $(BUILD_DIR)/zmq_client_threaded.o
+ZMQ_CLIENT_SRC = src/zmq_client.c
+ZMQ_CLIENT_OBJ = $(BUILD_DIR)/zmq_client.o
 ZMQ_MESSAGE_QUEUE_SRC = src/zmq_message_queue.c
 ZMQ_MESSAGE_QUEUE_OBJ = $(BUILD_DIR)/zmq_message_queue.o
 ZMQ_DAEMON_SRC = src/zmq_daemon.c
 ZMQ_DAEMON_OBJ = $(BUILD_DIR)/zmq_daemon.o
 ZMQ_THREAD_POOL_SRC = src/zmq_thread_pool.c
 ZMQ_THREAD_POOL_OBJ = $(BUILD_DIR)/zmq_thread_pool.o
-# ZMQ_CLIENT_THREADED_SRC and ZMQ_CLIENT_THREADED_OBJ are now consolidated into ZMQ_CLIENT_SRC and ZMQ_CLIENT_OBJ
-# ZMQ_CLIENT_THREADED_SRC = src/zmq_client_threaded.c
-# ZMQ_CLIENT_THREADED_OBJ = $(BUILD_DIR)/zmq_client_threaded.o
+# ZMQ_CLIENT_SRC and ZMQ_CLIENT_OBJ are now consolidated into ZMQ_CLIENT_SRC and ZMQ_CLIENT_OBJ
+# ZMQ_CLIENT_SRC = src/zmq_client.c
+# ZMQ_CLIENT_OBJ = $(BUILD_DIR)/zmq_client.o
 SQLITE_QUEUE_SRC = src/sqlite_queue.c
 SQLITE_QUEUE_OBJ = $(BUILD_DIR)/sqlite_queue.o
 
@@ -553,9 +553,9 @@ $(BUILD_DIR)/zmq_thread_pool.o: $(ZMQ_THREAD_POOL_SRC) src/zmq_thread_pool.h
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_thread_pool.o $(ZMQ_THREAD_POOL_SRC)
 
 # Build ZMQ client object (threaded version)
-$(BUILD_DIR)/zmq_client_threaded.o: $(ZMQ_CLIENT_SRC) src/zmq_client_threaded.h
+$(BUILD_DIR)/zmq_client.o: $(ZMQ_CLIENT_SRC) src/zmq_client.h
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_client_threaded.o $(ZMQ_CLIENT_SRC)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_client.o $(ZMQ_CLIENT_SRC)
 
 # Build ZMQ message queue object
 $(BUILD_DIR)/zmq_message_queue.o: $(ZMQ_MESSAGE_QUEUE_SRC) src/zmq_message_queue.h
@@ -567,10 +567,10 @@ $(BUILD_DIR)/zmq_daemon.o: $(ZMQ_DAEMON_SRC) src/zmq_daemon.h src/zmq_message_qu
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_daemon.o $(ZMQ_DAEMON_SRC)
 
-# Build ZMQ client threaded object - rule is already defined above using ZMQ_CLIENT_SRC
-# $(BUILD_DIR)/zmq_client_threaded.o: $(ZMQ_CLIENT_THREADED_SRC) src/zmq_client_threaded.h src/zmq_message_queue.h src/zmq_socket.h
+# Build ZMQ client object - rule is already defined above using ZMQ_CLIENT_SRC
+# $(BUILD_DIR)/zmq_client.o: $(ZMQ_CLIENT_SRC) src/zmq_client.h src/zmq_message_queue.h src/zmq_socket.h
 #	@mkdir -p $(BUILD_DIR)
-#	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_client_threaded.o $(ZMQ_CLIENT_THREADED_SRC)
+#	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_client.o $(ZMQ_CLIENT_SRC)
 
 # Build SQLite queue object
 $(BUILD_DIR)/sqlite_queue.o: $(SQLITE_QUEUE_SRC) src/sqlite_queue.h
@@ -625,7 +625,7 @@ $(VERSION_H): $(VERSION_FILE)
 	@echo "✓ Version: $(VERSION)"
 
 # Debug build with AddressSanitizer for finding memory bugs
-$(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) $(COMMANDS_SRC) $(COMPLETION_SRC) $(TUI_SRC) $(TODO_SRC) $(AWS_BEDROCK_SRC) $(PROVIDER_SRC) $(OPENAI_PROVIDER_SRC) $(OPENAI_MESSAGES_SRC) $(BEDROCK_PROVIDER_SRC) $(ANTHROPIC_PROVIDER_SRC) $(BUILTIN_THEMES_SRC) $(PATCH_PARSER_SRC) $(MESSAGE_QUEUE_SRC) $(AI_WORKER_SRC) $(VOICE_INPUT_SRC) $(ZMQ_SOCKET_SRC) $(ZMQ_CLIENT_SRC) $(ZMQ_MESSAGE_QUEUE_SRC) $(ZMQ_DAEMON_SRC) $(ZMQ_CLIENT_THREADED_SRC) $(SQLITE_QUEUE_SRC) $(MCP_SRC) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_SRC) $(RETRY_LOGIC_SRC)
+$(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) $(COMMANDS_SRC) $(COMPLETION_SRC) $(TUI_SRC) $(TODO_SRC) $(AWS_BEDROCK_SRC) $(PROVIDER_SRC) $(OPENAI_PROVIDER_SRC) $(OPENAI_MESSAGES_SRC) $(BEDROCK_PROVIDER_SRC) $(ANTHROPIC_PROVIDER_SRC) $(BUILTIN_THEMES_SRC) $(PATCH_PARSER_SRC) $(MESSAGE_QUEUE_SRC) $(AI_WORKER_SRC) $(VOICE_INPUT_SRC) $(ZMQ_SOCKET_SRC) $(ZMQ_CLIENT_SRC) $(ZMQ_MESSAGE_QUEUE_SRC) $(ZMQ_DAEMON_SRC) $(SQLITE_QUEUE_SRC) $(MCP_SRC) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_SRC) $(RETRY_LOGIC_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building with AddressSanitizer (debug mode)..."
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/logger_debug.o $(LOGGER_SRC)
@@ -651,9 +651,9 @@ $(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_socket_debug.o $(ZMQ_SOCKET_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_message_queue_debug.o $(ZMQ_MESSAGE_QUEUE_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_daemon_debug.o $(ZMQ_DAEMON_SRC)
-	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_client_threaded_debug.o $(ZMQ_CLIENT_THREADED_SRC)
+	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_client_debug.o $(ZMQ_CLIENT_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/sqlite_queue_debug.o $(SQLITE_QUEUE_SRC)
-	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/http_client_debug.o $(BUILD_DIR)/retry_logic_debug.o $(BUILD_DIR)/zmq_socket_debug.o $(BUILD_DIR)/zmq_message_queue_debug.o $(BUILD_DIR)/zmq_daemon_debug.o $(BUILD_DIR)/zmq_client_threaded_debug.o $(BUILD_DIR)/sqlite_queue_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
+	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/http_client_debug.o $(BUILD_DIR)/retry_logic_debug.o $(BUILD_DIR)/zmq_socket_debug.o $(BUILD_DIR)/zmq_message_queue_debug.o $(BUILD_DIR)/zmq_daemon_debug.o $(BUILD_DIR)/zmq_client_debug.o $(BUILD_DIR)/sqlite_queue_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
 	@echo ""
 	@echo "✓ Debug build successful with AddressSanitizer!"
 	@echo "Run: ./$(BUILD_DIR)/klawed-debug \"your prompt here\""

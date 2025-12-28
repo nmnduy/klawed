@@ -1,12 +1,12 @@
 /*
- * zmq_client_threaded.c - Thread-based ZMQ client for Klawed
+ * zmq_client.c - Thread-based ZMQ client for Klawed
  *
  * Implements a ZMQ client with separate receiver thread and main interactive thread.
  * Uses thread-safe message queues for communication between threads.
  * Provides reliable message delivery with ID/ACK system.
  */
 
-#include "zmq_client_threaded.h"
+#include "zmq_client.h"
 #include "zmq_message_queue.h"
 #include "zmq_socket.h"
 #include "logger.h"
@@ -96,7 +96,7 @@ static int is_duplicate_message(ZMQClientContextThreaded *ctx, const char *messa
 /**
  * Print usage information for ZMQ client mode
  */
-void zmq_client_threaded_print_usage(const char *program_name) {
+void zmq_client_print_usage(const char *program_name) {
     printf("Usage: %s --zmq-client <endpoint>\n", program_name);
     printf("\n");
     printf("Connect to a Klawed daemon running with ZMQ enabled.\n");
@@ -115,7 +115,7 @@ void zmq_client_threaded_print_usage(const char *program_name) {
 /**
  * Generate a message ID for a message
  */
-int zmq_client_threaded_generate_message_id(ZMQClientContextThreaded *ctx, const char *message,
+int zmq_client_generate_message_id(ZMQClientContextThreaded *ctx, const char *message,
                                           size_t message_len, char *out_id, size_t out_id_size) {
     if (!ctx || !message || !out_id || out_id_size < ZMQ_CLIENT_MESSAGE_ID_HEX_LENGTH) {
         return -1;
@@ -133,7 +133,7 @@ int zmq_client_threaded_generate_message_id(ZMQClientContextThreaded *ctx, const
 /**
  * Send a message with message ID for reliable delivery
  */
-int zmq_client_threaded_send_message_with_id(ZMQClientContextThreaded *ctx, const char *message,
+int zmq_client_send_message_with_id(ZMQClientContextThreaded *ctx, const char *message,
                                            char *message_id_out, size_t message_id_out_size) {
     if (!ctx || !message) {
         LOG_ERROR("ZMQ Client Threaded: Invalid parameters for send_message_with_id");
@@ -149,7 +149,7 @@ int zmq_client_threaded_send_message_with_id(ZMQClientContextThreaded *ctx, cons
     
     // Generate message ID
     char message_id[ZMQ_CLIENT_MESSAGE_ID_HEX_LENGTH];
-    if (zmq_client_threaded_generate_message_id(ctx, message, strlen(message), 
+    if (zmq_client_generate_message_id(ctx, message, strlen(message), 
                                                message_id, sizeof(message_id)) != 0) {
         LOG_ERROR("ZMQ Client Threaded: Failed to generate message ID");
         cJSON_Delete(json);
@@ -199,7 +199,7 @@ int zmq_client_threaded_send_message_with_id(ZMQClientContextThreaded *ctx, cons
 /**
  * Process an ACK message
  */
-int zmq_client_threaded_process_ack(ZMQClientContextThreaded *ctx, const char *message_id) {
+int zmq_client_process_ack(ZMQClientContextThreaded *ctx, const char *message_id) {
     if (!ctx || !message_id) {
         LOG_ERROR("ZMQ Client Threaded: Invalid parameters for process_ack");
         return -1;
@@ -222,7 +222,7 @@ int zmq_client_threaded_process_ack(ZMQClientContextThreaded *ctx, const char *m
 /**
  * Send an ACK message
  */
-int zmq_client_threaded_send_ack(ZMQClientContextThreaded *ctx, const char *message_id) {
+int zmq_client_send_ack(ZMQClientContextThreaded *ctx, const char *message_id) {
     if (!ctx || !message_id) {
         LOG_ERROR("ZMQ Client Threaded: Invalid parameters for send_ack");
         return -1;
@@ -252,7 +252,7 @@ int zmq_client_threaded_send_ack(ZMQClientContextThreaded *ctx, const char *mess
 /**
  * Check and resend pending messages that have timed out
  */
-int zmq_client_threaded_check_and_resend_pending(ZMQClientContextThreaded *ctx, int64_t current_time_ms) {
+int zmq_client_check_and_resend_pending(ZMQClientContextThreaded *ctx, int64_t current_time_ms) {
     if (!ctx) return 0;
     return check_and_resend_pending_internal(ctx, current_time_ms);
 }
@@ -260,7 +260,7 @@ int zmq_client_threaded_check_and_resend_pending(ZMQClientContextThreaded *ctx, 
 /**
  * Clean up pending message queue
  */
-void zmq_client_threaded_cleanup_pending_queue(ZMQClientContextThreaded *ctx) {
+void zmq_client_cleanup_pending_queue(ZMQClientContextThreaded *ctx) {
     if (!ctx) return;
     
     ZMQClientPendingMessage *msg = ctx->pending_queue.head;
@@ -287,7 +287,7 @@ void zmq_client_threaded_cleanup_pending_queue(ZMQClientContextThreaded *ctx) {
 /**
  * Process a received message
  */
-void zmq_client_threaded_process_message(ZMQClientContextThreaded *ctx, const char *response) {
+void zmq_client_process_message(ZMQClientContextThreaded *ctx, const char *response) {
     if (!ctx || !response) return;
     
     LOG_DEBUG("ZMQ Client Threaded: Processing message: %s", response);
@@ -308,7 +308,7 @@ void zmq_client_threaded_process_message(ZMQClientContextThreaded *ctx, const ch
         if (type_str && id_str) {
             if (strcmp(type_str, "ACK") == 0) {
                 // This is an ACK for a message we sent
-                zmq_client_threaded_process_ack(ctx, id_str);
+                zmq_client_process_ack(ctx, id_str);
             } else {
                 // This is a message from the daemon that needs an ACK
                 // Check for duplicate
@@ -319,7 +319,7 @@ void zmq_client_threaded_process_message(ZMQClientContextThreaded *ctx, const ch
                     add_seen_message(ctx, id_str);
                     
                     // Send ACK
-                    zmq_client_threaded_send_ack(ctx, id_str);
+                    zmq_client_send_ack(ctx, id_str);
                     
                     // Handle different message types
                     if (strcmp(type_str, "TEXT") == 0) {
@@ -461,7 +461,7 @@ void zmq_client_threaded_process_message(ZMQClientContextThreaded *ctx, const ch
 /**
  * Check for user input (non-blocking)
  */
-int zmq_client_threaded_check_user_input(char *buffer, size_t buffer_size, int timeout_ms) {
+int zmq_client_check_user_input(char *buffer, size_t buffer_size, int timeout_ms) {
     if (!buffer || buffer_size == 0) return -1;
     
     fd_set readfds;
@@ -494,8 +494,8 @@ int zmq_client_threaded_check_user_input(char *buffer, size_t buffer_size, int t
 /**
  * Main ZMQ client mode entry point
  */
-int zmq_client_threaded_mode(const char *endpoint) {
-    ZMQClientContextThreaded *ctx = zmq_client_threaded_init(endpoint);
+int zmq_client_mode(const char *endpoint) {
+    ZMQClientContextThreaded *ctx = zmq_client_init(endpoint);
     if (!ctx) {
         LOG_ERROR("Failed to initialize ZMQ client for %s", endpoint);
         printf("\nFailed to initialize ZMQ client for %s\n", endpoint);
@@ -503,12 +503,12 @@ int zmq_client_threaded_mode(const char *endpoint) {
     }
     
     // Initialize connection
-    if (zmq_client_threaded_start(ctx) != 0) {
+    if (zmq_client_start(ctx) != 0) {
         LOG_ERROR("Failed to connect to %s", endpoint);
         printf("\nFailed to connect to %s\n", endpoint);
         printf("Make sure Klawed is running with ZMQ enabled and listening on this endpoint.\n");
         printf("Check: KLAWED_ZMQ_ENDPOINT=%s\n", endpoint);
-        zmq_client_threaded_cleanup(ctx);
+        zmq_client_cleanup(ctx);
         return 1;
     }
     
@@ -518,18 +518,18 @@ int zmq_client_threaded_mode(const char *endpoint) {
     
     // Interactive loop
     char input[ZMQ_CLIENT_BUFFER_SIZE];
-    while (zmq_client_threaded_is_running(ctx)) {
+    while (zmq_client_is_running(ctx)) {
         printf("\n> ");
         fflush(stdout);
         
-        int input_result = zmq_client_threaded_check_user_input(input, sizeof(input), USER_INPUT_CHECK_TIMEOUT_MS);
+        int input_result = zmq_client_check_user_input(input, sizeof(input), USER_INPUT_CHECK_TIMEOUT_MS);
         if (input_result < 0) {
             // Error or EOF
             break;
         } else if (input_result == 0) {
             // Timeout, check for pending messages
             int64_t current_time = get_current_time_ms();
-            zmq_client_threaded_check_and_resend_pending(ctx, current_time);
+            zmq_client_check_and_resend_pending(ctx, current_time);
             continue;
         }
         
@@ -543,19 +543,19 @@ int zmq_client_threaded_mode(const char *endpoint) {
             printf("Goodbye!\n");
             break;
         } else if (strcmp(input, "/help") == 0) {
-            zmq_client_threaded_print_usage("klawed");
+            zmq_client_print_usage("klawed");
         } else if (input[0] == '/') {
             printf("Unknown command: %s\n", input);
             printf("Type /help for available commands\n");
         } else {
             // Regular text message
-            zmq_client_threaded_send_text(ctx, input);
+            zmq_client_send_text(ctx, input);
         }
     }
     
     // Cleanup
-    zmq_client_threaded_stop(ctx);
-    zmq_client_threaded_cleanup(ctx);
+    zmq_client_stop(ctx);
+    zmq_client_cleanup(ctx);
     
     LOG_INFO("ZMQ Client Threaded exiting");
     return 0;
@@ -840,7 +840,7 @@ static void* receiver_thread_func(void *arg) {
             LOG_DEBUG("ZMQ Client Threaded: Received %d bytes: %s", bytes, buffer);
             
             // Process the message
-            zmq_client_threaded_process_message(ctx, buffer);
+            zmq_client_process_message(ctx, buffer);
         }
         
         // Check for pending messages that need resending
@@ -905,7 +905,7 @@ static int check_and_resend_pending_internal(ZMQClientContextThreaded *ctx, int6
 /**
  * Send a text message to the daemon
  */
-int zmq_client_threaded_send_text(ZMQClientContextThreaded *ctx, const char *text) {
+int zmq_client_send_text(ZMQClientContextThreaded *ctx, const char *text) {
     if (!ctx || !text) {
         LOG_ERROR("ZMQ Client Threaded: Invalid parameters for send_text");
         return -1;
@@ -920,7 +920,7 @@ int zmq_client_threaded_send_text(ZMQClientContextThreaded *ctx, const char *tex
     LOG_DEBUG("ZMQ Client Threaded: Message JSON: %s", json_str);
 
     // Send the message with ID for reliable delivery
-    int rc = zmq_client_threaded_send_message_with_id(ctx, json_str, NULL, 0);
+    int rc = zmq_client_send_message_with_id(ctx, json_str, NULL, 0);
     
     free(json_str);
     cJSON_Delete(message);
@@ -933,7 +933,7 @@ int zmq_client_threaded_send_text(ZMQClientContextThreaded *ctx, const char *tex
 /**
  * Initialize ZMQ client context (threaded version)
  */
-ZMQClientContextThreaded* zmq_client_threaded_init(const char *endpoint) {
+ZMQClientContextThreaded* zmq_client_init(const char *endpoint) {
     if (!endpoint) {
         LOG_ERROR("ZMQ Client Threaded: Invalid endpoint for init");
         return NULL;
@@ -984,12 +984,12 @@ ZMQClientContextThreaded* zmq_client_threaded_init(const char *endpoint) {
 /**
  * Clean up ZMQ client resources
  */
-void zmq_client_threaded_cleanup(ZMQClientContextThreaded *ctx) {
+void zmq_client_cleanup(ZMQClientContextThreaded *ctx) {
     if (!ctx) return;
     
     // Stop if running
     if (ctx->running) {
-        zmq_client_threaded_stop(ctx);
+        zmq_client_stop(ctx);
     }
     
     // Clean up ZMQ resources
@@ -1007,7 +1007,7 @@ void zmq_client_threaded_cleanup(ZMQClientContextThreaded *ctx) {
     }
     
     // Clean up pending queue and seen messages
-    zmq_client_threaded_cleanup_pending_queue(ctx);
+    zmq_client_cleanup_pending_queue(ctx);
     
     // Free endpoint string
     if (ctx->endpoint) {
@@ -1020,14 +1020,14 @@ void zmq_client_threaded_cleanup(ZMQClientContextThreaded *ctx) {
 /**
  * Check if client is running
  */
-bool zmq_client_threaded_is_running(ZMQClientContextThreaded *ctx) {
+bool zmq_client_is_running(ZMQClientContextThreaded *ctx) {
     return ctx && ctx->running;
 }
 
 /**
  * Get client statistics
  */
-void zmq_client_threaded_get_stats(ZMQClientContextThreaded *ctx, uint64_t *messages_sent,
+void zmq_client_get_stats(ZMQClientContextThreaded *ctx, uint64_t *messages_sent,
                                    uint64_t *messages_received, uint64_t *errors) {
     if (!ctx) return;
     
@@ -1039,7 +1039,7 @@ void zmq_client_threaded_get_stats(ZMQClientContextThreaded *ctx, uint64_t *mess
 /**
  * Stop ZMQ client
  */
-void zmq_client_threaded_stop(ZMQClientContextThreaded *ctx) {
+void zmq_client_stop(ZMQClientContextThreaded *ctx) {
     if (!ctx) return;
     
     ctx->running = false;
@@ -1053,7 +1053,7 @@ void zmq_client_threaded_stop(ZMQClientContextThreaded *ctx) {
 /**
  * Start ZMQ client
  */
-int zmq_client_threaded_start(ZMQClientContextThreaded *ctx) {
+int zmq_client_start(ZMQClientContextThreaded *ctx) {
     if (!ctx) {
         LOG_ERROR("ZMQ Client Threaded: Invalid context for start");
         return -1;

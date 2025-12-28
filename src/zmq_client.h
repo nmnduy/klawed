@@ -1,5 +1,5 @@
 /*
- * zmq_client_threaded.h - Thread-based ZMQ client for Klawed
+ * zmq_client.h - Thread-based ZMQ client for Klawed
  *
  * Implements a ZMQ client with separate receiver thread and main interactive thread.
  * Uses thread-safe message queues for communication between threads.
@@ -8,8 +8,8 @@
  * Usage: ./klawed --zmq-client tcp://127.0.0.1:5555
  */
 
-#ifndef ZMQ_CLIENT_THREADED_H
-#define ZMQ_CLIENT_THREADED_H
+#ifndef ZMQ_CLIENT_H
+#define ZMQ_CLIENT_H
 
 #include "zmq_message_queue.h"
 #include <stdbool.h>
@@ -88,33 +88,33 @@ typedef struct ZMQClientContextThreaded {
  * @param endpoint ZMQ endpoint (e.g., "tcp://127.0.0.1:5555")
  * @return Initialized client context or NULL on error
  */
-ZMQClientContextThreaded* zmq_client_threaded_init(const char *endpoint);
+ZMQClientContextThreaded* zmq_client_init(const char *endpoint);
 
 /**
  * Start ZMQ client (starts receiver thread and enters main interactive loop)
  * @param ctx Client context
  * @return 0 on success, -1 on error
  */
-int zmq_client_threaded_start(ZMQClientContextThreaded *ctx);
+int zmq_client_start(ZMQClientContextThreaded *ctx);
 
 /**
  * Stop ZMQ client (stops receiver thread and cleans up)
  * @param ctx Client context
  */
-void zmq_client_threaded_stop(ZMQClientContextThreaded *ctx);
+void zmq_client_stop(ZMQClientContextThreaded *ctx);
 
 /**
  * Clean up ZMQ client resources
  * @param ctx Client context to clean up
  */
-void zmq_client_threaded_cleanup(ZMQClientContextThreaded *ctx);
+void zmq_client_cleanup(ZMQClientContextThreaded *ctx);
 
 /**
  * Check if client is running
  * @param ctx Client context
  * @return true if running, false otherwise
  */
-bool zmq_client_threaded_is_running(ZMQClientContextThreaded *ctx);
+bool zmq_client_is_running(ZMQClientContextThreaded *ctx);
 
 /**
  * Send a text message to the daemon
@@ -122,7 +122,7 @@ bool zmq_client_threaded_is_running(ZMQClientContextThreaded *ctx);
  * @param text Text message to send
  * @return 0 on success, -1 on error
  */
-int zmq_client_threaded_send_text(ZMQClientContextThreaded *ctx, const char *text);
+int zmq_client_send_text(ZMQClientContextThreaded *ctx, const char *text);
 
 /**
  * Get client statistics
@@ -131,21 +131,21 @@ int zmq_client_threaded_send_text(ZMQClientContextThreaded *ctx, const char *tex
  * @param messages_received Output: total messages received
  * @param errors Output: total errors
  */
-void zmq_client_threaded_get_stats(ZMQClientContextThreaded *ctx, uint64_t *messages_sent,
+void zmq_client_get_stats(ZMQClientContextThreaded *ctx, uint64_t *messages_sent,
                                    uint64_t *messages_received, uint64_t *errors);
 
 /**
  * Print usage information for ZMQ client mode
  * @param program_name Name of the program
  */
-void zmq_client_threaded_print_usage(const char *program_name);
+void zmq_client_print_usage(const char *program_name);
 
 /**
  * Main ZMQ client mode entry point (replaces zmq_client_mode)
  * @param endpoint ZMQ endpoint to connect to
  * @return Exit code (0 for success, non-zero for error)
  */
-int zmq_client_threaded_mode(const char *endpoint);
+int zmq_client_mode(const char *endpoint);
 
 /**
  * Send a message with message ID for reliable delivery
@@ -155,7 +155,7 @@ int zmq_client_threaded_mode(const char *endpoint);
  * @param message_id_out_size Size of message_id_out buffer
  * @return 0 on success, -1 on error
  */
-int zmq_client_threaded_send_message_with_id(ZMQClientContextThreaded *ctx, const char *message,
+int zmq_client_send_message_with_id(ZMQClientContextThreaded *ctx, const char *message,
                                            char *message_id_out, size_t message_id_out_size);
 
 /**
@@ -164,7 +164,7 @@ int zmq_client_threaded_send_message_with_id(ZMQClientContextThreaded *ctx, cons
  * @param message_id Message ID to acknowledge
  * @return 0 on success, -1 on error
  */
-int zmq_client_threaded_process_ack(ZMQClientContextThreaded *ctx, const char *message_id);
+int zmq_client_process_ack(ZMQClientContextThreaded *ctx, const char *message_id);
 
 /**
  * Send an ACK message
@@ -172,7 +172,7 @@ int zmq_client_threaded_process_ack(ZMQClientContextThreaded *ctx, const char *m
  * @param message_id Message ID to acknowledge
  * @return 0 on success, -1 on error
  */
-int zmq_client_threaded_send_ack(ZMQClientContextThreaded *ctx, const char *message_id);
+int zmq_client_send_ack(ZMQClientContextThreaded *ctx, const char *message_id);
 
 /**
  * Check and resend pending messages that have timed out
@@ -180,13 +180,13 @@ int zmq_client_threaded_send_ack(ZMQClientContextThreaded *ctx, const char *mess
  * @param current_time_ms Current time in milliseconds
  * @return Number of messages resent
  */
-int zmq_client_threaded_check_and_resend_pending(ZMQClientContextThreaded *ctx, int64_t current_time_ms);
+int zmq_client_check_and_resend_pending(ZMQClientContextThreaded *ctx, int64_t current_time_ms);
 
 /**
  * Clean up pending message queue
  * @param ctx Client context
  */
-void zmq_client_threaded_cleanup_pending_queue(ZMQClientContextThreaded *ctx);
+void zmq_client_cleanup_pending_queue(ZMQClientContextThreaded *ctx);
 
 /**
  * Generate a message ID for a message
@@ -197,7 +197,7 @@ void zmq_client_threaded_cleanup_pending_queue(ZMQClientContextThreaded *ctx);
  * @param out_id_size Size of out_id buffer
  * @return 0 on success, -1 on error
  */
-int zmq_client_threaded_generate_message_id(ZMQClientContextThreaded *ctx, const char *message,
+int zmq_client_generate_message_id(ZMQClientContextThreaded *ctx, const char *message,
                                           size_t message_len, char *out_id, size_t out_id_size);
 
 /**
@@ -205,7 +205,7 @@ int zmq_client_threaded_generate_message_id(ZMQClientContextThreaded *ctx, const
  * @param ctx Client context
  * @param response JSON response string
  */
-void zmq_client_threaded_process_message(ZMQClientContextThreaded *ctx, const char *response);
+void zmq_client_process_message(ZMQClientContextThreaded *ctx, const char *response);
 
 /**
  * Check for user input (non-blocking)
@@ -214,8 +214,8 @@ void zmq_client_threaded_process_message(ZMQClientContextThreaded *ctx, const ch
  * @param timeout_ms Timeout in milliseconds
  * @return 1 if input available, 0 if timeout, -1 on error
  */
-int zmq_client_threaded_check_user_input(char *buffer, size_t buffer_size, int timeout_ms);
+int zmq_client_check_user_input(char *buffer, size_t buffer_size, int timeout_ms);
 
 #endif // HAVE_ZMQ
 
-#endif // ZMQ_CLIENT_THREADED_H
+#endif // ZMQ_CLIENT_H
