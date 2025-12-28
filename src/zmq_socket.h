@@ -190,14 +190,7 @@ int zmq_process_ack(ZMQContext *ctx, const char *message_id);
  */
 int zmq_check_and_resend_pending(ZMQContext *ctx, int64_t current_time_ms);
 
-/**
- * Check for user input with timeout using select()
- * @param buffer Buffer to store user input
- * @param buffer_size Size of buffer
- * @param timeout_ms Timeout in milliseconds
- * @return 1 if input available, 0 if timeout, -1 on error
- */
-int zmq_check_user_input(char *buffer, size_t buffer_size, int timeout_ms);
+
 
 /**
  * Clean up pending message queue

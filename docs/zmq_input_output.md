@@ -382,9 +382,6 @@ int zmq_process_ack(ZMQContext *ctx, const char *message_id);
 // Check and resend pending messages
 int zmq_check_and_resend_pending(ZMQContext *ctx, int64_t current_time_ms);
 
-// Check for user input with timeout
-int zmq_check_user_input(char *buffer, size_t buffer_size, int timeout_ms);
-
 // Clean up pending queue
 void zmq_cleanup_pending_queue(ZMQContext *ctx);
 ```
