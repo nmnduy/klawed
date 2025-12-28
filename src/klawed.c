@@ -4938,7 +4938,7 @@ char* build_request_json_from_state(ConversationState *state) {
     }
 
     cJSON_AddStringToObject(request, "model", state->model);
-    cJSON_AddNumberToObject(request, "max_completion_tokens", MAX_TOKENS);
+    cJSON_AddNumberToObject(request, "max_completion_tokens", state->max_tokens);
 
     // Add messages in OpenAI format
     cJSON *messages_array = cJSON_CreateArray();
@@ -8030,6 +8030,7 @@ int main(int argc, char *argv[]) {
     state.api_key = strdup(api_key);
     state.api_url = strdup(api_base);
     state.model = strdup(model);
+    state.max_tokens = get_env_int_retry("KLAWED_MAX_TOKENS", MAX_TOKENS);
 
     // Get current working directory - use PATH_MAX to satisfy static analyzer
     char cwd_buf[PATH_MAX];

@@ -134,6 +134,8 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_BASH_TIMEOUT` - Timeout for bash commands in seconds (default: 30, 0=no timeout)
   - `KLAWED_TOOL_VERBOSE` - Verbose tool logging (0=off, 1=basic, 2=detailed, default: 0)
   - `KLAWED_IS_SUBAGENT` - Internal flag set automatically when running as a subagent (1/true/yes=subagent mode). Excludes Subagent, CheckSubagentProgress, and InterruptSubagent tools to prevent recursion
+- **API Limits**:
+  - `KLAWED_MAX_TOKENS` - Maximum tokens for completion (default: 16384)
 - **Theme**: `KLAWED_THEME` pointing to Kitty .conf file
 - **MCP**: `KLAWED_MCP_ENABLED=1` to enable (disabled by default), `KLAWED_MCP_CONFIG` for config path
   - `KLAWED_MCP_INIT_TIMEOUT` - Timeout for MCP server initialization in seconds (default: 10, 0=no timeout, overrides config file)
@@ -146,6 +148,7 @@ export OPENAI_API_KEY="your-api-key"
 - Database: `./.klawed/api_calls.db` (project-local)
 - Prompt caching: Enabled
 - Model: `claude-sonnet-4-20250514`
+- Max tokens: 16384 (configurable via `KLAWED_MAX_TOKENS`)
 - Token usage tracking: Enabled (stores in `token_usage` table)
 
 ## Color Themes

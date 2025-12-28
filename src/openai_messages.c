@@ -181,7 +181,7 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
     }
 
     cJSON_AddStringToObject(request, "model", state->model);
-    cJSON_AddNumberToObject(request, "max_completion_tokens", MAX_TOKENS);
+    cJSON_AddNumberToObject(request, "max_completion_tokens", state->max_tokens);
 
     cJSON *messages_array = cJSON_CreateArray();
     if (!messages_array) {
