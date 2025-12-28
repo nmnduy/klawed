@@ -16,7 +16,6 @@ zsh: abort      OPENAI_API_KEY=sk-3ec6a2b143b7498590dc72ccf074a8fe OPENAI_API_BA
     - [ ] oracle
         - can think hard
         - has web search
-- [ ] sometimes cursor placement is incorrect. maybe after some alt + <key> movements
 - [ ] make sure timeout is implemented
 - [ ] can open vim and when exits go back to the bot
 - [ ] reasoning effort
@@ -27,7 +26,6 @@ zsh: abort      OPENAI_API_KEY=sk-3ec6a2b143b7498590dc72ccf074a8fe OPENAI_API_BA
         - [ ] anthropic
     - [ ] toggle
 
-- [ ] read api_calls.db for token per second stats
 - [ ] $ klawed -r sess_1766925100_140aa178
 ... BUG: session_load_from_db: checking message 32
 DEBUG: session_load_from_db: checking message 31
@@ -425,8 +423,6 @@ klawed(63161,0x1fb262240) malloc: *** set a breakpoint in malloc_error_break to 
 zsh: abort      OPENAI_API_KEY=sk-3ec6a2b143b7498590dc72ccf074a8fe OPENAI_API_BASE= = klawed 
 
 ---
-
-- [ ] ctrl + c doesn't terminate the running tool
 
 - [ ] [2025-12-18 11:57:36] [sess_1766033195_15b39516] WARN  [openai_messages.c:370] build_openai_request: Request may be invalid: 60 tool_calls but only 0 tool_results
 
