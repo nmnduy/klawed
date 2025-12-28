@@ -528,7 +528,7 @@ int zmq_socket_receive(ZMQContext *ctx, char *buffer, size_t buffer_size, int ti
         }
     }
 
-    LOG_INFO("ZMQ: Received %d bytes from endpoint: %s", rc,
+    LOG_DEBUG("ZMQ: Received %d bytes from endpoint: %s", rc,
              ctx->endpoint ? ctx->endpoint : "unknown");
     buffer[rc] = '\0'; // Null-terminate the received data
     return rc;
@@ -638,7 +638,7 @@ int zmq_socket_send_with_id(ZMQContext *ctx, const char *message, size_t message
     int rc = zmq_send(ctx->socket, wrapped_message, wrapped_len, ZMQ_DONTWAIT);
 
     if (rc >= 0) {
-        LOG_INFO("ZMQ: Sent message %s (%zu bytes -> %d bytes sent, pending queue: %d/%d)",
+        LOG_DEBUG("ZMQ: Sent message %s (%zu bytes -> %d bytes sent, pending queue: %d/%d)",
                   message_id, wrapped_len, rc, ctx->pending_queue.count + 1, ctx->pending_queue.max_pending);
         LOG_DEBUG("ZMQ: Message content preview (first 500 chars): %.*s",
                  (int)(wrapped_len > 500 ? 500 : wrapped_len), wrapped_message);
@@ -723,7 +723,7 @@ int zmq_send_ack(ZMQContext *ctx, const char *message_id) {
     free(ack_str);
 
     if (rc >= 0) {
-        LOG_INFO("ZMQ: Sent ACK for message %s (%d bytes)", message_id, rc);
+        LOG_DEBUG("ZMQ: Sent ACK for message %s (%d bytes)", message_id, rc);
         return ZMQ_ERROR_NONE;
     } else {
         int err = errno;
@@ -1113,7 +1113,7 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
             }
 
             // Print the full TEXT message content to console (daemon messages should be shown)
-            printf("\n>>> ZMQ TEXT MESSAGE <<<\n%s\n>>> END OF MESSAGE <<<\n\n", content->valuestring);
+            // Message content is logged via LOG_INFO, no console output needed for daemon
             fflush(stdout);
 
             // Process interactively (handles tool calls recursively)
@@ -1415,10 +1415,7 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
             if (*p != '\0') {  // Has non-whitespace content
                 LOG_INFO("ZMQ: Sending assistant text response");
 
-                printf("\n--- AI Response ---\n");
-                int preview_len = (int)(strlen(p) > 200 ? 200 : strlen(p));
-                printf("%.*s%s\n", preview_len, p, strlen(p) > 200 ? "..." : "");
-                printf("--- End of AI Response ---\n");
+                // AI response is logged via LOG_INFO, no console output needed for daemon
                 fflush(stdout);
 
                 zmq_send_json_response(ctx, "TEXT", p);
@@ -1636,8 +1633,7 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     LOG_INFO("ZMQ:   Resend check interval: %d ms", 1000); // RESEND_CHECK_INTERVAL_MS
     LOG_INFO("ZMQ: =========================================");
 
-    printf("ZMQ daemon listening on %s\n", ctx->endpoint);
-    printf("(Check log file for detailed info)\n\n");
+    // Daemon startup is logged via LOG_INFO, no console output needed
     fflush(stdout);
 
     int message_count = 0;
@@ -1711,7 +1707,7 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
                     error_count = 0; // Reset error count on successful receive
 
                     LOG_INFO("ZMQ: Received %d bytes (message #%d)", received, message_count);
-                    printf("> Received message #%d\n", message_count);
+                    // Message receipt is logged via LOG_INFO, no console output needed for daemon
                     fflush(stdout);
 
                     // Log raw message preview for debugging
@@ -1738,8 +1734,6 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
                         if (error_count > 10) {
                             LOG_ERROR("ZMQ: Too many consecutive errors (%d), stopping daemon",
                                       error_count);
-                            printf("ZMQ: Too many consecutive errors (%d), stopping daemon\n",
-                                   error_count);
                             break;
                         }
                     } else {
@@ -1767,7 +1761,7 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     LOG_INFO("ZMQ: Total errors: %d", error_count);
     LOG_INFO("ZMQ: =========================================");
 
-    printf("ZMQ daemon stopped (see log file for details)\n");
+    // Daemon stop is logged via LOG_INFO, no console output needed
     fflush(stdout);
 
     return 0;
