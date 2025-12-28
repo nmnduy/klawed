@@ -1188,7 +1188,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         return;
     }
 
-    int prompt_len = (int)strlen(prompt) + 1;  // +1 for space after prompt
+    int prompt_len = (int)strlen(prompt);  // prompt already includes space
 
     // Calculate available width for text (window width - prompt)
     int available_width = input->win_width - prompt_len;
@@ -1259,7 +1259,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             mvwprintw(win, 0, 0, "%s", tui->command_buffer);
         } else {
             // Show normal prompt
-            mvwprintw(win, 0, 0, "%s ", prompt);
+            mvwprintw(win, 0, 0, "%s", prompt);
         }
 
         if (has_colors()) {
