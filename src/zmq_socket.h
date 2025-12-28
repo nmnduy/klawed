@@ -54,6 +54,12 @@ typedef struct ZMQPendingQueue {
     int max_retries;            // Maximum number of retries before giving up
 } ZMQPendingQueue;
 
+// Seen message tracking for duplicate detection
+typedef struct {
+    char *message_id;           // Message ID (hex string)
+    int64_t timestamp_ms;       // When this message was seen
+} ZMQSeenMessage;
+
 // Simple ZMQ socket context
 typedef struct ZMQContext {
     void *context;      // ZMQ context
@@ -66,6 +72,10 @@ typedef struct ZMQContext {
     ZMQPendingQueue pending_queue;   // Queue of messages waiting for ACK
     uint32_t salt;                   // Random salt for message ID generation
     int message_sequence;            // Simple counter for debugging
+    
+    // Duplicate message detection
+    ZMQSeenMessage seen_messages[1000];  // Circular buffer of recently seen message IDs
+    int seen_message_count;               // Number of messages in the seen list
 } ZMQContext;
 
 /**

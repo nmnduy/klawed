@@ -29,6 +29,10 @@
 #define ZMQ_CLIENT_DEFAULT_ACK_TIMEOUT_MS 3000    // 3 seconds
 #define ZMQ_CLIENT_DEFAULT_MAX_RETRIES 5
 
+// Duplicate detection
+#define ZMQ_CLIENT_MAX_SEEN_MESSAGES 1000
+#define ZMQ_CLIENT_SEEN_MESSAGE_TTL_MS 30000  // 30 seconds
+
 // Message ID constants
 #define ZMQ_CLIENT_MESSAGE_ID_HEX_LENGTH 33  // 128 bits = 32 hex chars + null terminator
 #define ZMQ_CLIENT_HASH_SAMPLE_SIZE 256      // Number of characters to sample from message for hash
@@ -43,6 +47,7 @@ static int remove_from_pending_queue_client(ZMQClientConnectionState *conn, cons
 static void hash_message_id_client(int64_t timestamp, const char *message, size_t message_len,
                                    uint32_t salt, uint8_t out_hash[16]);
 static void hash_to_hex_client(const uint8_t hash[16], char *out_hex, size_t out_hex_size);
+static int is_duplicate_message_client(ZMQClientConnectionState *conn, const char *message_id);
 
 /**
  * Get current time in milliseconds
@@ -51,6 +56,85 @@ static int64_t get_current_time_ms_client(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (int64_t)tv.tv_sec * 1000 + (int64_t)tv.tv_usec / 1000;
+}
+
+/**
+ * Check if a message ID has been seen recently (duplicate detection)
+ */
+static int is_duplicate_message_client(ZMQClientConnectionState *conn, const char *message_id) {
+    if (!conn || !message_id) return 0;
+    
+    // Simple linear search for now - could be optimized if needed
+    for (int i = 0; i < conn->seen_message_count; i++) {
+        if (strcmp(conn->seen_messages[i].message_id, message_id) == 0) {
+            int64_t current_time = get_current_time_ms_client();
+            int64_t age = current_time - conn->seen_messages[i].timestamp_ms;
+            
+            if (age < ZMQ_CLIENT_SEEN_MESSAGE_TTL_MS) {
+                LOG_WARN("ZMQ Client: Duplicate message detected! ID=%s (age=%lldms, TTL=%dms)",
+                         message_id, (long long)age, ZMQ_CLIENT_SEEN_MESSAGE_TTL_MS);
+                return 1;
+            } else {
+                // Expired, can be removed
+                free(conn->seen_messages[i].message_id);
+                // Shift remaining elements
+                for (int j = i; j < conn->seen_message_count - 1; j++) {
+                    conn->seen_messages[j] = conn->seen_messages[j + 1];
+                }
+                conn->seen_message_count--;
+                i--; // Check current position again
+            }
+        }
+    }
+    return 0;
+}
+
+/**
+ * Add a message ID to the seen messages list
+ */
+static void add_seen_message_client(ZMQClientConnectionState *conn, const char *message_id) {
+    if (!conn || !message_id || conn->seen_message_count >= ZMQ_CLIENT_MAX_SEEN_MESSAGES) {
+        return;
+    }
+    
+    // Check if we need to make room
+    if (conn->seen_message_count == ZMQ_CLIENT_MAX_SEEN_MESSAGES) {
+        // Remove oldest message
+        free(conn->seen_messages[0].message_id);
+        for (int i = 0; i < conn->seen_message_count - 1; i++) {
+            conn->seen_messages[i] = conn->seen_messages[i + 1];
+        }
+        conn->seen_message_count--;
+    }
+    
+    // Add new message
+    conn->seen_messages[conn->seen_message_count].message_id = strdup(message_id);
+    if (conn->seen_messages[conn->seen_message_count].message_id) {
+        conn->seen_messages[conn->seen_message_count].timestamp_ms = get_current_time_ms_client();
+        conn->seen_message_count++;
+        LOG_DEBUG("ZMQ Client: Added message %s to seen messages list (count: %d)",
+                  message_id, conn->seen_message_count);
+    }
+}
+
+/**
+ * Log current state of pending queue for debugging
+ */
+static void log_pending_queue_state_client(ZMQClientConnectionState *conn, const char *context) {
+    if (!conn) return;
+    
+    LOG_DEBUG("ZMQ Client: Pending queue state (%s): count=%d, max=%d", 
+              context, conn->pending_queue.count, conn->pending_queue.max_pending);
+    
+    ZMQClientPendingMessage *curr = conn->pending_queue.head;
+    int i = 0;
+    while (curr) {
+        int64_t elapsed = get_current_time_ms_client() - curr->sent_time_ms;
+        LOG_DEBUG("ZMQ Client:   [%d] ID=%s, elapsed=%lldms, retries=%d/%d",
+                  i++, curr->message_id, (long long)elapsed,
+                  curr->retry_count, conn->pending_queue.max_retries);
+        curr = curr->next;
+    }
 }
 
 void zmq_client_print_usage(const char *program_name) {
@@ -139,6 +223,10 @@ int zmq_client_initialize_connection(ZMQClientConnectionState *conn, const char 
     }
 
     conn->message_sequence = 0;
+    
+    // Initialize duplicate detection
+    conn->seen_message_count = 0;
+    memset(conn->seen_messages, 0, sizeof(conn->seen_messages));
 
     LOG_INFO("ZMQ Client: Successfully connected to %s", endpoint);
     LOG_DEBUG("ZMQ Client: Connection state: context=%p, socket=%p, endpoint=%s, is_connected=%d",
@@ -155,6 +243,15 @@ void zmq_client_cleanup_connection(ZMQClientConnectionState *conn) {
 
     // Clean up pending message queue
     zmq_client_cleanup_pending_queue(conn);
+    
+    // Clean up seen messages
+    for (int i = 0; i < conn->seen_message_count; i++) {
+        if (conn->seen_messages[i].message_id) {
+            free(conn->seen_messages[i].message_id);
+            conn->seen_messages[i].message_id = NULL;
+        }
+    }
+    conn->seen_message_count = 0;
 
     // Close socket
     if (conn->socket) {
@@ -438,18 +535,25 @@ int zmq_client_send_message_with_id(ZMQClientConnectionState *conn, const char *
               wrapped_len, strlen(message));
 
     // Send the wrapped message
+    LOG_DEBUG("ZMQ Client: About to send message %s (wrapped length: %zu, original length: %zu)",
+              message_id, wrapped_len, strlen(message));
     int rc = zmq_send(conn->socket, wrapped_message, wrapped_len, 0);
 
     if (rc >= 0) {
         LOG_INFO("ZMQ Client: Sent message %s (%zu bytes -> %d bytes sent, pending queue: %d/%d)",
                   message_id, wrapped_len, rc, conn->pending_queue.count + 1,
                   conn->pending_queue.max_pending);
+        LOG_DEBUG("ZMQ Client: Message content preview (first 500 chars): %.*s",
+                 (int)(wrapped_len > 500 ? 500 : wrapped_len), wrapped_message);
 
         // Add to pending queue
         int64_t sent_time = get_current_time_ms_client();
         if (add_to_pending_queue_client(conn, message_id, wrapped_message, sent_time) == 0) {
             LOG_DEBUG("ZMQ Client: Message %s added to pending queue at time %lld ms",
                      message_id, (long long)sent_time);
+            LOG_DEBUG("ZMQ Client: Pending queue now has %d messages", conn->pending_queue.count);
+            log_pending_queue_state_client(conn, "after_add");
+            
             // Return message ID to caller if requested
             if (message_id_out && message_id_out_size >= ZMQ_CLIENT_MESSAGE_ID_HEX_LENGTH) {
                 strlcpy(message_id_out, message_id, message_id_out_size);
@@ -535,14 +639,18 @@ int zmq_client_process_ack(ZMQClientConnectionState *conn, const char *message_i
 
     LOG_DEBUG("ZMQ Client: Processing ACK for message %s (pending queue size: %d)",
               message_id, conn->pending_queue.count);
+    
+    log_pending_queue_state_client(conn, "before_ack");
 
     int result = remove_from_pending_queue_client(conn, message_id);
     if (result == 0) {
         LOG_INFO("ZMQ Client: Successfully processed ACK for message %s (pending queue size: %d)",
                  message_id, conn->pending_queue.count);
+        log_pending_queue_state_client(conn, "after_ack");
     } else {
         LOG_WARN("ZMQ Client: Failed to process ACK for message %s (not found in pending queue)",
                  message_id);
+        log_pending_queue_state_client(conn, "after_failed_ack");
     }
 
     return result;
@@ -557,15 +665,25 @@ int zmq_client_check_and_resend_pending(ZMQClientConnectionState *conn, int64_t 
     }
 
     if (!conn->pending_queue.head) {
+        LOG_DEBUG("ZMQ Client: No pending messages to check");
         return 0; // No pending messages
     }
 
+    LOG_DEBUG("ZMQ Client: Checking pending messages (count: %d, current time: %lld)",
+              conn->pending_queue.count, (long long)current_time_ms);
+    log_pending_queue_state_client(conn, "before_resend_check");
+    
     int resent_count = 0;
     ZMQClientPendingMessage *curr = conn->pending_queue.head;
     ZMQClientPendingMessage *prev = NULL;
+    int checked_count = 0;
 
     while (curr) {
+        checked_count++;
         int64_t elapsed = current_time_ms - curr->sent_time_ms;
+        LOG_DEBUG("ZMQ Client: Checking message %s (elapsed: %lld ms, timeout: %lld ms, retries: %d/%d)",
+                  curr->message_id, (long long)elapsed, (long long)conn->pending_queue.timeout_ms,
+                  curr->retry_count, conn->pending_queue.max_retries);
 
         if (elapsed >= conn->pending_queue.timeout_ms) {
             // Timeout exceeded, check retry count
@@ -589,6 +707,8 @@ int zmq_client_check_and_resend_pending(ZMQClientConnectionState *conn, int64_t 
 
                 conn->pending_queue.count--;
                 free_pending_message_client(to_delete);
+                LOG_DEBUG("ZMQ Client: Dropped message %s from pending queue (new count: %d)",
+                          to_delete->message_id, conn->pending_queue.count);
                 continue;
             }
 
@@ -596,15 +716,21 @@ int zmq_client_check_and_resend_pending(ZMQClientConnectionState *conn, int64_t 
             curr->retry_count++;
             curr->sent_time_ms = current_time_ms;
 
+            LOG_INFO("ZMQ Client: Resending message %s (attempt %d/%d, elapsed: %lld ms)",
+                    curr->message_id, curr->retry_count, conn->pending_queue.max_retries,
+                    (long long)elapsed);
+            
             int rc = zmq_send(conn->socket, curr->message_json,
                              strlen(curr->message_json), 0);
 
             if (rc >= 0) {
-                LOG_INFO("ZMQ Client: Resent message %s (attempt %d/%d)",
-                        curr->message_id, curr->retry_count, conn->pending_queue.max_retries);
+                LOG_INFO("ZMQ Client: Resent message %s (attempt %d/%d, %d bytes)",
+                        curr->message_id, curr->retry_count, conn->pending_queue.max_retries, rc);
                 resent_count++;
             } else {
-                LOG_ERROR("ZMQ Client: Failed to resend message %s", curr->message_id);
+                int err = errno;
+                LOG_ERROR("ZMQ Client: Failed to resend message %s: %s",
+                         curr->message_id, zmq_strerror(err));
             }
         }
 
@@ -612,6 +738,10 @@ int zmq_client_check_and_resend_pending(ZMQClientConnectionState *conn, int64_t 
         curr = curr->next;
     }
 
+    LOG_DEBUG("ZMQ Client: Checked %d pending messages, resent %d", checked_count, resent_count);
+    if (resent_count > 0) {
+        log_pending_queue_state_client(conn, "after_resend");
+    }
     return resent_count;
 }
 
@@ -679,7 +809,8 @@ int zmq_client_receive_message(ZMQClientConnectionState *conn, char *buffer, siz
         if (errno == EAGAIN) {
             LOG_DEBUG("ZMQ Client: Receive timeout after %d ms (no message available)", timeout_ms);
         } else {
-            LOG_ERROR("ZMQ Client: Error receiving message: %s", zmq_strerror(errno));
+            int err = errno;
+            LOG_ERROR("ZMQ Client: Error receiving message: %s", zmq_strerror(err));
         }
         return -1;
     }
@@ -687,12 +818,12 @@ int zmq_client_receive_message(ZMQClientConnectionState *conn, char *buffer, siz
     buffer[rc] = '\0';
     LOG_INFO("ZMQ Client: Received %d bytes from %s", rc, conn->endpoint);
 
-    // Log message preview (first 200 chars)
+    // Log message preview (first 500 chars)
     if (rc > 0) {
-        int preview_len = rc > 200 ? 200 : rc;
+        int preview_len = rc > 500 ? 500 : rc;
         LOG_DEBUG("ZMQ Client: Message preview: %.*s%s",
                  preview_len, buffer,
-                 rc > 200 ? "..." : "");
+                 rc > 500 ? "..." : "");
     }
 
     return rc;
@@ -705,14 +836,14 @@ void zmq_client_process_message(ZMQClientConnectionState *conn, const char *resp
     }
 
     size_t response_len = strlen(response);
-    LOG_DEBUG("ZMQ Client: Processing message (length: %zu)", response_len);
+    LOG_INFO("ZMQ Client: Processing message (length: %zu)", response_len);
 
     // Log raw response preview
     if (response_len > 0) {
-        int preview_len = (int)(response_len > 200 ? 200 : response_len);
+        int preview_len = (int)(response_len > 500 ? 500 : response_len);
         LOG_DEBUG("ZMQ Client: Raw message preview: %.*s%s",
                  preview_len, response,
-                 response_len > 200 ? "..." : "");
+                 response_len > 500 ? "..." : "");
     }
 
     cJSON *json = cJSON_Parse(response);
@@ -751,8 +882,21 @@ void zmq_client_process_message(ZMQClientConnectionState *conn, const char *resp
     if (strcmp(msg_type, "ACK") == 0) {
         if (msg_id) {
             LOG_INFO("ZMQ Client: Received ACK for message %s", msg_id);
+            
+            // Check for duplicate ACK
+            if (conn && is_duplicate_message_client(conn, msg_id)) {
+                LOG_WARN("ZMQ Client: Duplicate ACK received for message %s, ignoring", msg_id);
+                cJSON_Delete(json);
+                return;
+            }
+            
             if (conn) {
+                LOG_DEBUG("ZMQ Client: Calling zmq_client_process_ack for message %s", msg_id);
                 zmq_client_process_ack(conn, msg_id);
+                // Mark this ACK as seen
+                add_seen_message_client(conn, msg_id);
+            } else {
+                LOG_WARN("ZMQ Client: No connection available to process ACK for message %s", msg_id);
             }
         } else {
             LOG_WARN("ZMQ Client: ACK message missing messageId");
@@ -763,8 +907,20 @@ void zmq_client_process_message(ZMQClientConnectionState *conn, const char *resp
 
     // Send ACK for all non-ACK messages that have a message ID
     if (conn && msg_id) {
-        LOG_DEBUG("ZMQ Client: Sending ACK for message %s", msg_id);
+        // Check for duplicate message
+        if (is_duplicate_message_client(conn, msg_id)) {
+            LOG_WARN("ZMQ Client: Duplicate message detected! ID=%s, type=%s, ignoring", msg_id, msg_type);
+            // Still send ACK for duplicate to prevent retries
+            LOG_INFO("ZMQ Client: Sending ACK for duplicate message %s", msg_id);
+            zmq_client_send_ack(conn, msg_id);
+            cJSON_Delete(json);
+            return;
+        }
+        
+        LOG_INFO("ZMQ Client: Sending ACK for message %s (type: %s)", msg_id, msg_type);
         zmq_client_send_ack(conn, msg_id);
+        // Mark this message as seen
+        add_seen_message_client(conn, msg_id);
     } else {
         LOG_DEBUG("ZMQ Client: No message ID to ACK or no connection available");
     }
