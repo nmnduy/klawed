@@ -518,9 +518,15 @@ int zmq_client_mode(const char *endpoint) {
     
     // Interactive loop
     char input[ZMQ_CLIENT_BUFFER_SIZE];
+    bool prompt_printed = false;
+    
     while (zmq_client_is_running(ctx)) {
-        printf("\n> ");
-        fflush(stdout);
+        // Only print prompt if we haven't already printed one
+        if (!prompt_printed) {
+            printf("\n> ");
+            fflush(stdout);
+            prompt_printed = true;
+        }
         
         int input_result = zmq_client_check_user_input(input, sizeof(input), USER_INPUT_CHECK_TIMEOUT_MS);
         if (input_result < 0) {
@@ -532,6 +538,9 @@ int zmq_client_mode(const char *endpoint) {
             zmq_client_check_and_resend_pending(ctx, current_time);
             continue;
         }
+        
+        // Got input - reset prompt flag for next iteration
+        prompt_printed = false;
         
         // Skip empty input
         if (strlen(input) == 0) {
