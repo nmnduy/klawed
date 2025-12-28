@@ -46,7 +46,7 @@
 
 #ifdef HAVE_ZMQ
 #include "zmq_socket.h"
-#include "zmq_client.h"
+#include "zmq_client_threaded.h"
 #include <zmq.h>
 #endif
 
@@ -7988,8 +7988,8 @@ int main(int argc, char *argv[]) {
     }
 #ifdef HAVE_ZMQ
     else if (zmq_client_mode_flag) {
-        // ZMQ client mode
-        return zmq_client_mode(zmq_client_endpoint);
+        // ZMQ client mode (threaded version)
+        return zmq_client_threaded_mode(zmq_client_endpoint);
     }
     else if (zmq_daemon_mode) {
         // ZMQ daemon mode

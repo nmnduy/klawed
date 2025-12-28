@@ -214,8 +214,17 @@ VOICE_INPUT_SRC = src/voice_input.c
 VOICE_INPUT_OBJ = $(BUILD_DIR)/voice_input.o
 ZMQ_SOCKET_SRC = src/zmq_socket.c
 ZMQ_SOCKET_OBJ = $(BUILD_DIR)/zmq_socket.o
-ZMQ_CLIENT_SRC = src/zmq_client.c
-ZMQ_CLIENT_OBJ = $(BUILD_DIR)/zmq_client.o
+ZMQ_CLIENT_SRC = src/zmq_client_threaded.c
+ZMQ_CLIENT_OBJ = $(BUILD_DIR)/zmq_client_threaded.o
+ZMQ_MESSAGE_QUEUE_SRC = src/zmq_message_queue.c
+ZMQ_MESSAGE_QUEUE_OBJ = $(BUILD_DIR)/zmq_message_queue.o
+ZMQ_DAEMON_SRC = src/zmq_daemon.c
+ZMQ_DAEMON_OBJ = $(BUILD_DIR)/zmq_daemon.o
+ZMQ_THREAD_POOL_SRC = src/zmq_thread_pool.c
+ZMQ_THREAD_POOL_OBJ = $(BUILD_DIR)/zmq_thread_pool.o
+# ZMQ_CLIENT_THREADED_SRC and ZMQ_CLIENT_THREADED_OBJ are now consolidated into ZMQ_CLIENT_SRC and ZMQ_CLIENT_OBJ
+# ZMQ_CLIENT_THREADED_SRC = src/zmq_client_threaded.c
+# ZMQ_CLIENT_THREADED_OBJ = $(BUILD_DIR)/zmq_client_threaded.o
 SQLITE_QUEUE_SRC = src/sqlite_queue.c
 SQLITE_QUEUE_OBJ = $(BUILD_DIR)/sqlite_queue.o
 
@@ -505,9 +514,9 @@ test-sqlite-queue: check-deps $(TEST_SQLITE_QUEUE_TARGET)
 
 # Socket test removed - will be reimplemented with ZMQ
 
-$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
+$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(VERSION_H)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Build successful!"
 	@echo "Version: $(VERSION)"
@@ -534,14 +543,34 @@ $(BUILD_DIR)/retry_logic.o: src/retry_logic.c src/retry_logic.h
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/retry_logic.o src/retry_logic.c
 
 # Build ZMQ socket object
-$(BUILD_DIR)/zmq_socket.o: $(ZMQ_SOCKET_SRC) src/zmq_socket.h
+$(BUILD_DIR)/zmq_socket.o: $(ZMQ_SOCKET_SRC) src/zmq_socket.h src/zmq_thread_pool.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_socket.o $(ZMQ_SOCKET_SRC)
 
-# Build ZMQ client object
-$(BUILD_DIR)/zmq_client.o: $(ZMQ_CLIENT_SRC) src/zmq_client.h
+# Build ZMQ thread pool object
+$(BUILD_DIR)/zmq_thread_pool.o: $(ZMQ_THREAD_POOL_SRC) src/zmq_thread_pool.h
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_client.o $(ZMQ_CLIENT_SRC)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_thread_pool.o $(ZMQ_THREAD_POOL_SRC)
+
+# Build ZMQ client object (threaded version)
+$(BUILD_DIR)/zmq_client_threaded.o: $(ZMQ_CLIENT_SRC) src/zmq_client_threaded.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_client_threaded.o $(ZMQ_CLIENT_SRC)
+
+# Build ZMQ message queue object
+$(BUILD_DIR)/zmq_message_queue.o: $(ZMQ_MESSAGE_QUEUE_SRC) src/zmq_message_queue.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_message_queue.o $(ZMQ_MESSAGE_QUEUE_SRC)
+
+# Build ZMQ daemon object
+$(BUILD_DIR)/zmq_daemon.o: $(ZMQ_DAEMON_SRC) src/zmq_daemon.h src/zmq_message_queue.h src/zmq_socket.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_daemon.o $(ZMQ_DAEMON_SRC)
+
+# Build ZMQ client threaded object - rule is already defined above using ZMQ_CLIENT_SRC
+# $(BUILD_DIR)/zmq_client_threaded.o: $(ZMQ_CLIENT_THREADED_SRC) src/zmq_client_threaded.h src/zmq_message_queue.h src/zmq_socket.h
+#	@mkdir -p $(BUILD_DIR)
+#	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_client_threaded.o $(ZMQ_CLIENT_THREADED_SRC)
 
 # Build SQLite queue object
 $(BUILD_DIR)/sqlite_queue.o: $(SQLITE_QUEUE_SRC) src/sqlite_queue.h
@@ -596,7 +625,7 @@ $(VERSION_H): $(VERSION_FILE)
 	@echo "✓ Version: $(VERSION)"
 
 # Debug build with AddressSanitizer for finding memory bugs
-$(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) $(COMMANDS_SRC) $(COMPLETION_SRC) $(TUI_SRC) $(TODO_SRC) $(AWS_BEDROCK_SRC) $(PROVIDER_SRC) $(OPENAI_PROVIDER_SRC) $(OPENAI_MESSAGES_SRC) $(BEDROCK_PROVIDER_SRC) $(ANTHROPIC_PROVIDER_SRC) $(BUILTIN_THEMES_SRC) $(PATCH_PARSER_SRC) $(MESSAGE_QUEUE_SRC) $(AI_WORKER_SRC) $(VOICE_INPUT_SRC) $(ZMQ_SOCKET_SRC) $(ZMQ_CLIENT_SRC) $(SQLITE_QUEUE_SRC) $(MCP_SRC) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_SRC) $(RETRY_LOGIC_SRC)
+$(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_SRC) $(COMMANDS_SRC) $(COMPLETION_SRC) $(TUI_SRC) $(TODO_SRC) $(AWS_BEDROCK_SRC) $(PROVIDER_SRC) $(OPENAI_PROVIDER_SRC) $(OPENAI_MESSAGES_SRC) $(BEDROCK_PROVIDER_SRC) $(ANTHROPIC_PROVIDER_SRC) $(BUILTIN_THEMES_SRC) $(PATCH_PARSER_SRC) $(MESSAGE_QUEUE_SRC) $(AI_WORKER_SRC) $(VOICE_INPUT_SRC) $(ZMQ_SOCKET_SRC) $(ZMQ_CLIENT_SRC) $(ZMQ_MESSAGE_QUEUE_SRC) $(ZMQ_DAEMON_SRC) $(ZMQ_CLIENT_THREADED_SRC) $(SQLITE_QUEUE_SRC) $(MCP_SRC) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_SRC) $(RETRY_LOGIC_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building with AddressSanitizer (debug mode)..."
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/logger_debug.o $(LOGGER_SRC)
@@ -620,8 +649,11 @@ $(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/http_client_debug.o $(HTTP_CLIENT_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/retry_logic_debug.o $(RETRY_LOGIC_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_socket_debug.o $(ZMQ_SOCKET_SRC)
+	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_message_queue_debug.o $(ZMQ_MESSAGE_QUEUE_SRC)
+	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_daemon_debug.o $(ZMQ_DAEMON_SRC)
+	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_client_threaded_debug.o $(ZMQ_CLIENT_THREADED_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/sqlite_queue_debug.o $(SQLITE_QUEUE_SRC)
-	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/http_client_debug.o $(BUILD_DIR)/retry_logic_debug.o $(BUILD_DIR)/zmq_socket_debug.o $(BUILD_DIR)/sqlite_queue_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
+	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/http_client_debug.o $(BUILD_DIR)/retry_logic_debug.o $(BUILD_DIR)/zmq_socket_debug.o $(BUILD_DIR)/zmq_message_queue_debug.o $(BUILD_DIR)/zmq_daemon_debug.o $(BUILD_DIR)/zmq_client_threaded_debug.o $(BUILD_DIR)/sqlite_queue_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
 	@echo ""
 	@echo "✓ Debug build successful with AddressSanitizer!"
 	@echo "Run: ./$(BUILD_DIR)/klawed-debug \"your prompt here\""
@@ -634,10 +666,10 @@ $(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_
 	@echo ""
 
 # Build with clang compiler
-$(BUILD_DIR)/klawed-clang: $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(AI_WORKER_OBJ) $(MESSAGE_QUEUE_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
+$(BUILD_DIR)/klawed-clang: $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(AI_WORKER_OBJ) $(MESSAGE_QUEUE_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building with clang compiler..."
-	$(CLANG) $(CFLAGS) -o $(BUILD_DIR)/klawed-clang $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
+	$(CLANG) $(CFLAGS) -o $(BUILD_DIR)/klawed-clang $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Clang build successful!"
 	@echo "Version: $(VERSION)"

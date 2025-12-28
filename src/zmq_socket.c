@@ -11,6 +11,7 @@
  */
 
 #include "zmq_socket.h"
+#include "zmq_thread_pool.h"
 #include "logger.h"
 #include "klawed_internal.h"
 #include <stdlib.h>
@@ -241,10 +242,6 @@ static int remove_from_pending_queue(ZMQContext *ctx, const char *message_id) {
 #ifdef HAVE_ZMQ
 static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *state, const char *user_input);
 static int zmq_send_json_response(ZMQContext *ctx, const char *message_type, const char *content);
-static int zmq_send_tool_result(ZMQContext *ctx, const char *tool_name, const char *tool_id,
-                                cJSON *tool_output, int is_error);
-static int zmq_send_tool_request(ZMQContext *ctx, const char *tool_name, const char *tool_id,
-                                 cJSON *tool_parameters);
 static int is_duplicate_message(ZMQContext *ctx, const char *message_id);
 static void add_seen_message(ZMQContext *ctx, const char *message_id);
 static void log_pending_queue_state(ZMQContext *ctx, const char *context);
@@ -366,6 +363,25 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     // Initialize duplicate detection
     ctx->seen_message_count = 0;
     memset(ctx->seen_messages, 0, sizeof(ctx->seen_messages));
+    
+    // Initialize thread pool for asynchronous tool execution
+    ctx->thread_pool = NULL;
+    ctx->use_thread_pool = false;
+    
+    // Check if thread pool should be enabled (default: enabled for daemon mode)
+    const char *disable_thread_pool = getenv("KLAWED_ZMQ_DISABLE_THREAD_POOL");
+    if (!disable_thread_pool || strcmp(disable_thread_pool, "1") != 0) {
+        // Create thread pool with reasonable defaults
+        ctx->thread_pool = zmq_thread_pool_init(4, 50); // 4 threads, max 50 queued tasks
+        if (ctx->thread_pool) {
+            ctx->use_thread_pool = true;
+            LOG_INFO("ZMQ: Thread pool initialized for asynchronous tool execution");
+        } else {
+            LOG_WARN("ZMQ: Failed to initialize thread pool, tool execution will be synchronous");
+        }
+    } else {
+        LOG_INFO("ZMQ: Thread pool disabled by environment variable");
+    }
 
     LOG_INFO("ZMQ: Message ID/ACK system initialized (salt: 0x%08x)", ctx->salt);
 
@@ -416,6 +432,12 @@ void zmq_socket_cleanup(ZMQContext *ctx) {
     if (ctx->endpoint) {
         free(ctx->endpoint);
         ctx->endpoint = NULL;
+    }
+    
+    // Clean up thread pool
+    if (ctx->thread_pool) {
+        zmq_thread_pool_cleanup(ctx->thread_pool);
+        ctx->thread_pool = NULL;
     }
 
     free(ctx);
@@ -1261,8 +1283,8 @@ static int zmq_send_json_response(ZMQContext *ctx, const char *message_type, con
 }
 
 // Helper function to send a tool result response with message ID for reliable delivery
-static int zmq_send_tool_result(ZMQContext *ctx, const char *tool_name, const char *tool_id,
-                                cJSON *tool_output, int is_error) {
+int zmq_send_tool_result(ZMQContext *ctx, const char *tool_name, const char *tool_id,
+                         cJSON *tool_output, int is_error) {
 #ifdef HAVE_ZMQ
     if (!ctx || !tool_name || !tool_id) {
         LOG_ERROR("ZMQ: Invalid parameters for send_tool_result");
@@ -1321,8 +1343,8 @@ static int zmq_send_tool_result(ZMQContext *ctx, const char *tool_name, const ch
 }
 
 // Helper function to send a tool execution request with message ID for reliable delivery
-static int zmq_send_tool_request(ZMQContext *ctx, const char *tool_name, const char *tool_id,
-                                 cJSON *tool_parameters) {
+int zmq_send_tool_request(ZMQContext *ctx, const char *tool_name, const char *tool_id,
+                          cJSON *tool_parameters) {
 #ifdef HAVE_ZMQ
     if (!ctx || !tool_name || !tool_id) {
         LOG_ERROR("ZMQ: Invalid parameters for send_tool_request");
@@ -1512,25 +1534,82 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                     ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
                     : cJSON_CreateObject();
 
-                // Send TOOL request message before execution
-                zmq_send_tool_request(ctx, tool->name, tool->id, input);
-
-                // Execute tool synchronously
-                cJSON *tool_result = execute_tool(tool->name, input, state);
-
-                // Send tool result response
-                zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
-
-                // Store tool result
-                results[i].type = INTERNAL_TOOL_RESPONSE;
-                results[i].tool_id = strdup(tool->id);
-                results[i].tool_name = strdup(tool->name);
-                results[i].tool_output = tool_result ? cJSON_Duplicate(tool_result, 1) : cJSON_CreateObject();
-                results[i].is_error = 0;
-
-                // Clean up
-                if (input) cJSON_Delete(input);
-                if (tool_result) cJSON_Delete(tool_result);
+                // Check if we should use thread pool for asynchronous execution
+                if (ctx->use_thread_pool && ctx->thread_pool) {
+                    // Submit task to thread pool for asynchronous execution
+                    LOG_INFO("ZMQ: Submitting tool '%s' (id: %s) to thread pool for asynchronous execution",
+                             tool->name, tool->id);
+                    
+                    int submit_result = zmq_thread_pool_submit_task(ctx->thread_pool,
+                                                                    tool->name,
+                                                                    tool->id,
+                                                                    input,
+                                                                    state,
+                                                                    ctx);
+                    
+                    if (submit_result == 0) {
+                        // Task successfully submitted to thread pool
+                        // We don't execute it synchronously, so we need to create a placeholder result
+                        // The actual tool result will be sent by the worker thread
+                        results[i].type = INTERNAL_TOOL_RESPONSE;
+                        results[i].tool_id = strdup(tool->id);
+                        results[i].tool_name = strdup(tool->name);
+                        results[i].tool_output = cJSON_CreateObject();
+                        cJSON_AddStringToObject(results[i].tool_output, "status", "queued");
+                        cJSON_AddStringToObject(results[i].tool_output, "message", "Tool execution queued for asynchronous processing");
+                        results[i].is_error = 0;
+                        
+                        // Note: input is now owned by the thread pool task, don't delete it here
+                    } else {
+                        // Thread pool submission failed, fall back to synchronous execution
+                        LOG_WARN("ZMQ: Thread pool submission failed for tool '%s', falling back to synchronous execution",
+                                 tool->name);
+                        
+                        // Send TOOL request message before execution
+                        zmq_send_tool_request(ctx, tool->name, tool->id, input);
+                        
+                        // Execute tool synchronously
+                        cJSON *tool_result = execute_tool(tool->name, input, state);
+                        
+                        // Send tool result response
+                        zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
+                        
+                        // Store tool result
+                        results[i].type = INTERNAL_TOOL_RESPONSE;
+                        results[i].tool_id = strdup(tool->id);
+                        results[i].tool_name = strdup(tool->name);
+                        results[i].tool_output = tool_result ? cJSON_Duplicate(tool_result, 1) : cJSON_CreateObject();
+                        results[i].is_error = 0;
+                        
+                        // Clean up
+                        if (tool_result) cJSON_Delete(tool_result);
+                        if (input) cJSON_Delete(input);
+                    }
+                } else {
+                    // Thread pool not available, execute synchronously
+                    LOG_DEBUG("ZMQ: Executing tool '%s' synchronously (thread pool not available)",
+                             tool->name);
+                    
+                    // Send TOOL request message before execution
+                    zmq_send_tool_request(ctx, tool->name, tool->id, input);
+                    
+                    // Execute tool synchronously
+                    cJSON *tool_result = execute_tool(tool->name, input, state);
+                    
+                    // Send tool result response
+                    zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
+                    
+                    // Store tool result
+                    results[i].type = INTERNAL_TOOL_RESPONSE;
+                    results[i].tool_id = strdup(tool->id);
+                    results[i].tool_name = strdup(tool->name);
+                    results[i].tool_output = tool_result ? cJSON_Duplicate(tool_result, 1) : cJSON_CreateObject();
+                    results[i].is_error = 0;
+                    
+                    // Clean up
+                    if (tool_result) cJSON_Delete(tool_result);
+                    if (input) cJSON_Delete(input);
+                }
             }
 
             // Add tool results to conversation

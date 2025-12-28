@@ -19,6 +19,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <cjson/cJSON.h>
 
 // Error codes
 typedef enum {
@@ -60,6 +61,9 @@ typedef struct {
     int64_t timestamp_ms;       // When this message was seen
 } ZMQSeenMessage;
 
+// Forward declaration for thread pool
+struct ZMQThreadPool;
+
 // Simple ZMQ socket context
 typedef struct ZMQContext {
     void *context;      // ZMQ context
@@ -76,6 +80,10 @@ typedef struct ZMQContext {
     // Duplicate message detection
     ZMQSeenMessage seen_messages[1000];  // Circular buffer of recently seen message IDs
     int seen_message_count;               // Number of messages in the seen list
+    
+    // Thread pool for asynchronous tool execution
+    struct ZMQThreadPool *thread_pool;    // Thread pool instance
+    bool use_thread_pool;                 // Whether to use thread pool for tool execution
 } ZMQContext;
 
 /**
@@ -203,5 +211,28 @@ void zmq_cleanup_pending_queue(ZMQContext *ctx);
  * @return File descriptor on success, -1 on error
  */
 int zmq_socket_get_fd(ZMQContext *ctx);
+
+/**
+ * Send tool request message via ZMQ
+ * @param ctx ZMQ context
+ * @param tool_name Name of the tool
+ * @param tool_id Unique ID for the tool call
+ * @param tool_parameters Tool parameters (JSON)
+ * @return 0 on success, ZMQErrorCode on failure
+ */
+int zmq_send_tool_request(ZMQContext *ctx, const char *tool_name, const char *tool_id,
+                          cJSON *tool_parameters);
+
+/**
+ * Send tool result message via ZMQ
+ * @param ctx ZMQ context
+ * @param tool_name Name of the tool
+ * @param tool_id Unique ID for the tool call
+ * @param tool_output Tool output (JSON)
+ * @param is_error Whether this is an error result
+ * @return 0 on success, ZMQErrorCode on failure
+ */
+int zmq_send_tool_result(ZMQContext *ctx, const char *tool_name, const char *tool_id,
+                         cJSON *tool_output, int is_error);
 
 #endif // ZMQ_SOCKET_H
