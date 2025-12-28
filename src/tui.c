@@ -825,7 +825,7 @@ struct TUIInputBuffer {
 
 // Calculate how many visual lines are needed for the current buffer
 // Note: This assumes first line includes the prompt
-static int calculate_needed_lines(const char *buffer, int buffer_len, int available_width, int prompt_len) {
+static int calculate_needed_lines(const char *buffer, int buffer_len, int win_width, int prompt_len) {
     if (buffer_len == 0) return 1;
 
     int lines = 1;
@@ -839,9 +839,8 @@ static int calculate_needed_lines(const char *buffer, int buffer_len, int availa
             current_col = 0;  // Newlines don't have prompt
         } else {
             current_col++;
-            // First line has prompt, others don't
-            int line_width = (current_line == 0) ? available_width + prompt_len : available_width;
-            if (current_col >= line_width) {
+            // All lines have full window width
+            if (current_col >= win_width) {
                 lines++;
                 current_line++;
                 current_col = 0;
@@ -1188,14 +1187,14 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         return;
     }
 
-    int prompt_len = (int)strlen(prompt) + 1;  // +1 for space after prompt
+    int prompt_len = (int)strlen(prompt);  // prompt already includes space
 
     // Calculate available width for text (window width - prompt)
     int available_width = input->win_width - prompt_len;
     if (available_width < 10) available_width = 10;
 
     // Calculate how many lines we need to display all content
-    int needed_lines = calculate_needed_lines(input->buffer, input->length, available_width, prompt_len);
+    int needed_lines = calculate_needed_lines(input->buffer, input->length, input->win_width, prompt_len);
 
     // Request window resize (this will be a no-op if size hasn't changed)
     resize_input_window(tui, needed_lines);
@@ -1218,7 +1217,8 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             cursor_col = 0;
         } else {
             cursor_col++;
-            if (cursor_col >= available_width + prompt_len) {
+            int line_width = input->win_width;
+            if (cursor_col >= line_width) {
                 cursor_line++;
                 cursor_col = 0;
             }
@@ -1259,7 +1259,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             mvwprintw(win, 0, 0, "%s", tui->command_buffer);
         } else {
             // Show normal prompt
-            mvwprintw(win, 0, 0, "%s ", prompt);
+            mvwprintw(win, 0, 0, "%s", prompt);
         }
 
         if (has_colors()) {
@@ -1284,7 +1284,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
                 screen_x = 0;
             } else {
                 screen_x++;
-                if (screen_x >= available_width + ((current_line == 0) ? prompt_len : 0)) {
+                if (screen_x >= input->win_width) {
                     current_line++;
                     screen_x = 0;
                 }
@@ -1304,12 +1304,8 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             screen_x++;
 
             // Check if we need to wrap
-            int line_width = available_width;
-            if (current_line == input->line_scroll_offset && input->line_scroll_offset == 0) {
-                line_width += prompt_len;  // First line includes prompt
-            }
-
-            if (screen_x > line_width) {
+            int line_width = input->win_width;  // Full window width for all lines
+            if (screen_x >= line_width) {
                 screen_y++;
                 current_line++;
                 screen_x = 0;
@@ -1334,7 +1330,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             temp_col = 0;
         } else {
             temp_col++;
-            int line_width = available_width + ((temp_line == 0) ? prompt_len : 0);
+            int line_width = input->win_width;
             if (temp_col >= line_width) {
                 temp_line++;
                 temp_col = 0;
