@@ -71,6 +71,7 @@ int zmq_client_receive_message(ZMQClientConnectionState *conn, char *buffer, siz
 void zmq_client_process_message(ZMQClientConnectionState *conn, const char *response);
 void zmq_client_send_text_message(ZMQClientConnectionState *conn, const char *text);
 int zmq_client_mode(const char *endpoint);
+int zmq_client_check_user_input(char *buffer, size_t buffer_size, int timeout_ms);
 
 // Reliability functions
 int zmq_client_send_message_with_id(ZMQClientConnectionState *conn, const char *message,
