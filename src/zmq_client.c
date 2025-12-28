@@ -891,7 +891,6 @@ static void* receiver_thread_func(void *arg) {
             ctx->messages_received++;
             
             LOG_DEBUG("ZMQ Client Threaded: Received %d bytes: %s", bytes, buffer);
-            printf("ZMQ Client: Received %d bytes from daemon\n", bytes);
             fflush(stdout);
             
             // Process the message
