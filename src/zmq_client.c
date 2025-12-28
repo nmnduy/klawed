@@ -16,7 +16,6 @@
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
-#include <sys/select.h>
 #include <sys/time.h>
 #include <bsd/string.h>
 
@@ -156,7 +155,6 @@ void zmq_client_print_usage(const char *program_name) {
 
 int zmq_client_initialize_connection(ZMQClientConnectionState *conn, const char *endpoint) {
     if (!conn || !endpoint) {
-        LOG_ERROR("ZMQ Client: Invalid parameters (conn=%p, endpoint=%p)", (void*)conn, (const void*)endpoint);
         return 0;
     }
 
@@ -991,48 +989,10 @@ void zmq_client_process_message(ZMQClientConnectionState *conn, const char *resp
 
     cJSON_Delete(json);
 }
-int zmq_client_check_user_input(char *buffer, size_t buffer_size, int timeout_ms) {
-    fd_set readfds;
-    struct timeval tv;
-    int retval;
-
-    // Set timeout
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
-
-    // Watch stdin (file descriptor 0) to see when it has input
-    FD_ZERO(&readfds);
-    FD_SET(0, &readfds);
-
-    // Wait for input with timeout
-    retval = select(1, &readfds, NULL, NULL, &tv);
-
-    if (retval == -1) {
-        LOG_ERROR("select() error: %s", strerror(errno));
-        return -1;
-    } else if (retval == 0) {
-        // Timeout occurred
-        return 0;
-    } else {
-        // Data is available on stdin
-        if (FD_ISSET(0, &readfds)) {
-            if (fgets(buffer, (int)buffer_size, stdin)) {
-                // Remove newline
-                buffer[strcspn(buffer, "\n")] = '\0';
-                return 1;
-            } else {
-                // EOF or error
-                return -1;
-            }
-        }
-    }
-
-    return 0;
-}
 
 void zmq_client_send_text_message(ZMQClientConnectionState *conn, const char *text) {
     if (!conn || !text) {
-        LOG_ERROR("Invalid parameters");
+        LOG_ERROR("ZMQ Client: Invalid parameters");
         return;
     }
 
@@ -1041,81 +1001,12 @@ void zmq_client_send_text_message(ZMQClientConnectionState *conn, const char *te
     cJSON_AddStringToObject(message, "content", text);
 
     char *json_str = cJSON_PrintUnformatted(message);
-    LOG_DEBUG("Message JSON: %s", json_str);
+    LOG_DEBUG("ZMQ Client: Message JSON: %s", json_str);
 
     // Send the message with ID for reliable delivery
     int rc = zmq_client_send_message_with_id(conn, json_str, NULL, 0);
     if (rc < 0) {
-        LOG_ERROR("Failed to send message with ID");
-        free(json_str);
-        cJSON_Delete(message);
-        return;
-    }
-
-    // Receive and process responses using time-sharing
-    const int ZMQ_POLL_TIMEOUT_MS = 500;
-    const int USER_INPUT_CHECK_TIMEOUT_MS = 100;
-    const int RESEND_CHECK_INTERVAL_MS = 1000;
-
-    int message_count = 0;
-    const int ZMQ_CLIENT_MAX_MESSAGES = 1000;
-    int in_conversation = 1;
-    int consecutive_timeouts = 0;
-    const int MAX_CONSECUTIVE_TIMEOUTS = 6;
-    int prompt_shown = 0;
-    int64_t last_resend_check = 0;
-
-    while (message_count < ZMQ_CLIENT_MAX_MESSAGES && in_conversation) {
-        int64_t current_time = get_current_time_ms_client();
-
-        // Periodically check and resend pending messages
-        if (current_time - last_resend_check >= RESEND_CHECK_INTERVAL_MS) {
-            int resent = zmq_client_check_and_resend_pending(conn, current_time);
-            if (resent > 0) {
-                LOG_INFO("ZMQ Client: Resent %d pending message(s)", resent);
-            }
-            last_resend_check = current_time;
-        }
-
-        char response[ZMQ_CLIENT_BUFFER_SIZE];
-        rc = zmq_client_receive_message(conn, response, sizeof(response), ZMQ_POLL_TIMEOUT_MS);
-
-        if (rc >= 0) {
-            message_count++;
-            consecutive_timeouts = 0;
-            zmq_client_process_message(conn, response);
-        } else if (errno == EAGAIN) {
-            consecutive_timeouts++;
-
-            if (consecutive_timeouts == 1 && !prompt_shown) {
-                printf("\n[Waiting for response... Type '/interrupt' to cancel or '/help' for commands]\n");
-                fflush(stdout);
-                prompt_shown = 1;
-            }
-
-            char user_input[ZMQ_CLIENT_BUFFER_SIZE];
-            int input_result = zmq_client_check_user_input(user_input, sizeof(user_input), USER_INPUT_CHECK_TIMEOUT_MS);
-
-            if (input_result == 1) {
-                prompt_shown = 0;
-
-                if (strcmp(user_input, "/interrupt") == 0 || strcmp(user_input, "/cancel") == 0) {
-                    printf("\n=== Conversation interrupted by user ===\n");
-                    break;
-                } else if (strcmp(user_input, "/help") == 0) {
-                    printf("\n=== Available commands during conversation ===\n");
-                    printf("/interrupt or /cancel - Stop current conversation and return to prompt\n");
-                    printf("/help - Show this help message\n");
-                }
-            }
-
-            if (consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS) {
-                break;
-            }
-        } else {
-            LOG_ERROR("Error receiving message: %s", zmq_strerror(errno));
-            break;
-        }
+        LOG_ERROR("ZMQ Client: Failed to send message with ID");
     }
 
     free(json_str);
@@ -1137,36 +1028,91 @@ int zmq_client_mode(const char *endpoint) {
     printf("Type your messages (or /help for commands)\n");
     printf("-----------------------------------------\n");
 
-    // Interactive loop
-    char input[ZMQ_CLIENT_BUFFER_SIZE];
-    while (1) {
-        printf("\n> ");
-        fflush(stdout);
+    // Set up zmq_poll items for stdin + ZMQ socket
+    zmq_pollitem_t items[2];
 
-        if (!fgets(input, sizeof(input), stdin)) {
+    // Item 0: stdin (file descriptor 0)
+    items[0].socket = NULL;
+    items[0].fd = 0;           // stdin
+    items[0].events = ZMQ_POLLIN;
+
+    // Item 1: ZMQ socket
+    items[1].socket = conn.socket;
+    items[1].fd = 0;
+    items[1].events = ZMQ_POLLIN;
+
+    int should_exit = 0;
+    int64_t last_resend_check = get_current_time_ms_client();
+    const int64_t RESEND_CHECK_INTERVAL_MS = 1000;
+
+    // Interactive loop using zmq_poll()
+    while (!should_exit) {
+        int64_t current_time = get_current_time_ms_client();
+
+        // Check and resend pending messages periodically
+        if (current_time - last_resend_check >= RESEND_CHECK_INTERVAL_MS) {
+            int resent = zmq_client_check_and_resend_pending(&conn, current_time);
+            if (resent > 0) {
+                LOG_DEBUG("ZMQ Client: Resent %d pending message(s)", resent);
+            }
+            last_resend_check = current_time;
+        }
+
+        // Poll both stdin and ZMQ socket with 100ms timeout
+        int rc = zmq_poll(items, 2, 100);
+
+        if (rc == -1) {
+            printf("Error: zmq_poll failed\n");
             break;
         }
 
-        // Remove newline
-        input[strcspn(input, "\n")] = '\0';
+        if (rc > 0) {
+            // Check for user input (stdin)
+            if (items[0].revents & ZMQ_POLLIN) {
+                printf("\n> ");
+                fflush(stdout);
 
-        // Skip empty input
-        if (strlen(input) == 0) {
-            continue;
-        }
+                char input[ZMQ_CLIENT_BUFFER_SIZE];
+                if (fgets(input, sizeof(input), stdin)) {
+                    // Remove newline
+                    input[strcspn(input, "\n")] = '\0';
 
-        // Check for commands
-        if (strcmp(input, "/quit") == 0 || strcmp(input, "/exit") == 0) {
-            printf("Goodbye!\n");
-            break;
-        } else if (strcmp(input, "/help") == 0) {
-            zmq_client_print_usage("klawed");
-        } else if (input[0] == '/') {
-            printf("Unknown command: %s\n", input);
-            printf("Type /help for available commands\n");
-        } else {
-            // Regular text message
-            zmq_client_send_text_message(&conn, input);
+                    // Skip empty input
+                    if (strlen(input) == 0) {
+                        continue;
+                    }
+
+                    // Check for commands
+                    if (strcmp(input, "/quit") == 0 || strcmp(input, "/exit") == 0) {
+                        printf("Goodbye!\n");
+                        should_exit = 1;
+                    } else if (strcmp(input, "/help") == 0) {
+                        zmq_client_print_usage("klawed");
+                    } else if (input[0] == '/') {
+                        printf("Unknown command: %s\n", input);
+                        printf("Type /help for available commands\n");
+                    } else {
+                        // Regular text message
+                        zmq_client_send_text_message(&conn, input);
+                    }
+                } else {
+                    // EOF or error on stdin
+                    should_exit = 1;
+                }
+            }
+
+            // Check for ZMQ messages from daemon
+            if (items[1].revents & ZMQ_POLLIN) {
+                char response[ZMQ_CLIENT_BUFFER_SIZE];
+                int received = zmq_recv(conn.socket, response, sizeof(response) - 1, ZMQ_DONTWAIT);
+
+                if (received > 0) {
+                    response[received] = '\0';
+                    zmq_client_process_message(&conn, response);
+                } else if (received == -1 && errno != EAGAIN) {
+                    LOG_ERROR("ZMQ Client: Error receiving message: %s", zmq_strerror(errno));
+                }
+            }
         }
     }
 
