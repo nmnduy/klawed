@@ -1440,6 +1440,7 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
 
         if (tool_count > 0) {
             LOG_INFO("ZMQ: Processing %d tool call(s)", tool_count);
+            LOG_DEBUG("ZMQ: Daemon mode tool execution - checking tool availability");
 
             // Allocate results array
             InternalContent *results = calloc((size_t)tool_count, sizeof(InternalContent));
@@ -1473,7 +1474,7 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
 
                 // Validate that the tool is in the allowed tools list
                 if (!is_tool_allowed(tool->name, state)) {
-                    LOG_ERROR("ZMQ: Tool validation failed: '%s' was not provided in tools list",
+                    LOG_ERROR("ZMQ: Tool validation failed: '%s' was not provided in tools list (cannot execute tool in daemon mode)",
                               tool->name);
                     results[i].type = INTERNAL_TOOL_RESPONSE;
                     results[i].tool_id = strdup(tool->id);
@@ -1557,6 +1558,20 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                     
                     // Execute tool synchronously
                     cJSON *tool_result = execute_tool(tool->name, input, state);
+                    
+                    // Log if tool execution failed
+                    if (!tool_result) {
+                        LOG_ERROR("ZMQ: Tool '%s' (id: %s) execution returned NULL", tool->name, tool->id);
+                        tool_result = cJSON_CreateObject();
+                        cJSON_AddStringToObject(tool_result, "error", "Tool execution failed (returned NULL)");
+                    } else {
+                        // Check if tool result contains an error
+                        cJSON *error_field = cJSON_GetObjectItem(tool_result, "error");
+                        if (error_field && cJSON_IsString(error_field)) {
+                            LOG_ERROR("ZMQ: Tool '%s' (id: %s) execution failed: %s", 
+                                     tool->name, tool->id, error_field->valuestring);
+                        }
+                    }
                     
                     // Send tool result response
                     zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
