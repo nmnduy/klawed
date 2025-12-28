@@ -321,11 +321,116 @@ void zmq_client_threaded_process_message(ZMQClientContextThreaded *ctx, const ch
                     // Send ACK
                     zmq_client_threaded_send_ack(ctx, id_str);
                     
-                    // Display the message content if it's a TEXT message
-                    cJSON *content = cJSON_GetObjectItem(json, "content");
-                    if (content && cJSON_IsString(content)) {
-                        printf("\n[Daemon]: %s\n", cJSON_GetStringValue(content));
-                        fflush(stdout);
+                    // Handle different message types
+                    if (strcmp(type_str, "TEXT") == 0) {
+                        // Display TEXT message
+                        cJSON *content = cJSON_GetObjectItem(json, "content");
+                        if (content && cJSON_IsString(content)) {
+                            printf("\n[Daemon]: %s\n", cJSON_GetStringValue(content));
+                            fflush(stdout);
+                        }
+                    } else if (strcmp(type_str, "TOOL") == 0) {
+                        // Display TOOL message (tool execution starting)
+                        cJSON *tool_name = cJSON_GetObjectItem(json, "toolName");
+                        cJSON *tool_id = cJSON_GetObjectItem(json, "toolId");
+                        cJSON *tool_parameters = cJSON_GetObjectItem(json, "toolParameters");
+                        
+                        if (tool_name && cJSON_IsString(tool_name)) {
+                            printf("\n[Tool]: Executing %s tool", cJSON_GetStringValue(tool_name));
+                            
+                            if (tool_id && cJSON_IsString(tool_id)) {
+                                printf(" (ID: %s)", cJSON_GetStringValue(tool_id));
+                            }
+                            
+                            if (tool_parameters && cJSON_IsObject(tool_parameters)) {
+                                // Print parameters in a readable format
+                                printf(" with parameters: ");
+                                cJSON *param = tool_parameters->child;
+                                int param_count = 0;
+                                while (param) {
+                                    if (param_count > 0) printf(", ");
+                                    printf("%s=", param->string);
+                                    if (cJSON_IsString(param)) {
+                                        printf("\"%s\"", cJSON_GetStringValue(param));
+                                    } else if (cJSON_IsNumber(param)) {
+                                        printf("%g", param->valuedouble);
+                                    } else if (cJSON_IsBool(param)) {
+                                        printf("%s", param->valueint ? "true" : "false");
+                                    } else if (cJSON_IsNull(param)) {
+                                        printf("null");
+                                    } else {
+                                        printf("[object]");
+                                    }
+                                    param = param->next;
+                                    param_count++;
+                                }
+                            }
+                            printf("\n");
+                            fflush(stdout);
+                        }
+                    } else if (strcmp(type_str, "TOOL_RESULT") == 0) {
+                        // Display TOOL_RESULT message (tool execution completed)
+                        cJSON *tool_name = cJSON_GetObjectItem(json, "toolName");
+                        cJSON *tool_id = cJSON_GetObjectItem(json, "toolId");
+                        cJSON *is_error = cJSON_GetObjectItem(json, "isError");
+                        cJSON *tool_output = cJSON_GetObjectItem(json, "toolOutput");
+                        
+                        if (tool_name && cJSON_IsString(tool_name)) {
+                            printf("\n[Tool Result]: %s tool ", cJSON_GetStringValue(tool_name));
+                            
+                            if (is_error && cJSON_IsBool(is_error) && is_error->valueint) {
+                                printf("failed");
+                            } else {
+                                printf("completed successfully");
+                            }
+                            
+                            if (tool_id && cJSON_IsString(tool_id)) {
+                                printf(" (ID: %s)", cJSON_GetStringValue(tool_id));
+                            }
+                            printf("\n");
+                            
+                            // Display tool output if available
+                            if (tool_output) {
+                                if (cJSON_IsObject(tool_output) || cJSON_IsArray(tool_output)) {
+                                    // For complex output, show a summary
+                                    char *output_str = cJSON_PrintUnformatted(tool_output);
+                                    if (output_str) {
+                                        size_t output_len = strlen(output_str);
+                                        if (output_len > 200) {
+                                            printf("Output (truncated): %.200s...\n", output_str);
+                                        } else {
+                                            printf("Output: %s\n", output_str);
+                                        }
+                                        free(output_str);
+                                    }
+                                } else if (cJSON_IsString(tool_output)) {
+                                    const char *output = cJSON_GetStringValue(tool_output);
+                                    size_t output_len = strlen(output);
+                                    if (output_len > 500) {
+                                        printf("Output (truncated): %.500s...\n", output);
+                                    } else {
+                                        printf("Output: %s\n", output);
+                                    }
+                                }
+                            }
+                            fflush(stdout);
+                        }
+                    } else if (strcmp(type_str, "ERROR") == 0) {
+                        // Display ERROR message
+                        cJSON *content = cJSON_GetObjectItem(json, "content");
+                        if (content && cJSON_IsString(content)) {
+                            printf("\n[Error]: %s\n", cJSON_GetStringValue(content));
+                            fflush(stdout);
+                        }
+                    } else if (strcmp(type_str, "NACK") == 0) {
+                        // Display NACK message
+                        cJSON *content = cJSON_GetObjectItem(json, "content");
+                        if (content && cJSON_IsString(content)) {
+                            printf("\n[NACK]: %s\n", cJSON_GetStringValue(content));
+                            fflush(stdout);
+                        }
+                    } else {
+                        LOG_DEBUG("ZMQ Client Threaded: Unknown message type: %s", type_str);
                     }
                 }
             }
@@ -333,11 +438,19 @@ void zmq_client_threaded_process_message(ZMQClientContextThreaded *ctx, const ch
     } else if (message_type) {
         // Message without ID (legacy or error)
         const char *type_str = cJSON_GetStringValue(message_type);
-        if (type_str && strcmp(type_str, "TEXT") == 0) {
-            cJSON *content = cJSON_GetObjectItem(json, "content");
-            if (content && cJSON_IsString(content)) {
-                printf("\n[Daemon]: %s\n", cJSON_GetStringValue(content));
-                fflush(stdout);
+        if (type_str) {
+            if (strcmp(type_str, "TEXT") == 0) {
+                cJSON *content = cJSON_GetObjectItem(json, "content");
+                if (content && cJSON_IsString(content)) {
+                    printf("\n[Daemon]: %s\n", cJSON_GetStringValue(content));
+                    fflush(stdout);
+                }
+            } else if (strcmp(type_str, "ERROR") == 0) {
+                cJSON *content = cJSON_GetObjectItem(json, "content");
+                if (content && cJSON_IsString(content)) {
+                    printf("\n[Error]: %s\n", cJSON_GetStringValue(content));
+                    fflush(stdout);
+                }
             }
         }
     }
