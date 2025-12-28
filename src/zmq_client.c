@@ -219,20 +219,17 @@ int zmq_client_process_ack(ZMQClientContextThreaded *ctx, const char *message_id
     }
     
     LOG_DEBUG("ZMQ Client Threaded: Processing ACK for message %s", message_id);
-    printf("ZMQ Client: Received ACK for message %s\n", message_id);
     fflush(stdout);
     
     // Remove from pending queue
     if (remove_from_pending_queue(ctx, message_id) == 0) {
         LOG_DEBUG("ZMQ Client Threaded: Message %s acknowledged and removed from pending queue", 
                  message_id);
-        printf("ZMQ Client: Message %s acknowledged and removed from pending queue\n", message_id);
         fflush(stdout);
         return 0;
     } else {
         LOG_DEBUG("ZMQ Client Threaded: Message %s not found in pending queue (may have timed out)", 
                  message_id);
-        printf("ZMQ Client: WARNING: Message %s not found in pending queue (may have timed out)\n", message_id);
         fflush(stdout);
         return -1;
     }
@@ -254,20 +251,17 @@ int zmq_client_send_ack(ZMQClientContextThreaded *ctx, const char *message_id) {
     
     char *json_str = cJSON_PrintUnformatted(ack);
     LOG_DEBUG("ZMQ Client Threaded: Sending ACK for message %s: %s", message_id, json_str);
-    printf("ZMQ Client: Sending ACK for message %s\n", message_id);
     fflush(stdout);
     
     int rc = zmq_send(ctx->zmq_socket, json_str, strlen(json_str), ZMQ_DONTWAIT);
     if (rc < 0) {
         LOG_ERROR("ZMQ Client Threaded: Failed to send ACK: %s", zmq_strerror(errno));
-        printf("ZMQ Client: ERROR: Failed to send ACK: %s\n", zmq_strerror(errno));
         fflush(stdout);
         free(json_str);
         cJSON_Delete(ack);
         return -1;
     }
     
-    printf("ZMQ Client: ACK sent successfully for message %s\n", message_id);
     fflush(stdout);
     
     free(json_str);
@@ -891,7 +885,6 @@ static void* receiver_thread_func(void *arg) {
             ctx->messages_received++;
             
             LOG_DEBUG("ZMQ Client Threaded: Received %d bytes: %s", bytes, buffer);
-            printf("ZMQ Client: Received %d bytes from daemon\n", bytes);
             fflush(stdout);
             
             // Process the message
