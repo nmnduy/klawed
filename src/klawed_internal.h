@@ -193,6 +193,7 @@ typedef struct ConversationState {
     char *api_key;
     char *api_url;
     char *model;
+    int max_tokens;           // Maximum tokens for completion (configurable via env var)
     char *working_dir;
     char **additional_dirs;         // Array of additional working directory paths
     int additional_dirs_count;      // Number of additional directories
