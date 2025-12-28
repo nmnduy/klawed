@@ -20,6 +20,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <cjson/cJSON.h>
+#include <pthread.h>
 
 // Error codes
 typedef enum {
@@ -83,7 +84,20 @@ typedef struct ZMQContext {
     
     // Thread pool for asynchronous tool execution
     struct ZMQThreadPool *thread_pool;    // Thread pool instance
-    bool use_thread_pool;                 // Whether to use thread pool for tool execution
+    
+    // Background ZMQ polling thread
+    pthread_t polling_thread;             // Thread for ZMQ message polling
+    bool polling_thread_running;          // Whether polling thread is running
+    bool should_exit;                     // Flag to signal polling thread to exit
+    
+    // Thread-safe queue for messages from polling thread to main thread
+    struct {
+        char **messages;                  // Array of message strings
+        int capacity;                     // Capacity of array
+        int count;                        // Number of messages in queue
+        pthread_mutex_t mutex;            // Mutex for thread safety
+        pthread_cond_t cond;              // Condition variable for waiting
+    } message_queue;
 } ZMQContext;
 
 /**
