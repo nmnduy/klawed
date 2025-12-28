@@ -1211,18 +1211,23 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
     // Calculate cursor line position
     int cursor_line = 0;
-    int cursor_col = prompt_len;
+    int cursor_col = 0;
     for (int i = 0; i < input->cursor; i++) {
         if (input->buffer[i] == '\n') {
             cursor_line++;
             cursor_col = 0;
         } else {
             cursor_col++;
-            if (cursor_col >= available_width + prompt_len) {
+            if (cursor_col >= available_width) {
                 cursor_line++;
                 cursor_col = 0;
             }
         }
+    }
+
+    // First line includes prompt offset
+    if (cursor_line == 0) {
+        cursor_col += prompt_len;
     }
 
     // Adjust vertical scroll to keep cursor visible
@@ -1274,7 +1279,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
     int current_line = 0;
     int screen_y = 0;
-    int screen_x = (current_line == 0) ? prompt_len : 0;
+    int screen_x = (input->line_scroll_offset == 0) ? prompt_len : 0;
 
     for (int i = 0; i < input->length && screen_y < input->win_height; i++) {
         // Skip lines before scroll offset
@@ -1284,7 +1289,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
                 screen_x = 0;
             } else {
                 screen_x++;
-                if (screen_x >= available_width + ((current_line == 0) ? prompt_len : 0)) {
+                if (screen_x >= available_width) {
                     current_line++;
                     screen_x = 0;
                 }
@@ -1304,12 +1309,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             screen_x++;
 
             // Check if we need to wrap
-            int line_width = available_width;
-            if (current_line == input->line_scroll_offset && input->line_scroll_offset == 0) {
-                line_width += prompt_len;  // First line includes prompt
-            }
-
-            if (screen_x > line_width) {
+            if (screen_x >= available_width) {
                 screen_y++;
                 current_line++;
                 screen_x = 0;
@@ -1323,25 +1323,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
     // Position cursor (adjusted for scroll)
     int cursor_screen_y = cursor_line - input->line_scroll_offset;
-    int cursor_screen_x = cursor_col;  // No border offset
-
-    // Recalculate cursor_col relative to its line
-    int temp_line = 0;
-    int temp_col = (temp_line == 0) ? prompt_len : 0;
-    for (int i = 0; i < input->cursor; i++) {
-        if (input->buffer[i] == '\n') {
-            temp_line++;
-            temp_col = 0;
-        } else {
-            temp_col++;
-            int line_width = available_width + ((temp_line == 0) ? prompt_len : 0);
-            if (temp_col >= line_width) {
-                temp_line++;
-                temp_col = 0;
-            }
-        }
-    }
-    cursor_screen_x = temp_col;
+    int cursor_screen_x = cursor_col;  // Already calculated with proper prompt offset
 
     // Bounds check for cursor position
     if (cursor_screen_y >= 0 && cursor_screen_y < input->win_height &&

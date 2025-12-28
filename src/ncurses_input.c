@@ -243,8 +243,9 @@ static void calculate_cursor_position(const char *buffer, int cursor_pos,
                                       int available_width, int prompt_len,
                                       int *out_line, int *out_col) {
     int line = 0;
-    int col = prompt_len;  // First line starts after prompt
+    int col = 0;
 
+    // Start at column 0; first line offset will be added after loop
     for (int i = 0; i < cursor_pos; i++) {
         if (buffer[i] == '\n') {
             line++;
@@ -256,6 +257,11 @@ static void calculate_cursor_position(const char *buffer, int cursor_pos,
                 col = 0;
             }
         }
+    }
+
+    // First line starts after prompt only if we're on line 0
+    if (line == 0) {
+        col += prompt_len;
     }
 
     *out_line = line;
@@ -306,18 +312,22 @@ static void redraw_input(NCursesInput *input, const char *prompt) {
         input->line_scroll_offset = cursor_line - available_height + 1;
     }
 
-    // Render visible lines
+    // Render visible lines and track cursor position
     int screen_line = 0;
     int current_line = 0;
-    int current_col = prompt_len;
-    int render_col = prompt_len;
+    int current_col = 0;
+
+    // Initial render column: include prompt offset only if first content line is visible
+    int render_col = (input->line_scroll_offset == 0) ? prompt_len : 0;
 
     // Draw prompt on first line
     if (input->line_scroll_offset == 0) {
         mvwprintw(input->window, 0, 0, "%s", prompt);
-    } else {
-        render_col = 0;
     }
+
+    // Track cursor position while rendering
+    int cursor_screen_line = -1;
+    int cursor_screen_col = 0;
 
     for (int i = 0; i < input->length && screen_line < available_height; i++) {
         // Skip lines before scroll offset
@@ -333,6 +343,12 @@ static void redraw_input(NCursesInput *input, const char *prompt) {
                 }
             }
             continue;
+        }
+
+        // Track cursor position
+        if (i == input->cursor) {
+            cursor_screen_line = screen_line;
+            cursor_screen_col = render_col;
         }
 
         // Render character
@@ -357,10 +373,15 @@ static void redraw_input(NCursesInput *input, const char *prompt) {
         }
     }
 
+    // Check cursor at end of buffer
+    if (input->cursor == input->length && cursor_screen_line == -1) {
+        cursor_screen_line = screen_line;
+        cursor_screen_col = render_col;
+    }
+
     // Position cursor
-    int cursor_screen_line = cursor_line - input->line_scroll_offset;
     if (cursor_screen_line >= 0 && cursor_screen_line < available_height) {
-        wmove(input->window, cursor_screen_line, cursor_col);
+        wmove(input->window, cursor_screen_line, cursor_screen_col);
     }
 
     wrefresh(input->window);
