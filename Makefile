@@ -119,6 +119,8 @@ ifeq ($(ZMQ),1)
     # Explicitly enable ZMQ
     CFLAGS += -DHAVE_ZMQ=1
     ZMQ_SOCKET_SRC = src/zmq_socket.c
+    ZMQ_CLIENT_SRC = src/zmq_client.c
+    ZMQ_DAEMON_SRC = src/zmq_daemon.c
     ZMQ_LIBS = -lzmq
     LDFLAGS += $(ZMQ_LIBS)
     DEBUG_LDFLAGS += $(ZMQ_LIBS)
@@ -126,6 +128,8 @@ else ifeq ($(ZMQ),0)
     # Explicitly disable ZMQ
     CFLAGS += -DDISABLE_ZMQ=1
     ZMQ_SOCKET_SRC = src/zmq_socket_stub.c
+    ZMQ_CLIENT_SRC = src/zmq_client_stub.c
+    ZMQ_DAEMON_SRC = src/zmq_daemon_stub.c
     ZMQ_LIBS =
 else
     # Default: auto-detect
@@ -133,6 +137,8 @@ else
     ifeq ($(shell pkg-config --exists libzmq && echo yes),yes)
         CFLAGS += -DHAVE_ZMQ=1 $(shell pkg-config --cflags libzmq)
         ZMQ_SOCKET_SRC = src/zmq_socket.c
+        ZMQ_CLIENT_SRC = src/zmq_client.c
+        ZMQ_DAEMON_SRC = src/zmq_daemon.c
         ZMQ_LIBS = $(shell pkg-config --libs libzmq)
         LDFLAGS += $(ZMQ_LIBS)
         DEBUG_LDFLAGS += $(ZMQ_LIBS)
@@ -140,6 +146,8 @@ else
         # ZMQ not available, disable it
         CFLAGS += -DDISABLE_ZMQ=1
         ZMQ_SOCKET_SRC = src/zmq_socket_stub.c
+        ZMQ_CLIENT_SRC = src/zmq_client_stub.c
+        ZMQ_DAEMON_SRC = src/zmq_daemon_stub.c
         ZMQ_LIBS =
     endif
 endif
@@ -210,15 +218,11 @@ MESSAGE_QUEUE_SRC = src/message_queue.c
 MESSAGE_QUEUE_OBJ = $(BUILD_DIR)/message_queue.o
 AI_WORKER_SRC = src/ai_worker.c
 AI_WORKER_OBJ = $(BUILD_DIR)/ai_worker.o
-VOICE_INPUT_SRC = src/voice_input.c
 VOICE_INPUT_OBJ = $(BUILD_DIR)/voice_input.o
-ZMQ_SOCKET_SRC = src/zmq_socket.c
 ZMQ_SOCKET_OBJ = $(BUILD_DIR)/zmq_socket.o
-ZMQ_CLIENT_SRC = src/zmq_client.c
 ZMQ_CLIENT_OBJ = $(BUILD_DIR)/zmq_client.o
 ZMQ_MESSAGE_QUEUE_SRC = src/zmq_message_queue.c
 ZMQ_MESSAGE_QUEUE_OBJ = $(BUILD_DIR)/zmq_message_queue.o
-ZMQ_DAEMON_SRC = src/zmq_daemon.c
 ZMQ_DAEMON_OBJ = $(BUILD_DIR)/zmq_daemon.o
 ZMQ_THREAD_POOL_SRC = src/zmq_thread_pool.c
 ZMQ_THREAD_POOL_OBJ = $(BUILD_DIR)/zmq_thread_pool.o

@@ -5,6 +5,7 @@
 #include "zmq_socket.h"
 #include <stdbool.h>
 #include <stdlib.h>
+#include "cjson/cJSON.h"
 
 ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     (void)endpoint;
@@ -46,4 +47,23 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
 
 bool zmq_socket_available(void) {
     return false;
+}
+
+int zmq_send_tool_request(ZMQContext *ctx, const char *tool_name, const char *tool_id,
+                          cJSON *tool_parameters) {
+    (void)ctx;
+    (void)tool_name;
+    (void)tool_id;
+    (void)tool_parameters;
+    return -1;
+}
+
+int zmq_send_tool_result(ZMQContext *ctx, const char *tool_name, const char *tool_id,
+                         cJSON *tool_output, int is_error) {
+    (void)ctx;
+    (void)tool_name;
+    (void)tool_id;
+    (void)tool_output;
+    (void)is_error;
+    return -1;
 }

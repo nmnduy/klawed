@@ -216,6 +216,33 @@ void zmq_client_process_message(ZMQClientContextThreaded *ctx, const char *respo
  */
 int zmq_client_check_user_input(char *buffer, size_t buffer_size, int timeout_ms);
 
+#else
+// Forward declarations for stub compilation
+typedef struct ZMQClientContextThreaded ZMQClientContextThreaded;
+typedef struct ConversationState ConversationState;
+typedef struct TUIState TUIState;
+
+// Function declarations for stub compilation
+ZMQClientContextThreaded* zmq_client_init(const char *endpoint);
+int zmq_client_start(ZMQClientContextThreaded *ctx);
+void zmq_client_stop(ZMQClientContextThreaded *ctx);
+void zmq_client_cleanup(ZMQClientContextThreaded *ctx);
+bool zmq_client_is_running(ZMQClientContextThreaded *ctx);
+int zmq_client_send_text(ZMQClientContextThreaded *ctx, const char *text);
+void zmq_client_get_stats(ZMQClientContextThreaded *ctx, uint64_t *messages_sent,
+                          uint64_t *messages_received, uint64_t *errors);
+void zmq_client_print_usage(const char *program_name);
+int zmq_client_mode(const char *endpoint);
+int zmq_client_send_message_with_id(ZMQClientContextThreaded *ctx, const char *message,
+                                    size_t message_len, char *out_id, size_t out_id_size);
+int zmq_client_process_ack(ZMQClientContextThreaded *ctx, const char *message_id);
+int zmq_client_send_ack(ZMQClientContextThreaded *ctx, const char *message_id);
+int zmq_client_check_and_resend_pending(ZMQClientContextThreaded *ctx, int64_t current_time_ms);
+void zmq_client_cleanup_pending_queue(ZMQClientContextThreaded *ctx);
+int zmq_client_generate_message_id(ZMQClientContextThreaded *ctx, const char *message,
+                                   size_t message_len, char *out_id, size_t out_id_size);
+void zmq_client_process_message(ZMQClientContextThreaded *ctx, const char *response);
+int zmq_client_check_user_input(char *buffer, size_t buffer_size, int timeout_ms);
 #endif // HAVE_ZMQ
 
 #endif // ZMQ_CLIENT_H
