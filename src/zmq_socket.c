@@ -198,9 +198,6 @@ static int add_to_pending_queue(ZMQContext *ctx, const char *message_id,
 
     LOG_DEBUG("ZMQ: Added message %s to pending queue (count: %d)",
               message_id, ctx->pending_queue.count);
-    printf("ZMQ: Added message %s to pending queue (count: %d)\n",
-           message_id, ctx->pending_queue.count);
-    fflush(stdout);
 
     return ZMQ_ERROR_NONE;
 }
@@ -228,9 +225,6 @@ static int remove_from_pending_queue(ZMQContext *ctx, const char *message_id) {
             ctx->pending_queue.count--;
             LOG_DEBUG("ZMQ: Removed message %s from pending queue (count: %d)",
                       message_id, ctx->pending_queue.count);
-            printf("ZMQ: Removed message %s from pending queue (count: %d)\n",
-                   message_id, ctx->pending_queue.count);
-            fflush(stdout);
 
             free_pending_message(curr);
             return 0;
@@ -1008,10 +1002,6 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
     LOG_DEBUG("ZMQ: Raw message (first 1000 chars): %.*s",
              (int)(buffer_len > 1000 ? 1000 : buffer_len), buffer);
 
-    // Print to console
-    printf("ZMQ: Processing %d byte message\n", buffer_len);
-    fflush(stdout);
-
     // Parse JSON message
     cJSON *json = cJSON_Parse(buffer);
     if (!json) {
@@ -1049,14 +1039,10 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
         strcmp(message_type->valuestring, "ACK") == 0) {
         if (message_id && cJSON_IsString(message_id)) {
             LOG_INFO("ZMQ: Received ACK for message %s", message_id->valuestring);
-            printf("ZMQ: Received ACK for message %s\n", message_id->valuestring);
-            fflush(stdout);
             
             // Check for duplicate ACK
             if (is_duplicate_message(ctx, message_id->valuestring)) {
                 LOG_WARN("ZMQ: Duplicate ACK received for message %s, ignoring", message_id->valuestring);
-                printf("ZMQ: WARNING: Duplicate ACK received for message %s, ignoring\n", message_id->valuestring);
-                fflush(stdout);
                 cJSON_Delete(json);
                 return 0;
             }
@@ -1079,20 +1065,12 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
             LOG_WARN("ZMQ: Duplicate message detected! ID=%s, type=%s, ignoring",
                      message_id->valuestring,
                      message_type && cJSON_IsString(message_type) ? message_type->valuestring : "unknown");
-            printf("ZMQ: WARNING: Duplicate message detected! ID=%s, type=%s, ignoring\n",
-                   message_id->valuestring,
-                   message_type && cJSON_IsString(message_type) ? message_type->valuestring : "unknown");
-            fflush(stdout);
             // Still send ACK for duplicate to prevent retries
             LOG_INFO("ZMQ: Sending ACK for duplicate message %s", message_id->valuestring);
-            printf("ZMQ: Sending ACK for duplicate message %s\n", message_id->valuestring);
-            fflush(stdout);
             int ack_result = zmq_send_ack(ctx, message_id->valuestring);
             if (ack_result != ZMQ_ERROR_NONE) {
                 LOG_ERROR("ZMQ: Failed to send ACK for duplicate message %s (error: %d)",
                          message_id->valuestring, ack_result);
-                printf("ZMQ: ERROR: Failed to send ACK for duplicate message %s\n", message_id->valuestring);
-                fflush(stdout);
                 // Don't delete JSON yet - let it be processed as a duplicate again on retry
             }
             cJSON_Delete(json);
@@ -1102,21 +1080,15 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
         LOG_INFO("ZMQ: Sending ACK for message %s (type: %s)",
                  message_id->valuestring,
                  message_type && cJSON_IsString(message_type) ? message_type->valuestring : "unknown");
-        printf("ZMQ: Sending ACK for message %s\n", message_id->valuestring);
-        fflush(stdout);
         int ack_result = zmq_send_ack(ctx, message_id->valuestring);
         if (ack_result != ZMQ_ERROR_NONE) {
             LOG_ERROR("ZMQ: Failed to send ACK for message %s (error: %d)",
                      message_id->valuestring, ack_result);
-            printf("ZMQ: ERROR: Failed to send ACK for message %s\n", message_id->valuestring);
-            fflush(stdout);
             // Don't mark as seen if ACK failed - let client retry
             cJSON_Delete(json);
             return -1;
         } else {
             LOG_DEBUG("ZMQ: ACK sent successfully for message %s", message_id->valuestring);
-            printf("ZMQ: ACK sent successfully for message %s\n", message_id->valuestring);
-            fflush(stdout);
         }
         // Mark this message as seen (only if ACK succeeded)
         add_seen_message(ctx, message_id->valuestring);
@@ -1140,7 +1112,8 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
                          content_len > 200 ? "..." : "");
             }
 
-            printf("ZMQ: Processing TEXT message (length: %zu)\n", content_len);
+            // Print the full TEXT message content to console (daemon messages should be shown)
+            printf("\n>>> ZMQ TEXT MESSAGE <<<\n%s\n>>> END OF MESSAGE <<<\n\n", content->valuestring);
             fflush(stdout);
 
             // Process interactively (handles tool calls recursively)
@@ -1500,8 +1473,6 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                 }
 
                 LOG_INFO("ZMQ: Executing tool: %s (id: %s)", tool->name, tool->id);
-                printf("ZMQ: Executing tool: %s\n", tool->name);
-                fflush(stdout);
 
                 // Validate that the tool is in the allowed tools list
                 if (!is_tool_allowed(tool->name, state)) {
@@ -1665,14 +1636,8 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     LOG_INFO("ZMQ:   Resend check interval: %d ms", 1000); // RESEND_CHECK_INTERVAL_MS
     LOG_INFO("ZMQ: =========================================");
 
-    printf("ZMQ daemon started on %s\n", ctx->endpoint);
-    printf("Message ID/ACK system: Enabled (salt: 0x%08x)\n", ctx->salt);
-    printf("Pending queue: max=%d, timeout=%lldms, retries=%d\n",
-           ctx->pending_queue.max_pending,
-           (long long)ctx->pending_queue.timeout_ms,
-           ctx->pending_queue.max_retries);
-    printf("Daemon is listening for ZMQ messages...\n");
-    printf("----------------------------------------\n");
+    printf("ZMQ daemon listening on %s\n", ctx->endpoint);
+    printf("(Check log file for detailed info)\n\n");
     fflush(stdout);
 
     int message_count = 0;
@@ -1699,8 +1664,6 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
             int resent = zmq_check_and_resend_pending(ctx, current_time);
             if (resent > 0) {
                 LOG_INFO("ZMQ: Resent %d pending message(s)", resent);
-                printf("ZMQ: Resent %d pending message(s)\n", resent);
-                fflush(stdout);
             }
             last_resend_check = current_time;
         }
@@ -1709,9 +1672,6 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
         if (current_time - last_queue_log >= QUEUE_LOG_INTERVAL_MS) {
             if (ctx->pending_queue.count > 0) {
                 LOG_INFO("ZMQ: Pending queue: %d message(s) waiting for ACK", ctx->pending_queue.count);
-                printf("ZMQ: Pending queue: %d message(s) waiting for ACK\n", ctx->pending_queue.count);
-                fflush(stdout);
-                
                 // Log detailed state at DEBUG level
                 log_pending_queue_state(ctx, "periodic_check");
             }
@@ -1807,9 +1767,7 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     LOG_INFO("ZMQ: Total errors: %d", error_count);
     LOG_INFO("ZMQ: =========================================");
 
-    printf("\nZMQ daemon stopped\n");
-    printf("Total messages processed: %d\n", message_count);
-    printf("Total errors: %d\n", error_count);
+    printf("ZMQ daemon stopped (see log file for details)\n");
     fflush(stdout);
 
     return 0;
