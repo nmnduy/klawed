@@ -13,6 +13,9 @@
 #include <sqlite3.h>
 #include <cjson/cJSON.h>
 #include <ctype.h>
+#include <bsd/string.h>
+#include <bsd/stdlib.h>
+#include <assert.h>
 
 // Default buffer size for SQLite messages
 #define SQLITE_QUEUE_BUFFER_SIZE 65536
@@ -62,7 +65,9 @@
     "SELECT COUNT(*) FROM messages WHERE sender = ? AND sent = 0;"
 
 // Forward declarations
+#ifndef TEST_BUILD
 static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx, struct ConversationState *state, const char *user_input);
+#endif
 static void sqlite_queue_set_error(SQLiteQueueContext *ctx, SQLiteQueueErrorCode error_code, const char *format, ...);
 static const char* sqlite_queue_error_to_string(SQLiteQueueErrorCode error_code);
 static int sqlite_queue_open_db(SQLiteQueueContext *ctx);
@@ -70,6 +75,9 @@ static void sqlite_queue_close_db(SQLiteQueueContext *ctx);
 static int sqlite_queue_prepare_statement(SQLiteQueueContext *ctx, sqlite3_stmt **stmt, const char *sql);
 
 SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_name) {
+    // Critical invariant: database path must not be NULL
+    assert(db_path != NULL);
+    
     if (!db_path) {
         LOG_ERROR("SQLite Queue: Database path cannot be NULL");
         return NULL;
@@ -79,12 +87,14 @@ SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_na
     LOG_DEBUG("SQLite Queue: Database path: %s", db_path);
     LOG_DEBUG("SQLite Queue: Sender name: %s", sender_name ? sender_name : "klawed");
 
-    SQLiteQueueContext *ctx = calloc(1, sizeof(SQLiteQueueContext));
+    SQLiteQueueContext *ctx = reallocarray(NULL, 1, sizeof(SQLiteQueueContext));
     if (!ctx) {
         LOG_ERROR("SQLite Queue: Failed to allocate context memory");
         return NULL;
     }
     LOG_DEBUG("SQLite Queue: Allocated SQLite queue context structure");
+    // Zero-initialize the context (calloc equivalent)
+    memset(ctx, 0, sizeof(SQLiteQueueContext));
 
     // Copy database path
     ctx->db_path = strdup(db_path);
@@ -168,6 +178,9 @@ SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_na
 }
 
 void sqlite_queue_cleanup(SQLiteQueueContext *ctx) {
+    // Critical invariant: context must not be NULL (but we handle it gracefully)
+    // assert(ctx != NULL);
+    
     if (!ctx) return;
 
     LOG_INFO("SQLite Queue: Cleaning up SQLite queue context for database: %s",
@@ -194,6 +207,11 @@ void sqlite_queue_cleanup(SQLiteQueueContext *ctx) {
 }
 
 int sqlite_queue_send(SQLiteQueueContext *ctx, const char *receiver, const char *message, size_t message_len) {
+    // Critical invariants
+    assert(ctx != NULL);
+    assert(receiver != NULL);
+    assert(message != NULL);
+    
     if (!ctx || !receiver || !message) {
         sqlite_queue_set_error(ctx, SQLITE_QUEUE_ERROR_INVALID_PARAM, "Invalid parameters for send");
         return SQLITE_QUEUE_ERROR_INVALID_PARAM;
@@ -246,6 +264,12 @@ int sqlite_queue_send(SQLiteQueueContext *ctx, const char *receiver, const char 
 
 int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int max_messages,
                          char ***messages, int *message_count, long long **message_ids, int timeout_ms) {
+    // Critical invariants
+    assert(ctx != NULL);
+    assert(messages != NULL);
+    assert(message_count != NULL);
+    assert(message_ids != NULL);
+    
     if (!ctx || !messages || !message_count || !message_ids) {
         sqlite_queue_set_error(ctx, SQLITE_QUEUE_ERROR_INVALID_PARAM, "Invalid parameters for receive");
         return SQLITE_QUEUE_ERROR_INVALID_PARAM;
@@ -287,8 +311,8 @@ int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int
 
         // Fetch messages
         int count = 0;
-        char **msg_array = calloc((size_t)max_messages, sizeof(char *));
-        long long *id_array = calloc((size_t)max_messages, sizeof(long long));
+        char **msg_array = reallocarray(NULL, (size_t)max_messages, sizeof(char *));
+        long long *id_array = reallocarray(NULL, (size_t)max_messages, sizeof(long long));
 
         if (!msg_array || !id_array) {
             free(msg_array);
@@ -407,6 +431,7 @@ void sqlite_queue_clear_error(SQLiteQueueContext *ctx) {
     ctx->error_time = 0;
 }
 
+#ifndef TEST_BUILD
 int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationState *state, struct TUIState *tui) {
     if (!ctx || !state) {
         LOG_ERROR("SQLite Queue: Invalid parameters for process_message");
@@ -485,7 +510,16 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
             fflush(stdout);
 
             // Process interactively (handles tool calls recursively)
-            process_result = sqlite_queue_process_interactive(ctx, state, content->valuestring);
+            // Make a copy of the content string to avoid potential use-after-free
+            char *content_copy = strdup(content->valuestring);
+            if (!content_copy) {
+                LOG_ERROR("SQLite Queue: Failed to duplicate message content");
+                cJSON_Delete(json);
+                free((void *)message);
+                continue;
+            }
+            process_result = sqlite_queue_process_interactive(ctx, state, content_copy);
+            free(content_copy);
 
             if (process_result != 0) {
                 LOG_ERROR("SQLite Queue: Interactive processing failed");
@@ -517,7 +551,9 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
     LOG_INFO("SQLite Queue: Message processing completed");
     return 0;
 }
+#endif // TEST_BUILD
 
+#ifndef TEST_BUILD
 // Helper function to send a JSON response
 static int sqlite_queue_send_json(SQLiteQueueContext *ctx, const char *receiver,
                                   const char *message_type, const char *content) {
@@ -592,6 +628,36 @@ static int sqlite_queue_send_tool_result(SQLiteQueueContext *ctx, const char *re
     return result;
 }
 
+// Helper function to send assistant text response
+static int sqlite_queue_send_text_response(SQLiteQueueContext *ctx, const char *receiver,
+                                          const char *text) {
+    if (!ctx || !receiver || !text) {
+        LOG_ERROR("SQLite Queue: Invalid parameters for send_text_response");
+        return -1;
+    }
+
+    // Skip whitespace-only content
+    const char *p = text;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    if (*p == '\0') {  // Only whitespace
+        LOG_DEBUG("SQLite Queue: Skipping whitespace-only text response");
+        return 0;
+    }
+
+    LOG_INFO("SQLite Queue: Sending assistant text response");
+
+    // Print to console
+    printf("\n--- AI Response ---\n");
+    // Print first 200 chars of the response
+    int preview_len = (int)(strlen(p) > 200 ? 200 : strlen(p));
+    printf("%.*s%s\n", preview_len, p, strlen(p) > 200 ? "..." : "");
+    printf("--- End of AI Response ---\n");
+    fflush(stdout);
+
+    return sqlite_queue_send_json(ctx, receiver, "TEXT", p);
+}
+
 // Helper function to send a tool execution request
 static int sqlite_queue_send_tool_request(SQLiteQueueContext *ctx, const char *receiver,
                                          const char *tool_name, const char *tool_id,
@@ -630,6 +696,85 @@ static int sqlite_queue_send_tool_request(SQLiteQueueContext *ctx, const char *r
     cJSON_Delete(request_json);
 
     return result;
+}
+
+// Helper function to validate and execute a single tool
+static int process_single_tool(SQLiteQueueContext *ctx, const char *response_receiver,
+                              ToolCall *tool, ConversationState *state,
+                              InternalContent *result) {
+    if (!ctx || !response_receiver || !tool || !state || !result) {
+        LOG_ERROR("SQLite Queue: Invalid parameters for process_single_tool");
+        return -1;
+    }
+
+    // Initialize result
+    memset(result, 0, sizeof(InternalContent));
+    result->type = INTERNAL_TOOL_RESPONSE;
+
+    // Check for missing tool name or ID
+    if (!tool->name || !tool->id) {
+        LOG_WARN("SQLite Queue: Tool call missing name or id, skipping");
+        result->tool_id = tool->id ? strdup(tool->id) : strdup("unknown");
+        result->tool_name = tool->name ? strdup(tool->name) : strdup("tool");
+        result->tool_output = cJSON_CreateObject();
+        cJSON_AddStringToObject(result->tool_output, "error", "Tool call missing name or id");
+        result->is_error = 1;
+        return 0;
+    }
+
+    LOG_INFO("SQLite Queue: Executing tool: %s (id: %s)", tool->name, tool->id);
+
+    // Print to console
+    printf("SQLite Queue: Executing tool: %s\n", tool->name);
+    fflush(stdout);
+
+    // Validate that the tool is in the allowed tools list (prevent hallucination)
+    if (!is_tool_allowed(tool->name, state)) {
+        LOG_ERROR("SQLite Queue: Tool validation failed: '%s' was not provided in tools list", tool->name);
+        result->tool_id = strdup(tool->id);
+        result->tool_name = strdup(tool->name);
+        result->tool_output = cJSON_CreateObject();
+        char error_msg[512];
+        snprintf(error_msg, sizeof(error_msg),
+                 "ERROR: Tool '%s' does not exist or was not provided to you. "
+                 "Please check the list of available tools and try again with a valid tool name.",
+                 tool->name);
+        cJSON_AddStringToObject(result->tool_output, "error", error_msg);
+        result->is_error = 1;
+
+        // Send TOOL request message (even though it will fail)
+        sqlite_queue_send_tool_request(ctx, response_receiver, tool->name, tool->id, NULL);
+
+        // Send error response
+        sqlite_queue_send_tool_result(ctx, response_receiver, tool->name, tool->id, result->tool_output, 1);
+        return 0;
+    }
+
+    // Convert ToolCall to execute_tool parameters
+    cJSON *input = tool->parameters
+        ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
+        : cJSON_CreateObject();
+
+    // Send TOOL request message before execution
+    sqlite_queue_send_tool_request(ctx, response_receiver, tool->name, tool->id, input);
+
+    // Execute tool synchronously
+    cJSON *tool_result = execute_tool(tool->name, input, state);
+
+    // Send tool result response
+    sqlite_queue_send_tool_result(ctx, response_receiver, tool->name, tool->id, tool_result, 0);
+
+    // Store tool result
+    result->tool_id = strdup(tool->id);
+    result->tool_name = strdup(tool->name);
+    result->tool_output = tool_result ? cJSON_Duplicate(tool_result, 1) : cJSON_CreateObject();
+    result->is_error = 0;
+
+    // Clean up
+    if (input) cJSON_Delete(input);
+    if (tool_result) cJSON_Delete(tool_result);
+
+    return 0;
 }
 
 // Process SQLite message with interactive tool call support
@@ -677,23 +822,7 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
 
         // Send assistant's text response if present
         if (api_response->message.text && api_response->message.text[0] != '\0') {
-            // Skip whitespace-only content
-            const char *p = api_response->message.text;
-            while (*p && isspace((unsigned char)*p)) p++;
-
-            if (*p != '\0') {  // Has non-whitespace content
-                LOG_INFO("SQLite Queue: Sending assistant text response");
-
-                // Print to console
-                printf("\n--- AI Response ---\n");
-                // Print first 200 chars of the response
-                int preview_len = (int)(strlen(p) > 200 ? 200 : strlen(p));
-                printf("%.*s%s\n", preview_len, p, strlen(p) > 200 ? "..." : "");
-                printf("--- End of AI Response ---\n");
-                fflush(stdout);
-
-                sqlite_queue_send_json(ctx, response_receiver, "TEXT", p);
-            }
+            sqlite_queue_send_text_response(ctx, response_receiver, api_response->message.text);
         }
 
         // Add assistant message to conversation history
@@ -716,7 +845,10 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
             LOG_INFO("SQLite Queue: Processing %d tool call(s)", tool_count);
 
             // Allocate results array
-            InternalContent *results = calloc((size_t)tool_count, sizeof(InternalContent));
+            InternalContent *results = reallocarray(NULL, (size_t)tool_count, sizeof(InternalContent));
+            if (results) {
+                memset(results, 0, (size_t)tool_count * sizeof(InternalContent));
+            }
             if (!results) {
                 LOG_ERROR("SQLite Queue: Failed to allocate tool result buffer");
                 sqlite_queue_send_json(ctx, response_receiver, "ERROR", "Failed to allocate tool result buffer");
@@ -727,70 +859,7 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
             // Execute tools synchronously
             for (int i = 0; i < tool_count; i++) {
                 ToolCall *tool = &tool_calls_array[i];
-                if (!tool->name || !tool->id) {
-                    LOG_WARN("SQLite Queue: Tool call missing name or id, skipping");
-                    results[i].type = INTERNAL_TOOL_RESPONSE;
-                    results[i].tool_id = tool->id ? strdup(tool->id) : strdup("unknown");
-                    results[i].tool_name = tool->name ? strdup(tool->name) : strdup("tool");
-                    results[i].tool_output = cJSON_CreateObject();
-                    cJSON_AddStringToObject(results[i].tool_output, "error", "Tool call missing name or id");
-                    results[i].is_error = 1;
-                    continue;
-                }
-
-                LOG_INFO("SQLite Queue: Executing tool: %s (id: %s)", tool->name, tool->id);
-
-                // Print to console
-                printf("SQLite Queue: Executing tool: %s\n", tool->name);
-                fflush(stdout);
-
-                // Validate that the tool is in the allowed tools list (prevent hallucination)
-                if (!is_tool_allowed(tool->name, state)) {
-                    LOG_ERROR("SQLite Queue: Tool validation failed: '%s' was not provided in tools list", tool->name);
-                    results[i].type = INTERNAL_TOOL_RESPONSE;
-                    results[i].tool_id = strdup(tool->id);
-                    results[i].tool_name = strdup(tool->name);
-                    results[i].tool_output = cJSON_CreateObject();
-                    char error_msg[512];
-                    snprintf(error_msg, sizeof(error_msg),
-                             "ERROR: Tool '%s' does not exist or was not provided to you. "
-                             "Please check the list of available tools and try again with a valid tool name.",
-                             tool->name);
-                    cJSON_AddStringToObject(results[i].tool_output, "error", error_msg);
-                    results[i].is_error = 1;
-
-                    // Send TOOL request message (even though it will fail)
-                    sqlite_queue_send_tool_request(ctx, response_receiver, tool->name, tool->id, NULL);
-
-                    // Send error response
-                    sqlite_queue_send_tool_result(ctx, response_receiver, tool->name, tool->id, results[i].tool_output, 1);
-                    continue;
-                }
-
-                // Convert ToolCall to execute_tool parameters
-                cJSON *input = tool->parameters
-                    ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
-                    : cJSON_CreateObject();
-
-                // Send TOOL request message before execution
-                sqlite_queue_send_tool_request(ctx, response_receiver, tool->name, tool->id, input);
-
-                // Execute tool synchronously
-                cJSON *tool_result = execute_tool(tool->name, input, state);
-
-                // Send tool result response
-                sqlite_queue_send_tool_result(ctx, response_receiver, tool->name, tool->id, tool_result, 0);
-
-                // Store tool result
-                results[i].type = INTERNAL_TOOL_RESPONSE;
-                results[i].tool_id = strdup(tool->id);
-                results[i].tool_name = strdup(tool->name);
-                results[i].tool_output = tool_result ? cJSON_Duplicate(tool_result, 1) : cJSON_CreateObject();
-                results[i].is_error = 0;
-
-                // Clean up
-                if (input) cJSON_Delete(input);
-                if (tool_result) cJSON_Delete(tool_result);
+                process_single_tool(ctx, response_receiver, tool, state, &results[i]);
             }
 
             // Add tool results to conversation
@@ -829,7 +898,9 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
 
     return 0;
 }
+#endif // TEST_BUILD
 
+#ifndef TEST_BUILD
 int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *state) {
     if (!ctx || !state) {
         LOG_ERROR("SQLite Queue: Invalid parameters for daemon_mode");
@@ -899,6 +970,7 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
 
     return 0;
 }
+#endif // TEST_BUILD
 
 bool sqlite_queue_available(void) {
     // SQLite is always available (it's a required dependency)
