@@ -4,12 +4,13 @@ This document describes the JSON message format for ZeroMQ communication in Klaw
 
 ## Overview
 
-Klawed uses a JSON message format for both input (requests) and output (responses) when communicating via ZeroMQ sockets using the PAIR socket pattern (exclusive peer-to-peer communication). The implementation now includes:
+Klawed uses a JSON message format for both input (requests) and output (responses) when communicating via ZeroMQ sockets using the PAIR socket pattern (exclusive peer-to-peer communication). The implementation includes:
 
 1. **Message ID/ACK system** for reliable message delivery
-2. **Time-sharing loop** for checking both user input and incoming messages
-3. **Pending message queue** with automatic retry mechanism
-4. **Enhanced error handling** with ACK/NACK messages
+2. **Background polling thread** for receiving messages
+3. **Thread pool** for asynchronous tool execution
+4. **Pending message queue** with automatic retry mechanism
+5. **Duplicate message detection** to prevent processing the same message multiple times
 
 The format is designed to be self-describing and reliable.
 
@@ -19,7 +20,7 @@ All messages are JSON objects with at least a `messageType` field that indicates
 
 ### Common Fields
 
-- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL", "TOOL_RESULT", "ACK", or "NACK")
+- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL", "TOOL_RESULT", or "ACK")
 - `content` (string, optional): Primary content/message text
 - `messageId` (string, optional): Unique message identifier for reliable delivery (32-character hex string)
 
@@ -129,23 +130,6 @@ Acknowledgment message for reliable delivery.
 **Fields:**
 - `messageType`: Always "ACK"
 - `messageId`: ID of the message being acknowledged
-
-### 6. NACK Response
-
-Negative acknowledgment (error in processing).
-
-```json
-{
-  "messageType": "NACK",
-  "messageId": "a1b2c3d4e5f678901234567890123456",
-  "content": "Error reason for negative acknowledgment"
-}
-```
-
-**Fields:**
-- `messageType`: Always "NACK"
-- `messageId`: ID of the message being negatively acknowledged
-- `content`: Reason for the negative acknowledgment
 
 ## Message Flow Examples
 
@@ -270,16 +254,16 @@ Negative acknowledgment (error in processing).
 
 ## Reliable Delivery System
 
-Klawed now implements a reliable message delivery system with the following features:
+Klawed implements a reliable message delivery system with the following features:
 
 ### Message ID Generation
 - Each message can have a unique `messageId` field (32-character hex string)
 - Generated using timestamp + partial content hash + random salt
 - Based on FNV-1a hash algorithm with additional mixing
+- Implemented in `zmq_socket.c` with `zmq_generate_message_id()` function
 
-### ACK/NACK Mechanism
+### ACK Mechanism
 - **ACK**: Positive acknowledgment - message received and processed successfully
-- **NACK**: Negative acknowledgment - message received but processing failed
 - Clients should send ACK for successfully processed messages
 - Klawed will automatically resend unacknowledged messages
 
@@ -289,13 +273,34 @@ Klawed now implements a reliable message delivery system with the following feat
 - Default ACK timeout: 3000ms (3 seconds)
 - Default maximum retries: 5
 - Automatic cleanup of acknowledged messages
+- Automatic resend of timed-out messages
 
-### Time-sharing Loop
-The daemon mode now uses a time-sharing approach:
-- Checks for user input for 100ms
-- Checks for incoming messages for 100ms
-- Alternates between input and message processing
-- Allows responsive handling of both user interaction and ZMQ communication
+### Duplicate Message Detection
+- Recently seen message IDs are tracked (up to 1000 messages)
+- Default TTL for seen messages: 30 seconds
+- Duplicate messages are acknowledged but not processed
+
+## Daemon Architecture
+
+The ZMQ daemon uses a multi-threaded architecture:
+
+### 1. Background Polling Thread
+- Continuously polls the ZMQ socket for incoming messages
+- Processes ACK messages immediately (removes from pending queue)
+- Queues other messages for main thread processing
+- Handles termination messages to stop the daemon
+
+### 2. Main Thread
+- Processes messages from the background thread queue
+- Handles AI API calls and conversation management
+- Manages the pending message queue and retry logic
+- Coordinates tool execution via thread pool
+
+### 3. Thread Pool (Optional)
+- Executes tools asynchronously to prevent blocking
+- Default: 4 threads, max 50 queued tasks
+- Can be disabled via `KLAWED_ZMQ_DISABLE_THREAD_POOL=1`
+- Each tool execution sends TOOL and TOOL_RESULT messages
 
 ## Connection Management
 
@@ -313,6 +318,7 @@ The implementation uses ZMQ_PAIR sockets with the following settings:
 
 - `KLAWED_ZMQ_ENDPOINT`: ZMQ endpoint (e.g., "tcp://127.0.0.1:5555" or "ipc:///tmp/klawed.sock")
 - `KLAWED_ZMQ_MODE`: ZMQ mode ("daemon")
+- `KLAWED_ZMQ_DISABLE_THREAD_POOL`: Set to "1" to disable thread pool for tool execution
 
 ### Configuration Constants (in code)
 
@@ -321,19 +327,21 @@ The following constants can be modified in `src/zmq_socket.c`:
 - `DEFAULT_MAX_PENDING`: Maximum pending messages (default: 50)
 - `DEFAULT_ACK_TIMEOUT_MS`: ACK timeout in milliseconds (default: 3000)
 - `DEFAULT_MAX_RETRIES`: Maximum retry attempts (default: 5)
-- `DEFAULT_TIMESLICE_MS`: Time-sharing interval in milliseconds (default: 100)
 - `ZMQ_BUFFER_SIZE`: Message buffer size (default: 65536)
 - `MESSAGE_ID_HEX_LENGTH`: Message ID string length (default: 33)
 - `HASH_SAMPLE_SIZE`: Characters sampled for message ID hash (default: 256)
+- `MAX_SEEN_MESSAGES`: Maximum number of messages to track for duplicate detection (default: 1000)
+- `SEEN_MESSAGE_TTL_MS`: Time-to-live for seen messages in milliseconds (default: 30000)
 
 ## Implementation Details
 
 ### Code Location
 - Main implementation: `src/zmq_socket.c` - ZMQ socket handling with reliable delivery
 - Header: `src/zmq_socket.h` - Interface definitions
-- Message ID system: `src/zmq_message_id.h` - Message ID generation and tracking
-- Client mode: Built into main `klawed` binary (use `--zmq-client <endpoint>`)
+- Thread pool: `src/zmq_thread_pool.c` - Asynchronous tool execution
+- Client mode: `src/zmq_client.c` - ZMQ client implementation
 - Daemon mode: Built into main `klawed` binary (use `--zmq <endpoint>`)
+- Client mode: Built into main `klawed` binary (use `--zmq-client <endpoint>`)
 
 ### Message Type Constants
 - `"TEXT"`: Text processing request and successful response
@@ -341,7 +349,6 @@ The following constants can be modified in `src/zmq_socket.c`:
 - `"TOOL"`: Tool execution request (sent before tool execution)
 - `"TOOL_RESULT"`: Tool execution result (sent after tool execution)
 - `"ACK"`: Acknowledgment message
-- `"NACK"`: Negative acknowledgment message
 
 ### Buffer Sizes
 - Default buffer size: `ZMQ_BUFFER_SIZE` (65536 bytes, defined in code)
@@ -360,9 +367,9 @@ ZeroMQ handles message framing internally:
 2. Messages are self-contained JSON objects
 3. Clients should validate JSON to ensure message completeness
 
-### New API Functions
+### API Functions
 
-The following new functions have been added for reliable message delivery:
+The following functions are implemented for reliable message delivery:
 
 ```c
 // Generate unique message ID
@@ -384,6 +391,17 @@ int zmq_check_and_resend_pending(ZMQContext *ctx, int64_t current_time_ms);
 
 // Clean up pending queue
 void zmq_cleanup_pending_queue(ZMQContext *ctx);
+
+// Run ZMQ daemon mode
+int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state);
+
+// Send tool request message
+int zmq_send_tool_request(ZMQContext *ctx, const char *tool_name, const char *tool_id,
+                          cJSON *tool_parameters);
+
+// Send tool result message
+int zmq_send_tool_result(ZMQContext *ctx, const char *tool_name, const char *tool_id,
+                         cJSON *tool_output, int is_error);
 ```
 
 ### Error Handling
@@ -393,36 +411,36 @@ void zmq_cleanup_pending_queue(ZMQContext *ctx);
 - Network/timeout errors return -1 (no response sent)
 - Unacknowledged messages are automatically retried (up to 5 times)
 - Messages exceeding retry limit are dropped with warning
+- Duplicate messages are acknowledged but not processed
 
 ## Best Practices
 
 ### Message Handling with Reliable Delivery
 1. **Always include `messageId`** in messages for reliable delivery
 2. **Send ACK for received messages** - Respond with ACK message for successful processing
-3. **Send NACK for failed processing** - Use NACK with error reason when message processing fails
-4. **Check `messageType`** before processing responses
-5. **Handle errors gracefully** - check for ERROR and NACK message types
-6. **Validate JSON** to ensure message completeness
-7. **Use appropriate timeouts** for network operations
+3. **Check `messageType`** before processing responses
+4. **Handle errors gracefully** - check for ERROR message type
+5. **Validate JSON** to ensure message completeness
+6. **Use appropriate timeouts** for network operations
 
 ### Conversation Flow
-8. **Track message sequences**: TOOL → TOOL_RESULT → TEXT for interactive processing
-9. **Implement ACK handling** - Process ACK messages to confirm delivery
-10. **Monitor pending messages** - Track messages waiting for acknowledgment
-11. **Use time-sharing approach** - Alternate between user input and message processing
-12. **Ensure buffers are large enough** (minimum 64KB recommended)
-13. **If there is no more TOOL without a TOOL_RESULT, you can consider that the agent has completed its turn. This can be used as a signal for continuing to wait**
+7. **Track message sequences**: TOOL → TOOL_RESULT → TEXT for interactive processing
+8. **Implement ACK handling** - Process ACK messages to confirm delivery
+9. **Monitor pending messages** - Track messages waiting for acknowledgment
+10. **Ensure buffers are large enough** (minimum 64KB recommended)
+11. **If there is no more TOOL without a TOOL_RESULT, you can consider that the agent has completed its turn. This can be used as a signal for continuing to wait**
 
 ### Connection Management
-14. **Handle connection failures gracefully** - Messages will be retried when connection is restored
-15. **Monitor connection state** - The system includes TCP keepalive
-16. **Clean up resources** - ensure proper cleanup of ZMQ contexts and sockets
-17. **Reuse connections** when possible for performance
-18. **Handle multiple messages per request** - The daemon may send multiple messages (TEXT, TOOL, TOOL_RESULT) for a single user request. Clients should keep receiving messages until the conversation is complete. The built-in client mode handles this by receiving multiple messages with a timeout between messages.
-19. **Implement message deduplication** - Use `messageId` to detect and handle duplicate messages
+12. **Handle connection failures gracefully** - Messages will be retried when connection is restored
+13. **Monitor connection state** - The system includes TCP keepalive
+14. **Clean up resources** - ensure proper cleanup of ZMQ contexts and sockets
+15. **Reuse connections** when possible for performance
+16. **Handle multiple messages per request** - The daemon may send multiple messages (TEXT, TOOL, TOOL_RESULT) for a single user request. Clients should keep receiving messages until the conversation is complete. The built-in client mode handles this by receiving multiple messages with a timeout between messages.
+17. **Implement message deduplication** - Use `messageId` to detect and handle duplicate messages
 
 ### Performance Considerations
-20. **Adjust pending queue size** based on expected message volume
-21. **Tune ACK timeout** based on network latency
-22. **Configure retry limits** based on reliability requirements
-23. **Optimize time-sharing interval** for responsiveness vs CPU usage
+18. **Adjust pending queue size** based on expected message volume
+19. **Tune ACK timeout** based on network latency
+20. **Configure retry limits** based on reliability requirements
+21. **Enable/disable thread pool** based on tool execution requirements
+22. **Monitor thread pool statistics** for performance tuning
