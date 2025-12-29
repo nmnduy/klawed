@@ -111,6 +111,11 @@ public class InteractiveClient {
         String toolId = toolMessage.getToolId();
         ObjectNode parameters = toolMessage.getToolParameters();
         
+        System.out.println("\n=== Tool Request ===");
+        System.out.println("Tool: " + toolName + " (ID: " + toolId + ")");
+        System.out.println("Parameters: " + parameters);
+        System.out.println("====================\n");
+        
         logger.info("Tool request received: {} (ID: {})", toolName, toolId);
         logger.info("Parameters: {}", parameters);
         
@@ -161,8 +166,16 @@ public class InteractiveClient {
         ObjectNode output = toolResult.getToolOutput();
         
         if (isError) {
+            System.err.println("\n=== Tool Error ===");
+            System.err.println("Tool: " + toolName + " (ID: " + toolId + ")");
+            System.err.println("Error: " + output);
+            System.err.println("==================\n");
             logger.error("Tool error: {} (ID: {}) - {}", toolName, toolId, output);
         } else {
+            System.out.println("\n=== Tool Result ===");
+            System.out.println("Tool: " + toolName + " (ID: " + toolId + ")");
+            System.out.println("Output: " + output);
+            System.out.println("===================\n");
             logger.info("Tool completed: {} (ID: {})", toolName, toolId);
             logger.debug("Tool output: {}", output);
         }
