@@ -15,7 +15,7 @@
   - Documentation: ZMQ_README.md 
 
 - [ ] subagents
-    - [ ] explore
+    - [ ] explore: explore code base or current directtory and write a concise markdown with findings
     - [ ] oracle
         - can think hard
         - has web search
