@@ -1602,7 +1602,7 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
 
     // Main interactive loop
     int iteration = 0;
-    const int MAX_ITERATIONS = 50; // Safety limit
+    const int MAX_ITERATIONS = 500; // Safety limit
 
     while (iteration < MAX_ITERATIONS) {
         iteration++;
