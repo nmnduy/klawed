@@ -1,22 +1,24 @@
-- [ ] ~/zmq_doc/ klawed -r sess_1766925100_140aa178
-DEBUG: session_load_from_db: statement bound
-DEBUG: session_load_from_db: calling clear_conversation
-DEBUG: clear_conversation: calling todo_free
-DEBUG: clear_conversation: todo_init done
-DEBUG: clear_conversation: calling conversation_state_unlock
-DEBUG: session_load_from_db: session_id set
-DEBUG: session_load_from_db: about to execute query
-DEBUG: session_load_from_db: calling sqlite3_step
-Error: Failed to resume session 'sess_1766925100_140aa178'. Session may not exist.
-klawed(63121,0x1fb262240) malloc: *** error for object 0x600000890140: pointer being freed was not allocated
-klawed(63121,0x1fb262240) malloc: *** set a breakpoint in malloc_error_break to debug
-zsh: abort      OPENAI_API_KEY=sk-3ec6a2b143b7498590dc72ccf074a8fe OPENAI_API_BASE= = klawed 
+- [x] Investigate session resume crash (pointer being freed was not allocated)
+  - Root cause: Potential double-free or memory corruption in free_internal_message
+  - Fix: Added safety checks in free_internal_message() and session loading code
+  - Changes: src/openai_messages.c, src/session.c
+  - Test with: ./test_session_resume.sh
+
+- [x] ZMQ client-daemon communication issue
+  - Issue: Client runs without daemon, messages resent without ACKs
+  - Root cause: No daemon running to receive messages and send ACKs
+  - Solution: Run daemon first: `./build/klawed --zmq tcp://127.0.0.1:5555`
+  - Then run client: `./build/klawed --zmq-client tcp://127.0.0.1:5555`
+  - Test with: ./test_zmq_setup.sh
+  - Documentation: ZMQ_README.md 
+
 - [ ] subagents
     - [ ] explore
     - [ ] oracle
         - can think hard
         - has web search
-- [ ] make sure timeout is implemented
+
+- [ ] make sure every 'Bash' command is started with a 'timeout'
 - [ ] can open vim and when exits go back to the bot
 - [ ] reasoning effort
     - [ ] providers API diff
