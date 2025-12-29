@@ -221,6 +221,10 @@ int session_load_from_db(PersistenceDB *db, const char *session_id, Conversation
                     state->messages[state->count] = assistant_msg;
                     state->count++;
                     fprintf(stderr, "DEBUG: session_load_from_db: message assigned, new count = %d\n", state->count);
+                    // Message successfully added to state, clear assistant_msg to avoid double-free
+                    // Set content_count to 0 so it won't be freed again
+                    assistant_msg.content_count = 0;
+                    assistant_msg.contents = NULL;
                 } else {
                     LOG_WARN("Conversation buffer full, cannot add more messages");
                     // Free the message contents

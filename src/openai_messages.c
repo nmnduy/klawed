@@ -497,20 +497,47 @@ InternalMessage parse_openai_response(cJSON *response) {
  * Free internal message contents
  */
 void free_internal_message(InternalMessage *msg) {
-    if (!msg || !msg->contents) return;
+    if (!msg) return;
+    
+    // Check if contents is valid before trying to free individual elements
+    if (!msg->contents) {
+        msg->content_count = 0;
+        return;
+    }
+    
+    // Safety check: if content_count is negative or very large, something is wrong
+    if (msg->content_count < 0 || msg->content_count > 10000) {
+        LOG_ERROR("Invalid content_count in free_internal_message: %d", msg->content_count);
+        free(msg->contents);
+        msg->contents = NULL;
+        msg->content_count = 0;
+        return;
+    }
 
     for (int i = 0; i < msg->content_count; i++) {
         InternalContent *c = &msg->contents[i];
-
-        free(c->text);
-        free(c->tool_id);
-        free(c->tool_name);
+        
+        // Only free pointers that are non-NULL
+        if (c->text) {
+            free(c->text);
+            c->text = NULL;
+        }
+        if (c->tool_id) {
+            free(c->tool_id);
+            c->tool_id = NULL;
+        }
+        if (c->tool_name) {
+            free(c->tool_name);
+            c->tool_name = NULL;
+        }
 
         if (c->tool_params) {
             cJSON_Delete(c->tool_params);
+            c->tool_params = NULL;
         }
         if (c->tool_output) {
             cJSON_Delete(c->tool_output);
+            c->tool_output = NULL;
         }
     }
 
