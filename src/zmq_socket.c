@@ -559,6 +559,8 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     LOG_INFO("ZMQ: Socket initialization completed successfully");
     return ctx;
 #else
+    (void)endpoint;
+    (void)socket_type;
     LOG_ERROR("ZMQ: ZeroMQ support not compiled in");
     return NULL;
 #endif
