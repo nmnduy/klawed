@@ -28,20 +28,18 @@ int main(void) {
         return 0;
     }
 
-    // Test 2: Try to initialize ZMQ context (should fail without actual ZMQ library in test)
-    // Note: This test doesn't actually run ZMQ, just tests the interface
-    ZMQContext *ctx = zmq_socket_init("tcp://127.0.0.1:5555", ZMQ_PAIR);
+    // Test 2: Try to initialize ZMQ context with invalid endpoint
+    // This should fail gracefully
+    ZMQContext *ctx = zmq_socket_init(NULL, ZMQ_PAIR);
     if (ctx) {
-        printf("ZMQ context initialized successfully\n");
-
-        // Test 3: Cleanup
+        printf("ERROR: zmq_socket_init with NULL endpoint should return NULL\n");
         zmq_socket_cleanup(ctx);
-        printf("ZMQ context cleaned up successfully\n");
+        return 1;
     } else {
-        printf("ZMQ context initialization failed (expected in test environment)\n");
+        printf("zmq_socket_init with NULL endpoint correctly returned NULL\n");
     }
 
-    // Test 4: Test stub functions
+    // Test 3: Test stub functions with NULL context
     ConversationState state = {0};
     state.session_id = strdup("test_session");
 

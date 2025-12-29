@@ -249,7 +249,10 @@ static void log_pending_queue_state(ZMQContext *ctx, const char *context);
 
 // Message queue helper functions
 static int message_queue_push(ZMQContext *ctx, const char *message) {
-    pthread_mutex_lock(&ctx->message_queue.mutex);
+    if (pthread_mutex_lock(&ctx->message_queue.mutex) != 0) {
+        LOG_ERROR("ZMQ: Failed to lock message queue mutex for push");
+        return -1;
+    }
     
     // Resize if needed
     if (ctx->message_queue.count >= ctx->message_queue.capacity) {
@@ -283,7 +286,10 @@ static char* message_queue_pop(ZMQContext *ctx, int timeout_ms) {
     struct timespec timeout;
     int result = 0;
     
-    pthread_mutex_lock(&ctx->message_queue.mutex);
+    if (pthread_mutex_lock(&ctx->message_queue.mutex) != 0) {
+        LOG_ERROR("ZMQ: Failed to lock message queue mutex for pop");
+        return NULL;
+    }
     
     // Wait for message or timeout
     while (ctx->message_queue.count == 0 && !ctx->should_exit) {
@@ -537,8 +543,23 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     ctx->message_queue.messages = NULL;
     ctx->message_queue.capacity = 0;
     ctx->message_queue.count = 0;
-    pthread_mutex_init(&ctx->message_queue.mutex, NULL);
-    pthread_cond_init(&ctx->message_queue.cond, NULL);
+    if (pthread_mutex_init(&ctx->message_queue.mutex, NULL) != 0) {
+        LOG_ERROR("ZMQ: Failed to initialize message queue mutex");
+        if (ctx->endpoint) free(ctx->endpoint);
+        zmq_close(ctx->socket);
+        zmq_ctx_term(ctx->context);
+        free(ctx);
+        return NULL;
+    }
+    if (pthread_cond_init(&ctx->message_queue.cond, NULL) != 0) {
+        LOG_ERROR("ZMQ: Failed to initialize message queue condition variable");
+        pthread_mutex_destroy(&ctx->message_queue.mutex);
+        if (ctx->endpoint) free(ctx->endpoint);
+        zmq_close(ctx->socket);
+        zmq_ctx_term(ctx->context);
+        free(ctx);
+        return NULL;
+    }
     
     // Check if thread pool should be enabled (default: enabled for daemon mode)
     const char *disable_thread_pool = getenv("KLAWED_ZMQ_DISABLE_THREAD_POOL");
@@ -621,16 +642,19 @@ void zmq_socket_cleanup(ZMQContext *ctx) {
     }
     
     // Clean up message queue
-    pthread_mutex_lock(&ctx->message_queue.mutex);
-    for (int i = 0; i < ctx->message_queue.count; i++) {
-        if (ctx->message_queue.messages[i]) {
-            free(ctx->message_queue.messages[i]);
+    if (pthread_mutex_lock(&ctx->message_queue.mutex) == 0) {
+        for (int i = 0; i < ctx->message_queue.count; i++) {
+            if (ctx->message_queue.messages[i]) {
+                free(ctx->message_queue.messages[i]);
+            }
         }
+        if (ctx->message_queue.messages) {
+            free(ctx->message_queue.messages);
+        }
+        pthread_mutex_unlock(&ctx->message_queue.mutex);
+    } else {
+        LOG_WARN("ZMQ: Failed to lock message queue mutex during cleanup");
     }
-    if (ctx->message_queue.messages) {
-        free(ctx->message_queue.messages);
-    }
-    pthread_mutex_unlock(&ctx->message_queue.mutex);
     
     pthread_mutex_destroy(&ctx->message_queue.mutex);
     pthread_cond_destroy(&ctx->message_queue.cond);
