@@ -1,0 +1,101 @@
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Package files
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Build output directories
+target/
+build/
+out/
+bin/
+dist/
+
+# Dependency directories
+lib/
+libs/
+dependencies/
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Gradle
+.gradle/
+gradle-app.setting
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Eclipse
+.settings/
+.metadata/
+
+# NetBeans
+nbproject/
+nbactions.xml
+
+# IntelliJ
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code
+.vscode/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Test output
+test-output/
+coverage/
+
+# Documentation
+javadoc/
+
+# Native libraries
+*.so
+*.dylib
+*.dll
+
+# Executables
+*.exe
+
+# Configuration files with sensitive data
+*.properties
+*.config
+*.cfg
+*.yml
+*.yaml
+*.json
+*.xml
