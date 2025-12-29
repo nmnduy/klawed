@@ -336,6 +336,7 @@ static void* zmq_polling_thread(void *arg) {
     ZMQContext *ctx = (ZMQContext*)arg;
     
     LOG_INFO("ZMQ: Background polling thread started");
+    printf("ZMQ: Background polling thread started\n");
     
     while (!ctx->should_exit) {
         zmq_pollitem_t items[1];
@@ -344,6 +345,7 @@ static void* zmq_polling_thread(void *arg) {
         
         // Poll with 100ms timeout
         int poll_result = zmq_poll(items, 1, 100);
+        LOG_DEBUG("ZMQ: Poll result: %d, revents: %d", poll_result, items[0].revents);
         
         if (poll_result > 0 && items[0].revents & ZMQ_POLLIN) {
             // Receive message
@@ -352,17 +354,18 @@ static void* zmq_polling_thread(void *arg) {
             
             if (received > 0) {
                 buffer[received] = '\0';
+                LOG_DEBUG("ZMQ: Background thread received %d bytes: %s", received, buffer);
                 
                 // Parse message to check type
                 cJSON *json = cJSON_Parse(buffer);
                 if (json) {
-                    cJSON *type_obj = cJSON_GetObjectItem(json, "type");
+                    cJSON *type_obj = cJSON_GetObjectItem(json, "messageType");
                     if (type_obj && cJSON_IsString(type_obj)) {
                         const char *type = type_obj->valuestring;
                         
                         // Handle ACK messages immediately
                         if (strcmp(type, "ACK") == 0) {
-                            cJSON *id_obj = cJSON_GetObjectItem(json, "id");
+                            cJSON *id_obj = cJSON_GetObjectItem(json, "messageId");
                             if (id_obj && cJSON_IsString(id_obj)) {
                                 remove_from_pending_queue(ctx, id_obj->valuestring);
                             }
@@ -1810,8 +1813,10 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     const int64_t QUEUE_LOG_INTERVAL_MS = 5000; // Log queue state every 5 seconds
 
     // Main event loop - uses message queue from background thread
+    LOG_INFO("ZMQ: Entering main event loop");
     while (ctx->enabled && !ctx->should_exit) {
         int64_t current_time = get_current_time_ms();
+        LOG_DEBUG("ZMQ: Main loop iteration");
 
         // 1. Check and resend pending messages periodically
         if (current_time - last_resend_check >= RESEND_CHECK_INTERVAL_MS) {
