@@ -1,3 +1,5 @@
+- [ ] zsh: segmentation fault  ./build/klawed --zmq-client tcp://127.0.0.1:5555
+
 - [x] Investigate session resume crash (pointer being freed was not allocated)
   - Root cause: Potential double-free or memory corruption in free_internal_message
   - Fix: Added safety checks in free_internal_message() and session loading code
