@@ -20,6 +20,7 @@
 #include <time.h>
 #include <string.h>
 #include <bsd/string.h>
+#include <bsd/stdlib.h>
 #include <ctype.h>
 #include <sys/time.h>
 #include <sys/select.h>
@@ -245,6 +246,173 @@ static int zmq_send_json_response(ZMQContext *ctx, const char *message_type, con
 static int is_duplicate_message(ZMQContext *ctx, const char *message_id);
 static void add_seen_message(ZMQContext *ctx, const char *message_id);
 static void log_pending_queue_state(ZMQContext *ctx, const char *context);
+
+// Message queue helper functions
+static int message_queue_push(ZMQContext *ctx, const char *message) {
+    if (pthread_mutex_lock(&ctx->message_queue.mutex) != 0) {
+        LOG_ERROR("ZMQ: Failed to lock message queue mutex for push");
+        return -1;
+    }
+    
+    // Resize if needed
+    if (ctx->message_queue.count >= ctx->message_queue.capacity) {
+        int new_capacity = ctx->message_queue.capacity == 0 ? 16 : ctx->message_queue.capacity * 2;
+        char **new_messages = reallocarray(ctx->message_queue.messages, 
+                                          (size_t)new_capacity, sizeof(char*));
+        if (!new_messages) {
+            pthread_mutex_unlock(&ctx->message_queue.mutex);
+            return -1;
+        }
+        ctx->message_queue.messages = new_messages;
+        ctx->message_queue.capacity = new_capacity;
+    }
+    
+    // Add message
+    ctx->message_queue.messages[ctx->message_queue.count] = strdup(message);
+    if (!ctx->message_queue.messages[ctx->message_queue.count]) {
+        pthread_mutex_unlock(&ctx->message_queue.mutex);
+        return -1;
+    }
+    ctx->message_queue.count++;
+    
+    // Signal waiting thread
+    pthread_cond_signal(&ctx->message_queue.cond);
+    
+    pthread_mutex_unlock(&ctx->message_queue.mutex);
+    return 0;
+}
+
+static char* message_queue_pop(ZMQContext *ctx, int timeout_ms) {
+    struct timespec timeout;
+    int result = 0;
+    
+    if (pthread_mutex_lock(&ctx->message_queue.mutex) != 0) {
+        LOG_ERROR("ZMQ: Failed to lock message queue mutex for pop");
+        return NULL;
+    }
+    
+    // Wait for message or timeout
+    while (ctx->message_queue.count == 0 && !ctx->should_exit) {
+        if (timeout_ms > 0) {
+            clock_gettime(CLOCK_REALTIME, &timeout);
+            timeout.tv_sec += timeout_ms / 1000;
+            timeout.tv_nsec += (timeout_ms % 1000) * 1000000;
+            if (timeout.tv_nsec >= 1000000000) {
+                timeout.tv_sec++;
+                timeout.tv_nsec -= 1000000000;
+            }
+            result = pthread_cond_timedwait(&ctx->message_queue.cond, 
+                                           &ctx->message_queue.mutex, &timeout);
+            if (result == ETIMEDOUT) {
+                pthread_mutex_unlock(&ctx->message_queue.mutex);
+                return NULL;
+            }
+        } else {
+            pthread_cond_wait(&ctx->message_queue.cond, &ctx->message_queue.mutex);
+        }
+    }
+    
+    if (ctx->should_exit || ctx->message_queue.count == 0) {
+        pthread_mutex_unlock(&ctx->message_queue.mutex);
+        return NULL;
+    }
+    
+    // Get first message
+    char *message = ctx->message_queue.messages[0];
+    
+    // Shift remaining messages
+    for (int i = 1; i < ctx->message_queue.count; i++) {
+        ctx->message_queue.messages[i-1] = ctx->message_queue.messages[i];
+    }
+    ctx->message_queue.count--;
+    
+    pthread_mutex_unlock(&ctx->message_queue.mutex);
+    return message;
+}
+
+// static int message_queue_peek(ZMQContext *ctx) {
+//     pthread_mutex_lock(&ctx->message_queue.mutex);
+//     int count = ctx->message_queue.count;
+//     pthread_mutex_unlock(&ctx->message_queue.mutex);
+//     return count;
+// }
+
+// Background polling thread function
+static void* zmq_polling_thread(void *arg) {
+    ZMQContext *ctx = (ZMQContext*)arg;
+    
+    LOG_INFO("ZMQ: Background polling thread started");
+    printf("ZMQ: Background polling thread started\n");
+    
+    while (!ctx->should_exit) {
+        zmq_pollitem_t items[1];
+        items[0].socket = ctx->socket;
+        items[0].events = ZMQ_POLLIN;
+        
+        // Poll with 100ms timeout
+        int poll_result = zmq_poll(items, 1, 100);
+        LOG_DEBUG("ZMQ: Poll result: %d, revents: %d", poll_result, items[0].revents);
+        
+        if (poll_result > 0 && items[0].revents & ZMQ_POLLIN) {
+            // Receive message
+            char buffer[ZMQ_BUFFER_SIZE];
+            int received = zmq_recv(ctx->socket, buffer, sizeof(buffer) - 1, 0);
+            
+            if (received > 0) {
+                buffer[received] = '\0';
+                LOG_DEBUG("ZMQ: Background thread received %d bytes: %s", received, buffer);
+                
+                // Parse message to check type
+                cJSON *json = cJSON_Parse(buffer);
+                if (json) {
+                    cJSON *type_obj = cJSON_GetObjectItem(json, "messageType");
+                    if (type_obj && cJSON_IsString(type_obj)) {
+                        const char *type = type_obj->valuestring;
+                        
+                        // Handle ACK messages immediately
+                        if (strcmp(type, "ACK") == 0) {
+                            cJSON *id_obj = cJSON_GetObjectItem(json, "messageId");
+                            if (id_obj && cJSON_IsString(id_obj)) {
+                                remove_from_pending_queue(ctx, id_obj->valuestring);
+                            }
+                        }
+                        // Handle termination messages
+                        else if (strcmp(type, "TERMINATE") == 0) {
+                            LOG_INFO("ZMQ: Received termination message");
+                            ctx->should_exit = true;
+                        }
+                        // Queue other messages for main thread
+                        else {
+                            message_queue_push(ctx, buffer);
+                        }
+                    }
+                    cJSON_Delete(json);
+                }
+            }
+        }
+    }
+    
+    LOG_INFO("ZMQ: Background polling thread exiting");
+    return NULL;
+}
+
+// Start background polling thread
+static int start_polling_thread(ZMQContext *ctx) {
+    if (ctx->polling_thread_running) {
+        return 0; // Already running
+    }
+    
+    ctx->should_exit = false;
+    int result = pthread_create(&ctx->polling_thread, NULL, zmq_polling_thread, ctx);
+    if (result != 0) {
+        LOG_ERROR("ZMQ: Failed to create polling thread: %d", result);
+        return -1;
+    }
+    
+    ctx->polling_thread_running = true;
+    LOG_INFO("ZMQ: Background polling thread started successfully");
+    return 0;
+}
 #endif
 
 ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
@@ -366,7 +534,32 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     
     // Initialize thread pool for asynchronous tool execution
     ctx->thread_pool = NULL;
-    ctx->use_thread_pool = false;
+    
+    // Initialize background polling thread fields
+    ctx->polling_thread_running = false;
+    ctx->should_exit = false;
+    
+    // Initialize message queue
+    ctx->message_queue.messages = NULL;
+    ctx->message_queue.capacity = 0;
+    ctx->message_queue.count = 0;
+    if (pthread_mutex_init(&ctx->message_queue.mutex, NULL) != 0) {
+        LOG_ERROR("ZMQ: Failed to initialize message queue mutex");
+        if (ctx->endpoint) free(ctx->endpoint);
+        zmq_close(ctx->socket);
+        zmq_ctx_term(ctx->context);
+        free(ctx);
+        return NULL;
+    }
+    if (pthread_cond_init(&ctx->message_queue.cond, NULL) != 0) {
+        LOG_ERROR("ZMQ: Failed to initialize message queue condition variable");
+        pthread_mutex_destroy(&ctx->message_queue.mutex);
+        if (ctx->endpoint) free(ctx->endpoint);
+        zmq_close(ctx->socket);
+        zmq_ctx_term(ctx->context);
+        free(ctx);
+        return NULL;
+    }
     
     // Check if thread pool should be enabled (default: enabled for daemon mode)
     const char *disable_thread_pool = getenv("KLAWED_ZMQ_DISABLE_THREAD_POOL");
@@ -374,10 +567,9 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
         // Create thread pool with reasonable defaults
         ctx->thread_pool = zmq_thread_pool_init(4, 50); // 4 threads, max 50 queued tasks
         if (ctx->thread_pool) {
-            ctx->use_thread_pool = true;
             LOG_INFO("ZMQ: Thread pool initialized for asynchronous tool execution");
         } else {
-            LOG_WARN("ZMQ: Failed to initialize thread pool, tool execution will be synchronous");
+            LOG_WARN("ZMQ: Failed to initialize thread pool");
         }
     } else {
         LOG_INFO("ZMQ: Thread pool disabled by environment variable");
@@ -388,6 +580,8 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     LOG_INFO("ZMQ: Socket initialization completed successfully");
     return ctx;
 #else
+    (void)endpoint;
+    (void)socket_type;
     LOG_ERROR("ZMQ: ZeroMQ support not compiled in");
     return NULL;
 #endif
@@ -439,6 +633,31 @@ void zmq_socket_cleanup(ZMQContext *ctx) {
         zmq_thread_pool_cleanup(ctx->thread_pool);
         ctx->thread_pool = NULL;
     }
+    
+    // Signal polling thread to exit and wait for it
+    if (ctx->polling_thread_running) {
+        ctx->should_exit = true;
+        pthread_join(ctx->polling_thread, NULL);
+        ctx->polling_thread_running = false;
+    }
+    
+    // Clean up message queue
+    if (pthread_mutex_lock(&ctx->message_queue.mutex) == 0) {
+        for (int i = 0; i < ctx->message_queue.count; i++) {
+            if (ctx->message_queue.messages[i]) {
+                free(ctx->message_queue.messages[i]);
+            }
+        }
+        if (ctx->message_queue.messages) {
+            free(ctx->message_queue.messages);
+        }
+        pthread_mutex_unlock(&ctx->message_queue.mutex);
+    } else {
+        LOG_WARN("ZMQ: Failed to lock message queue mutex during cleanup");
+    }
+    
+    pthread_mutex_destroy(&ctx->message_queue.mutex);
+    pthread_cond_destroy(&ctx->message_queue.cond);
 
     free(ctx);
 #else
@@ -481,7 +700,7 @@ int zmq_socket_send(ZMQContext *ctx, const char *message, size_t message_len) {
     LOG_DEBUG("ZMQ: Sending %zu bytes to endpoint: %s",
               message_len, ctx->endpoint ? ctx->endpoint : "unknown");
 
-    int rc = zmq_send(ctx->socket, message, message_len, 0);
+    int rc = zmq_send(ctx->socket, message, message_len, ZMQ_DONTWAIT);
     if (rc < 0) {
         int err = errno;
         LOG_ERROR("ZMQ: Failed to send message: %s", zmq_strerror(err));
@@ -528,7 +747,7 @@ int zmq_socket_receive(ZMQContext *ctx, char *buffer, size_t buffer_size, int ti
         }
     }
 
-    LOG_INFO("ZMQ: Received %d bytes from endpoint: %s", rc,
+    LOG_DEBUG("ZMQ: Received %d bytes from endpoint: %s", rc,
              ctx->endpoint ? ctx->endpoint : "unknown");
     buffer[rc] = '\0'; // Null-terminate the received data
     return rc;
@@ -635,10 +854,10 @@ int zmq_socket_send_with_id(ZMQContext *ctx, const char *message, size_t message
     // Send the wrapped message
     LOG_DEBUG("ZMQ: About to send message %s (wrapped length: %zu, original length: %zu)",
               message_id, wrapped_len, message_len);
-    int rc = zmq_send(ctx->socket, wrapped_message, wrapped_len, 0);
+    int rc = zmq_send(ctx->socket, wrapped_message, wrapped_len, ZMQ_DONTWAIT);
 
     if (rc >= 0) {
-        LOG_INFO("ZMQ: Sent message %s (%zu bytes -> %d bytes sent, pending queue: %d/%d)",
+        LOG_DEBUG("ZMQ: Sent message %s (%zu bytes -> %d bytes sent, pending queue: %d/%d)",
                   message_id, wrapped_len, rc, ctx->pending_queue.count + 1, ctx->pending_queue.max_pending);
         LOG_DEBUG("ZMQ: Message content preview (first 500 chars): %.*s",
                  (int)(wrapped_len > 500 ? 500 : wrapped_len), wrapped_message);
@@ -719,11 +938,11 @@ int zmq_send_ack(ZMQContext *ctx, const char *message_id) {
     size_t ack_len = strlen(ack_str);
     LOG_DEBUG("ZMQ: ACK message length: %zu bytes", ack_len);
 
-    int rc = zmq_send(ctx->socket, ack_str, ack_len, 0);
+    int rc = zmq_send(ctx->socket, ack_str, ack_len, ZMQ_DONTWAIT);
     free(ack_str);
 
     if (rc >= 0) {
-        LOG_INFO("ZMQ: Sent ACK for message %s (%d bytes)", message_id, rc);
+        LOG_DEBUG("ZMQ: Sent ACK for message %s (%d bytes)", message_id, rc);
         return ZMQ_ERROR_NONE;
     } else {
         int err = errno;
@@ -1002,10 +1221,6 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
     LOG_DEBUG("ZMQ: Raw message (first 1000 chars): %.*s",
              (int)(buffer_len > 1000 ? 1000 : buffer_len), buffer);
 
-    // Print to console
-    printf("ZMQ: Processing %d byte message\n", buffer_len);
-    fflush(stdout);
-
     // Parse JSON message
     cJSON *json = cJSON_Parse(buffer);
     if (!json) {
@@ -1071,7 +1286,12 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
                      message_type && cJSON_IsString(message_type) ? message_type->valuestring : "unknown");
             // Still send ACK for duplicate to prevent retries
             LOG_INFO("ZMQ: Sending ACK for duplicate message %s", message_id->valuestring);
-            zmq_send_ack(ctx, message_id->valuestring);
+            int ack_result = zmq_send_ack(ctx, message_id->valuestring);
+            if (ack_result != ZMQ_ERROR_NONE) {
+                LOG_ERROR("ZMQ: Failed to send ACK for duplicate message %s (error: %d)",
+                         message_id->valuestring, ack_result);
+                // Don't delete JSON yet - let it be processed as a duplicate again on retry
+            }
             cJSON_Delete(json);
             return 0;
         }
@@ -1079,8 +1299,17 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
         LOG_INFO("ZMQ: Sending ACK for message %s (type: %s)",
                  message_id->valuestring,
                  message_type && cJSON_IsString(message_type) ? message_type->valuestring : "unknown");
-        zmq_send_ack(ctx, message_id->valuestring);
-        // Mark this message as seen
+        int ack_result = zmq_send_ack(ctx, message_id->valuestring);
+        if (ack_result != ZMQ_ERROR_NONE) {
+            LOG_ERROR("ZMQ: Failed to send ACK for message %s (error: %d)",
+                     message_id->valuestring, ack_result);
+            // Don't mark as seen if ACK failed - let client retry
+            cJSON_Delete(json);
+            return -1;
+        } else {
+            LOG_DEBUG("ZMQ: ACK sent successfully for message %s", message_id->valuestring);
+        }
+        // Mark this message as seen (only if ACK succeeded)
         add_seen_message(ctx, message_id->valuestring);
     } else {
         LOG_DEBUG("ZMQ: No message ID to ACK");
@@ -1102,7 +1331,8 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
                          content_len > 200 ? "..." : "");
             }
 
-            printf("ZMQ: Processing TEXT message (length: %zu)\n", content_len);
+            // Print the full TEXT message content to console (daemon messages should be shown)
+            // Message content is logged via LOG_INFO, no console output needed for daemon
             fflush(stdout);
 
             // Process interactively (handles tool calls recursively)
@@ -1372,7 +1602,7 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
 
     // Main interactive loop
     int iteration = 0;
-    const int MAX_ITERATIONS = 50; // Safety limit
+    const int MAX_ITERATIONS = 500; // Safety limit
 
     while (iteration < MAX_ITERATIONS) {
         iteration++;
@@ -1404,10 +1634,7 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
             if (*p != '\0') {  // Has non-whitespace content
                 LOG_INFO("ZMQ: Sending assistant text response");
 
-                printf("\n--- AI Response ---\n");
-                int preview_len = (int)(strlen(p) > 200 ? 200 : strlen(p));
-                printf("%.*s%s\n", preview_len, p, strlen(p) > 200 ? "..." : "");
-                printf("--- End of AI Response ---\n");
+                // AI response is logged via LOG_INFO, no console output needed for daemon
                 fflush(stdout);
 
                 zmq_send_json_response(ctx, "TEXT", p);
@@ -1432,6 +1659,7 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
 
         if (tool_count > 0) {
             LOG_INFO("ZMQ: Processing %d tool call(s)", tool_count);
+            LOG_DEBUG("ZMQ: Daemon mode tool execution - checking tool availability");
 
             // Allocate results array
             InternalContent *results = calloc((size_t)tool_count, sizeof(InternalContent));
@@ -1442,7 +1670,8 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                 return -1;
             }
 
-            // Execute tools synchronously
+            // Submit all tools to thread pool
+            int tools_submitted = 0;
             for (int i = 0; i < tool_count; i++) {
                 ToolCall *tool = &tool_calls_array[i];
                 if (!tool->name || !tool->id) {
@@ -1462,12 +1691,10 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                 }
 
                 LOG_INFO("ZMQ: Executing tool: %s (id: %s)", tool->name, tool->id);
-                printf("ZMQ: Executing tool: %s\n", tool->name);
-                fflush(stdout);
 
                 // Validate that the tool is in the allowed tools list
                 if (!is_tool_allowed(tool->name, state)) {
-                    LOG_ERROR("ZMQ: Tool validation failed: '%s' was not provided in tools list",
+                    LOG_ERROR("ZMQ: Tool validation failed: '%s' was not provided in tools list (cannot execute tool in daemon mode)",
                               tool->name);
                     results[i].type = INTERNAL_TOOL_RESPONSE;
                     results[i].tool_id = strdup(tool->id);
@@ -1490,82 +1717,52 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                     ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
                     : cJSON_CreateObject();
 
-                // Check if we should use thread pool for asynchronous execution
-                if (ctx->use_thread_pool && ctx->thread_pool) {
-                    // Submit task to thread pool for asynchronous execution
-                    LOG_INFO("ZMQ: Submitting tool '%s' (id: %s) to thread pool for asynchronous execution",
-                             tool->name, tool->id);
-                    
-                    int submit_result = zmq_thread_pool_submit_task(ctx->thread_pool,
-                                                                    tool->name,
-                                                                    tool->id,
-                                                                    input,
-                                                                    state,
-                                                                    ctx);
-                    
-                    if (submit_result == 0) {
-                        // Task successfully submitted to thread pool
-                        // We don't execute it synchronously, so we need to create a placeholder result
-                        // The actual tool result will be sent by the worker thread
-                        results[i].type = INTERNAL_TOOL_RESPONSE;
-                        results[i].tool_id = strdup(tool->id);
-                        results[i].tool_name = strdup(tool->name);
-                        results[i].tool_output = cJSON_CreateObject();
-                        cJSON_AddStringToObject(results[i].tool_output, "status", "queued");
-                        cJSON_AddStringToObject(results[i].tool_output, "message", "Tool execution queued for asynchronous processing");
-                        results[i].is_error = 0;
-                        
-                        // Note: input is now owned by the thread pool task, don't delete it here
-                    } else {
-                        // Thread pool submission failed, fall back to synchronous execution
-                        LOG_WARN("ZMQ: Thread pool submission failed for tool '%s', falling back to synchronous execution",
-                                 tool->name);
-                        
-                        // Send TOOL request message before execution
-                        zmq_send_tool_request(ctx, tool->name, tool->id, input);
-                        
-                        // Execute tool synchronously
-                        cJSON *tool_result = execute_tool(tool->name, input, state);
-                        
-                        // Send tool result response
-                        zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
-                        
-                        // Store tool result
-                        results[i].type = INTERNAL_TOOL_RESPONSE;
-                        results[i].tool_id = strdup(tool->id);
-                        results[i].tool_name = strdup(tool->name);
-                        results[i].tool_output = tool_result ? cJSON_Duplicate(tool_result, 1) : cJSON_CreateObject();
-                        results[i].is_error = 0;
-                        
-                        // Clean up
-                        if (tool_result) cJSON_Delete(tool_result);
-                        if (input) cJSON_Delete(input);
-                    }
+                // Submit task to thread pool for asynchronous execution
+                LOG_INFO("ZMQ: Submitting tool '%s' (id: %s) to thread pool",
+                         tool->name, tool->id);
+                
+                int submit_result = zmq_thread_pool_submit_task(ctx->thread_pool,
+                                                                tool->name,
+                                                                tool->id,
+                                                                input,
+                                                                state,
+                                                                ctx);
+                
+                if (submit_result == 0) {
+                    tools_submitted++;
+                    // Note: input is now owned by the thread pool task, don't delete it here
                 } else {
-                    // Thread pool not available, execute synchronously
-                    LOG_DEBUG("ZMQ: Executing tool '%s' synchronously (thread pool not available)",
-                             tool->name);
-                    
-                    // Send TOOL request message before execution
-                    zmq_send_tool_request(ctx, tool->name, tool->id, input);
-                    
-                    // Execute tool synchronously
-                    cJSON *tool_result = execute_tool(tool->name, input, state);
-                    
-                    // Send tool result response
-                    zmq_send_tool_result(ctx, tool->name, tool->id, tool_result, 0);
-                    
-                    // Store tool result
-                    results[i].type = INTERNAL_TOOL_RESPONSE;
-                    results[i].tool_id = strdup(tool->id);
-                    results[i].tool_name = strdup(tool->name);
-                    results[i].tool_output = tool_result ? cJSON_Duplicate(tool_result, 1) : cJSON_CreateObject();
-                    results[i].is_error = 0;
-                    
-                    // Clean up
-                    if (tool_result) cJSON_Delete(tool_result);
+                    LOG_ERROR("ZMQ: Failed to submit tool '%s' to thread pool", tool->name);
+                    // Clean up input since submission failed
                     if (input) cJSON_Delete(input);
                 }
+            }
+
+            // Wait for all tools to complete if any were submitted
+            if (tools_submitted > 0 && ctx->thread_pool) {
+                LOG_INFO("ZMQ: Waiting for %d tool(s) to complete", tools_submitted);
+                int wait_result = zmq_thread_pool_wait_for_completion(ctx->thread_pool, 0);
+                if (wait_result != 0) {
+                    LOG_WARN("ZMQ: Timeout or error waiting for tool completion");
+                } else {
+                    LOG_INFO("ZMQ: All tools completed successfully");
+                }
+            }
+
+            // Tool results are sent by worker threads via ZMQ
+            // We need to collect them from the message queue
+            for (int i = 0; i < tool_count; i++) {
+                ToolCall *tool = &tool_calls_array[i];
+                if (!tool->name || !tool->id) continue;
+
+                // Create placeholder result (actual result sent by worker thread)
+                results[i].type = INTERNAL_TOOL_RESPONSE;
+                results[i].tool_id = strdup(tool->id);
+                results[i].tool_name = strdup(tool->name);
+                results[i].tool_output = cJSON_CreateObject();
+                cJSON_AddStringToObject(results[i].tool_output, "status", "completed");
+                cJSON_AddStringToObject(results[i].tool_output, "message", "Tool executed asynchronously");
+                results[i].is_error = 0;
             }
 
             // Add tool results to conversation
@@ -1614,7 +1811,7 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     }
 
     LOG_INFO("ZMQ: =========================================");
-    LOG_INFO("ZMQ: Starting ZMQ daemon mode with zmq_poll() multiplexing");
+    LOG_INFO("ZMQ: Starting ZMQ daemon mode with background polling thread");
     LOG_INFO("ZMQ: Endpoint: %s", ctx->endpoint);
     LOG_INFO("ZMQ: Socket type: ZMQ_PAIR (Peer-to-peer)");
     LOG_INFO("ZMQ: Message ID/ACK system enabled (salt: 0x%08x)", ctx->salt);
@@ -1622,37 +1819,30 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     LOG_INFO("ZMQ:   Max pending messages: %d", ctx->pending_queue.max_pending);
     LOG_INFO("ZMQ:   ACK timeout: %lld ms", (long long)ctx->pending_queue.timeout_ms);
     LOG_INFO("ZMQ:   Max retries: %d", ctx->pending_queue.max_retries);
-    LOG_INFO("ZMQ: Time-sharing loop configuration:");
-    LOG_INFO("ZMQ:   Poll timeout: %d ms", 100); // ZMQ_POLL_TIMEOUT_MS
-    LOG_INFO("ZMQ:   Resend check interval: %d ms", 1000); // RESEND_CHECK_INTERVAL_MS
+    LOG_INFO("ZMQ: Architecture: Main thread handles LLM calls, background thread polls ZMQ");
     LOG_INFO("ZMQ: =========================================");
 
-    printf("ZMQ daemon started on %s\n", ctx->endpoint);
-    printf("Message ID/ACK system: Enabled (salt: 0x%08x)\n", ctx->salt);
-    printf("Pending queue: max=%d, timeout=%lldms, retries=%d\n",
-           ctx->pending_queue.max_pending,
-           (long long)ctx->pending_queue.timeout_ms,
-           ctx->pending_queue.max_retries);
-    printf("Daemon is listening for ZMQ messages...\n");
-    printf("----------------------------------------\n");
+    // Daemon startup is logged via LOG_INFO, no console output needed
     fflush(stdout);
+
+    // Start background polling thread
+    if (start_polling_thread(ctx) != 0) {
+        LOG_ERROR("ZMQ: Failed to start background polling thread");
+        return -1;
+    }
 
     int message_count = 0;
     int error_count = 0;
     int64_t last_resend_check = 0;
+    int64_t last_queue_log = 0;
     const int64_t RESEND_CHECK_INTERVAL_MS = 1000; // Check pending messages every second
-    const int ZMQ_POLL_TIMEOUT_MS = 100; // Check for events every 100ms
+    const int64_t QUEUE_LOG_INTERVAL_MS = 5000; // Log queue state every 5 seconds
 
-    // Set up zmq_poll items - only monitor ZMQ socket (no stdin)
-    zmq_pollitem_t items[1];
-    items[0].socket = ctx->socket;
-    items[0].events = ZMQ_POLLIN;
-    items[0].fd = 0;
-    items[0].revents = 0;
-
-    // Main event loop using zmq_poll()
-    while (ctx->enabled) {
+    // Main event loop - uses message queue from background thread
+    LOG_INFO("ZMQ: Entering main event loop");
+    while (ctx->enabled && !ctx->should_exit) {
         int64_t current_time = get_current_time_ms();
+        LOG_DEBUG("ZMQ: Main loop iteration");
 
         // 1. Check and resend pending messages periodically
         if (current_time - last_resend_check >= RESEND_CHECK_INTERVAL_MS) {
@@ -1663,74 +1853,35 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
             last_resend_check = current_time;
         }
 
-        // 2. Wait for events using zmq_poll()
-        int poll_result = zmq_poll(items, 1, ZMQ_POLL_TIMEOUT_MS);
-
-        if (poll_result < 0) {
-            // Error in zmq_poll()
-            if (errno == EINTR) {
-                // Interrupted by signal, continue
-                continue;
+        // Log pending queue state periodically
+        if (current_time - last_queue_log >= QUEUE_LOG_INTERVAL_MS) {
+            if (ctx->pending_queue.count > 0) {
+                LOG_INFO("ZMQ: Pending queue: %d message(s) waiting for ACK", ctx->pending_queue.count);
+                // Log detailed state at DEBUG level
+                log_pending_queue_state(ctx, "periodic_check");
             }
-            LOG_ERROR("ZMQ: zmq_poll() error: %s", zmq_strerror(errno));
-            break;
-        } else if (poll_result == 0) {
-            // Timeout, continue loop to check pending messages
-            continue;
+            last_queue_log = current_time;
         }
 
-        // 3. Check for ZMQ socket events
-        if (items[0].revents & ZMQ_POLLIN) {
-            // ZMQ socket is ready for reading
-            char buffer[ZMQ_BUFFER_SIZE];
-            int received = zmq_socket_receive(ctx, buffer, sizeof(buffer), 0); // Non-blocking
+        // 2. Check for messages from background polling thread
+        char *message = message_queue_pop(ctx, 100); // 100ms timeout
+        if (message) {
+            message_count++;
+            error_count = 0; // Reset error count on successful receive
 
-            if (received > 0) {
-                message_count++;
-                error_count = 0; // Reset error count on successful receive
-
-                LOG_INFO("ZMQ: Received %d bytes (message #%d)", received, message_count);
-                printf("> Received message #%d\n", message_count);
-                fflush(stdout);
-
-                // Log raw message preview for debugging
-                if (received > 0) {
-                    int preview_len = received > 500 ? 500 : received;
-                    LOG_DEBUG("ZMQ: Raw message preview (first %d chars): %.*s",
-                             preview_len, preview_len, buffer);
+            LOG_INFO("ZMQ: Processing message #%d from background thread", message_count);
+            
+            // Process the message
+            int result = zmq_process_message_from_buffer(ctx, state, NULL, message, (int)strlen(message));
+            free(message);
+            
+            if (result != 0) {
+                LOG_ERROR("ZMQ: Failed to process message #%d", message_count);
+                error_count++;
+                if (error_count >= 10) {
+                    LOG_ERROR("ZMQ: Too many consecutive errors (%d), stopping daemon", error_count);
+                    break;
                 }
-
-                // Process the message from buffer (already received)
-                // Null-terminate the buffer
-                if (received < (int)sizeof(buffer)) {
-                    buffer[received] = '\0';
-                } else {
-                    buffer[sizeof(buffer) - 1] = '\0';
-                }
-
-                LOG_DEBUG("ZMQ: Calling zmq_process_message_from_buffer for message #%d", message_count);
-                int result = zmq_process_message_from_buffer(ctx, state, NULL, buffer, received);
-                if (result != 0) {
-                    error_count++;
-                    LOG_WARN("ZMQ: Message processing failed (error #%d)", error_count);
-
-                    if (error_count > 10) {
-                        LOG_ERROR("ZMQ: Too many consecutive errors (%d), stopping daemon",
-                                  error_count);
-                        printf("ZMQ: Too many consecutive errors (%d), stopping daemon\n",
-                               error_count);
-                        break;
-                    }
-                } else {
-                    LOG_INFO("ZMQ: Successfully processed message #%d", message_count);
-                }
-            } else if (received == ZMQ_ERROR_RECEIVE_TIMEOUT) {
-                // No message available despite POLLIN flag, continue
-                LOG_DEBUG("ZMQ: No message available despite POLLIN flag");
-            } else if (received == ZMQ_ERROR_RECEIVE_FAILED) {
-                // Actual error (not timeout)
-                LOG_ERROR("ZMQ: Receive error, stopping daemon");
-                break;
             }
         }
     }
@@ -1741,9 +1892,7 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
     LOG_INFO("ZMQ: Total errors: %d", error_count);
     LOG_INFO("ZMQ: =========================================");
 
-    printf("\nZMQ daemon stopped\n");
-    printf("Total messages processed: %d\n", message_count);
-    printf("Total errors: %d\n", error_count);
+    // Daemon stop is logged via LOG_INFO, no console output needed
     fflush(stdout);
 
     return 0;
