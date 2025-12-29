@@ -57,24 +57,24 @@ typedef struct ZMQThreadPool {
     pthread_t *threads;        // Array of thread IDs
     int thread_count;          // Current number of threads
     int max_threads;           // Maximum allowed threads
-    
+
     // Task queue
     ZMQToolTask *task_queue_head;
     ZMQToolTask *task_queue_tail;
     int queue_size;
     int max_queue_size;
-    
+
     // Synchronization
     pthread_mutex_t queue_mutex;
     pthread_cond_t queue_cond;
     pthread_cond_t queue_not_full_cond;
-    
+
     // Statistics
     ZMQThreadPoolStats stats;
-    
+
     // Configuration
     ZMQThreadPoolConfig config;
-    
+
     // Control flags
     bool shutdown_requested;
     bool running;

@@ -18,7 +18,7 @@ int zmq_queue_init(ZMQMessageQueue *queue, size_t max_capacity) {
         LOG_ERROR("ZMQ Queue: Cannot initialize NULL queue");
         return -1;
     }
-    
+
     // Initialize queue structure
     queue->head = NULL;
     queue->tail = NULL;
@@ -27,27 +27,27 @@ int zmq_queue_init(ZMQMessageQueue *queue, size_t max_capacity) {
     queue->total_enqueued = 0;
     queue->total_dequeued = 0;
     queue->overflow_count = 0;
-    
+
     // Initialize mutex
     if (pthread_mutex_init(&queue->mutex, NULL) != 0) {
         LOG_ERROR("ZMQ Queue: Failed to initialize mutex: %s", strerror(errno));
         return -1;
     }
-    
+
     // Initialize condition variables
     if (pthread_cond_init(&queue->not_empty, NULL) != 0) {
         LOG_ERROR("ZMQ Queue: Failed to initialize not_empty condition: %s", strerror(errno));
         pthread_mutex_destroy(&queue->mutex);
         return -1;
     }
-    
+
     if (pthread_cond_init(&queue->not_full, NULL) != 0) {
         LOG_ERROR("ZMQ Queue: Failed to initialize not_full condition: %s", strerror(errno));
         pthread_cond_destroy(&queue->not_empty);
         pthread_mutex_destroy(&queue->mutex);
         return -1;
     }
-    
+
     LOG_DEBUG("ZMQ Queue: Initialized with capacity %zu", max_capacity);
     return 0;
 }
@@ -57,17 +57,17 @@ int zmq_queue_init(ZMQMessageQueue *queue, size_t max_capacity) {
  */
 void zmq_queue_destroy(ZMQMessageQueue *queue) {
     if (!queue) return;
-    
+
     LOG_DEBUG("ZMQ Queue: Destroying queue with %zu messages", queue->count);
-    
+
     // Clear all messages
     zmq_queue_clear(queue);
-    
+
     // Destroy synchronization primitives
     pthread_cond_destroy(&queue->not_full);
     pthread_cond_destroy(&queue->not_empty);
     pthread_mutex_destroy(&queue->mutex);
-    
+
     LOG_DEBUG("ZMQ Queue: Destroyed");
 }
 
@@ -79,10 +79,10 @@ int zmq_queue_enqueue(ZMQMessageQueue *queue, const ZMQMessage *msg, int timeout
         LOG_ERROR("ZMQ Queue: Invalid parameters for enqueue");
         return -2;
     }
-    
+
     int result = 0;
     struct timespec timeout_ts;
-    
+
     // Calculate absolute timeout if needed
     if (timeout_ms > 0) {
         clock_gettime(CLOCK_REALTIME, &timeout_ts);
@@ -93,9 +93,9 @@ int zmq_queue_enqueue(ZMQMessageQueue *queue, const ZMQMessage *msg, int timeout
             timeout_ts.tv_nsec -= 1000000000;
         }
     }
-    
+
     pthread_mutex_lock(&queue->mutex);
-    
+
     // Wait for space if queue is full (with timeout if specified)
     while (queue->max_capacity > 0 && queue->count >= queue->max_capacity) {
         if (timeout_ms == 0) {
@@ -123,7 +123,7 @@ int zmq_queue_enqueue(ZMQMessageQueue *queue, const ZMQMessage *msg, int timeout
             pthread_cond_wait(&queue->not_full, &queue->mutex);
         }
     }
-    
+
     // Create a copy of the message
     ZMQMessage *new_msg = zmq_message_copy(msg);
     if (!new_msg) {
@@ -131,7 +131,7 @@ int zmq_queue_enqueue(ZMQMessageQueue *queue, const ZMQMessage *msg, int timeout
         LOG_ERROR("ZMQ Queue: Failed to copy message for enqueue");
         return -2;
     }
-    
+
     // Add to queue
     new_msg->next = NULL;
     if (queue->tail) {
@@ -143,16 +143,16 @@ int zmq_queue_enqueue(ZMQMessageQueue *queue, const ZMQMessage *msg, int timeout
     }
     queue->count++;
     queue->total_enqueued++;
-    
+
     LOG_DEBUG("ZMQ Queue: Enqueued message (type: %s, id: %s, queue size: %zu)",
               new_msg->message_type ? new_msg->message_type : "unknown",
               new_msg->message_id[0] ? new_msg->message_id : "none",
               queue->count);
-    
+
     // Signal that queue is not empty
     pthread_cond_signal(&queue->not_empty);
     pthread_mutex_unlock(&queue->mutex);
-    
+
     return result;
 }
 
@@ -164,10 +164,10 @@ int zmq_queue_dequeue(ZMQMessageQueue *queue, ZMQMessage *msg, int timeout_ms) {
         LOG_ERROR("ZMQ Queue: Invalid parameters for dequeue");
         return -2;
     }
-    
+
     int result = 0;
     struct timespec timeout_ts;
-    
+
     // Calculate absolute timeout if needed
     if (timeout_ms > 0) {
         clock_gettime(CLOCK_REALTIME, &timeout_ts);
@@ -178,9 +178,9 @@ int zmq_queue_dequeue(ZMQMessageQueue *queue, ZMQMessage *msg, int timeout_ms) {
             timeout_ts.tv_nsec -= 1000000000;
         }
     }
-    
+
     pthread_mutex_lock(&queue->mutex);
-    
+
     // Wait for message if queue is empty (with timeout if specified)
     while (queue->count == 0) {
         if (timeout_ms == 0) {
@@ -203,7 +203,7 @@ int zmq_queue_dequeue(ZMQMessageQueue *queue, ZMQMessage *msg, int timeout_ms) {
             pthread_cond_wait(&queue->not_empty, &queue->mutex);
         }
     }
-    
+
     // Remove message from queue
     ZMQMessage *old_msg = queue->head;
     queue->head = old_msg->next;
@@ -212,7 +212,7 @@ int zmq_queue_dequeue(ZMQMessageQueue *queue, ZMQMessage *msg, int timeout_ms) {
     }
     queue->count--;
     queue->total_dequeued++;
-    
+
     // Copy message data to output
     msg->data = old_msg->data;  // Transfer ownership
     msg->length = old_msg->length;
@@ -220,21 +220,21 @@ int zmq_queue_dequeue(ZMQMessageQueue *queue, ZMQMessage *msg, int timeout_ms) {
     msg->message_type = old_msg->message_type;  // Transfer ownership
     msg->timestamp_ms = old_msg->timestamp_ms;
     msg->next = NULL;
-    
+
     // Free the queue node (but not the data)
     free(old_msg);
-    
+
     LOG_DEBUG("ZMQ Queue: Dequeued message (type: %s, id: %s, queue size: %zu)",
               msg->message_type ? msg->message_type : "unknown",
               msg->message_id[0] ? msg->message_id : "none",
               queue->count);
-    
+
     // Signal that queue is not full (if capacity limited)
     if (queue->max_capacity > 0) {
         pthread_cond_signal(&queue->not_full);
     }
     pthread_mutex_unlock(&queue->mutex);
-    
+
     return result;
 }
 
@@ -250,11 +250,11 @@ int zmq_queue_try_dequeue(ZMQMessageQueue *queue, ZMQMessage *msg) {
  */
 bool zmq_queue_is_empty(ZMQMessageQueue *queue) {
     if (!queue) return true;
-    
+
     pthread_mutex_lock(&queue->mutex);
     bool empty = (queue->count == 0);
     pthread_mutex_unlock(&queue->mutex);
-    
+
     return empty;
 }
 
@@ -263,11 +263,11 @@ bool zmq_queue_is_empty(ZMQMessageQueue *queue) {
  */
 size_t zmq_queue_size(ZMQMessageQueue *queue) {
     if (!queue) return 0;
-    
+
     pthread_mutex_lock(&queue->mutex);
     size_t count = queue->count;
     pthread_mutex_unlock(&queue->mutex);
-    
+
     return count;
 }
 
@@ -276,25 +276,25 @@ size_t zmq_queue_size(ZMQMessageQueue *queue) {
  */
 void zmq_queue_clear(ZMQMessageQueue *queue) {
     if (!queue) return;
-    
+
     pthread_mutex_lock(&queue->mutex);
-    
+
     ZMQMessage *curr = queue->head;
     while (curr) {
         ZMQMessage *next = curr->next;
         zmq_message_free(curr);
         curr = next;
     }
-    
+
     queue->head = NULL;
     queue->tail = NULL;
     queue->count = 0;
-    
+
     // Wake up any waiting threads
     pthread_cond_broadcast(&queue->not_full);
-    
+
     pthread_mutex_unlock(&queue->mutex);
-    
+
     LOG_DEBUG("ZMQ Queue: Cleared all messages");
 }
 
@@ -304,13 +304,13 @@ void zmq_queue_clear(ZMQMessageQueue *queue) {
 void zmq_queue_get_stats(ZMQMessageQueue *queue, uint64_t *total_enqueued,
                          uint64_t *total_dequeued, uint64_t *overflow_count) {
     if (!queue) return;
-    
+
     pthread_mutex_lock(&queue->mutex);
-    
+
     if (total_enqueued) *total_enqueued = queue->total_enqueued;
     if (total_dequeued) *total_dequeued = queue->total_dequeued;
     if (overflow_count) *overflow_count = queue->overflow_count;
-    
+
     pthread_mutex_unlock(&queue->mutex);
 }
 
@@ -323,13 +323,13 @@ ZMQMessage* zmq_message_create(const char *data, size_t length,
         LOG_ERROR("ZMQ Queue: Cannot create message with NULL data or zero length");
         return NULL;
     }
-    
+
     ZMQMessage *msg = calloc(1, sizeof(ZMQMessage));
     if (!msg) {
         LOG_ERROR("ZMQ Queue: Failed to allocate message");
         return NULL;
     }
-    
+
     // Copy message data
     msg->data = malloc(length + 1);
     if (!msg->data) {
@@ -340,14 +340,14 @@ ZMQMessage* zmq_message_create(const char *data, size_t length,
     memcpy(msg->data, data, length);
     msg->data[length] = '\0';
     msg->length = length;
-    
+
     // Copy message ID if provided
     if (message_id && message_id[0]) {
         strlcpy(msg->message_id, message_id, sizeof(msg->message_id));
     } else {
         msg->message_id[0] = '\0';
     }
-    
+
     // Copy message type if provided
     if (message_type && message_type[0]) {
         msg->message_type = strdup(message_type);
@@ -358,17 +358,17 @@ ZMQMessage* zmq_message_create(const char *data, size_t length,
             return NULL;
         }
     }
-    
+
     // Set timestamp
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     msg->timestamp_ms = (int64_t)ts.tv_sec * 1000 + (int64_t)ts.tv_nsec / 1000000;
-    
+
     LOG_DEBUG("ZMQ Queue: Created message (type: %s, id: %s, length: %zu)",
               msg->message_type ? msg->message_type : "unknown",
               msg->message_id[0] ? msg->message_id : "none",
               length);
-    
+
     return msg;
 }
 
@@ -377,7 +377,7 @@ ZMQMessage* zmq_message_create(const char *data, size_t length,
  */
 void zmq_message_free(ZMQMessage *msg) {
     if (!msg) return;
-    
+
     if (msg->data) {
         free(msg->data);
     }
@@ -392,7 +392,7 @@ void zmq_message_free(ZMQMessage *msg) {
  */
 ZMQMessage* zmq_message_copy(const ZMQMessage *src) {
     if (!src) return NULL;
-    
+
     return zmq_message_create(src->data, src->length,
                               src->message_id, src->message_type);
 }

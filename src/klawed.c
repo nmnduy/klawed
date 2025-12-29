@@ -1513,13 +1513,13 @@ STATIC int timeout_command_available(void) {
     if (result == 0) {
         return 1;  // timeout command is available
     }
-    
+
     // Try alternative: check if timeout exists in common locations
     if (access("/usr/bin/timeout", X_OK) == 0 ||
         access("/bin/timeout", X_OK) == 0) {
         return 1;
     }
-    
+
     return 0;  // timeout command not available
 }
 
@@ -1586,15 +1586,15 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
         snprintf(warning, sizeof(warning), "[Warning] Bash timeout set to %d seconds (unusually long)", timeout_seconds);
         post_tui_message(g_active_tool_queue, TUI_MSG_ADD_LINE, warning);
     }
-    
+
     // Check for timeout limits (some timeout implementations have max limits)
     // Common limit is 999999 seconds (~11.5 days)
     if (timeout_seconds > 999999) {
         LOG_WARN("Timeout value %d seconds exceeds typical 'timeout' command limit (999999)", timeout_seconds);
         if (g_active_tool_queue) {
             char warning[256];
-            snprintf(warning, sizeof(warning), 
-                    "[Warning] Timeout value %d seconds may exceed 'timeout' command limits", 
+            snprintf(warning, sizeof(warning),
+                    "[Warning] Timeout value %d seconds may exceed 'timeout' command limits",
                     timeout_seconds);
             post_tui_message(g_active_tool_queue, TUI_MSG_ADD_LINE, warning);
         }
@@ -1625,22 +1625,22 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     // Redirect stdin to /dev/null to prevent child processes from competing for terminal input
     // Try to use 'timeout' command for reliable total timeout enforcement
     int use_timeout = timeout_command_available();
-    
+
     if (use_timeout) {
         // Use timeout command for kernel-enforced total timeout
-        snprintf(full_command, sizeof(full_command), 
-                 "timeout %ds sh -c '%s' </dev/null 2>&1", 
+        snprintf(full_command, sizeof(full_command),
+                 "timeout %ds sh -c '%s' </dev/null 2>&1",
                  timeout_seconds, escaped_command);
         LOG_DEBUG("Using kernel-enforced timeout via 'timeout' command");
     } else {
         // Fallback to original implementation without timeout command
-        snprintf(full_command, sizeof(full_command), 
+        snprintf(full_command, sizeof(full_command),
                  "sh -c '%s' </dev/null 2>&1", escaped_command);
-        
+
         // Warn about missing timeout command
         if (g_active_tool_queue) {
             char warning[256];
-            snprintf(warning, sizeof(warning), 
+            snprintf(warning, sizeof(warning),
                     "[Warning] 'timeout' command not available. Using application-level timeout (less reliable).");
             post_tui_message(g_active_tool_queue, TUI_MSG_ADD_LINE, warning);
         }
@@ -1772,7 +1772,7 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     } else {
         // Fallback: Use select() with total timeout (not per-read timeout)
         time_t start_time = time(NULL);
-        
+
         while (1) {
             // Check for interrupt during long-running command
             if (state && state->interrupt_requested) {
@@ -1796,7 +1796,7 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
             time_t current_time = time(NULL);
             time_t elapsed = current_time - start_time;
             int remaining_time = timeout_seconds - (int)elapsed;
-            
+
             if (remaining_time <= 0) {
                 // Total timeout reached
                 timed_out = 1;
@@ -1901,7 +1901,7 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
 
     int status = pclose(pipe);
     int exit_code;
-    
+
     if (use_timeout) {
         // When using timeout command, check for timeout exit code (124)
         exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;

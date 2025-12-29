@@ -498,13 +498,13 @@ InternalMessage parse_openai_response(cJSON *response) {
  */
 void free_internal_message(InternalMessage *msg) {
     if (!msg) return;
-    
+
     // Check if contents is valid before trying to free individual elements
     if (!msg->contents) {
         msg->content_count = 0;
         return;
     }
-    
+
     // Safety check: if content_count is negative or very large, something is wrong
     if (msg->content_count < 0 || msg->content_count > 10000) {
         LOG_ERROR("Invalid content_count in free_internal_message: %d", msg->content_count);
@@ -516,7 +516,7 @@ void free_internal_message(InternalMessage *msg) {
 
     for (int i = 0; i < msg->content_count; i++) {
         InternalContent *c = &msg->contents[i];
-        
+
         // Only free pointers that are non-NULL
         if (c->text) {
             free(c->text);

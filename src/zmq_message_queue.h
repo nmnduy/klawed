@@ -24,12 +24,12 @@ typedef struct ZMQMessageQueue {
     ZMQMessage *tail;           // Last message in queue
     size_t count;               // Number of messages in queue
     size_t max_capacity;        // Maximum capacity (0 = unlimited)
-    
+
     // Synchronization
     pthread_mutex_t mutex;      // Mutex for thread-safe operations
     pthread_cond_t not_empty;   // Condition variable for waiting consumers
     pthread_cond_t not_full;    // Condition variable for waiting producers
-    
+
     // Statistics
     uint64_t total_enqueued;    // Total messages enqueued
     uint64_t total_dequeued;    // Total messages dequeued
@@ -45,7 +45,7 @@ struct ZMQMessage {
     char message_id[33];        // Message ID (32 hex chars + null terminator)
     char *message_type;         // Message type (e.g., "TEXT", "TOOL", "ACK")
     int64_t timestamp_ms;       // Timestamp when message was created
-    
+
     ZMQMessage *next;           // Next message in queue
 };
 

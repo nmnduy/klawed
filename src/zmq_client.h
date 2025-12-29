@@ -56,27 +56,27 @@ typedef struct ZMQClientContextThreaded {
     pthread_t receiver_thread;
     bool running;
     bool thread_started;
-    
+
     // ZMQ components
     void *zmq_context;
     void *zmq_socket;
     char *endpoint;
     int socket_type;  // ZMQ_PAIR for client
-    
+
     // Message queues (thread-safe)
     ZMQMessageQueue *incoming_queue;   // Daemon → Client (responses)
-    
+
     // Message tracking (for reliable delivery)
     ZMQClientPendingQueue pending_queue;
     ZMQClientSeenMessage seen_messages[1000];  // Circular buffer of recently seen message IDs
     int seen_message_count;
     uint32_t salt;                         // Random salt for message ID generation
     int message_sequence;                  // Simple counter for debugging
-    
+
     // User input buffer
     char input_buffer[4096];
     size_t input_pos;
-    
+
     // Statistics
     uint64_t messages_sent;
     uint64_t messages_received;

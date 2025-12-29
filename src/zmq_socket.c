@@ -253,11 +253,11 @@ static int message_queue_push(ZMQContext *ctx, const char *message) {
         LOG_ERROR("ZMQ: Failed to lock message queue mutex for push");
         return -1;
     }
-    
+
     // Resize if needed
     if (ctx->message_queue.count >= ctx->message_queue.capacity) {
         int new_capacity = ctx->message_queue.capacity == 0 ? 16 : ctx->message_queue.capacity * 2;
-        char **new_messages = reallocarray(ctx->message_queue.messages, 
+        char **new_messages = reallocarray(ctx->message_queue.messages,
                                           (size_t)new_capacity, sizeof(char*));
         if (!new_messages) {
             pthread_mutex_unlock(&ctx->message_queue.mutex);
@@ -266,7 +266,7 @@ static int message_queue_push(ZMQContext *ctx, const char *message) {
         ctx->message_queue.messages = new_messages;
         ctx->message_queue.capacity = new_capacity;
     }
-    
+
     // Add message
     ctx->message_queue.messages[ctx->message_queue.count] = strdup(message);
     if (!ctx->message_queue.messages[ctx->message_queue.count]) {
@@ -274,10 +274,10 @@ static int message_queue_push(ZMQContext *ctx, const char *message) {
         return -1;
     }
     ctx->message_queue.count++;
-    
+
     // Signal waiting thread
     pthread_cond_signal(&ctx->message_queue.cond);
-    
+
     pthread_mutex_unlock(&ctx->message_queue.mutex);
     return 0;
 }
@@ -285,12 +285,12 @@ static int message_queue_push(ZMQContext *ctx, const char *message) {
 static char* message_queue_pop(ZMQContext *ctx, int timeout_ms) {
     struct timespec timeout;
     int result = 0;
-    
+
     if (pthread_mutex_lock(&ctx->message_queue.mutex) != 0) {
         LOG_ERROR("ZMQ: Failed to lock message queue mutex for pop");
         return NULL;
     }
-    
+
     // Wait for message or timeout
     while (ctx->message_queue.count == 0 && !ctx->should_exit) {
         if (timeout_ms > 0) {
@@ -301,7 +301,7 @@ static char* message_queue_pop(ZMQContext *ctx, int timeout_ms) {
                 timeout.tv_sec++;
                 timeout.tv_nsec -= 1000000000;
             }
-            result = pthread_cond_timedwait(&ctx->message_queue.cond, 
+            result = pthread_cond_timedwait(&ctx->message_queue.cond,
                                            &ctx->message_queue.mutex, &timeout);
             if (result == ETIMEDOUT) {
                 pthread_mutex_unlock(&ctx->message_queue.mutex);
@@ -311,21 +311,21 @@ static char* message_queue_pop(ZMQContext *ctx, int timeout_ms) {
             pthread_cond_wait(&ctx->message_queue.cond, &ctx->message_queue.mutex);
         }
     }
-    
+
     if (ctx->should_exit || ctx->message_queue.count == 0) {
         pthread_mutex_unlock(&ctx->message_queue.mutex);
         return NULL;
     }
-    
+
     // Get first message
     char *message = ctx->message_queue.messages[0];
-    
+
     // Shift remaining messages
     for (int i = 1; i < ctx->message_queue.count; i++) {
         ctx->message_queue.messages[i-1] = ctx->message_queue.messages[i];
     }
     ctx->message_queue.count--;
-    
+
     pthread_mutex_unlock(&ctx->message_queue.mutex);
     return message;
 }
@@ -340,35 +340,35 @@ static char* message_queue_pop(ZMQContext *ctx, int timeout_ms) {
 // Background polling thread function
 static void* zmq_polling_thread(void *arg) {
     ZMQContext *ctx = (ZMQContext*)arg;
-    
+
     LOG_INFO("ZMQ: Background polling thread started");
     printf("ZMQ: Background polling thread started\n");
-    
+
     while (!ctx->should_exit) {
         zmq_pollitem_t items[1];
         items[0].socket = ctx->socket;
         items[0].events = ZMQ_POLLIN;
-        
+
         // Poll with 100ms timeout
         int poll_result = zmq_poll(items, 1, 100);
         LOG_DEBUG("ZMQ: Poll result: %d, revents: %d", poll_result, items[0].revents);
-        
+
         if (poll_result > 0 && items[0].revents & ZMQ_POLLIN) {
             // Receive message
             char buffer[ZMQ_BUFFER_SIZE];
             int received = zmq_recv(ctx->socket, buffer, sizeof(buffer) - 1, 0);
-            
+
             if (received > 0) {
                 buffer[received] = '\0';
                 LOG_DEBUG("ZMQ: Background thread received %d bytes: %s", received, buffer);
-                
+
                 // Parse message to check type
                 cJSON *json = cJSON_Parse(buffer);
                 if (json) {
                     cJSON *type_obj = cJSON_GetObjectItem(json, "messageType");
                     if (type_obj && cJSON_IsString(type_obj)) {
                         const char *type = type_obj->valuestring;
-                        
+
                         // Handle ACK messages immediately
                         if (strcmp(type, "ACK") == 0) {
                             cJSON *id_obj = cJSON_GetObjectItem(json, "messageId");
@@ -391,7 +391,7 @@ static void* zmq_polling_thread(void *arg) {
             }
         }
     }
-    
+
     LOG_INFO("ZMQ: Background polling thread exiting");
     return NULL;
 }
@@ -401,14 +401,14 @@ static int start_polling_thread(ZMQContext *ctx) {
     if (ctx->polling_thread_running) {
         return 0; // Already running
     }
-    
+
     ctx->should_exit = false;
     int result = pthread_create(&ctx->polling_thread, NULL, zmq_polling_thread, ctx);
     if (result != 0) {
         LOG_ERROR("ZMQ: Failed to create polling thread: %d", result);
         return -1;
     }
-    
+
     ctx->polling_thread_running = true;
     LOG_INFO("ZMQ: Background polling thread started successfully");
     return 0;
@@ -527,18 +527,18 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     }
 
     ctx->message_sequence = 0;
-    
+
     // Initialize duplicate detection
     ctx->seen_message_count = 0;
     memset(ctx->seen_messages, 0, sizeof(ctx->seen_messages));
-    
+
     // Initialize thread pool for asynchronous tool execution
     ctx->thread_pool = NULL;
-    
+
     // Initialize background polling thread fields
     ctx->polling_thread_running = false;
     ctx->should_exit = false;
-    
+
     // Initialize message queue
     ctx->message_queue.messages = NULL;
     ctx->message_queue.capacity = 0;
@@ -560,7 +560,7 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
         free(ctx);
         return NULL;
     }
-    
+
     // Check if thread pool should be enabled (default: enabled for daemon mode)
     const char *disable_thread_pool = getenv("KLAWED_ZMQ_DISABLE_THREAD_POOL");
     if (!disable_thread_pool || strcmp(disable_thread_pool, "1") != 0) {
@@ -603,7 +603,7 @@ void zmq_socket_cleanup(ZMQContext *ctx) {
     ctx->pending_queue.head = NULL;
     ctx->pending_queue.tail = NULL;
     ctx->pending_queue.count = 0;
-    
+
     // Clean up seen messages
     for (int i = 0; i < ctx->seen_message_count; i++) {
         if (ctx->seen_messages[i].message_id) {
@@ -627,20 +627,20 @@ void zmq_socket_cleanup(ZMQContext *ctx) {
         free(ctx->endpoint);
         ctx->endpoint = NULL;
     }
-    
+
     // Clean up thread pool
     if (ctx->thread_pool) {
         zmq_thread_pool_cleanup(ctx->thread_pool);
         ctx->thread_pool = NULL;
     }
-    
+
     // Signal polling thread to exit and wait for it
     if (ctx->polling_thread_running) {
         ctx->should_exit = true;
         pthread_join(ctx->polling_thread, NULL);
         ctx->polling_thread_running = false;
     }
-    
+
     // Clean up message queue
     if (pthread_mutex_lock(&ctx->message_queue.mutex) == 0) {
         for (int i = 0; i < ctx->message_queue.count; i++) {
@@ -655,7 +655,7 @@ void zmq_socket_cleanup(ZMQContext *ctx) {
     } else {
         LOG_WARN("ZMQ: Failed to lock message queue mutex during cleanup");
     }
-    
+
     pthread_mutex_destroy(&ctx->message_queue.mutex);
     pthread_cond_destroy(&ctx->message_queue.cond);
 
@@ -869,7 +869,7 @@ int zmq_socket_send_with_id(ZMQContext *ctx, const char *message, size_t message
                      message_id, (long long)sent_time);
             LOG_DEBUG("ZMQ: Pending queue now has %d messages", ctx->pending_queue.count);
             log_pending_queue_state(ctx, "after_add");
-            
+
             // Return message ID to caller if requested
             if (message_id_out && message_id_out_size >= MESSAGE_ID_HEX_LENGTH) {
                 strlcpy(message_id_out, message_id, message_id_out_size);
@@ -968,7 +968,7 @@ int zmq_process_ack(ZMQContext *ctx, const char *message_id) {
 
     LOG_DEBUG("ZMQ: Processing ACK for message %s (pending queue size: %d)",
               message_id, ctx->pending_queue.count);
-    
+
     log_pending_queue_state(ctx, "before_ack");
 
     int result = remove_from_pending_queue(ctx, message_id);
@@ -995,13 +995,13 @@ int zmq_process_ack(ZMQContext *ctx, const char *message_id) {
 static int is_duplicate_message(ZMQContext *ctx, const char *message_id) {
 #ifdef HAVE_ZMQ
     if (!ctx || !message_id) return 0;
-    
+
     // Simple linear search for now - could be optimized if needed
     for (int i = 0; i < ctx->seen_message_count; i++) {
         if (strcmp(ctx->seen_messages[i].message_id, message_id) == 0) {
             int64_t current_time = get_current_time_ms();
             int64_t age = current_time - ctx->seen_messages[i].timestamp_ms;
-            
+
             if (age < SEEN_MESSAGE_TTL_MS) {
                 LOG_WARN("ZMQ: Duplicate message detected! ID=%s (age=%lldms, TTL=%dms)",
                          message_id, (long long)age, SEEN_MESSAGE_TTL_MS);
@@ -1034,7 +1034,7 @@ static void add_seen_message(ZMQContext *ctx, const char *message_id) {
     if (!ctx || !message_id || ctx->seen_message_count >= MAX_SEEN_MESSAGES) {
         return;
     }
-    
+
     // Check if we need to make room
     if (ctx->seen_message_count == MAX_SEEN_MESSAGES) {
         // Remove oldest message
@@ -1044,7 +1044,7 @@ static void add_seen_message(ZMQContext *ctx, const char *message_id) {
         }
         ctx->seen_message_count--;
     }
-    
+
     // Add new message
     ctx->seen_messages[ctx->seen_message_count].message_id = strdup(message_id);
     if (ctx->seen_messages[ctx->seen_message_count].message_id) {
@@ -1065,10 +1065,10 @@ static void add_seen_message(ZMQContext *ctx, const char *message_id) {
 static void log_pending_queue_state(ZMQContext *ctx, const char *context) {
 #ifdef HAVE_ZMQ
     if (!ctx) return;
-    
-    LOG_DEBUG("ZMQ: Pending queue state (%s): count=%d, max=%d", 
+
+    LOG_DEBUG("ZMQ: Pending queue state (%s): count=%d, max=%d",
               context, ctx->pending_queue.count, ctx->pending_queue.max_pending);
-    
+
     ZMQPendingMessage *curr = ctx->pending_queue.head;
     int i = 0;
     while (curr) {
@@ -1101,7 +1101,7 @@ int zmq_check_and_resend_pending(ZMQContext *ctx, int64_t current_time_ms) {
     LOG_DEBUG("ZMQ: Checking pending messages (count: %d, current time: %lld)",
               ctx->pending_queue.count, (long long)current_time_ms);
     log_pending_queue_state(ctx, "before_resend_check");
-    
+
     int resent_count = 0;
     ZMQPendingMessage *curr = ctx->pending_queue.head;
     ZMQPendingMessage *prev = NULL;
@@ -1148,7 +1148,7 @@ int zmq_check_and_resend_pending(ZMQContext *ctx, int64_t current_time_ms) {
             LOG_INFO("ZMQ: Resending message %s (attempt %d/%d, elapsed: %lld ms)",
                     curr->message_id, curr->retry_count, ctx->pending_queue.max_retries,
                     (long long)elapsed);
-            
+
             int rc = zmq_send(ctx->socket, curr->message_json,
                              strlen(curr->message_json), 0);
 
@@ -1258,14 +1258,14 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
         strcmp(message_type->valuestring, "ACK") == 0) {
         if (message_id && cJSON_IsString(message_id)) {
             LOG_INFO("ZMQ: Received ACK for message %s", message_id->valuestring);
-            
+
             // Check for duplicate ACK
             if (is_duplicate_message(ctx, message_id->valuestring)) {
                 LOG_WARN("ZMQ: Duplicate ACK received for message %s, ignoring", message_id->valuestring);
                 cJSON_Delete(json);
                 return 0;
             }
-            
+
             LOG_DEBUG("ZMQ: Calling zmq_process_ack for message %s", message_id->valuestring);
             zmq_process_ack(ctx, message_id->valuestring);
             // Mark this ACK as seen
@@ -1295,7 +1295,7 @@ static int zmq_process_message_from_buffer(ZMQContext *ctx, struct ConversationS
             cJSON_Delete(json);
             return 0;
         }
-        
+
         LOG_INFO("ZMQ: Sending ACK for message %s (type: %s)",
                  message_id->valuestring,
                  message_type && cJSON_IsString(message_type) ? message_type->valuestring : "unknown");
@@ -1720,14 +1720,14 @@ static int zmq_process_interactive(ZMQContext *ctx, struct ConversationState *st
                 // Submit task to thread pool for asynchronous execution
                 LOG_INFO("ZMQ: Submitting tool '%s' (id: %s) to thread pool",
                          tool->name, tool->id);
-                
+
                 int submit_result = zmq_thread_pool_submit_task(ctx->thread_pool,
                                                                 tool->name,
                                                                 tool->id,
                                                                 input,
                                                                 state,
                                                                 ctx);
-                
+
                 if (submit_result == 0) {
                     tools_submitted++;
                     // Note: input is now owned by the thread pool task, don't delete it here
@@ -1870,11 +1870,11 @@ int zmq_socket_daemon_mode(ZMQContext *ctx, struct ConversationState *state) {
             error_count = 0; // Reset error count on successful receive
 
             LOG_INFO("ZMQ: Processing message #%d from background thread", message_count);
-            
+
             // Process the message
             int result = zmq_process_message_from_buffer(ctx, state, NULL, message, (int)strlen(message));
             free(message);
-            
+
             if (result != 0) {
                 LOG_ERROR("ZMQ: Failed to process message #%d", message_count);
                 error_count++;

@@ -41,7 +41,7 @@ ZMQDaemonContext* zmq_daemon_init(const char *endpoint, struct ConversationState
 
     ctx->conv_state = conv_state;
     ctx->socket_type = ZMQ_PAIR;
-    
+
     // Initialize pending queue
     ctx->pending_queue.max_pending = 100;
     ctx->pending_queue.timeout_ms = 5000; // 5 seconds
@@ -49,10 +49,10 @@ ZMQDaemonContext* zmq_daemon_init(const char *endpoint, struct ConversationState
     ctx->pending_queue.count = 0;
     ctx->pending_queue.head = NULL;
     ctx->pending_queue.tail = NULL;
-    
+
     // Initialize seen messages array
     ctx->seen_message_count = 0;
-    
+
     // Initialize statistics mutex
     if (pthread_mutex_init(&ctx->stats_mutex, NULL) != 0) {
         LOG_ERROR("ZMQ Daemon: Failed to initialize stats mutex");
@@ -60,11 +60,11 @@ ZMQDaemonContext* zmq_daemon_init(const char *endpoint, struct ConversationState
         free(ctx);
         return NULL;
     }
-    
+
     // Allocate and initialize message queues
     ctx->incoming_queue = calloc(1, sizeof(ZMQMessageQueue));
     ctx->outgoing_queue = calloc(1, sizeof(ZMQMessageQueue));
-    
+
     if (!ctx->incoming_queue || !ctx->outgoing_queue) {
         LOG_ERROR("ZMQ Daemon: Failed to allocate message queues");
         if (ctx->incoming_queue) free(ctx->incoming_queue);
@@ -74,7 +74,7 @@ ZMQDaemonContext* zmq_daemon_init(const char *endpoint, struct ConversationState
         free(ctx);
         return NULL;
     }
-    
+
     // Initialize queues
     if (zmq_queue_init(ctx->incoming_queue, 100) != 0 ||
         zmq_queue_init(ctx->outgoing_queue, 100) != 0) {
@@ -92,7 +92,7 @@ ZMQDaemonContext* zmq_daemon_init(const char *endpoint, struct ConversationState
         free(ctx);
         return NULL;
     }
-    
+
     return ctx;
 }
 
@@ -101,12 +101,12 @@ ZMQDaemonContext* zmq_daemon_init(const char *endpoint, struct ConversationState
  */
 void zmq_daemon_cleanup(ZMQDaemonContext *ctx) {
     if (!ctx) return;
-    
+
     // Stop if running
     if (ctx->running) {
         zmq_daemon_stop(ctx);
     }
-    
+
     // Clean up ZMQ resources
     if (ctx->zmq_socket) {
         zmq_close(ctx->zmq_socket);
@@ -114,7 +114,7 @@ void zmq_daemon_cleanup(ZMQDaemonContext *ctx) {
     if (ctx->zmq_context) {
         zmq_ctx_destroy(ctx->zmq_context);
     }
-    
+
     // Clean up message queues
     if (ctx->incoming_queue) {
         zmq_queue_destroy(ctx->incoming_queue);
@@ -124,7 +124,7 @@ void zmq_daemon_cleanup(ZMQDaemonContext *ctx) {
         zmq_queue_destroy(ctx->outgoing_queue);
         free(ctx->outgoing_queue);
     }
-    
+
     // Clean up pending queue
     ZMQPendingMessage *curr = ctx->pending_queue.head;
     while (curr) {
@@ -134,20 +134,20 @@ void zmq_daemon_cleanup(ZMQDaemonContext *ctx) {
         free(curr);
         curr = next;
     }
-    
+
     // Clean up seen messages
     for (int i = 0; i < ctx->seen_message_count; i++) {
         free(ctx->seen_messages[i].message_id);
     }
-    
+
     // Clean up mutex
     pthread_mutex_destroy(&ctx->stats_mutex);
-    
+
     // Free endpoint string
     if (ctx->endpoint) {
         free(ctx->endpoint);
     }
-    
+
     free(ctx);
 }
 
@@ -164,7 +164,7 @@ bool zmq_daemon_is_running(ZMQDaemonContext *ctx) {
 void zmq_daemon_get_stats(ZMQDaemonContext *ctx, uint64_t *messages_received,
                           uint64_t *messages_sent, uint64_t *errors) {
     if (!ctx) return;
-    
+
     pthread_mutex_lock(&ctx->stats_mutex);
     if (messages_received) *messages_received = ctx->messages_received;
     if (messages_sent) *messages_sent = ctx->messages_sent;
@@ -177,9 +177,9 @@ void zmq_daemon_get_stats(ZMQDaemonContext *ctx, uint64_t *messages_received,
  */
 void zmq_daemon_stop(ZMQDaemonContext *ctx) {
     if (!ctx) return;
-    
+
     ctx->running = false;
-    
+
     if (ctx->thread_started) {
         pthread_join(ctx->receiver_thread, NULL);
         ctx->thread_started = false;
@@ -194,14 +194,14 @@ int zmq_daemon_start(ZMQDaemonContext *ctx) {
         LOG_ERROR("ZMQ Daemon: Invalid context for start");
         return -1;
     }
-    
+
     // Initialize ZMQ context
     ctx->zmq_context = zmq_ctx_new();
     if (!ctx->zmq_context) {
         LOG_ERROR("ZMQ Daemon: Failed to create ZMQ context");
         return -1;
     }
-    
+
     // Create ZMQ socket
     ctx->zmq_socket = zmq_socket(ctx->zmq_context, ctx->socket_type);
     if (!ctx->zmq_socket) {
@@ -210,7 +210,7 @@ int zmq_daemon_start(ZMQDaemonContext *ctx) {
         ctx->zmq_context = NULL;
         return -1;
     }
-    
+
     // Bind socket
     if (zmq_bind(ctx->zmq_socket, ctx->endpoint) != 0) {
         LOG_ERROR("ZMQ Daemon: Failed to bind to %s: %s", ctx->endpoint, zmq_strerror(errno));
@@ -220,14 +220,14 @@ int zmq_daemon_start(ZMQDaemonContext *ctx) {
         ctx->zmq_context = NULL;
         return -1;
     }
-    
+
     LOG_INFO("ZMQ Daemon: Bound to %s", ctx->endpoint);
-    
+
     // Mark as running
     ctx->running = true;
-    
+
     // Note: The actual receiver thread and main processing loop would be implemented here
     // For now, we just return success to allow compilation
-    
+
     return 0;
 }

@@ -77,19 +77,19 @@ typedef struct ZMQContext {
     ZMQPendingQueue pending_queue;   // Queue of messages waiting for ACK
     uint32_t salt;                   // Random salt for message ID generation
     int message_sequence;            // Simple counter for debugging
-    
+
     // Duplicate message detection
     ZMQSeenMessage seen_messages[1000];  // Circular buffer of recently seen message IDs
     int seen_message_count;               // Number of messages in the seen list
-    
+
     // Thread pool for asynchronous tool execution
     struct ZMQThreadPool *thread_pool;    // Thread pool instance
-    
+
     // Background ZMQ polling thread
     pthread_t polling_thread;             // Thread for ZMQ message polling
     bool polling_thread_running;          // Whether polling thread is running
     bool should_exit;                     // Flag to signal polling thread to exit
-    
+
     // Thread-safe queue for messages from polling thread to main thread
     struct {
         char **messages;                  // Array of message strings

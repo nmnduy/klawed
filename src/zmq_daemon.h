@@ -25,30 +25,30 @@ typedef struct ZMQDaemonContext {
     pthread_t receiver_thread;
     bool running;
     bool thread_started;
-    
+
     // ZMQ components
     void *zmq_context;
     void *zmq_socket;
     char *endpoint;
     int socket_type;  // ZMQ_PAIR for daemon
-    
+
     // Message queues (thread-safe)
     ZMQMessageQueue *incoming_queue;   // Client → Daemon (user input)
     ZMQMessageQueue *outgoing_queue;   // Daemon → Client (responses)
-    
+
     // Conversation state
     struct ConversationState *conv_state;
-    
+
     // Message tracking (from existing zmq_socket.h)
     ZMQPendingQueue pending_queue;     // For reliable delivery
     ZMQSeenMessage seen_messages[1000];  // Duplicate detection
     int seen_message_count;
-    
+
     // Statistics
     uint64_t messages_received;
     uint64_t messages_sent;
     uint64_t errors;
-    
+
     // Synchronization
     pthread_mutex_t stats_mutex;
 } ZMQDaemonContext;
