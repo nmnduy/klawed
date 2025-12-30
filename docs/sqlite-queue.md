@@ -52,6 +52,7 @@ All messages in the `message` field are JSON objects with a `messageType` field.
 | `TEXT` | Text prompt or response | Client → Klawed, Klawed → Client |
 | `TOOL` | Tool execution request | Klawed → Client |
 | `TOOL_RESULT` | Tool execution result | Klawed → Client |
+| `API_CALL` | API call in progress (waiting for AI response) | Klawed → Client |
 | `ERROR` | Error message | Klawed → Client |
 
 ### Completion Detection
@@ -231,6 +232,28 @@ Error occurred:
   "content": "Error description"
 }
 ```
+
+#### API_CALL Message
+
+API call in progress (sent before making an API call to indicate waiting time):
+
+```json
+{
+  "messageType": "API_CALL",
+  "timestamp": 1735579200,
+  "timestampMs": 1735579200123,
+  "estimatedDurationMs": 5000,
+  "model": "gpt-4",
+  "provider": "openai"
+}
+```
+
+**Fields:**
+- `timestamp`: Unix timestamp (seconds)
+- `timestampMs`: Unix timestamp with milliseconds (optional, more precise)
+- `estimatedDurationMs`: Estimated duration of the API call in milliseconds (optional)
+- `model`: AI model being used (optional)
+- `provider`: API provider (e.g., "openai", "anthropic", "bedrock") (optional)
 
 ## Client Code Examples
 

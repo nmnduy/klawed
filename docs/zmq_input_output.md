@@ -20,7 +20,7 @@ All messages are JSON objects with at least a `messageType` field that indicates
 
 ### Common Fields
 
-- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL", "TOOL_RESULT", or "ACK")
+- `messageType` (string, required): Type of message ("TEXT", "ERROR", "TOOL", "TOOL_RESULT", "API_CALL", or "ACK")
 - `content` (string, optional): Primary content/message text
 - `messageId` (string, optional): Unique message identifier for reliable delivery (32-character hex string)
 
@@ -104,7 +104,32 @@ Sent when a tool execution completes during interactive processing.
 - `isError`: Boolean indicating if the tool execution resulted in an error
 - `messageId`: Unique message identifier (optional but recommended)
 
-### 4. Error Response
+### 4. API_CALL Message
+
+API call in progress (sent before making an API call to indicate waiting time):
+
+```json
+{
+  "messageType": "API_CALL",
+  "timestamp": 1735579200,
+  "timestampMs": 1735579200123,
+  "estimatedDurationMs": 5000,
+  "model": "gpt-4",
+  "provider": "openai",
+  "messageId": "a1b2c3d4e5f678901234567890123456"
+}
+```
+
+**Fields:**
+- `messageType`: Always "API_CALL"
+- `timestamp`: Unix timestamp (seconds)
+- `timestampMs`: Unix timestamp with milliseconds (optional, more precise)
+- `estimatedDurationMs`: Estimated duration of the API call in milliseconds (optional)
+- `model`: AI model being used (optional)
+- `provider`: API provider (e.g., "openai", "anthropic", "bedrock") (optional)
+- `messageId`: Unique message identifier (optional but recommended)
+
+### 5. Error Response
 
 Error messages for various failure conditions.
 
@@ -348,6 +373,7 @@ The following constants can be modified in `src/zmq_socket.c`:
 - `"ERROR"`: Error response
 - `"TOOL"`: Tool execution request (sent before tool execution)
 - `"TOOL_RESULT"`: Tool execution result (sent after tool execution)
+- `"API_CALL"`: API call in progress (sent before making API calls)
 - `"ACK"`: Acknowledgment message
 
 ### Buffer Sizes
