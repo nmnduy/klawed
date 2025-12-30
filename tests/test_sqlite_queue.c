@@ -1,7 +1,7 @@
 /*
- * test_sqlite_queue_fixed.c - Test SQLite queue functionality (fixed version)
+ * test_sqlite_queue.c - Test SQLite queue functionality
  * 
- * This test only tests the basic functions that don't require klawed.c dependencies.
+ * This test tests the basic SQLite queue functions that don't require klawed.c dependencies.
  */
 
 #include <stdio.h>
@@ -9,48 +9,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <sqlite3.h>
+#include <stdbool.h>
 
-// Minimal SQLite queue implementation for testing
-typedef enum {
-    SQLITE_QUEUE_ERROR_NONE = 0,
-    SQLITE_QUEUE_ERROR_INVALID_PARAM = -1,
-    SQLITE_QUEUE_ERROR_DB_OPEN_FAILED = -2,
-    SQLITE_QUEUE_ERROR_DB_PREPARE_FAILED = -3,
-    SQLITE_QUEUE_ERROR_DB_EXECUTE_FAILED = -4,
-    SQLITE_QUEUE_ERROR_DB_BUSY = -5,
-    SQLITE_QUEUE_ERROR_NO_MESSAGES = -6,
-    SQLITE_QUEUE_ERROR_MESSAGE_TOO_LONG = -7,
-    SQLITE_QUEUE_ERROR_INVALID_MESSAGE = -8,
-    SQLITE_QUEUE_ERROR_TIMEOUT = -9,
-    SQLITE_QUEUE_ERROR_NOT_INITIALIZED = -10
-} SQLiteQueueErrorCode;
+// Include the actual SQLite queue header
+#include "../src/sqlite_queue.h"
 
-typedef struct SQLiteQueueContext {
-    char *db_path;
-    char *sender_name;
-    int poll_interval;
-    int poll_timeout;
-    int max_retries;
-    size_t max_message_size;
-    int max_queue_size;
-    void *db_handle;
-} SQLiteQueueContext;
-
-// Forward declarations of functions we'll test
-SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_name);
-void sqlite_queue_cleanup(SQLiteQueueContext *ctx);
-int sqlite_queue_send(SQLiteQueueContext *ctx, const char *receiver, const char *message, size_t message_len);
-int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int max_messages,
-                         char ***messages, int *message_count, long long **message_ids, int timeout_ms);
-int sqlite_queue_acknowledge(SQLiteQueueContext *ctx, long long message_id);
-int sqlite_queue_init_schema(SQLiteQueueContext *ctx);
-int sqlite_queue_get_stats(SQLiteQueueContext *ctx, int *pending_count, int *total_count, int *unread_count);
-int sqlite_queue_get_status(SQLiteQueueContext *ctx, char *buffer, size_t buffer_size);
-const char* sqlite_queue_last_error(SQLiteQueueContext *ctx);
-void sqlite_queue_clear_error(SQLiteQueueContext *ctx);
-bool sqlite_queue_available(void);
-
-#define TEST_DB "/tmp/test_sqlite_queue_fixed.db"
+#define TEST_DB "/tmp/test_sqlite_queue.db"
 
 static int test_init_cleanup(void) {
     printf("Test: Initialize and cleanup SQLite queue context\n");
@@ -134,11 +98,17 @@ static int test_send_receive(void) {
 
     if (message_count != 1) {
         printf("  FAILED: Expected 1 message, got %d\n", message_count);
-        for (int i = 0; i < message_count; i++) {
-            free(messages[i]);
+        if (messages) {
+            for (int i = 0; i < message_count; i++) {
+                if (messages[i]) {
+                    free(messages[i]);
+                }
+            }
+            free(messages);
         }
-        free(messages);
-        free(message_ids);
+        if (message_ids) {
+            free(message_ids);
+        }
         sqlite_queue_cleanup(sender);
         sqlite_queue_cleanup(receiver);
         return -1;
@@ -149,9 +119,13 @@ static int test_send_receive(void) {
     // Verify message content
     if (strstr(messages[0], "Hello, World!") == NULL) {
         printf("  FAILED: Message content incorrect: %s\n", messages[0]);
-        free(messages[0]);
-        free(messages);
-        free(message_ids);
+        if (messages) {
+            free(messages[0]);
+            free(messages);
+        }
+        if (message_ids) {
+            free(message_ids);
+        }
         sqlite_queue_cleanup(sender);
         sqlite_queue_cleanup(receiver);
         return -1;
@@ -161,9 +135,13 @@ static int test_send_receive(void) {
     result = sqlite_queue_acknowledge(receiver, message_ids[0]);
     if (result != SQLITE_QUEUE_ERROR_NONE) {
         printf("  FAILED: Acknowledge failed: %s\n", sqlite_queue_last_error(receiver));
-        free(messages[0]);
-        free(messages);
-        free(message_ids);
+        if (messages) {
+            free(messages[0]);
+            free(messages);
+        }
+        if (message_ids) {
+            free(message_ids);
+        }
         sqlite_queue_cleanup(sender);
         sqlite_queue_cleanup(receiver);
         return -1;
@@ -175,9 +153,13 @@ static int test_send_receive(void) {
     result = sqlite_queue_receive(receiver, NULL, 10, &messages, &message_count, &message_ids, 1000);
     if (result != SQLITE_QUEUE_ERROR_TIMEOUT && result != SQLITE_QUEUE_ERROR_NO_MESSAGES) {
         printf("  FAILED: Expected timeout after acknowledgment\n");
-        free(messages[0]);
-        free(messages);
-        free(message_ids);
+        if (messages) {
+            free(messages[0]);
+            free(messages);
+        }
+        if (message_ids) {
+            free(message_ids);
+        }
         sqlite_queue_cleanup(sender);
         sqlite_queue_cleanup(receiver);
         return -1;
@@ -186,9 +168,13 @@ static int test_send_receive(void) {
     printf("  PASSED: Message properly marked as sent\n");
 
     // Cleanup
-    free(messages[0]);
-    free(messages);
-    free(message_ids);
+    if (messages) {
+        free(messages[0]);
+        free(messages);
+    }
+    if (message_ids) {
+        free(message_ids);
+    }
     sqlite_queue_cleanup(sender);
     sqlite_queue_cleanup(receiver);
 
