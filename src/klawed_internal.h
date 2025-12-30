@@ -10,6 +10,9 @@
 #include <cjson/cJSON.h>
 #include <pthread.h>
 #include <signal.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
 #include "version.h"
 
 #ifdef HAVE_ZMQ
@@ -48,6 +51,30 @@
 
 // PersistenceDB is defined in persistence.h (or stubbed in TEST_BUILD)
 struct PersistenceDB;
+
+// Helper function to check if API URL contains "deepseek" (case-insensitive)
+static inline int is_deepseek_api_url(const char *api_url) {
+    if (!api_url) {
+        return 0;
+    }
+    
+    char *url_lower = strdup(api_url);
+    if (!url_lower) {
+        return 0;
+    }
+    
+    int result = 0;
+    for (char *p = url_lower; *p; p++) {
+        *p = (char)tolower((unsigned char)*p);
+    }
+    
+    if (strstr(url_lower, "deepseek") != NULL) {
+        result = 1;
+    }
+    
+    free(url_lower);
+    return result;
+}
 
 // TodoList is defined in todo.h
 struct TodoList;

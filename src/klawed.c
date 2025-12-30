@@ -4828,7 +4828,14 @@ char* build_request_json_from_state(ConversationState *state) {
     }
 
     cJSON_AddStringToObject(request, "model", state->model);
-    cJSON_AddNumberToObject(request, "max_completion_tokens", state->max_tokens);
+    
+    // Check if API URL contains "deepseek" - use max_tokens instead of max_completion_tokens
+    if (is_deepseek_api_url(state->api_url)) {
+        cJSON_AddNumberToObject(request, "max_tokens", state->max_tokens);
+        LOG_DEBUG("Using max_tokens (not max_completion_tokens) for DeepSeek API");
+    } else {
+        cJSON_AddNumberToObject(request, "max_completion_tokens", state->max_tokens);
+    }
 
     // Add messages in OpenAI format
     cJSON *messages_array = cJSON_CreateArray();
@@ -7969,6 +7976,12 @@ int main(int argc, char *argv[]) {
     state.api_url = strdup(api_base);
     state.model = strdup(model);
     state.max_tokens = get_env_int_retry("KLAWED_MAX_TOKENS", MAX_TOKENS);
+    
+    // Override max_tokens to 4096 if API URL contains "deepseek"
+    if (is_deepseek_api_url(state.api_url)) {
+        state.max_tokens = 4096;
+        LOG_INFO("DeepSeek API detected, setting max_tokens to 4096");
+    }
 
     // Get current working directory - use PATH_MAX to satisfy static analyzer
     char cwd_buf[PATH_MAX];
