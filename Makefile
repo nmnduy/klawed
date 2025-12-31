@@ -19,6 +19,9 @@ ifeq ($(UNAME_S),Darwin)
     DEBUG_CFLAGS += -D_DARWIN_C_SOURCE
 endif
 
+# Disable implicit rules to avoid conflicts with our pattern rules
+# .SUFFIXES:
+
 # Default ncurses library (Linux)
 NCURSES_LIB = -lncursesw
 
@@ -157,6 +160,13 @@ else
 endif
 
 BUILD_DIR = build
+
+# Special rule for sqlite_queue_test.o (needs -DTEST_BUILD)
+$(BUILD_DIR)/sqlite_queue_test.o: src/sqlite_queue.c
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling SQLite queue for tests (TEST_BUILD)..."
+	$(CC) $(CFLAGS) -DTEST_BUILD -c -o $@ $<
+
 TARGET = $(BUILD_DIR)/klawed
 TEST_EDIT_TARGET = $(BUILD_DIR)/test_edit
 TEST_EDIT_REGEX_TARGET = $(BUILD_DIR)/test_edit_regex_enhancements
@@ -323,9 +333,9 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket test-deepseek-incomplete-write
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket test-deepseek-incomplete-write
 
-test-edit: check-deps $(TEST_EDIT_TARGET)
+test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
 	@echo "Running Edit tool tests..."
 	@echo ""
@@ -1103,12 +1113,21 @@ $(TEST_WM_TARGET): $(TEST_WM_SRC) $(WINDOW_MANAGER_OBJ) $(LOGGER_OBJ)
 # Test target for Edit tool - compiles test suite with claude.c functions
 # We rename claude's main to avoid conflict with test's main
 # and export internal functions via TEST_BUILD flag
+# Helper to ensure sqlite_queue_test.o is built (needs -DTEST_BUILD)
+define BUILD_SQLITE_QUEUE_TEST_OBJ
+	@if [ ! -f "$(SQLITE_QUEUE_TEST_OBJ)" ]; then \
+		echo "Building $(SQLITE_QUEUE_TEST_OBJ)..."; \
+		$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(SQLITE_QUEUE_TEST_OBJ) src/sqlite_queue.c; \
+	fi
+endef
+
 $(TEST_EDIT_TARGET): $(SRC) $(TEST_EDIT_SRC) $(TEST_COMMON_OBJS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_test.o $(SRC)
 	@echo "Compiling Edit tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_edit.o $(TEST_EDIT_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
 	@$(CC) -o $(TEST_EDIT_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit.o $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
@@ -1135,6 +1154,7 @@ $(TEST_READ_TARGET): $(SRC) $(TEST_READ_SRC) $(TEST_COMMON_OBJS)
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_read_test.o $(SRC)
 	@echo "Compiling Read tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_read.o $(TEST_READ_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
 	@$(CC) -o $(TEST_READ_TARGET) $(BUILD_DIR)/claude_read_test.o $(BUILD_DIR)/test_read.o $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
@@ -1162,6 +1182,7 @@ $(TEST_TODO_WRITE_TARGET): $(SRC) $(TEST_TODO_WRITE_SRC) $(TEST_COMMON_OBJS)
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_todowrite_test.o $(SRC)
 	@echo "Compiling TodoWrite tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_todo_write.o $(TEST_TODO_WRITE_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
 	@$(CC) -o $(TEST_TODO_WRITE_TARGET) $(BUILD_DIR)/claude_todowrite_test.o $(BUILD_DIR)/test_todo_write.o $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
@@ -1755,10 +1776,8 @@ SQLITE_QUEUE_TEST_OBJ = $(BUILD_DIR)/sqlite_queue_test.o
 # Common objects needed by tests that compile claude.c
 TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(DEEPSEEK_RESPONSE_PARSER_OBJ) $(DEEPSEEK_CONTINUATION_OBJ) $(JSON_REPAIR_OBJ) $(SQLITE_QUEUE_TEST_OBJ)
 
-$(SQLITE_QUEUE_TEST_OBJ): $(SQLITE_QUEUE_SRC)
-	@mkdir -p $(BUILD_DIR)
-	@echo "Compiling SQLite queue for tests (TEST_BUILD)..."
-	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(SQLITE_QUEUE_TEST_OBJ) $(SQLITE_QUEUE_SRC)
+# $(SQLITE_QUEUE_TEST_OBJ) is now built by the pattern rule with -DTEST_BUILD flag
+# Rule removed to avoid duplication
 
 # Socket test target removed - will be reimplemented with ZMQ
 
