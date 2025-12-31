@@ -293,12 +293,14 @@ TEST_BASH_STDERR_TARGET = $(BUILD_DIR)/test_bash_stderr
 TEST_BASH_TRUNCATION_TARGET = $(BUILD_DIR)/test_bash_truncation
 TEST_HISTORY_FILE_TARGET = $(BUILD_DIR)/test_history_file
 TEST_TUI_INPUT_BUFFER_TARGET = $(BUILD_DIR)/test_tui_input_buffer
+TEST_TUI_AUTO_SCROLL_TARGET = $(BUILD_DIR)/test_tui_auto_scroll
 TEST_TOOL_DETAILS_TARGET = $(BUILD_DIR)/test_tool_details_simple
 TEST_BASH_TIMEOUT_SRC = tests/test_bash_timeout.c
 TEST_BASH_STDERR_SRC = tests/test_bash_stderr.c
 TEST_BASH_TRUNCATION_SRC = tests/test_bash_truncation.c
 TEST_HISTORY_FILE_SRC = tests/test_history_file.c
 TEST_TUI_INPUT_BUFFER_SRC = tests/test_tui_input_buffer.c
+TEST_TUI_AUTO_SCROLL_SRC = tests/test_tui_auto_scroll.c
 TEST_TOOL_DETAILS_SRC = tests/test_tool_details_simple.c
 TEST_ARRAY_RESIZE_SRC = tests/test_array_resize.c
 TEST_TOKEN_USAGE_SRC = tests/test_token_usage.c
@@ -321,7 +323,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket test-deepseek-incomplete-write
+test: test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket test-deepseek-incomplete-write
 
 test-edit: check-deps $(TEST_EDIT_TARGET)
 	@echo ""
@@ -489,6 +491,12 @@ test-tui-input-buffer: check-deps $(TEST_TUI_INPUT_BUFFER_TARGET)
 	@echo "Running TUI Input Buffer tests..."
 	@echo ""
 	@./$(TEST_TUI_INPUT_BUFFER_TARGET)
+
+test-tui-auto-scroll: check-deps $(TEST_TUI_AUTO_SCROLL_TARGET)
+	@echo ""
+	@echo "Running TUI Auto-Scroll tests..."
+	@echo ""
+	@./$(TEST_TUI_AUTO_SCROLL_TARGET)
 
 test-tool-details: check-deps $(TEST_TOOL_DETAILS_TARGET)
 	@echo ""
@@ -1725,6 +1733,17 @@ $(TEST_TUI_INPUT_BUFFER_TARGET): $(TEST_TUI_INPUT_BUFFER_SRC)
 	@$(CC) -o $(TEST_TUI_INPUT_BUFFER_TARGET) $(BUILD_DIR)/test_tui_input_buffer.o $(LDFLAGS)
 	@echo ""
 	@echo "✓ TUI Input Buffer test build successful!"
+	@echo ""
+
+# Test target for TUI Auto-Scroll logic (simplified standalone test)
+$(TEST_TUI_AUTO_SCROLL_TARGET): $(TEST_TUI_AUTO_SCROLL_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling TUI Auto-Scroll test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_tui_auto_scroll.o $(TEST_TUI_AUTO_SCROLL_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_TUI_AUTO_SCROLL_TARGET) $(BUILD_DIR)/test_tui_auto_scroll.o $(LDFLAGS)
+	@echo ""
+	@echo "✓ TUI Auto-Scroll test build successful!"
 	@echo ""
 
 # Test target for Bash command summarization

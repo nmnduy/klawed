@@ -1740,12 +1740,12 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
 
     // Auto-scroll logic:
     // - In INSERT mode: always auto-scroll
-    // - In NORMAL/COMMAND mode: auto-scroll only if we're at 100% scroll height
-    //   (so it doesn't jump while we're reading)
+    // - In NORMAL/COMMAND mode: auto-scroll only if we're at 98-100% scroll height
+    //   (so it doesn't jump while we're reading, but auto-scrolls when near bottom)
     if (tui->mode == TUI_MODE_INSERT) {
         window_manager_scroll_to_bottom(&tui->wm);
     } else if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
-        // Check if we're already at 100% scroll height
+        // Check if we're already at 98-100% scroll height (near bottom)
         int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
         int max_scroll = window_manager_get_max_scroll(&tui->wm);
         int content_lines = window_manager_get_content_lines(&tui->wm);
@@ -1756,14 +1756,14 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
             // No content or everything fits in viewport
             at_bottom = 1;
             LOG_DEBUG("[TUI] Auto-scroll: at_bottom=1 (no content or fits in viewport)");
-        } else if (scroll_offset >= max_scroll) {
-            // Already at bottom
+        } else if (scroll_offset >= max_scroll - 1) {
+            // Already at bottom (with 1-line tolerance for 98-100% range)
             at_bottom = 1;
-            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=1 (scroll_offset=%d >= max_scroll=%d)",
-                     scroll_offset, max_scroll);
+            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=1 (scroll_offset=%d >= max_scroll-1=%d)",
+                     scroll_offset, max_scroll - 1);
         } else {
-            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=0 (scroll_offset=%d < max_scroll=%d, content_lines=%d)",
-                     scroll_offset, max_scroll, content_lines);
+            LOG_DEBUG("[TUI] Auto-scroll: at_bottom=0 (scroll_offset=%d < max_scroll-1=%d, content_lines=%d)",
+                     scroll_offset, max_scroll - 1, content_lines);
         }
 
         if (at_bottom) {
@@ -1836,12 +1836,12 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
 
     // Auto-scroll logic:
     // - In INSERT mode: always auto-scroll
-    // - In NORMAL/COMMAND mode: auto-scroll only if we're at 100% scroll height
-    //   (so it doesn't jump while we're reading)
+    // - In NORMAL/COMMAND mode: auto-scroll only if we're at 98-100% scroll height
+    //   (so it doesn't jump while we're reading, but auto-scrolls when near bottom)
     if (tui->mode == TUI_MODE_INSERT) {
         window_manager_scroll_to_bottom(&tui->wm);
     } else if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
-        // Check if we're already at 100% scroll height
+        // Check if we're already at 98-100% scroll height (near bottom)
         int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
         int max_scroll = window_manager_get_max_scroll(&tui->wm);
         int content_lines = window_manager_get_content_lines(&tui->wm);
@@ -1852,14 +1852,14 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
             // No content or everything fits in viewport
             at_bottom = 1;
             LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=1 (no content or fits in viewport)");
-        } else if (scroll_offset >= max_scroll) {
-            // Already at bottom
+        } else if (scroll_offset >= max_scroll - 1) {
+            // Already at bottom (with 1-line tolerance for 98-100% range)
             at_bottom = 1;
-            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=1 (scroll_offset=%d >= max_scroll=%d)",
-                     scroll_offset, max_scroll);
+            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=1 (scroll_offset=%d >= max_scroll-1=%d)",
+                     scroll_offset, max_scroll - 1);
         } else {
-            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=0 (scroll_offset=%d < max_scroll=%d, content_lines=%d)",
-                     scroll_offset, max_scroll, content_lines);
+            LOG_DEBUG("[TUI] Auto-scroll (update): at_bottom=0 (scroll_offset=%d < max_scroll-1=%d, content_lines=%d)",
+                     scroll_offset, max_scroll - 1, content_lines);
         }
 
         if (at_bottom) {
