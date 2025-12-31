@@ -161,13 +161,14 @@ endif
 
 BUILD_DIR = build
 
-# Special rule for sqlite_queue_test.o (needs -DTEST_BUILD)
-$(BUILD_DIR)/sqlite_queue_test.o: src/sqlite_queue.c
-	@mkdir -p $(BUILD_DIR)
-	@echo "Compiling SQLite queue for tests (TEST_BUILD)..."
-	$(CC) $(CFLAGS) -DTEST_BUILD -c -o $@ $<
-
 TARGET = $(BUILD_DIR)/klawed
+
+# Special rule for sqlite_queue_test.o (needs -DTEST_BUILD)
+# This rule is only used by test targets via BUILD_SQLITE_QUEUE_TEST_OBJ macro
+# $(BUILD_DIR)/sqlite_queue_test.o: src/sqlite_queue.c
+#	@mkdir -p $(BUILD_DIR)
+#	@echo "Compiling SQLite queue for tests (TEST_BUILD)..."
+#	$(CC) $(CFLAGS) -DTEST_BUILD -c -o $@ $<
 TEST_EDIT_TARGET = $(BUILD_DIR)/test_edit
 TEST_EDIT_REGEX_TARGET = $(BUILD_DIR)/test_edit_regex_enhancements
 TEST_READ_TARGET = $(BUILD_DIR)/test_read
@@ -1097,7 +1098,7 @@ $(TEST_EDIT_TARGET): $(SRC) $(TEST_EDIT_SRC) $(TEST_COMMON_OBJS)
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_edit.o $(TEST_EDIT_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_EDIT_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_EDIT_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Edit tool test build successful!"
 	@echo ""
@@ -1124,7 +1125,7 @@ $(TEST_READ_TARGET): $(SRC) $(TEST_READ_SRC) $(TEST_COMMON_OBJS)
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_read.o $(TEST_READ_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_READ_TARGET) $(BUILD_DIR)/claude_read_test.o $(BUILD_DIR)/test_read.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_READ_TARGET) $(BUILD_DIR)/claude_read_test.o $(BUILD_DIR)/test_read.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Read tool test build successful!"
 	@echo ""
@@ -1152,7 +1153,7 @@ $(TEST_TODO_WRITE_TARGET): $(SRC) $(TEST_TODO_WRITE_SRC) $(TEST_COMMON_OBJS)
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_todo_write.o $(TEST_TODO_WRITE_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_TODO_WRITE_TARGET) $(BUILD_DIR)/claude_todowrite_test.o $(BUILD_DIR)/test_todo_write.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_TODO_WRITE_TARGET) $(BUILD_DIR)/claude_todowrite_test.o $(BUILD_DIR)/test_todo_write.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ TodoWrite tool test build successful!"
 	@echo ""
@@ -1173,8 +1174,9 @@ $(TEST_BASH_TIMEOUT_TARGET): $(SRC) $(TEST_BASH_TIMEOUT_SRC) $(TEST_COMMON_OBJS)
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_bash_timeout_test.o $(SRC)
 	@echo "Compiling Bash timeout test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_timeout.o $(TEST_BASH_TIMEOUT_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_TIMEOUT_TARGET) $(BUILD_DIR)/claude_bash_timeout_test.o $(BUILD_DIR)/test_bash_timeout.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_TIMEOUT_TARGET) $(BUILD_DIR)/claude_bash_timeout_test.o $(BUILD_DIR)/test_bash_timeout.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash timeout test build successful!"
 	@echo ""
@@ -1186,8 +1188,9 @@ $(TEST_BASH_STDERR_TARGET): $(SRC) $(TEST_BASH_STDERR_SRC) $(TEST_COMMON_OBJS)
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_bash_stderr_test.o $(SRC)
 	@echo "Compiling Bash stderr test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_stderr.o $(TEST_BASH_STDERR_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_STDERR_TARGET) $(BUILD_DIR)/claude_bash_stderr_test.o $(BUILD_DIR)/test_bash_stderr.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_STDERR_TARGET) $(BUILD_DIR)/claude_bash_stderr_test.o $(BUILD_DIR)/test_bash_stderr.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash stderr test build successful!"
 	@echo ""
@@ -1199,8 +1202,9 @@ $(TEST_BASH_TRUNCATION_TARGET): $(SRC) $(TEST_BASH_TRUNCATION_SRC) $(TEST_COMMON
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_bash_truncation_test.o $(SRC)
 	@echo "Compiling Bash truncation test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_truncation.o $(TEST_BASH_TRUNCATION_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_TRUNCATION_TARGET) $(BUILD_DIR)/claude_bash_truncation_test.o $(BUILD_DIR)/test_bash_truncation.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_TRUNCATION_TARGET) $(BUILD_DIR)/claude_bash_truncation_test.o $(BUILD_DIR)/test_bash_truncation.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash truncation test build successful!"
 	@echo ""
@@ -1266,8 +1270,9 @@ $(TEST_TOOL_RESULTS_REGRESSION_TARGET): $(SRC) $(TEST_TOOL_RESULTS_REGRESSION_SR
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_tool_results_test.o $(SRC)
 	@echo "Compiling tool results regression test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_tool_results_regression.o $(TEST_TOOL_RESULTS_REGRESSION_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_TOOL_RESULTS_REGRESSION_TARGET) $(BUILD_DIR)/claude_tool_results_test.o $(BUILD_DIR)/test_tool_results_regression.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_TOOL_RESULTS_REGRESSION_TARGET) $(BUILD_DIR)/claude_tool_results_test.o $(BUILD_DIR)/test_tool_results_regression.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Tool results regression test build successful!"
 	@echo ""
@@ -1301,8 +1306,9 @@ $(TEST_CANCEL_FLOW_TARGET): $(SRC) tests/test_cancel_flow.c $(TEST_COMMON_OBJS)
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/klawed_cancel_flow_test.o $(SRC)
 	@echo "Compiling cancel flow test suite..."
 	@$(CC) $(CFLAGS) -I./src -c -o $(BUILD_DIR)/test_cancel_flow.o tests/test_cancel_flow.c
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_CANCEL_FLOW_TARGET) $(BUILD_DIR)/klawed_cancel_flow_test.o $(BUILD_DIR)/test_cancel_flow.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_CANCEL_FLOW_TARGET) $(BUILD_DIR)/klawed_cancel_flow_test.o $(BUILD_DIR)/test_cancel_flow.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Cancel flow test build successful!"
 	@echo ""
@@ -1320,8 +1326,9 @@ $(TEST_WRITE_DIFF_INTEGRATION_TARGET): $(SRC) $(TEST_WRITE_DIFF_INTEGRATION_SRC)
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_write_diff_test.o $(SRC)
 	@echo "Compiling Write tool diff integration test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_write_diff_integration.o $(TEST_WRITE_DIFF_INTEGRATION_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_WRITE_DIFF_INTEGRATION_TARGET) $(BUILD_DIR)/claude_write_diff_test.o $(BUILD_DIR)/test_write_diff_integration.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_WRITE_DIFF_INTEGRATION_TARGET) $(BUILD_DIR)/claude_write_diff_test.o $(BUILD_DIR)/test_write_diff_integration.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Write tool diff integration test build successful!"
 	@echo ""
@@ -1344,8 +1351,9 @@ $(TEST_FUNCTION_CONTEXT_TARGET): $(SRC) $(TEST_FUNCTION_CONTEXT_SRC) $(TEST_COMM
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_function_context_test.o $(SRC)
 	@echo "Compiling Function Context test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_function_context.o $(TEST_FUNCTION_CONTEXT_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_FUNCTION_CONTEXT_TARGET) $(BUILD_DIR)/claude_function_context_test.o $(BUILD_DIR)/test_function_context.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_FUNCTION_CONTEXT_TARGET) $(BUILD_DIR)/claude_function_context_test.o $(BUILD_DIR)/test_function_context.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Function Context test build successful!"
 	@echo ""
@@ -1381,8 +1389,9 @@ $(TEST_EVENT_LOOP_TARGET): $(SRC) $(TEST_EVENT_LOOP_SRC) $(TEST_STUBS_SRC) $(TES
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for event loop testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_event_loop_test.o $(SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Compiling Event Loop test..."
-	@$(CC) $(CFLAGS) -Wno-unused-function -o $(TEST_EVENT_LOOP_TARGET) $(BUILD_DIR)/claude_event_loop_test.o $(TEST_EVENT_LOOP_SRC) $(TEST_STUBS_SRC) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -Wno-unused-function -o $(TEST_EVENT_LOOP_TARGET) $(BUILD_DIR)/claude_event_loop_test.o $(TEST_EVENT_LOOP_SRC) $(TEST_STUBS_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Event Loop test build successful!"
 	@echo ""
@@ -1761,8 +1770,9 @@ $(TEST_ZMQ_SOCKET_TARGET): $(SRC) $(TEST_ZMQ_SOCKET_SRC) $(TEST_COMMON_OBJS)
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_zmq_test.o $(SRC)
 	@echo "Compiling ZMQ socket test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_zmq_socket.o $(TEST_ZMQ_SOCKET_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_ZMQ_SOCKET_TARGET) $(BUILD_DIR)/claude_zmq_test.o $(BUILD_DIR)/test_zmq_socket.o $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_ZMQ_SOCKET_TARGET) $(BUILD_DIR)/claude_zmq_test.o $(BUILD_DIR)/test_zmq_socket.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 
 
 
