@@ -561,26 +561,114 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         // Keep raw response for history
         api_response->raw_response = raw_json;
 
-        // Extract message from OpenAI response format
-        cJSON *choices = cJSON_GetObjectItem(raw_json, "choices");
-        if (!choices || !cJSON_IsArray(choices) || cJSON_GetArraySize(choices) == 0) {
-            result.error_message = strdup("Invalid response format: no choices");
-            result.is_retryable = 0;
-            api_response_free(api_response);
-            free(result.headers_json);  // Clean up headers JSON in error paths
-            result.headers_json = NULL;
-            return result;
-        }
+        // Detect API format: Responses API has "output" array, Chat Completions has "choices"
+        cJSON *output = cJSON_GetObjectItem(raw_json, "output");
+        cJSON *message = NULL;
+        int message_is_synthetic = 0;  // Track if we created message object (needs cleanup)
 
-        cJSON *choice = cJSON_GetArrayItem(choices, 0);
-        cJSON *message = cJSON_GetObjectItem(choice, "message");
-        if (!message) {
-            result.error_message = strdup("Invalid response format: no message");
-            result.is_retryable = 0;
-            api_response_free(api_response);
-            free(result.headers_json);  // Clean up headers JSON in error paths
-            result.headers_json = NULL;
-            return result;
+        if (output && cJSON_IsArray(output) && cJSON_GetArraySize(output) > 0) {
+            // Responses API format
+            LOG_DEBUG("Parsing Responses API format");
+            cJSON *output_item = cJSON_GetArrayItem(output, 0);
+            if (!output_item) {
+                result.error_message = strdup("Invalid response format: empty output array");
+                result.is_retryable = 0;
+                api_response_free(api_response);
+                free(result.headers_json);
+                result.headers_json = NULL;
+                return result;
+            }
+
+            // Get content array from output item
+            cJSON *content_array = cJSON_GetObjectItem(output_item, "content");
+            if (!content_array || !cJSON_IsArray(content_array)) {
+                result.error_message = strdup("Invalid response format: no content in output");
+                result.is_retryable = 0;
+                api_response_free(api_response);
+                free(result.headers_json);
+                result.headers_json = NULL;
+                return result;
+            }
+
+            // Build a synthetic message object compatible with Chat Completions format
+            message = cJSON_CreateObject();
+            message_is_synthetic = 1;
+            cJSON_AddStringToObject(message, "role", "assistant");
+
+            // Extract text from content array items with type "output_text"
+            char *text_content = NULL;
+            size_t text_capacity = 0;
+            size_t text_length = 0;
+
+            cJSON *content_item = NULL;
+            cJSON_ArrayForEach(content_item, content_array) {
+                cJSON *type = cJSON_GetObjectItem(content_item, "type");
+                if (type && cJSON_IsString(type) && strcmp(type->valuestring, "output_text") == 0) {
+                    cJSON *text = cJSON_GetObjectItem(content_item, "text");
+                    if (text && cJSON_IsString(text) && text->valuestring) {
+                        size_t text_len = strlen(text->valuestring);
+                        size_t needed = text_length + text_len + 1;
+                        
+                        if (needed > text_capacity) {
+                            size_t new_cap = text_capacity ? text_capacity * 2 : 1024;
+                            if (new_cap < needed) new_cap = needed;
+                            char *new_buf = realloc(text_content, new_cap);
+                            if (!new_buf) {
+                                free(text_content);
+                                cJSON_Delete(message);
+                                result.error_message = strdup("Failed to allocate text buffer");
+                                result.is_retryable = 0;
+                                api_response_free(api_response);
+                                free(result.headers_json);
+                                result.headers_json = NULL;
+                                return result;
+                            }
+                            text_content = new_buf;
+                            text_capacity = new_cap;
+                        }
+                        
+                        if (text_length == 0) {
+                            memcpy(text_content, text->valuestring, text_len + 1);
+                        } else {
+                            memcpy(text_content + text_length, text->valuestring, text_len + 1);
+                        }
+                        text_length += text_len;
+                    }
+                }
+            }
+
+            if (text_content) {
+                cJSON_AddStringToObject(message, "content", text_content);
+                free(text_content);
+            } else {
+                cJSON_AddNullToObject(message, "content");
+            }
+
+            // Note: Responses API tool calls would need additional parsing here if supported
+            // For now, we assume text-only responses from Responses API
+        } else {
+            // Chat Completions API format
+            LOG_DEBUG("Parsing Chat Completions API format");
+            cJSON *choices = cJSON_GetObjectItem(raw_json, "choices");
+            if (!choices || !cJSON_IsArray(choices) || cJSON_GetArraySize(choices) == 0) {
+                result.error_message = strdup("Invalid response format: no choices or output");
+                result.is_retryable = 0;
+                api_response_free(api_response);
+                free(result.headers_json);
+                result.headers_json = NULL;
+                return result;
+            }
+
+            cJSON *choice = cJSON_GetArrayItem(choices, 0);
+            message = cJSON_GetObjectItem(choice, "message");
+            if (!message) {
+                result.error_message = strdup("Invalid response format: no message");
+                result.is_retryable = 0;
+                api_response_free(api_response);
+                free(result.headers_json);
+                result.headers_json = NULL;
+                return result;
+            }
         }
 
         // Extract text content
@@ -611,6 +699,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                 if (!api_response->tools) {
                     result.error_message = strdup("Failed to allocate tool calls");
                     result.is_retryable = 0;
+                    if (message_is_synthetic) cJSON_Delete(message);
                     api_response_free(api_response);
                     free(result.headers_json);  // Clean up headers JSON in error paths
                     result.headers_json = NULL;
@@ -653,6 +742,11 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                 }
                 api_response->tool_count = valid_count;
             }
+        }
+
+        // Clean up synthetic message if we created one for Responses API
+        if (message_is_synthetic) {
+            cJSON_Delete(message);
         }
 
         result.response = api_response;
