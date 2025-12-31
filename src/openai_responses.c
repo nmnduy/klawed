@@ -80,24 +80,37 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
                 InternalContent *c = &msg->contents[j];
 
                 if (c->type == INTERNAL_TEXT && c->text) {
-                    // Regular user text -> input_text item
+                    // Regular user text -> message item
                     cJSON *text_item = cJSON_CreateObject();
-                    cJSON_AddStringToObject(text_item, "type", "input_text");
-                    cJSON_AddStringToObject(text_item, "text", c->text);
+                    cJSON_AddStringToObject(text_item, "type", "message");
+                    cJSON_AddStringToObject(text_item, "role", "user");
+                    cJSON *content_array = cJSON_CreateArray();
+                    cJSON *content_obj = cJSON_CreateObject();
+                    cJSON_AddStringToObject(content_obj, "type", "input_text");
+                    cJSON_AddStringToObject(content_obj, "text", c->text);
+                    cJSON_AddItemToArray(content_array, content_obj);
+                    cJSON_AddItemToObject(text_item, "content", content_array);
                     cJSON_AddItemToArray(input_array, text_item);
                 }
                 else if (c->type == INTERNAL_TOOL_RESPONSE) {
-                    // Tool response - Responses API uses "tool_result" type
-                    cJSON *tool_item = cJSON_CreateObject();
-                    cJSON_AddStringToObject(tool_item, "type", "tool_result");
-                    cJSON_AddStringToObject(tool_item, "tool_call_id", c->tool_id);
-
+                    // Tool response - wrap in message with role "user"
+                    cJSON *msg_item = cJSON_CreateObject();
+                    cJSON_AddStringToObject(msg_item, "type", "message");
+                    cJSON_AddStringToObject(msg_item, "role", "user");
+                    
+                    cJSON *content_array = cJSON_CreateArray();
+                    cJSON *tool_result = cJSON_CreateObject();
+                    cJSON_AddStringToObject(tool_result, "type", "function_call_output");
+                    cJSON_AddStringToObject(tool_result, "call_id", c->tool_id);
+                    
                     // Convert output to string
                     char *output_str = cJSON_PrintUnformatted(c->tool_output);
-                    cJSON_AddStringToObject(tool_item, "content", output_str ? output_str : "{}");
+                    cJSON_AddStringToObject(tool_result, "output", output_str ? output_str : "{}");
                     free(output_str);
-
-                    cJSON_AddItemToArray(input_array, tool_item);
+                    
+                    cJSON_AddItemToArray(content_array, tool_result);
+                    cJSON_AddItemToObject(msg_item, "content", content_array);
+                    cJSON_AddItemToArray(input_array, msg_item);
                 }
             }
         }
@@ -107,28 +120,47 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
             // previous assistant messages as output items in the input array.
             // This allows the model to see the conversation history.
 
-            // Check if there's text content
-            int has_text = 0;
+            // Check if there's text content or tool calls
+            int has_content = 0;
+            cJSON *content_array = cJSON_CreateArray();
+            
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
                 if (c->type == INTERNAL_TEXT && c->text) {
-                    // Add output_text item for assistant's text response
-                    cJSON *text_item = cJSON_CreateObject();
-                    cJSON_AddStringToObject(text_item, "type", "output_text");
-                    cJSON_AddStringToObject(text_item, "text", c->text);
-                    cJSON_AddItemToArray(input_array, text_item);
-                    has_text = 1;
+                    // Add output_text to content array
+                    cJSON *text_obj = cJSON_CreateObject();
+                    cJSON_AddStringToObject(text_obj, "type", "output_text");
+                    cJSON_AddStringToObject(text_obj, "text", c->text);
+                    cJSON_AddItemToArray(content_array, text_obj);
+                    has_content = 1;
                 }
                 else if (c->type == INTERNAL_TOOL_CALL) {
-                    // For tool calls in assistant messages, we don't add them
-                    // to the input array directly. The tool responses are what
-                    // matter for the conversation context.
-                    LOG_DEBUG("Skipping tool call in assistant message for Responses API");
+                    // Add function_call to content array
+                    cJSON *func_obj = cJSON_CreateObject();
+                    cJSON_AddStringToObject(func_obj, "type", "function_call");
+                    cJSON_AddStringToObject(func_obj, "id", c->tool_id);
+                    cJSON_AddStringToObject(func_obj, "name", c->tool_name);
+                    
+                    // Arguments as JSON string
+                    char *args_str = cJSON_PrintUnformatted(c->tool_params);
+                    cJSON_AddStringToObject(func_obj, "arguments", args_str ? args_str : "{}");
+                    free(args_str);
+                    
+                    cJSON_AddItemToArray(content_array, func_obj);
+                    has_content = 1;
                 }
             }
 
-            if (has_text) {
-                LOG_DEBUG("Added assistant message as output_text item");
+            if (has_content) {
+                // Create message item with assistant role
+                cJSON *msg_item = cJSON_CreateObject();
+                cJSON_AddStringToObject(msg_item, "type", "message");
+                cJSON_AddStringToObject(msg_item, "role", "assistant");
+                cJSON_AddItemToObject(msg_item, "content", content_array);
+                cJSON_AddItemToArray(input_array, msg_item);
+                LOG_DEBUG("Added assistant message with %d content blocks", msg->content_count);
+            } else {
+                cJSON_Delete(content_array);
             }
         }
     }
@@ -179,12 +211,11 @@ InternalMessage parse_openai_responses_response(cJSON *response) {
             continue;
         }
 
-        if (strcmp(type->valuestring, "output_text") == 0) {
-            count++;
-        } else if (strcmp(type->valuestring, "tool_calls") == 0) {
-            cJSON *tool_calls = cJSON_GetObjectItem(item, "tool_calls");
-            if (tool_calls && cJSON_IsArray(tool_calls)) {
-                count += cJSON_GetArraySize(tool_calls);
+        if (strcmp(type->valuestring, "message") == 0) {
+            // Message contains content array with text and/or tool calls
+            cJSON *content = cJSON_GetObjectItem(item, "content");
+            if (content && cJSON_IsArray(content)) {
+                count += cJSON_GetArraySize(content);
             }
         }
     }
@@ -209,32 +240,38 @@ InternalMessage parse_openai_responses_response(cJSON *response) {
             continue;
         }
 
-        if (strcmp(type->valuestring, "output_text") == 0) {
-            cJSON *text = cJSON_GetObjectItem(item, "text");
-            if (text && cJSON_IsString(text) && text->valuestring) {
-                msg.contents[idx].type = INTERNAL_TEXT;
-                msg.contents[idx].text = strdup(text->valuestring);
-                if (!msg.contents[idx].text) {
-                    LOG_ERROR("Failed to duplicate text content");
-                }
-                idx++;
+        if (strcmp(type->valuestring, "message") == 0) {
+            cJSON *content = cJSON_GetObjectItem(item, "content");
+            if (!content || !cJSON_IsArray(content)) {
+                continue;
             }
-        } else if (strcmp(type->valuestring, "tool_calls") == 0) {
-            cJSON *tool_calls = cJSON_GetObjectItem(item, "tool_calls");
-            if (tool_calls && cJSON_IsArray(tool_calls)) {
-                cJSON *tc = NULL;
-                cJSON_ArrayForEach(tc, tool_calls) {
-                    if (idx >= count) break;
-
-                    cJSON *id = cJSON_GetObjectItem(tc, "id");
-                    cJSON *func = cJSON_GetObjectItem(tc, "function");
-                    if (!func) continue;
-
-                    cJSON *name = cJSON_GetObjectItem(func, "name");
-                    cJSON *arguments = cJSON_GetObjectItem(func, "arguments");
+            
+            cJSON *content_item = NULL;
+            cJSON_ArrayForEach(content_item, content) {
+                if (idx >= count) break;
+                
+                cJSON *content_type = cJSON_GetObjectItem(content_item, "type");
+                if (!content_type || !cJSON_IsString(content_type)) {
+                    continue;
+                }
+                
+                if (strcmp(content_type->valuestring, "output_text") == 0) {
+                    cJSON *text = cJSON_GetObjectItem(content_item, "text");
+                    if (text && cJSON_IsString(text) && text->valuestring) {
+                        msg.contents[idx].type = INTERNAL_TEXT;
+                        msg.contents[idx].text = strdup(text->valuestring);
+                        if (!msg.contents[idx].text) {
+                            LOG_ERROR("Failed to duplicate text content");
+                        }
+                        idx++;
+                    }
+                } else if (strcmp(content_type->valuestring, "function_call") == 0) {
+                    cJSON *id = cJSON_GetObjectItem(content_item, "id");
+                    cJSON *name = cJSON_GetObjectItem(content_item, "name");
+                    cJSON *arguments = cJSON_GetObjectItem(content_item, "arguments");
 
                     if (!id || !name || !arguments) {
-                        LOG_WARN("Malformed tool_call, skipping");
+                        LOG_WARN("Malformed function_call, skipping");
                         continue;
                     }
 
