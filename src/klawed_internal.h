@@ -153,6 +153,7 @@ typedef struct {
     char *id;                // Unique ID for this tool call
     char *name;              // Tool name (e.g., "Bash", "Read", "Write")
     cJSON *parameters;       // Tool parameters (owned by this struct, must be freed)
+    char *incomplete_args;   // Original incomplete arguments string (for DeepSeek continuation)
 } ToolCall;
 
 /**

@@ -21,6 +21,7 @@ Project instructions for Klawed when working with this codebase.
 
 **Core Systems:**
 - **API providers**: `src/openai_provider.c`, `src/anthropic_provider.c`, `src/bedrock_provider.c`, `src/aws_bedrock.c`
+  - **DeepSeek incomplete payload handling**: `src/deepseek_response_parser.c`, `src/deepseek_continuation.c`, `src/json_repair.c` (handles incomplete Write tool JSON when token limit reached)
 - **Tools**: Built-in tools in `src/klawed.c`, common utilities in `src/tool_utils.c`
 - **Subagent**: `src/subagent_manager.c`, `docs/subagent.md` (task delegation with fresh context)
 - **MCP**: `src/mcp.c`, `src/mcp.h`, `docs/mcp.md` (external tool servers)

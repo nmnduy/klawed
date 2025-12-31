@@ -54,6 +54,8 @@
 #ifndef TEST_BUILD
 #include "openai_messages.h"
 #endif
+#include "deepseek_response_parser.h"
+#include "deepseek_continuation.h"
 
 #ifdef TEST_BUILD
 // Disable unused function warnings for test builds since not all functions are used by tests
@@ -5053,6 +5055,7 @@ void api_response_free(ApiResponse *response) {
             if (response->tools[i].parameters) {
                 cJSON_Delete(response->tools[i].parameters);
             }
+            free(response->tools[i].incomplete_args);
         }
         free(response->tools);
     }
@@ -6209,6 +6212,34 @@ static void process_response(ConversationState *state,
     // Process tool calls from vendor-agnostic structure
     int tool_count = response->tool_count;
     ToolCall *tool_calls_array = response->tools;
+
+    // Check for incomplete Write tool arguments with DeepSeek API
+    if (tool_count > 0 && deepseek_should_handle_incomplete_payload(state->api_url, response->raw_response)) {
+        LOG_INFO("DeepSeek API response with finish_reason 'length' - checking for incomplete Write tool");
+        
+        // Check each tool call for incomplete arguments
+        for (int i = 0; i < tool_count; i++) {
+            ToolCall *tool = &tool_calls_array[i];
+            if (tool->name && strcmp(tool->name, "Write") == 0 && tool->incomplete_args) {
+                LOG_WARN("Found incomplete Write tool arguments, requesting continuation");
+                
+                // Build continuation prompt
+                char *continuation_prompt = deepseek_build_continuation_prompt(tool, tool->incomplete_args);
+                if (continuation_prompt) {
+                    LOG_DEBUG("Continuation prompt: %s", continuation_prompt);
+                    
+                    // Make continuation API call
+                    if (deepseek_make_continuation_call(state, tool, continuation_prompt)) {
+                        LOG_INFO("Successfully completed Write tool arguments via continuation");
+                    } else {
+                        LOG_WARN("Failed to get continuation for Write tool, using incomplete parameters");
+                    }
+                    
+                    free(continuation_prompt);
+                }
+            }
+        }
+    }
 
     if (tool_count > 0) {
 

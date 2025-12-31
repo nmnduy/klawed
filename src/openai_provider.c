@@ -9,6 +9,8 @@
 #include "logger.h"
 #include "http_client.h"
 #include "tui.h"  // For streaming TUI updates
+#include "deepseek_response_parser.h"
+#include "json_repair.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -595,8 +597,26 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                     if (arguments && cJSON_IsString(arguments)) {
                         api_response->tools[tool_idx].parameters = cJSON_Parse(arguments->valuestring);
                         if (!api_response->tools[tool_idx].parameters) {
-                            LOG_WARN("Failed to parse tool arguments, using empty object");
-                            api_response->tools[tool_idx].parameters = cJSON_CreateObject();
+                            LOG_WARN("Failed to parse tool arguments, attempting repair");
+                            
+                            // Try to repair truncated JSON (common with DeepSeek token limits)
+                            char repaired[65536];  // Large buffer for Write tool content
+                            if (is_truncated_write_args(arguments->valuestring) &&
+                                repair_truncated_json(arguments->valuestring, sizeof(repaired), repaired)) {
+                                
+                                LOG_DEBUG("Attempting to parse repaired JSON");
+                                api_response->tools[tool_idx].parameters = cJSON_Parse(repaired);
+                            }
+                            
+                            if (!api_response->tools[tool_idx].parameters) {
+                                LOG_WARN("Could not parse even after repair, using empty object");
+                                api_response->tools[tool_idx].parameters = cJSON_CreateObject();
+                                
+                                // Store incomplete arguments for DeepSeek continuation
+                                api_response->tools[tool_idx].incomplete_args = strdup(arguments->valuestring);
+                            } else {
+                                LOG_INFO("Successfully repaired truncated JSON arguments");
+                            }
                         }
                     } else {
                         api_response->tools[tool_idx].parameters = cJSON_CreateObject();
