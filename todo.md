@@ -27,12 +27,6 @@
   - Test with: ./test_zmq_setup.sh
   - Documentation: ZMQ_README.md 
 
-- [x] DeepSeek API incomplete Write tool payload handling
-  - Issue: When DeepSeek API hits token limit (finish_reason: "length"), Write tool arguments JSON is truncated
-  - Solution: Added automatic continuation requests for incomplete Write tool payloads
-  - Implementation: `src/deepseek_response_parser.c`, `src/deepseek_continuation.c`, `src/json_repair.c`
-  - Updates: `src/openai_provider.c`, `src/klawed.c`, `Makefile`
-
 - [ ] subagents
     - [ ] explore: explore code base or current directtory and write a concise markdown with findings
     - [ ] oracle
