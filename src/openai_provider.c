@@ -298,6 +298,23 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
 
     LOG_DEBUG("OpenAI: Built request with caching %s", enable_caching ? "enabled" : "disabled");
 
+    // Detect if we are targeting the new /responses endpoint
+    int use_responses_api = (config->base_url && strstr(config->base_url, "/responses") != NULL);
+    if (use_responses_api) {
+        LOG_INFO("OpenAI provider: using responses endpoint payload shape");
+
+        // Rename messages -> input (responses API expects "input")
+        cJSON *messages = cJSON_DetachItemFromObject(request, "messages");
+        if (messages) {
+            cJSON_AddItemToObject(request, "input", messages);
+        }
+
+        // Use max_output_tokens for responses API
+        cJSON_DeleteItemFromObjectCaseSensitive(request, "max_completion_tokens");
+        cJSON_DeleteItemFromObjectCaseSensitive(request, "max_tokens");
+        cJSON_AddNumberToObject(request, "max_output_tokens", state->max_tokens);
+    }
+
     // Add streaming parameter if enabled
     if (enable_streaming) {
         cJSON_AddBoolToObject(request, "stream", cJSON_True);
@@ -316,9 +333,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
     }
 
     // Build full URL (base_url is already complete for OpenAI, just use it directly)
-    // Actually, looking at the previous code, it needs /v1/chat/completions appended
-    // But for Anthropic API, the base_url already includes the full path
-    // For simplicity, just use base_url directly - it should be pre-configured correctly
+    // If caller provided a /responses URL, we send as-is; otherwise treat as chat/completions-compatible
     const char *url = config->base_url;
 
     // Set up headers
@@ -388,6 +403,9 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
     // Store request JSON for logging (caller must free)
     result.request_json = openai_json;
 
+    // Include endpoint info for logging/debugging
+    result.headers_json = http_headers_to_json(headers);
+
     // Initialize streaming context if needed
     OpenAIStreamingContext stream_ctx = {0};
     HttpResponse *http_resp = NULL;
@@ -411,6 +429,10 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
     result.duration_ms = http_resp->duration_ms;
     result.http_status = http_resp->status_code;
     result.raw_response = http_resp->body ? strdup(http_resp->body) : NULL;
+    if (result.headers_json) {
+        free(result.headers_json);
+        result.headers_json = NULL;
+    }
     result.headers_json = http_headers_to_json(http_resp->headers);
 
     // Handle HTTP errors
