@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
 #include <errno.h>
 #include <curl/curl.h>
 #include <bsd/string.h>
@@ -298,8 +299,35 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
 
     LOG_DEBUG("OpenAI: Built request with caching %s", enable_caching ? "enabled" : "disabled");
 
-    // Detect if we are targeting the new /responses endpoint
-    int use_responses_api = (config->base_url && strstr(config->base_url, "/responses") != NULL);
+    // Detect if we are targeting the new /responses endpoint (case-insensitive)
+    int use_responses_api = 0;
+    if (config->base_url) {
+        // Check for "/responses" in the URL (case-insensitive)
+        const char *url = config->base_url;
+        const char *pattern = "/responses";
+        size_t pattern_len = strlen(pattern);
+        
+        for (size_t i = 0; url[i] && url[i + pattern_len - 1]; i++) {
+            if (url[i] == '/') {
+                int match = 1;
+                for (size_t j = 0; j < pattern_len; j++) {
+                    if (tolower((unsigned char)url[i + j]) != tolower((unsigned char)pattern[j])) {
+                        match = 0;
+                        break;
+                    }
+                }
+                // Check that after "/responses" we have end of string, '/', '?', or '#'
+                if (match) {
+                    char next_char = url[i + pattern_len];
+                    if (next_char == '\0' || next_char == '/' || next_char == '?' || next_char == '#') {
+                        use_responses_api = 1;
+                        LOG_DEBUG("OpenAI provider: detected responses API URL: %s", url);
+                        break;
+                    }
+                }
+            }
+        }
+    }
     if (use_responses_api) {
         LOG_INFO("OpenAI provider: using responses endpoint payload shape");
 
@@ -307,12 +335,16 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         cJSON *messages = cJSON_DetachItemFromObject(request, "messages");
         if (messages) {
             cJSON_AddItemToObject(request, "input", messages);
+            LOG_DEBUG("OpenAI provider: renamed 'messages' to 'input' for responses API");
+        } else {
+            LOG_WARN("OpenAI provider: 'messages' field not found in request, cannot rename to 'input'");
         }
 
         // Use max_output_tokens for responses API
         cJSON_DeleteItemFromObjectCaseSensitive(request, "max_completion_tokens");
         cJSON_DeleteItemFromObjectCaseSensitive(request, "max_tokens");
         cJSON_AddNumberToObject(request, "max_output_tokens", state->max_tokens);
+        LOG_DEBUG("OpenAI provider: using max_output_tokens=%d for responses API", state->max_tokens);
     }
 
     // Add streaming parameter if enabled
