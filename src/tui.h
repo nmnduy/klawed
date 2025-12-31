@@ -53,7 +53,8 @@ typedef struct {
 typedef enum {
     TUI_MODE_NORMAL,   // Normal mode (vim-like navigation, default for conversation viewing)
     TUI_MODE_INSERT,   // Insert mode (text input for sending messages)
-    TUI_MODE_COMMAND   // Command mode (entered with ':' from normal mode)
+    TUI_MODE_COMMAND,  // Command mode (entered with ':' from normal mode)
+    TUI_MODE_SEARCH    // Search mode (entered with '/' or '?' from normal mode)
 } TUIMode;
 
 // TUI State
@@ -91,6 +92,14 @@ typedef struct TUIStateStruct {
     char *command_buffer;    // Buffer for command mode input (starts with ':')
     int command_buffer_len;  // Length of command buffer
     int command_buffer_capacity; // Capacity of command buffer
+    
+    // Search state
+    char *search_buffer;     // Buffer for search pattern input
+    int search_buffer_len;   // Length of search buffer
+    int search_buffer_capacity; // Capacity of search buffer
+    int search_direction;    // 1 for forward ('/'), -1 for backward ('?')
+    int last_search_match_line; // Line number of last search match
+    char *last_search_pattern;  // Last search pattern used
 
     int is_initialized;      // Whether TUI has been set up
 

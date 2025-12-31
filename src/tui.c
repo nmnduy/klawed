@@ -48,6 +48,9 @@
 // Enable by setting env var TUI_PASTE_HEURISTIC=1
 // Default: enable heuristic (helps when bracketed paste isn't passed through, e.g. tmux)
 static int g_enable_paste_heuristic = 1;
+
+// Function prototypes
+static int perform_search(TUIState *tui, const char *pattern, int direction);
 // Less sensitive defaults: require very fast, large bursts to classify as paste
 static int g_paste_gap_ms = 12;         // max gap to count as "rapid" for burst
 static int g_paste_burst_min = 60;      // min consecutive keys within gap to enter paste mode
@@ -1257,6 +1260,15 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         if (tui->mode == TUI_MODE_COMMAND && tui->command_buffer) {
             // Show command buffer
             mvwprintw(win, 0, 0, "%s", tui->command_buffer);
+        } else if (tui->mode == TUI_MODE_SEARCH && tui->search_buffer) {
+            // Show search buffer with appropriate prefix
+            char search_prompt[260];
+            if (tui->search_direction == 1) {
+                snprintf(search_prompt, sizeof(search_prompt), "/%s", tui->search_buffer);
+            } else {
+                snprintf(search_prompt, sizeof(search_prompt), "?%s", tui->search_buffer);
+            }
+            mvwprintw(win, 0, 0, "%s", search_prompt);
         } else {
             // Show normal prompt
             mvwprintw(win, 0, 0, "%s", prompt);
@@ -1462,6 +1474,14 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->command_buffer = NULL;
     tui->command_buffer_len = 0;
     tui->command_buffer_capacity = 0;
+    
+    // Initialize search state
+    tui->search_buffer = NULL;
+    tui->search_buffer_len = 0;
+    tui->search_buffer_capacity = 0;
+    tui->search_direction = 1;  // Default forward search
+    tui->last_search_match_line = -1;
+    tui->last_search_pattern = NULL;
 
     // Initialize input buffer
     if (input_init(tui) != 0) {
@@ -1532,6 +1552,12 @@ void tui_cleanup(TUIState *tui) {
     // Free command buffer
     free(tui->command_buffer);
     tui->command_buffer = NULL;
+    
+    // Free search state
+    free(tui->search_buffer);
+    tui->search_buffer = NULL;
+    free(tui->last_search_pattern);
+    tui->last_search_pattern = NULL;
 
     // Destroy ncurses windows via window manager
     window_manager_destroy(&tui->wm);
@@ -2506,6 +2532,205 @@ static int find_prev_paragraph(WINDOW *pad, int start_line, int max_lines) {
     return 0;
 }
 
+// Handle search mode input
+// Returns: 0 to continue, -1 on error/quit
+static int handle_search_mode_input(TUIState *tui, int ch, const char *prompt) {
+    if (!tui || !tui->search_buffer) {
+        return 0;
+    }
+
+    if (ch == 27) {  // ESC - cancel search mode
+        tui->mode = TUI_MODE_NORMAL;
+        tui->search_buffer_len = 0;
+        if (tui->search_buffer) {
+            tui->search_buffer[0] = '\0';
+        }
+        if (tui->wm.status_height > 0) {
+            render_status_window(tui);
+        }
+        input_redraw(tui, prompt);
+        return 0;
+    } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {  // Backspace
+        if (tui->search_buffer_len > 0) {
+            tui->search_buffer_len--;
+            tui->search_buffer[tui->search_buffer_len] = '\0';
+            input_redraw(tui, prompt);
+        } else {
+            // Backspace on empty search buffer exits search mode
+            tui->mode = TUI_MODE_NORMAL;
+            tui->search_buffer_len = 0;
+            tui->search_buffer[0] = '\0';
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+        }
+        return 0;
+    } else if (ch == 13 || ch == 10) {  // Enter - execute search
+        // Execute search with current pattern
+        if (tui->search_buffer_len > 0) {
+            // Store last search pattern
+            free(tui->last_search_pattern);
+            tui->last_search_pattern = strdup(tui->search_buffer);
+            
+            // Perform search
+            perform_search(tui, tui->search_buffer, tui->search_direction);
+        }
+        
+        // Exit search mode
+        tui->mode = TUI_MODE_NORMAL;
+        tui->search_buffer_len = 0;
+        tui->search_buffer[0] = '\0';
+        if (tui->wm.status_height > 0) {
+            render_status_window(tui);
+        }
+        input_redraw(tui, prompt);
+        return 0;
+    } else if (ch >= 32 && ch < 127) {  // Printable ASCII
+        // Add to search buffer
+        if (tui->search_buffer_len < tui->search_buffer_capacity - 1) {
+            tui->search_buffer[tui->search_buffer_len++] = (char)ch;
+            tui->search_buffer[tui->search_buffer_len] = '\0';
+            input_redraw(tui, prompt);
+        }
+        return 0;
+    }
+
+    return 0;
+}
+
+// Perform search through conversation entries
+// Returns: 1 if match found, 0 if no match, -1 on error
+static int perform_search(TUIState *tui, const char *pattern, int direction) {
+    if (!tui || !pattern || !pattern[0]) {
+        return -1;
+    }
+    
+    // Get current scroll position
+    int current_scroll = window_manager_get_scroll_offset(&tui->wm);
+    int content_lines = window_manager_get_content_lines(&tui->wm);
+    
+    // Determine start position for search
+    int start_line;
+    if (direction == 1) {  // Forward search
+        // Start from line after current scroll position
+        start_line = current_scroll + 1;
+        if (start_line >= content_lines) {
+            start_line = 0;  // Wrap around to beginning
+        }
+    } else {  // Backward search
+        // Start from line before current scroll position
+        start_line = current_scroll - 1;
+        if (start_line < 0) {
+            start_line = content_lines - 1;  // Wrap around to end
+        }
+    }
+    
+    // Search through lines in the pad
+    int found_line = -1;
+    int line = start_line;
+    int steps = 0;
+    int max_steps = content_lines;
+    
+    while (steps < max_steps) {
+        // Check if line contains the pattern
+        // We need to get the text from the pad
+        WINDOW *pad = tui->wm.conv_pad;
+        if (!pad) {
+            break;
+        }
+        
+        int pad_height, pad_width;
+        getmaxyx(pad, pad_height, pad_width);
+        
+        if (line >= pad_height) {
+            // Line doesn't exist in pad
+            if (direction == 1) {
+                line = 0;  // Wrap around
+            } else {
+                line = pad_height - 1;  // Wrap around
+            }
+            steps++;
+            continue;
+        }
+        
+        // Read a chunk of text from the pad line
+        char line_text[256];
+        int col = 0;
+        int text_len = 0;
+        
+        // Read up to 255 characters from the line
+        while (col < pad_width && text_len < 255) {
+            chtype ch = mvwinch(pad, line, col);
+            char c = (char)(ch & A_CHARTEXT);
+            
+            if (c == '\0' || c == '\n') {
+                break;
+            }
+            
+            line_text[text_len++] = c;
+            col++;
+        }
+        line_text[text_len] = '\0';
+        
+        // Simple case-insensitive search
+        char *pattern_lower = strdup(pattern);
+        char *line_lower = strdup(line_text);
+        if (pattern_lower && line_lower) {
+            // Convert to lowercase for case-insensitive search
+            for (int i = 0; pattern_lower[i]; i++) {
+                pattern_lower[i] = (char)tolower((unsigned char)pattern_lower[i]);
+            }
+            for (int i = 0; line_lower[i]; i++) {
+                line_lower[i] = (char)tolower((unsigned char)line_lower[i]);
+            }
+            
+            if (strstr(line_lower, pattern_lower) != NULL) {
+                found_line = line;
+                break;
+            }
+        }
+        
+        free(pattern_lower);
+        free(line_lower);
+        
+        // Move to next line
+        if (direction == 1) {
+            line++;
+            if (line >= content_lines) {
+                line = 0;  // Wrap around
+            }
+        } else {
+            line--;
+            if (line < 0) {
+                line = content_lines - 1;  // Wrap around
+            }
+        }
+        steps++;
+    }
+    
+    if (found_line >= 0) {
+        // Scroll to found line
+        tui_scroll_conversation(tui, found_line - current_scroll);
+        tui->last_search_match_line = found_line;
+        
+        // Show status message
+        char status_msg[256];
+        snprintf(status_msg, sizeof(status_msg), "Search: %s (match at line %d)", 
+                pattern, found_line + 1);
+        tui_update_status(tui, status_msg);
+        
+        return 1;
+    } else {
+        // No match found
+        char status_msg[256];
+        snprintf(status_msg, sizeof(status_msg), "Search: %s (no match)", pattern);
+        tui_update_status(tui, status_msg);
+        
+        return 0;
+    }
+}
+
 // Handle normal mode input
 // Returns: 0 to continue, 1 to switch to insert mode, -1 on error/quit
 static int handle_normal_mode_input(TUIState *tui, int ch, const char *prompt, void *user_data) {
@@ -2571,6 +2796,68 @@ static int handle_normal_mode_input(TUIState *tui, int ch, const char *prompt, v
             }
             input_redraw(tui, prompt);  // Redraw to show input box
             return 0;  // Mode switched, continue processing (not submission)
+
+        case '/':  // Enter forward search mode
+            tui->mode = TUI_MODE_SEARCH;
+            tui->search_direction = 1;  // Forward search
+            // Initialize search buffer
+            if (!tui->search_buffer) {
+                tui->search_buffer_capacity = 256;
+                tui->search_buffer = malloc((size_t)tui->search_buffer_capacity);
+                if (!tui->search_buffer) {
+                    LOG_ERROR("[TUI] Failed to allocate search buffer");
+                    tui->mode = TUI_MODE_NORMAL;
+                    return 0;
+                }
+            }
+            tui->search_buffer[0] = '\0';  // Start with empty buffer
+            tui->search_buffer_len = 0;
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, "");  // Redraw to show search buffer
+            return 0;
+
+        case '?':  // Enter backward search mode
+            tui->mode = TUI_MODE_SEARCH;
+            tui->search_direction = -1;  // Backward search
+            // Initialize search buffer
+            if (!tui->search_buffer) {
+                tui->search_buffer_capacity = 256;
+                tui->search_buffer = malloc((size_t)tui->search_buffer_capacity);
+                if (!tui->search_buffer) {
+                    LOG_ERROR("[TUI] Failed to allocate search buffer");
+                    tui->mode = TUI_MODE_NORMAL;
+                    return 0;
+                }
+            }
+            tui->search_buffer[0] = '\0';  // Start with empty buffer
+            tui->search_buffer_len = 0;
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, "");  // Redraw to show search buffer
+            return 0;
+
+        case 'n':  // Repeat search in same direction
+            if (tui->last_search_pattern) {
+                perform_search(tui, tui->last_search_pattern, tui->search_direction);
+                input_redraw(tui, prompt);
+            } else {
+                // No previous search
+                tui_update_status(tui, "No previous search pattern");
+            }
+            break;
+
+        case 'N':  // Repeat search in opposite direction
+            if (tui->last_search_pattern) {
+                perform_search(tui, tui->last_search_pattern, -tui->search_direction);
+                input_redraw(tui, prompt);
+            } else {
+                // No previous search
+                tui_update_status(tui, "No previous search pattern");
+            }
+            break;
 
         case ':':  // Enter command mode
             tui->mode = TUI_MODE_COMMAND;
@@ -2906,6 +3193,16 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
             return -1;  // Quit signal
         }
         // Command mode handles all input internally
+        return 0;
+    }
+
+    // Handle search mode separately
+    if (tui->mode == TUI_MODE_SEARCH) {
+        int result = handle_search_mode_input(tui, ch, prompt);
+        if (result == -1) {
+            return -1;  // Quit signal
+        }
+        // Search mode handles all input internally
         return 0;
     }
 

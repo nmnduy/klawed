@@ -1,4 +1,10 @@
-- [ ] in normal mode, allow searching forward and backward using '/' and '?' respectively
+- [x] in normal mode, allow searching forward and backward using '/' and '?' respectively
+    - Implemented search functionality in TUI
+    - Added TUI_MODE_SEARCH mode
+    - '/' enters forward search mode, '?' enters backward search mode
+    - 'n' repeats search in same direction, 'N' repeats in opposite direction
+    - Search is case-insensitive and wraps around
+    - Status messages show search results
 - [x] doesn't auto-scroll at 100% scroll position. should always auto-scroll at that position
     - Fixed: Changed auto-scroll condition from `scroll_offset >= max_scroll` to `scroll_offset >= max_scroll - 1` (98-100% range)
     - Updated both occurrences in src/tui.c with proper logging
