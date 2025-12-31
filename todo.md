@@ -1,5 +1,8 @@
-- [ ] doesn't auto-scroll at 100% scroll position. should always auto-scroll at that position
-    - maybe change to auto-scroll at 98-100%?
+- [x] doesn't auto-scroll at 100% scroll position. should always auto-scroll at that position
+    - Fixed: Changed auto-scroll condition from `scroll_offset >= max_scroll` to `scroll_offset >= max_scroll - 1` (98-100% range)
+    - Updated both occurrences in src/tui.c with proper logging
+    - Added comprehensive unit tests in tests/test_tui_auto_scroll.c
+    - Added test target to Makefile: `make test-tui-auto-scroll`
 
 - [x] zsh: segmentation fault  ./build/klawed --zmq-client tcp://127.0.0.1:5555
 
