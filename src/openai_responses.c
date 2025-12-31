@@ -341,15 +341,14 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
               plan_mode, is_subagent, is_deepseek_api);
 
     // Helper macro to create a tool definition
+    // Responses API expects tools with name/description/parameters at top level
 #define CREATE_TOOL(tool_obj, tool_name, tool_desc, params_obj) \
     do { \
         tool_obj = cJSON_CreateObject(); \
         cJSON_AddStringToObject(tool_obj, "type", "function"); \
-        cJSON *func = cJSON_CreateObject(); \
-        cJSON_AddStringToObject(func, "name", tool_name); \
-        cJSON_AddStringToObject(func, "description", tool_desc); \
-        cJSON_AddItemToObject(func, "parameters", params_obj); \
-        cJSON_AddItemToObject(tool_obj, "function", func); \
+        cJSON_AddStringToObject(tool_obj, "name", tool_name); \
+        cJSON_AddStringToObject(tool_obj, "description", tool_desc); \
+        cJSON_AddItemToObject(tool_obj, "parameters", params_obj); \
         cJSON_AddItemToArray(tool_array, tool_obj); \
     } while(0)
 
@@ -688,11 +687,37 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
             LOG_DEBUG("get_tool_definitions_for_responses_api: Found %d dynamic MCP tools", mcp_tool_count);
             cJSON *t = NULL;
             cJSON_ArrayForEach(t, mcp_tools) {
-                cJSON *name_obj = cJSON_GetObjectItem(t, "name");
+                // MCP tools come in Messages API format: { type: "function", function: { name, description, parameters } }
+                // Convert to Responses API format: { type: "function", name, description, parameters }
+                cJSON *func = cJSON_GetObjectItem(t, "function");
+                if (!func) continue;
+                
+                cJSON *name_obj = cJSON_GetObjectItem(func, "name");
                 const char *tool_name = name_obj && cJSON_IsString(name_obj) ? name_obj->valuestring : "unknown";
                 LOG_DEBUG("get_tool_definitions_for_responses_api: Adding dynamic MCP tool '%s'", tool_name);
-                // MCP tools are already in the correct format
-                cJSON_AddItemToArray(tool_array, cJSON_Duplicate(t, 1));
+                
+                // Create flat tool definition for Responses API
+                cJSON *flat_tool = cJSON_CreateObject();
+                cJSON_AddStringToObject(flat_tool, "type", "function");
+                
+                // Copy name
+                if (name_obj) {
+                    cJSON_AddStringToObject(flat_tool, "name", name_obj->valuestring);
+                }
+                
+                // Copy description if present
+                cJSON *desc = cJSON_GetObjectItem(func, "description");
+                if (desc && cJSON_IsString(desc)) {
+                    cJSON_AddStringToObject(flat_tool, "description", desc->valuestring);
+                }
+                
+                // Copy parameters if present
+                cJSON *params = cJSON_GetObjectItem(func, "parameters");
+                if (params) {
+                    cJSON_AddItemToObject(flat_tool, "parameters", cJSON_Duplicate(params, 1));
+                }
+                
+                cJSON_AddItemToArray(tool_array, flat_tool);
             }
             cJSON_Delete(mcp_tools);
         }

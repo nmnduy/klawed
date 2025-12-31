@@ -4668,8 +4668,9 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
             cJSON *t = NULL;
             int idx = 0;
             cJSON_ArrayForEach(t, mcp_tools) {
-                // Each t is already a full Claude tool definition object
-                cJSON *name_obj = cJSON_GetObjectItem(t, "name");
+                // Each t is already a full Claude tool definition object { type: "function", function: { name, ... } }
+                cJSON *func = cJSON_GetObjectItem(t, "function");
+                cJSON *name_obj = func ? cJSON_GetObjectItem(func, "name") : NULL;
                 const char *tool_name = name_obj && cJSON_IsString(name_obj) ? name_obj->valuestring : "unknown";
                 LOG_DEBUG("get_tool_definitions: Adding dynamic MCP tool %d: '%s'", idx, tool_name);
                 cJSON_AddItemToArray(tool_array, cJSON_Duplicate(t, 1));
