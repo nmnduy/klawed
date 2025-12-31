@@ -1,4 +1,7 @@
-- [ ] zsh: segmentation fault  ./build/klawed --zmq-client tcp://127.0.0.1:5555
+- [ ] doesn't auto-scroll at 100% scroll position. should always auto-scroll at that position
+    - maybe change to auto-scroll at 98-100%?
+
+- [x] zsh: segmentation fault  ./build/klawed --zmq-client tcp://127.0.0.1:5555
 
 - [x] Investigate session resume crash (pointer being freed was not allocated)
   - Root cause: Potential double-free or memory corruption in free_internal_message
