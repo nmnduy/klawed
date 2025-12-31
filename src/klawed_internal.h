@@ -57,21 +57,21 @@ static inline int is_deepseek_api_url(const char *api_url) {
     if (!api_url) {
         return 0;
     }
-    
+
     char *url_lower = strdup(api_url);
     if (!url_lower) {
         return 0;
     }
-    
+
     int result = 0;
     for (char *p = url_lower; *p; p++) {
         *p = (char)tolower((unsigned char)*p);
     }
-    
+
     if (strstr(url_lower, "deepseek") != NULL) {
         result = 1;
     }
-    
+
     free(url_lower);
     return result;
 }

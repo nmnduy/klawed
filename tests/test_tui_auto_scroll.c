@@ -39,7 +39,7 @@ static void print_summary(void) {
     printf("Tests run:    %d\n", tests_run);
     printf("Tests passed: %d\n", tests_passed);
     printf("Tests failed: %d\n", tests_failed);
-    
+
     if (tests_failed == 0) {
         printf(TEST_COLOR_GREEN "\n✓ All tests passed!" TEST_COLOR_RESET "\n");
     } else {
@@ -58,7 +58,7 @@ typedef enum {
 static int should_auto_scroll_normal_command(int scroll_offset, int max_scroll, int content_lines) {
     // This replicates the logic from tui.c lines ~1750-1770
     // Auto-scroll logic for NORMAL/COMMAND mode
-    
+
     if (content_lines == 0 || max_scroll <= 0) {
         // No content or everything fits in viewport
         return 1;
@@ -138,15 +138,15 @@ static void test_percentage_calculation(void) {
     int scroll_offset = 75;
     int max_scroll = 100;
     int percentage = (scroll_offset * 100 + max_scroll / 2) / max_scroll;
-    
+
     print_test_result("Percentage calculation (75/100 = 75%)", percentage == 75);
-    
+
     // Test rounding
     scroll_offset = 99;
     max_scroll = 100;
     percentage = (scroll_offset * 100 + max_scroll / 2) / max_scroll;
     print_test_result("Percentage rounding (99/100 = 99%)", percentage == 99);
-    
+
     // Test edge case with max_scroll = 0 (should not divide by zero in actual code)
     scroll_offset = 0;
     max_scroll = 0;
@@ -157,19 +157,19 @@ static void test_percentage_calculation(void) {
 // Test boundary conditions
 static void test_boundary_conditions(void) {
     printf(TEST_COLOR_YELLOW "\n=== Boundary Condition Tests ===" TEST_COLOR_RESET "\n");
-    
+
     // Test exactly at the boundary: scroll_offset = max_scroll - 1
     int result = should_auto_scroll_normal_command(99, 100, 200);
     print_test_result("Boundary: scroll_offset = max_scroll - 1 should auto-scroll", result == 1);
-    
+
     // Test just below boundary: scroll_offset = max_scroll - 2
     result = should_auto_scroll_normal_command(98, 100, 200);
     print_test_result("Boundary: scroll_offset = max_scroll - 2 should NOT auto-scroll", result == 0);
-    
+
     // Test large numbers
     result = should_auto_scroll_normal_command(9999, 10000, 20000);
     print_test_result("Large numbers: 9999/10000 should auto-scroll", result == 1);
-    
+
     result = should_auto_scroll_normal_command(9998, 10000, 20000);
     print_test_result("Large numbers: 9998/10000 should NOT auto-scroll", result == 0);
 }
@@ -177,7 +177,7 @@ static void test_boundary_conditions(void) {
 int main(void) {
     printf(TEST_COLOR_CYAN "=== TUI Auto-Scroll Logic Tests ===" TEST_COLOR_RESET "\n");
     printf("Testing auto-scroll condition: scroll_offset >= max_scroll - 1 (98-100%% range)\n\n");
-    
+
     // Run tests
     test_auto_scroll_at_bottom();
     test_auto_scroll_one_line_from_bottom();
@@ -191,8 +191,8 @@ int main(void) {
     test_auto_scroll_insert_mode_always();
     test_percentage_calculation();
     test_boundary_conditions();
-    
+
     print_summary();
-    
+
     return tests_failed == 0 ? 0 : 1;
 }

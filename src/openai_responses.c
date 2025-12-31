@@ -1,0 +1,737 @@
+/*
+ * openai_responses.c - OpenAI Responses API format conversion
+ *
+ * Converts between internal vendor-agnostic message format
+ * and OpenAI's Responses API format (/v1/responses endpoint)
+ */
+
+#define _POSIX_C_SOURCE 200809L
+
+#include "openai_responses.h"
+#include "logger.h"
+#include "klawed_internal.h"
+#include "mcp.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <bsd/stdlib.h>
+#include <string.h>
+
+/**
+ * Build OpenAI Responses API request JSON from internal message format
+ *
+ * Converts InternalMessage[] to OpenAI's Responses API format:
+ * - input: array of items with types like "input_text", "input_image", etc.
+ * - output: array of items with types like "output_text", "refusal", etc.
+ *
+ * @param state - Conversation state with internal messages
+ * @param enable_caching - Whether to add cache_control markers
+ * @return JSON object with OpenAI Responses API request (caller must free), or NULL on error
+ */
+cJSON* build_openai_responses_request(ConversationState *state, int enable_caching) {
+    if (!state) {
+        LOG_ERROR("ConversationState is NULL");
+        return NULL;
+    }
+
+    if (conversation_state_lock(state) != 0) {
+        return NULL;
+    }
+
+    LOG_DEBUG("Building OpenAI Responses API request (messages: %d, caching: %s)",
+              state->count, enable_caching ? "enabled" : "disabled");
+
+    cJSON *request = cJSON_CreateObject();
+    if (!request) {
+        conversation_state_unlock(state);
+        return NULL;
+    }
+
+    cJSON_AddStringToObject(request, "model", state->model);
+    cJSON_AddNumberToObject(request, "max_output_tokens", state->max_tokens);
+
+    // Create conversation items for Responses API
+    // The Responses API uses a flat "input" array that can contain both
+    // input items and previous output items (for multi-turn conversations)
+    cJSON *input_array = cJSON_CreateArray();
+    if (!input_array) {
+        cJSON_Delete(request);
+        conversation_state_unlock(state);
+        return NULL;
+    }
+
+    // Convert each internal message to Responses API format
+    for (int i = 0; i < state->count; i++) {
+        InternalMessage *msg = &state->messages[i];
+
+        if (msg->role == MSG_SYSTEM) {
+            // System messages become instructions in Responses API
+            for (int j = 0; j < msg->content_count; j++) {
+                InternalContent *c = &msg->contents[j];
+                if (c->type == INTERNAL_TEXT && c->text) {
+                    cJSON_AddStringToObject(request, "instructions", c->text);
+                    break;
+                }
+            }
+        }
+        else if (msg->role == MSG_USER) {
+            // User messages - may contain text or tool responses
+            for (int j = 0; j < msg->content_count; j++) {
+                InternalContent *c = &msg->contents[j];
+
+                if (c->type == INTERNAL_TEXT && c->text) {
+                    // Regular user text -> input_text item
+                    cJSON *text_item = cJSON_CreateObject();
+                    cJSON_AddStringToObject(text_item, "type", "input_text");
+                    cJSON_AddStringToObject(text_item, "text", c->text);
+                    cJSON_AddItemToArray(input_array, text_item);
+                }
+                else if (c->type == INTERNAL_TOOL_RESPONSE) {
+                    // Tool response - Responses API uses "tool_result" type
+                    cJSON *tool_item = cJSON_CreateObject();
+                    cJSON_AddStringToObject(tool_item, "type", "tool_result");
+                    cJSON_AddStringToObject(tool_item, "tool_call_id", c->tool_id);
+
+                    // Convert output to string
+                    char *output_str = cJSON_PrintUnformatted(c->tool_output);
+                    cJSON_AddStringToObject(tool_item, "content", output_str ? output_str : "{}");
+                    free(output_str);
+
+                    cJSON_AddItemToArray(input_array, tool_item);
+                }
+            }
+        }
+        else if (msg->role == MSG_ASSISTANT) {
+            // Assistant messages - may contain text and/or tool calls
+            // For Responses API multi-turn conversations, we need to include
+            // previous assistant messages as output items in the input array.
+            // This allows the model to see the conversation history.
+
+            // Check if there's text content
+            int has_text = 0;
+            for (int j = 0; j < msg->content_count; j++) {
+                InternalContent *c = &msg->contents[j];
+                if (c->type == INTERNAL_TEXT && c->text) {
+                    // Add output_text item for assistant's text response
+                    cJSON *text_item = cJSON_CreateObject();
+                    cJSON_AddStringToObject(text_item, "type", "output_text");
+                    cJSON_AddStringToObject(text_item, "text", c->text);
+                    cJSON_AddItemToArray(input_array, text_item);
+                    has_text = 1;
+                }
+                else if (c->type == INTERNAL_TOOL_CALL) {
+                    // For tool calls in assistant messages, we don't add them
+                    // to the input array directly. The tool responses are what
+                    // matter for the conversation context.
+                    LOG_DEBUG("Skipping tool call in assistant message for Responses API");
+                }
+            }
+
+            if (has_text) {
+                LOG_DEBUG("Added assistant message as output_text item");
+            }
+        }
+    }
+
+    cJSON_AddItemToObject(request, "input", input_array);
+
+    // Add tools with cache_control support (including MCP tools if available)
+    // Use the Responses API-specific tool definitions function
+    cJSON *tool_defs = get_tool_definitions_for_responses_api(state, enable_caching);
+    cJSON_AddItemToObject(request, "tools", tool_defs);
+
+    conversation_state_unlock(state);
+
+    LOG_DEBUG("OpenAI Responses API request built successfully");
+    return request;
+}
+
+/**
+ * Parse OpenAI Responses API response into internal message format
+ *
+ * Converts OpenAI Responses API response to InternalMessage:
+ * - output array with items -> INTERNAL_TEXT or INTERNAL_TOOL_CALL blocks
+ *
+ * @param response - OpenAI Responses API response JSON
+ * @return InternalMessage (caller must free contents), or empty message on error
+ */
+InternalMessage parse_openai_responses_response(cJSON *response) {
+    InternalMessage msg = {0};
+    msg.role = MSG_ASSISTANT;
+
+    if (!response) {
+        LOG_ERROR("Response is NULL");
+        return msg;
+    }
+
+    cJSON *output = cJSON_GetObjectItem(response, "output");
+    if (!output || !cJSON_IsArray(output)) {
+        LOG_ERROR("Invalid Responses API response: missing 'output' array");
+        return msg;
+    }
+
+    // Count content blocks in output array
+    int count = 0;
+    cJSON *item = NULL;
+    cJSON_ArrayForEach(item, output) {
+        cJSON *type = cJSON_GetObjectItem(item, "type");
+        if (!type || !cJSON_IsString(type)) {
+            continue;
+        }
+
+        if (strcmp(type->valuestring, "output_text") == 0) {
+            count++;
+        } else if (strcmp(type->valuestring, "tool_calls") == 0) {
+            cJSON *tool_calls = cJSON_GetObjectItem(item, "tool_calls");
+            if (tool_calls && cJSON_IsArray(tool_calls)) {
+                count += cJSON_GetArraySize(tool_calls);
+            }
+        }
+    }
+
+    if (count == 0) {
+        LOG_WARN("Response has no content or tool_calls");
+        return msg;
+    }
+
+    // Allocate content array
+    msg.contents = calloc((size_t)count, sizeof(InternalContent));
+    if (!msg.contents) {
+        LOG_ERROR("Failed to allocate content array");
+        return msg;
+    }
+    msg.content_count = count;
+
+    int idx = 0;
+    cJSON_ArrayForEach(item, output) {
+        cJSON *type = cJSON_GetObjectItem(item, "type");
+        if (!type || !cJSON_IsString(type)) {
+            continue;
+        }
+
+        if (strcmp(type->valuestring, "output_text") == 0) {
+            cJSON *text = cJSON_GetObjectItem(item, "text");
+            if (text && cJSON_IsString(text) && text->valuestring) {
+                msg.contents[idx].type = INTERNAL_TEXT;
+                msg.contents[idx].text = strdup(text->valuestring);
+                if (!msg.contents[idx].text) {
+                    LOG_ERROR("Failed to duplicate text content");
+                }
+                idx++;
+            }
+        } else if (strcmp(type->valuestring, "tool_calls") == 0) {
+            cJSON *tool_calls = cJSON_GetObjectItem(item, "tool_calls");
+            if (tool_calls && cJSON_IsArray(tool_calls)) {
+                cJSON *tc = NULL;
+                cJSON_ArrayForEach(tc, tool_calls) {
+                    if (idx >= count) break;
+
+                    cJSON *id = cJSON_GetObjectItem(tc, "id");
+                    cJSON *func = cJSON_GetObjectItem(tc, "function");
+                    if (!func) continue;
+
+                    cJSON *name = cJSON_GetObjectItem(func, "name");
+                    cJSON *arguments = cJSON_GetObjectItem(func, "arguments");
+
+                    if (!id || !name || !arguments) {
+                        LOG_WARN("Malformed tool_call, skipping");
+                        continue;
+                    }
+
+                    msg.contents[idx].type = INTERNAL_TOOL_CALL;
+                    msg.contents[idx].tool_id = strdup(id->valuestring);
+                    msg.contents[idx].tool_name = strdup(name->valuestring);
+
+                    // Parse arguments JSON string to cJSON object
+                    const char *args_str = arguments->valuestring;
+                    msg.contents[idx].tool_params = cJSON_Parse(args_str ? args_str : "{}");
+                    if (!msg.contents[idx].tool_params) {
+                        LOG_WARN("Failed to parse tool arguments, using empty object");
+                        msg.contents[idx].tool_params = cJSON_CreateObject();
+                    }
+
+                    idx++;
+                }
+            }
+        }
+    }
+
+    LOG_DEBUG("Parsed OpenAI Responses API response: %d content blocks", msg.content_count);
+    return msg;
+}
+
+/**
+ * Build OpenAI Responses API tool definitions
+ *
+ * Returns tool definitions in the Responses API format.
+ * The Responses API uses the same tool format as Chat Completions for
+ * function tools: a flat array with type: "function" for each tool.
+ *
+ * @param state - Conversation state
+ * @param enable_caching - Whether to add cache_control markers
+ * @return JSON array of tool definitions (caller must free), or NULL on error
+ */
+cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enable_caching) {
+    cJSON *tool_array = cJSON_CreateArray();
+    if (!tool_array) {
+        return NULL;
+    }
+
+    int plan_mode = state ? state->plan_mode : 0;
+
+    // Check if we're running as a subagent - if so, exclude the Subagent tool to prevent recursion
+    const char *is_subagent_env = getenv("KLAWED_IS_SUBAGENT");
+    int is_subagent = is_subagent_env && (strcmp(is_subagent_env, "1") == 0 ||
+                                         strcasecmp(is_subagent_env, "true") == 0 ||
+                                         strcasecmp(is_subagent_env, "yes") == 0);
+
+    // Check if API URL contains "deepseek" (case-insensitive)
+    int is_deepseek_api = 0;
+    if (state && state->api_url) {
+        char *url_lower = strdup(state->api_url);
+        if (url_lower) {
+            for (char *p = url_lower; *p; p++) {
+                *p = (char)tolower((unsigned char)*p);
+            }
+            if (strstr(url_lower, "deepseek") != NULL) {
+                is_deepseek_api = 1;
+            }
+            free(url_lower);
+        }
+    }
+
+    LOG_DEBUG("[TOOLS] get_tool_definitions_for_responses_api: plan_mode=%d, is_subagent=%d, is_deepseek_api=%d",
+              plan_mode, is_subagent, is_deepseek_api);
+
+    // Helper macro to create a tool definition
+#define CREATE_TOOL(tool_obj, tool_name, tool_desc, params_obj) \
+    do { \
+        tool_obj = cJSON_CreateObject(); \
+        cJSON_AddStringToObject(tool_obj, "type", "function"); \
+        cJSON *func = cJSON_CreateObject(); \
+        cJSON_AddStringToObject(func, "name", tool_name); \
+        cJSON_AddStringToObject(func, "description", tool_desc); \
+        cJSON_AddItemToObject(func, "parameters", params_obj); \
+        cJSON_AddItemToObject(tool_obj, "function", func); \
+        cJSON_AddItemToArray(tool_array, tool_obj); \
+    } while(0)
+
+    // Sleep tool
+    cJSON *sleep_params = cJSON_CreateObject();
+    cJSON_AddStringToObject(sleep_params, "type", "object");
+    cJSON *sleep_props = cJSON_CreateObject();
+    cJSON *duration_prop = cJSON_CreateObject();
+    cJSON_AddStringToObject(duration_prop, "type", "integer");
+    cJSON_AddStringToObject(duration_prop, "description", "Duration to sleep in seconds");
+    cJSON_AddItemToObject(sleep_props, "duration", duration_prop);
+    cJSON_AddItemToObject(sleep_params, "properties", sleep_props);
+    cJSON *sleep_req = cJSON_CreateArray();
+    cJSON_AddItemToArray(sleep_req, cJSON_CreateString("duration"));
+    cJSON_AddItemToObject(sleep_params, "required", sleep_req);
+
+    cJSON *sleep_tool;
+    CREATE_TOOL(sleep_tool, "Sleep",
+                "Pauses execution for specified duration (seconds)",
+                sleep_params);
+
+    // Read tool
+    cJSON *read_params = cJSON_CreateObject();
+    cJSON_AddStringToObject(read_params, "type", "object");
+    cJSON *read_props = cJSON_CreateObject();
+    cJSON *read_path = cJSON_CreateObject();
+    cJSON_AddStringToObject(read_path, "type", "string");
+    cJSON_AddStringToObject(read_path, "description", "The absolute path to the file");
+    cJSON_AddItemToObject(read_props, "file_path", read_path);
+    cJSON *read_start = cJSON_CreateObject();
+    cJSON_AddStringToObject(read_start, "type", "integer");
+    cJSON_AddStringToObject(read_start, "description", "Optional: Starting line number (1-indexed, inclusive)");
+    cJSON_AddItemToObject(read_props, "start_line", read_start);
+    cJSON *read_end = cJSON_CreateObject();
+    cJSON_AddStringToObject(read_end, "type", "integer");
+    cJSON_AddStringToObject(read_end, "description", "Optional: Ending line number (1-indexed, inclusive)");
+    cJSON_AddItemToObject(read_props, "end_line", read_end);
+    cJSON_AddItemToObject(read_params, "properties", read_props);
+    cJSON *read_req = cJSON_CreateArray();
+    cJSON_AddItemToArray(read_req, cJSON_CreateString("file_path"));
+    cJSON_AddItemToObject(read_params, "required", read_req);
+
+    cJSON *read_tool;
+    CREATE_TOOL(read_tool, "Read",
+                "Reads a file from the filesystem with optional line range support",
+                read_params);
+
+    // Bash, Subagent, Write, and Edit tools - excluded in plan mode
+    if (!plan_mode) {
+        // Bash tool
+        cJSON *bash_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(bash_params, "type", "object");
+        cJSON *bash_props = cJSON_CreateObject();
+        cJSON *bash_cmd = cJSON_CreateObject();
+        cJSON_AddStringToObject(bash_cmd, "type", "string");
+        cJSON_AddStringToObject(bash_cmd, "description", "The command to execute");
+        cJSON_AddItemToObject(bash_props, "command", bash_cmd);
+        cJSON *bash_timeout = cJSON_CreateObject();
+        cJSON_AddStringToObject(bash_timeout, "type", "integer");
+        cJSON_AddStringToObject(bash_timeout, "description",
+            "Optional: Timeout in seconds. Default: 30 (from KLAWED_BASH_TIMEOUT env var). "
+            "Set to 0 for no timeout. Commands that timeout will return exit code -2.");
+        cJSON_AddItemToObject(bash_props, "timeout", bash_timeout);
+        cJSON_AddItemToObject(bash_params, "properties", bash_props);
+        cJSON *bash_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(bash_req, cJSON_CreateString("command"));
+        cJSON_AddItemToObject(bash_params, "required", bash_req);
+
+        cJSON *bash_tool;
+        CREATE_TOOL(bash_tool, "Bash",
+                    "Executes bash commands. Note: stderr is automatically redirected to stdout "
+                    "to prevent terminal corruption, so both stdout and stderr output will be "
+                    "captured in the 'output' field. Commands have a configurable timeout "
+                    "(default: 30 seconds) to prevent hanging. Use the 'timeout' parameter to "
+                    "override the default or set to 0 for no timeout. If the output exceeds "
+                    "12,228 bytes, it will be truncated and a 'truncation_warning' field "
+                    "will be added to the result.",
+                    bash_params);
+
+        // Subagent tool - exclude if running as subagent to prevent recursion
+        if (!is_subagent) {
+            cJSON *subagent_params = cJSON_CreateObject();
+            cJSON_AddStringToObject(subagent_params, "type", "object");
+            cJSON *subagent_props = cJSON_CreateObject();
+            cJSON *subagent_prompt = cJSON_CreateObject();
+            cJSON_AddStringToObject(subagent_prompt, "type", "string");
+            cJSON_AddStringToObject(subagent_prompt, "description",
+                "The task prompt for the subagent. Be specific and include all necessary context.");
+            cJSON_AddItemToObject(subagent_props, "prompt", subagent_prompt);
+            cJSON *subagent_timeout = cJSON_CreateObject();
+            cJSON_AddStringToObject(subagent_timeout, "type", "integer");
+            cJSON_AddStringToObject(subagent_timeout, "description",
+                "Optional: Timeout in seconds. Default: 300 (5 minutes). Set to 0 for no timeout.");
+            cJSON_AddItemToObject(subagent_props, "timeout", subagent_timeout);
+            cJSON *subagent_tail = cJSON_CreateObject();
+            cJSON_AddStringToObject(subagent_tail, "type", "integer");
+            cJSON_AddStringToObject(subagent_tail, "description",
+                "Optional: Number of lines to return from end of log. Default: 100. The summary is usually at the end.");
+            cJSON_AddItemToObject(subagent_props, "tail_lines", subagent_tail);
+            cJSON_AddItemToObject(subagent_params, "properties", subagent_props);
+            cJSON *subagent_req = cJSON_CreateArray();
+            cJSON_AddItemToArray(subagent_req, cJSON_CreateString("prompt"));
+            cJSON_AddItemToObject(subagent_params, "required", subagent_req);
+
+            cJSON *subagent_tool;
+            CREATE_TOOL(subagent_tool, "Subagent",
+                        "Spawns a new instance of klawed with the same configuration to work on a "
+                        "delegated task in a fresh context. The subagent runs independently and writes "
+                        "all output (stdout and stderr) to a log file. Returns the tail of the log "
+                        "(last 100 lines by default) which typically contains the task summary. "
+                        "For large outputs, use Read tool to access the full log file, or Grep to "
+                        "search for specific content. Use this when: (1) you need a fresh context "
+                        "without conversation history, (2) delegating a complex independent task, "
+                        "(3) avoiding context limit issues. Note: The subagent has full tool access "
+                        "including Write, Edit, and Bash.",
+                        subagent_params);
+        }
+
+        // Write tool
+        cJSON *write_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(write_params, "type", "object");
+        cJSON *write_props = cJSON_CreateObject();
+        cJSON *write_path = cJSON_CreateObject();
+        cJSON_AddStringToObject(write_path, "type", "string");
+        cJSON_AddStringToObject(write_path, "description", "Path to the file to write");
+        cJSON_AddItemToObject(write_props, "file_path", write_path);
+        cJSON *write_content = cJSON_CreateObject();
+        cJSON_AddStringToObject(write_content, "type", "string");
+        cJSON_AddStringToObject(write_content, "description", "Content to write to the file");
+        cJSON_AddItemToObject(write_props, "content", write_content);
+        cJSON_AddItemToObject(write_params, "properties", write_props);
+        cJSON *write_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(write_req, cJSON_CreateString("file_path"));
+        cJSON_AddItemToArray(write_req, cJSON_CreateString("content"));
+        cJSON_AddItemToObject(write_params, "required", write_req);
+
+        cJSON *write_tool;
+        CREATE_TOOL(write_tool, "Write",
+                    "Writes content to a file. IMPORTANT: Some models cannot produce outputs larger "
+                    "than 4096 tokens. To avoid hitting this limit, make smaller changes and call "
+                    "the Write tool multiple times with focused content instead of writing entire "
+                    "files at once. Break large operations into logical chunks (e.g., write a single "
+                    "function at a time, one section at a time).",
+                    write_params);
+
+        // Edit tool
+        cJSON *edit_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(edit_params, "type", "object");
+        cJSON *edit_props = cJSON_CreateObject();
+        cJSON *edit_path = cJSON_CreateObject();
+        cJSON_AddStringToObject(edit_path, "type", "string");
+        cJSON_AddStringToObject(edit_path, "description", "Path to the file to edit");
+        cJSON_AddItemToObject(edit_props, "file_path", edit_path);
+        cJSON *edit_old = cJSON_CreateObject();
+        cJSON_AddStringToObject(edit_old, "type", "string");
+        cJSON_AddStringToObject(edit_old, "description", "Exact text to find and replace. Only simple string matching is supported.");
+        cJSON_AddItemToObject(edit_props, "old_string", edit_old);
+        cJSON *edit_new = cJSON_CreateObject();
+        cJSON_AddStringToObject(edit_new, "type", "string");
+        cJSON_AddStringToObject(edit_new, "description", "Replacement text. Will replace the first occurrence of old_string.");
+        cJSON_AddItemToObject(edit_props, "new_string", edit_new);
+        cJSON_AddItemToObject(edit_params, "properties", edit_props);
+        cJSON *edit_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(edit_req, cJSON_CreateString("file_path"));
+        cJSON_AddItemToArray(edit_req, cJSON_CreateString("old_string"));
+        cJSON_AddItemToArray(edit_req, cJSON_CreateString("new_string"));
+        cJSON_AddItemToObject(edit_params, "required", edit_req);
+
+        cJSON *edit_tool;
+        CREATE_TOOL(edit_tool, "Edit",
+                    "Performs simple string replacement in files. Replaces the first occurrence of "
+                    "old_string with new_string. IMPORTANT: Some models cannot produce outputs larger "
+                    "than 4096 tokens. To avoid hitting this limit, make smaller changes and call "
+                    "the Edit tool multiple times with focused edits instead of making massive "
+                    "changes in a single call. Break large operations into logical chunks (e.g., "
+                    "edit one function at a time, one section at a time).",
+                    edit_params);
+
+        // MultiEdit tool
+        cJSON *multiedit_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit_params, "type", "object");
+        cJSON *multiedit_props = cJSON_CreateObject();
+        cJSON *multiedit_path = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit_path, "type", "string");
+        cJSON_AddStringToObject(multiedit_path, "description", "Path to the file to edit");
+        cJSON_AddItemToObject(multiedit_props, "file_path", multiedit_path);
+        cJSON *multiedit_edits = cJSON_CreateObject();
+        cJSON_AddStringToObject(multiedit_edits, "type", "array");
+        cJSON_AddStringToObject(multiedit_edits, "description", "Array of edit objects, each with old_string and new_string fields");
+        cJSON_AddItemToObject(multiedit_props, "edits", multiedit_edits);
+        cJSON_AddItemToObject(multiedit_params, "properties", multiedit_props);
+        cJSON *multiedit_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(multiedit_req, cJSON_CreateString("file_path"));
+        cJSON_AddItemToArray(multiedit_req, cJSON_CreateString("edits"));
+        cJSON_AddItemToObject(multiedit_params, "required", multiedit_req);
+
+        cJSON *multiedit_tool;
+        CREATE_TOOL(multiedit_tool, "MultiEdit",
+                    "Performs multiple string replacements in a file. Applies edits sequentially in "
+                    "the order provided. Each edit replaces the first occurrence of old_string with "
+                    "new_string. Returns counts of successful and failed edits.",
+                    multiedit_params);
+    }
+
+    // Glob tool
+    cJSON *glob_params = cJSON_CreateObject();
+    cJSON_AddStringToObject(glob_params, "type", "object");
+    cJSON *glob_props = cJSON_CreateObject();
+    cJSON *glob_pattern = cJSON_CreateObject();
+    cJSON_AddStringToObject(glob_pattern, "type", "string");
+    cJSON_AddStringToObject(glob_pattern, "description", "Glob pattern to match files against");
+    cJSON_AddItemToObject(glob_props, "pattern", glob_pattern);
+    cJSON_AddItemToObject(glob_params, "properties", glob_props);
+    cJSON *glob_req = cJSON_CreateArray();
+    cJSON_AddItemToArray(glob_req, cJSON_CreateString("pattern"));
+    cJSON_AddItemToObject(glob_params, "required", glob_req);
+
+    cJSON *glob_tool;
+    CREATE_TOOL(glob_tool, "Glob",
+                "Finds files matching a pattern",
+                glob_params);
+
+    // Grep tool
+    cJSON *grep_params = cJSON_CreateObject();
+    cJSON_AddStringToObject(grep_params, "type", "object");
+    cJSON *grep_props = cJSON_CreateObject();
+    cJSON *grep_pattern = cJSON_CreateObject();
+    cJSON_AddStringToObject(grep_pattern, "type", "string");
+    cJSON_AddStringToObject(grep_pattern, "description", "Pattern to search for");
+    cJSON_AddItemToObject(grep_props, "pattern", grep_pattern);
+    cJSON *grep_path = cJSON_CreateObject();
+    cJSON_AddStringToObject(grep_path, "type", "string");
+    cJSON_AddStringToObject(grep_path, "description", "Path to search in (default: .)");
+    cJSON_AddItemToObject(grep_props, "path", grep_path);
+    cJSON_AddItemToObject(grep_params, "properties", grep_props);
+    cJSON *grep_req = cJSON_CreateArray();
+    cJSON_AddItemToArray(grep_req, cJSON_CreateString("pattern"));
+    cJSON_AddItemToObject(grep_params, "required", grep_req);
+
+    cJSON *grep_tool;
+    CREATE_TOOL(grep_tool, "Grep",
+                "Searches for patterns in files. Results limited to 100 matches by default "
+                "(configurable via KLAWED_GREP_MAX_RESULTS). Automatically excludes common "
+                "build directories, dependencies, and binary files (.git, node_modules, build/, "
+                "*.min.js, etc). Returns 'match_count' and 'warning' if truncated.",
+                grep_params);
+
+    // UploadImage tool
+    cJSON *upload_image_params = cJSON_CreateObject();
+    cJSON_AddStringToObject(upload_image_params, "type", "object");
+    cJSON *upload_image_props = cJSON_CreateObject();
+    cJSON *image_path_prop = cJSON_CreateObject();
+    cJSON_AddStringToObject(image_path_prop, "type", "string");
+    cJSON_AddStringToObject(image_path_prop, "description", "Path to the image file to upload");
+    cJSON_AddItemToObject(upload_image_props, "file_path", image_path_prop);
+    cJSON_AddItemToObject(upload_image_params, "properties", upload_image_props);
+    cJSON *upload_image_req = cJSON_CreateArray();
+    cJSON_AddItemToArray(upload_image_req, cJSON_CreateString("file_path"));
+    cJSON_AddItemToObject(upload_image_params, "required", upload_image_req);
+
+    cJSON *upload_image_tool;
+    CREATE_TOOL(upload_image_tool, "UploadImage",
+                "Uploads an image file to be included in the conversation context using OpenAI-compatible format. Supports common image formats (PNG, JPEG, GIF, WebP).",
+                upload_image_params);
+
+    // TodoWrite tool
+    cJSON *todo_params = cJSON_CreateObject();
+    cJSON_AddStringToObject(todo_params, "type", "object");
+    cJSON *todo_props = cJSON_CreateObject();
+
+    cJSON *todos_array = cJSON_CreateObject();
+    cJSON_AddStringToObject(todos_array, "type", "array");
+    cJSON_AddStringToObject(todos_array, "description",
+        "Array of todo items to display. Replaces the entire todo list.");
+
+    cJSON *todos_items = cJSON_CreateObject();
+    cJSON_AddStringToObject(todos_items, "type", "object");
+    cJSON *item_props = cJSON_CreateObject();
+
+    cJSON *content_prop = cJSON_CreateObject();
+    cJSON_AddStringToObject(content_prop, "type", "string");
+    cJSON_AddStringToObject(content_prop, "description",
+        "Task description in imperative form (e.g., 'Run tests')");
+    cJSON_AddItemToObject(item_props, "content", content_prop);
+
+    cJSON *active_form_prop = cJSON_CreateObject();
+    cJSON_AddStringToObject(active_form_prop, "type", "string");
+    cJSON_AddStringToObject(active_form_prop, "description",
+        "Task description in present continuous form (e.g., 'Running tests')");
+    cJSON_AddItemToObject(item_props, "activeForm", active_form_prop);
+
+    cJSON *status_prop = cJSON_CreateObject();
+    cJSON_AddStringToObject(status_prop, "type", "string");
+    cJSON *status_enum = cJSON_CreateArray();
+    cJSON_AddItemToArray(status_enum, cJSON_CreateString("pending"));
+    cJSON_AddItemToArray(status_enum, cJSON_CreateString("in_progress"));
+    cJSON_AddItemToArray(status_enum, cJSON_CreateString("completed"));
+    cJSON_AddItemToObject(status_prop, "enum", status_enum);
+    cJSON_AddStringToObject(status_prop, "description",
+        "Current status of the task");
+    cJSON_AddItemToObject(item_props, "status", status_prop);
+
+    cJSON_AddItemToObject(todos_items, "properties", item_props);
+    cJSON *item_required = cJSON_CreateArray();
+    cJSON_AddItemToArray(item_required, cJSON_CreateString("content"));
+    cJSON_AddItemToArray(item_required, cJSON_CreateString("activeForm"));
+    cJSON_AddItemToArray(item_required, cJSON_CreateString("status"));
+    cJSON_AddItemToObject(todos_items, "required", item_required);
+
+    cJSON_AddItemToObject(todos_array, "items", todos_items);
+    cJSON_AddItemToObject(todo_props, "todos", todos_array);
+    cJSON_AddItemToObject(todo_params, "properties", todo_props);
+    cJSON *todo_req = cJSON_CreateArray();
+    cJSON_AddItemToArray(todo_req, cJSON_CreateString("todos"));
+    cJSON_AddItemToObject(todo_params, "required", todo_req);
+
+    cJSON *todo_tool;
+    CREATE_TOOL(todo_tool, "TodoWrite",
+                "Creates and updates a task list to track progress on multi-step tasks",
+                todo_params);
+
+    // Add cache_control to the last tool (TodoWrite) if caching is enabled
+    if (enable_caching) {
+        add_cache_control(todo_tool);
+    }
+
+    // Add MCP tools if MCP is enabled and configured
+    #ifndef TEST_BUILD
+    if (state && state->mcp_config && mcp_is_enabled()) {
+        LOG_DEBUG("get_tool_definitions_for_responses_api: Adding MCP tools");
+
+        // Dynamic MCP tools discovered from servers
+        cJSON *mcp_tools = mcp_get_all_tools(state->mcp_config);
+        if (mcp_tools && cJSON_IsArray(mcp_tools)) {
+            int mcp_tool_count = cJSON_GetArraySize(mcp_tools);
+            LOG_DEBUG("get_tool_definitions_for_responses_api: Found %d dynamic MCP tools", mcp_tool_count);
+            cJSON *t = NULL;
+            cJSON_ArrayForEach(t, mcp_tools) {
+                cJSON *name_obj = cJSON_GetObjectItem(t, "name");
+                const char *tool_name = name_obj && cJSON_IsString(name_obj) ? name_obj->valuestring : "unknown";
+                LOG_DEBUG("get_tool_definitions_for_responses_api: Adding dynamic MCP tool '%s'", tool_name);
+                // MCP tools are already in the correct format
+                cJSON_AddItemToArray(tool_array, cJSON_Duplicate(t, 1));
+            }
+            cJSON_Delete(mcp_tools);
+        }
+
+        // ListMcpResources tool
+        cJSON *list_res_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(list_res_params, "type", "object");
+        cJSON *list_res_props = cJSON_CreateObject();
+        cJSON *server_prop = cJSON_CreateObject();
+        cJSON_AddStringToObject(server_prop, "type", "string");
+        cJSON_AddStringToObject(server_prop, "description",
+            "Optional server name to filter resources by. If not provided, resources from all servers will be returned.");
+        cJSON_AddItemToObject(list_res_props, "server", server_prop);
+        cJSON_AddItemToObject(list_res_params, "properties", list_res_props);
+
+        cJSON *list_res_tool;
+        CREATE_TOOL(list_res_tool, "ListMcpResources",
+                    "Lists available resources from configured MCP servers. "
+                    "Each resource object includes a 'server' field indicating which server it's from.",
+                    list_res_params);
+
+        // ReadMcpResource tool
+        cJSON *read_res_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(read_res_params, "type", "object");
+        cJSON *read_res_props = cJSON_CreateObject();
+        cJSON *read_server_prop = cJSON_CreateObject();
+        cJSON_AddStringToObject(read_server_prop, "type", "string");
+        cJSON_AddStringToObject(read_server_prop, "description", "The name of the MCP server to read from");
+        cJSON_AddItemToObject(read_res_props, "server", read_server_prop);
+        cJSON *uri_prop = cJSON_CreateObject();
+        cJSON_AddStringToObject(uri_prop, "type", "string");
+        cJSON_AddStringToObject(uri_prop, "description", "The URI of the resource to read");
+        cJSON_AddItemToObject(read_res_props, "uri", uri_prop);
+        cJSON_AddItemToObject(read_res_params, "properties", read_res_props);
+        cJSON *read_res_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(read_res_req, cJSON_CreateString("server"));
+        cJSON_AddItemToArray(read_res_req, cJSON_CreateString("uri"));
+        cJSON_AddItemToObject(read_res_params, "required", read_res_req);
+
+        cJSON *read_res_tool;
+        CREATE_TOOL(read_res_tool, "ReadMcpResource",
+                    "Reads a specific resource from an MCP server, identified by server name and resource URI.",
+                    read_res_params);
+
+        // CallMcpTool tool (generic MCP tool invoker)
+        cJSON *call_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(call_params, "type", "object");
+        cJSON *call_props = cJSON_CreateObject();
+        cJSON *call_server_prop = cJSON_CreateObject();
+        cJSON_AddStringToObject(call_server_prop, "type", "string");
+        cJSON_AddStringToObject(call_server_prop, "description", "The MCP server name (as in config)");
+        cJSON_AddItemToObject(call_props, "server", call_server_prop);
+        cJSON *call_tool_prop = cJSON_CreateObject();
+        cJSON_AddStringToObject(call_tool_prop, "type", "string");
+        cJSON_AddStringToObject(call_tool_prop, "description", "The tool name exposed by the server");
+        cJSON_AddItemToObject(call_props, "tool", call_tool_prop);
+        cJSON *call_args_prop = cJSON_CreateObject();
+        cJSON_AddStringToObject(call_args_prop, "type", "object");
+        cJSON_AddStringToObject(call_args_prop, "description", "Arguments object per the tool's JSON schema");
+        cJSON_AddItemToObject(call_props, "arguments", call_args_prop);
+        cJSON_AddItemToObject(call_params, "properties", call_props);
+        cJSON *call_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(call_req, cJSON_CreateString("server"));
+        cJSON_AddItemToArray(call_req, cJSON_CreateString("tool"));
+        cJSON_AddItemToObject(call_params, "required", call_req);
+
+        cJSON *call_tool;
+        CREATE_TOOL(call_tool, "CallMcpTool",
+                    "Calls a specific MCP tool by server and tool name with JSON arguments.",
+                    call_params);
+
+        LOG_INFO("Added MCP resource tools (ListMcpResources, ReadMcpResource, CallMcpTool)");
+    }
+    #else
+    (void)state;  // Suppress unused parameter warning in test builds
+    #endif
+
+    return tool_array;
+}

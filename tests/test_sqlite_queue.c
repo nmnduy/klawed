@@ -1,6 +1,6 @@
 /*
  * test_sqlite_queue.c - Test SQLite queue functionality
- * 
+ *
  * This test tests the basic SQLite queue functions that don't require klawed.c dependencies.
  */
 
@@ -288,19 +288,19 @@ static int test_message_size_limit(void) {
         sqlite_queue_cleanup(ctx);
         return -1;
     }
-    
+
     memset(huge_message, 'A', huge_size - 1);
     huge_message[huge_size - 1] = '\0';
-    
+
     int result = sqlite_queue_send(ctx, "receiver", huge_message, huge_size);
     free(huge_message);
-    
+
     if (result != SQLITE_QUEUE_ERROR_MESSAGE_TOO_LONG) {
         printf("  FAILED: Should reject oversized message, got error code: %d\n", result);
         sqlite_queue_cleanup(ctx);
         return -1;
     }
-    
+
     printf("  PASSED: Message size limit enforced\n");
     sqlite_queue_cleanup(ctx);
     return 0;

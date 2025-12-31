@@ -92,7 +92,7 @@ typedef struct TUIStateStruct {
     char *command_buffer;    // Buffer for command mode input (starts with ':')
     int command_buffer_len;  // Length of command buffer
     int command_buffer_capacity; // Capacity of command buffer
-    
+
     // Search state
     char *search_buffer;     // Buffer for search pattern input
     int search_buffer_len;   // Length of search buffer

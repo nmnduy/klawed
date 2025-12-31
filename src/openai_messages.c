@@ -181,7 +181,7 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
     }
 
     cJSON_AddStringToObject(request, "model", state->model);
-    
+
     // Check if API URL contains "deepseek" - use max_tokens instead of max_completion_tokens
     if (is_deepseek_api_url(state->api_url)) {
         cJSON_AddNumberToObject(request, "max_tokens", state->max_tokens);

@@ -77,7 +77,7 @@ static int sqlite_queue_prepare_statement(SQLiteQueueContext *ctx, sqlite3_stmt 
 SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_name) {
     // Critical invariant: database path must not be NULL
     assert(db_path != NULL);
-    
+
     if (!db_path) {
         LOG_ERROR("SQLite Queue: Database path cannot be NULL");
         return NULL;
@@ -180,7 +180,7 @@ SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_na
 void sqlite_queue_cleanup(SQLiteQueueContext *ctx) {
     // Critical invariant: context must not be NULL (but we handle it gracefully)
     // assert(ctx != NULL);
-    
+
     if (!ctx) return;
 
     LOG_INFO("SQLite Queue: Cleaning up SQLite queue context for database: %s",
@@ -211,7 +211,7 @@ int sqlite_queue_send(SQLiteQueueContext *ctx, const char *receiver, const char 
     assert(ctx != NULL);
     assert(receiver != NULL);
     assert(message != NULL);
-    
+
     if (!ctx || !receiver || !message) {
         sqlite_queue_set_error(ctx, SQLITE_QUEUE_ERROR_INVALID_PARAM, "Invalid parameters for send");
         return SQLITE_QUEUE_ERROR_INVALID_PARAM;
@@ -269,7 +269,7 @@ int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int
     assert(messages != NULL);
     assert(message_count != NULL);
     assert(message_ids != NULL);
-    
+
     if (!ctx || !messages || !message_count || !message_ids) {
         sqlite_queue_set_error(ctx, SQLITE_QUEUE_ERROR_INVALID_PARAM, "Invalid parameters for receive");
         return SQLITE_QUEUE_ERROR_INVALID_PARAM;

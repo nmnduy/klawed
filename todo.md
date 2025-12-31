@@ -1,3 +1,10 @@
+- [ ] 
+```sh
+[Read] openai-responses.md:1-400
+
+[Error] Read failed: Failed to read file: No such file or directory
+```
+
 - [x] in normal mode, allow searching forward and backward using '/' and '?' respectively
     - Implemented search functionality in TUI
     - Added TUI_MODE_SEARCH mode
