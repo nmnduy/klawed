@@ -1228,8 +1228,9 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         }
     }
 
-    // Adjust vertical scroll to keep cursor visible
-    int max_visible_lines = input->win_height;
+    // Adjust vertical scroll to keep cursor visible (account for top border)
+    int max_visible_lines = input->win_height - 1;
+    if (max_visible_lines < 1) max_visible_lines = 1;
     if (cursor_line < input->line_scroll_offset) {
         input->line_scroll_offset = cursor_line;
     } else if (cursor_line >= input->line_scroll_offset + max_visible_lines) {
@@ -1239,16 +1240,10 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     // Clear the window
     werase(win);
 
-    // Draw box with accent color if colors are available (commented out - no border)
-    /*
-    if (has_colors()) {
-        wattron(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
-        box(win, 0, 0);
-        wattroff(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
-    } else {
-        box(win, 0, 0);
+    // Draw a thin horizontal border at the top of the input window
+    for (int i = 0; i < input->win_width; i++) {
+        mvwaddch(win, 0, i, ACS_HLINE);
     }
-    */
 
     // Draw prompt on first visible line (if we're not scrolled past it)
     // In command mode, show command buffer instead of normal prompt
@@ -1259,7 +1254,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
         if (tui->mode == TUI_MODE_COMMAND && tui->command_buffer) {
             // Show command buffer
-            mvwprintw(win, 0, 0, "%s", tui->command_buffer);
+            mvwprintw(win, 1, 0, "%s", tui->command_buffer);
         } else if (tui->mode == TUI_MODE_SEARCH && tui->search_buffer) {
             // Show search buffer with appropriate prefix
             char search_prompt[260];
@@ -1268,10 +1263,10 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             } else {
                 snprintf(search_prompt, sizeof(search_prompt), "?%s", tui->search_buffer);
             }
-            mvwprintw(win, 0, 0, "%s", search_prompt);
+            mvwprintw(win, 1, 0, "%s", search_prompt);
         } else {
             // Show normal prompt
-            mvwprintw(win, 0, 0, "%s", prompt);
+            mvwprintw(win, 1, 0, "%s", prompt);
         }
 
         if (has_colors()) {
@@ -1288,7 +1283,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     int screen_y = 0;
     int screen_x = (current_line == 0) ? prompt_len : 0;
 
-    for (int i = 0; i < input->length && screen_y < input->win_height; i++) {
+    for (int i = 0; i < input->length && screen_y < input->win_height - 1; i++) {
         // Skip lines before scroll offset
         if (current_line < input->line_scroll_offset) {
             if (input->buffer[i] == '\n') {
@@ -1304,7 +1299,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             continue;
         }
 
-        // Render character
+        // Render character (adjusted for top border)
         char c = input->buffer[i];
         if (c == '\n') {
             screen_y++;
@@ -1312,7 +1307,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             screen_x = 0;  // Reset to left edge (no border)
         } else {
             // Cast to unsigned char then to chtype to avoid sign-conversion warnings
-            mvwaddch(win, screen_y, screen_x, (chtype)(unsigned char)c);
+            mvwaddch(win, screen_y + 1, screen_x, (chtype)(unsigned char)c);
             screen_x++;
 
             // Check if we need to wrap
@@ -1351,10 +1346,10 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     }
     cursor_screen_x = temp_col;
 
-    // Bounds check for cursor position
-    if (cursor_screen_y >= 0 && cursor_screen_y < input->win_height &&
+    // Bounds check for cursor position (adjusted for top border)
+    if (cursor_screen_y >= 0 && cursor_screen_y < input->win_height - 1 &&
         cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
-        wmove(win, cursor_screen_y, cursor_screen_x);
+        wmove(win, cursor_screen_y + 1, cursor_screen_x);
     }
 
     // Hide cursor in NORMAL mode, show it in INSERT/COMMAND modes
