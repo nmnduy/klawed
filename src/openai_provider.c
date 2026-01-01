@@ -608,7 +608,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                     if (text && cJSON_IsString(text) && text->valuestring) {
                         size_t text_len = strlen(text->valuestring);
                         size_t needed = text_length + text_len + 1;
-                        
+
                         if (needed > text_capacity) {
                             size_t new_cap = text_capacity ? text_capacity * 2 : 1024;
                             if (new_cap < needed) new_cap = needed;
@@ -626,7 +626,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                             text_content = new_buf;
                             text_capacity = new_cap;
                         }
-                        
+
                         if (text_length == 0) {
                             memcpy(text_content, text->valuestring, text_len + 1);
                         } else {

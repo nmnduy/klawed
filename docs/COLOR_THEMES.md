@@ -11,6 +11,22 @@ The TUI uses **Kitty terminal's theme format**, but themes are **embedded in the
 - `solarized-dark` — Blue-tinted, carefully balanced
 - `black-metal` — Pure black with grayscale tones
 
+## Theme Explorer (Interactive Preview)
+
+The easiest way to preview themes is with the built-in theme explorer:
+
+1. Start klawed in interactive mode: `./klawed`
+2. Type `/themes` and press Enter
+3. Use `j`/`k` or arrow keys to browse themes
+4. Press `Enter` to select a theme, or `q`/`ESC` to cancel
+5. Follow the displayed instructions to apply the theme
+
+The theme explorer shows a live preview of each theme with sample text, including:
+- Foreground text color
+- User, Assistant, Status, Error, and Tool colors
+- Diff add/remove colors
+- Full 16-color palette preview
+
 ## Choosing a Theme
 
 **Use a built-in theme (recommended):**

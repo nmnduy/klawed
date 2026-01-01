@@ -97,17 +97,17 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
                     cJSON *msg_item = cJSON_CreateObject();
                     cJSON_AddStringToObject(msg_item, "type", "message");
                     cJSON_AddStringToObject(msg_item, "role", "user");
-                    
+
                     cJSON *content_array = cJSON_CreateArray();
                     cJSON *tool_result = cJSON_CreateObject();
                     cJSON_AddStringToObject(tool_result, "type", "function_call_output");
                     cJSON_AddStringToObject(tool_result, "call_id", c->tool_id);
-                    
+
                     // Convert output to string
                     char *output_str = cJSON_PrintUnformatted(c->tool_output);
                     cJSON_AddStringToObject(tool_result, "output", output_str ? output_str : "{}");
                     free(output_str);
-                    
+
                     cJSON_AddItemToArray(content_array, tool_result);
                     cJSON_AddItemToObject(msg_item, "content", content_array);
                     cJSON_AddItemToArray(input_array, msg_item);
@@ -123,7 +123,7 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
             // Check if there's text content or tool calls
             int has_content = 0;
             cJSON *content_array = cJSON_CreateArray();
-            
+
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
                 if (c->type == INTERNAL_TEXT && c->text) {
@@ -140,12 +140,12 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
                     cJSON_AddStringToObject(func_obj, "type", "function_call");
                     cJSON_AddStringToObject(func_obj, "id", c->tool_id);
                     cJSON_AddStringToObject(func_obj, "name", c->tool_name);
-                    
+
                     // Arguments as JSON string
                     char *args_str = cJSON_PrintUnformatted(c->tool_params);
                     cJSON_AddStringToObject(func_obj, "arguments", args_str ? args_str : "{}");
                     free(args_str);
-                    
+
                     cJSON_AddItemToArray(content_array, func_obj);
                     has_content = 1;
                 }
@@ -245,16 +245,16 @@ InternalMessage parse_openai_responses_response(cJSON *response) {
             if (!content || !cJSON_IsArray(content)) {
                 continue;
             }
-            
+
             cJSON *content_item = NULL;
             cJSON_ArrayForEach(content_item, content) {
                 if (idx >= count) break;
-                
+
                 cJSON *content_type = cJSON_GetObjectItem(content_item, "type");
                 if (!content_type || !cJSON_IsString(content_type)) {
                     continue;
                 }
-                
+
                 if (strcmp(content_type->valuestring, "output_text") == 0) {
                     cJSON *text = cJSON_GetObjectItem(content_item, "text");
                     if (text && cJSON_IsString(text) && text->valuestring) {
@@ -708,32 +708,32 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
                 // Convert to Responses API format: { type: "function", name, description, parameters }
                 cJSON *func = cJSON_GetObjectItem(t, "function");
                 if (!func) continue;
-                
+
                 cJSON *name_obj = cJSON_GetObjectItem(func, "name");
                 const char *tool_name = name_obj && cJSON_IsString(name_obj) ? name_obj->valuestring : "unknown";
                 LOG_DEBUG("get_tool_definitions_for_responses_api: Adding dynamic MCP tool '%s'", tool_name);
-                
+
                 // Create flat tool definition for Responses API
                 cJSON *flat_tool = cJSON_CreateObject();
                 cJSON_AddStringToObject(flat_tool, "type", "function");
-                
+
                 // Copy name
                 if (name_obj) {
                     cJSON_AddStringToObject(flat_tool, "name", name_obj->valuestring);
                 }
-                
+
                 // Copy description if present
                 cJSON *desc = cJSON_GetObjectItem(func, "description");
                 if (desc && cJSON_IsString(desc)) {
                     cJSON_AddStringToObject(flat_tool, "description", desc->valuestring);
                 }
-                
+
                 // Copy parameters if present
                 cJSON *params = cJSON_GetObjectItem(func, "parameters");
                 if (params) {
                     cJSON_AddItemToObject(flat_tool, "parameters", cJSON_Duplicate(params, 1));
                 }
-                
+
                 cJSON_AddItemToArray(tool_array, flat_tool);
             }
             cJSON_Delete(mcp_tools);
