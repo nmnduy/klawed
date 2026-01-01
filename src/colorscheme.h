@@ -90,10 +90,8 @@ static RGB parse_hex_color(const char *hex) {
     return rgb;
 }
 
-// Convert RGB to ANSI 256-color escape code
-// Returns foreground color code like "\033[38;5;123m"
-static void rgb_to_ansi_code(RGB rgb, char *buf, size_t bufsize) {
-    // Convert RGB to nearest 256-color palette index
+// Convert RGB to nearest 256-color palette index
+static int rgb_to_256_index(RGB rgb) {
     // Check if it's grayscale
     int avg = (rgb.r + rgb.g + rgb.b) / 3;
     int r_diff = abs(rgb.r - avg);
@@ -113,6 +111,13 @@ static void rgb_to_ansi_code(RGB rgb, char *buf, size_t bufsize) {
         color_idx = 16 + (36 * r_idx) + (6 * g_idx) + b_idx;
     }
 
+    return color_idx;
+}
+
+// Convert RGB to ANSI 256-color escape code
+// Returns foreground color code like "\033[38;5;123m"
+static void rgb_to_ansi_code(RGB rgb, char *buf, size_t bufsize) {
+    int color_idx = rgb_to_256_index(rgb);
     snprintf(buf, bufsize, "\033[38;5;%dm", color_idx);
 }
 

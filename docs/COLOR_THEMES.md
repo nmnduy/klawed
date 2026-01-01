@@ -87,3 +87,10 @@ To add a theme to the binary (see `src/builtin_themes.c`):
 4. Rebuild with `make`
 
 This way, your favorite theme is always available without carrying external files.
+
+## Notes for tmux and limited-color terminals
+
+- If `tmux` is compiled without 24-bit color, TRUECOLOR sequences can be lost. We now fall back to the 256-color palette when `can_change_color()` is false but `COLORS >= 256`.
+- Ensure your tmux session advertises truecolor: set `set -g default-terminal "tmux-256color"` and add `set -ga terminal-overrides ',*:Tc'`.
+- Also set your shell env before launching tmux (or inside): `export TERM=tmux-256color` (or `xterm-256color` if appropriate) and `export COLORTERM=truecolor`.
+- Kitty themes still apply in these fallback modes, but will approximate to the nearest 256-color entry.

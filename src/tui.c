@@ -473,6 +473,8 @@ static void init_ncurses_colors(void) {
     if (g_theme_loaded) {
         LOG_DEBUG("[TUI] Initializing ncurses colors from loaded theme");
 
+        int supports_256 = (COLORS >= 256);
+
         // Define custom colors (colors 16-21 are safe to redefine)
         if (can_change_color()) {
             // Foreground
@@ -526,9 +528,31 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, 19, -1);  // Yellow (same as STATUS)
             init_pair(NCURSES_PAIR_TODO_PENDING, 18, -1);      // Cyan (same as ASSISTANT)
 
-            LOG_DEBUG("[TUI] Custom colors initialized successfully");
+            LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
+        } else if (supports_256) {
+            // Map theme colors to nearest 256-color palette indices
+            int fg_idx = rgb_to_256_index(g_theme.foreground_rgb);
+            int user_idx = rgb_to_256_index(g_theme.user_rgb);
+            int assistant_idx = rgb_to_256_index(g_theme.assistant_rgb);
+            int status_idx = rgb_to_256_index(g_theme.status_rgb);
+            int error_idx = rgb_to_256_index(g_theme.error_rgb);
+
+            init_pair(NCURSES_PAIR_FOREGROUND, (short)fg_idx, (short)-1);
+            init_pair(NCURSES_PAIR_USER, (short)user_idx, (short)-1);
+            init_pair(NCURSES_PAIR_ASSISTANT, (short)assistant_idx, (short)-1);
+            init_pair(NCURSES_PAIR_STATUS, (short)status_idx, (short)-1);
+            init_pair(NCURSES_PAIR_ERROR, (short)error_idx, (short)-1);
+            // Use status color for tool tag to reduce color variance
+            init_pair(NCURSES_PAIR_TOOL, (short)status_idx, (short)-1);
+            init_pair(NCURSES_PAIR_PROMPT, (short)user_idx, (short)-1);
+            // TODO color pairs
+            init_pair(NCURSES_PAIR_TODO_COMPLETED, (short)user_idx, (short)-1);
+            init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, (short)status_idx, (short)-1);
+            init_pair(NCURSES_PAIR_TODO_PENDING, (short)assistant_idx, (short)-1);
+
+            LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
-            LOG_DEBUG("[TUI] Terminal does not support color changes, using standard colors");
+            LOG_DEBUG("[TUI] Terminal does not support color changes or 256 colors, using standard colors");
             // Fall back to standard ncurses colors
             init_pair(NCURSES_PAIR_FOREGROUND, COLOR_WHITE, -1);
             init_pair(NCURSES_PAIR_USER, COLOR_GREEN, -1);
