@@ -4,7 +4,7 @@
 
 [Error] Read failed: Failed to read file: No such file or directory
 ```
-- [ ] bash timeout unusually long is not 120 seconds
+- [x] bash timeout unusually long is not 120 seconds
 
 - [x] in normal mode, allow searching forward and backward using '/' and '?' respectively
     - Implemented search functionality in TUI
@@ -43,14 +43,6 @@
 
 - [ ] make sure every 'Bash' command is started with a 'timeout'
 - [ ] can open vim and when exits go back to the bot
-- [ ] reasoning effort
-    - [ ] providers API diff
-        - [ ] deepseek
-        - [ ] moonshot
-        - [ ] aws bedrock
-        - [ ] anthropic
-    - [ ] toggle
-
 - [ ] $ klawed -r sess_1766925100_140aa178
 ... BUG: session_load_from_db: checking message 32
 DEBUG: session_load_from_db: checking message 31

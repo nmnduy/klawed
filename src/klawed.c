@@ -1580,10 +1580,10 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
         }
     }
 
-    // Warn if timeout is > 60 seconds
-    if (timeout_seconds > 60 && g_active_tool_queue) {
+    // Warn only for very long timeouts (> 3 minutes)
+    if (timeout_seconds > 180 && g_active_tool_queue) {
         char warning[128];
-        snprintf(warning, sizeof(warning), "[Warning] Bash timeout set to %d seconds (unusually long)", timeout_seconds);
+        snprintf(warning, sizeof(warning), "[Warning] Bash timeout set to %d seconds (over 3 minutes)", timeout_seconds);
         post_tui_message(g_active_tool_queue, TUI_MSG_ADD_LINE, warning);
     }
 
