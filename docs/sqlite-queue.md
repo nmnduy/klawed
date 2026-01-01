@@ -125,6 +125,7 @@ UPDATE messages SET sent = 1 WHERE id = ?;
 | `KLAWED_SQLITE_MAX_RETRIES` | Maximum retry attempts | 3 |
 | `KLAWED_SQLITE_MAX_MESSAGE_SIZE` | Maximum message size in bytes | 1048576 (1MB) |
 | `KLAWED_SQLITE_MAX_QUEUE_SIZE` | Maximum pending messages | 1000 |
+| `KLAWED_SQLITE_MAX_ITERATIONS` | Maximum iterations in interactive loop (0 = unlimited) | 1000 |
 
 ### Starting Klawed in Daemon Mode
 

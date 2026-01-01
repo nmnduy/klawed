@@ -46,6 +46,7 @@ typedef struct SQLiteQueueContext {
     // Message configuration
     size_t max_message_size;
     int max_queue_size;
+    int max_iterations;      // Maximum iterations in interactive loop (0 = unlimited)
 
     // State tracking
     time_t last_poll;
