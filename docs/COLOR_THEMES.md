@@ -1,37 +1,33 @@
 # Color Theme Support
 
-The TUI uses **Kitty terminal's theme format** - a simple, dependency-free configuration format. Built-in themes are embedded in the binary for zero-dependency operation, and you can still use external .conf files for custom themes.
+The TUI uses **Kitty terminal's theme format**, but themes are **embedded in the binary** so Klawed ships with zero runtime theme dependencies. External `.conf` files still work for overrides, but the preferred path is to embed themes directly in `src/builtin_themes.c`.
 
-## Built-in Themes
+## Built-in Themes (shipped in the binary)
 
-Six themes are embedded in the binary (no external files needed):
+- `tender` *(default)* — Warm and soft
+- `kitty-default` — Classic high contrast black & white
+- `dracula` — Dark purple with vibrant colors
+- `gruvbox-dark` — Warm retro with low contrast
+- `solarized-dark` — Blue-tinted, carefully balanced
+- `black-metal` — Pure black with grayscale tones
 
-- `tender` - Warm and soft, easy on the eyes (default)
-- `kitty-default` - Classic high contrast black & white
-- `dracula` - Dark purple with vibrant colors
-- `gruvbox-dark` - Warm retro with low contrast
-- `solarized-dark` - Blue-tinted, carefully balanced
-- `black-metal` - Pure black with grayscale tones
+## Choosing a Theme
 
-## Configuration
-
-**Using a built-in theme:**
+**Use a built-in theme (recommended):**
 ```bash
 export KLAWED_THEME="dracula"
 ./klawed "your prompt"
 ```
 
-**Using an external theme file:**
+**Use an external theme file (legacy/override):**
 ```bash
-export KLAWED_THEME="/path/to/your/theme.conf"
+export KLAWED_THEME="/path/to/theme.conf"
 ./klawed "your prompt"
 ```
 
-**No theme specified:** Defaults to `tender` built-in theme
+**No theme specified:** Defaults to the built-in `tender` theme.
 
-## Theme Format
-
-Kitty's dead-simple key-value format - no parser library needed!
+## Theme Format (Kitty-compatible)
 
 ```conf
 # Klawed TUI Theme
@@ -54,43 +50,29 @@ status_bg #44475a
 error_fg #ff5555
 ```
 
+## Adding New Built-in Themes (preferred)
+
+1. Obtain a Kitty theme `.conf` file (local or URL).
+2. Generate a C snippet using the helper script:
+   ```bash
+   ./scripts/embed_kitty_theme.sh "my-theme" /path/or/url/to/theme.conf > /tmp/my-theme-snippet.c
+   ```
+3. Paste the snippet into the `built_in_themes` array in `src/builtin_themes.c`.
+4. Keep the name short (≤63 chars) and unique.
+5. Rebuild: `make` (or `gmake` on macOS if needed).
+
+> Tip: External themes are still supported via `KLAWED_THEME=/path/to/theme.conf`, but embedding keeps the binary self-contained.
+
 ## Why Kitty's format?
 
-- ✅ Zero dependencies - no parser library needed
-- ✅ Trivial to parse in C (~50 lines)
-- ✅ 300+ themes available from kitty-themes
+- ✅ No extra parser dependencies; trivial to parse in C
+- ✅ Hundreds of community themes available
 - ✅ Human-readable and editable
 - ✅ Compatible with Kitty terminal themes
-- ✅ Faster than structured formats (TOML/YAML)
-
-## Using External Kitty Themes
-
-Most Kitty themes work out of the box! Download from [kitty-themes](https://github.com/dexpota/kitty-themes):
-
-```bash
-# Download a theme
-curl -o ~/nord.conf \
-  https://raw.githubusercontent.com/dexpota/kitty-themes/master/themes/Nord.conf
-
-# Use it
-export KLAWED_THEME=~/nord.conf
-./klawed "your prompt"
-```
-
-## Adding New Built-in Themes
-
-To add a theme to the binary (see `src/builtin_themes.c`):
-
-1. Download the .conf file
-2. Convert to C string literal with escaped newlines
-3. Add to the `built_in_themes[]` array
-4. Rebuild with `make`
-
-This way, your favorite theme is always available without carrying external files.
 
 ## Notes for tmux and limited-color terminals
 
-- If `tmux` is compiled without 24-bit color, TRUECOLOR sequences can be lost. We now fall back to the 256-color palette when `can_change_color()` is false but `COLORS >= 256`.
-- Ensure your tmux session advertises truecolor: set `set -g default-terminal "tmux-256color"` and add `set -ga terminal-overrides ',*:Tc'`.
-- Also set your shell env before launching tmux (or inside): `export TERM=tmux-256color` (or `xterm-256color` if appropriate) and `export COLORTERM=truecolor`.
-- Kitty themes still apply in these fallback modes, but will approximate to the nearest 256-color entry.
+- If `tmux` lacks truecolor, we fall back to the 256-color palette when `can_change_color()` is false but `COLORS >= 256`.
+- Ensure tmux advertises truecolor: `set -g default-terminal "tmux-256color"` and `set -ga terminal-overrides ',*:Tc'`.
+- Set your shell env before launching tmux (or inside): `export TERM=tmux-256color` (or `xterm-256color`) and `export COLORTERM=truecolor`.
+- Kitty themes still apply in fallback modes, but colors are approximated to the nearest 256-color entry.
