@@ -569,9 +569,20 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         if (output && cJSON_IsArray(output) && cJSON_GetArraySize(output) > 0) {
             // Responses API format
             LOG_DEBUG("Parsing Responses API format");
-            cJSON *output_item = cJSON_GetArrayItem(output, 0);
-            if (!output_item) {
-                result.error_message = strdup("Invalid response format: empty output array");
+            
+            // Find the message item in output array
+            cJSON *message_item = NULL;
+            cJSON *output_item = NULL;
+            cJSON_ArrayForEach(output_item, output) {
+                cJSON *type = cJSON_GetObjectItem(output_item, "type");
+                if (type && cJSON_IsString(type) && strcmp(type->valuestring, "message") == 0) {
+                    message_item = output_item;
+                    break;
+                }
+            }
+            
+            if (!message_item) {
+                result.error_message = strdup("Invalid response format: no message in output array");
                 result.is_retryable = 0;
                 api_response_free(api_response);
                 free(result.headers_json);
@@ -579,10 +590,10 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                 return result;
             }
 
-            // Get content array from output item
-            cJSON *content_array = cJSON_GetObjectItem(output_item, "content");
+            // Get content array from message item
+            cJSON *content_array = cJSON_GetObjectItem(message_item, "content");
             if (!content_array || !cJSON_IsArray(content_array)) {
-                result.error_message = strdup("Invalid response format: no content in output");
+                result.error_message = strdup("Invalid response format: no content in message");
                 result.is_retryable = 0;
                 api_response_free(api_response);
                 free(result.headers_json);
