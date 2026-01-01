@@ -4,6 +4,7 @@
 
 [Error] Read failed: Failed to read file: No such file or directory
 ```
+- [ ] bash timeout unusually long is not 120 seconds
 
 - [x] in normal mode, allow searching forward and backward using '/' and '?' respectively
     - Implemented search functionality in TUI
