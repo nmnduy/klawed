@@ -7457,6 +7457,7 @@ static int get_env_int_retry(const char *name, int default_value) {
 }
 
 #ifndef TEST_BUILD
+#include "dump_utils.h"
 // Dump conversation from database by session ID
 static int dump_conversation_from_db(const char *session_id) {
     PersistenceDB *db = persistence_init(NULL);
@@ -7603,35 +7604,7 @@ static int dump_conversation_from_db(const char *session_id) {
         if (status && strcmp(status, "error") == 0 && error_msg) {
             fprintf(stdout, "  [ERROR] %s\n", error_msg);
         } else if (response_json) {
-            cJSON *response = cJSON_Parse(response_json);
-            if (response) {
-                cJSON *content = cJSON_GetObjectItem(response, "content");
-                if (content && cJSON_IsArray(content)) {
-                    int content_count = cJSON_GetArraySize(content);
-                    for (int i = 0; i < content_count; i++) {
-                        cJSON *block = cJSON_GetArrayItem(content, i);
-                        cJSON *type = cJSON_GetObjectItem(block, "type");
-
-                        if (type && cJSON_IsString(type)) {
-                            if (strcmp(type->valuestring, "text") == 0) {
-                                cJSON *text = cJSON_GetObjectItem(block, "text");
-                                if (text && cJSON_IsString(text)) {
-                                    fprintf(stdout, "\n  %s\n", text->valuestring);
-                                }
-                            } else if (strcmp(type->valuestring, "tool_use") == 0) {
-                                cJSON *name = cJSON_GetObjectItem(block, "name");
-                                cJSON *id = cJSON_GetObjectItem(block, "id");
-                                fprintf(stdout, "\n  [TOOL_USE: %s", name && cJSON_IsString(name) ? name->valuestring : "unknown");
-                                if (id && cJSON_IsString(id)) {
-                                    fprintf(stdout, " (id: %s)", id->valuestring);
-                                }
-                                fprintf(stdout, "]\n");
-                            }
-                        }
-                    }
-                }
-                cJSON_Delete(response);
-            }
+            (void)dump_response_content(response_json, stdout);
         }
 
         fprintf(stdout, "\n");
