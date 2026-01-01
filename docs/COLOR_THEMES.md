@@ -10,6 +10,8 @@ The TUI uses **Kitty terminal's theme format**, but themes are **embedded in the
 - `gruvbox-dark` — Warm retro with low contrast
 - `solarized-dark` — Blue-tinted, carefully balanced
 - `black-metal` — Pure black with grayscale tones
+- `ayu` — Dark blue theme with warm accents
+- `belafonte-night` — Dark red/purple theme with earthy tones
 
 ## Theme Explorer (Interactive Preview)
 

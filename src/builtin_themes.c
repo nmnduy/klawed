@@ -199,7 +199,32 @@ const BuiltInTheme built_in_themes[] = {
       "color14 #c7fffc\n"
       "color7 #ffffff\n"
       "color15 #ffffff\n"
-      "selection_foreground #0e1419\n" }
+      "selection_foreground #0e1419\n" },
+    { "belafonte-night",
+      "# Belafonte Night Theme for Kitty\n"
+      "# Source: https://github.com/dexpota/kitty-themes/blob/master/themes/Belafonte_Night.conf\n"
+      "\n"
+      "background #20111a\n"
+      "foreground #958b83\n"
+      "cursor #958b83\n"
+      "selection_background #45363b\n"
+      "color0 #20111a\n"
+      "color8 #5e5252\n"
+      "color1 #bd100d\n"
+      "color9 #bd100d\n"
+      "color2 #858062\n"
+      "color10 #858062\n"
+      "color3 #e9a448\n"
+      "color11 #e9a448\n"
+      "color4 #416978\n"
+      "color12 #416978\n"
+      "color5 #96522b\n"
+      "color13 #96522b\n"
+      "color6 #98999c\n"
+      "color14 #98999c\n"
+      "color7 #958b83\n"
+      "color15 #d4ccb9\n"
+      "selection_foreground #20111a\n" }
 };
 
 const size_t built_in_themes_count = sizeof(built_in_themes) / sizeof(built_in_themes[0]);
