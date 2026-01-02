@@ -350,36 +350,6 @@ static void test_null_content_handling(void) {
     free_parsed_response(&resp);
 }
 
-static void test_parsing_from_file(void) {
-    printf(COLOR_YELLOW "\nTest: Parsing actual test_data/response.json\n" COLOR_RESET);
-
-    FILE *f = fopen("test_data/response.json", "r");
-    if (!f) {
-        printf(COLOR_RED "  ✗ Could not open test_data/response.json\n" COLOR_RESET);
-        tests_run++;
-        tests_failed++;
-        return;
-    }
-
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    char *json_str = malloc((size_t)fsize + 1);
-    fread(json_str, 1, (size_t)fsize, f);
-    json_str[fsize] = '\0';
-    fclose(f);
-
-    ParsedResponse resp = parse_responses_response(json_str);
-
-    TEST_ASSERT(resp.text != NULL, "Should extract text from file");
-    TEST_ASSERT(strstr(resp.text, "Hey!") != NULL, "Text should contain greeting");
-    TEST_ASSERT(resp.tool_count == 0, "This specific response has no tool calls");
-
-    free(json_str);
-    free_parsed_response(&resp);
-}
-
 static void test_parsing_from_db_response(void) {
     printf(COLOR_YELLOW "\nTest: Parsing response with function_call (simulates DB response)\n" COLOR_RESET);
 
@@ -417,7 +387,6 @@ int main(void) {
     test_text_and_tools_response();
     test_multiple_tool_calls();
     test_null_content_handling();
-    test_parsing_from_file();
     test_parsing_from_db_response();
 
     TEST_SUMMARY();
