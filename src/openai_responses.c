@@ -8,7 +8,9 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "openai_responses.h"
+#include "openai_provider.h"
 #include "logger.h"
+#include "http_client.h"
 #include "klawed_internal.h"
 #include "mcp.h"
 
@@ -176,6 +178,320 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
 
     LOG_DEBUG("OpenAI Responses API request built successfully");
     return request;
+}
+
+/**
+ * Build HTTP request for OpenAI Responses API
+ *
+ * Constructs a complete HttpRequest struct including:
+ * - URL (from config->base_url)
+ * - Headers (Content-Type, Authorization, extra headers)
+ * - Body (JSON request from build_openai_responses_request)
+ *
+ * @param state - Conversation state with messages
+ * @param config - OpenAI provider configuration
+ * @param enable_caching - Whether to enable prompt caching
+ * @return HttpRequest struct (caller must free request->headers and request->body on success), or empty struct on error
+ */
+HttpRequest build_responses_http_request(ConversationState *state, OpenAIConfig *config, int enable_caching) {
+    HttpRequest req = {0};
+
+    if (!config || !config->api_key || !config->base_url) {
+        LOG_ERROR("OpenAI config or credentials not initialized");
+        return req;
+    }
+
+    if (!state) {
+        LOG_ERROR("ConversationState is NULL");
+        return req;
+    }
+
+    LOG_DEBUG("Building HTTP request for Responses API (caching: %s)",
+              enable_caching ? "enabled" : "disabled");
+
+    // Build the JSON request body
+    cJSON *request_json = build_openai_responses_request(state, enable_caching);
+    if (!request_json) {
+        LOG_ERROR("Failed to build Responses API request JSON");
+        return req;
+    }
+
+    // Serialize to JSON string
+    char *body = cJSON_PrintUnformatted(request_json);
+    cJSON_Delete(request_json);
+
+    if (!body) {
+        LOG_ERROR("Failed to serialize request JSON");
+        return req;
+    }
+
+    LOG_DEBUG("OpenAI Responses API: Request serialized, length: %zu bytes", strlen(body));
+
+    // Build authentication header
+    char auth_header[512];
+    if (config->auth_header_template) {
+        // Use custom auth header template (should contain %s for API key)
+        const char *percent_s = strstr(config->auth_header_template, "%s");
+        if (percent_s) {
+            size_t prefix_len = (size_t)(percent_s - config->auth_header_template);
+            size_t api_key_len = strlen(config->api_key);
+            size_t suffix_len = strlen(percent_s + 2);
+
+            if (prefix_len + api_key_len + suffix_len + 1 < sizeof(auth_header)) {
+                strlcpy(auth_header, config->auth_header_template, prefix_len + 1);
+                strlcat(auth_header, config->api_key, sizeof(auth_header));
+                strlcat(auth_header, percent_s + 2, sizeof(auth_header));
+            } else {
+                strlcpy(auth_header, config->auth_header_template, sizeof(auth_header));
+                LOG_WARN("Auth header template too long, truncated");
+            }
+        } else {
+            strlcpy(auth_header, config->auth_header_template, sizeof(auth_header));
+        }
+    } else {
+        // Default Bearer token format
+        snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", config->api_key);
+    }
+
+    // Set up headers
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, auth_header);
+
+    // Add extra headers from config
+    if (config->extra_headers) {
+        for (int i = 0; i < config->extra_headers_count; i++) {
+            if (config->extra_headers[i]) {
+                headers = curl_slist_append(headers, config->extra_headers[i]);
+            }
+        }
+    }
+
+    if (!headers) {
+        free(body);
+        LOG_ERROR("Failed to setup HTTP headers");
+        return req;
+    }
+
+    // Populate HttpRequest struct
+    req.url = config->base_url;
+    req.method = "POST";
+    req.body = body;
+    req.headers = headers;
+    req.connect_timeout_ms = 30000;   // 30 seconds
+    req.total_timeout_ms = 300000;    // 5 minutes
+    req.enable_streaming = 0;          // Responses API doesn't use SSE streaming
+
+    LOG_DEBUG("HTTP request built for URL: %s", req.url);
+    return req;
+}
+
+/**
+ * Submit HTTP request to OpenAI Responses API
+ *
+ * Executes the HTTP request using the HTTP client with progress callback
+ * for interrupt handling.
+ *
+ * @param request - Pre-built HTTP request
+ * @param state - Conversation state (for interrupt checking)
+ * @return HttpResponse (caller must free with http_response_free()), or NULL on error
+ */
+HttpResponse* submit_responses_http_request(HttpRequest *request, ConversationState *state) {
+    if (!request || !request->url || !request->body) {
+        LOG_ERROR("Invalid HTTP request");
+        return NULL;
+    }
+
+    LOG_DEBUG("Submitting HTTP request to: %s", request->url);
+
+    // Execute the HTTP request
+    HttpResponse *response = http_client_execute(request, NULL, state);
+
+    if (!response) {
+        LOG_ERROR("Failed to execute HTTP request");
+        return NULL;
+    }
+
+    if (response->error_message) {
+        LOG_ERROR("HTTP request error: %s", response->error_message);
+        return response;
+    }
+
+    LOG_DEBUG("HTTP response received: status=%ld, body_size=%zu",
+              response->status_code,
+              response->body ? strlen(response->body) : 0);
+
+    return response;
+}
+
+/**
+ * Parse OpenAI Responses API response into ApiResponse
+ *
+ * Converts raw HTTP response body to ApiResponse:
+ * - Extracts text content from output array
+ * - Parses tool calls if present
+ *
+ * @param raw_response - Raw HTTP response body (JSON string)
+ * @return ApiResponse (caller must free with api_response_free()), or NULL on error
+ */
+ApiResponse* parse_responses_http_response(const char *raw_response) {
+    if (!raw_response) {
+        LOG_ERROR("Raw response is NULL");
+        return NULL;
+    }
+
+    LOG_DEBUG("Parsing Responses API response");
+
+    // Parse JSON response
+    cJSON *json = cJSON_Parse(raw_response);
+    if (!json) {
+        LOG_ERROR("Failed to parse JSON response");
+        return NULL;
+    }
+
+    // Allocate ApiResponse
+    ApiResponse *api_response = calloc(1, sizeof(ApiResponse));
+    if (!api_response) {
+        LOG_ERROR("Failed to allocate ApiResponse");
+        cJSON_Delete(json);
+        return NULL;
+    }
+
+    api_response->error_message = NULL;
+    api_response->raw_response = json;
+
+    // Parse the output array to extract text and tool calls
+    cJSON *output = cJSON_GetObjectItem(json, "output");
+    if (output && cJSON_IsArray(output)) {
+        // First pass: count tool calls (text is accumulated)
+        int tool_call_count = 0;
+
+        cJSON *item = NULL;
+        cJSON_ArrayForEach(item, output) {
+            cJSON *type = cJSON_GetObjectItem(item, "type");
+            if (!type || !cJSON_IsString(type)) {
+                continue;
+            }
+
+            if (strcmp(type->valuestring, "message") == 0) {
+                cJSON *content = cJSON_GetObjectItem(item, "content");
+                if (content && cJSON_IsArray(content)) {
+                    cJSON *content_item = NULL;
+                    cJSON_ArrayForEach(content_item, content) {
+                        cJSON *content_type = cJSON_GetObjectItem(content_item, "type");
+                        if (!content_type || !cJSON_IsString(content_type)) {
+                            continue;
+                        }
+
+                        if (strcmp(content_type->valuestring, "function_call") == 0) {
+                            tool_call_count++;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Allocate for tool calls
+        if (tool_call_count > 0) {
+            api_response->tools = calloc((size_t)tool_call_count, sizeof(ToolCall));
+            if (!api_response->tools) {
+                LOG_ERROR("Failed to allocate tool calls");
+                api_response_free(api_response);
+                return NULL;
+            }
+            api_response->tool_count = tool_call_count;
+        }
+
+        // Second pass: extract content
+        int tool_idx = 0;
+        char *combined_text = NULL;
+        size_t text_capacity = 0;
+        size_t text_length = 0;
+
+        cJSON_ArrayForEach(item, output) {
+            cJSON *type = cJSON_GetObjectItem(item, "type");
+            if (!type || !cJSON_IsString(type)) {
+                continue;
+            }
+
+            if (strcmp(type->valuestring, "message") == 0) {
+                cJSON *content = cJSON_GetObjectItem(item, "content");
+                if (!content || !cJSON_IsArray(content)) {
+                    continue;
+                }
+
+                cJSON *content_item = NULL;
+                cJSON_ArrayForEach(content_item, content) {
+                    cJSON *content_type = cJSON_GetObjectItem(content_item, "type");
+                    if (!content_type || !cJSON_IsString(content_type)) {
+                        continue;
+                    }
+
+                    if (strcmp(content_type->valuestring, "output_text") == 0) {
+                        cJSON *text = cJSON_GetObjectItem(content_item, "text");
+                        if (text && cJSON_IsString(text) && text->valuestring) {
+                            size_t text_len = strlen(text->valuestring);
+                            size_t needed = text_length + text_len + 1;
+
+                            if (needed > text_capacity) {
+                                size_t new_cap = text_capacity ? text_capacity * 2 : 1024;
+                                if (new_cap < needed) new_cap = needed;
+                                char *new_buf = realloc(combined_text, new_cap);
+                                if (!new_buf) {
+                                    free(combined_text);
+                                    api_response_free(api_response);
+                                    return NULL;
+                                }
+                                combined_text = new_buf;
+                                text_capacity = new_cap;
+                            }
+
+                            if (text_length == 0) {
+                                memcpy(combined_text, text->valuestring, text_len + 1);
+                            } else {
+                                memcpy(combined_text + text_length, text->valuestring, text_len + 1);
+                            }
+                            text_length += text_len;
+                        }
+                    } else if (strcmp(content_type->valuestring, "function_call") == 0) {
+                        cJSON *id = cJSON_GetObjectItem(content_item, "id");
+                        cJSON *name = cJSON_GetObjectItem(content_item, "name");
+                        cJSON *arguments = cJSON_GetObjectItem(content_item, "arguments");
+
+                        if (!id || !name || !arguments) {
+                            LOG_WARN("Malformed function_call, skipping");
+                            continue;
+                        }
+
+                        api_response->tools[tool_idx].id = strdup(id->valuestring);
+                        api_response->tools[tool_idx].name = strdup(name->valuestring);
+
+                        // Parse arguments JSON string to cJSON object
+                        const char *args_str = arguments->valuestring;
+                        api_response->tools[tool_idx].parameters = cJSON_Parse(args_str ? args_str : "{}");
+                        if (!api_response->tools[tool_idx].parameters) {
+                            LOG_WARN("Failed to parse tool arguments, using empty object");
+                            api_response->tools[tool_idx].parameters = cJSON_CreateObject();
+                        }
+
+                        tool_idx++;
+                    }
+                }
+            }
+        }
+
+        if (combined_text && text_length > 0) {
+            api_response->message.text = combined_text;
+        } else {
+            free(combined_text);
+        }
+    }
+
+    LOG_DEBUG("Parsed Responses API response: text=%s, tools=%d",
+              api_response->message.text ? "yes" : "no",
+              api_response->tool_count);
+
+    return api_response;
 }
 
 /**

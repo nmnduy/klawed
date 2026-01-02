@@ -6669,7 +6669,7 @@ static void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstructi
     }
 
     cJSON *error = cJSON_GetObjectItem(response->raw_response, "error");
-    if (error) {
+    if (error && !cJSON_IsNull(error)) {
         cJSON *error_message = cJSON_GetObjectItem(error, "message");
         const char *error_msg = error_message ? error_message->valuestring : "Unknown error";
         ui_show_error(NULL, ctx->tui_queue, error_msg);
@@ -6958,7 +6958,7 @@ static int submit_input_callback(const char *input, void *user_data) {
         }
 
         cJSON *error = cJSON_GetObjectItem(response->raw_response, "error");
-        if (error) {
+        if (error && !cJSON_IsNull(error)) {
             cJSON *error_message = cJSON_GetObjectItem(error, "message");
             const char *error_msg = error_message ? error_message->valuestring : "Unknown error";
             ui_show_error(tui, queue, error_msg);
@@ -7049,7 +7049,7 @@ static int single_command_mode(ConversationState *state, const char *prompt) {
     }
 
     cJSON *error = cJSON_GetObjectItem(response->raw_response, "error");
-    if (error) {
+    if (error && !cJSON_IsNull(error)) {
         cJSON *error_message = cJSON_GetObjectItem(error, "message");
         const char *error_msg = error_message ? error_message->valuestring : "Unknown error";
         LOG_ERROR("API error: %s", error_msg);
