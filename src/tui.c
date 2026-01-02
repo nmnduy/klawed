@@ -1377,6 +1377,64 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         curs_set(2);  // Show block cursor
     }
 
+    // Draw vertical scroll bar on the right edge when input has scrolled
+    // Only show when there's content above or below the visible area
+    if (tui->mode == TUI_MODE_INSERT || tui->mode == TUI_MODE_COMMAND ||
+        tui->mode == TUI_MODE_SEARCH) {
+        int total_lines = needed_lines;
+        int visible_lines = input->win_height;
+        int indicator_col = input->win_width - 1;
+
+        // Show only when there is more content than fits on screen
+        if (total_lines > visible_lines && visible_lines > 0) {
+            int track_height = visible_lines;
+            int thumb_height = (visible_lines * visible_lines) / total_lines;
+            if (thumb_height < 1) {
+                thumb_height = 1;
+            }
+
+            int max_thumb_top = track_height - thumb_height;
+            int scroll_range = total_lines - visible_lines;
+            int thumb_top = 0;
+            if (scroll_range > 0 && max_thumb_top > 0) {
+                long long num = (long long)input->line_scroll_offset * (long long)max_thumb_top;
+                thumb_top = (int)(num / scroll_range);
+            }
+
+            if (thumb_top < 0) {
+                thumb_top = 0;
+            }
+            if (thumb_top > max_thumb_top) {
+                thumb_top = max_thumb_top;
+            }
+
+            // Set full color for scroll bar (no transparency/dimming)
+            if (has_colors()) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT));
+            }
+
+            // Draw track
+            for (int row = 0; row < track_height; row++) {
+                mvwaddch(win, row, indicator_col, ACS_VLINE);
+            }
+
+            // Draw thumb
+            for (int row = thumb_top; row < thumb_top + thumb_height; row++) {
+                mvwaddch(win, row, indicator_col, ACS_CKBOARD);
+            }
+
+            if (has_colors()) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT));
+            }
+
+            // Restore cursor position after drawing indicators
+            if (cursor_screen_y >= 0 && cursor_screen_y < input->win_height &&
+                cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
+                wmove(win, cursor_screen_y, cursor_screen_x);
+            }
+        }
+    }
+
     wrefresh(win);
 }
 
