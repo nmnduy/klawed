@@ -810,6 +810,10 @@ sanitize-all: check-deps
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/zmq_daemon_all.o $(ZMQ_DAEMON_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/zmq_thread_pool_all.o $(ZMQ_THREAD_POOL_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/retry_logic_all.o $(RETRY_LOGIC_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/file_search_all.o $(FILE_SEARCH_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/theme_explorer_all.o $(THEME_EXPLORER_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/openai_responses_all.o $(OPENAI_RESPONSES_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/dump_utils_all.o $(DUMP_UTILS_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -o $(BUILD_DIR)/klawed-allsan $(SRC) \
 		$(BUILD_DIR)/logger_all.o $(BUILD_DIR)/persistence_all.o $(BUILD_DIR)/migrations_all.o $(BUILD_DIR)/commands_all.o \
 		$(BUILD_DIR)/completion_all.o $(BUILD_DIR)/tui_all.o $(BUILD_DIR)/todo_all.o $(BUILD_DIR)/aws_bedrock_all.o \
@@ -821,6 +825,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/session_all.o $(BUILD_DIR)/sqlite_queue_all.o $(BUILD_DIR)/subagent_manager_all.o \
 		$(BUILD_DIR)/zmq_socket_all.o $(BUILD_DIR)/zmq_client_all.o $(BUILD_DIR)/zmq_message_queue_all.o \
 		$(BUILD_DIR)/zmq_daemon_all.o $(BUILD_DIR)/zmq_thread_pool_all.o $(BUILD_DIR)/retry_logic_all.o \
+		$(BUILD_DIR)/file_search_all.o $(BUILD_DIR)/theme_explorer_all.o $(BUILD_DIR)/openai_responses_all.o $(BUILD_DIR)/dump_utils_all.o \
 		$(LDFLAGS) -fsanitize=address,undefined
 	@echo ""
 	@echo "✓ Build successful with combined sanitizers!"
@@ -874,7 +879,7 @@ memscan: analyze sanitize-all
 	@echo ""
 	@echo "Completed checks:"
 	@echo "  ✓ Static analysis (see $(BUILD_DIR)/analyze.log)"
-	@echo "  ✓ Built with combined sanitizers ($(BUILD_DIR)/claude-allsan)"
+	@echo "  ✓ Built with combined sanitizers ($(BUILD_DIR)/klawed-allsan)"
 	@echo ""
 	@echo "Next steps:"
 	@echo "  1. Review static analysis results: cat $(BUILD_DIR)/analyze.log"
@@ -1138,14 +1143,15 @@ $(TEST_EDIT_TARGET): $(SRC) $(TEST_EDIT_SRC) $(TEST_COMMON_OBJS)
 	@echo ""
 
 # Test target for Edit tool regex enhancements
-$(TEST_EDIT_REGEX_TARGET): $(SRC) $(TEST_EDIT_REGEX_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(SQLITE_QUEUE_TEST_OBJ)
+$(TEST_EDIT_REGEX_TARGET): $(SRC) $(TEST_EDIT_REGEX_SRC) $(TEST_COMMON_OBJS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_test.o $(SRC)
 	@echo "Compiling Edit tool regex enhancement test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_edit_regex.o $(TEST_EDIT_REGEX_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_EDIT_REGEX_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit_regex.o $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(SQLITE_QUEUE_TEST_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_EDIT_REGEX_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit_regex.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Edit tool regex enhancement test build successful!"
 	@echo ""
@@ -1832,7 +1838,7 @@ TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET = $(BUILD_DIR)/test_token_usage_comprehens
 SQLITE_QUEUE_TEST_OBJ = $(BUILD_DIR)/sqlite_queue_test.o
 # Common objects needed by tests that compile claude.c
 
-TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ)
+TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(OPENAI_RESPONSES_OBJ) $(DUMP_UTILS_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ)
 
 test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET)
 	@echo ""
