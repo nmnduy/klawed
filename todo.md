@@ -1,3 +1,5 @@
+- [ ] no highlight in search results when using '/' and '?' in normal mode
+- [ ] cant clear search?
 - [ ] 
 ```sh
 [Read] openai-responses.md:1-400
