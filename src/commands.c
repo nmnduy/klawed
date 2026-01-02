@@ -8,6 +8,7 @@
 #include "fallback_colors.h"
 #include "voice_input.h"
 #include "tui.h"
+#include "theme_explorer.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
 #include <bsd/string.h>
@@ -218,6 +219,80 @@ static int cmd_help(ConversationState *state, const char *args) {
     return 0;
 }
 
+static int cmd_themes(ConversationState *state, const char *args) {
+    (void)args;
+
+    // Theme explorer requires TUI mode
+    if (!tui_mode_enabled || !state || !state->tui) {
+        if (!tui_mode_enabled) {
+            fprintf(stderr, "Theme explorer requires TUI mode. ");
+            fprintf(stderr, "Run klawed without arguments to enter interactive mode.\n");
+            fprintf(stderr, "\nAvailable themes:\n");
+            int count = theme_explorer_get_theme_count();
+            for (int i = 0; i < count; i++) {
+                const char *name = theme_explorer_get_theme_name(i);
+                if (name) {
+                    fprintf(stderr, "  - %s\n", name);
+                }
+            }
+            fprintf(stderr, "\nSet theme with: export KLAWED_THEME=\"<name>\"\n");
+        }
+        return -1;
+    }
+
+    // Suspend the TUI temporarily
+    if (tui_suspend(state->tui) != 0) {
+        LOG_ERROR("[CMD_THEMES] Failed to suspend TUI");
+        return -1;
+    }
+
+    // Initialize theme explorer
+    ThemeExplorerState explorer;
+    if (theme_explorer_init(&explorer) != 0) {
+        LOG_ERROR("[CMD_THEMES] Failed to initialize theme explorer");
+        tui_resume(state->tui);
+        return -1;
+    }
+
+    // Run the explorer
+    ThemeExplorerResult result = theme_explorer_run(&explorer);
+
+    if (result == THEME_EXPLORER_SELECTED) {
+        const char *selected = theme_explorer_get_selected(&explorer);
+        if (selected) {
+            LOG_INFO("[CMD_THEMES] User selected theme: %s", selected);
+
+            // Provide instructions to the user
+            // Note: We can't change the theme at runtime easily since it's
+            // loaded at startup. We'll show instructions instead.
+            char msg[256];
+            snprintf(msg, sizeof(msg),
+                     "Selected theme: %s\n"
+                     "To apply, set: export KLAWED_THEME=\"%s\"\n"
+                     "Then restart klawed.",
+                     selected, selected);
+
+            // Clean up explorer before resuming TUI
+            theme_explorer_cleanup(&explorer);
+            tui_resume(state->tui);
+
+            // Show message in TUI
+            tui_update_status(state->tui, msg);
+            return 0;
+        }
+    }
+
+    // Clean up
+    theme_explorer_cleanup(&explorer);
+    tui_resume(state->tui);
+
+    if (result == THEME_EXPLORER_CANCELLED) {
+        LOG_DEBUG("[CMD_THEMES] Theme selection cancelled");
+    }
+
+    return 0;
+}
+
 // ============================================================================
 // Command Definitions
 // ============================================================================
@@ -276,6 +351,15 @@ static Command voice_cmd = {
     .needs_terminal = 1
 };
 
+static Command themes_cmd = {
+    .name = "themes",
+    .usage = "/themes",
+    .description = "Browse and preview available color themes",
+    .handler = cmd_themes,
+    .completer = commands_tab_completer,
+    .needs_terminal = 1
+};
+
 // ============================================================================
 // API Implementation
 // ============================================================================
@@ -288,6 +372,7 @@ void commands_init(void) {
     commands_register(&add_dir_cmd);
     commands_register(&help_cmd);
     commands_register(&voice_cmd);
+    commands_register(&themes_cmd);
 }
 
 void commands_set_tui_mode(int enabled) {

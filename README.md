@@ -22,7 +22,7 @@ sudo apt-get install libcurl4-openssl-dev libcjson-dev portaudio19-dev build-ess
 
 **Recommended: Use stable release**
 ```bash
-git clone --branch v0.1.33 https://github.com/nmnduy/klawed.git
+git clone --branch v0.3.1 https://github.com/nmnduy/klawed.git
 cd klawed
 make
 ```
@@ -66,16 +66,15 @@ make VOICE=1 install
 ### Quick start
 
 ```sh
-export OPENAI_API_KEY=$DEEPSEEK_API_KEY
-export OPENAI_API_BASE=https://api.deepseek.com
-export OPENAI_MODEL=deepseek-chat
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_API_BASE="https://api.openai.com/v1"
+export OPENAI_MODEL="gpt-4o"
 klawed
 ```
 
 We dont have config switching yet. But you can also just do this in .bashrc
 
 ```bash
-alias deepseek-chat="OPENAI_API_KEY=$DEEPSEEK_API_KEY OPENAI_API_BASE=https://api.deepseek.com OPENAI_MODEL=deepseek-chat klawed"
 alias glm-4.6="OPENAI_API_KEY=$ZAI_API_KEY OPENAI_API_BASE=https://api.z.ai/api/paas/v4/chat/completions OPENAI_MODEL=glm-4.6 klawed"
 alias kimi-k2-thinking="OPENAI_API_KEY=$MOONSHOT_AI_API_KEY OPENAI_API_BASE=https://api.moonshot.ai OPENAI_MODEL=kimi-k2-thinking klawed"
 alias gpt-5="OPENAI_API_BASE=https://api.openai.com OPENAI_MODEL=gpt-5 klawed"

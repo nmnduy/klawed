@@ -1520,6 +1520,12 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->input_history_capacity = 0;
     tui->input_history_index = -1;
     tui->input_saved_before_history = NULL;
+
+    // Initialize file search
+    if (file_search_init(&tui->file_search) != 0) {
+        LOG_WARN("[TUI] Failed to initialize file search");
+        // Non-fatal - continue without file search
+    }
     tui->history_file = history_file_open(NULL);
     if (tui->history_file) {
         int limit = 100;  // default history size in memory
@@ -1582,6 +1588,9 @@ void tui_cleanup(TUIState *tui) {
     tui->search_buffer = NULL;
     free(tui->last_search_pattern);
     tui->last_search_pattern = NULL;
+
+    // Free file search state
+    file_search_free(&tui->file_search);
 
     // Destroy ncurses windows via window manager
     window_manager_destroy(&tui->wm);
@@ -3241,6 +3250,35 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         return 0;
     }
 
+    // Handle file search mode separately
+    if (tui->mode == TUI_MODE_FILE_SEARCH) {
+        int result = file_search_process_key(&tui->file_search, ch);
+        if (result == 1) {
+            // Selection made - insert path into input buffer
+            const char *selected = file_search_get_selected(&tui->file_search);
+            if (selected) {
+                input_insert_string(tui->input_buffer, selected);
+                LOG_DEBUG("[TUI] Inserted file path: %s", selected);
+            }
+            file_search_stop(&tui->file_search);
+            tui->mode = TUI_MODE_INSERT;
+            // Refresh all windows to restore display
+            window_manager_refresh_all(&tui->wm);
+            input_redraw(tui, prompt);
+        } else if (result == -1) {
+            // Cancelled
+            file_search_stop(&tui->file_search);
+            tui->mode = TUI_MODE_INSERT;
+            // Refresh all windows to restore display
+            window_manager_refresh_all(&tui->wm);
+            input_redraw(tui, prompt);
+        } else {
+            // Continue - just render the popup
+            file_search_render(&tui->file_search);
+        }
+        return 0;
+    }
+
     // Detect rapid input (optional paste heuristic; default disabled)
     if (g_enable_paste_heuristic) {
         struct timespec current_time;
@@ -3355,6 +3393,20 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
                     render_status_window(tui);
                 }
             }
+        }
+        return 0;
+    } else if (ch == 6) {  // Ctrl+F: File search (in INSERT mode)
+        // Start file search popup
+        LOG_DEBUG("[TUI] Ctrl+F pressed - starting file search");
+        if (file_search_start(&tui->file_search,
+                              tui->wm.screen_height,
+                              tui->wm.screen_width,
+                              NULL) == 0) {
+            tui->mode = TUI_MODE_FILE_SEARCH;
+            file_search_render(&tui->file_search);
+        } else {
+            LOG_ERROR("[TUI] Failed to start file search");
+            beep();
         }
         return 0;
     } else if (ch == 1) {  // Ctrl+A: beginning of line

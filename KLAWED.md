@@ -41,6 +41,7 @@ Project instructions for Klawed when working with this codebase.
 - **Window management**: `src/window_manager.c`, `src/window_manager.h`, `docs/window-management-refactor.md`
 - **Voice mode**: `src/voice_input.c`, `src/voice_stub.c`, `docs/voice-mode.md`
 - **Chat input**: `src/ncurses_input.c`, `src/ncurses_input.h`
+- **File search (Ctrl+F)**: `src/file_search.c`, `src/file_search.h` (fuzzy file finder popup)
 - **Streaming**: `docs/streaming.md` (real-time response display)
 
 **Network & Communication:**
@@ -183,9 +184,3 @@ export OPENAI_API_KEY="your-api-key"
 - Prompt caching: Enabled
 - Max tokens: 16384 (configurable via `KLAWED_MAX_TOKENS`)
 - Token usage tracking: Enabled (stores in `token_usage` table)
-
-## Write and Edit tool responses
-
-You must create small Write and Edit tool responses. Why? You have a limit of 4096 tokens in your response output. Creating smaller writes will force you to write cleaner code and more modular code. Also, when you create huge payloads that exceed this token limit, the tool responses are partial and will be discarded. That would be a waste of energy for no reason.
-
-**DeepSeek API Note:** When using the DeepSeek API (detected when API base URL contains "deepseek"), the Write, Edit, and MultiEdit tool descriptions will explicitly mention the 4096 token limit to remind you of this constraint.

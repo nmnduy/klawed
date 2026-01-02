@@ -15,6 +15,7 @@
 #include "todo.h"
 #include "window_manager.h"
 #include "history_file.h"
+#include "file_search.h"
 #ifndef TEST_BUILD
 #include "persistence.h"
 #else
@@ -51,10 +52,11 @@ typedef struct {
 
 // TUI Mode (Vim-like)
 typedef enum {
-    TUI_MODE_NORMAL,   // Normal mode (vim-like navigation, default for conversation viewing)
-    TUI_MODE_INSERT,   // Insert mode (text input for sending messages)
-    TUI_MODE_COMMAND,  // Command mode (entered with ':' from normal mode)
-    TUI_MODE_SEARCH    // Search mode (entered with '/' or '?' from normal mode)
+    TUI_MODE_NORMAL,      // Normal mode (vim-like navigation, default for conversation viewing)
+    TUI_MODE_INSERT,      // Insert mode (text input for sending messages)
+    TUI_MODE_COMMAND,     // Command mode (entered with ':' from normal mode)
+    TUI_MODE_SEARCH,      // Search mode (entered with '/' or '?' from normal mode)
+    TUI_MODE_FILE_SEARCH  // File search mode (entered with Ctrl+F from insert mode)
 } TUIMode;
 
 // TUI State
@@ -132,6 +134,9 @@ typedef struct TUIStateStruct {
 
     // Terminal state for suspend/resume
     int terminal_suspended;           // Whether terminal is currently suspended
+
+    // File search state (Ctrl+F)
+    FileSearchState file_search;      // File search popup state
 } TUIState;
 
 // Initialize TUI (must be called before any other TUI functions)

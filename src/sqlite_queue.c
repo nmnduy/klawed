@@ -26,6 +26,7 @@
 #define DEFAULT_MAX_RETRIES 3
 #define DEFAULT_MAX_MESSAGE_SIZE (1024 * 1024)  // 1MB
 #define DEFAULT_MAX_QUEUE_SIZE 1000
+#define DEFAULT_MAX_ITERATIONS 1000    // Increased from 50 for more complex tasks
 
 // SQL statements
 #define CREATE_MESSAGES_TABLE_SQL \
@@ -133,6 +134,10 @@ SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_na
     const char *max_queue_size_env = getenv("KLAWED_SQLITE_MAX_QUEUE_SIZE");
     ctx->max_queue_size = max_queue_size_env ? atoi(max_queue_size_env) : DEFAULT_MAX_QUEUE_SIZE;
 
+    // Initialize iteration limit
+    const char *max_iterations_env = getenv("KLAWED_SQLITE_MAX_ITERATIONS");
+    ctx->max_iterations = max_iterations_env ? atoi(max_iterations_env) : DEFAULT_MAX_ITERATIONS;
+
     // Initialize state tracking
     ctx->last_poll = 0;
     ctx->retry_count = 0;
@@ -145,8 +150,8 @@ SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_na
     ctx->error_time = 0;
 
     LOG_DEBUG("SQLite Queue: Poll interval: %dms, Poll timeout: %dms", ctx->poll_interval, ctx->poll_timeout);
-    LOG_DEBUG("SQLite Queue: Max retries: %d, Max message size: %zu, Max queue size: %d",
-              ctx->max_retries, ctx->max_message_size, ctx->max_queue_size);
+    LOG_DEBUG("SQLite Queue: Max retries: %d, Max message size: %zu, Max queue size: %d, Max iterations: %d",
+              ctx->max_retries, ctx->max_message_size, ctx->max_queue_size, ctx->max_iterations);
 
     // Open database and initialize schema
     if (sqlite_queue_open_db(ctx) != 0) {
@@ -797,9 +802,9 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
 
     // Main interactive loop
     int iteration = 0;
-    const int MAX_ITERATIONS = 50; // Safety limit
+    const int max_iterations = ctx->max_iterations; // Configurable limit (0 = unlimited)
 
-    while (iteration < MAX_ITERATIONS) {
+    while (max_iterations == 0 || iteration < max_iterations) {
         iteration++;
         LOG_DEBUG("SQLite Queue: Interactive loop iteration %d", iteration);
 
@@ -885,8 +890,8 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
         break;
     }
 
-    if (iteration >= MAX_ITERATIONS) {
-        LOG_WARN("SQLite Queue: Reached maximum iterations (%d), stopping interactive loop", MAX_ITERATIONS);
+    if (max_iterations > 0 && iteration >= max_iterations) {
+        LOG_WARN("SQLite Queue: Reached maximum iterations (%d), stopping interactive loop", max_iterations);
         sqlite_queue_send_json(ctx, response_receiver, "ERROR", "Maximum iteration limit reached");
         return -1;
     }

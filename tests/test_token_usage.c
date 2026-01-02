@@ -86,22 +86,6 @@ static void test_token_extraction(const char *provider_name, const char *respons
 int main(void) {
     printf("=== Token Usage Extraction Test ===\n\n");
 
-    // Test DeepSeek response
-    const char *deepseek_response = "{"
-        "\"usage\": {"
-            "\"prompt_tokens\": 37667,"
-            "\"completion_tokens\": 25,"
-            "\"total_tokens\": 37692,"
-            "\"prompt_tokens_details\": {"
-                "\"cached_tokens\": 37632"
-            "},"
-            "\"prompt_cache_hit_tokens\": 37632,"
-            "\"prompt_cache_miss_tokens\": 35"
-        "}"
-    "}";
-
-    test_token_extraction("DeepSeek", deepseek_response, 37667, 25, 37632);
-
     // Test Moonshot response
     const char *moonshot_response = "{"
         "\"usage\": {"
