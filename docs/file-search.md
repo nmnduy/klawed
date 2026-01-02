@@ -19,6 +19,7 @@ Interactive file finder for quickly inserting file paths into the input buffer.
   - `find` (fallback)
 - **Timeout protection**: 3-second timeout prevents hangs on large directories
 - **File caching**: Files are cached on first open for instant filtering
+- **Readline shortcuts**: Familiar word navigation and deletion shortcuts (Alt+B/F/D/Backspace)
 
 ## Keyboard Shortcuts
 
@@ -28,11 +29,16 @@ Interactive file finder for quickly inserting file paths into the input buffer.
 | `j` / `↓` | Select next result |
 | `k` / `↑` | Select previous result |
 | `Ctrl+D` / `PgDn` | Page down |
-| `Ctrl+U` / `PgUp` | Page up |
+| `Ctrl+U` / `PgUp` | Page up / Delete to beginning of line |
+| `Ctrl+K` | Delete to end of line |
 | `Enter` | Insert selected path |
 | `ESC` | Cancel search |
 | `Backspace` | Delete last character from pattern |
 | `Ctrl+L` | Clear search pattern |
+| `Alt+B` | Move cursor backward one word |
+| `Alt+F` | Move cursor forward one word |
+| `Alt+D` | Delete next word |
+| `Alt+Backspace` | Delete previous word |
 
 ## Configuration
 

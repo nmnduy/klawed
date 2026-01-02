@@ -28,7 +28,7 @@ typedef struct _win_st WINDOW;
 
 typedef struct TUIInputBuffer TUIInputBuffer;
 
-// TUI Color pairs
+// TUI Color pairs (public API for conversation entries)
 typedef enum {
     COLOR_PAIR_DEFAULT = 1,    // Foreground color for main text
     COLOR_PAIR_FOREGROUND = 2, // Explicit foreground color
@@ -42,6 +42,19 @@ typedef enum {
     COLOR_PAIR_TODO_IN_PROGRESS = 10, // Yellow for in-progress tasks
     COLOR_PAIR_TODO_PENDING = 11     // Cyan/Blue for pending tasks
 } TUIColorPair;
+
+// Ncurses color pair definitions (internal indices for init_pair/COLOR_PAIR)
+// Used by TUI components including file_search
+#define NCURSES_PAIR_FOREGROUND 1
+#define NCURSES_PAIR_USER 2
+#define NCURSES_PAIR_ASSISTANT 3
+#define NCURSES_PAIR_STATUS 4
+#define NCURSES_PAIR_ERROR 5
+#define NCURSES_PAIR_PROMPT 6
+#define NCURSES_PAIR_TODO_COMPLETED 7
+#define NCURSES_PAIR_TODO_IN_PROGRESS 8
+#define NCURSES_PAIR_TODO_PENDING 9
+#define NCURSES_PAIR_TOOL 10
 
 // Conversation message entry
 typedef struct {

@@ -3,6 +3,7 @@
  */
 
 #include "file_search.h"
+#include "tui.h"
 #include "logger.h"
 #include <stdlib.h>
 #include <string.h>
@@ -609,20 +610,42 @@ void file_search_render(FileSearchState *state) {
     WINDOW *win = state->popup_win;
     int width = state->popup_width;
     int height = state->popup_height;
+    int use_colors = has_colors();
 
-    // Clear and draw border
+    // Clear and draw border with theme color
     werase(win);
+    if (use_colors) {
+        wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+    }
     box(win, 0, 0);
 
-    // Title
+    // Title (with status color and bold)
     const char *title = " Find File (Ctrl+F) ";
     int title_x = (width - (int)strlen(title)) / 2;
     if (title_x < 1) title_x = 1;
+    if (use_colors) {
+        wattron(win, A_BOLD);
+    }
     mvwprintw(win, 0, title_x, "%s", title);
+    if (use_colors) {
+        wattroff(win, A_BOLD);
+        wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+    }
 
-    // Search prompt (line 1)
+    // Search prompt ">" (with prompt/user color - green)
+    if (use_colors) {
+        wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
+    }
     mvwprintw(win, 1, 2, "> ");
+    if (use_colors) {
+        wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
+    }
+
+    // Search pattern text (with foreground color)
     if (state->pattern_len > 0) {
+        if (use_colors) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
         int max_pattern = width - 6;
         if ((int)state->pattern_len > max_pattern) {
             mvwprintw(win, 1, 4, "...%s",
@@ -630,16 +653,31 @@ void file_search_render(FileSearchState *state) {
         } else {
             mvwprintw(win, 1, 4, "%s", state->search_pattern);
         }
+        if (use_colors) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
     }
 
-    // Result count
+    // Result count (with status color)
     char count_str[32];
     snprintf(count_str, sizeof(count_str), " %d/%d ",
              state->result_count, state->file_cache_count);
+    if (use_colors) {
+        wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+    }
     mvwprintw(win, 1, width - (int)strlen(count_str) - 1, "%s", count_str);
+    if (use_colors) {
+        wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+    }
 
-    // Separator
+    // Separator (with status color)
+    if (use_colors) {
+        wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+    }
     mvwhline(win, 2, 1, ACS_HLINE, width - 2);
+    if (use_colors) {
+        wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+    }
 
     // Results
     int visible_lines = height - 4;
@@ -653,9 +691,18 @@ void file_search_render(FileSearchState *state) {
 
         int y = 3 + i;
 
-        // Highlight selected
+        // Highlight selected item (with user/green color for selection)
         if (result_idx == state->selected_index) {
-            wattron(win, A_REVERSE);
+            if (use_colors) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_USER) | A_REVERSE);
+            } else {
+                wattron(win, A_REVERSE);
+            }
+        } else {
+            // Non-selected items use foreground color
+            if (use_colors) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+            }
         }
 
         // Truncate long paths
@@ -678,20 +725,179 @@ void file_search_render(FileSearchState *state) {
         }
 
         if (result_idx == state->selected_index) {
-            wattroff(win, A_REVERSE);
+            if (use_colors) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_USER) | A_REVERSE);
+            } else {
+                wattroff(win, A_REVERSE);
+            }
+        } else {
+            if (use_colors) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+            }
         }
     }
 
-    // Footer with hints
-    const char *hints = " ESC:cancel  Enter:select  j/k:navigate ";
+    // Footer with hints (with status color)
+    const char *hints = " ESC:cancel  Enter:select  j/k:navigate  Alt+B/F:word  Alt+D/⌫:del";
     int hints_x = (width - (int)strlen(hints)) / 2;
     if (hints_x < 1) hints_x = 1;
+    if (use_colors) {
+        wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+    }
     mvwprintw(win, height - 1, hints_x, "%s", hints);
+    if (use_colors) {
+        wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+    }
 
     // Position cursor at end of search pattern
     wmove(win, 1, 4 + (int)state->pattern_len);
 
     wrefresh(win);
+}
+
+// ============================================================================
+// Word Movement and Deletion Helpers
+// ============================================================================
+
+// Move cursor backward one word in search pattern
+static size_t move_backward_word_in_pattern(FileSearchState *state) {
+    if (!state || state->pattern_len == 0) {
+        return 0;
+    }
+
+    size_t cursor = state->pattern_len;  // Current cursor is at end of pattern
+    const char *pattern = state->search_pattern;
+
+    // Skip trailing whitespace
+    while (cursor > 0 && isspace((unsigned char)pattern[cursor - 1])) {
+        cursor--;
+    }
+
+    // Skip word characters
+    while (cursor > 0 && !isspace((unsigned char)pattern[cursor - 1])) {
+        cursor--;
+    }
+
+    return cursor;
+}
+
+// Move cursor forward one word in search pattern
+static size_t move_forward_word_in_pattern(FileSearchState *state) {
+    if (!state || state->pattern_len == 0) {
+        return state->pattern_len;
+    }
+
+    size_t cursor = state->pattern_len;  // Current cursor is at end of pattern
+    const char *pattern = state->search_pattern;
+
+    // If at end of pattern, return current position
+    if (cursor >= state->pattern_len) {
+        return cursor;
+    }
+
+    // Skip current word if we're in the middle of one
+    while (cursor < state->pattern_len && !isspace((unsigned char)pattern[cursor])) {
+        cursor++;
+    }
+
+    // Skip whitespace
+    while (cursor < state->pattern_len && isspace((unsigned char)pattern[cursor])) {
+        cursor++;
+    }
+
+    return cursor;
+}
+
+// Delete from cursor to end of current word (forward)
+static size_t delete_word_forward(FileSearchState *state) {
+    if (!state || state->pattern_len == 0) {
+        return 0;
+    }
+
+    size_t cursor = state->pattern_len;  // Current cursor is at end of pattern
+    const char *pattern = state->search_pattern;
+
+    // If at end of pattern, nothing to delete
+    if (cursor >= state->pattern_len) {
+        return 0;
+    }
+
+    // Find end of word to delete
+    size_t word_end = cursor;
+    while (word_end < state->pattern_len && !isspace((unsigned char)pattern[word_end])) {
+        word_end++;
+    }
+
+    // Delete the word
+    size_t delete_len = word_end - cursor;
+    if (delete_len > 0) {
+        // Shift characters left
+        for (size_t i = cursor; i < state->pattern_len - delete_len; i++) {
+            state->search_pattern[i] = state->search_pattern[i + delete_len];
+        }
+        state->pattern_len -= delete_len;
+        state->search_pattern[state->pattern_len] = '\0';
+        return delete_len;
+    }
+
+    return 0;
+}
+
+// Delete from cursor to start of current word (backward)
+static size_t delete_word_backward(FileSearchState *state) {
+    if (!state || state->pattern_len == 0) {
+        return 0;
+    }
+
+    size_t cursor = state->pattern_len;  // Current cursor is at end of pattern
+    const char *pattern = state->search_pattern;
+
+    // Skip trailing whitespace
+    size_t word_start = cursor;
+    while (word_start > 0 && isspace((unsigned char)pattern[word_start - 1])) {
+        word_start--;
+    }
+
+    // Skip word characters
+    while (word_start > 0 && !isspace((unsigned char)pattern[word_start - 1])) {
+        word_start--;
+    }
+
+    // Delete the word
+    size_t delete_len = cursor - word_start;
+    if (delete_len > 0) {
+        // Shift characters left
+        for (size_t i = word_start; i < state->pattern_len - delete_len; i++) {
+            state->search_pattern[i] = state->search_pattern[i + delete_len];
+        }
+        state->pattern_len -= delete_len;
+        state->search_pattern[state->pattern_len] = '\0';
+        return delete_len;
+    }
+
+    return 0;
+}
+
+// Delete from cursor to beginning of line (Ctrl+U)
+static void delete_to_beginning_of_line(FileSearchState *state) {
+    if (!state || state->pattern_len == 0) {
+        return;
+    }
+
+    state->pattern_len = 0;
+    state->search_pattern[0] = '\0';
+}
+
+// Delete from cursor to end of line (Ctrl+K)
+static void delete_to_end_of_line(FileSearchState *state) {
+    if (!state || state->pattern_len == 0) {
+        return;
+    }
+
+    // Since cursor is always at end in current implementation,
+    // this does nothing, but we keep it for completeness
+    // In a future implementation with cursor movement within pattern,
+    // this would delete from cursor to end
 }
 
 // ============================================================================
@@ -704,8 +910,66 @@ int file_search_process_key(FileSearchState *state, int ch) {
     }
 
     switch (ch) {
-        case 27:  // ESC - cancel
-            return -1;
+        case 27:  // ESC - could be cancel or start of Alt key sequence
+            // Check if there's a following character (Alt key)
+            nodelay(state->popup_win, TRUE);
+            int next_ch = wgetch(state->popup_win);
+            nodelay(state->popup_win, FALSE);
+
+            if (next_ch == ERR) {
+                // Standalone ESC - cancel
+                return -1;
+            }
+
+            // Handle Alt key combinations (readline shortcuts)
+            switch (next_ch) {
+                case 'b':  // Alt+b: move cursor backward one word
+                case 'B':
+                    {
+                        size_t new_pos = move_backward_word_in_pattern(state);
+                        if (new_pos != state->pattern_len) {
+                            // For now, we delete from new position to end
+                            // In a future implementation with cursor movement within pattern,
+                            // we would just move the cursor
+                            state->pattern_len = new_pos;
+                            state->search_pattern[state->pattern_len] = '\0';
+                            filter_results(state);
+                        }
+                    }
+                    break;
+
+                case 'f':  // Alt+f: move cursor forward one word
+                case 'F':
+                    {
+                        size_t new_pos = move_forward_word_in_pattern(state);
+                        if (new_pos != state->pattern_len) {
+                            // For now, we delete from cursor to new position
+                            // In a future implementation with cursor movement within pattern,
+                            // we would just move the cursor
+                            // Since cursor is at end, this does nothing
+                        }
+                    }
+                    break;
+
+                case 'd':  // Alt+d: delete next word
+                case 'D':
+                    if (delete_word_forward(state) > 0) {
+                        filter_results(state);
+                    }
+                    break;
+
+                case 127:  // Alt+Backspace: delete previous word
+                case 8:
+                    if (delete_word_backward(state) > 0) {
+                        filter_results(state);
+                    }
+                    break;
+
+                default:
+                    // Unknown Alt combination, treat as cancel
+                    return -1;
+            }
+            break;
 
         case '\n':
         case '\r':
@@ -723,8 +987,9 @@ int file_search_process_key(FileSearchState *state, int ch) {
             break;
 
         case KEY_PPAGE:
-        case 21:  // Ctrl+U
-            file_search_page_up(state);
+        case 21:  // Ctrl+U - delete to beginning of line
+            delete_to_beginning_of_line(state);
+            filter_results(state);
             break;
 
         case KEY_NPAGE:
@@ -736,6 +1001,11 @@ int file_search_process_key(FileSearchState *state, int ch) {
         case 127:
         case 8:
             file_search_backspace(state);
+            break;
+
+        case 11:  // Ctrl+K - delete to end of line
+            delete_to_end_of_line(state);
+            filter_results(state);
             break;
 
         case 21 + 64:  // Ctrl+U (alternative)

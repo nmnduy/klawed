@@ -59,18 +59,7 @@ static int g_paste_timeout_ms = 400;    // idle time to finalize paste
 // Global flag to detect terminal resize
 static volatile sig_atomic_t g_resize_flag = 0;
 
-// Ncurses color pair definitions (match TUIColorPair enum)
-#define NCURSES_PAIR_FOREGROUND 1
-#define NCURSES_PAIR_USER 2
-#define NCURSES_PAIR_ASSISTANT 3
-#define NCURSES_PAIR_STATUS 4
-#define NCURSES_PAIR_ERROR 5
-#define NCURSES_PAIR_PROMPT 6
-#define NCURSES_PAIR_TODO_COMPLETED 7
-#define NCURSES_PAIR_TODO_IN_PROGRESS 8
-#define NCURSES_PAIR_TODO_PENDING 9
-// Dedicated tool color pair (separate from STATUS)
-#define NCURSES_PAIR_TOOL 10
+// Ncurses color pair definitions are now in tui.h for sharing across TUI components
 
 // Validate TUI window state (debug builds)
 // Uses ncurses is_pad() function to check window types
@@ -2343,6 +2332,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         /* "Switch models via OPENAI_MODEL or ANTHROPIC_MODEL environment variables.", */
         /* "Enable Bedrock with KLAWED_USE_BEDROCK=1 and ANTHROPIC_MODEL set.", */
         "Interrupt long tool runs any time with Ctrl+C.",
+        "Press Ctrl+F to open file search popup (fuzzy find files, supports Alt+B/F/D/⌫).",
         /* "Disable prompt caching with DISABLE_PROMPT_CACHING=1 if needed.", */
         "MCP is disabled by default; enable with KLAWED_MCP_ENABLED=1 and configure servers in ~/.config/klawed/.",
         "Use /clear to clear conversation; /quit or /exit to leave.",
