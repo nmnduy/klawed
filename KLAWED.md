@@ -41,6 +41,7 @@ Project instructions for Klawed when working with this codebase.
 - **Window management**: `src/window_manager.c`, `src/window_manager.h`, `docs/window-management-refactor.md`
 - **Voice mode**: `src/voice_input.c`, `src/voice_stub.c`, `docs/voice-mode.md`
 - **Chat input**: `src/ncurses_input.c`, `src/ncurses_input.h`
+- **File search (Ctrl+F)**: `src/file_search.c`, `src/file_search.h` (fuzzy file finder popup)
 - **Streaming**: `docs/streaming.md` (real-time response display)
 
 **Network & Communication:**
