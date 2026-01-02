@@ -323,7 +323,7 @@ TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
 TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 # Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -1543,6 +1543,7 @@ help:
 	@echo "  make version        - Show current version"
 	@echo "  make show-version   - Show detailed version information"
 	@echo "  make bump-patch     - Increment patch version and update README (e.g., 0.0.2 → 0.0.3)"
+	@echo "  make bump-minor-version - Increment minor version and reset patch (e.g., 0.1.36 → 0.2.0)"
 	@echo "  make update-version VERSION=1.0.0 - Set specific version number"
 	@echo ""
 	@echo "Memory Bug Scanning:"
@@ -1633,6 +1634,44 @@ bump-patch:
 	NEW_PATCH=$$((VERSION_PATCH + 1)); \
 	NEW_VERSION="$$VERSION_MAJOR.$$VERSION_MINOR.$$NEW_PATCH"; \
 	echo "Bumping patch version: $$CURRENT_VERSION → $$NEW_VERSION"; \
+	echo "$$NEW_VERSION" > $(VERSION_FILE); \
+	echo "✓ Version bumped to $$NEW_VERSION"; \
+	echo ""; \
+	echo "Regenerating version.h..."; \
+	rm -f $(VERSION_H); \
+	$(MAKE) $(VERSION_H); \
+	echo ""; \
+	echo "Updating README.md with new version..."; \
+	sed -i.bak 's/git clone --branch v[0-9]*\.[0-9]*\.[0-9]*/git clone --branch v'"$$NEW_VERSION"'/g' README.md; \
+	rm -f README.md.bak; \
+	echo "✓ Updated README.md with v$$NEW_VERSION"; \
+	echo ""; \
+	echo "Staging version files..."; \
+	git add $(VERSION_FILE) $(VERSION_H) README.md; \
+	git commit -m "chore: bump version to $$NEW_VERSION"; \
+	echo ""; \
+	echo "Creating git tag v$$NEW_VERSION..."; \
+	git tag -a "v$$NEW_VERSION" -m "Release v$$NEW_VERSION"; \
+	echo ""; \
+	echo "Pushing to remote..."; \
+	git push origin master; \
+	git push origin "v$$NEW_VERSION"; \
+	echo ""; \
+	echo "✓ Version $$NEW_VERSION released successfully!"; \
+	echo "  - Committed: $(VERSION_FILE) and $(VERSION_H)"; \
+	echo "  - Updated: README.md with new version"; \
+	echo "  - Tagged: v$$NEW_VERSION"; \
+	echo "  - Pushed to remote"
+
+bump-minor-version:
+	@echo "Current version: $(VERSION)"
+	@CURRENT_VERSION="$(VERSION)"; \
+	VERSION_MAJOR=$$(echo "$$CURRENT_VERSION" | sed 's/^\([0-9]*\)\..*/\1/'); \
+	VERSION_MINOR=$$(echo "$$CURRENT_VERSION" | sed 's/^[0-9]*\.\([0-9]*\)\..*/\1/'); \
+	VERSION_PATCH=$$(echo "$$CURRENT_VERSION" | sed 's/^[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/'); \
+	NEW_MINOR=$$((VERSION_MINOR + 1)); \
+	NEW_VERSION="$$VERSION_MAJOR.$$NEW_MINOR.0"; \
+	echo "Bumping minor version: $$CURRENT_VERSION → $$NEW_VERSION"; \
 	echo "$$NEW_VERSION" > $(VERSION_FILE); \
 	echo "✓ Version bumped to $$NEW_VERSION"; \
 	echo ""; \
