@@ -570,93 +570,156 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
             // Responses API format
             LOG_DEBUG("Parsing Responses API format");
             
-            // Find the message item in output array
+            // Find the message item and function_call items in output array
             cJSON *message_item = NULL;
             cJSON *output_item = NULL;
+            cJSON *tool_calls_array = NULL;  // For function_call items
+            
             cJSON_ArrayForEach(output_item, output) {
                 cJSON *type = cJSON_GetObjectItem(output_item, "type");
-                if (type && cJSON_IsString(type) && strcmp(type->valuestring, "message") == 0) {
-                    message_item = output_item;
-                    break;
+                if (type && cJSON_IsString(type)) {
+                    if (strcmp(type->valuestring, "message") == 0) {
+                        message_item = output_item;
+                    } else if (strcmp(type->valuestring, "function_call") == 0) {
+                        // Build tool_calls array from function_call items
+                        if (!tool_calls_array) {
+                            tool_calls_array = cJSON_CreateArray();
+                        }
+                        cJSON *tool_call = cJSON_CreateObject();
+                        
+                        // Extract call_id for id field
+                        cJSON *call_id = cJSON_GetObjectItem(output_item, "call_id");
+                        if (call_id && cJSON_IsString(call_id)) {
+                            cJSON_AddStringToObject(tool_call, "id", call_id->valuestring);
+                        } else {
+                            cJSON_AddStringToObject(tool_call, "id", "");
+                        }
+                        
+                        // Extract name
+                        cJSON *name = cJSON_GetObjectItem(output_item, "name");
+                        if (name && cJSON_IsString(name)) {
+                            cJSON_AddStringToObject(tool_call, "name", name->valuestring);
+                        }
+                        
+                        // Extract arguments
+                        cJSON *arguments = cJSON_GetObjectItem(output_item, "arguments");
+                        if (arguments && cJSON_IsString(arguments)) {
+                            cJSON_AddStringToObject(tool_call, "arguments", arguments->valuestring);
+                        }
+                        
+                        cJSON_AddItemToArray(tool_calls_array, tool_call);
+                    }
                 }
             }
             
-            if (!message_item) {
-                result.error_message = strdup("Invalid response format: no message in output array");
-                result.is_retryable = 0;
-                api_response_free(api_response);
-                free(result.headers_json);
-                result.headers_json = NULL;
-                return result;
-            }
-
-            // Get content array from message item
-            cJSON *content_array = cJSON_GetObjectItem(message_item, "content");
-            if (!content_array || !cJSON_IsArray(content_array)) {
-                result.error_message = strdup("Invalid response format: no content in message");
-                result.is_retryable = 0;
-                api_response_free(api_response);
-                free(result.headers_json);
-                result.headers_json = NULL;
-                return result;
-            }
-
             // Build a synthetic message object compatible with Chat Completions format
             message = cJSON_CreateObject();
             message_is_synthetic = 1;
             cJSON_AddStringToObject(message, "role", "assistant");
 
-            // Extract text from content array items with type "output_text"
-            char *text_content = NULL;
-            size_t text_capacity = 0;
-            size_t text_length = 0;
+            // Handle message item for text content (if present)
+            if (message_item) {
+                // Get content array from message item
+                cJSON *content_array = cJSON_GetObjectItem(message_item, "content");
+                if (content_array && cJSON_IsArray(content_array)) {
+                    // Extract text from content array items with type "output_text"
+                    char *text_content = NULL;
+                    size_t text_capacity = 0;
+                    size_t text_length = 0;
 
-            cJSON *content_item = NULL;
-            cJSON_ArrayForEach(content_item, content_array) {
-                cJSON *type = cJSON_GetObjectItem(content_item, "type");
-                if (type && cJSON_IsString(type) && strcmp(type->valuestring, "output_text") == 0) {
-                    cJSON *text = cJSON_GetObjectItem(content_item, "text");
-                    if (text && cJSON_IsString(text) && text->valuestring) {
-                        size_t text_len = strlen(text->valuestring);
-                        size_t needed = text_length + text_len + 1;
-                        
-                        if (needed > text_capacity) {
-                            size_t new_cap = text_capacity ? text_capacity * 2 : 1024;
-                            if (new_cap < needed) new_cap = needed;
-                            char *new_buf = realloc(text_content, new_cap);
-                            if (!new_buf) {
-                                free(text_content);
-                                cJSON_Delete(message);
-                                result.error_message = strdup("Failed to allocate text buffer");
-                                result.is_retryable = 0;
-                                api_response_free(api_response);
-                                free(result.headers_json);
-                                result.headers_json = NULL;
-                                return result;
+                    cJSON *content_item = NULL;
+                    cJSON_ArrayForEach(content_item, content_array) {
+                        cJSON *type = cJSON_GetObjectItem(content_item, "type");
+                        if (type && cJSON_IsString(type) && strcmp(type->valuestring, "output_text") == 0) {
+                            cJSON *text = cJSON_GetObjectItem(content_item, "text");
+                            if (text && cJSON_IsString(text) && text->valuestring) {
+                                size_t text_len = strlen(text->valuestring);
+                                size_t needed = text_length + text_len + 1;
+                                
+                                if (needed > text_capacity) {
+                                    size_t new_cap = text_capacity ? text_capacity * 2 : 1024;
+                                    if (new_cap < needed) new_cap = needed;
+                                    char *new_buf = realloc(text_content, new_cap);
+                                    if (!new_buf) {
+                                        free(text_content);
+                                        cJSON_Delete(message);
+                                        if (tool_calls_array) cJSON_Delete(tool_calls_array);
+                                        result.error_message = strdup("Failed to allocate text buffer");
+                                        result.is_retryable = 0;
+                                        api_response_free(api_response);
+                                        free(result.headers_json);
+                                        result.headers_json = NULL;
+                                        return result;
+                                    }
+                                    text_content = new_buf;
+                                    text_capacity = new_cap;
+                                }
+                                
+                                if (text_length == 0) {
+                                    memcpy(text_content, text->valuestring, text_len + 1);
+                                } else {
+                                    memcpy(text_content + text_length, text->valuestring, text_len + 1);
+                                }
+                                text_length += text_len;
                             }
-                            text_content = new_buf;
-                            text_capacity = new_cap;
                         }
-                        
-                        if (text_length == 0) {
-                            memcpy(text_content, text->valuestring, text_len + 1);
-                        } else {
-                            memcpy(text_content + text_length, text->valuestring, text_len + 1);
-                        }
-                        text_length += text_len;
                     }
-                }
-            }
 
-            if (text_content) {
-                cJSON_AddStringToObject(message, "content", text_content);
-                free(text_content);
+                    if (text_content) {
+                        cJSON_AddStringToObject(message, "content", text_content);
+                        free(text_content);
+                    } else {
+                        cJSON_AddNullToObject(message, "content");
+                    }
+                } else {
+                    cJSON_AddNullToObject(message, "content");
+                }
             } else {
+                // No message item, content is null
                 cJSON_AddNullToObject(message, "content");
             }
 
-            // Note: Responses API tool calls would need additional parsing here if supported
-            // For now, we assume text-only responses from Responses API
+            // Add tool_calls to message if we have function_call items
+            if (tool_calls_array && cJSON_GetArraySize(tool_calls_array) > 0) {
+                // Convert function_call format to standard tool_calls format
+                cJSON *tool_calls = cJSON_CreateArray();
+                int func_count = cJSON_GetArraySize(tool_calls_array);
+                
+                for (int i = 0; i < func_count; i++) {
+                    cJSON *func_call = cJSON_GetArrayItem(tool_calls_array, i);
+                    cJSON *tool_call = cJSON_CreateObject();
+                    
+                    // Copy id
+                    cJSON *id = cJSON_GetObjectItem(func_call, "id");
+                    if (id && cJSON_IsString(id)) {
+                        cJSON_AddStringToObject(tool_call, "id", id->valuestring);
+                    } else {
+                        cJSON_AddStringToObject(tool_call, "id", "");
+                    }
+                    
+                    cJSON_AddStringToObject(tool_call, "type", "function");
+                    
+                    // Create function object
+                    cJSON *function = cJSON_CreateObject();
+                    cJSON *name = cJSON_GetObjectItem(func_call, "name");
+                    if (name && cJSON_IsString(name)) {
+                        cJSON_AddStringToObject(function, "name", name->valuestring);
+                    }
+                    cJSON *arguments = cJSON_GetObjectItem(func_call, "arguments");
+                    if (arguments && cJSON_IsString(arguments)) {
+                        cJSON_AddStringToObject(function, "arguments", arguments->valuestring);
+                    }
+                    cJSON_AddItemToObject(tool_call, "function", function);
+                    
+                    cJSON_AddItemToArray(tool_calls, tool_call);
+                }
+                
+                cJSON_AddItemToObject(message, "tool_calls", tool_calls);
+                cJSON_Delete(tool_calls_array);
+                tool_calls_array = NULL;
+            } else {
+                if (tool_calls_array) cJSON_Delete(tool_calls_array);
+            }
         } else {
             // Chat Completions API format
             LOG_DEBUG("Parsing Chat Completions API format");

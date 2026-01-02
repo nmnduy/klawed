@@ -178,6 +178,7 @@ TEST_TIMING_TARGET = $(BUILD_DIR)/test_tool_timing
 TEST_PASTE_TARGET = $(BUILD_DIR)/test_paste
 TEST_RETRY_JITTER_TARGET = $(BUILD_DIR)/test_retry_jitter
 TEST_OPENAI_FORMAT_TARGET = $(BUILD_DIR)/test_openai_format
+TEST_OPENAI_RESPONSES_TARGET = $(BUILD_DIR)/test_openai_responses
 TEST_DUMP_UTILS_TARGET = $(BUILD_DIR)/test_dump_utils
 TEST_WRITE_DIFF_INTEGRATION_TARGET = $(BUILD_DIR)/test_write_diff_integration
 TEST_ROTATION_TARGET = $(BUILD_DIR)/test_rotation
@@ -278,6 +279,7 @@ TEST_TODO_WRITE_SRC = tests/test_todo_write.c
 TEST_PASTE_SRC = tests/test_paste.c
 TEST_RETRY_JITTER_SRC = tests/test_retry_jitter.c
 TEST_OPENAI_FORMAT_SRC = tests/test_openai_format.c
+TEST_OPENAI_RESPONSES_SRC = tests/test_openai_responses.c
 TEST_WRITE_DIFF_INTEGRATION_SRC = tests/test_write_diff_integration.c
 TEST_ROTATION_SRC = tests/test_rotation.c
 TEST_FUNCTION_CONTEXT_SRC = tests/test_function_context.c
@@ -319,7 +321,7 @@ TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
 TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 # Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-openai-responses test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -332,7 +334,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -399,6 +401,12 @@ test-openai-format: check-deps $(TEST_OPENAI_FORMAT_TARGET)
 	@echo "Running OpenAI message format validation tests..."
 	@echo ""
 	@./$(TEST_OPENAI_FORMAT_TARGET)
+
+test-openai-responses: check-deps $(TEST_OPENAI_RESPONSES_TARGET)
+	@echo ""
+	@echo "Running OpenAI Responses API parsing tests..."
+	@echo ""
+	@./$(TEST_OPENAI_RESPONSES_TARGET)
 
 test-dump-utils: check-deps $(TEST_DUMP_UTILS_TARGET)
 	@echo ""
@@ -1320,6 +1328,15 @@ $(TEST_OPENAI_FORMAT_TARGET): $(TEST_OPENAI_FORMAT_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_OPENAI_FORMAT_TARGET) $(TEST_OPENAI_FORMAT_SRC) $(LDFLAGS)
 	@echo ""
 	@echo "✓ OpenAI format test build successful!"
+	@echo ""
+
+# Test target for OpenAI Responses API parsing
+$(TEST_OPENAI_RESPONSES_TARGET): $(TEST_OPENAI_RESPONSES_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling OpenAI Responses API parsing test suite..."
+	@$(CC) $(CFLAGS) -o $(TEST_OPENAI_RESPONSES_TARGET) $(TEST_OPENAI_RESPONSES_SRC) $(LDFLAGS)
+	@echo ""
+	@echo "✓ OpenAI Responses API test build successful!"
 	@echo ""
 
 # Test target for dump utils (conversation dump parsing)

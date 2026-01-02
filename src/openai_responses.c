@@ -96,20 +96,20 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
                 }
                 else if (c->type == INTERNAL_TOOL_RESPONSE) {
                     // Tool response - wrap in message with role "user"
+                    // Use input_text type for tool output (function_call_output is not supported)
                     cJSON *msg_item = cJSON_CreateObject();
                     cJSON_AddStringToObject(msg_item, "type", "message");
                     cJSON_AddStringToObject(msg_item, "role", "user");
-                    
+
                     cJSON *content_array = cJSON_CreateArray();
                     cJSON *tool_result = cJSON_CreateObject();
-                    cJSON_AddStringToObject(tool_result, "type", "function_call_output");
-                    cJSON_AddStringToObject(tool_result, "call_id", c->tool_id);
-                    
+                    cJSON_AddStringToObject(tool_result, "type", "input_text");
+
                     // Convert output to string
                     char *output_str = cJSON_PrintUnformatted(c->tool_output);
-                    cJSON_AddStringToObject(tool_result, "output", output_str ? output_str : "{}");
+                    cJSON_AddStringToObject(tool_result, "text", output_str ? output_str : "{}");
                     free(output_str);
-                    
+
                     cJSON_AddItemToArray(content_array, tool_result);
                     cJSON_AddItemToObject(msg_item, "content", content_array);
                     cJSON_AddItemToArray(input_array, msg_item);
