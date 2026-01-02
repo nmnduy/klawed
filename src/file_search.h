@@ -23,6 +23,7 @@
 // Search result entry
 typedef struct {
     char *path;          // File path (relative to search directory)
+    int score;           // Fuzzy match score (higher = better)
 } FileSearchResult;
 
 // File search state

@@ -7,6 +7,7 @@
 #include "logger.h"
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <bsd/string.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -15,10 +16,19 @@
 #include <signal.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 #define INITIAL_PATTERN_CAPACITY 256
 #define INITIAL_RESULTS_CAPACITY 100
 #define INITIAL_CACHE_CAPACITY 1000
+#define FUZZY_MAX_PATTERN 256
+#define FUZZY_ADJACENT_BONUS 5
+#define FUZZY_SEPARATOR_BONUS 10
+#define FUZZY_CASE_MISMATCH_PENALTY 1
 
 // ============================================================================
 // Tool Detection
@@ -259,7 +269,7 @@ static void free_results(FileSearchState *state) {
     state->scroll_offset = 0;
 }
 
-static int add_result(FileSearchState *state, const char *path) {
+static int add_result(FileSearchState *state, const char *path, int score) {
     if (state->result_count >= state->result_capacity) {
         int new_capacity = state->result_capacity * 2;
         if (new_capacity == 0) new_capacity = INITIAL_RESULTS_CAPACITY;
@@ -277,40 +287,92 @@ static int add_result(FileSearchState *state, const char *path) {
     if (!state->results[state->result_count].path) {
         return -1;
     }
+    state->results[state->result_count].score = score;
     state->result_count++;
     return 0;
 }
 
-// Case-insensitive substring match
-static int fuzzy_match(const char *haystack, const char *needle) {
+// Lightweight fuzzy match scored search (case-insensitive, subsequence-based)
+// Inspired by fzf-like scoring but simplified for C and no dynamic allocations.
+// Returns >0 score for match, 0 for no match. Higher is better.
+static int fuzzy_score(const char *haystack, const char *needle) {
     if (!needle || !needle[0]) {
-        return 1;  // Empty pattern matches everything
+        return 1;  // Empty pattern matches everything with minimal score
     }
 
-    // Simple case-insensitive substring search
-    const char *h = haystack;
-    const char *n = needle;
-
-    while (*h) {
-        const char *h_ptr = h;
-        const char *n_ptr = n;
-
-        while (*h_ptr && *n_ptr &&
-               tolower((unsigned char)*h_ptr) == tolower((unsigned char)*n_ptr)) {
-            h_ptr++;
-            n_ptr++;
-        }
-
-        if (!*n_ptr) {
-            return 1;  // Found match
-        }
-        h++;
+    size_t nlen = strnlen(needle, FUZZY_MAX_PATTERN);
+    if (nlen == 0) {
+        return 1;
     }
 
-    return 0;
+    int score = 0;
+    size_t hlen = strnlen(haystack, PATH_MAX);
+    if (hlen == 0) {
+        return 0;
+    }
+    size_t hidx = 0;
+    size_t nidx = 0;
+    int consecutive = 0;
+
+    while (hidx < hlen && nidx < nlen) {
+        char hc = haystack[hidx];
+        char nc = needle[nidx];
+        int match = tolower((unsigned char)hc) == tolower((unsigned char)nc);
+
+        if (match) {
+            // Base score for a matched character
+            score += 10;
+
+            // Bonus for consecutive matches (prefers substrings)
+            if (consecutive) {
+                score += FUZZY_ADJACENT_BONUS;
+            }
+
+            // Bonus for matches after a separator or path boundary
+            if (hidx == 0 || haystack[hidx - 1] == '/' || haystack[hidx - 1] == '_' || haystack[hidx - 1] == '-') {
+                score += FUZZY_SEPARATOR_BONUS;
+            }
+
+            // Penalty for case mismatch
+            if (hc != nc) {
+                score -= FUZZY_CASE_MISMATCH_PENALTY;
+            }
+
+            consecutive = 1;
+            nidx++;
+        } else {
+            consecutive = 0;
+        }
+
+        hidx++;
+    }
+
+    if (nidx < nlen) {
+        // Not all pattern consumed -> no match
+        return 0;
+    }
+
+    // Slight preference for shorter paths when scores tie
+    score -= (int)hlen / 100;
+
+    if (score < 1) {
+        score = 1;
+    }
+
+    return score;
 }
 
 // Filter cache based on pattern
+static int compare_results(const void *a, const void *b) {
+    const FileSearchResult *ra = (const FileSearchResult *)a;
+    const FileSearchResult *rb = (const FileSearchResult *)b;
+
+    if (ra->score != rb->score) {
+        return rb->score - ra->score;  // higher score first
+    }
+    return strcasecmp(ra->path, rb->path);
+}
+
 static int filter_results(FileSearchState *state) {
     free_results(state);
 
@@ -321,9 +383,14 @@ static int filter_results(FileSearchState *state) {
     const char *pattern = state->search_pattern;
 
     for (int i = 0; i < state->file_cache_count && state->result_count < FILE_SEARCH_MAX_RESULTS; i++) {
-        if (fuzzy_match(state->file_cache[i], pattern)) {
-            add_result(state, state->file_cache[i]);
+        int score = fuzzy_score(state->file_cache[i], pattern);
+        if (score > 0) {
+            add_result(state, state->file_cache[i], score);
         }
+    }
+
+    if (state->result_count > 1) {
+        qsort(state->results, (size_t)state->result_count, sizeof(FileSearchResult), compare_results);
     }
 
     // Reset selection
@@ -344,7 +411,7 @@ int file_search_init(FileSearchState *state) {
 
     memset(state, 0, sizeof(FileSearchState));
 
-    state->search_pattern = malloc(INITIAL_PATTERN_CAPACITY);
+    state->search_pattern = calloc(1, INITIAL_PATTERN_CAPACITY);
     if (!state->search_pattern) {
         return -1;
     }
@@ -457,6 +524,7 @@ int file_search_update_pattern(FileSearchState *state, const char *pattern) {
             return -1;
         }
         state->search_pattern = new_buf;
+        state->search_pattern[new_cap - 1] = '\0';
         state->pattern_capacity = new_cap;
     }
 
@@ -478,6 +546,7 @@ int file_search_add_char(FileSearchState *state, char c) {
             return -1;
         }
         state->search_pattern = new_buf;
+        state->search_pattern[new_cap - 1] = '\0';
         state->pattern_capacity = new_cap;
     }
 
