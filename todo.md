@@ -444,3 +444,5 @@ zsh: abort      OPENAI_API_KEY=sk-3ec6a2b143b7498590dc72ccf074a8fe OPENAI_API_BA
 - [ ] [2025-12-18 11:57:36] [sess_1766033195_15b39516] WARN  [openai_messages.c:370] build_openai_request: Request may be invalid: 60 tool_calls but only 0 tool_results
 
 - [x] log WARN when finish_reason is 'length' (implemented in klawed.c:6170 and klawed.c:7068)
+
+- [ ] add `make bump-minor-version`
