@@ -181,14 +181,7 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
     }
 
     cJSON_AddStringToObject(request, "model", state->model);
-
-    // Check if API URL contains "deepseek" - use max_tokens instead of max_completion_tokens
-    if (is_deepseek_api_url(state->api_url)) {
-        cJSON_AddNumberToObject(request, "max_tokens", state->max_tokens);
-        LOG_DEBUG("Using max_tokens (not max_completion_tokens) for DeepSeek API");
-    } else {
-        cJSON_AddNumberToObject(request, "max_completion_tokens", state->max_tokens);
-    }
+    cJSON_AddNumberToObject(request, "max_completion_tokens", state->max_tokens);
 
     cJSON *messages_array = cJSON_CreateArray();
     if (!messages_array) {

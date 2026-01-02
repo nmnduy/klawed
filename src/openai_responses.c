@@ -322,23 +322,8 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
                                          strcasecmp(is_subagent_env, "true") == 0 ||
                                          strcasecmp(is_subagent_env, "yes") == 0);
 
-    // Check if API URL contains "deepseek" (case-insensitive)
-    int is_deepseek_api = 0;
-    if (state && state->api_url) {
-        char *url_lower = strdup(state->api_url);
-        if (url_lower) {
-            for (char *p = url_lower; *p; p++) {
-                *p = (char)tolower((unsigned char)*p);
-            }
-            if (strstr(url_lower, "deepseek") != NULL) {
-                is_deepseek_api = 1;
-            }
-            free(url_lower);
-        }
-    }
-
-    LOG_DEBUG("[TOOLS] get_tool_definitions_for_responses_api: plan_mode=%d, is_subagent=%d, is_deepseek_api=%d",
-              plan_mode, is_subagent, is_deepseek_api);
+    LOG_DEBUG("[TOOLS] get_tool_definitions_for_responses_api: plan_mode=%d, is_subagent=%d",
+              plan_mode, is_subagent);
 
     // Helper macro to create a tool definition
     // Responses API expects tools with name/description/parameters at top level

@@ -4220,22 +4220,7 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
                                          strcasecmp(is_subagent_env, "true") == 0 ||
                                          strcasecmp(is_subagent_env, "yes") == 0);
 
-    // Check if API URL contains "deepseek" (case-insensitive)
-    int is_deepseek_api = 0;
-    if (state && state->api_url) {
-        char *url_lower = strdup(state->api_url);
-        if (url_lower) {
-            for (char *p = url_lower; *p; p++) {
-                *p = (char)tolower((unsigned char)*p);
-            }
-            if (strstr(url_lower, "deepseek") != NULL) {
-                is_deepseek_api = 1;
-            }
-            free(url_lower);
-        }
-    }
-
-    LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d, is_subagent=%d, is_deepseek_api=%d", plan_mode, is_subagent, is_deepseek_api);
+    LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d, is_subagent=%d", plan_mode, is_subagent);
     // Sleep tool
     cJSON *sleep_tool = cJSON_CreateObject();
     cJSON_AddStringToObject(sleep_tool, "type", "function");
@@ -4803,14 +4788,7 @@ char* build_request_json_from_state(ConversationState *state) {
     }
 
     cJSON_AddStringToObject(request, "model", state->model);
-
-    // Check if API URL contains "deepseek" - use max_tokens instead of max_completion_tokens
-    if (is_deepseek_api_url(state->api_url)) {
-        cJSON_AddNumberToObject(request, "max_tokens", state->max_tokens);
-        LOG_DEBUG("Using max_tokens (not max_completion_tokens) for DeepSeek API");
-    } else {
-        cJSON_AddNumberToObject(request, "max_completion_tokens", state->max_tokens);
-    }
+    cJSON_AddNumberToObject(request, "max_completion_tokens", state->max_tokens);
 
     // Add messages in OpenAI format
     cJSON *messages_array = cJSON_CreateArray();
@@ -5549,21 +5527,6 @@ char* build_system_prompt(ConversationState *state) {
     // Add space for additional directories
     for (int i = 0; i < state->additional_dirs_count; i++) {
         prompt_size += strlen(state->additional_dirs[i]) + 4; // path + ", " separator
-    }
-
-    // Add space for DeepSeek instruction if needed (case-insensitive check)
-    if (state->api_url) {
-        // Case-insensitive check for "deepseek" in API URL
-        char *url_lower = strdup(state->api_url);
-        if (url_lower) {
-            for (char *p = url_lower; *p; p++) {
-                *p = (char)tolower((unsigned char)*p);
-            }
-            if (strstr(url_lower, "deepseek") != NULL) {
-                prompt_size += 512; // Extra space for DeepSeek instruction
-            }
-            free(url_lower);
-        }
     }
 
     char *prompt = malloc(prompt_size);

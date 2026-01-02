@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <math.h>
 #include <cjson/cJSON.h>
 #include <assert.h>
 
@@ -98,7 +99,8 @@ static void assert_json_number_equals(const char *test_name, cJSON *json, const 
         printf("%s  ✗ %s: key '%s' not found or not a number%s\n", COLOR_RED, test_name, key, COLOR_RESET);
         exit(1);
     }
-    if (item->valuedouble != expected) {
+    // Use tolerance for floating point comparison
+    if (fabs(item->valuedouble - expected) > 0.0001) {
         printf("%s  ✗ %s: expected %.0f, got %.0f%s\n", COLOR_RED, test_name, expected, item->valuedouble, COLOR_RESET);
         exit(1);
     }
