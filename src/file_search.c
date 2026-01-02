@@ -295,7 +295,11 @@ static int add_result(FileSearchState *state, const char *path, int score) {
 // Lightweight fuzzy match scored search (case-insensitive, subsequence-based)
 // Inspired by fzf-like scoring but simplified for C and no dynamic allocations.
 // Returns >0 score for match, 0 for no match. Higher is better.
+#ifdef TEST_BUILD
+int fuzzy_score(const char *haystack, const char *needle) {
+#else
 static int fuzzy_score(const char *haystack, const char *needle) {
+#endif
     if (!needle || !needle[0]) {
         return 1;  // Empty pattern matches everything with minimal score
     }
@@ -363,7 +367,11 @@ static int fuzzy_score(const char *haystack, const char *needle) {
 }
 
 // Filter cache based on pattern
+#ifdef TEST_BUILD
+int compare_results(const void *a, const void *b) {
+#else
 static int compare_results(const void *a, const void *b) {
+#endif
     const FileSearchResult *ra = (const FileSearchResult *)a;
     const FileSearchResult *rb = (const FileSearchResult *)b;
 

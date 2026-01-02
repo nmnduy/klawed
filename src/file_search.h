@@ -145,4 +145,10 @@ void file_search_render(FileSearchState *state);
 //  -1: cancelled (ESC pressed)
 int file_search_process_key(FileSearchState *state, int ch);
 
+#ifdef TEST_BUILD
+// Internal functions exposed for testing
+int fuzzy_score(const char *haystack, const char *needle);
+int compare_results(const void *a, const void *b);
+#endif
+
 #endif // FILE_SEARCH_H

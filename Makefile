@@ -323,9 +323,11 @@ TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
 TEST_ZMQ_SOCKET_SRC = tests/test_zmq_socket.c
 TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
 TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
+TEST_FILE_SEARCH_SRC = tests/test_file_search.c
+TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 # Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-openai-responses test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-openai-responses test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -338,7 +340,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket test-file-search
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -562,6 +564,12 @@ test-sqlite-queue: check-deps $(TEST_SQLITE_QUEUE_TARGET)
 	@echo "Running SQLite Queue tests..."
 	@echo ""
 	@./$(TEST_SQLITE_QUEUE_TARGET)
+
+test-file-search: check-deps $(TEST_FILE_SEARCH_TARGET)
+	@echo ""
+	@echo "Running File Search fuzzy matching tests..."
+	@echo ""
+	@./$(TEST_FILE_SEARCH_TARGET)
 
 # Socket test removed - will be reimplemented with ZMQ
 
@@ -1885,6 +1893,18 @@ $(TEST_ZMQ_SOCKET_TARGET): $(SRC) $(TEST_ZMQ_SOCKET_SRC) $(TEST_COMMON_OBJS)
 
 $(TEST_SQLITE_QUEUE_TARGET): $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_SQLITE_QUEUE_TARGET) $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
+
+# Test target for File Search fuzzy matching
+$(TEST_FILE_SEARCH_TARGET): $(FILE_SEARCH_SRC) $(TEST_FILE_SEARCH_SRC) $(LOGGER_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling File Search implementation for tests (TEST_BUILD)..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/file_search_test.o $(FILE_SEARCH_SRC)
+	@echo "Compiling File Search test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_file_search.o $(TEST_FILE_SEARCH_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_FILE_SEARCH_TARGET) $(BUILD_DIR)/file_search_test.o $(BUILD_DIR)/test_file_search.o $(LOGGER_OBJ) $(LDFLAGS)
+	@echo ""
+	@echo "✓ File Search test build successful!"
 
 # Socket test build rule removed - will be reimplemented with ZMQ
 
