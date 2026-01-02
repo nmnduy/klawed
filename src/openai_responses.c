@@ -487,8 +487,7 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
 
         cJSON *write_tool;
         CREATE_TOOL(write_tool, "Write",
-                    "Writes content to a file. IMPORTANT: Some models cannot produce outputs larger "
-                    "than 4096 tokens. To avoid hitting this limit, make smaller changes and call "
+                    "Writes content to a file. To avoid hitting token limits, make smaller changes and call "
                     "the Write tool multiple times with focused content instead of writing entire "
                     "files at once. Break large operations into logical chunks (e.g., write a single "
                     "function at a time, one section at a time).",
@@ -520,8 +519,7 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
         cJSON *edit_tool;
         CREATE_TOOL(edit_tool, "Edit",
                     "Performs simple string replacement in files. Replaces the first occurrence of "
-                    "old_string with new_string. IMPORTANT: Some models cannot produce outputs larger "
-                    "than 4096 tokens. To avoid hitting this limit, make smaller changes and call "
+                    "old_string with new_string. To avoid hitting token limits, make smaller changes and call "
                     "the Edit tool multiple times with focused edits instead of making massive "
                     "changes in a single call. Break large operations into logical chunks (e.g., "
                     "edit one function at a time, one section at a time).",
