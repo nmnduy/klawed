@@ -29,6 +29,7 @@
 #include <time.h>
 #include <strings.h>
 #include <limits.h>
+#include <stdio.h>
 #include <bsd/string.h>
 #include "message_queue.h"
 #include "history_file.h"
@@ -2378,6 +2379,8 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         /* "Type /help for commands (e.g., /clear, /exit, /add-dir).", */
         "Press Shift+Tab to toggle Plan mode (read-only tools only).",
         "Press Ctrl+C to cancel a running API/tool action.",
+        "In Normal mode, :!cmd runs a shell command in the current dir (like Vim).",
+        "In Normal mode, :re !cmd puts the command output into the input box.",
         /* "Use /add-dir to attach a directory as context.", */
         "Press Ctrl+D to exit quickly.",
         /* "Use /voice to record and transcribe audio (requires PortAudio).", */
@@ -2489,6 +2492,79 @@ static int handle_command_mode_input(TUIState *tui, int ch, const char *prompt) 
         } else if (strcmp(cmd, "wq") == 0) {
             // Write and quit
             return -1;
+        } else if (cmd[0] == '!') {
+            // Vim-style shell escape: :!<cmd>
+            const char *shell_cmd = cmd + 1;
+            // Run in foreground, like Vim: suspend TUI, run system(), resume
+            if (tui_suspend(tui) != 0) {
+                LOG_ERROR("[TUI] Failed to suspend TUI for shell command");
+            } else {
+                // system() runs in current working directory and inherits env
+                // User can Ctrl+C to stop (same terminal)
+                int rc = system(shell_cmd);
+                (void)rc;  // We intentionally do not display output or status
+                if (tui_resume(tui) != 0) {
+                    LOG_ERROR("[TUI] Failed to resume TUI after shell command");
+                }
+            }
+            // Stay in Normal mode after command (like Vim)
+            tui->mode = TUI_MODE_NORMAL;
+            tui->command_buffer_len = 0;
+            tui->command_buffer[0] = '\0';
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            return 0;
+        } else if (strncmp(cmd, "re !", 4) == 0) {
+            // Optional: :re !<cmd> to replace input buffer with command output
+            const char *shell_cmd = cmd + 4;
+            if (shell_cmd[0] != '\0') {
+                FILE *fp = popen(shell_cmd, "r");
+                if (fp) {
+                    char *line = NULL;
+                    size_t cap = 0;
+                    ssize_t nread;
+                    // Clear current input buffer
+                    tui->input_buffer->length = 0;
+                    tui->input_buffer->cursor = 0;
+                    tui->input_buffer->buffer[0] = '\0';
+                    while ((nread = getline(&line, &cap, fp)) != -1) {
+                        // Ensure capacity
+                        if ((size_t)(tui->input_buffer->length + nread + 1) >
+                            tui->input_buffer->capacity) {
+                            size_t new_capacity = (size_t)tui->input_buffer->length + (size_t)nread + 1024;
+                            void *buf_ptr = (void *)tui->input_buffer->buffer;
+                            if (buffer_reserve(&buf_ptr, &tui->input_buffer->capacity, new_capacity) != 0) {
+                                LOG_ERROR("[TUI] Failed to expand input buffer for :re ! output");
+                                break;
+                            }
+                            tui->input_buffer->buffer = (char *)buf_ptr;
+                        }
+                        memcpy(tui->input_buffer->buffer + tui->input_buffer->length, line, (size_t)nread);
+                        tui->input_buffer->length += (int)nread;
+                        tui->input_buffer->buffer[tui->input_buffer->length] = '\0';
+                    }
+                    free(line);
+                    pclose(fp);
+                    // Move cursor to end
+                    tui->input_buffer->cursor = tui->input_buffer->length;
+                    tui->input_buffer->view_offset = 0;
+                    tui->input_buffer->line_scroll_offset = 0;
+                    input_redraw(tui, prompt);
+                } else {
+                    LOG_ERROR("[TUI] Failed to run command for :re !");
+                }
+            }
+            // Stay in Normal mode after command
+            tui->mode = TUI_MODE_NORMAL;
+            tui->command_buffer_len = 0;
+            tui->command_buffer[0] = '\0';
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            return 0;
         } else if (cmd[0] != '\0') {
             // Unknown command
             char error_msg[256];
