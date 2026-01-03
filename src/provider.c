@@ -31,10 +31,16 @@ static int is_bedrock_enabled(void) {
  * Get API URL from environment, or return default
  */
 static char *get_api_url_from_env(void) {
+    // Prefer explicit Anthropic URLs, but keep OpenAI-compatible env for backward compatibility
     const char *env_url = getenv("OPENAI_API_BASE");
     if (!env_url || env_url[0] == '\0') {
         env_url = getenv("ANTHROPIC_API_URL");
     }
+    if (!env_url || env_url[0] == '\0') {
+        // Some SDKs and docs use ANTHROPIC_BASE_URL; accept it too
+        env_url = getenv("ANTHROPIC_BASE_URL");
+    }
+
     if (env_url && env_url[0] != '\0') {
         char *url = strdup(env_url);
         if (url) LOG_INFO("Using API URL from environment: %s", url);
@@ -136,6 +142,9 @@ void provider_init(const char *model,
 
     int use_anthropic = 0;
     const char *anth_env = getenv("ANTHROPIC_API_URL");
+    if (!anth_env || anth_env[0] == '\0') {
+        anth_env = getenv("ANTHROPIC_BASE_URL");
+    }
     if (anth_env && anth_env[0] != '\0') {
         use_anthropic = 1;
     }
