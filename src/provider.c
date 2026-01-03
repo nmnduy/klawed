@@ -139,7 +139,7 @@ void provider_init(const char *model,
     if (anth_env && anth_env[0] != '\0') {
         use_anthropic = 1;
     }
-    if (strstr(base_url, "anthropic.com") != NULL) {
+    if (strstr(base_url, "anthropic.com") != NULL || strstr(base_url, "/anthropic") != NULL) {
         use_anthropic = 1;
     }
 
