@@ -214,8 +214,49 @@ static int cmd_voice(ConversationState *state, const char *args) {
 }
 
 static int cmd_help(ConversationState *state, const char *args) {
-    (void)state; (void)args;
-    // Suppress non-TUI help text output
+    (void)args;
+    
+    // Build help text
+    char help_text[2048];
+    size_t pos = 0;
+    
+    // Header
+    const char *header = "Available commands:\n";
+    strlcpy(help_text, header, sizeof(help_text));
+    pos = strlen(help_text);
+    
+    // List all commands
+    for (int i = 0; i < command_count; i++) {
+        const Command *cmd = command_registry[i];
+        char line[256];
+        snprintf(line, sizeof(line), "  %-12s %s\n", cmd->usage, cmd->description);
+        
+        // Check if we have space
+        if (pos + strlen(line) < sizeof(help_text) - 1) {
+            strlcpy(help_text + pos, line, sizeof(help_text) - pos);
+            pos += strlen(line);
+        } else {
+            // Truncate with ellipsis
+            strlcpy(help_text + pos, "  ... (more commands)\n", sizeof(help_text) - pos);
+            break;
+        }
+    }
+    
+    // Footer
+    const char *footer = "\nType /help to see this list again.";
+    if (pos + strlen(footer) < sizeof(help_text) - 1) {
+        strlcpy(help_text + pos, footer, sizeof(help_text) - pos);
+    }
+    
+    // Show help in appropriate way
+    if (tui_mode_enabled && state && state->tui) {
+        // In TUI mode: add to conversation
+        tui_add_conversation_line(state->tui, "[System]", help_text, COLOR_PAIR_STATUS);
+    } else {
+        // In non-TUI mode: print to stdout
+        print_status(help_text);
+    }
+    
     return 0;
 }
 

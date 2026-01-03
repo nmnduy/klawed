@@ -7,7 +7,7 @@ zsh: abort      OPENAI_API_KEY=sk-3ec6a2b143b7498590dc72ccf074a8fe OPENAI_API_BA
 - [ ] cant clear search?
 - [x] token count should show total token, not prompt
 - [ ] /help doesn't show shit
-- [ ] /bash to run any bash commands then return to this file
+- [x] /bash to run any bash commands then return to this file
 - [ ] this simple read fails?
 ```sh
 [Read] openai-responses.md:1-400
