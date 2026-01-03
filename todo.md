@@ -1,3 +1,8 @@
+- [ ]  ~/git/invoicesurf/ [master] deepseek-chat -r sess_1767422591_40938104
+klawed(53514,0x1fb262240) malloc: *** error for object 0x600000f93900: pointer being freed was not allocated
+klawed(53514,0x1fb262240) malloc: *** set a breakpoint in malloc_error_break to debug
+zsh: abort      OPENAI_API_KEY=sk-3ec6a2b143b7498590dc72ccf074a8fe OPENAI_API_BASE= = klawed
+
 - [ ] search results are not highlihted when using '/' and '?' in normal mode
 - [ ] cant clear search?
 - [x] token count should show total token, not prompt
