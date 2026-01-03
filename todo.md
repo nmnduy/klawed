@@ -18,6 +18,25 @@
     - 'n' repeats search in same direction, 'N' repeats in opposite direction
     - Search is case-insensitive and wraps around
     - Status messages show search results
+- [ ] app unable to continue after canceling a long running task. submitting new instructions doesn't send more api calls.
+```sh
+[...]
+[Assistant] Now let me restart the Quarkus server to pick up all changes. First, let me kill the current process:
+
+[Bash] kill 43231 43349 2>/dev/null; sleep 3
+
+[Assistant] Now let me start the server in the background:
+
+[Bash] mvn quarkus:dev > /tmp/quarkus.log 2>&1 &
+
+[User] hey
+[User] hey
+[User] hey
+[User] hey
+Instruction queued (4/16 pending)
+>>>
+```
+
 - [x] doesn't auto-scroll at 100% scroll position. should always auto-scroll at that position
     - Fixed: Changed auto-scroll condition from `scroll_offset >= max_scroll` to `scroll_offset >= max_scroll - 1` (98-100% range)
     - Updated both occurrences in src/tui.c with proper logging
