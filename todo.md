@@ -1,6 +1,6 @@
 - [ ] no highlight in search results when using '/' and '?' in normal mode
 - [ ] cant clear search?
-- [ ] token count should show total token, not prompt
+- [x] token count should show total token, not prompt
 - [ ] /help doesn't show shit
 - [ ] /bash to run any bash commands then return to this file
 - [ ] this simple read fails?

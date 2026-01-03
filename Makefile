@@ -319,6 +319,8 @@ TEST_TUI_AUTO_SCROLL_SRC = tests/test_tui_auto_scroll.c
 TEST_TOOL_DETAILS_SRC = tests/test_tool_details_simple.c
 TEST_ARRAY_RESIZE_SRC = tests/test_array_resize.c
 TEST_TOKEN_USAGE_SRC = tests/test_token_usage.c
+TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
+TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
 TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
 TEST_ZMQ_SOCKET_SRC = tests/test_zmq_socket.c
 TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
@@ -331,6 +333,8 @@ TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
+TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET = $(BUILD_DIR)/test_token_usage_session_totals
+TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
 
 build: check-deps $(TARGET)
 
@@ -340,7 +344,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-http-client test-zmq-socket test-file-search
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-zmq-socket test-file-search
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -544,6 +548,12 @@ test-token-usage: check-deps $(TEST_TOKEN_USAGE_TARGET)
 	@echo "Running Token Usage tests..."
 	@echo ""
 	@./$(TEST_TOKEN_USAGE_TARGET)
+
+test-token-usage-session-totals: check-deps $(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET)
+	@echo ""
+	@echo "Running Token Usage Session Totals tests..."
+	@echo ""
+	@./$(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET)
 
 test-http-client: check-deps $(TEST_HTTP_CLIENT_TARGET)
 	@echo ""
@@ -1859,6 +1869,10 @@ $(TEST_TUI_AUTO_SCROLL_TARGET): $(TEST_TUI_AUTO_SCROLL_SRC)
 # Note: test_bash_summary.c file does not exist, so test-bash-summary target is removed
 
 TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET = $(BUILD_DIR)/test_token_usage_comprehensive
+TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET = $(BUILD_DIR)/test_token_usage_session_totals
+
+$(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET): $(TEST_TOKEN_USAGE_SESSION_TOTALS_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ)
+	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET) $(TEST_TOKEN_USAGE_SESSION_TOTALS_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(LDFLAGS)
 # Test-specific SQLite queue object (compiled with TEST_BUILD to exclude klawed.c dependencies)
 SQLITE_QUEUE_TEST_OBJ = $(BUILD_DIR)/sqlite_queue_test.o
 # Common objects needed by tests that compile claude.c
@@ -1870,6 +1884,12 @@ test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARG
 	@echo "Running Comprehensive Token Usage tests..."
 	@echo ""
 	@./$(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET)
+
+test-token-usage-session-totals: check-deps $(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET)
+	@echo ""
+	@echo "Running Token Usage Session Totals tests..."
+	@echo ""
+	@./$(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET)
 
 $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET): $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET) $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC) $(LDFLAGS)

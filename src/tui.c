@@ -184,42 +184,40 @@ static void render_status_window(TUIState *tui) {
     char token_str[128] = {0};
     int token_str_len = 0;
     if (tui->mode == TUI_MODE_NORMAL) {
-        // Query prompt tokens and cached tokens from the last API call
+        // Query total prompt/completion tokens and cached tokens for this session
         int prompt_tokens = 0;
+        int completion_tokens = 0;
         int cached_tokens = 0;
         if (tui->persistence_db) {
-            if (persistence_get_last_prompt_tokens(tui->persistence_db,
-                                                   tui->session_id,
-                                                   &prompt_tokens) == 0) {
-                LOG_DEBUG("[TUI] Retrieved last prompt tokens from DB: %d", prompt_tokens);
+            if (persistence_get_session_token_usage(tui->persistence_db,
+                                                    tui->session_id,
+                                                    &prompt_tokens,
+                                                    &completion_tokens,
+                                                    &cached_tokens) == 0) {
+                LOG_DEBUG("[TUI] Retrieved session token totals from DB: prompt=%d completion=%d cached=%d",
+                          prompt_tokens, completion_tokens, cached_tokens);
             } else {
-                LOG_DEBUG("[TUI] Failed to retrieve last prompt tokens from DB");
-            }
-
-            if (persistence_get_last_cached_tokens(tui->persistence_db,
-                                                   tui->session_id,
-                                                   &cached_tokens) == 0) {
-                LOG_DEBUG("[TUI] Retrieved last cached tokens from DB: %d", cached_tokens);
-            } else {
-                LOG_DEBUG("[TUI] Failed to retrieve last cached tokens from DB");
+                LOG_DEBUG("[TUI] Failed to retrieve session token totals from DB");
             }
         } else {
             LOG_DEBUG("[TUI] No persistence database connection available");
         }
 
-        // Show both prompt tokens and cached tokens in the format: "Prompt: X (+Y cached) "
+        int total_tokens = prompt_tokens + completion_tokens;
+
+        // Show total tokens and cached tokens in the format: "Token: X (+Y cached) "
         if (cached_tokens > 0) {
-            snprintf(token_str, sizeof(token_str), "Prompt: %d (+%d cached) ",
-                     prompt_tokens, cached_tokens);
+            snprintf(token_str, sizeof(token_str), "Token: %d (+%d cached) ",
+                     total_tokens, cached_tokens);
         } else {
-            snprintf(token_str, sizeof(token_str), "Prompt: %d ", prompt_tokens);
+            snprintf(token_str, sizeof(token_str), "Token: %d ", total_tokens);
         }
         token_str_len = (int)strlen(token_str);
         LOG_DEBUG("[TUI] Rendering token display: %s (mode=NORMAL)", token_str);
 
         // Debug: warn if token counts are 0 in Normal mode (might indicate a bug)
-        if (prompt_tokens == 0) {
-            LOG_DEBUG("[TUI] Warning: Prompt token count is 0 in NORMAL mode");
+        if (total_tokens == 0) {
+            LOG_DEBUG("[TUI] Warning: Token count is 0 in NORMAL mode");
         }
     }
 
