@@ -1,4 +1,4 @@
-- [ ] no highlight in search results when using '/' and '?' in normal mode
+- [ ] search results are not highlihted when using '/' and '?' in normal mode
 - [ ] cant clear search?
 - [x] token count should show total token, not prompt
 - [ ] /help doesn't show shit
