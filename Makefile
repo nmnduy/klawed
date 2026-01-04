@@ -1399,10 +1399,15 @@ $(TEST_OPENAI_RESPONSES_TARGET): $(TEST_OPENAI_RESPONSES_SRC)
 	@echo ""
 
 # Test target for OpenAI response parsing (regression tests for session loading)
-$(TEST_OPENAI_RESPONSE_PARSING_TARGET): $(TEST_OPENAI_RESPONSE_PARSING_SRC) $(TEST_COMMON_OBJS)
+$(TEST_OPENAI_RESPONSE_PARSING_TARGET): $(SRC) $(TEST_OPENAI_RESPONSE_PARSING_SRC) $(TEST_COMMON_OBJS)
 	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling klawed.c for OpenAI response parsing testing (renaming main)..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_openai_response_test.o $(SRC)
 	@echo "Compiling OpenAI response parsing regression test suite..."
-	@$(CC) $(CFLAGS) -I./src -o $(TEST_OPENAI_RESPONSE_PARSING_TARGET) $(TEST_OPENAI_RESPONSE_PARSING_SRC) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_openai_response_parsing.o $(TEST_OPENAI_RESPONSE_PARSING_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_OPENAI_RESPONSE_PARSING_TARGET) $(BUILD_DIR)/claude_openai_response_test.o $(BUILD_DIR)/test_openai_response_parsing.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ OpenAI response parsing regression test build successful!"
 	@echo ""
