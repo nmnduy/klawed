@@ -1,18 +1,20 @@
-/*
+#ifndef HAVE_STRLCPY
+#include "compat.h"
+#endif/*
  * completion.c - Path and File Completion Implementation
  */
 
 #include "completion.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <bsd/stdlib.h>
+
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <limits.h>
 #include <libgen.h>
-#include <bsd/string.h>
+
 
 // ============================================================================
 // Helper Functions

@@ -1,4 +1,6 @@
-/*
+#ifndef HAVE_STRLCPY
+#include "compat.h"
+#endif/*
  * zmq_socket.c - Simple ZeroMQ socket implementation for Klawed
  *
  * Implementation:
@@ -19,8 +21,8 @@
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
-#include <bsd/string.h>
-#include <bsd/stdlib.h>
+
+
 #include <ctype.h>
 #include <sys/time.h>
 #include <sys/select.h>

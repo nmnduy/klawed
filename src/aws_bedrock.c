@@ -1,4 +1,6 @@
-/*
+#ifndef HAVE_STRLCPY
+#include "compat.h"
+#endif/*
  * aws_bedrock.c - AWS Bedrock provider implementation
  */
 
@@ -19,7 +21,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pwd.h>
-#include <bsd/string.h>
+
 
 // ============================================================================
 // Helper Functions

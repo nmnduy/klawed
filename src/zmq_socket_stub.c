@@ -13,6 +13,7 @@ ZMQContext* zmq_socket_init(const char *endpoint, int socket_type) {
     return NULL;
 }
 
+
 void zmq_socket_cleanup(ZMQContext *ctx) {
     (void)ctx;
 }

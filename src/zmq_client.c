@@ -1,4 +1,6 @@
-/*
+#ifndef HAVE_STRLCPY
+#include "compat.h"
+#endif/*
  * zmq_client.c - Thread-based ZMQ client for Klawed
  *
  * Implements a ZMQ client with separate receiver thread and main interactive thread.
@@ -19,7 +21,7 @@
 #include <stdio.h>
 #include <sys/select.h>
 #include <sys/time.h>
-#include <bsd/string.h>
+
 #include <time.h>
 #include <arpa/inet.h>
 

@@ -1,4 +1,6 @@
-/*
+#ifndef HAVE_STRLCPY
+#include "compat.h"
+#endif/*
  * mcp.c - Model Context Protocol (MCP) client implementation
  *
  * This implements a JSON-RPC 2.0 client for communicating with MCP servers.
@@ -22,7 +24,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <cjson/cJSON.h>
-#include <bsd/string.h>
+
 #include "mcp.h"
 #include "base64.h"
 
