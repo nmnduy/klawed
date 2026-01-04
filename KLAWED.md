@@ -184,3 +184,7 @@ export OPENAI_API_KEY="your-api-key"
 - Prompt caching: Enabled
 - Max tokens: 16384 (configurable via `KLAWED_MAX_TOKENS`)
 - Token usage tracking: Enabled (stores in `token_usage` table)
+
+## Development
+
+If you're going to test the built binary, make sure it is run with 'timeout'. This is to avoid deadlock because the program runs in a loop waiting for user input.
