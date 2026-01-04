@@ -1,7 +1,8 @@
-- [ ]  ~/git/invoicesurf/ [master] deepseek-chat -r sess_1767422591_40938104
-klawed(53514,0x1fb262240) malloc: *** error for object 0x600000f93900: pointer being freed was not allocated
-klawed(53514,0x1fb262240) malloc: *** set a breakpoint in malloc_error_break to debug
-zsh: abort      OPENAI_API_KEY=sk-3ec6a2b143b7498590dc72ccf074a8fe OPENAI_API_BASE= = klawed
+- [x]  ~/git/invoicesurf/ [master] deepseek-chat -r sess_1767422591_40938104
+  - Fixed memory error in session loading by properly NULLing pointers after freeing in clear_conversation() and conversation_free()
+  - Root cause: Pointers were freed but not set to NULL, leading to potential double-free or use-after-free
+  - Fix: Updated src/klawed.c to set all freed pointers to NULL
+  - Test: Build and run session resume to verify no more segfaults
 
 - [ ] search results are not highlihted when using '/' and '?' in normal mode
 - [ ] cant clear search?
@@ -470,7 +471,7 @@ zsh: abort      OPENAI_API_KEY=sk-3ec6a2b143b7498590dc72ccf074a8fe OPENAI_API_BA
 
 ---
 
-- [ ] [2025-12-18 11:57:36] [sess_1766033195_15b39516] WARN  [openai_messages.c:370] build_openai_request: Request may be invalid: 60 tool_calls but only 0 tool_results
+- [x] [2025-12-18 11:57:36] [sess_1766033195_15b39516] WARN  [openai_messages.c:370] build_openai_request: Request may be invalid: 60 tool_calls but only 0 tool_results
 
 - [x] log WARN when finish_reason is 'length' (implemented in klawed.c:6170 and klawed.c:7068)
 

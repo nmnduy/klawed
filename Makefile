@@ -179,6 +179,9 @@ TEST_PASTE_TARGET = $(BUILD_DIR)/test_paste
 TEST_RETRY_JITTER_TARGET = $(BUILD_DIR)/test_retry_jitter
 TEST_OPENAI_FORMAT_TARGET = $(BUILD_DIR)/test_openai_format
 TEST_OPENAI_RESPONSES_TARGET = $(BUILD_DIR)/test_openai_responses
+TEST_OPENAI_RESPONSE_PARSING_TARGET = $(BUILD_DIR)/test_openai_response_parsing
+TEST_CONVERSATION_FREE_TARGET = $(BUILD_DIR)/test_conversation_free
+TEST_MEMORY_NULL_FIX_TARGET = $(BUILD_DIR)/test_memory_null_fix
 TEST_DUMP_UTILS_TARGET = $(BUILD_DIR)/test_dump_utils
 TEST_WRITE_DIFF_INTEGRATION_TARGET = $(BUILD_DIR)/test_write_diff_integration
 TEST_ROTATION_TARGET = $(BUILD_DIR)/test_rotation
@@ -284,6 +287,9 @@ TEST_PASTE_SRC = tests/test_paste.c
 TEST_RETRY_JITTER_SRC = tests/test_retry_jitter.c
 TEST_OPENAI_FORMAT_SRC = tests/test_openai_format.c
 TEST_OPENAI_RESPONSES_SRC = tests/test_openai_responses.c
+TEST_OPENAI_RESPONSE_PARSING_SRC = tests/test_openai_response_parsing.c
+TEST_CONVERSATION_FREE_SRC = tests/test_conversation_free.c
+TEST_MEMORY_NULL_FIX_SRC = tests/test_memory_null_fix.c
 TEST_WRITE_DIFF_INTEGRATION_SRC = tests/test_write_diff_integration.c
 TEST_ROTATION_SRC = tests/test_rotation.c
 TEST_FUNCTION_CONTEXT_SRC = tests/test_function_context.c
@@ -329,7 +335,7 @@ TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 # Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-openai-responses test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -344,7 +350,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-zmq-socket test-file-search
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-conversation-free test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-zmq-socket test-file-search
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -417,6 +423,24 @@ test-openai-responses: check-deps $(TEST_OPENAI_RESPONSES_TARGET)
 	@echo "Running OpenAI Responses API parsing tests..."
 	@echo ""
 	@./$(TEST_OPENAI_RESPONSES_TARGET)
+
+test-openai-response-parsing: check-deps $(TEST_OPENAI_RESPONSE_PARSING_TARGET)
+	@echo ""
+	@echo "Running OpenAI response parsing regression tests..."
+	@echo ""
+	@./$(TEST_OPENAI_RESPONSE_PARSING_TARGET)
+
+test-conversation-free: check-deps $(TEST_CONVERSATION_FREE_TARGET)
+	@echo ""
+	@echo "Running conversation memory management tests..."
+	@echo ""
+	@./$(TEST_CONVERSATION_FREE_TARGET)
+
+test-memory-null-fix: check-deps $(TEST_MEMORY_NULL_FIX_TARGET)
+	@echo ""
+	@echo "Running memory NULL fix regression tests..."
+	@echo ""
+	@./$(TEST_MEMORY_NULL_FIX_TARGET)
 
 test-dump-utils: check-deps $(TEST_DUMP_UTILS_TARGET)
 	@echo ""
@@ -1372,6 +1396,38 @@ $(TEST_OPENAI_RESPONSES_TARGET): $(TEST_OPENAI_RESPONSES_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_OPENAI_RESPONSES_TARGET) $(TEST_OPENAI_RESPONSES_SRC) $(LDFLAGS)
 	@echo ""
 	@echo "✓ OpenAI Responses API test build successful!"
+	@echo ""
+
+# Test target for OpenAI response parsing (regression tests for session loading)
+$(TEST_OPENAI_RESPONSE_PARSING_TARGET): $(TEST_OPENAI_RESPONSE_PARSING_SRC) $(TEST_COMMON_OBJS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling OpenAI response parsing regression test suite..."
+	@$(CC) $(CFLAGS) -I./src -o $(TEST_OPENAI_RESPONSE_PARSING_TARGET) $(TEST_OPENAI_RESPONSE_PARSING_SRC) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@echo ""
+	@echo "✓ OpenAI response parsing regression test build successful!"
+	@echo ""
+
+# Test target for conversation memory management (regression tests for double-free)
+# Compile free_internal_message from openai_messages.c directly
+$(TEST_CONVERSATION_FREE_TARGET): $(OPENAI_MESSAGES_SRC) $(LOGGER_SRC) $(TEST_CONVERSATION_FREE_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling openai_messages.c for memory management tests..."
+	@$(CC) $(CFLAGS) -I./src -c -o $(BUILD_DIR)/openai_messages_free.o $(OPENAI_MESSAGES_SRC)
+	@echo "Compiling conversation memory management test suite..."
+	@$(CC) $(CFLAGS) -I./src -c -o $(BUILD_DIR)/test_conversation_free.o $(TEST_CONVERSATION_FREE_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_CONVERSATION_FREE_TARGET) $(BUILD_DIR)/openai_messages_free.o $(BUILD_DIR)/test_conversation_free.o $(LOGGER_OBJ) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Conversation memory management test build successful!"
+	@echo ""
+
+# Test target for memory NULL fix (standalone test)
+$(TEST_MEMORY_NULL_FIX_TARGET): $(TEST_MEMORY_NULL_FIX_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling memory NULL fix regression test..."
+	@$(CC) $(CFLAGS) -I./src -o $(TEST_MEMORY_NULL_FIX_TARGET) $(TEST_MEMORY_NULL_FIX_SRC) $(LDFLAGS) -lcjson
+	@echo ""
+	@echo "✓ Memory NULL fix regression test build successful!"
 	@echo ""
 
 # Test target for dump utils (conversation dump parsing)

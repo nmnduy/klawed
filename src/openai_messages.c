@@ -393,24 +393,32 @@ InternalMessage parse_openai_response(cJSON *response) {
 
     if (!response) {
         LOG_ERROR("Response is NULL");
+        msg.contents = NULL;
+        msg.content_count = 0;
         return msg;
     }
 
     cJSON *choices = cJSON_GetObjectItem(response, "choices");
     if (!choices || !cJSON_IsArray(choices)) {
         LOG_ERROR("Invalid response: missing 'choices' array");
+        msg.contents = NULL;
+        msg.content_count = 0;
         return msg;
     }
 
     cJSON *choice = cJSON_GetArrayItem(choices, 0);
     if (!choice) {
         LOG_ERROR("Invalid response: empty 'choices' array");
+        msg.contents = NULL;
+        msg.content_count = 0;
         return msg;
     }
 
     cJSON *message = cJSON_GetObjectItem(choice, "message");
     if (!message) {
         LOG_ERROR("Invalid response: missing 'message' object");
+        msg.contents = NULL;
+        msg.content_count = 0;
         return msg;
     }
 
@@ -428,6 +436,9 @@ InternalMessage parse_openai_response(cJSON *response) {
 
     if (count == 0) {
         LOG_WARN("Response has no content or tool_calls");
+        free(msg.contents);  // Free the empty allocation
+        msg.contents = NULL;
+        msg.content_count = 0;
         return msg;
     }
 

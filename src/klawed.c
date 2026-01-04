@@ -6022,12 +6022,23 @@ void clear_conversation(ConversationState *state) {
         for (int j = 0; j < state->messages[i].content_count; j++) {
             InternalContent *cb = &state->messages[i].contents[j];
             free(cb->text);
+            cb->text = NULL;
             free(cb->tool_id);
+            cb->tool_id = NULL;
             free(cb->tool_name);
-            if (cb->tool_params) cJSON_Delete(cb->tool_params);
-            if (cb->tool_output) cJSON_Delete(cb->tool_output);
+            cb->tool_name = NULL;
+            if (cb->tool_params) {
+                cJSON_Delete(cb->tool_params);
+                cb->tool_params = NULL;
+            }
+            if (cb->tool_output) {
+                cJSON_Delete(cb->tool_output);
+                cb->tool_output = NULL;
+            }
         }
         free(state->messages[i].contents);
+        state->messages[i].contents = NULL;
+        state->messages[i].content_count = 0;
     }
 
     // Reset message count (keeping system message)
@@ -6057,12 +6068,23 @@ void conversation_free(ConversationState *state) {
         for (int j = 0; j < state->messages[i].content_count; j++) {
             InternalContent *cb = &state->messages[i].contents[j];
             free(cb->text);
+            cb->text = NULL;
             free(cb->tool_id);
+            cb->tool_id = NULL;
             free(cb->tool_name);
-            if (cb->tool_params) cJSON_Delete(cb->tool_params);
-            if (cb->tool_output) cJSON_Delete(cb->tool_output);
+            cb->tool_name = NULL;
+            if (cb->tool_params) {
+                cJSON_Delete(cb->tool_params);
+                cb->tool_params = NULL;
+            }
+            if (cb->tool_output) {
+                cJSON_Delete(cb->tool_output);
+                cb->tool_output = NULL;
+            }
         }
         free(state->messages[i].contents);
+        state->messages[i].contents = NULL;
+        state->messages[i].content_count = 0;
     }
     state->count = 0;
 
