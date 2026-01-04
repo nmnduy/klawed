@@ -1602,8 +1602,9 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
 
     // Execute command and capture both stdout and stderr
     // Use shell wrapper with proper quoting and stderr redirection
-    // full_command needs extra space for "sh -c '...' </dev/null 2>&1" wrapper (24 bytes + null)
-    char full_command[BUFFER_SIZE + 32];
+    // full_command needs extra space for "timeout %ds sh -c '...' </dev/null 2>&1" wrapper
+    // Worst case: "timeout " (8) + up to 10 digits + " sh -c '" (9) + "'" (1) + " </dev/null 2>&1" (17) + null (1) = up to 46 bytes
+    char full_command[BUFFER_SIZE + 64];
     // Escape single quotes in the command for shell safety
     char escaped_command[BUFFER_SIZE];
     size_t j = 0;
