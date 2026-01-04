@@ -353,12 +353,13 @@ static void test_session_loading_scenario(void) {
     const char *responses[] = {
         "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"Step 1\"}}]}",
         "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"Step 2\"}}]}",
-        NULL  // Simulates what might happen with malformed data
+        "invalid json"  // Simulates what might happen with malformed data
     };
+    int num_responses = sizeof(responses) / sizeof(responses[0]);
 
     int messages_freed = 0;
 
-    for (int i = 0; responses[i] != NULL; i++) {
+    for (int i = 0; i < num_responses; i++) {
         cJSON *json = cJSON_Parse(responses[i]);
         if (!json) {
             // This simulates what happens when we get invalid data from DB

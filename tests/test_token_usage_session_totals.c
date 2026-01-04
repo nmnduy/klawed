@@ -80,20 +80,24 @@ int main(void) {
     insert_api_call(db, "session-1", 1, &api_call_id1);
     insert_api_call(db, "session-1", 2, &api_call_id2);
 
+    // Insert cumulative token usage records
+    // First call: 100 prompt, 25 completion, 10 cached
+    // Second call: adds 40 more prompt, 15 more completion, 5 more cached
+    // So second record should have cumulative totals: 140, 40, 15
     insert_token_usage(db, api_call_id1, "session-1", 100, 25, 10, 1);
-    insert_token_usage(db, api_call_id2, "session-1", 40, 15, 5, 2);
+    insert_token_usage(db, api_call_id2, "session-1", 140, 40, 15, 2);
 
     int prompt_tokens = -1;
     int completion_tokens = -1;
     int cached_tokens = -1;
 
-    // Per-session totals
+    // Per-session totals - should get latest (cumulative) record
     int rc = persistence_get_session_token_usage(pdb, "session-1",
                                                  &prompt_tokens, &completion_tokens, &cached_tokens);
     assert(rc == 0);
-    assert(prompt_tokens == 140);      // 100 + 40
-    assert(completion_tokens == 40);   // 25 + 15
-    assert(cached_tokens == 15);       // 10 + 5
+    assert(prompt_tokens == 140);      // Latest record (cumulative)
+    assert(completion_tokens == 40);   // Latest record (cumulative)
+    assert(cached_tokens == 15);       // Latest record (cumulative)
 
     // All sessions (should match since only one session exists)
     prompt_tokens = completion_tokens = cached_tokens = -1;
