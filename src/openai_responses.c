@@ -16,9 +16,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <bsd/stdlib.h>
 #include <string.h>
-
-#include "compat.h"
 
 /**
  * Build OpenAI Responses API request JSON from internal message format

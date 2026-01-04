@@ -1,6 +1,4 @@
-#ifndef HAVE_STRLCPY
-#include "compat.h"
-#endif/**
+/**
  * logger.c - Thread-safe file logging implementation
  */
 
@@ -8,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <bsd/string.h>
 #include <stdarg.h>
 #include <time.h>
 #include <pthread.h>

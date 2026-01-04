@@ -1,6 +1,4 @@
-#ifndef HAVE_STRLCPY
-#include "compat.h"
-#endif/*
+/*
  * Klawed - Pure C Implementation
  * A lightweight coding agent that interacts with OpenAI-compatible APIs
  *
@@ -16,8 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-
+#include <bsd/string.h>
+#include <bsd/stdlib.h>
 #include <unistd.h>
 #include <time.h>
 #include <pthread.h>

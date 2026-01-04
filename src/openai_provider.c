@@ -1,6 +1,4 @@
-#ifndef HAVE_STRLCPY
-#include "compat.h"
-#endif/*
+/*
  * openai_provider.c - OpenAI-compatible API provider implementation
  */
 
@@ -20,7 +18,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <curl/curl.h>
-
+#include <bsd/string.h>
 // Socket support removed - will be reimplemented with ZMQ
 #include "retry_logic.h"  // For common retry logic
 

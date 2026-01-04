@@ -1,6 +1,4 @@
-#ifndef HAVE_STRLCPY
-#include "compat.h"
-#endif/*
+/*
  * theme_explorer.c - Interactive Theme Explorer Implementation
  *
  * Provides a full-screen TUI panel for browsing and previewing
@@ -16,7 +14,7 @@
 #include "logger.h"
 #include <stdlib.h>
 #include <string.h>
-
+#include <bsd/string.h>
 #include <ncurses.h>
 #include <ctype.h>
 
