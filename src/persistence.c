@@ -174,21 +174,24 @@ int persistence_get_session_token_usage(
     sqlite3_stmt *stmt;
     int rc;
 
+    // Get the latest token usage record (cumulative mode)
     if (session_id) {
-        // Get token usage for specific session
         sql = "SELECT "
-              "COALESCE(SUM(prompt_tokens), 0) as total_prompt, "
-              "COALESCE(SUM(completion_tokens), 0) as total_completion, "
-              "COALESCE(SUM(cached_tokens), 0) as total_cached "
+              "prompt_tokens, "
+              "completion_tokens, "
+              "cached_tokens "
               "FROM token_usage "
-              "WHERE session_id = ?;";
+              "WHERE session_id = ? "
+              "ORDER BY created_at DESC "
+              "LIMIT 1;";
     } else {
-        // Get token usage for all sessions
         sql = "SELECT "
-              "COALESCE(SUM(prompt_tokens), 0) as total_prompt, "
-              "COALESCE(SUM(completion_tokens), 0) as total_completion, "
-              "COALESCE(SUM(cached_tokens), 0) as total_cached "
-              "FROM token_usage;";
+              "prompt_tokens, "
+              "completion_tokens, "
+              "cached_tokens "
+              "FROM token_usage "
+              "ORDER BY created_at DESC "
+              "LIMIT 1;";
     }
 
     rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
@@ -208,8 +211,13 @@ int persistence_get_session_token_usage(
         *cached_tokens = sqlite3_column_int(stmt, 2);
 
         LOG_DEBUG("Retrieved token usage for session %s: prompt=%d, completion=%d, cached=%d",
-                 session_id ? session_id : "all", *prompt_tokens, *completion_tokens, *cached_tokens);
-    } else if (rc != SQLITE_DONE) {
+                 session_id ? session_id : "all",
+                 *prompt_tokens, *completion_tokens, *cached_tokens);
+    } else if (rc == SQLITE_DONE) {
+        // No records found - this is OK for a new session
+        LOG_DEBUG("No token usage records found for session %s",
+                 session_id ? session_id : "all");
+    } else {
         LOG_ERROR("Failed to execute token usage query: %s", sqlite3_errmsg(db->db));
         sqlite3_finalize(stmt);
         return -1;
