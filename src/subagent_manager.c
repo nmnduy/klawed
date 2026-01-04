@@ -1,6 +1,4 @@
-#ifndef HAVE_STRLCPY
-#include "compat.h"
-#endif/*
+/*
  * Subagent Manager Implementation
  */
 
@@ -12,7 +10,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <unistd.h>
-
+#include <bsd/string.h>
 
 #define INITIAL_CAPACITY 4
 

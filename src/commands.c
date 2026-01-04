@@ -1,6 +1,4 @@
-#ifndef HAVE_STRLCPY
-#include "compat.h"
-#endif/*
+/*
  * commands.c - Command Registration and Dispatch Implementation
  */
 
@@ -13,8 +11,8 @@
 #include "theme_explorer.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
-
-
+#include <bsd/string.h>
+#include <bsd/stdlib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

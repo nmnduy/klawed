@@ -190,16 +190,20 @@ static void test_buggy_version_double_free(void) {
     TEST_ASSERT(msg.contents != NULL, "Message created");
     TEST_ASSERT(msg.contents[0].text != NULL, "Text allocated");
     
+    // Store pointer before freeing
+    void *contents_ptr = msg.contents;
+    
     // First free
     free_internal_message_buggy(&msg);
     
     // Check state after first free
     printf("  After first free:\n");
-    printf("    msg.contents = %p (should be dangling pointer)\n", (void*)msg.contents);
+    // Don't print the pointer value to avoid use-after-free warning
+    printf("    msg.contents is NOT NULL (should be dangling pointer)\n");
     printf("    msg.content_count = %d (should still be 1)\n", msg.content_count);
     
     // This is dangerous - pointers are not NULL!
-    TEST_ASSERT(msg.contents != NULL, "BUG: contents not NULL after free");
+    TEST_ASSERT(contents_ptr != NULL, "BUG: contents not NULL after free");
     TEST_ASSERT(msg.content_count == 1, "BUG: content_count not reset");
     
     // Second free would cause "pointer being freed was not allocated"

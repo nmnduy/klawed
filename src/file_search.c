@@ -1,6 +1,4 @@
-#ifndef HAVE_STRLCPY
-#include "compat.h"
-#endif/*
+/*
  * File Search - Interactive file finder for TUI
  */
 
@@ -10,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-
+#include <bsd/string.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <unistd.h>

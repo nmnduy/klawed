@@ -1,6 +1,4 @@
-#ifndef HAVE_STRLCPY
-#include "compat.h"
-#endif/*
+/*
  * ncurses_input.c - ncurses-based input bar implementation
  *
  * Provides readline-like functionality using ncurses with full keyboard support
@@ -10,7 +8,7 @@
 #include "logger.h"
 #include <stdlib.h>
 #include <string.h>
-
+#include <bsd/string.h>
 #include <ctype.h>
 
 #define INITIAL_BUFFER_SIZE 8192

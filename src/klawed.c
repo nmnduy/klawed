@@ -1,6 +1,4 @@
-#ifndef HAVE_STRLCPY
-#include "compat.h"
-#endif/*
+/*
  * Klawed - Pure C Implementation
  * A lightweight coding agent that interacts with OpenAI-compatible APIs
  *
@@ -16,8 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-
+#include <bsd/string.h>
+#include <bsd/stdlib.h>
 #include <unistd.h>
 #include <time.h>
 #include <pthread.h>
@@ -1604,8 +1602,9 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
 
     // Execute command and capture both stdout and stderr
     // Use shell wrapper with proper quoting and stderr redirection
-    // full_command needs extra space for "sh -c '...' </dev/null 2>&1" wrapper (24 bytes + null)
-    char full_command[BUFFER_SIZE + 32];
+    // full_command needs extra space for "timeout %ds sh -c '...' </dev/null 2>&1" wrapper
+    // Worst case: "timeout " (8) + up to 10 digits + " sh -c '" (9) + "'" (1) + " </dev/null 2>&1" (17) + null (1) = up to 46 bytes
+    char full_command[BUFFER_SIZE + 64];
     // Escape single quotes in the command for shell safety
     char escaped_command[BUFFER_SIZE];
     size_t j = 0;
