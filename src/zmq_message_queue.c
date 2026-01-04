@@ -1,4 +1,6 @@
-/*
+#ifndef HAVE_STRLCPY
+#include "compat.h"
+#endif/*
  * zmq_message_queue.c - Thread-safe message queue implementation
  */
 
@@ -8,7 +10,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
-#include <bsd/string.h>
+
 
 /**
  * Initialize a message queue

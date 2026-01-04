@@ -1,4 +1,6 @@
-/*
+#ifndef HAVE_STRLCPY
+#include "compat.h"
+#endif/*
  * TUI (Terminal User Interface) - ncurses-based implementation
  *
  * This module provides an ncurses-based input bar with full readline-like
@@ -18,7 +20,7 @@
 #include "indicators.h"
 #include "klawed_internal.h"
 #include <stdlib.h>
-#include <bsd/stdlib.h>
+
 #include <string.h>
 #include <ctype.h>
 #include <locale.h>
@@ -30,7 +32,7 @@
 #include <strings.h>
 #include <limits.h>
 #include <stdio.h>
-#include <bsd/string.h>
+
 #include "message_queue.h"
 #include "history_file.h"
 #include "array_resize.h"

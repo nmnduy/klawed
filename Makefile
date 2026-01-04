@@ -19,6 +19,18 @@ ifeq ($(UNAME_S),Darwin)
     DEBUG_CFLAGS += -D_DARWIN_C_SOURCE
 endif
 
+# Check if strlcpy/strlcat are available in the standard library
+# If not, we'll use our fallback implementations
+CHECK_STRLCPY := $(shell echo "int main() { char dst[10]; strlcpy(dst, \"test\", 10); return 0; }" | $(CC) -x c -o /dev/null -lbsd - 2>/dev/null && echo "yes" || echo "no")
+ifeq ($(CHECK_STRLCPY),yes)
+    CFLAGS += -DHAVE_STRLCPY -DHAVE_STRLCAT -DHAVE_REALLOCARRAY
+    DEBUG_CFLAGS += -DHAVE_STRLCPY -DHAVE_STRLCAT -DHAVE_REALLOCARRAY
+else
+    # Don't link with libbsd if we're using our own implementations
+    LDFLAGS := $(filter-out -lbsd,$(LDFLAGS))
+    DEBUG_LDFLAGS := $(filter-out -lbsd,$(DEBUG_LDFLAGS))
+endif
+
 # Disable implicit rules to avoid conflicts with our pattern rules
 # .SUFFIXES:
 
@@ -1600,7 +1612,14 @@ check-deps:
 	@command -v pkg-config >/dev/null 2>&1 || { echo "Warning: pkg-config not found. May have issues detecting OpenSSL."; }
 	@pkg-config --exists openssl 2>/dev/null || { echo "Error: OpenSSL not found. Install with: brew install openssl (macOS) or apt-get install libssl-dev (Linux)"; exit 1; }
 	@pkg-config --exists libcjson 2>/dev/null || { echo "Error: cJSON not found. Install with: brew install cjson (macOS) or apt-get install libcjson-dev (Linux)"; exit 1; }
-	@pkg-config --exists libbsd 2>/dev/null || { echo "Error: libbsd not found. Install with: brew install libbsd (macOS) or apt-get install libbsd-dev (Linux)"; exit 1; }
+	@# Check if strlcpy/strlcat are available in standard library
+	@echo "Checking for strlcpy/strlcat..."
+	@if echo "int main() { char dst[10]; strlcpy(dst, \"test\", 10); return 0; }" | $(CC) -x c -o /dev/null -lbsd - 2>/dev/null; then \
+		echo "✓ strlcpy/strlcat available (libbsd)"; \
+		pkg-config --exists libbsd 2>/dev/null || { echo "Error: libbsd not found. Install with: brew install libbsd (macOS) or apt-get install libbsd-dev (Linux)"; exit 1; }; \
+	else \
+		echo "✓ Using built-in strlcpy/strlcat implementations"; \
+	fi
 	@# Check for ZMQ if explicitly enabled
 	@if [ "$(ZMQ)" = "1" ]; then \
 		echo "Checking for ZeroMQ (ZMQ=1 specified)..."; \
