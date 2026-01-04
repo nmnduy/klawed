@@ -334,6 +334,47 @@ static int cmd_themes(ConversationState *state, const char *args) {
     return 0;
 }
 
+static int cmd_vim(ConversationState *state, const char *args) {
+    (void)state; (void)args;
+    
+    // Check if vim is available
+    if (system("which vim >/dev/null 2>&1") != 0) {
+        if (!tui_mode_enabled) {
+            print_error("vim not found in PATH");
+            fprintf(stderr, "Install vim to use this command.\n");
+        }
+        return -1;
+    }
+    
+    // In TUI mode, we need to suspend the TUI before running vim
+    if (tui_mode_enabled && state && state->tui) {
+        if (tui_suspend(state->tui) != 0) {
+            LOG_ERROR("[CMD_VIM] Failed to suspend TUI");
+            return -1;
+        }
+    }
+    
+    // Run vim in the current directory
+    int result = system("vim");
+    
+    // Resume TUI if we suspended it
+    if (tui_mode_enabled && state && state->tui) {
+        if (tui_resume(state->tui) != 0) {
+            LOG_ERROR("[CMD_VIM] Failed to resume TUI");
+            // Continue anyway
+        }
+    }
+    
+    if (result != 0) {
+        if (!tui_mode_enabled) {
+            print_error("vim exited with non-zero status");
+        }
+        return -1;
+    }
+    
+    return 0;
+}
+
 // ============================================================================
 // Command Definitions
 // ============================================================================
@@ -401,6 +442,15 @@ static Command themes_cmd = {
     .needs_terminal = 1
 };
 
+static Command vim_cmd = {
+    .name = "vim",
+    .usage = "/vim",
+    .description = "Open vim editor in current directory",
+    .handler = cmd_vim,
+    .completer = commands_tab_completer,
+    .needs_terminal = 1
+};
+
 // ============================================================================
 // API Implementation
 // ============================================================================
@@ -414,6 +464,7 @@ void commands_init(void) {
     commands_register(&help_cmd);
     commands_register(&voice_cmd);
     commands_register(&themes_cmd);
+    commands_register(&vim_cmd);
 }
 
 void commands_set_tui_mode(int enabled) {
