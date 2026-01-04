@@ -42,6 +42,7 @@
 #include "colorscheme.h"
 #include "fallback_colors.h"
 #include "tool_utils.h"
+#include "process_utils.h"
 #include "http_client.h"  // For StreamEvent and HttpStreamCallback
 
 #ifdef HAVE_ZMQ
@@ -1504,24 +1505,7 @@ static int show_diff(const char *file_path, const char *original_content) {
 // Tool Implementations
 // ============================================================================
 
-// Helper function to check if 'timeout' command is available
-STATIC int timeout_command_available(void);  // Prototype
-STATIC int timeout_command_available(void) {
-    // Check if timeout command exists by trying to run it with --help
-    // This is more reliable than checking PATH since timeout might be a shell builtin
-    int result = system("timeout --help >/dev/null 2>&1");
-    if (result == 0) {
-        return 1;  // timeout command is available
-    }
 
-    // Try alternative: check if timeout exists in common locations
-    if (access("/usr/bin/timeout", X_OK) == 0 ||
-        access("/bin/timeout", X_OK) == 0) {
-        return 1;
-    }
-
-    return 0;  // timeout command not available
-}
 
 STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     // Check for interrupt before starting
@@ -1624,29 +1608,8 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
 
     // Use shell wrapper to ensure consistent execution and stderr capture
     // Redirect stdin to /dev/null to prevent child processes from competing for terminal input
-    // Try to use 'timeout' command for reliable total timeout enforcement
-    int use_timeout = timeout_command_available();
-
-    if (use_timeout) {
-        // Use timeout command for kernel-enforced total timeout
-        snprintf(full_command, sizeof(full_command),
-                 "timeout %ds sh -c '%s' </dev/null 2>&1",
-                 timeout_seconds, escaped_command);
-        LOG_DEBUG("Using kernel-enforced timeout via 'timeout' command");
-    } else {
-        // Fallback to original implementation without timeout command
-        snprintf(full_command, sizeof(full_command),
-                 "sh -c '%s' </dev/null 2>&1", escaped_command);
-
-        // Warn about missing timeout command
-        if (g_active_tool_queue) {
-            char warning[256];
-            snprintf(warning, sizeof(warning),
-                    "[Warning] 'timeout' command not available. Using application-level timeout (less reliable).");
-            post_tui_message(g_active_tool_queue, TUI_MSG_ADD_LINE, warning);
-        }
-        LOG_WARN("timeout command not available, using application-level timeout");
-    }
+    snprintf(full_command, sizeof(full_command),
+             "sh -c '%s' </dev/null 2>&1", escaped_command);
 
     // Temporarily redirect stderr to prevent any direct terminal output
     int saved_stderr = -1;
@@ -1665,276 +1628,38 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
         }
     }
 
-    FILE *pipe = popen(full_command, "r");
-    if (!pipe) {
-        // Restore stderr before returning error
-        if (saved_stderr != -1) {
-            dup2(saved_stderr, STDERR_FILENO);
-            close(saved_stderr);
-            fflush(stderr);
-        }
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Failed to execute command");
-        return error;
-    }
-
-    char *output = NULL;
-    size_t total_size = 0;
-    char buffer[BUFFER_SIZE];
-
-    // Get the file descriptor from the pipe
-    int fd = fileno(pipe);
-
+    // Use the new process_utils function for robust command execution
     int timed_out = 0;
-    int truncated = 0;
-
-    if (use_timeout) {
-        // Simple blocking reads - timeout is enforced by 'timeout' command
-        while (1) {
-            // Check for interrupt during long-running command
-            if (state && state->interrupt_requested) {
-                free(output);
-                pclose(pipe);
-                // Restore stderr before returning error
-                if (saved_stderr != -1) {
-                    dup2(saved_stderr, STDERR_FILENO);
-                    close(saved_stderr);
-                    fflush(stderr);
-                }
-                cJSON *error = cJSON_CreateObject();
-                cJSON_AddStringToObject(error, "error", "Operation interrupted by user");
-                return error;
-            }
-
-            // Add cancellation point to allow thread cancellation during long reads
-            pthread_testcancel();
-
-            // Simple blocking read - timeout is handled by 'timeout' command
-            if (fgets(buffer, sizeof(buffer), pipe) == NULL) {
-                // EOF or error
-                if (ferror(pipe)) {
-                    LOG_ERROR("Error reading from pipe: %s", strerror(errno));
-                }
-                break;
-            }
-
-            size_t len = strlen(buffer);
-
-            // Check if adding this buffer would exceed maximum output size
-            if (total_size + len >= BASH_OUTPUT_MAX_SIZE) {
-                // Calculate how much we can add before hitting the limit
-                size_t remaining = BASH_OUTPUT_MAX_SIZE - total_size;
-                if (remaining > 0) {
-                    // Add partial buffer content
-                    char *new_output = realloc(output, total_size + remaining + 1);
-                    if (!new_output) {
-                        free(output);
-                        pclose(pipe);
-                        // Restore stderr before returning error
-                        if (saved_stderr != -1) {
-                            dup2(saved_stderr, STDERR_FILENO);
-                            close(saved_stderr);
-                            fflush(stderr);
-                        }
-                        cJSON *error = cJSON_CreateObject();
-                        cJSON_AddStringToObject(error, "error", "Out of memory");
-                        return error;
-                    }
-                    output = new_output;
-                    memcpy(output + total_size, buffer, remaining);
-                    total_size += remaining;
-                    output[total_size] = '\0';
-                }
-
-                // Set truncated flag and break out of the loop
-                truncated = 1;
-                break;
-            }
-
-            char *new_output = realloc(output, total_size + len + 1);
-            if (!new_output) {
-                free(output);
-                pclose(pipe);
-                // Restore stderr before returning error
-                if (saved_stderr != -1) {
-                    dup2(saved_stderr, STDERR_FILENO);
-                    close(saved_stderr);
-                    fflush(stderr);
-                }
-                cJSON *error = cJSON_CreateObject();
-                cJSON_AddStringToObject(error, "error", "Out of memory");
-                return error;
-            }
-            output = new_output;
-            memcpy(output + total_size, buffer, len);
-            total_size += len;
-            output[total_size] = '\0';
-        }
-    } else {
-        // Fallback: Use select() with total timeout (not per-read timeout)
-        time_t start_time = time(NULL);
-
-        while (1) {
-            // Check for interrupt during long-running command
-            if (state && state->interrupt_requested) {
-                free(output);
-                pclose(pipe);
-                // Restore stderr before returning error
-                if (saved_stderr != -1) {
-                    dup2(saved_stderr, STDERR_FILENO);
-                    close(saved_stderr);
-                    fflush(stderr);
-                }
-                cJSON *error = cJSON_CreateObject();
-                cJSON_AddStringToObject(error, "error", "Operation interrupted by user");
-                return error;
-            }
-
-            // Add cancellation point to allow thread cancellation during long reads
-            pthread_testcancel();
-
-            // Calculate remaining time for total timeout
-            time_t current_time = time(NULL);
-            time_t elapsed = current_time - start_time;
-            int remaining_time = timeout_seconds - (int)elapsed;
-
-            if (remaining_time <= 0) {
-                // Total timeout reached
-                timed_out = 1;
-                LOG_WARN("Bash command timed out after %d seconds: %s", timeout_seconds, command);
-                break;
-            }
-
-            // Use select() to check if there's data available with remaining timeout
-            fd_set readfds;
-            FD_ZERO(&readfds);
-            FD_SET(fd, &readfds);
-
-            struct timeval timeout;
-            timeout.tv_sec = remaining_time;
-            timeout.tv_usec = 0;
-
-            int select_result = select(fd + 1, &readfds, NULL, NULL, &timeout);
-
-            if (select_result == -1) {
-                // select() error
-                LOG_ERROR("select() failed: %s", strerror(errno));
-                free(output);
-                pclose(pipe);
-                // Restore stderr before returning error
-                if (saved_stderr != -1) {
-                    dup2(saved_stderr, STDERR_FILENO);
-                    close(saved_stderr);
-                    fflush(stderr);
-                }
-                cJSON *error = cJSON_CreateObject();
-                cJSON_AddStringToObject(error, "error", "Failed to monitor command execution");
-                return error;
-            } else if (select_result == 0) {
-                // Timeout occurred (should have been caught by total timeout check above)
-                timed_out = 1;
-                LOG_WARN("Bash command timed out after %d seconds: %s", timeout_seconds, command);
-                break;
-            }
-
-            // Data is available, try to read
-            if (fgets(buffer, sizeof(buffer), pipe) == NULL) {
-                // EOF or error
-                if (ferror(pipe)) {
-                    LOG_ERROR("Error reading from pipe: %s", strerror(errno));
-                }
-                break;
-            }
-
-            size_t len = strlen(buffer);
-
-            // Check if adding this buffer would exceed maximum output size
-            if (total_size + len >= BASH_OUTPUT_MAX_SIZE) {
-                // Calculate how much we can add before hitting the limit
-                size_t remaining = BASH_OUTPUT_MAX_SIZE - total_size;
-                if (remaining > 0) {
-                    // Add partial buffer content
-                    char *new_output = realloc(output, total_size + remaining + 1);
-                    if (!new_output) {
-                        free(output);
-                        pclose(pipe);
-                        // Restore stderr before returning error
-                        if (saved_stderr != -1) {
-                            dup2(saved_stderr, STDERR_FILENO);
-                            close(saved_stderr);
-                            fflush(stderr);
-                        }
-                        cJSON *error = cJSON_CreateObject();
-                        cJSON_AddStringToObject(error, "error", "Out of memory");
-                        return error;
-                    }
-                    output = new_output;
-                    memcpy(output + total_size, buffer, remaining);
-                    total_size += remaining;
-                    output[total_size] = '\0';
-                }
-
-                // Set truncated flag and break out of the loop
-                truncated = 1;
-                break;
-            }
-
-            char *new_output = realloc(output, total_size + len + 1);
-            if (!new_output) {
-                free(output);
-                pclose(pipe);
-                // Restore stderr before returning error
-                if (saved_stderr != -1) {
-                    dup2(saved_stderr, STDERR_FILENO);
-                    close(saved_stderr);
-                    fflush(stderr);
-                }
-                cJSON *error = cJSON_CreateObject();
-                cJSON_AddStringToObject(error, "error", "Out of memory");
-                return error;
-            }
-            output = new_output;
-            memcpy(output + total_size, buffer, len);
-            total_size += len;
-            output[total_size] = '\0';
-        }
+    char *output = NULL;
+    size_t output_size = 0;
+    volatile int *interrupt_flag = state ? &state->interrupt_requested : NULL;
+    
+    // Create a local interrupt flag if state is NULL
+    volatile int local_interrupt_flag = 0;
+    if (!interrupt_flag) {
+        interrupt_flag = &local_interrupt_flag;
     }
+    
+    int exit_code = execute_command_with_timeout(
+        full_command,
+        timeout_seconds,
+        &timed_out,
+        &output,
+        &output_size,
+        interrupt_flag
+    );
 
-    int status = pclose(pipe);
-    int exit_code;
-
-    if (use_timeout) {
-        // When using timeout command, check for timeout exit code (124)
-        exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-        if (exit_code == 124) {
-            timed_out = 1;
-            exit_code = -2;  // Map to our special timeout code
-        } else if (exit_code == 125) {
-            // timeout command itself failed
-            LOG_ERROR("timeout command failed (exit code 125)");
-            // Fall through with original exit code
-        } else if (exit_code == 126 || exit_code == 127) {
-            // Command not found or not executable
-            // timeout returns these codes when the wrapped command fails
-            LOG_DEBUG("Wrapped command failed (exit code %d)", exit_code);
-            // Keep the original exit code
-        }
-    } else {
-        // Fallback: use our own timeout detection
-        if (timed_out) {
-            // Kill the process group to ensure all child processes are terminated
-            pid_t pgid = getpgid(fileno(pipe));
-            if (pgid > 0) {
-                kill(-pgid, SIGTERM);
-                // Give it a moment to terminate gracefully
-                usleep(100000); // 100ms
-                kill(-pgid, SIGKILL);
+    // Check for truncation
+    int truncated = 0;
+    if (output_size >= BASH_OUTPUT_MAX_SIZE) {
+        truncated = 1;
+        // Truncate the output to the maximum size
+        if (output_size > BASH_OUTPUT_MAX_SIZE) {
+            output = realloc(output, BASH_OUTPUT_MAX_SIZE + 1);
+            if (output) {
+                output[BASH_OUTPUT_MAX_SIZE] = '\0';
+                output_size = BASH_OUTPUT_MAX_SIZE;
             }
-            // Close pipe again after killing
-            pclose(pipe);
-            exit_code = -2;  // Special code for timeout
-        } else {
-            exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
         }
     }
 
@@ -1959,15 +1684,9 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
 
     if (timed_out) {
         char timeout_msg[256];
-        if (use_timeout) {
-            snprintf(timeout_msg, sizeof(timeout_msg),
-                    "Command timed out after %d seconds (kernel-enforced timeout). Use KLAWED_BASH_TIMEOUT to adjust timeout.",
-                    timeout_seconds);
-        } else {
-            snprintf(timeout_msg, sizeof(timeout_msg),
-                    "Command timed out after %d seconds (application timeout). Use KLAWED_BASH_TIMEOUT to adjust timeout.",
-                    timeout_seconds);
-        }
+        snprintf(timeout_msg, sizeof(timeout_msg),
+                "Command timed out after %d seconds. Use KLAWED_BASH_TIMEOUT to adjust timeout.",
+                timeout_seconds);
         cJSON_AddStringToObject(result, "timeout_error", timeout_msg);
     }
 
@@ -1975,7 +1694,7 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
         char truncate_msg[256];
         snprintf(truncate_msg, sizeof(truncate_msg),
                 "Command output was truncated at %zu bytes (maximum: %d bytes).",
-                total_size, BASH_OUTPUT_MAX_SIZE);
+                output_size, BASH_OUTPUT_MAX_SIZE);
         cJSON_AddStringToObject(result, "truncation_warning", truncate_msg);
     }
 
@@ -6682,7 +6401,7 @@ static int interrupt_callback(void *user_data) {
     } else {
         // No work in queue, but interrupt flag is set for any ongoing operations
         LOG_INFO("User pressed Ctrl+C - interrupt flag set for any ongoing operations");
-        ui_set_status(NULL, queue, "Interruptted");
+        ui_set_status(NULL, queue, "Interrupted");
     }
 
     return 0;  // Always continue running (never exit on Ctrl+C)

@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
 /* ========================================================================
  * TUI Message Queue Implementation
@@ -239,9 +240,24 @@ int enqueue_instruction(AIInstructionQueue *queue, const char *text, void *conve
 
     pthread_mutex_lock(&queue->mutex);
 
-    /* Wait until space available or shutdown */
+    /* Wait until space available or shutdown, with timeout */
+    struct timespec timeout;
+    clock_gettime(CLOCK_REALTIME, &timeout);
+    timeout.tv_sec += 5;  // 5 second timeout
+    
     while (queue->count == queue->capacity && !queue->shutdown) {
-        pthread_cond_wait(&queue->not_full, &queue->mutex);
+        int rc = pthread_cond_timedwait(&queue->not_full, &queue->mutex, &timeout);
+        if (rc == ETIMEDOUT) {
+            pthread_mutex_unlock(&queue->mutex);
+            free(text_copy);
+            LOG_WARN("enqueue_instruction timed out after 5 seconds (queue full)");
+            return -1;
+        } else if (rc != 0) {
+            pthread_mutex_unlock(&queue->mutex);
+            free(text_copy);
+            LOG_ERROR("pthread_cond_timedwait failed: %s", strerror(rc));
+            return -1;
+        }
     }
 
     /* Check shutdown flag */
