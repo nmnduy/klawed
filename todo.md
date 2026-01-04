@@ -475,4 +475,4 @@ zsh: abort      OPENAI_API_KEY=sk-3ec6a2b143b7498590dc72ccf074a8fe OPENAI_API_BA
 
 - [x] log WARN when finish_reason is 'length' (implemented in klawed.c:6170 and klawed.c:7068)
 
-- [ ] add `make bump-minor-version`
+- [x] add `make bump-minor-version`
