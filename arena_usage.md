@@ -1,0 +1,30 @@
+- [ ] src/completion.c:80-200 - Directory completion system with many small string allocations for file/directory names
+- [ ] src/completion.c:172-200 - Array expansion for completion options using reallocarray
+- [ ] src/ncurses_input.c:70-120 - History management system with strdup for each history entry
+- [ ] src/ncurses_input.c:105-120 - History addition with circular buffer and individual frees
+- [ ] src/openai_provider.c:85-160 - Streaming context with accumulated text buffer allocations
+- [ ] src/openai_provider.c:547-800 - API response parsing with tool call allocations and error messages
+- [ ] src/openai_provider.c:772-802 - Tool call array allocation and string duplication
+- [ ] src/openai_provider.c:914-1038 - Provider configuration with many string allocations (API key, base URL, headers)
+- [ ] src/anthropic_provider.c:371-389 - Streaming context with multiple text buffers
+- [ ] src/anthropic_provider.c:819-890 - Anthropic API response parsing with tool allocations
+- [ ] src/anthropic_provider.c:868-887 - Tool call array and string allocations
+- [ ] src/anthropic_provider.c:965-1001 - Anthropic provider configuration string allocations
+- [ ] src/mcp.c:268-317 - MCP server configuration with command, arguments, and environment strings
+- [ ] src/mcp.c:1089-1168 - MCP tool handling with result string allocations
+- [ ] src/mcp.c:1538-1546 - Resource URI and name allocations
+- [ ] src/subagent_manager.c:31-121 - Subagent process management with prompt and log file strings
+- [ ] src/subagent_manager.c:102-121 - Subagent process allocation and string duplication
+- [ ] src/subagent_manager.c:337-343 - Subagent process copying with string duplication
+- [ ] src/sqlite_queue.c:319-342 - Message array allocation for SQLite queue operations
+- [ ] src/sqlite_queue.c:722-740 - Tool result string allocations in SQLite queue
+- [ ] src/commands.c:537-614 - Command completion with glob results and string allocations
+- [ ] src/commands.c:602-614 - Directory completion result allocation
+- [ ] src/history_search.c:119-129 - History search results with command string duplication
+- [ ] src/file_search.c:79-277 - File search cache and results array allocations
+- [ ] src/zmq_message_queue.c:327-353 - ZMQ message allocation with data buffer
+- [ ] src/history_file.c:127-254 - History file operations with escaped/unescaped string buffers
+- [ ] src/process_utils.c:161-192 - Process output buffer reallocation during command execution
+- [ ] src/array_resize.c:211-315 - Generic array resize operations with realloc patterns
+- [ ] src/klawed.c:832-937 - File content reading and additional directories array management
+- [ ] src/klawed.c:1127-1287 - Image data loading and result string allocations
