@@ -16,5 +16,11 @@
 // Returns 0 on success.
 int summarize_bash_command(const char *cmd, char *out, size_t outsz);
 
+// Trim trailing whitespace from a string in-place.
+// Modifies the original string by removing whitespace characters
+// (space, tab, newline, carriage return, formfeed, vertical tab)
+// from the end of the string.
+void trim_trailing_whitespace(char *str);
+
 #endif // TOOL_UTILS_H
 

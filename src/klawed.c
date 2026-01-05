@@ -1523,6 +1523,17 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     }
 
     const char *command = cmd_json->valuestring;
+    
+    // Create a copy of the command to trim trailing whitespace
+    char *command_copy = strdup(command);
+    if (!command_copy) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Memory allocation failed for command copy");
+        return error;
+    }
+    
+    // Trim trailing whitespace from the command copy
+    trim_trailing_whitespace(command_copy);
 
     // Check for verbose tool logging
     int tool_verbose = 0;
@@ -1535,7 +1546,7 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
 
     // Verbose logging for Bash tool
     if (tool_verbose >= 1) {
-        LOG_DEBUG("[TOOL VERBOSE] Bash tool executing command: %s", command);
+        LOG_DEBUG("[TOOL VERBOSE] Bash tool executing command: %s", command_copy);
     }
 
     // Get timeout from parameter, environment, or use default (30 seconds)
@@ -1592,8 +1603,8 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     // Escape single quotes in the command for shell safety
     char escaped_command[BUFFER_SIZE];
     size_t j = 0;
-    for (size_t i = 0; command[i] && j < sizeof(escaped_command) - 1; i++) {
-        if (command[i] == '\'') {
+    for (size_t i = 0; command_copy[i] && j < sizeof(escaped_command) - 1; i++) {
+        if (command_copy[i] == '\'') {
             if (j < sizeof(escaped_command) - 2) {
                 escaped_command[j++] = '\'';
                 escaped_command[j++] = '\\';
@@ -1601,7 +1612,7 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
                 escaped_command[j++] = '\'';
             }
         } else {
-            escaped_command[j++] = command[i];
+            escaped_command[j++] = command_copy[i];
         }
     }
     escaped_command[j] = '\0';
@@ -1706,6 +1717,7 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     }
 
     free(output);
+    free(command_copy);
     return result;
 }
 
@@ -6421,13 +6433,24 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         return 0;
     }
 
+    // Create a copy of the command to trim trailing whitespace
+    char *cmd_copy = strdup(cmd);
+    if (!cmd_copy) {
+        LOG_ERROR("Failed to allocate memory for command copy");
+        return 0;
+    }
+    
+    // Trim trailing whitespace from the command copy
+    trim_trailing_whitespace(cmd_copy);
+
     // Check for quit commands
-    if (strcmp(cmd, "q") == 0 || strcmp(cmd, "quit") == 0 || strcmp(cmd, "wq") == 0) {
+    if (strcmp(cmd_copy, "q") == 0 || strcmp(cmd_copy, "quit") == 0 || strcmp(cmd_copy, "wq") == 0) {
+        free(cmd_copy);
         return 1;  // Signal to exit
     }
 
     // Check for help command
-    if (strcmp(cmd, "help") == 0) {
+    if (strcmp(cmd_copy, "help") == 0) {
         ui_append_line(tui, queue, "[Help]", "Vim-style commands:", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :q, :quit, :wq - Exit klawed", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :!<cmd> - Execute shell command (e.g., :!ls)", COLOR_PAIR_STATUS);
@@ -6435,12 +6458,13 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         ui_append_line(tui, queue, "[Help]", "  :vim - Open vim editor (shortcut for :!vim)", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :git - Open vim-fugitive (requires vim-fugitive plugin)", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :help - Show this help", COLOR_PAIR_STATUS);
+        free(cmd_copy);
         return 0;
     }
 
     // Check for shell escape: :!<cmd>
-    if (cmd[0] == '!') {
-        const char *shell_cmd = cmd + 1;
+    if (cmd_copy[0] == '!') {
+        const char *shell_cmd = cmd_copy + 1;
         // Skip leading whitespace
         while (*shell_cmd == ' ' || *shell_cmd == '\t') {
             shell_cmd++;
@@ -6448,6 +6472,7 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
 
         if (shell_cmd[0] == '\0') {
             ui_show_error(tui, queue, "No command specified after :!");
+            free(cmd_copy);
             return 0;
         }
 
@@ -6459,6 +6484,7 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         // Suspend TUI to run command
         if (tui_suspend(tui) != 0) {
             ui_show_error(tui, queue, "Failed to suspend TUI for shell command");
+            free(cmd_copy);
             return 0;
         }
 
@@ -6497,14 +6523,16 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         }
 
         ui_set_status(tui, queue, "");
+        free(cmd_copy);
         return 0;
     }
 
     // Check for read command output: :re !<cmd>
-    if (strncmp(cmd, "re !", 4) == 0) {
-        const char *shell_cmd = cmd + 4;
+    if (strncmp(cmd_copy, "re !", 4) == 0) {
+        const char *shell_cmd = cmd_copy + 4;
         if (shell_cmd[0] == '\0') {
             ui_show_error(tui, queue, "No command specified after :re !");
+            free(cmd_copy);
             return 0;
         }
 
@@ -6588,12 +6616,13 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         }
 
         ui_set_status(tui, queue, "");
+        free(cmd_copy);
         // Return -1 to indicate "don't clear input buffer"
         return -1;
     }
 
     // Check for :vim command (shortcut for :!vim)
-    if (strcmp(cmd, "vim") == 0) {
+    if (strcmp(cmd_copy, "vim") == 0) {
         // Treat as :!vim
         const char *shell_cmd = "vim";
         // Show what we're executing
@@ -6604,6 +6633,7 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         // Suspend TUI to run command
         if (tui_suspend(tui) != 0) {
             ui_show_error(tui, queue, "Failed to suspend TUI for shell command");
+            free(cmd_copy);
             return 0;
         }
 
@@ -6642,11 +6672,12 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         }
 
         ui_set_status(tui, queue, "");
+        free(cmd_copy);
         return 0;
     }
 
     // Check for :git command (opens vim-fugitive if available)
-    if (strcmp(cmd, "git") == 0) {
+    if (strcmp(cmd_copy, "git") == 0) {
         // Check cached vim-fugitive availability first
         int fugitive_available = tui_get_vim_fugitive_available(tui);
         
@@ -6662,6 +6693,7 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
             if (!fp) {
                 ui_show_error(tui, queue, "Failed to check vim-fugitive availability");
                 ui_set_status(tui, queue, "");
+                free(cmd_copy);
                 return 0;
             }
             
@@ -6694,6 +6726,7 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
             // Suspend TUI to run command
             if (tui_suspend(tui) != 0) {
                 ui_show_error(tui, queue, "Failed to suspend TUI for shell command");
+                free(cmd_copy);
                 return 0;
             }
             
@@ -6739,13 +6772,15 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         }
         
         ui_set_status(tui, queue, "");
+        free(cmd_copy);
         return 0;
     }
 
     // Unknown command
     char error_msg[256];
-    snprintf(error_msg, sizeof(error_msg), "Unknown vim command: %s", cmd);
+    snprintf(error_msg, sizeof(error_msg), "Unknown vim command: %s", cmd_copy);
     ui_show_error(tui, queue, error_msg);
+    free(cmd_copy);
     return 0;
 }
 

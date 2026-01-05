@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <limits.h>
+#include <ctype.h>
 
 #include "tool_utils.h"
 
@@ -115,5 +116,21 @@ int summarize_bash_command(const char *cmd, char *out, size_t outsz) {
 
     safe_copy_with_ellipsis(chosen, out, outsz);
     return 0;
+}
+
+void trim_trailing_whitespace(char *str) {
+    if (!str) return;
+    
+    size_t len = strlen(str);
+    if (len == 0) return;
+    
+    // Start from the end and move backwards while we find whitespace
+    size_t i = len;
+    while (i > 0 && isspace((unsigned char)str[i - 1])) {
+        i--;
+    }
+    
+    // Null-terminate at the new end
+    str[i] = '\0';
 }
 
