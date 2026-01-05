@@ -600,11 +600,13 @@ int history_search_process_key(HistorySearchState *state, int ch) {
 
         case KEY_UP:
         case 'k':
+        case 16:  // Ctrl+P - previous (like readline)
             history_search_select_prev(state);
             break;
 
         case KEY_DOWN:
         case 'j':
+        case 14:  // Ctrl+N - next (like readline)
             history_search_select_next(state);
             break;
 
@@ -614,6 +616,7 @@ int history_search_process_key(HistorySearchState *state, int ch) {
 
         case KEY_NPAGE:
         case ' ':
+        case 4:   // Ctrl+D - page down (like file search)
             history_search_page_down(state);
             break;
 
@@ -625,6 +628,20 @@ int history_search_process_key(HistorySearchState *state, int ch) {
 
         case KEY_DC:  // Delete
             // Clear pattern on delete when at end?
+            break;
+
+        case 11:  // Ctrl+K - delete to end of line
+            // Since cursor is always at end in current implementation,
+            // this does nothing, but we keep it for consistency
+            break;
+
+        case 21:  // Ctrl+U - delete to beginning of line
+        case 21 + 64:  // Ctrl+U (alternative)
+            history_search_clear_pattern(state);
+            break;
+
+        case 12:  // Ctrl+L - clear pattern
+            history_search_clear_pattern(state);
             break;
 
         case KEY_HOME:
