@@ -26,6 +26,7 @@ Project instructions for Klawed when working with this codebase.
 - **MCP**: `src/mcp.c`, `src/mcp.h`, `docs/mcp.md` (external tool servers)
 - **TODO system**: `src/todo.c`, `src/todo.h`
 - **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/normal-mode.md`
+- **Arena allocator**: `src/arena.h` (region-based memory management, single-header library)
 
 **Data & State:**
 - **Database/Persistence**: `src/persistence.c`, `src/sqlite_queue.c`, `docs/sqlite-queue.md`
@@ -114,7 +115,7 @@ libbsd is a newly introduced to this codebase. We will slowly transition to it. 
 9. **Careful pointer use** - Be mindful of pointer complexity
 10. **Zero warnings** - Compile with all warnings, pass static analysis ✓
 
-**Note:** These rules were discovered after the project has somewhat matured. You might see code that violates them. That's fine, we will incrementally refactor following the rules above.
+**Note:** These rules were discovered after the project has somewhat matured. You might see code that violates them. That's fine, we will incrementally refactor following the rules above. If it makes practical sense to use memory allocation, then use `src/arena.h`.
 
 **Full details:** `docs/nasa_c_coding_standards.md`
 
