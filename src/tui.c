@@ -2255,7 +2255,7 @@ void tui_refresh(TUIState *tui) {
     window_manager_refresh_all(&tui->wm);
 }
 
-void tui_clear_conversation(TUIState *tui) {
+void tui_clear_conversation(TUIState *tui, const char *version, const char *model, const char *working_dir) {
     if (!tui || !tui->is_initialized) return;
 
     // Validate conversation pad exists
@@ -2277,6 +2277,24 @@ void tui_clear_conversation(TUIState *tui) {
 
     // Add a system message indicating the clear
     tui_add_conversation_line(tui, "[System]", "Conversation history cleared", COLOR_PAIR_STATUS);
+
+    // Show mascot banner again (useful info like current directory)
+    // Try to get version/model/working_dir from parameters or TUI state
+    const char *ver = version;
+    const char *mod = model;
+    const char *dir = working_dir;
+    
+    // If parameters are NULL but we have conversation state, try to get from there
+    if (tui->conversation_state) {
+        if (!mod) mod = tui->conversation_state->model;
+        if (!dir) dir = tui->conversation_state->working_dir;
+    }
+    
+    // Show mascot if we have at least model and working directory
+    // Version can be NULL - we'll show placeholder in that case
+    if (mod && dir) {
+        tui_show_startup_banner(tui, ver ? ver : "?", mod, dir);
+    }
 
     // Refresh all windows to ensure consistent state
     window_manager_refresh_all(&tui->wm);
@@ -2482,7 +2500,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     char tip_line[512];
 
     // ASCII art cat mascot
-    snprintf(line1, sizeof(line1), "  /\\_/\\   klawed v%s", version);
+    snprintf(line1, sizeof(line1), "  /\\_/\\   klawed v%s", version ? version : "?");
     snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
     snprintf(line3, sizeof(line3), "  > ^ <    %s", working_dir);
 
@@ -4351,7 +4369,7 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
             break;
 
         case TUI_MSG_CLEAR:
-            tui_clear_conversation(tui);
+            tui_clear_conversation(tui, NULL, NULL, NULL);
             break;
 
         case TUI_MSG_ERROR:

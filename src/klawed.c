@@ -6779,7 +6779,7 @@ static int submit_input_callback(const char *input, void *user_data) {
 
         // For /clear, also clear the TUI
         if (strncmp(input_copy, "/clear", 6) == 0) {
-            tui_clear_conversation(tui);
+            tui_clear_conversation(tui, VERSION, state->model, state->working_dir);
         }
 
         // For /add-dir, rebuild system prompt

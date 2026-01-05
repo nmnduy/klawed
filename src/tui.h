@@ -180,8 +180,8 @@ void tui_update_status(TUIState *tui, const char *status_text);
 // Refresh the display (call after making changes)
 void tui_refresh(TUIState *tui);
 
-// Clear conversation display
-void tui_clear_conversation(TUIState *tui);
+// Clear conversation display and show mascot banner
+void tui_clear_conversation(TUIState *tui, const char *version, const char *model, const char *working_dir);
 
 // Handle terminal resize
 void tui_handle_resize(TUIState *tui);
