@@ -6647,27 +6647,44 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
 
     // Check for :git command (opens vim-fugitive if available)
     if (strcmp(cmd, "git") == 0) {
-        // First check if vim-fugitive is available by running vim with a test command
-        char test_cmd[512];
-        snprintf(test_cmd, sizeof(test_cmd), 
-                 "vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" 2>&1");
+        // Check cached vim-fugitive availability first
+        int fugitive_available = tui_get_vim_fugitive_available(tui);
         
-        FILE *fp = popen(test_cmd, "r");
-        if (!fp) {
-            ui_show_error(tui, queue, "Failed to check vim-fugitive availability");
-            return 0;
+        // If not checked yet, run the check synchronously (this will be slow)
+        if (fugitive_available == -1) {
+            ui_set_status(tui, queue, "Checking vim-fugitive availability...");
+            
+            char test_cmd[512];
+            snprintf(test_cmd, sizeof(test_cmd), 
+                     "vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" 2>&1");
+            
+            FILE *fp = popen(test_cmd, "r");
+            if (!fp) {
+                ui_show_error(tui, queue, "Failed to check vim-fugitive availability");
+                ui_set_status(tui, queue, "");
+                return 0;
+            }
+            
+            char buffer[256];
+            // Read output to check for errors
+            while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+                // Just consume output
+            }
+            
+            int rc = pclose(fp);
+            fugitive_available = (rc == 0) ? 1 : 0;
+            
+            // Cache the result for future use
+            if (tui->vim_fugitive_mutex_initialized) {
+                pthread_mutex_lock(&tui->vim_fugitive_mutex);
+                tui->vim_fugitive_available = fugitive_available;
+                pthread_mutex_unlock(&tui->vim_fugitive_mutex);
+            }
+            
+            ui_set_status(tui, queue, "");
         }
         
-        char buffer[256];
-        // Read output to check for errors
-        while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-            // Just consume output
-        }
-        
-        int rc = pclose(fp);
-        // vim returns 0 if fugitive exists (Git command exists), non-zero otherwise
-        
-        if (rc == 0) {
+        if (fugitive_available == 1) {
             // vim-fugitive is available, open vim with :Git command
             const char *shell_cmd = "vim -c Git";
             char status_msg[256];
@@ -6712,7 +6729,7 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
             if (tui_resume(tui) != 0) {
                 ui_show_error(tui, queue, "Failed to resume TUI after shell command");
             }
-        } else {
+        } else if (fugitive_available == 0) {
             // vim-fugitive is not available
             ui_append_line(tui, queue, "[Info]", "vim-fugitive plugin is not available", COLOR_PAIR_STATUS);
             ui_append_line(tui, queue, "[Info]", "Install it with your vim plugin manager:", COLOR_PAIR_STATUS);

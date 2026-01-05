@@ -1684,6 +1684,15 @@ int tui_init(TUIState *tui, ConversationState *state) {
     signal(SIGWINCH, handle_resize);
 #endif
 
+    // Initialize vim-fugitive availability tracking
+    tui->vim_fugitive_available = -1;  // Unknown state
+    tui->vim_fugitive_mutex_initialized = 0;
+    if (pthread_mutex_init(&tui->vim_fugitive_mutex, NULL) == 0) {
+        tui->vim_fugitive_mutex_initialized = 1;
+    } else {
+        LOG_WARN("[TUI] Failed to initialize vim-fugitive mutex");
+    }
+
     tui->is_initialized = 1;
 
     LOG_DEBUG("[TUI] Initialized (screen=%dx%d, conv_h=%d, status_h=%d, input_h=%d)",
@@ -1698,6 +1707,9 @@ int tui_init(TUIState *tui, ConversationState *state) {
     }
 
     refresh();
+
+    // Start background check for vim-fugitive availability
+    tui_start_vim_fugitive_check(tui);
 
     return 0;
 }
@@ -1745,6 +1757,12 @@ void tui_cleanup(TUIState *tui) {
     printf("\n");
     LOG_DEBUG("[TUI] Cleaned up ncurses resources");
     fflush(stdout);
+
+    // Clean up vim-fugitive mutex
+    if (tui->vim_fugitive_mutex_initialized) {
+        pthread_mutex_destroy(&tui->vim_fugitive_mutex);
+        tui->vim_fugitive_mutex_initialized = 0;
+    }
 
     // Free input history
     if (tui->input_history) {
@@ -1817,6 +1835,92 @@ int tui_resume(TUIState *tui) {
 
     tui->terminal_suspended = 0;
     return 0;
+}
+
+// Thread function to check vim-fugitive availability in background
+static void* check_vim_fugitive_thread(void *arg) {
+    TUIState *tui = (TUIState *)arg;
+    if (!tui) return NULL;
+
+    LOG_DEBUG("[TUI] Background thread checking vim-fugitive availability");
+
+    // Check if vim-fugitive is available by running vim with a test command
+    char test_cmd[512];
+    snprintf(test_cmd, sizeof(test_cmd), 
+             "vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" 2>&1");
+    
+    FILE *fp = popen(test_cmd, "r");
+    if (!fp) {
+        LOG_WARN("[TUI] Failed to check vim-fugitive availability in background thread");
+        return NULL;
+    }
+    
+    char buffer[256];
+    // Read output to check for errors
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        // Just consume output
+    }
+    
+    int rc = pclose(fp);
+    // vim returns 0 if fugitive exists (Git command exists), non-zero otherwise
+    
+    int available = (rc == 0) ? 1 : 0;
+    
+    // Update the cached value with thread-safe mutex
+    if (tui->vim_fugitive_mutex_initialized) {
+        pthread_mutex_lock(&tui->vim_fugitive_mutex);
+        tui->vim_fugitive_available = available;
+        pthread_mutex_unlock(&tui->vim_fugitive_mutex);
+        
+        LOG_DEBUG("[TUI] Background check complete: vim-fugitive %s", 
+                  available ? "available" : "not available");
+    } else {
+        LOG_WARN("[TUI] Cannot update vim-fugitive availability - mutex not initialized");
+    }
+    
+    return NULL;
+}
+
+void tui_start_vim_fugitive_check(TUIState *tui) {
+    if (!tui) return;
+    
+    // Only start check if we haven't checked yet
+    if (tui->vim_fugitive_mutex_initialized) {
+        pthread_mutex_lock(&tui->vim_fugitive_mutex);
+        int current = tui->vim_fugitive_available;
+        pthread_mutex_unlock(&tui->vim_fugitive_mutex);
+        
+        if (current != -1) {
+            LOG_DEBUG("[TUI] vim-fugitive availability already checked: %d", current);
+            return;
+        }
+    }
+    
+    // Start background thread
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, check_vim_fugitive_thread, tui) != 0) {
+        LOG_WARN("[TUI] Failed to create background thread for vim-fugitive check");
+        return;
+    }
+    
+    // Detach thread so it cleans up automatically
+    pthread_detach(thread);
+    
+    LOG_DEBUG("[TUI] Started background thread to check vim-fugitive availability");
+}
+
+int tui_get_vim_fugitive_available(TUIState *tui) {
+    if (!tui) return -1;
+    
+    if (!tui->vim_fugitive_mutex_initialized) {
+        return -1;
+    }
+    
+    pthread_mutex_lock(&tui->vim_fugitive_mutex);
+    int result = tui->vim_fugitive_available;
+    pthread_mutex_unlock(&tui->vim_fugitive_mutex);
+    
+    return result;
 }
 
 void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {

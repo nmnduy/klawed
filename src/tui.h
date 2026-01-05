@@ -154,6 +154,11 @@ typedef struct TUIStateStruct {
     // File search state (Ctrl+F)
     FileSearchState file_search;      // File search popup state
     HistorySearchState history_search;  // History search popup state
+
+    // Vim-fugitive availability (cached to avoid slow checks)
+    int vim_fugitive_available;       // -1 = unknown, 0 = not available, 1 = available
+    pthread_mutex_t vim_fugitive_mutex; // Mutex for thread-safe access
+    int vim_fugitive_mutex_initialized; // Tracks mutex initialization
 } TUIState;
 
 // Initialize TUI (must be called before any other TUI functions)
@@ -246,5 +251,13 @@ int tui_suspend(TUIState *tui);
 // Resume TUI (restore terminal to program mode after external commands)
 // Returns 0 on success, -1 on error
 int tui_resume(TUIState *tui);
+
+// Check if vim-fugitive is available (cached result)
+// Returns: -1 = unknown/not checked yet, 0 = not available, 1 = available
+int tui_get_vim_fugitive_available(TUIState *tui);
+
+// Start background check for vim-fugitive availability
+// This spawns a thread to check without blocking the main thread
+void tui_start_vim_fugitive_check(TUIState *tui);
 
 #endif // TUI_H
