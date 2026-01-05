@@ -6407,6 +6407,183 @@ static int interrupt_callback(void *user_data) {
     return 0;  // Always continue running (never exit on Ctrl+C)
 }
 
+// Helper function to handle vim-style commands from input box
+static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char *command) {
+    if (!tui || !queue || !command) {
+        return 0;
+    }
+
+    // Skip the leading ':'
+    const char *cmd = command + 1;
+
+    // Handle empty command (just ':')
+    if (cmd[0] == '\0') {
+        return 0;
+    }
+
+    // Check for quit commands
+    if (strcmp(cmd, "q") == 0 || strcmp(cmd, "quit") == 0 || strcmp(cmd, "wq") == 0) {
+        return 1;  // Signal to exit
+    }
+
+    // Check for shell escape: :!<cmd>
+    if (cmd[0] == '!') {
+        const char *shell_cmd = cmd + 1;
+        // Skip leading whitespace
+        while (*shell_cmd == ' ' || *shell_cmd == '\t') {
+            shell_cmd++;
+        }
+
+        if (shell_cmd[0] == '\0') {
+            ui_show_error(tui, queue, "No command specified after :!");
+            return 0;
+        }
+
+        // Show what we're executing
+        char status_msg[256];
+        snprintf(status_msg, sizeof(status_msg), "Executing: %s", shell_cmd);
+        ui_set_status(tui, queue, status_msg);
+
+        // Suspend TUI to run command
+        if (tui_suspend(tui) != 0) {
+            ui_show_error(tui, queue, "Failed to suspend TUI for shell command");
+            return 0;
+        }
+
+        // Run the command
+        int rc = system(shell_cmd);
+        (void)rc;  // We don't display the return code
+
+        // Vim-style: wait for Enter before resuming
+        printf("\nPress ENTER or type command to continue");
+        fflush(stdout);
+
+        // Read a line from stdin
+        char *line = NULL;
+        size_t linecap = 0;
+        ssize_t linelen = getline(&line, &linecap, stdin);
+
+        if (linelen == -1) {
+            // Handle EOF or error
+            LOG_DEBUG("EOF or error reading from stdin after shell command");
+        } else if (linelen > 0 && line[linelen-1] == '\n') {
+            line[linelen-1] = '\0';
+            linelen--;
+        }
+
+        // If user typed a command (not just Enter), run it
+        if (linelen > 0) {
+            int rc2 = system(line);
+            (void)rc2;
+        }
+
+        free(line);
+
+        // Resume TUI
+        if (tui_resume(tui) != 0) {
+            ui_show_error(tui, queue, "Failed to resume TUI after shell command");
+        }
+
+        ui_set_status(tui, queue, "");
+        return 0;
+    }
+
+    // Check for read command output: :re !<cmd>
+    if (strncmp(cmd, "re !", 4) == 0) {
+        const char *shell_cmd = cmd + 4;
+        if (shell_cmd[0] == '\0') {
+            ui_show_error(tui, queue, "No command specified after :re !");
+            return 0;
+        }
+
+        // Show what we're executing
+        char status_msg[256];
+        snprintf(status_msg, sizeof(status_msg), "Reading output from: %s", shell_cmd);
+        ui_set_status(tui, queue, status_msg);
+
+        // Execute command and capture output
+        int timed_out = 0;
+        char *output = NULL;
+        size_t output_size = 0;
+        int interrupt_requested = 0;
+
+        int exit_code = execute_command_with_timeout(
+            shell_cmd,
+            30,  // 30 second timeout
+            &timed_out,
+            &output,
+            &output_size,
+            &interrupt_requested
+        );
+
+        if (timed_out) {
+            ui_show_error(tui, queue, "Command timed out after 30 seconds");
+        } else if (exit_code != 0) {
+            char error_msg[256];
+            snprintf(error_msg, sizeof(error_msg), "Command failed with exit code %d", exit_code);
+            ui_show_error(tui, queue, error_msg);
+        } else if (output && output_size > 0) {
+            // Success - put output in input buffer
+            // Clear current input first
+            tui_clear_input_buffer(tui);
+
+            // Copy output to input buffer
+            size_t output_len = output_size;
+            if (output_len > 0 && output[output_len-1] == '\n') {
+                output_len--;  // Remove trailing newline
+            }
+
+            // Truncate if too long (avoid buffer overflow)
+            // We'll insert in chunks if needed
+            const size_t MAX_INSERT = 4096;  // Reasonable limit
+            if (output_len > MAX_INSERT) {
+                output_len = MAX_INSERT;
+                char trunc_msg[256];
+                snprintf(trunc_msg, sizeof(trunc_msg),
+                         "Command output truncated to %zu chars", output_len);
+                ui_set_status(tui, queue, trunc_msg);
+            }
+
+            if (output_len > 0) {
+                // Create a null-terminated copy of the output
+                char *output_copy = malloc(output_len + 1);
+                if (output_copy) {
+                    memcpy(output_copy, output, output_len);
+                    output_copy[output_len] = '\0';
+
+                    // Insert into input buffer
+                    if (tui_insert_input_text(tui, output_copy) == 0) {
+                        char success_msg[256];
+                        snprintf(success_msg, sizeof(success_msg),
+                                 "Command output (%zu chars) loaded into input buffer", output_len);
+                        ui_set_status(tui, queue, success_msg);
+                    } else {
+                        ui_show_error(tui, queue, "Failed to insert command output into input buffer");
+                    }
+                    free(output_copy);
+                } else {
+                    ui_show_error(tui, queue, "Memory allocation failed for command output");
+                }
+            } else {
+                ui_set_status(tui, queue, "Command produced no output");
+            }
+        }
+
+        if (output) {
+            free(output);
+        }
+
+        ui_set_status(tui, queue, "");
+        return 0;
+    }
+
+    // Unknown command
+    char error_msg[256];
+    snprintf(error_msg, sizeof(error_msg), "Unknown vim command: %s", cmd);
+    ui_show_error(tui, queue, error_msg);
+    return 0;
+}
+
 // Submit callback invoked by the TUI event loop when the user presses Enter
 static int submit_input_callback(const char *input, void *user_data) {
     InteractiveContext *ctx = (InteractiveContext *)user_data;
@@ -6431,6 +6608,14 @@ static int submit_input_callback(const char *input, void *user_data) {
     if (!input_copy) {
         LOG_ERROR("Failed to allocate memory for input copy");
         return 0;
+    }
+
+    // Check for vim-style commands (starting with ':')
+    if (input_copy[0] == ':') {
+        ui_append_line(tui, queue, "[Command]", input_copy, COLOR_PAIR_STATUS);
+        int result = handle_vim_command(tui, queue, input_copy);
+        free(input_copy);
+        return result;  // 1 means exit, 0 means continue
     }
 
     if (input_copy[0] == '/') {
