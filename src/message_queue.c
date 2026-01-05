@@ -244,7 +244,7 @@ int enqueue_instruction(AIInstructionQueue *queue, const char *text, void *conve
     struct timespec timeout;
     clock_gettime(CLOCK_REALTIME, &timeout);
     timeout.tv_sec += 5;  // 5 second timeout
-    
+
     while (queue->count == queue->capacity && !queue->shutdown) {
         int rc = pthread_cond_timedwait(&queue->not_full, &queue->mutex, &timeout);
         if (rc == ETIMEDOUT) {

@@ -215,22 +215,22 @@ static int cmd_voice(ConversationState *state, const char *args) {
 
 static int cmd_help(ConversationState *state, const char *args) {
     (void)args;
-    
+
     // Build help text
     char help_text[2048];
     size_t pos = 0;
-    
+
     // Header
     const char *header = "Available commands:\n";
     strlcpy(help_text, header, sizeof(help_text));
     pos = strlen(help_text);
-    
+
     // List all commands
     for (int i = 0; i < command_count; i++) {
         const Command *cmd = command_registry[i];
         char line[256];
         snprintf(line, sizeof(line), "  %-12s %s\n", cmd->usage, cmd->description);
-        
+
         // Check if we have space
         if (pos + strlen(line) < sizeof(help_text) - 1) {
             strlcpy(help_text + pos, line, sizeof(help_text) - pos);
@@ -241,13 +241,13 @@ static int cmd_help(ConversationState *state, const char *args) {
             break;
         }
     }
-    
+
     // Footer
     const char *footer = "\nType /help to see this list again.";
     if (pos + strlen(footer) < sizeof(help_text) - 1) {
         strlcpy(help_text + pos, footer, sizeof(help_text) - pos);
     }
-    
+
     // Show help in appropriate way
     if (tui_mode_enabled && state && state->tui) {
         // In TUI mode: add to conversation
@@ -256,7 +256,7 @@ static int cmd_help(ConversationState *state, const char *args) {
         // In non-TUI mode: print to stdout
         print_status(help_text);
     }
-    
+
     return 0;
 }
 
@@ -336,7 +336,7 @@ static int cmd_themes(ConversationState *state, const char *args) {
 
 static int cmd_vim(ConversationState *state, const char *args) {
     (void)state; (void)args;
-    
+
     // Check if vim is available
     if (system("which vim >/dev/null 2>&1") != 0) {
         if (!tui_mode_enabled) {
@@ -345,7 +345,7 @@ static int cmd_vim(ConversationState *state, const char *args) {
         }
         return -1;
     }
-    
+
     // In TUI mode, we need to suspend the TUI before running vim
     if (tui_mode_enabled && state && state->tui) {
         if (tui_suspend(state->tui) != 0) {
@@ -353,10 +353,10 @@ static int cmd_vim(ConversationState *state, const char *args) {
             return -1;
         }
     }
-    
+
     // Run vim in the current directory
     int result = system("vim");
-    
+
     // Resume TUI if we suspended it
     if (tui_mode_enabled && state && state->tui) {
         if (tui_resume(state->tui) != 0) {
@@ -364,14 +364,14 @@ static int cmd_vim(ConversationState *state, const char *args) {
             // Continue anyway
         }
     }
-    
+
     if (result != 0) {
         if (!tui_mode_enabled) {
             print_error("vim exited with non-zero status");
         }
         return -1;
     }
-    
+
     return 0;
 }
 

@@ -37,7 +37,7 @@ int execute_command_with_timeout(
     // Create pipes for stdout/stderr
     int stdout_pipe[2];
     int stderr_pipe[2];
-    
+
     if (pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1) {
         LOG_ERROR("Failed to create pipes: %s", strerror(errno));
         return -1;
@@ -62,7 +62,7 @@ int execute_command_with_timeout(
         // Redirect stdout and stderr to pipes
         dup2(stdout_pipe[1], STDOUT_FILENO);
         dup2(stderr_pipe[1], STDERR_FILENO);
-        
+
         // Close write ends (now duplicated)
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
@@ -79,7 +79,7 @@ int execute_command_with_timeout(
 
         // Execute the command
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);
-        
+
         // If we get here, exec failed
         _exit(127);  // Command not found
     }
@@ -142,21 +142,21 @@ int execute_command_with_timeout(
         FD_ZERO(&readfds);
         FD_SET(stdout_pipe[0], &readfds);
         FD_SET(stderr_pipe[0], &readfds);
-        
+
         struct timeval timeout;
         timeout.tv_sec = 0;
         timeout.tv_usec = 100000;  // 100ms
-        
+
         int max_fd = (stdout_pipe[0] > stderr_pipe[0]) ? stdout_pipe[0] : stderr_pipe[0];
         int select_result = select(max_fd + 1, &readfds, NULL, NULL, &timeout);
-        
+
         if (select_result > 0) {
             // Read from stdout
             if (FD_ISSET(stdout_pipe[0], &readfds)) {
                 ssize_t bytes_read = read(stdout_pipe[0], buffer, sizeof(buffer) - 1);
                 if (bytes_read > 0) {
                     buffer[bytes_read] = '\0';
-                    
+
                     // Append to result
                     char *new_result = realloc(result, total_size + (size_t)bytes_read + 1);
                     if (!new_result) {
@@ -178,13 +178,13 @@ int execute_command_with_timeout(
                     stdout_pipe[0] = -1;
                 }
             }
-            
+
             // Read from stderr (append to same output)
             if (FD_ISSET(stderr_pipe[0], &readfds)) {
                 ssize_t bytes_read = read(stderr_pipe[0], buffer, sizeof(buffer) - 1);
                 if (bytes_read > 0) {
                     buffer[bytes_read] = '\0';
-                    
+
                     // Append to result
                     char *new_result = realloc(result, total_size + (size_t)bytes_read + 1);
                     if (!new_result) {
@@ -210,7 +210,7 @@ int execute_command_with_timeout(
             LOG_ERROR("select failed: %s", strerror(errno));
             break;
         }
-        
+
         // If both pipes are closed and process hasn't exited yet, wait a bit
         if ((stdout_pipe[0] == -1 || !FD_ISSET(stdout_pipe[0], &readfds)) &&
             (stderr_pipe[0] == -1 || !FD_ISSET(stderr_pipe[0], &readfds)) &&
@@ -236,10 +236,10 @@ int execute_command_with_timeout(
 
     *output = result;
     *output_size = total_size;
-    
+
     if (*timed_out) {
         return -2;  // Special timeout code
     }
-    
+
     return exit_status;
 }

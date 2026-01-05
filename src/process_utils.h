@@ -9,7 +9,7 @@
 
 /**
  * Execute a command with timeout and interrupt support
- * 
+ *
  * @param command The command to execute
  * @param timeout_seconds Timeout in seconds (0 for no timeout)
  * @param timed_out Output: set to 1 if command timed out

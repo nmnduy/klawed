@@ -1633,13 +1633,13 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     char *output = NULL;
     size_t output_size = 0;
     volatile int *interrupt_flag = state ? &state->interrupt_requested : NULL;
-    
+
     // Create a local interrupt flag if state is NULL
     volatile int local_interrupt_flag = 0;
     if (!interrupt_flag) {
         interrupt_flag = &local_interrupt_flag;
     }
-    
+
     int exit_code = execute_command_with_timeout(
         full_command,
         timeout_seconds,

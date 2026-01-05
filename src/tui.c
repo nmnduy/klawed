@@ -681,23 +681,23 @@ static void refresh_conversation_viewport(TUIState *tui) {
 
 // Helper: Render text with search highlighting
 // Returns number of characters rendered
-static int render_text_with_search_highlight(WINDOW *win, const char *text, 
-                                           int text_pair __attribute__((unused)), 
+static int render_text_with_search_highlight(WINDOW *win, const char *text,
+                                           int text_pair __attribute__((unused)),
                                            const char *search_pattern) {
     if (!text || !text[0]) {
         return 0;
     }
-    
+
     if (!search_pattern || !search_pattern[0]) {
         // No search pattern, render normally
         waddstr(win, text);
         return (int)strlen(text);
     }
-    
+
     int rendered = 0;
     const char *current = text;
     size_t pattern_len = strlen(search_pattern);
-    
+
     while (*current) {
         // Check if pattern matches at current position (case-insensitive)
         if (strncasecmp(current, search_pattern, pattern_len) == 0) {
@@ -707,7 +707,7 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
                 waddnstr(win, text, (int)before_len);
                 rendered += (int)before_len;
             }
-            
+
             // Render the match with highlight
             if (has_colors()) {
                 wattron(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
@@ -717,7 +717,7 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
                 wattroff(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
             }
             rendered += (int)pattern_len;
-            
+
             // Move past the match
             current += pattern_len;
             text = current; // Update text pointer for next segment
@@ -726,13 +726,13 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
             current++;
         }
     }
-    
+
     // Render any remaining text after last match
     if (*text) {
         waddstr(win, text);
         rendered += (int)strlen(text);
     }
-    
+
     return rendered;
 }
 
@@ -807,14 +807,14 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
         }
-        
+
         // Check if we have an active search pattern to highlight
         if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
             render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern);
         } else {
             waddstr(tui->wm.conv_pad, text);
         }
-        
+
         if (has_colors()) {
             wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
         }
@@ -2268,23 +2268,23 @@ static void redraw_conversation(TUIState *tui) {
     if (!tui || !tui->is_initialized || !tui->wm.conv_pad) {
         return;
     }
-    
+
     // Save current scroll position
     int saved_scroll_offset = tui->wm.conv_scroll_offset;
-    
+
     // Clear the pad
     werase(tui->wm.conv_pad);
     window_manager_set_content_lines(&tui->wm, 0);
-    
+
     // Re-render all entries
     for (int i = 0; i < tui->entries_count; i++) {
         ConversationEntry *entry = &tui->entries[i];
         render_entry_to_pad(tui, entry->prefix, entry->text, entry->color_pair);
     }
-    
+
     // Restore scroll position
     tui->wm.conv_scroll_offset = saved_scroll_offset;
-    
+
     // Refresh the conversation viewport
     window_manager_refresh_conversation(&tui->wm);
 }
@@ -2627,44 +2627,44 @@ static int handle_command_mode_input(TUIState *tui, int ch, const char *prompt) 
                 // User can Ctrl+C to stop (same terminal)
                 int rc = system(shell_cmd);
                 (void)rc;  // We intentionally do not display output or status
-                
+
                 // Vim-style: show prompt and wait for Enter before resuming
                 // Loop to handle multiple commands like Vim does
                 while (1) {
                     printf("\nPress ENTER or type command to continue");
                     fflush(stdout);
-                    
+
                     // Read a line from stdin with dynamic allocation
                     char *line = NULL;
                     size_t linecap = 0;
                     ssize_t linelen = getline(&line, &linecap, stdin);
-                    
+
                     if (linelen == -1) {
                         // Handle EOF or error
                         LOG_DEBUG("[TUI] EOF or error reading from stdin after shell command");
                         free(line);
                         break;
                     }
-                    
+
                     // Remove trailing newline
                     if (linelen > 0 && line[linelen-1] == '\n') {
                         line[linelen-1] = '\0';
                         linelen--;
                     }
-                    
+
                     // If line is empty (just Enter), break the loop
                     if (linelen == 0) {
                         free(line);
                         break;
                     }
-                    
+
                     // User typed a command, run it
                     int rc2 = system(line);
                     (void)rc2;
                     free(line);
                     // Loop continues to show prompt again
                 }
-                
+
                 if (tui_resume(tui) != 0) {
                     LOG_ERROR("[TUI] Failed to resume TUI after shell command");
                 }
@@ -2900,7 +2900,7 @@ static int handle_search_mode_input(TUIState *tui, int ch, const char *prompt) {
 
             // Perform search
             perform_search(tui, tui->search_buffer, tui->search_direction);
-            
+
             // Redraw conversation with search highlights
             redraw_conversation(tui);
         }
