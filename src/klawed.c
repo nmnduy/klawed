@@ -6426,6 +6426,17 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         return 1;  // Signal to exit
     }
 
+    // Check for help command
+    if (strcmp(cmd, "help") == 0) {
+        ui_append_line(tui, queue, "[Help]", "Vim-style commands:", COLOR_PAIR_STATUS);
+        ui_append_line(tui, queue, "[Help]", "  :q, :quit, :wq - Exit klawed", COLOR_PAIR_STATUS);
+        ui_append_line(tui, queue, "[Help]", "  :!<cmd> - Execute shell command (e.g., :!ls)", COLOR_PAIR_STATUS);
+        ui_append_line(tui, queue, "[Help]", "  :re !<cmd> - Execute command and insert output into input box", COLOR_PAIR_STATUS);
+        ui_append_line(tui, queue, "[Help]", "  :vim - Open vim editor (shortcut for :!vim)", COLOR_PAIR_STATUS);
+        ui_append_line(tui, queue, "[Help]", "  :help - Show this help", COLOR_PAIR_STATUS);
+        return 0;
+    }
+
     // Check for shell escape: :!<cmd>
     if (cmd[0] == '!') {
         const char *shell_cmd = cmd + 1;
@@ -6557,6 +6568,8 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
                         snprintf(success_msg, sizeof(success_msg),
                                  "Command output (%zu chars) loaded into input buffer", output_len);
                         ui_set_status(tui, queue, success_msg);
+                        // Redraw input to show the inserted text
+                        tui_redraw_input(tui, NULL);
                     } else {
                         ui_show_error(tui, queue, "Failed to insert command output into input buffer");
                     }
@@ -6571,6 +6584,60 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
 
         if (output) {
             free(output);
+        }
+
+        ui_set_status(tui, queue, "");
+        // Return -1 to indicate "don't clear input buffer"
+        return -1;
+    }
+
+    // Check for :vim command (shortcut for :!vim)
+    if (strcmp(cmd, "vim") == 0) {
+        // Treat as :!vim
+        const char *shell_cmd = "vim";
+        // Show what we're executing
+        char status_msg[256];
+        snprintf(status_msg, sizeof(status_msg), "Executing: %s", shell_cmd);
+        ui_set_status(tui, queue, status_msg);
+
+        // Suspend TUI to run command
+        if (tui_suspend(tui) != 0) {
+            ui_show_error(tui, queue, "Failed to suspend TUI for shell command");
+            return 0;
+        }
+
+        // Run the command
+        int rc = system(shell_cmd);
+        (void)rc;  // We don't display the return code
+
+        // Vim-style: wait for Enter before resuming
+        printf("\nPress ENTER or type command to continue");
+        fflush(stdout);
+
+        // Read a line from stdin
+        char *line = NULL;
+        size_t linecap = 0;
+        ssize_t linelen = getline(&line, &linecap, stdin);
+
+        if (linelen == -1) {
+            // Handle EOF or error
+            LOG_DEBUG("EOF or error reading from stdin after shell command");
+        } else if (linelen > 0 && line[linelen-1] == '\n') {
+            line[linelen-1] = '\0';
+            linelen--;
+        }
+
+        // If user typed a command (not just Enter), run it
+        if (linelen > 0) {
+            int rc2 = system(line);
+            (void)rc2;
+        }
+
+        free(line);
+
+        // Resume TUI
+        if (tui_resume(tui) != 0) {
+            ui_show_error(tui, queue, "Failed to resume TUI after shell command");
         }
 
         ui_set_status(tui, queue, "");

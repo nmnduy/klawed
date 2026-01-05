@@ -1075,7 +1075,7 @@ static int input_insert_char(TUIInputBuffer *input, const unsigned char *utf8_ch
 
 // Insert string at cursor position
 static int input_insert_string(TUIInputBuffer *input, const char *str) {
-    if (!input || !str) {
+    if (!input || !str || !input->buffer) {
         return -1;
     }
 
@@ -1084,9 +1084,20 @@ static int input_insert_string(TUIInputBuffer *input, const char *str) {
         return 0;  // Nothing to insert
     }
 
-    // Check if we have enough space
-    if (input->length + (int)str_len >= (int)input->capacity - 1) {
-        return -1;  // Buffer full
+    // Check if we have enough space, resize if needed
+    if ((size_t)(input->length + (int)str_len) >= input->capacity - 1) {
+        // Calculate new capacity
+        size_t new_capacity;
+        if (__builtin_add_overflow((size_t)input->length, str_len, &new_capacity) ||
+            __builtin_add_overflow(new_capacity, (size_t)1024, &new_capacity)) {
+            return -1;  // Overflow
+        }
+        
+        void *buf_ptr = (void *)input->buffer;
+        if (buffer_reserve(&buf_ptr, &input->capacity, new_capacity) != 0) {
+            return -1;  // Resize failed
+        }
+        input->buffer = (char *)buf_ptr;
     }
 
     // Make space for the new string
@@ -2688,20 +2699,45 @@ static int handle_command_mode_input(TUIState *tui, int ch, const char *prompt) 
                     size_t cap = 0;
                     ssize_t nread;
                     // Clear current input buffer
+                    if (!tui->input_buffer || !tui->input_buffer->buffer) {
+                        LOG_ERROR("[TUI] input_buffer or buffer is NULL in :re ! command");
+                        pclose(fp);
+                        return 0;
+                    }
                     tui->input_buffer->length = 0;
                     tui->input_buffer->cursor = 0;
                     tui->input_buffer->buffer[0] = '\0';
                     while ((nread = getline(&line, &cap, fp)) != -1) {
                         // Ensure capacity
-                        if ((size_t)(tui->input_buffer->length + nread + 1) >
-                            tui->input_buffer->capacity) {
-                            size_t new_capacity = (size_t)tui->input_buffer->length + (size_t)nread + 1024;
+                        // Check for overflow in capacity calculation
+                        size_t needed_capacity;
+                        if (__builtin_add_overflow((size_t)tui->input_buffer->length, (size_t)nread, &needed_capacity) ||
+                            __builtin_add_overflow(needed_capacity, (size_t)1, &needed_capacity)) {
+                            LOG_ERROR("[TUI] Capacity calculation overflow in :re ! command");
+                            break;
+                        }
+                        if (needed_capacity > tui->input_buffer->capacity) {
+                            size_t new_capacity;
+                            if (__builtin_add_overflow(needed_capacity, (size_t)1024, &new_capacity)) {
+                                LOG_ERROR("[TUI] New capacity calculation overflow in :re ! command");
+                                break;
+                            }
                             void *buf_ptr = (void *)tui->input_buffer->buffer;
                             if (buffer_reserve(&buf_ptr, &tui->input_buffer->capacity, new_capacity) != 0) {
                                 LOG_ERROR("[TUI] Failed to expand input buffer for :re ! output");
                                 break;
                             }
                             tui->input_buffer->buffer = (char *)buf_ptr;
+                        }
+                        // Check buffer is valid after potential resize
+                        if (!tui->input_buffer->buffer) {
+                            LOG_ERROR("[TUI] input_buffer->buffer is NULL after resize in :re ! command");
+                            break;
+                        }
+                        // Check for integer overflow
+                        if (nread > INT_MAX - tui->input_buffer->length) {
+                            LOG_ERROR("[TUI] Integer overflow in :re ! command, nread=%zd, length=%d", nread, tui->input_buffer->length);
+                            break;
                         }
                         memcpy(tui->input_buffer->buffer + tui->input_buffer->length, line, (size_t)nread);
                         tui->input_buffer->length += (int)nread;
@@ -4415,12 +4451,15 @@ int tui_event_loop(TUIState *tui, const char *prompt,
                     // Call the callback
                     int callback_result = submit_callback(ext_buffer, user_data);
 
-                    // Clear input buffer after submission
-                    tui_clear_input_buffer(tui);
-                    tui_redraw_input(tui, prompt);
+                    // Clear input buffer after submission, unless callback returns -1
+                    // (used for :re ! commands that insert output into input buffer)
+                    if (callback_result != -1) {
+                        tui_clear_input_buffer(tui);
+                        tui_redraw_input(tui, prompt);
+                    }
 
                     // Check if callback wants to exit
-                    if (callback_result != 0) {
+                    if (callback_result == 1) {
                         LOG_DEBUG("[TUI] Callback requested exit (code=%d)", callback_result);
                         running = 0;
                     }
@@ -4486,12 +4525,15 @@ int tui_event_loop(TUIState *tui, const char *prompt,
                     // Call the callback
                     int callback_result = submit_callback(input, user_data);
 
-                    // Clear input buffer after submission
-                    tui_clear_input_buffer(tui);
-                    tui_redraw_input(tui, prompt);
+                    // Clear input buffer after submission, unless callback returns -1
+                    // (used for :re ! commands that insert output into input buffer)
+                    if (callback_result != -1) {
+                        tui_clear_input_buffer(tui);
+                        tui_redraw_input(tui, prompt);
+                    }
 
                     // Check if callback wants to exit
-                    if (callback_result != 0) {
+                    if (callback_result == 1) {
                         LOG_DEBUG("[TUI] Callback requested exit (code=%d)", callback_result);
                         running = 0;
                     }
