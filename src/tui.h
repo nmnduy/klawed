@@ -16,13 +16,13 @@
 #include "window_manager.h"
 #include "history_file.h"
 #include "file_search.h"
+#include "history_search.h"
 #ifndef TEST_BUILD
 #include "persistence.h"
 #else
 // Forward declaration for test builds
 struct PersistenceDB;
 #endif
-
 // Forward declaration for WINDOW type (not actually used, kept for compatibility)
 typedef struct _win_st WINDOW;
 
@@ -71,7 +71,8 @@ typedef enum {
     TUI_MODE_INSERT,      // Insert mode (text input for sending messages)
     TUI_MODE_COMMAND,     // Command mode (entered with ':' from normal mode)
     TUI_MODE_SEARCH,      // Search mode (entered with '/' or '?' from normal mode)
-    TUI_MODE_FILE_SEARCH  // File search mode (entered with Ctrl+F from insert mode)
+    TUI_MODE_FILE_SEARCH,  // File search mode (entered with Ctrl+F from insert mode)
+    TUI_MODE_HISTORY_SEARCH  // History search mode (entered with Ctrl+R from insert mode)
 } TUIMode;
 
 // TUI State
@@ -152,6 +153,7 @@ typedef struct TUIStateStruct {
 
     // File search state (Ctrl+F)
     FileSearchState file_search;      // File search popup state
+    HistorySearchState history_search;  // History search popup state
 } TUIState;
 
 // Initialize TUI (must be called before any other TUI functions)

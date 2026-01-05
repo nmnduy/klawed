@@ -13,6 +13,7 @@
 #include "tui.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
+#include "history_search.h"
 #include "fallback_colors.h"
 #include "logger.h"
 #include "indicators.h"
@@ -1654,6 +1655,13 @@ int tui_init(TUIState *tui, ConversationState *state) {
         LOG_WARN("[TUI] Failed to initialize file search");
         // Non-fatal - continue without file search
     }
+    // Initialize history search
+    if (history_search_init(&tui->history_search) != 0) {
+        LOG_WARN("[TUI] Failed to initialize history search");
+        // Non-fatal - continue without history search
+    } else {
+        LOG_DEBUG("[TUI] History search initialized successfully");
+    }
     tui->history_file = history_file_open(NULL);
     if (tui->history_file) {
         int limit = 100;  // default history size in memory
@@ -1719,7 +1727,8 @@ void tui_cleanup(TUIState *tui) {
 
     // Free file search state
     file_search_free(&tui->file_search);
-
+    // Free history search state
+    history_search_free(&tui->history_search);
     // Destroy ncurses windows via window manager
     window_manager_destroy(&tui->wm);
 
@@ -2508,7 +2517,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         /* "Enable Bedrock with KLAWED_USE_BEDROCK=1 and ANTHROPIC_MODEL set.", */
         "Interrupt long tool runs any time with Ctrl+C.",
         "Press Ctrl+F to open file search popup (fuzzy find files, supports Alt+B/F/D/⌫).",
-        /* "Disable prompt caching with DISABLE_PROMPT_CACHING=1 if needed.", */
+        "Press Ctrl+R to open history search popup (fuzzy find previous commands).",        /* "Disable prompt caching with DISABLE_PROMPT_CACHING=1 if needed.", */
         "MCP is disabled by default; enable with KLAWED_MCP_ENABLED=1 and configure servers in ~/.config/klawed/.",
         "Use /clear to clear conversation; /quit or /exit to leave.",
         "Use /help to see all available commands.",
@@ -3624,7 +3633,36 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         return 0;
     }
 
-    // Detect rapid input (optional paste heuristic; default disabled)
+    // Handle history search mode separately
+    if (tui->mode == TUI_MODE_HISTORY_SEARCH) {
+        LOG_DEBUG("[TUI] Processing key %d in history search mode", ch);
+        int result = history_search_process_key(&tui->history_search, ch);
+        if (result == 1) {
+            // Selection made - insert command into input buffer
+            const char *selected = history_search_get_selected(&tui->history_search);
+            if (selected) {
+                input_insert_string(tui->input_buffer, selected);
+                LOG_DEBUG("[TUI] Inserted history command: %s", selected);
+            }
+            history_search_stop(&tui->history_search);
+            tui->mode = TUI_MODE_INSERT;
+            // Refresh all windows to restore display
+            window_manager_refresh_all(&tui->wm);
+            input_redraw(tui, prompt);
+        } else if (result == -1) {
+            // Cancelled
+            history_search_stop(&tui->history_search);
+            tui->mode = TUI_MODE_INSERT;
+            // Refresh all windows to restore display
+            window_manager_refresh_all(&tui->wm);
+            input_redraw(tui, prompt);
+        } else {
+            // Continue - just render the popup
+            history_search_render(&tui->history_search);
+        }
+        return 0;
+    }
+
     if (g_enable_paste_heuristic) {
         struct timespec current_time;
         clock_gettime(CLOCK_MONOTONIC, &current_time);
@@ -3751,6 +3789,23 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
             file_search_render(&tui->file_search);
         } else {
             LOG_ERROR("[TUI] Failed to start file search");
+            beep();
+        }
+        return 0;
+    } else if (ch == 18) {  // Ctrl+R: History search (in INSERT mode)
+        // Start history search popup
+        LOG_DEBUG("[TUI] Ctrl+R pressed - starting history search (history entries: %p, count: %d)",
+                  (void *)tui->input_history, tui->input_history_count);
+        if (history_search_start(&tui->history_search,
+                                 tui->wm.screen_height,
+                                 tui->wm.screen_width,
+                                 tui->input_history,
+                                 tui->input_history_count) == 0) {
+            tui->mode = TUI_MODE_HISTORY_SEARCH;
+            history_search_render(&tui->history_search);
+            LOG_DEBUG("[TUI] History search started successfully, mode changed to TUI_MODE_HISTORY_SEARCH");
+        } else {
+            LOG_ERROR("[TUI] Failed to start history search");
             beep();
         }
         return 0;
