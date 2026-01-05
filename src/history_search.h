@@ -20,6 +20,7 @@
 typedef struct {
     char *command;        // Command text
     int score;            // Fuzzy match score (higher = better)
+    int original_index;   // Original index in history array (for chronological sorting)
 } HistorySearchResult;
 
 // History search state

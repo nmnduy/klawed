@@ -111,7 +111,7 @@ static void free_results(HistorySearchState *state) {
     state->result_capacity = 0;
 }
 
-static int add_result(HistorySearchState *state, const char *command, int score) {
+static int add_result(HistorySearchState *state, const char *command, int score, int original_index) {
     if (state->result_count >= state->result_capacity) {
         int new_capacity = state->result_capacity * 2;
         if (new_capacity == 0) new_capacity = INITIAL_RESULTS_CAPACITY;
@@ -131,6 +131,7 @@ static int add_result(HistorySearchState *state, const char *command, int score)
         return -1;
     }
     state->results[state->result_count].score = score;
+    state->results[state->result_count].original_index = original_index;
     state->result_count++;
     return 0;
 }
@@ -142,7 +143,9 @@ static int compare_results(const void *a, const void *b) {
     if (ra->score != rb->score) {
         return rb->score - ra->score;  // higher score first
     }
-    return strcasecmp(ra->command, rb->command);
+    // When scores are equal, sort by reverse chronological order (newest first)
+    // Since history_entries is oldest->newest, higher index = newer
+    return rb->original_index - ra->original_index;
 }
 
 static int filter_results(HistorySearchState *state) {
@@ -154,10 +157,18 @@ static int filter_results(HistorySearchState *state) {
 
     const char *pattern = state->search_pattern;
 
-    for (int i = 0; i < state->history_count && state->result_count < HISTORY_SEARCH_MAX_RESULTS; i++) {
+    // Process most recent history entries first to ensure we see recent matches
+    // Use a reasonable limit to avoid excessive memory usage
+    #define PROCESSING_LIMIT 2000
+    int start_idx = state->history_count - PROCESSING_LIMIT;
+    if (start_idx < 0) {
+        start_idx = 0;
+    }
+    
+    for (int i = start_idx; i < state->history_count; i++) {
         int score = fuzzy_score(state->history_entries[i], pattern);
         if (score > 0) {
-            add_result(state, state->history_entries[i], score);
+            add_result(state, state->history_entries[i], score, i);
         }
     }
 
