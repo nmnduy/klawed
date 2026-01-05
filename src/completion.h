@@ -27,4 +27,13 @@ CompletionResult* complete_filepath(const char *partial, void *ctx);
  */
 CompletionResult* complete_dirpath(const char *partial, void *ctx);
 
+/**
+ * Free a CompletionResult (handles both arena and regular allocations)
+ * This should be used instead of ncurses_completion_free for completion results
+ * created by completion.c functions.
+ *
+ * @param result  CompletionResult to free
+ */
+void completion_free_result(CompletionResult *result);
+
 #endif // COMPLETION_H

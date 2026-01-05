@@ -6,6 +6,7 @@
 
 #include "ncurses_input.h"
 #include "logger.h"
+#include "completion.h"  // For completion_free_result
 #include <stdlib.h>
 #include <string.h>
 #include <bsd/string.h>
@@ -440,13 +441,9 @@ void ncurses_input_free(NCursesInput *input) {
 }
 
 void ncurses_completion_free(CompletionResult *result) {
-    if (!result) return;
-
-    for (int i = 0; i < result->count; i++) {
-        free(result->options[i]);
-    }
-    free(result->options);
-    free(result);
+    // Use the completion module's free function which handles both
+    // arena-allocated and regular completion results
+    completion_free_result(result);
 }
 
 void ncurses_input_set_resize_callback(NCursesInput *input, ResizeFn resizer,

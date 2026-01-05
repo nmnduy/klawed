@@ -2,9 +2,12 @@
  * completion.c - Path and File Completion Implementation
  */
 
+#define ARENA_IMPLEMENTATION
+
 #include "completion.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <bsd/stdlib.h>
 #include <string.h>
 #include <dirent.h>
@@ -13,6 +16,9 @@
 #include <limits.h>
 #include <libgen.h>
 #include <bsd/string.h>
+
+// Arena allocator for completion memory management
+#include "arena.h"
 
 // ============================================================================
 // Helper Functions
@@ -66,6 +72,96 @@ static int matches_prefix(const char *entry, const char *prefix) {
     return strncmp(entry, prefix, prefix_len) == 0;
 }
 
+// Magic number to identify arena-allocated CompletionResult
+#define COMPLETION_ARENA_MAGIC 0xCAFEBABE
+
+// Structure for arena-allocated CompletionResult
+typedef struct {
+    uint32_t magic;           // Magic number to identify arena allocation
+    Arena *arena;             // Arena for all allocations
+    CompletionResult result;  // Actual completion result
+} ArenaCompletionResult;
+
+// Helper to allocate a CompletionResult with embedded arena
+// Returns pointer to CompletionResult, with arena stored before it
+static CompletionResult* completion_result_create_with_arena(size_t arena_size) {
+    // Allocate space for ArenaCompletionResult
+    ArenaCompletionResult *acr = malloc(sizeof(ArenaCompletionResult));
+    if (!acr) {
+        return NULL;
+    }
+    
+    // Create arena for string allocations
+    Arena *arena = arena_create(arena_size);
+    if (!arena) {
+        free(acr);
+        return NULL;
+    }
+    
+    // Initialize structure
+    acr->magic = COMPLETION_ARENA_MAGIC;
+    acr->arena = arena;
+    acr->result.options = NULL;
+    acr->result.count = 0;
+    acr->result.selected = 0;
+    
+    return &acr->result;
+}
+
+// Helper to check if CompletionResult is arena-allocated
+static int completion_result_is_arena_allocated(CompletionResult *result) {
+    if (!result) return 0;
+    
+    // Check if pointer is at least sizeof(uint32_t) + sizeof(Arena*) before result
+    // Use memcpy to avoid alignment issues
+    uint32_t magic;
+    char *ptr = (char*)result - offsetof(ArenaCompletionResult, result);
+    memcpy(&magic, ptr, sizeof(uint32_t));
+    
+    // Verify magic number
+    return (magic == COMPLETION_ARENA_MAGIC);
+}
+
+// Helper to get arena from CompletionResult (if arena-allocated)
+static Arena* completion_result_get_arena(CompletionResult *result) {
+    if (!result || !completion_result_is_arena_allocated(result)) {
+        return NULL;
+    }
+    
+    // Get arena pointer using memcpy to avoid alignment issues
+    Arena *arena;
+    char *ptr = (char*)result - offsetof(ArenaCompletionResult, result) + offsetof(ArenaCompletionResult, arena);
+    memcpy(&arena, ptr, sizeof(Arena*));
+    return arena;
+}
+
+// Free a CompletionResult (handles both arena and regular allocations)
+void completion_free_result(CompletionResult *result) {
+    if (!result) return;
+    
+    if (completion_result_is_arena_allocated(result)) {
+        // Get arena pointer using memcpy to avoid alignment issues
+        Arena *arena;
+        char *ptr = (char*)result - offsetof(ArenaCompletionResult, result) + offsetof(ArenaCompletionResult, arena);
+        memcpy(&arena, ptr, sizeof(Arena*));
+        
+        if (arena) {
+            arena_destroy(arena);
+        }
+        
+        // Free the ArenaCompletionResult structure
+        char *acr_ptr = (char*)result - offsetof(ArenaCompletionResult, result);
+        free(acr_ptr);
+    } else {
+        // Regular allocation - free individual strings and arrays
+        for (int i = 0; i < result->count; i++) {
+            free(result->options[i]);
+        }
+        free(result->options);
+        free(result);
+    }
+}
+
 // ============================================================================
 // Generic Path Completion
 // ============================================================================
@@ -85,12 +181,14 @@ static CompletionResult* complete_path_internal(const char *partial, int dirs_on
         return NULL;  // Can't open directory
     }
 
-    // Allocate result structure
-    CompletionResult *result = calloc(1, sizeof(CompletionResult));
+    // Allocate result structure with arena (16KB should be enough for most completions)
+    CompletionResult *result = completion_result_create_with_arena(16 * 1024);
     if (!result) {
         closedir(dir);
         return NULL;
     }
+    
+    Arena *arena = completion_result_get_arena(result);
 
     result->options = NULL;
     result->count = 0;
@@ -98,9 +196,9 @@ static CompletionResult* complete_path_internal(const char *partial, int dirs_on
 
     // Initial capacity for options array
     int capacity = 16;
-    result->options = malloc((size_t)capacity * sizeof(char*));
+    result->options = arena_alloc(arena, (size_t)capacity * sizeof(char*));
     if (!result->options) {
-        free(result);
+        completion_free_result(result);
         closedir(dir);
         return NULL;
     }
@@ -169,18 +267,25 @@ static CompletionResult* complete_path_internal(const char *partial, int dirs_on
         // Expand array if needed
         if (result->count >= capacity) {
             capacity *= 2;
-            char **new_options = reallocarray(result->options, (size_t)capacity, sizeof(char*));
+            char **new_options = arena_alloc(arena, (size_t)capacity * sizeof(char*));
             if (!new_options) {
                 // Cleanup and return what we have
                 closedir(dir);
                 return result;
             }
+            // Copy existing pointers
+            for (int i = 0; i < result->count; i++) {
+                new_options[i] = result->options[i];
+            }
             result->options = new_options;
         }
 
-        // Add to results
-        result->options[result->count] = strdup(completion);
-        if (result->options[result->count]) {
+        // Add to results - allocate string from arena
+        size_t completion_len = strlen(completion) + 1;
+        char *allocated_str = arena_alloc(arena, completion_len);
+        if (allocated_str) {
+            strlcpy(allocated_str, completion, completion_len);
+            result->options[result->count] = allocated_str;
             result->count++;
         }
     }
@@ -189,8 +294,7 @@ static CompletionResult* complete_path_internal(const char *partial, int dirs_on
 
     // If no matches, return NULL
     if (result->count == 0) {
-        free(result->options);
-        free(result);
+        completion_free_result(result);
         return NULL;
     }
 
