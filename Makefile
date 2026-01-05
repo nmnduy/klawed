@@ -866,6 +866,7 @@ sanitize-all: check-deps
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/zmq_thread_pool_all.o $(ZMQ_THREAD_POOL_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/retry_logic_all.o $(RETRY_LOGIC_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/file_search_all.o $(FILE_SEARCH_SRC); \
+	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/history_search_all.o $(HISTORY_SEARCH_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/theme_explorer_all.o $(THEME_EXPLORER_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/openai_responses_all.o $(OPENAI_RESPONSES_SRC); \
 	$(CC) $(CFLAGS) $$EXTRA_FLAGS -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $(BUILD_DIR)/dump_utils_all.o $(DUMP_UTILS_SRC); \
@@ -881,7 +882,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/session_all.o $(BUILD_DIR)/sqlite_queue_all.o $(BUILD_DIR)/subagent_manager_all.o \
 		$(BUILD_DIR)/zmq_socket_all.o $(BUILD_DIR)/zmq_client_all.o $(BUILD_DIR)/zmq_message_queue_all.o \
 		$(BUILD_DIR)/zmq_daemon_all.o $(BUILD_DIR)/zmq_thread_pool_all.o $(BUILD_DIR)/retry_logic_all.o \
-		$(BUILD_DIR)/file_search_all.o $(BUILD_DIR)/theme_explorer_all.o $(BUILD_DIR)/openai_responses_all.o $(BUILD_DIR)/dump_utils_all.o $(BUILD_DIR)/process_utils_all.o \
+		$(BUILD_DIR)/file_search_all.o $(BUILD_DIR)/history_search_all.o $(BUILD_DIR)/theme_explorer_all.o $(BUILD_DIR)/openai_responses_all.o $(BUILD_DIR)/dump_utils_all.o $(BUILD_DIR)/process_utils_all.o \
 		$(LDFLAGS) -fsanitize=address,undefined
 	@echo ""
 	@echo "✓ Build successful with combined sanitizers!"
