@@ -2492,6 +2492,21 @@ static int handle_command_mode_input(TUIState *tui, int ch, const char *prompt) 
         } else if (strcmp(cmd, "wq") == 0) {
             // Write and quit
             return -1;
+        } else if (strcmp(cmd, "noh") == 0 || strcmp(cmd, "nohlsearch") == 0) {
+            // Clear search highlight (status)
+            tui_update_status(tui, "");
+            free(tui->last_search_pattern);
+            tui->last_search_pattern = NULL;
+            tui->last_search_match_line = -1;
+            // Exit command mode
+            tui->mode = TUI_MODE_NORMAL;
+            tui->command_buffer_len = 0;
+            tui->command_buffer[0] = '\0';
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            return 0;
         } else if (cmd[0] == '!') {
             // Vim-style shell escape: :!<cmd>
             const char *shell_cmd = cmd + 1;
@@ -3180,6 +3195,18 @@ static int handle_normal_mode_input(TUIState *tui, int ch, const char *prompt, v
             render_status_window(tui);
             input_redraw(tui, prompt);
             break;
+        case 12:  // Ctrl+L: clear search status (like Vim's :noh)
+            // Clear search status message and reset search state
+            tui_update_status(tui, "");
+            free(tui->last_search_pattern);
+            tui->last_search_pattern = NULL;
+            tui->last_search_match_line = -1;
+            // Refresh to update status bar
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            break;
         default:
             /* Unhandled key in normal mode */
             break;
@@ -3552,12 +3579,17 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
             input->cursor = 0;
             input_redraw(tui, prompt);
         }
-    } else if (ch == 12) {  // Ctrl+L: clear input
+    } else if (ch == 12) {  // Ctrl+L: clear input and search status
         input->buffer[0] = '\0';
         input->length = 0;
         input->cursor = 0;
         input->paste_mode = 0;  // Reset paste mode
         input->rapid_input_count = 0;
+        // Also clear search status
+        tui_update_status(tui, "");
+        free(tui->last_search_pattern);
+        tui->last_search_pattern = NULL;
+        tui->last_search_match_line = -1;
         input_redraw(tui, prompt);
     } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {  // Backspace
         if (input_backspace(input) > 0) {
