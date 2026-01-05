@@ -2524,6 +2524,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         "Press Ctrl+C to cancel a running API/tool action.",
         "In Normal mode, :!cmd runs a shell command in the current dir (like Vim).",
         "In Normal mode, :re !cmd puts the command output into the input box.",
+        "In Normal mode, :git opens vim-fugitive (requires vim-fugitive plugin).",
         /* "Use /add-dir to attach a directory as context.", */
         "Press Ctrl+D to exit quickly.",
         /* "Use /voice to record and transcribe audio (requires PortAudio).", */

@@ -6433,6 +6433,7 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         ui_append_line(tui, queue, "[Help]", "  :!<cmd> - Execute shell command (e.g., :!ls)", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :re !<cmd> - Execute command and insert output into input box", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :vim - Open vim editor (shortcut for :!vim)", COLOR_PAIR_STATUS);
+        ui_append_line(tui, queue, "[Help]", "  :git - Open vim-fugitive (requires vim-fugitive plugin)", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :help - Show this help", COLOR_PAIR_STATUS);
         return 0;
     }
@@ -6640,6 +6641,86 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
             ui_show_error(tui, queue, "Failed to resume TUI after shell command");
         }
 
+        ui_set_status(tui, queue, "");
+        return 0;
+    }
+
+    // Check for :git command (opens vim-fugitive if available)
+    if (strcmp(cmd, "git") == 0) {
+        // First check if vim-fugitive is available by running vim with a test command
+        char test_cmd[512];
+        snprintf(test_cmd, sizeof(test_cmd), 
+                 "vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" 2>&1");
+        
+        FILE *fp = popen(test_cmd, "r");
+        if (!fp) {
+            ui_show_error(tui, queue, "Failed to check vim-fugitive availability");
+            return 0;
+        }
+        
+        char buffer[256];
+        // Read output to check for errors
+        while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+            // Just consume output
+        }
+        
+        int rc = pclose(fp);
+        // vim returns 0 if fugitive exists (Git command exists), non-zero otherwise
+        
+        if (rc == 0) {
+            // vim-fugitive is available, open vim with :Git command
+            const char *shell_cmd = "vim -c Git";
+            char status_msg[256];
+            snprintf(status_msg, sizeof(status_msg), "Opening vim-fugitive: %s", shell_cmd);
+            ui_set_status(tui, queue, status_msg);
+            
+            // Suspend TUI to run command
+            if (tui_suspend(tui) != 0) {
+                ui_show_error(tui, queue, "Failed to suspend TUI for shell command");
+                return 0;
+            }
+            
+            // Run vim with Git command
+            int vim_rc = system(shell_cmd);
+            (void)vim_rc;
+            
+            // Vim-style: wait for Enter before resuming
+            printf("\nPress ENTER or type command to continue");
+            fflush(stdout);
+            
+            // Read a line from stdin
+            char *line = NULL;
+            size_t linecap = 0;
+            ssize_t linelen = getline(&line, &linecap, stdin);
+            
+            if (linelen == -1) {
+                LOG_DEBUG("EOF or error reading from stdin after shell command");
+            } else if (linelen > 0 && line[linelen-1] == '\n') {
+                line[linelen-1] = '\0';
+                linelen--;
+            }
+            
+            // If user typed a command (not just Enter), run it
+            if (linelen > 0) {
+                int rc2 = system(line);
+                (void)rc2;
+            }
+            
+            free(line);
+            
+            // Resume TUI
+            if (tui_resume(tui) != 0) {
+                ui_show_error(tui, queue, "Failed to resume TUI after shell command");
+            }
+        } else {
+            // vim-fugitive is not available
+            ui_append_line(tui, queue, "[Info]", "vim-fugitive plugin is not available", COLOR_PAIR_STATUS);
+            ui_append_line(tui, queue, "[Info]", "Install it with your vim plugin manager:", COLOR_PAIR_STATUS);
+            ui_append_line(tui, queue, "[Info]", "  vim-plug: Plug 'tpope/vim-fugitive'", COLOR_PAIR_STATUS);
+            ui_append_line(tui, queue, "[Info]", "  Vundle: Plugin 'tpope/vim-fugitive'", COLOR_PAIR_STATUS);
+            ui_append_line(tui, queue, "[Info]", "  Pathogen: git clone https://github.com/tpope/vim-fugitive ~/.vim/bundle/vim-fugitive", COLOR_PAIR_STATUS);
+        }
+        
         ui_set_status(tui, queue, "");
         return 0;
     }
