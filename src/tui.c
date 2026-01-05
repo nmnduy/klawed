@@ -515,6 +515,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_COMPLETED, 17, -1);    // Green (same as USER)
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, 19, -1);  // Yellow (same as STATUS)
             init_pair(NCURSES_PAIR_TODO_PENDING, 18, -1);      // Cyan (same as ASSISTANT)
+            init_pair(NCURSES_PAIR_SEARCH, 21, -1);            // Magenta for search highlights
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -537,6 +538,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_COMPLETED, (short)user_idx, (short)-1);
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, (short)status_idx, (short)-1);
             init_pair(NCURSES_PAIR_TODO_PENDING, (short)assistant_idx, (short)-1);
+            init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Magenta for search highlights
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -555,6 +557,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, -1);
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, -1);
             init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
+            init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Magenta for search highlights
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -572,6 +575,7 @@ static void init_ncurses_colors(void) {
         init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, -1);
         init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, -1);
         init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
+        init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Magenta for search highlights
     }
 }
 
@@ -675,6 +679,63 @@ static void refresh_conversation_viewport(TUIState *tui) {
     window_manager_refresh_conversation(&tui->wm);
 }
 
+// Helper: Render text with search highlighting
+// Returns number of characters rendered
+static int render_text_with_search_highlight(WINDOW *win, const char *text, 
+                                           int text_pair __attribute__((unused)), 
+                                           const char *search_pattern) {
+    if (!text || !text[0]) {
+        return 0;
+    }
+    
+    if (!search_pattern || !search_pattern[0]) {
+        // No search pattern, render normally
+        waddstr(win, text);
+        return (int)strlen(text);
+    }
+    
+    int rendered = 0;
+    const char *current = text;
+    size_t pattern_len = strlen(search_pattern);
+    
+    while (*current) {
+        // Check if pattern matches at current position (case-insensitive)
+        if (strncasecmp(current, search_pattern, pattern_len) == 0) {
+            // Render text before the match
+            if (current > text) {
+                size_t before_len = (size_t)(current - text);
+                waddnstr(win, text, (int)before_len);
+                rendered += (int)before_len;
+            }
+            
+            // Render the match with highlight
+            if (has_colors()) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
+            }
+            waddnstr(win, current, (int)pattern_len);
+            if (has_colors()) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
+            }
+            rendered += (int)pattern_len;
+            
+            // Move past the match
+            current += pattern_len;
+            text = current; // Update text pointer for next segment
+        } else {
+            // Move to next character
+            current++;
+        }
+    }
+    
+    // Render any remaining text after last match
+    if (*text) {
+        waddstr(win, text);
+        rendered += (int)strlen(text);
+    }
+    
+    return rendered;
+}
+
 // Helper: Render a single conversation entry to the pad
 // Returns 0 on success, -1 on error
 static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
@@ -716,6 +777,9 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
         case COLOR_PAIR_TODO_PENDING:
             mapped_pair = NCURSES_PAIR_TODO_PENDING;
             break;
+        case COLOR_PAIR_SEARCH:
+            mapped_pair = NCURSES_PAIR_SEARCH;
+            break;
         default:
             /* Keep default mapped_pair (foreground) */
             break;
@@ -743,7 +807,14 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
         }
-        waddstr(tui->wm.conv_pad, text);
+        
+        // Check if we have an active search pattern to highlight
+        if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
+            render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern);
+        } else {
+            waddstr(tui->wm.conv_pad, text);
+        }
+        
         if (has_colors()) {
             wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
         }
@@ -2176,6 +2247,10 @@ void tui_clear_conversation(TUIState *tui) {
     // Free all conversation entries
     free_conversation_entries(tui);
 
+    // Clear search pattern when conversation is cleared
+    free(tui->last_search_pattern);
+    tui->last_search_pattern = NULL;
+
     // Clear pad and reset content lines
     werase(tui->wm.conv_pad);
     window_manager_set_content_lines(&tui->wm, 0);
@@ -2185,6 +2260,33 @@ void tui_clear_conversation(TUIState *tui) {
 
     // Refresh all windows to ensure consistent state
     window_manager_refresh_all(&tui->wm);
+}
+
+// Redraw the entire conversation from stored entries
+// This is useful for applying search highlighting after a search
+static void redraw_conversation(TUIState *tui) {
+    if (!tui || !tui->is_initialized || !tui->wm.conv_pad) {
+        return;
+    }
+    
+    // Save current scroll position
+    int saved_scroll_offset = tui->wm.conv_scroll_offset;
+    
+    // Clear the pad
+    werase(tui->wm.conv_pad);
+    window_manager_set_content_lines(&tui->wm, 0);
+    
+    // Re-render all entries
+    for (int i = 0; i < tui->entries_count; i++) {
+        ConversationEntry *entry = &tui->entries[i];
+        render_entry_to_pad(tui, entry->prefix, entry->text, entry->color_pair);
+    }
+    
+    // Restore scroll position
+    tui->wm.conv_scroll_offset = saved_scroll_offset;
+    
+    // Refresh the conversation viewport
+    window_manager_refresh_conversation(&tui->wm);
 }
 
 void tui_handle_resize(TUIState *tui) {
@@ -2294,6 +2396,9 @@ void tui_handle_resize(TUIState *tui) {
                         break;
                     case COLOR_PAIR_TODO_PENDING:
                         mapped_pair = NCURSES_PAIR_TODO_PENDING;
+                        break;
+                    case COLOR_PAIR_SEARCH:
+                        mapped_pair = NCURSES_PAIR_SEARCH;
                         break;
                     default:
                         /* Keep default mapped_pair (foreground) */
@@ -2715,6 +2820,10 @@ static int handle_search_mode_input(TUIState *tui, int ch, const char *prompt) {
         if (tui->search_buffer) {
             tui->search_buffer[0] = '\0';
         }
+        // Clear search pattern and redraw without highlights
+        free(tui->last_search_pattern);
+        tui->last_search_pattern = NULL;
+        redraw_conversation(tui);
         if (tui->wm.status_height > 0) {
             render_status_window(tui);
         }
@@ -2730,6 +2839,10 @@ static int handle_search_mode_input(TUIState *tui, int ch, const char *prompt) {
             tui->mode = TUI_MODE_NORMAL;
             tui->search_buffer_len = 0;
             tui->search_buffer[0] = '\0';
+            // Clear search pattern and redraw without highlights
+            free(tui->last_search_pattern);
+            tui->last_search_pattern = NULL;
+            redraw_conversation(tui);
             if (tui->wm.status_height > 0) {
                 render_status_window(tui);
             }
@@ -2745,6 +2858,9 @@ static int handle_search_mode_input(TUIState *tui, int ch, const char *prompt) {
 
             // Perform search
             perform_search(tui, tui->search_buffer, tui->search_direction);
+            
+            // Redraw conversation with search highlights
+            redraw_conversation(tui);
         }
 
         // Exit search mode
@@ -3012,6 +3128,7 @@ static int handle_normal_mode_input(TUIState *tui, int ch, const char *prompt, v
         case 'n':  // Repeat search in same direction
             if (tui->last_search_pattern) {
                 perform_search(tui, tui->last_search_pattern, tui->search_direction);
+                redraw_conversation(tui);
                 input_redraw(tui, prompt);
             } else {
                 // No previous search
@@ -3022,6 +3139,7 @@ static int handle_normal_mode_input(TUIState *tui, int ch, const char *prompt, v
         case 'N':  // Repeat search in opposite direction
             if (tui->last_search_pattern) {
                 perform_search(tui, tui->last_search_pattern, -tui->search_direction);
+                redraw_conversation(tui);
                 input_redraw(tui, prompt);
             } else {
                 // No previous search
