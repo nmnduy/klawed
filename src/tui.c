@@ -2615,6 +2615,10 @@ static int handle_command_mode_input(TUIState *tui, int ch, const char *prompt) 
         } else if (cmd[0] == '!') {
             // Vim-style shell escape: :!<cmd>
             const char *shell_cmd = cmd + 1;
+            // Skip leading whitespace
+            while (*shell_cmd == ' ' || *shell_cmd == '\t') {
+                shell_cmd++;
+            }
             // Run in foreground, like Vim: suspend TUI, run system(), resume
             if (tui_suspend(tui) != 0) {
                 LOG_ERROR("[TUI] Failed to suspend TUI for shell command");
@@ -2623,6 +2627,44 @@ static int handle_command_mode_input(TUIState *tui, int ch, const char *prompt) 
                 // User can Ctrl+C to stop (same terminal)
                 int rc = system(shell_cmd);
                 (void)rc;  // We intentionally do not display output or status
+                
+                // Vim-style: show prompt and wait for Enter before resuming
+                // Loop to handle multiple commands like Vim does
+                while (1) {
+                    printf("\nPress ENTER or type command to continue");
+                    fflush(stdout);
+                    
+                    // Read a line from stdin with dynamic allocation
+                    char *line = NULL;
+                    size_t linecap = 0;
+                    ssize_t linelen = getline(&line, &linecap, stdin);
+                    
+                    if (linelen == -1) {
+                        // Handle EOF or error
+                        LOG_DEBUG("[TUI] EOF or error reading from stdin after shell command");
+                        free(line);
+                        break;
+                    }
+                    
+                    // Remove trailing newline
+                    if (linelen > 0 && line[linelen-1] == '\n') {
+                        line[linelen-1] = '\0';
+                        linelen--;
+                    }
+                    
+                    // If line is empty (just Enter), break the loop
+                    if (linelen == 0) {
+                        free(line);
+                        break;
+                    }
+                    
+                    // User typed a command, run it
+                    int rc2 = system(line);
+                    (void)rc2;
+                    free(line);
+                    // Loop continues to show prompt again
+                }
+                
                 if (tui_resume(tui) != 0) {
                     LOG_ERROR("[TUI] Failed to resume TUI after shell command");
                 }
