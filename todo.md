@@ -72,7 +72,7 @@ Instruction queued (4/16 pending)
         - has web search
 
 - [ ] make sure every 'Bash' command is started with a 'timeout'
-- [ ] can open vim and when exits go back to the bot
+- [x] can open vim and when exits go back to the bot
 - [ ] $ klawed -r sess_1766925100_140aa178
 ... BUG: session_load_from_db: checking message 32
 DEBUG: session_load_from_db: checking message 31
