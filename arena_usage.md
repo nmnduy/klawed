@@ -49,6 +49,12 @@
   - Reused `arena_strdup()` helper function for safe string duplication
   - Single `arena_destroy()` call frees all ApiResponse memory
 
+- ✅ Bedrock provider API response parsing now uses arena allocation
+  - Created arena (16KB) for each ApiResponse in bedrock provider
+  - All ApiResponse structures, tool arrays, and strings allocated from arena
+  - Added `arena_strdup()` helper function for safe string duplication
+  - Single `arena_destroy()` call frees all ApiResponse memory
+
 **Patterns established:**
 1. Embed arena pointer in wrapper structure with magic number (completion system)
 2. Add arena pointer directly to existing structure (streaming context, ApiResponse)
@@ -70,13 +76,13 @@
 - Buffer growth in streaming: Use arena allocation with copy for both accumulated_text and tool_input_json buffers
 
 **Remaining challenges:**
-- Need to update other providers (bedrock, openai_responses) to use arena allocation for consistency
+- Need to update openai_responses.c to use arena allocation for consistency
 - cJSON objects still use heap allocation (cJSON_Parse, cJSON_CreateObject)
 - Need to handle potential arena size limits for variable-length data
-- Other providers still use old allocation method (arena = NULL)
+- Bedrock provider streaming context still uses heap allocation (could be updated later)
 
 **Next steps/TODO:**
-1. Update bedrock provider to use arena allocation for ApiResponse  
-2. Update openai_responses.c to use arena allocation for ApiResponse
-3. Investigate if cJSON objects can be allocated from arena (may require cJSON modification)
-4. Consider adding arena to bedrock provider structures if applicable
+1. Update openai_responses.c to use arena allocation for ApiResponse
+2. Investigate if cJSON objects can be allocated from arena (may require cJSON modification)
+3. Consider adding arena to bedrock provider streaming context if applicable
+4. Add arena allocation to any other major allocation hotspots identified
