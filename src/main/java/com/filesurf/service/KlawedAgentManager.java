@@ -122,7 +122,15 @@ public class KlawedAgentManager {
             LOGGER.info("[SESSION:" + sessionId + "] Set HTTP_PROXY: " + httpProxy.get());
         }
         
-        processBuilder.environment().put("KLAWED_USE_BEDROCK", "");
+        // Forward Bedrock/Anthropic specific environment if user has configured it (e.g., via shell aliases)
+        copyEnvIfPresent(processBuilder, "KLAWED_USE_BEDROCK");
+        copyEnvIfPresent(processBuilder, "ANTHROPIC_MODEL");
+        copyEnvIfPresent(processBuilder, "ANTHROPIC_VERSION");
+        copyEnvIfPresent(processBuilder, "AWS_REGION");
+        copyEnvIfPresent(processBuilder, "AWS_PROFILE");
+        copyEnvIfPresent(processBuilder, "AWS_ACCESS_KEY_ID");
+        copyEnvIfPresent(processBuilder, "AWS_SECRET_ACCESS_KEY");
+        copyEnvIfPresent(processBuilder, "AWS_SESSION_TOKEN");
         
         // API configuration - prioritize OPENAI_* environment variables for simplicity
         // This aligns with the user's request to use only OpenAI-compatible environment variables
@@ -136,17 +144,30 @@ public class KlawedAgentManager {
         if (modelName == null || modelName.isBlank()) {
             modelName = apiModel.orElse("deepseek-chat");
         }
+
+        // Push resolved base/model into child env so aliases (incl. Bedrock/Anthropic) flow through
+        processBuilder.environment().put("OPENAI_API_BASE", apiBaseUrl);
+        processBuilder.environment().put("OPENAI_MODEL", modelName);
         
-        // Get API key from system environment - use OPENAI_API_KEY only
-        // This keeps it simple and compatible with any OpenAI-compatible API
+        // Get API key from system environment - prefer OPENAI_API_KEY, allow OPENROUTER_API_KEY and ANTHROPIC_API_KEY fallback
         String apiKey = System.getenv("OPENAI_API_KEY");
-        if (apiKey != null) {
+        if (apiKey == null || apiKey.isBlank()) {
+            apiKey = System.getenv("OPENROUTER_API_KEY");
+        }
+        if (apiKey == null || apiKey.isBlank()) {
+            apiKey = System.getenv("ANTHROPIC_API_KEY");
+        }
+        if (apiKey != null && !apiKey.isBlank()) {
             processBuilder.environment().put("OPENAI_API_KEY", apiKey);
             LOGGER.info("[SESSION:" + sessionId + "] OPENAI_API_KEY set from environment");
         } else {
             LOGGER.warning("[SESSION:" + sessionId + "] OPENAI_API_KEY not found in environment variables");
-            LOGGER.warning("[SESSION:" + sessionId + "] Note: Set OPENAI_API_KEY for your chosen API (DeepSeek, OpenRouter, etc.)");
+            LOGGER.warning("[SESSION:" + sessionId + "] Note: Set OPENAI_API_KEY for your chosen API (DeepSeek, OpenRouter, Anthropic, etc.)");
         }
+
+        // Forward optional auth header and extra headers for Anthropic-compatible endpoints (e.g., Sonnet/Opus via Anthropic API)
+        copyEnvIfPresent(processBuilder, "OPENAI_AUTH_HEADER");
+        copyEnvIfPresent(processBuilder, "OPENAI_EXTRA_HEADERS");
         
         // Enable verbose tool output for debugging
         processBuilder.environment().put("KLAWED_TOOL_VERBOSE", "1");
@@ -299,7 +320,13 @@ public class KlawedAgentManager {
     }
     
 
-    
+    private static void copyEnvIfPresent(ProcessBuilder pb, String key) {
+        String val = System.getenv(key);
+        if (val != null && !val.isBlank()) {
+            pb.environment().put(key, val);
+        }
+    }
+
     /**
      * Represents a running klawed agent instance
      */
