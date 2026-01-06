@@ -78,7 +78,7 @@ public class SessionCleanupJobService {
     SessionManager sessionManager;
     
     @Inject
-    FileChatService invoiceChatService;
+    FileChatService fileChatService;
 
     @PostConstruct
     void init() {
@@ -153,7 +153,7 @@ public class SessionCleanupJobService {
                 LOGGER.info("Processing cleanup job id=" + job.id + " session=" + job.sessionId + " scheduled_at=" + job.scheduledAt);
                 try {
                     // Check if the session is still active in the database
-                    if (invoiceChatService.isChatSessionActive(job.sessionId)) {
+                    if (fileChatService.isChatSessionActive(job.sessionId)) {
                         LOGGER.info("Session " + job.sessionId + " is still active, skipping cleanup");
                         // Reschedule the job for later (e.g., 5 minutes from now)
                         rescheduleJob(job.id, Instant.now().plusSeconds(300).getEpochSecond());

@@ -51,7 +51,7 @@ class TemplateBrowser {
         try {
             if (!this.sessionId) throw new Error('No session');
 
-            const resp = await fetch(`/invoice-chat/explorer/list?path=TEMPLATES`, {
+            const resp = await fetch(`/file-chat/explorer/list?path=TEMPLATES`, {
                 method: 'GET',
                 headers: { 'X-Session-ID': this.sessionId || '' },
                 credentials: 'include'
@@ -216,7 +216,7 @@ class TemplateBrowser {
             this.pdfCache.delete(cacheKey);
         }
 
-        const compileUrl = `/invoice-chat/explorer/compile-latex?path=TEMPLATES/${encodeURIComponent(template.fileName)}&engine=xelatex`;
+        const compileUrl = `/file-chat/explorer/compile-latex?path=TEMPLATES/${encodeURIComponent(template.fileName)}&engine=xelatex`;
         const resp = await fetch(compileUrl, {
             method: 'POST',
             headers: { 'X-Session-ID': this.sessionId },
@@ -232,7 +232,7 @@ class TemplateBrowser {
     }
 
     async displayPdfPreview(template, pdfPath, targetEl) {
-        const fileUrl = `/invoice-chat/explorer/open?path=${encodeURIComponent(pdfPath)}`;
+        const fileUrl = `/file-chat/explorer/open?path=${encodeURIComponent(pdfPath)}`;
         const resp = await fetch(fileUrl, { headers: { 'X-Session-ID': this.sessionId } });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
         const blob = await resp.blob();
@@ -255,7 +255,7 @@ class TemplateBrowser {
     }
 
     async loadLaTeXSource(template, targetEl) {
-        const resp = await fetch(`/invoice-chat/explorer/preview?path=TEMPLATES/${encodeURIComponent(template.fileName)}`, {
+        const resp = await fetch(`/file-chat/explorer/preview?path=TEMPLATES/${encodeURIComponent(template.fileName)}`, {
             method: 'GET',
             headers: { 'X-Session-ID': this.sessionId || '' },
             credentials: 'include'

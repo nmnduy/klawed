@@ -24,16 +24,16 @@ import java.util.List;
 import java.util.logging.Logger;
 
 /**
- * HTTP endpoint for invoice chat AI agent.
- * Provides REST API for AI agents to interact with the invoice chat agent
+ * HTTP endpoint for file chat AI agent.
+ * Provides REST API for AI agents to interact with the file chat agent
  * via HTTP requests instead of WebSocket.
  */
-@Path("/invoice-chat/http")
+@Path("/file-chat/http")
 public class FileChatHttpResource {
 
     private static final Logger LOGGER = Logger.getLogger(FileChatHttpResource.class.getName());
     private final ObjectMapper objectMapper = createObjectMapper();
-    private static final String USER_COOKIE_NAME = "userId";
+    private static final String USER_COOKIE_NAME = "filesurf_userId";
 
     @Inject
     KlawedAgentManager agentManager;
@@ -45,7 +45,7 @@ public class FileChatHttpResource {
     SessionCleanupJobService cleanupJobService;
 
     @Inject
-    FileChatService invoiceChatService;
+    FileChatService fileChatService;
 
     /**
      * Initialize or connect to a chat session via HTTP.
@@ -93,7 +93,7 @@ public class FileChatHttpResource {
 
         try {
             // Create or update chat session in database
-            ChatSessionRecord chatSession = invoiceChatService.createOrUpdateChatSession(sessionId, clientIdentity);
+            ChatSessionRecord chatSession = fileChatService.createOrUpdateChatSession(sessionId, clientIdentity);
             LOGGER.info("[SESSION:" + sessionId + "] Chat session created/updated in database");
 
             // Cancel any pending cleanup jobs for this session since it's being resumed
@@ -114,7 +114,7 @@ public class FileChatHttpResource {
 
             // Save status message to database
             String statusMessage = "SESSION_ID:" + sessionId + "|Connected via HTTP";
-            ChatMessageRecord statusDbMessage = invoiceChatService.createChatMessage(
+            ChatMessageRecord statusDbMessage = fileChatService.createChatMessage(
                 sessionId, ChatConstants.AGENT, ChatConstants.CLIENT, statusMessage, "status");
             LOGGER.info("[SESSION:" + sessionId + "] Status message saved to database with ID: " + statusDbMessage.getId());
 
@@ -160,11 +160,11 @@ public class FileChatHttpResource {
         
         // Save incoming message to database and mark as sent immediately
         try {
-            ChatMessageRecord clientMessage = invoiceChatService.createChatMessage(
+            ChatMessageRecord clientMessage = fileChatService.createChatMessage(
                 sessionId, ChatConstants.CLIENT, ChatConstants.AGENT, message, ChatConstants.DB_MESSAGE_TYPE_TEXT);
             LOGGER.info("[SESSION:" + sessionId + "] Incoming message saved to database with ID: " + clientMessage.getId());
             // Mark client message as sent immediately since it was successfully received by server
-            invoiceChatService.markMessageAsSent(clientMessage.getId());
+            fileChatService.markMessageAsSent(clientMessage.getId());
             LOGGER.info("[SESSION:" + sessionId + "] Client message marked as sent");
         } catch (Exception dbEx) {
             LOGGER.warning("[SESSION:" + sessionId + "] Failed to save incoming message to database: " + dbEx.getMessage());
@@ -220,7 +220,7 @@ public class FileChatHttpResource {
             e.printStackTrace();
             LOGGER.info("[SESSION:" + sessionId + "] Saving error to database");
             try {
-                ChatMessageRecord errorMessage = invoiceChatService.createChatMessage(
+                ChatMessageRecord errorMessage = fileChatService.createChatMessage(
                     sessionId, ChatConstants.AGENT, ChatConstants.CLIENT, errorMsg, ChatConstants.DB_MESSAGE_TYPE_ERROR);
                 LOGGER.info("[SESSION:" + sessionId + "] Error message saved to database with ID: " + errorMessage.getId());
             } catch (Exception dbEx) {
@@ -268,18 +268,18 @@ public class FileChatHttpResource {
             List<ChatMessageRecord> unsentMessages;
             if (sinceTimestamp != null && sinceTimestamp > 0) {
                 // Get messages since the given timestamp
-                unsentMessages = invoiceChatService.findMessagesBySessionAndReceiverSince(
+                unsentMessages = fileChatService.findMessagesBySessionAndReceiverSince(
                     sessionId, ChatConstants.CLIENT, sinceTimestamp);
             } else {
                 // Get all unsent messages for this session
-                unsentMessages = invoiceChatService.findUnsentMessagesForSession(sessionId);
+                unsentMessages = fileChatService.findUnsentMessagesForSession(sessionId);
             }
             
             LOGGER.info("[SESSION:" + sessionId + "] Found " + unsentMessages.size() + " unsent messages");
             
             // Mark messages as sent
             for (ChatMessageRecord message : unsentMessages) {
-                invoiceChatService.markMessageAsSent(message.getId());
+                fileChatService.markMessageAsSent(message.getId());
             }
             
             // Convert messages to JSON
@@ -329,7 +329,7 @@ public class FileChatHttpResource {
         LOGGER.info("[SESSION:" + sessionId + "] HTTP get all messages request received");
 
         try {
-            List<ChatMessageRecord> allMessages = invoiceChatService.findMessagesBySession(sessionId);
+            List<ChatMessageRecord> allMessages = fileChatService.findMessagesBySession(sessionId);
             
             LOGGER.info("[SESSION:" + sessionId + "] Found " + allMessages.size() + " total messages");
             
@@ -401,7 +401,7 @@ public class FileChatHttpResource {
             LOGGER.info("[SESSION:" + sessionId + "] Session removed from session store");
 
             // Deactivate chat session in database
-            invoiceChatService.deactivateChatSession(sessionId);
+            fileChatService.deactivateChatSession(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Chat session deactivated in database");
 
             return Response.ok()
@@ -473,7 +473,7 @@ public class FileChatHttpResource {
             LOGGER.info("[SESSION:" + sessionId + "] Session removed from session store");
             
             // Deactivate chat session in database (don't delete messages)
-            invoiceChatService.deactivateChatSession(sessionId);
+            fileChatService.deactivateChatSession(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Chat session deactivated in database");
             
             return Response.ok()

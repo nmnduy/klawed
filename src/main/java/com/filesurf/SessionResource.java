@@ -57,7 +57,7 @@ public class SessionResource {
 
         boolean secure = cookieSecure.orElse(false);
         NewCookie userCookie = new NewCookie(
-                "userId",
+                "filesurf_userId",
                 userId,
                 "/",
                 null,
@@ -80,7 +80,7 @@ public class SessionResource {
     private String extractUserIdFromCookies(HttpHeaders headers) {
         if (headers == null) return null;
         var cookies = headers.getCookies();
-        Cookie cookie = cookies != null ? cookies.get("userId") : null;
+        Cookie cookie = cookies != null ? cookies.get("filesurf_userId") : null;
         if (cookie != null && cookie.getValue() != null && !cookie.getValue().isBlank()) {
             return cookie.getValue();
         }

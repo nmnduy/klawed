@@ -48,7 +48,7 @@ public class KlawedAgentManager {
     Optional<String> klawedPath;
     
     @Inject
-    FileChatService invoiceChatService;
+    FileChatService fileChatService;
     
     // Thread pool for async polling
     private final ExecutorService asyncPollingExecutor = Executors.newCachedThreadPool();
@@ -365,10 +365,10 @@ public class KlawedAgentManager {
                 return;
             }
             
-            // Create SQLiteQueueClient with sessionId and invoiceChatService
+            // Create SQLiteQueueClient with sessionId and fileChatService
             SQLiteQueueClient.Config config = new SQLiteQueueClient.Config(sqliteDbPath)
                 .withSessionId(sessionId)
-                .withFileChatService(invoiceChatService);
+                .withFileChatService(fileChatService);
             
             sqliteQueueClient = new SQLiteQueueClient(config);
             sqliteQueueClient.connect();

@@ -1,7 +1,7 @@
-# FileSurv v2 - Klawed Agent Project
+# FileSurf v2 - Klawed Agent Project
 
 ## Project Overview
-FileSurv v2 is a Quarkus-based application for file management and chat functionality with AI integration.
+FileSurf v2 is a Quarkus-based application for file management and chat functionality with AI integration.
 
 ## Current Status (2026-01-06)
 - ✅ Application codebase is clean and ready for development
@@ -16,8 +16,8 @@ FileSurv v2 is a Quarkus-based application for file management and chat function
 mvn quarkus:dev
 
 # 2. Access the application
-# Default: http://localhost:8080/invoice-chat
-# Or use custom port: http://localhost:8082/invoice-chat
+# Default: http://localhost:8080/file-chat
+# Or use custom port: http://localhost:8082/file-chat
 
 # 3. View logs
 tail -f logs/application.log
@@ -68,14 +68,21 @@ logs/                          # Application logs
 ```
 
 ## Key Endpoints
-- `GET /invoice-chat` - Main chat interface
-- WebSocket: `/invoice-chat/ws/{sessionId}`
-- REST API: Various endpoints under `/invoice-chat/http/`
+- `GET /file-chat` - Main chat interface
+- WebSocket: `/file-chat/ws/{sessionId}`
+- REST API: Various endpoints under `/file-chat/http/`
 
 ## Database
-- SQLite database: `data/invoicesurf.db`
+- SQLite database: `data/filesurf.db`
 - Schema is automatically initialized on first run
 - Uses Write-Ahead Logging (WAL) mode for better concurrency
+
+## Cookie Configuration
+- Cookie name: `filesurf_userId` (application-specific to avoid conflicts with other apps)
+- Cookie path: `/` (root path)
+- HttpOnly: `true` (secure, not accessible from JavaScript)
+- Secure: Configurable via `cookie.secure` property (defaults to `false` for development)
+- The cookie name is specific to FileSurf to prevent interference with other applications running on the same host
 
 ## Dependencies
 - Quarkus 3.16.4
@@ -120,5 +127,5 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 ### Known Issues & Fixes
 1. **Template Name Mismatch (Fixed)**: 
    - Was: Java code expected `invoiceChat.html`, file was `fileChat.html`
-   - Fix: Renamed `fileChat.html` to `invoiceChat.html`
-   - Location: `src/main/resources/templates/invoiceChat.html`
+   - Fix: Updated Java code to use `fileChat.html` (correct for FileSurf)
+   - Location: `src/main/resources/templates/fileChat.html`

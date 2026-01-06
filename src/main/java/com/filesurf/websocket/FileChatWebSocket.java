@@ -28,12 +28,12 @@ import java.util.List;
 import java.util.logging.Logger;
 import java.io.IOException;
 
-@WebSocket(path = "/invoice-chat/ws/{sessionId}")
+@WebSocket(path = "/file-chat/ws/{sessionId}")
 public class FileChatWebSocket {
 
     private static final Logger LOGGER = Logger.getLogger(FileChatWebSocket.class.getName());
     private final ObjectMapper objectMapper = createObjectMapper();
-    private static final String USER_COOKIE_NAME = "userId";
+    private static final String USER_COOKIE_NAME = "filesurf_userId";
 
     /**
      * Create and configure ObjectMapper with JavaTimeModule
@@ -72,7 +72,7 @@ public class FileChatWebSocket {
     ChatMessagePollingService chatMessagePollingService;
 
     @Inject
-    FileChatService invoiceChatService;
+    FileChatService fileChatService;
 
     @OnOpen
     @ActivateRequestContext
@@ -139,7 +139,7 @@ public class FileChatWebSocket {
         LOGGER.info("[SESSION:" + sessionId + "] WebSocket connection opened for client: " + clientIdentity);
 
         // Create or update chat session in database
-        ChatSessionRecord chatSession = invoiceChatService.createOrUpdateChatSession(sessionId, clientIdentity);
+        ChatSessionRecord chatSession = fileChatService.createOrUpdateChatSession(sessionId, clientIdentity);
         LOGGER.info("[SESSION:" + sessionId + "] Chat session created/updated in database");
 
         // Cancel any pending cleanup jobs for this session since it's being resumed
@@ -169,7 +169,7 @@ public class FileChatWebSocket {
                 String statusMessage = "SESSION_ID:" + sessionId + "|Connected";
                 // Save status message to database for poller to handle resending if needed
                 try {
-                    ChatMessageRecord statusDbMessage = invoiceChatService.createChatMessage(sessionId, ChatConstants.AGENT, ChatConstants.CLIENT, statusMessage, "status");
+                    ChatMessageRecord statusDbMessage = fileChatService.createChatMessage(sessionId, ChatConstants.AGENT, ChatConstants.CLIENT, statusMessage, "status");
                     LOGGER.info("[SESSION:" + sessionId + "] Status message saved to database with ID: " + statusDbMessage.getId());
                 } catch (Exception dbEx) {
                     LOGGER.warning("[SESSION:" + sessionId + "] Failed to save status message to database: " + dbEx.getMessage());
@@ -234,10 +234,10 @@ public class FileChatWebSocket {
         // Save incoming message to database and mark as sent immediately
         // (client-to-agent messages don't need to be sent via WebSocket)
         try {
-            ChatMessageRecord clientMessage = invoiceChatService.createChatMessage(sessionId, ChatConstants.CLIENT, ChatConstants.AGENT, message, ChatConstants.DB_MESSAGE_TYPE_TEXT);
+            ChatMessageRecord clientMessage = fileChatService.createChatMessage(sessionId, ChatConstants.CLIENT, ChatConstants.AGENT, message, ChatConstants.DB_MESSAGE_TYPE_TEXT);
             LOGGER.info("[SESSION:" + sessionId + "] Incoming message saved to database with ID: " + clientMessage.getId());
             // Mark client message as sent immediately since it was successfully received by server
-            invoiceChatService.markMessageAsSent(clientMessage.getId());
+            fileChatService.markMessageAsSent(clientMessage.getId());
             LOGGER.info("[SESSION:" + sessionId + "] Client message marked as sent");
         } catch (Exception dbEx) {
             LOGGER.warning("[SESSION:" + sessionId + "] Failed to save incoming message to database: " + dbEx.getMessage());
@@ -306,7 +306,7 @@ public class FileChatWebSocket {
             e.printStackTrace();
             LOGGER.info("[SESSION:" + sessionId + "] Saving error to database for poller to send");
             try {
-                ChatMessageRecord errorMessage = invoiceChatService.createChatMessage(sessionId, ChatConstants.AGENT, ChatConstants.CLIENT, errorMsg, ChatConstants.DB_MESSAGE_TYPE_ERROR);
+                ChatMessageRecord errorMessage = fileChatService.createChatMessage(sessionId, ChatConstants.AGENT, ChatConstants.CLIENT, errorMsg, ChatConstants.DB_MESSAGE_TYPE_ERROR);
                 LOGGER.info("[SESSION:" + sessionId + "] Error message saved to database with ID: " + errorMessage.getId());
             } catch (Exception dbEx) {
                 LOGGER.warning("[SESSION:" + sessionId + "] Failed to save error message to database: " + dbEx.getMessage());
@@ -372,7 +372,7 @@ public class FileChatWebSocket {
         LOGGER.info("[SESSION:" + sessionId + "] Session removed from session store");
 
         // Deactivate chat session in database
-        invoiceChatService.deactivateChatSession(sessionId);
+        fileChatService.deactivateChatSession(sessionId);
         LOGGER.info("[SESSION:" + sessionId + "] Chat session deactivated in database");
 
         // Unregister connection from polling service
@@ -438,7 +438,7 @@ public class FileChatWebSocket {
             LOGGER.info("[SESSION:" + sessionId + "] Session removed from session store");
             
             // Deactivate chat session in database (don't delete messages)
-            invoiceChatService.deactivateChatSession(sessionId);
+            fileChatService.deactivateChatSession(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Chat session deactivated in database");
             
             // Send success response

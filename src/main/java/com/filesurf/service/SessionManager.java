@@ -742,7 +742,7 @@ public class SessionManager {
     // ---------- Persistent storage helpers ----------
 
     private Path resolveBaseTempDir() {
-        String configured = System.getProperty("invoicesurf.sessions.base-dir",
+        String configured = System.getProperty("filesurf.sessions.base-dir",
                 System.getenv().getOrDefault("SESSION_BASE_DIR", "/tmp/is-sessions"));
         Path resolved = Path.of(configured).toAbsolutePath().normalize();
         LOGGER.info("Base temp dir resolved to: " + resolved + " (configured='" + configured + "')");
@@ -753,7 +753,7 @@ public class SessionManager {
         if (persistRoot != null && Files.exists(persistRoot)) {
             return persistRoot;
         }
-        String configured = System.getProperty("invoicesurf.persist.root",
+        String configured = System.getProperty("filesurf.persist.root",
                 System.getenv().getOrDefault("PERSIST_ROOT", "./data/persistent"));
         persistRoot = Path.of(configured).toAbsolutePath().normalize();
         return persistRoot;

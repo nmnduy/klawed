@@ -1,13 +1,13 @@
 {
-  "name": "invoicesurf-css",
+  "name": "filesurf-css",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npx tailwindcss -i ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css --watch",
     "prebuild": "node -e \"const fs = require('fs'); const path = require('path'); const assetsDir = path.join(__dirname, 'src/main/resources/META-INF/resources/assets'); try { fs.rmSync(assetsDir, { recursive: true, force: true }); } catch(e) {}\"",
-    "build": "vite build",
-    "watch": "vite build --watch",
-    "preview": "vite preview"
+    "build": "npx tailwindcss -i ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css --minify",
+    "watch": "npx tailwindcss -i ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css --watch",
+    "preview": "echo 'Preview not configured for CSS-only build'"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",

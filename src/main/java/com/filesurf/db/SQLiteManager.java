@@ -22,7 +22,7 @@ public class SQLiteManager {
     void init() throws SQLException {
         LOGGER.info("Initializing SQLiteManager...");
         // Create single connection
-        connection = DriverManager.getConnection("jdbc:sqlite:data/invoicesurf.db");
+        connection = DriverManager.getConnection("jdbc:sqlite:data/filesurf.db");
         
         // Set PRAGMAs for optimal SQLite performance
         try (Statement stmt = connection.createStatement()) {

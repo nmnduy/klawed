@@ -12,19 +12,19 @@ import jakarta.ws.rs.core.MediaType;
 
 import java.util.logging.Logger;
 
-@Path("/invoice-chat")
+@Path("/file-chat")
 public class FileChatResource {
 
     private static final Logger LOGGER = Logger.getLogger(FileChatResource.class.getName());
 
     @Inject
-    @Location("invoiceChat.html")
-    Template invoiceChat;
+    @Location("fileChat.html")
+    Template fileChat;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance get() {
-        LOGGER.info("Loading Invoice Chat interface");
-        return invoiceChat.instance();
+        LOGGER.info("Loading File Chat interface");
+        return fileChat.instance();
     }
 }

@@ -24,7 +24,7 @@ public class ChatMessagePollingService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     @Inject
-    FileChatService invoiceChatService;
+    FileChatService fileChatService;
     
     // Store active WebSocket connections by session ID
     private final Map<String, WebSocketConnection> activeConnections = new ConcurrentHashMap<>();
@@ -95,7 +95,7 @@ public class ChatMessagePollingService {
         
         try {
             // Get unsent messages
-            List<ChatMessageRecord> unsentMessages = invoiceChatService.findUnsentMessages();
+            List<ChatMessageRecord> unsentMessages = fileChatService.findUnsentMessages();
         
             LOGGER.fine("Found " + unsentMessages.size() + " unsent messages");
             
@@ -173,7 +173,7 @@ public class ChatMessagePollingService {
     @Transactional
     @ActivateRequestContext
     public void markMessageAsSent(Long messageId) {
-        invoiceChatService.markMessageAsSent(messageId);
+        fileChatService.markMessageAsSent(messageId);
         LOGGER.fine("Message " + messageId + " marked as sent in database");
     }
 
@@ -186,7 +186,7 @@ public class ChatMessagePollingService {
         
         try {
             // Get unsent messages for this session
-            List<ChatMessageRecord> unsentMessages = invoiceChatService.findUnsentMessagesForSession(sessionId);
+            List<ChatMessageRecord> unsentMessages = fileChatService.findUnsentMessagesForSession(sessionId);
             
             LOGGER.fine("[SESSION:" + sessionId + "] Found " + unsentMessages.size() + " unsent messages");
             

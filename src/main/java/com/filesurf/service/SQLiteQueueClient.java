@@ -32,7 +32,7 @@ public class SQLiteQueueClient {
     private final java.util.Set<String> pendingToolRequests = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
     
     @Inject
-    FileChatService invoiceChatService;
+    FileChatService fileChatService;
     
     private String sessionId;
     
@@ -43,7 +43,7 @@ public class SQLiteQueueClient {
         private String senderName = SQLiteQueueConstants.DEFAULT_SENDER_NAME;
         private String receiverName = SQLiteQueueConstants.DEFAULT_RECEIVER_NAME;
         private String sessionId;
-        private FileChatService invoiceChatService;
+        private FileChatService fileChatService;
         
         // Client configuration
         private int pollIntervalMs = SQLiteQueueConstants.DEFAULT_POLL_INTERVAL_MS;
@@ -72,8 +72,8 @@ public class SQLiteQueueClient {
             return this;
         }
         
-        public Config withFileChatService(FileChatService invoiceChatService) {
-            this.invoiceChatService = invoiceChatService;
+        public Config withFileChatService(FileChatService fileChatService) {
+            this.fileChatService = fileChatService;
             return this;
         }
         
@@ -107,7 +107,7 @@ public class SQLiteQueueClient {
         public String getSenderName() { return senderName; }
         public String getReceiverName() { return receiverName; }
         public String getSessionId() { return sessionId; }
-        public FileChatService getFileChatService() { return invoiceChatService; }
+        public FileChatService getFileChatService() { return fileChatService; }
         public int getPollIntervalMs() { return pollIntervalMs; }
         public int getPollTimeoutMs() { return pollTimeoutMs; }
         public int getMaxRetries() { return maxRetries; }

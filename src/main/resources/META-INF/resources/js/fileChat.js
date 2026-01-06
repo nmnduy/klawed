@@ -346,7 +346,7 @@ export function init(rootEl) {
         hideEmptyState();
 
         const demoScript = [
-            { from: 'assistant', text: 'Hi! I can draft invoices, apply rules, and schedule sends. What do you need?' },
+            { from: 'assistant', text: 'Hi! I can help with file management, document processing, and organization. What do you need?' },
             { from: 'user', text: "Create a net-30 invoice for Acme Labs for $8,750 with a late fee." },
             { type: 'system', text: 'API call • generating draft with validation and tax rules…' },
             { from: 'assistant', text: 'Draft ready. Summary:\n• Client: Acme Labs\n• Amount: $8,750\n• Terms: Net 30 + 2% late fee\n• Attachments: prepared PDF, CSV ledger' },
@@ -429,7 +429,7 @@ export function init(rootEl) {
             setTemplateBrowserSession();
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = protocol + '//' + window.location.host + '/invoice-chat/ws/' + encodeURIComponent(sessionId);
+            const wsUrl = protocol + '//' + window.location.host + '/file-chat/ws/' + encodeURIComponent(sessionId);
 
             debug('Connecting to WebSocket', wsUrl);
             ws = new WebSocket(wsUrl);
@@ -695,7 +695,7 @@ export function init(rootEl) {
             files.forEach(file => formData.append('files', file));
 
             try {
-                const response = await fetch('/invoice-chat/upload', {
+                const response = await fetch('/file-chat/upload', {
                     method: 'POST',
                     headers: {
                         'X-Session-ID': sessionId

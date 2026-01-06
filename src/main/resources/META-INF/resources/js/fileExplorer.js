@@ -168,7 +168,7 @@ class FileExplorer {
     async compileLatexAndPreview(filePath, fileName, latexContent) {
         try {
             // Call compilation endpoint with xelatex engine for better Unicode support
-            const response = await fetch(`/invoice-chat/explorer/compile-latex?path=${encodeURIComponent(filePath)}&engine=xelatex`, {
+            const response = await fetch(`/file-chat/explorer/compile-latex?path=${encodeURIComponent(filePath)}&engine=xelatex`, {
                 method: 'POST',
                 headers: {
                     'X-Session-ID': this.sessionId,
@@ -257,7 +257,7 @@ class FileExplorer {
     async compileLatex(filePath, fileName) {
         // For manual retry, we need to get the LaTeX content first
         try {
-            const response = await fetch(`/invoice-chat/explorer/preview?path=${encodeURIComponent(filePath)}`, {
+            const response = await fetch(`/file-chat/explorer/preview?path=${encodeURIComponent(filePath)}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
@@ -278,7 +278,7 @@ class FileExplorer {
 
     // Open PDF file in new tab
     openPdfFile(pdfPath) {
-        const fileUrl = `/invoice-chat/explorer/open?path=${encodeURIComponent(pdfPath)}`;
+        const fileUrl = `/file-chat/explorer/open?path=${encodeURIComponent(pdfPath)}`;
         window.open(fileUrl, '_blank', 'noopener');
     }
 
@@ -323,7 +323,7 @@ class FileExplorer {
         }
 
         try {
-            const response = await fetch(`/invoice-chat/explorer/list?path=${encodeURIComponent(path)}`, {
+            const response = await fetch(`/file-chat/explorer/list?path=${encodeURIComponent(path)}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
@@ -505,7 +505,7 @@ class FileExplorer {
     // Open file (download or inline preview in browser)
     openFile(filePath, fileName) {
         if (!this.sessionId) return;
-        const url = `/invoice-chat/explorer/open?path=${encodeURIComponent(filePath)}`;
+        const url = `/file-chat/explorer/open?path=${encodeURIComponent(filePath)}`;
         fetch(url, {
             headers: {
                 'X-Session-ID': this.sessionId
@@ -553,7 +553,7 @@ class FileExplorer {
 
         try {
             if (fileName && fileName.toLowerCase().endsWith('.pdf')) {
-                const fileUrl = `/invoice-chat/explorer/open?path=${encodeURIComponent(filePath)}`;
+                const fileUrl = `/file-chat/explorer/open?path=${encodeURIComponent(filePath)}`;
                 const resp = await fetch(fileUrl, {
                     headers: {
                         'X-Session-ID': this.sessionId
@@ -581,7 +581,7 @@ class FileExplorer {
                 return;
             }
 
-            const response = await fetch(`/invoice-chat/explorer/preview?path=${encodeURIComponent(filePath)}`, {
+            const response = await fetch(`/file-chat/explorer/preview?path=${encodeURIComponent(filePath)}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }

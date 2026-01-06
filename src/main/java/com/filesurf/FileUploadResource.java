@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 
-@jakarta.ws.rs.Path("/invoice-chat/upload")
+@jakarta.ws.rs.Path("/file-chat/upload")
 public class FileUploadResource {
 
     private static final Logger LOGGER = Logger.getLogger(FileUploadResource.class.getName());
@@ -61,7 +61,7 @@ public class FileUploadResource {
     public Response uploadFiles(@MultipartForm UploadForm form,
                                 @HeaderParam("X-Session-ID") String sessionId,
                                 @HeaderParam("X-User-ID") String headerUserId,
-                                @CookieParam("userId") String cookieUserId) {
+                                @CookieParam("filesurf_userId") String cookieUserId) {
         LOGGER.info("Received file upload request for session: " + sessionId);
 
         if (sessionId == null || sessionId.trim().isEmpty()) {
@@ -177,7 +177,7 @@ public class FileUploadResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response listUploadedFiles(@HeaderParam("X-Session-ID") String sessionId,
                                       @HeaderParam("X-User-ID") String headerUserId,
-                                      @CookieParam("userId") String cookieUserId) {
+                                      @CookieParam("filesurf_userId") String cookieUserId) {
         LOGGER.info("Listing uploaded files for session: " + sessionId);
 
         if (sessionId == null || sessionId.trim().isEmpty()) {

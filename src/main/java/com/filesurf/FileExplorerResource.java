@@ -25,7 +25,7 @@ import java.util.logging.Logger;
 /**
  * File Explorer Resource for browsing session directories and files
  */
-@Path("/invoice-chat/explorer")
+@Path("/file-chat/explorer")
 public class FileExplorerResource {
 
     private static final Logger LOGGER = Logger.getLogger(FileExplorerResource.class.getName());
@@ -72,7 +72,7 @@ public class FileExplorerResource {
     public Response listDirectory(
             @HeaderParam("X-Session-ID") String sessionId,
             @HeaderParam("X-User-ID") String headerUserId,
-            @CookieParam("userId") String cookieUserId,
+            @CookieParam("filesurf_userId") String cookieUserId,
             @QueryParam("path") String relativePath) {
 
         LOGGER.info("Listing directory for session: " + sessionId + ", path: " + relativePath);
@@ -214,7 +214,7 @@ public class FileExplorerResource {
     public Response previewFile(
             @HeaderParam("X-Session-ID") String sessionId,
             @HeaderParam("X-User-ID") String headerUserId,
-            @CookieParam("userId") String cookieUserId,
+            @CookieParam("filesurf_userId") String cookieUserId,
             @QueryParam("path") String filePath) {
 
         LOGGER.info("Previewing file for session: " + sessionId + ", path: " + filePath);
@@ -329,7 +329,7 @@ public class FileExplorerResource {
     public Response compileLatex(
             @HeaderParam("X-Session-ID") String sessionId,
             @HeaderParam("X-User-ID") String headerUserId,
-            @CookieParam("userId") String cookieUserId,
+            @CookieParam("filesurf_userId") String cookieUserId,
             @QueryParam("path") String filePath,
             @QueryParam("engine") String engine) {
         
@@ -435,7 +435,7 @@ public class FileExplorerResource {
     public Response openFile(
             @HeaderParam("X-Session-ID") String sessionId,
             @HeaderParam("X-User-ID") String headerUserId,
-            @CookieParam("userId") String cookieUserId,
+            @CookieParam("filesurf_userId") String cookieUserId,
             @QueryParam("path") String filePath) {
 
         LOGGER.info("Opening file for session: " + sessionId + ", path: " + filePath);
@@ -543,7 +543,7 @@ public class FileExplorerResource {
     public Response getFileMetadata(
             @HeaderParam("X-Session-ID") String sessionId,
             @HeaderParam("X-User-ID") String headerUserId,
-            @CookieParam("userId") String cookieUserId,
+            @CookieParam("filesurf_userId") String cookieUserId,
             @QueryParam("path") String filePath) {
 
         LOGGER.info("Getting file metadata for session: " + sessionId + ", path: " + filePath);
