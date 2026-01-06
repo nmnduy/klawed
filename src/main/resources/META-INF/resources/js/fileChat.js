@@ -410,18 +410,15 @@ export function init(rootEl) {
         if (!el) return () => {};
         const prevZ = el.style.zIndex;
         const prevPos = el.style.position;
-        const prevBoxShadow = el.style.boxShadow;
         if (!prevPos || prevPos === 'static') {
             el.style.position = 'relative';
         }
         el.style.zIndex = '40';
-        // Ring + large shadow to dim the rest of the page
+        // Only add ring for emphasis - dimming is handled by the overlay
         el.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2');
-        el.style.boxShadow = '0 0 0 9999px rgba(0,0,0,0.40)';
         return () => {
             el.style.zIndex = prevZ;
             el.style.position = prevPos;
-            el.style.boxShadow = prevBoxShadow;
             el.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2');
         };
     }
@@ -429,7 +426,7 @@ export function init(rootEl) {
     function addOverlay() {
         const overlay = document.createElement('div');
         // Allow clicks so users can advance the tour by clicking the dimmed area
-        overlay.className = 'fixed inset-0 bg-black/30 backdrop-blur-[2px] z-20';
+        overlay.className = 'fixed inset-0 bg-black/40 backdrop-blur-[2px] z-20';
         overlay.setAttribute('data-tour-overlay', '');
         document.body.appendChild(overlay);
         return overlay;
