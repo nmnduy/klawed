@@ -20,6 +20,7 @@
 #include <curl/curl.h>
 // Socket support removed - will be reimplemented with ZMQ
 #include "retry_logic.h"  // For common retry logic
+#include "arena.h"        // For arena allocation
 
 // ============================================================================
 // CURL Helpers
@@ -85,6 +86,7 @@ typedef struct {
     size_t tool_input_capacity;
     cJSON *message_start_data;       // Message metadata from message_start
     char *stop_reason;               // Stop reason from message_delta
+    Arena *arena;                    // Arena for all allocations (optional, NULL for heap allocation)
 } BedrockStreamingContext;
 
 static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, ConversationState *state) {
@@ -92,14 +94,31 @@ static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, Convers
     ctx->state = state;
     ctx->content_block_index = -1;
     ctx->accumulated_capacity = 4096;
-    ctx->accumulated_text = malloc(ctx->accumulated_capacity);
-    if (ctx->accumulated_text) {
-        ctx->accumulated_text[0] = '\0';
-    }
-    ctx->tool_input_capacity = 4096;
-    ctx->tool_input_json = malloc(ctx->tool_input_capacity);
-    if (ctx->tool_input_json) {
-        ctx->tool_input_json[0] = '\0';
+    
+    // Create arena for streaming context allocations
+    ctx->arena = arena_create(65536);  // 64KB arena for streaming context
+    if (ctx->arena) {
+        // Use arena allocation
+        ctx->accumulated_text = arena_alloc(ctx->arena, ctx->accumulated_capacity);
+        if (ctx->accumulated_text) {
+            ctx->accumulated_text[0] = '\0';
+        }
+        ctx->tool_input_capacity = 4096;
+        ctx->tool_input_json = arena_alloc(ctx->arena, ctx->tool_input_capacity);
+        if (ctx->tool_input_json) {
+            ctx->tool_input_json[0] = '\0';
+        }
+    } else {
+        // Fallback to heap allocation
+        ctx->accumulated_text = malloc(ctx->accumulated_capacity);
+        if (ctx->accumulated_text) {
+            ctx->accumulated_text[0] = '\0';
+        }
+        ctx->tool_input_capacity = 4096;
+        ctx->tool_input_json = malloc(ctx->tool_input_capacity);
+        if (ctx->tool_input_json) {
+            ctx->tool_input_json[0] = '\0';
+        }
     }
 }
 
@@ -108,12 +127,21 @@ static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, Convers
 
 static void bedrock_streaming_context_free(BedrockStreamingContext *ctx) {
     if (!ctx) return;
-    free(ctx->accumulated_text);
-    free(ctx->content_block_type);
-    free(ctx->tool_use_id);
-    free(ctx->tool_use_name);
-    free(ctx->tool_input_json);
-    free(ctx->stop_reason);
+    
+    // If arena is present, destroy it (frees all arena-allocated memory)
+    if (ctx->arena) {
+        arena_destroy(ctx->arena);
+    } else {
+        // Fallback to individual free calls
+        free(ctx->accumulated_text);
+        free(ctx->content_block_type);
+        free(ctx->tool_use_id);
+        free(ctx->tool_use_name);
+        free(ctx->tool_input_json);
+        free(ctx->stop_reason);
+    }
+    
+    // cJSON objects still use heap allocation
     if (ctx->message_start_data) {
         cJSON_Delete(ctx->message_start_data);
     }
@@ -163,18 +191,18 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
                 cJSON *type = cJSON_GetObjectItem(content_block, "type");
                 if (type && cJSON_IsString(type)) {
                     free(ctx->content_block_type);
-                    ctx->content_block_type = strdup(type->valuestring);
+                    ctx->content_block_type = arena_strdup(ctx->arena, type->valuestring);
 
                     if (strcmp(type->valuestring, "tool_use") == 0) {
                         cJSON *id = cJSON_GetObjectItem(content_block, "id");
                         cJSON *name = cJSON_GetObjectItem(content_block, "name");
                         if (id && cJSON_IsString(id)) {
                             free(ctx->tool_use_id);
-                            ctx->tool_use_id = strdup(id->valuestring);
+                            ctx->tool_use_id = arena_strdup(ctx->arena, id->valuestring);
                         }
                         if (name && cJSON_IsString(name)) {
                             free(ctx->tool_use_name);
-                            ctx->tool_use_name = strdup(name->valuestring);
+                            ctx->tool_use_name = arena_strdup(ctx->arena, name->valuestring);
                         }
                         ctx->tool_input_size = 0;
                         if (ctx->tool_input_json) {
@@ -204,10 +232,24 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
                             if (needed > ctx->accumulated_capacity) {
                                 size_t new_cap = ctx->accumulated_capacity * 2;
                                 if (new_cap < needed) new_cap = needed;
-                                char *new_buf = realloc(ctx->accumulated_text, new_cap);
-                                if (new_buf) {
-                                    ctx->accumulated_text = new_buf;
-                                    ctx->accumulated_capacity = new_cap;
+                                
+                                if (ctx->arena) {
+                                    // Use arena allocation with copy
+                                    char *new_buf = arena_alloc(ctx->arena, new_cap);
+                                    if (new_buf) {
+                                        if (ctx->accumulated_text && ctx->accumulated_size > 0) {
+                                            memcpy(new_buf, ctx->accumulated_text, ctx->accumulated_size);
+                                        }
+                                        ctx->accumulated_text = new_buf;
+                                        ctx->accumulated_capacity = new_cap;
+                                    }
+                                } else {
+                                    // Fallback to realloc
+                                    char *new_buf = realloc(ctx->accumulated_text, new_cap);
+                                    if (new_buf) {
+                                        ctx->accumulated_text = new_buf;
+                                        ctx->accumulated_capacity = new_cap;
+                                    }
                                 }
                             }
 
@@ -235,10 +277,24 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
                             if (needed > ctx->tool_input_capacity) {
                                 size_t new_cap = ctx->tool_input_capacity * 2;
                                 if (new_cap < needed) new_cap = needed;
-                                char *new_buf = realloc(ctx->tool_input_json, new_cap);
-                                if (new_buf) {
-                                    ctx->tool_input_json = new_buf;
-                                    ctx->tool_input_capacity = new_cap;
+                                
+                                if (ctx->arena) {
+                                    // Use arena allocation with copy
+                                    char *new_buf = arena_alloc(ctx->arena, new_cap);
+                                    if (new_buf) {
+                                        if (ctx->tool_input_json && ctx->tool_input_size > 0) {
+                                            memcpy(new_buf, ctx->tool_input_json, ctx->tool_input_size);
+                                        }
+                                        ctx->tool_input_json = new_buf;
+                                        ctx->tool_input_capacity = new_cap;
+                                    }
+                                } else {
+                                    // Fallback to realloc
+                                    char *new_buf = realloc(ctx->tool_input_json, new_cap);
+                                    if (new_buf) {
+                                        ctx->tool_input_json = new_buf;
+                                        ctx->tool_input_capacity = new_cap;
+                                    }
                                 }
                             }
 
@@ -267,7 +323,7 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
                 cJSON *stop_reason = cJSON_GetObjectItem(delta, "stop_reason");
                 if (stop_reason && cJSON_IsString(stop_reason)) {
                     free(ctx->stop_reason);
-                    ctx->stop_reason = strdup(stop_reason->valuestring);
+                    ctx->stop_reason = arena_strdup(ctx->arena, stop_reason->valuestring);
                     LOG_DEBUG("Bedrock stream: stop_reason=%s", ctx->stop_reason);
                 }
             }

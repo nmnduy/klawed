@@ -55,6 +55,13 @@
   - Added `arena_strdup()` helper function for safe string duplication
   - Single `arena_destroy()` call frees all ApiResponse memory
 
+- ✅ Bedrock provider streaming context now uses arena allocation
+  - Added `Arena *arena` field to `BedrockStreamingContext` structure
+  - Created arena (64KB) during context initialization
+  - All strings (accumulated_text, content_block_type, tool_use_id, tool_use_name, tool_input_json, stop_reason) allocated from arena
+  - Buffer growth uses arena allocation with copy instead of `realloc`
+  - Single `arena_destroy` call in `bedrock_streaming_context_free` frees all memory
+
 - ✅ OpenAI Responses API format conversion (openai_responses.c) now uses arena allocation
   - Created arena (16KB) for each ApiResponse in parse_responses_http_response()
   - All ApiResponse structures, tool arrays, and strings allocated from arena
@@ -84,11 +91,14 @@
 
 **Remaining challenges:**
 - cJSON objects still use heap allocation (cJSON_Parse, cJSON_CreateObject)
+  - cJSON is an external library that would require modification to support arena allocation
+  - Acceptable limitation: cJSON objects are relatively small and infrequent compared to string/array allocations
 - Need to handle potential arena size limits for variable-length data
-- Bedrock provider streaming context still uses heap allocation (could be updated later)
+  - Current solution: Use algorithmic optimization (two-pass) for temporary buffers where possible
+  - For streaming contexts: Use arena allocation with copy for buffer growth
 
 **Next steps/TODO:**
 1. ✅ Update openai_responses.c to use arena allocation for ApiResponse
-2. Investigate if cJSON objects can be allocated from arena (may require cJSON modification)
-3. Consider adding arena to bedrock provider streaming context if applicable
-4. Add arena allocation to any other major allocation hotspots identified
+2. ⚠️ cJSON objects use heap allocation (external library limitation)
+3. ✅ Add arena allocation to bedrock provider streaming context
+4. Monitor for other major allocation hotspots as they are identified
