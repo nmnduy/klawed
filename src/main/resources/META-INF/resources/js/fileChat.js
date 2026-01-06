@@ -538,15 +538,34 @@ export function init(rootEl) {
 
         // Finish message
         steps.push(() => {
+            // Create a wrapper div that will handle centering
+            const wrapper = document.createElement('div');
+            wrapper.style.position = 'fixed';
+            wrapper.style.top = '0';
+            wrapper.style.left = '0';
+            wrapper.style.width = '100%';
+            wrapper.style.height = '100%';
+            wrapper.style.display = 'flex';
+            wrapper.style.alignItems = 'center';
+            wrapper.style.justifyContent = 'center';
+            wrapper.style.zIndex = '40';
+            wrapper.style.pointerEvents = 'none'; // Allow clicks to pass through to overlay
+            
+            // Create the tooltip
             const tip = createTooltip('<strong>You are ready!</strong><br/>Start a conversation or upload a file to begin.');
             tip.addEventListener('click', () => {
                 overlay.dispatchEvent(new Event('click'));
             }, { once: true });
-            tip.style.position = 'fixed';
-            tip.style.top = '50%';
-            tip.style.left = '50%';
-            tip.style.transform = 'translate(-50%, -50%)';
-            return () => { tip.remove(); };
+            
+            // Remove pointer-events: none from tooltip so it's clickable
+            tip.style.pointerEvents = 'auto';
+            
+            // Remove the tooltip from body and add to wrapper
+            tip.remove();
+            wrapper.appendChild(tip);
+            document.body.appendChild(wrapper);
+            
+            return () => { wrapper.remove(); };
         });
 
         let currentStep = 0;
