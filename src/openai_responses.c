@@ -13,12 +13,32 @@
 #include "http_client.h"
 #include "klawed_internal.h"
 #include "mcp.h"
+#include "arena.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <bsd/stdlib.h>
 #include <bsd/string.h>
 #include <string.h>
+
+/**
+ * Duplicate a string using arena allocation if arena is provided
+ * Falls back to strdup if arena is NULL
+ */
+static char* arena_strdup(Arena *arena, const char *str) {
+    if (!str) return NULL;
+    
+    if (arena) {
+        size_t len = strlen(str) + 1;
+        char *copy = arena_alloc(arena, len);
+        if (copy) {
+            memcpy(copy, str, len);
+        }
+        return copy;
+    } else {
+        return strdup(str);
+    }
+}
 
 /**
  * Build OpenAI Responses API request JSON from internal message format
@@ -351,14 +371,26 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
         return NULL;
     }
 
-    // Allocate ApiResponse
-    ApiResponse *api_response = calloc(1, sizeof(ApiResponse));
-    if (!api_response) {
-        LOG_ERROR("Failed to allocate ApiResponse");
+    // Create arena for ApiResponse allocations (16KB default size)
+    Arena *arena = arena_create(16 * 1024);
+    if (!arena) {
+        LOG_ERROR("Failed to create arena for ApiResponse");
         cJSON_Delete(json);
         return NULL;
     }
 
+    // Allocate ApiResponse from arena
+    ApiResponse *api_response = arena_alloc(arena, sizeof(ApiResponse));
+    if (!api_response) {
+        LOG_ERROR("Failed to allocate ApiResponse from arena");
+        arena_destroy(arena);
+        cJSON_Delete(json);
+        return NULL;
+    }
+
+    // Initialize ApiResponse
+    memset(api_response, 0, sizeof(ApiResponse));
+    api_response->arena = arena;
     api_response->error_message = NULL;
     api_response->raw_response = json;
 
@@ -395,12 +427,15 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
 
         // Allocate for tool calls
         if (tool_call_count > 0) {
-            api_response->tools = calloc((size_t)tool_call_count, sizeof(ToolCall));
+            api_response->tools = arena_alloc(api_response->arena, 
+                                             (size_t)tool_call_count * sizeof(ToolCall));
             if (!api_response->tools) {
-                LOG_ERROR("Failed to allocate tool calls");
+                LOG_ERROR("Failed to allocate tool calls from arena");
                 api_response_free(api_response);
                 return NULL;
             }
+            // Initialize tool call structures
+            memset(api_response->tools, 0, (size_t)tool_call_count * sizeof(ToolCall));
             api_response->tool_count = tool_call_count;
         }
 
@@ -438,11 +473,18 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
                             if (needed > text_capacity) {
                                 size_t new_cap = text_capacity ? text_capacity * 2 : 1024;
                                 if (new_cap < needed) new_cap = needed;
-                                char *new_buf = realloc(combined_text, new_cap);
+                                
+                                // Allocate new buffer from arena
+                                char *new_buf = arena_alloc(api_response->arena, new_cap);
                                 if (!new_buf) {
-                                    free(combined_text);
+                                    // Note: combined_text is allocated from arena, no need to free
                                     api_response_free(api_response);
                                     return NULL;
+                                }
+                                
+                                // Copy existing content if any
+                                if (combined_text && text_length > 0) {
+                                    memcpy(new_buf, combined_text, text_length);
                                 }
                                 combined_text = new_buf;
                                 text_capacity = new_cap;
@@ -465,8 +507,8 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
                             continue;
                         }
 
-                        api_response->tools[tool_idx].id = strdup(id->valuestring);
-                        api_response->tools[tool_idx].name = strdup(name->valuestring);
+                        api_response->tools[tool_idx].id = arena_strdup(api_response->arena, id->valuestring);
+                        api_response->tools[tool_idx].name = arena_strdup(api_response->arena, name->valuestring);
 
                         // Parse arguments JSON string to cJSON object
                         const char *args_str = arguments->valuestring;
@@ -484,9 +526,9 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
 
         if (combined_text && text_length > 0) {
             api_response->message.text = combined_text;
-        } else {
-            free(combined_text);
         }
+        // Note: if combined_text is not used, it's allocated from arena
+        // and will be freed when arena is destroyed
     }
 
     LOG_DEBUG("Parsed Responses API response: text=%s, tools=%d",
