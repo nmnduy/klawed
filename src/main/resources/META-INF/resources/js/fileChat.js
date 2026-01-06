@@ -498,25 +498,29 @@ export function init(rootEl) {
         });
 
         steps.push(() => {
+            // Show the Files tab first so users understand where uploads live
+            switchToTab('file');
+            const cleanup = highlightElement(actions.filesTab);
+            const tip = createTooltip('<strong>Files tab</strong><br/>This is where you manage and upload files.');
+            positionTooltip(tip, actions.filesTab, 'bottom');
+            return () => { cleanup(); tip.remove(); };
+        });
+
+        steps.push(() => {
             // Ensure Files tab is visible so the upload button is in DOM/visible
             switchToTab('file');
             let cleanup = null;
             let tip = null;
+            let cancelled = false;
             const run = () => {
+                if (cancelled) return;
                 cleanup = highlightElement(actions.uploadButton);
                 tip = createTooltip('<strong>Upload files</strong><br/>Attach PDFs, docs, or data so the AI can analyze them.');
                 positionTooltip(tip, actions.uploadButton, 'top');
             };
-            // Small delay to allow tab content to render
-            setTimeout(run, 80);
-            return () => { if (cleanup) cleanup(); if (tip) tip.remove(); switchToTab('chat'); };
-        });
-
-        steps.push(() => {
-            const cleanup = highlightElement(actions.filesTab);
-            const tip = createTooltip('<strong>Switch to Files</strong><br/>Browse, preview, and manage files in your workspace.');
-            positionTooltip(tip, actions.filesTab, 'bottom');
-            return () => { cleanup(); tip.remove(); };
+            // Use double rAF to allow layout/render after tab switch
+            requestAnimationFrame(() => requestAnimationFrame(run));
+            return () => { cancelled = true; if (cleanup) cleanup(); if (tip) tip.remove(); switchToTab('chat'); };
         });
 
         steps.push(() => {
