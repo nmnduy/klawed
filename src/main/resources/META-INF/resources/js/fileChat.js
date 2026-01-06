@@ -414,19 +414,19 @@ export function init(rootEl) {
             el.style.position = 'relative';
         }
         el.style.zIndex = '40';
-        // Only add ring for emphasis - dimming is handled by the overlay
-        el.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2');
+        // Enhanced highlight box - more prominent without background dimming
+        el.classList.add('ring-4', 'ring-amber-500', 'ring-offset-4', 'shadow-2xl', 'shadow-amber-500/30');
         return () => {
             el.style.zIndex = prevZ;
             el.style.position = prevPos;
-            el.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2');
+            el.classList.remove('ring-4', 'ring-amber-500', 'ring-offset-4', 'shadow-2xl', 'shadow-amber-500/30');
         };
     }
 
     function addOverlay() {
         const overlay = document.createElement('div');
-        // Allow clicks so users can advance the tour by clicking the dimmed area
-        overlay.className = 'fixed inset-0 bg-black/40 backdrop-blur-[2px] z-20';
+        // Transparent overlay for click handling only - no dimming
+        overlay.className = 'fixed inset-0 z-20';
         overlay.setAttribute('data-tour-overlay', '');
         document.body.appendChild(overlay);
         return overlay;
