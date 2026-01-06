@@ -196,6 +196,7 @@ TEST_MCP_TARGET = $(BUILD_DIR)/test_mcp
 TEST_WM_TARGET = $(BUILD_DIR)/test_window_manager
 TEST_TOOL_RESULTS_REGRESSION_TARGET = $(BUILD_DIR)/test_tool_results_regression
 TEST_ARRAY_RESIZE_TARGET = $(BUILD_DIR)/test_array_resize
+TEST_ARENA_TARGET = $(BUILD_DIR)/test_arena
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 TEST_ZMQ_SOCKET_TARGET = $(BUILD_DIR)/test_zmq_socket
@@ -328,6 +329,7 @@ TEST_TUI_INPUT_BUFFER_SRC = tests/test_tui_input_buffer.c
 TEST_TUI_AUTO_SCROLL_SRC = tests/test_tui_auto_scroll.c
 TEST_TOOL_DETAILS_SRC = tests/test_tool_details_simple.c
 TEST_ARRAY_RESIZE_SRC = tests/test_array_resize.c
+TEST_ARENA_SRC = tests/test_arena.c
 TEST_TOKEN_USAGE_SRC = tests/test_token_usage.c
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
 TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
@@ -354,7 +356,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-zmq-socket test-file-search
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-zmq-socket test-file-search
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -570,6 +572,12 @@ test-array-resize: check-deps $(TEST_ARRAY_RESIZE_TARGET)
 	@echo "Running Array Resize tests..."
 	@echo ""
 	@./$(TEST_ARRAY_RESIZE_TARGET)
+
+test-arena: check-deps $(TEST_ARENA_TARGET)
+	@echo ""
+	@echo "Running Arena Allocator tests..."
+	@echo ""
+	@./$(TEST_ARENA_TARGET)
 
 test-token-usage: check-deps $(TEST_TOKEN_USAGE_TARGET)
 	@echo ""
@@ -1339,6 +1347,14 @@ $(TEST_ARRAY_RESIZE_TARGET): $(TEST_ARRAY_RESIZE_SRC) $(ARRAY_RESIZE_OBJ) $(LOGG
 	@$(CC) $(CFLAGS) -o $(TEST_ARRAY_RESIZE_TARGET) $(TEST_ARRAY_RESIZE_SRC) $(ARRAY_RESIZE_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Array Resize test build successful!"
+	@echo ""
+
+$(TEST_ARENA_TARGET): $(TEST_ARENA_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Arena Allocator test suite..."
+	@$(CC) $(CFLAGS) -DARENA_IMPLEMENTATION -o $(TEST_ARENA_TARGET) $(TEST_ARENA_SRC) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Arena Allocator test build successful!"
 	@echo ""
 
 # Test target for Token Usage - tests token usage tracking functionality
