@@ -33,7 +33,10 @@ export function init(rootEl) {
         messageInput: rootEl.querySelector('[data-message-input]'),
         sendButton: rootEl.querySelector('[data-send-button]'),
         uploadButton: rootEl.querySelector('[data-upload-button]'),
-        fileInput: rootEl.querySelector('[data-file-input]')
+        fileInput: rootEl.querySelector('[data-file-input]'),
+        // Select all upload buttons and file inputs since we now have multiple
+        uploadButtons: rootEl.querySelectorAll('[data-upload-button]'),
+        fileInputs: rootEl.querySelectorAll('[data-file-input]')
     };
 
     const messageParent = elements.chatMessages || elements.chatContainer || rootEl;
@@ -384,7 +387,8 @@ export function init(rootEl) {
             sendButton: elements.sendButton,
             filesTab: rootEl.querySelector('#file-tab'),
             chatTab: rootEl.querySelector('#chat-tab'),
-            uploadButton: elements.uploadButton,
+            uploadButton: elements.uploadButton, // This will be the chat upload button (first one)
+            fileExplorerUploadButton: rootEl.querySelector('#file-explorer-upload'), // Specific ID for file explorer upload
             statusText: elements.statusText,
             emptyState: rootEl.querySelector('[data-chat-empty]')
         };
@@ -489,6 +493,14 @@ export function init(rootEl) {
         });
 
         steps.push(() => {
+            const cleanup = highlightElement(actions.uploadButton);
+            const tip = createTooltip('<strong>Upload files directly</strong><br/>Click here to upload files without switching tabs. You can also use the Files tab for more file management options.');
+            positionTooltip(tip, actions.uploadButton, 'top');
+            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
+            return () => { cleanup(); tip.remove(); };
+        });
+
+        steps.push(() => {
             // Show the Files tab first so users understand where uploads live
             switchToTab('file');
             const cleanup = highlightElement(actions.filesTab);
@@ -506,8 +518,8 @@ export function init(rootEl) {
             let cancelled = false;
             const run = () => {
                 if (cancelled) return;
-                cleanup = highlightElement(actions.uploadButton);
-                tip = createTooltip('<strong>Upload files</strong><br/>Attach PDFs, docs, or data so the AI can analyze them.');
+                cleanup = highlightElement(actions.fileExplorerUploadButton);
+                tip = createTooltip('<strong>File explorer upload</strong><br/>You can also upload files here in the Files tab for more control over file management.');
                 positionTooltip(tip, actions.uploadButton, 'top');
                 tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
             };
@@ -847,12 +859,23 @@ export function init(rootEl) {
         });
     });
 
-    if (elements.uploadButton && elements.fileInput) {
-        elements.uploadButton.addEventListener('click', () => {
-            elements.fileInput.click();
+    // Set up upload functionality for all upload buttons
+    if (elements.uploadButtons && elements.uploadButtons.length > 0 && elements.fileInputs && elements.fileInputs.length > 0) {
+        // For each upload button, wire it to the corresponding file input
+        // The chat upload button (first) should use the chat file input (first)
+        // The file explorer upload button (second) should use the file explorer file input (second)
+        elements.uploadButtons.forEach((uploadButton, index) => {
+            if (index < elements.fileInputs.length) {
+                const fileInput = elements.fileInputs[index];
+                uploadButton.addEventListener('click', () => {
+                    fileInput.click();
+                });
+            }
         });
 
-        elements.fileInput.addEventListener('change', async (e) => {
+        // Set up change handlers for all file inputs
+        elements.fileInputs.forEach((fileInput) => {
+            fileInput.addEventListener('change', async (e) => {
             const files = Array.from(e.target.files || []);
             if (files.length === 0) return;
 
@@ -893,7 +916,8 @@ export function init(rootEl) {
                 addSystemMessage('✗ Upload error: ' + error.message, 'error');
             }
 
-            elements.fileInput.value = '';
+            fileInput.value = '';
+            });
         });
     }
 
