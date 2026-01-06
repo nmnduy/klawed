@@ -10,8 +10,8 @@ CLANG = clang
 # Detect OS for ncurses library linking
 UNAME_S := $(shell uname -s)
 
-CFLAGS = -Werror -Wall -Wextra -Wpedantic -Wformat=2 -Wconversion -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wuninitialized -Warray-bounds -Wvla -Wwrite-strings -Wnull-dereference -Wimplicit-fallthrough -Wsign-conversion -Wsign-compare -Wfloat-equal -Wpointer-arith -Wbad-function-cast -Wstrict-overflow -Waggregate-return -Wredundant-decls -Wnested-externs -Winline -Wswitch-enum -Wswitch-default -Wenum-conversion -Wdisabled-optimization -O2 -std=c11 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE=1 -Wno-aggregate-return $(SANITIZERS)
-DEBUG_CFLAGS = -Werror -Wall -Wextra -Wpedantic -Wformat=2 -Wconversion -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wuninitialized -Warray-bounds -Wvla -Wwrite-strings -Wnull-dereference -Wimplicit-fallthrough -Wsign-conversion -Wsign-compare -Wfloat-equal -Wpointer-arith -Wbad-function-cast -Wstrict-overflow -Waggregate-return -Wredundant-decls -Wnested-externs -Winline -Wswitch-enum -Wswitch-default -Wenum-conversion -Wdisabled-optimization -g -O0 -std=c11 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE=1 -fsanitize=address -fno-omit-frame-pointer
+CFLAGS = -Werror -Wall -Wextra -Wpedantic -Wformat=2 -Wconversion -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wuninitialized -Warray-bounds -Wvla -Wwrite-strings -Wnull-dereference -Wimplicit-fallthrough -Wsign-conversion -Wsign-compare -Wfloat-equal -Wpointer-arith -Wbad-function-cast -Wstrict-overflow -Waggregate-return -Wredundant-decls -Wnested-externs -Winline -Wswitch-enum -Wswitch-default -Wenum-conversion -Wdisabled-optimization -O2 -std=c11 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE=1 -Wno-aggregate-return -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE $(SANITIZERS)
+DEBUG_CFLAGS = -Werror -Wall -Wextra -Wpedantic -Wformat=2 -Wconversion -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wuninitialized -Warray-bounds -Wvla -Wwrite-strings -Wnull-dereference -Wimplicit-fallthrough -Wsign-conversion -Wsign-compare -Wfloat-equal -Wpointer-arith -Wbad-function-cast -Wstrict-overflow -Waggregate-return -Wredundant-decls -Wnested-externs -Winline -Wswitch-enum -Wswitch-default -Wenum-conversion -Wdisabled-optimization -g -O0 -std=c11 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE=1 -fsanitize=address -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE
 
 # macOS needs _DARWIN_C_SOURCE for strlcpy/strlcat in string.h
 ifeq ($(UNAME_S),Darwin)
@@ -30,8 +30,14 @@ ifeq ($(UNAME_S),Darwin)
     NCURSES_LIB = -lncurses
 endif
 
-LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd $(NCURSES_LIB) $(SANITIZERS)
-DEBUG_LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd $(NCURSES_LIB) -fsanitize=address
+LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd $(NCURSES_LIB) $(SANITIZERS) -Wl,-pie
+ifeq ($(UNAME_S),Linux)
+    LDFLAGS += -Wl,-z,relro -Wl,-z,now
+endif
+DEBUG_LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd $(NCURSES_LIB) -fsanitize=address -Wl,-pie
+ifeq ($(UNAME_S),Linux)
+    DEBUG_LDFLAGS += -Wl,-z,relro -Wl,-z,now
+endif
 
 # Installation prefix (can be overridden via command line)
 INSTALL_PREFIX ?= $(HOME)/.local
