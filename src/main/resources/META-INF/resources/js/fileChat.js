@@ -428,7 +428,8 @@ export function init(rootEl) {
 
     function addOverlay() {
         const overlay = document.createElement('div');
-        overlay.className = 'fixed inset-0 bg-black/30 backdrop-blur-[2px] z-20 pointer-events-none';
+        // Allow clicks so users can advance the tour by clicking the dimmed area
+        overlay.className = 'fixed inset-0 bg-black/30 backdrop-blur-[2px] z-20';
         overlay.setAttribute('data-tour-overlay', '');
         document.body.appendChild(overlay);
         return overlay;
@@ -487,6 +488,7 @@ export function init(rootEl) {
             const cleanup = highlightElement(actions.chatInput);
             const tip = createTooltip('<strong>Start chatting</strong><br/>Type a question or task for the AI assistant here. Press Enter to send, Shift+Enter for a new line.');
             positionTooltip(tip, actions.chatInput, 'top');
+            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
             return () => { cleanup(); tip.remove(); };
         });
 
@@ -494,6 +496,7 @@ export function init(rootEl) {
             const cleanup = highlightElement(actions.sendButton);
             const tip = createTooltip('<strong>Send your message</strong><br/>Click Send or press Enter to submit.');
             positionTooltip(tip, actions.sendButton, 'top');
+            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
             return () => { cleanup(); tip.remove(); };
         });
 
@@ -503,6 +506,7 @@ export function init(rootEl) {
             const cleanup = highlightElement(actions.filesTab);
             const tip = createTooltip('<strong>Files tab</strong><br/>This is where you manage and upload files.');
             positionTooltip(tip, actions.filesTab, 'bottom');
+            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
             return () => { cleanup(); tip.remove(); };
         });
 
@@ -517,6 +521,7 @@ export function init(rootEl) {
                 cleanup = highlightElement(actions.uploadButton);
                 tip = createTooltip('<strong>Upload files</strong><br/>Attach PDFs, docs, or data so the AI can analyze them.');
                 positionTooltip(tip, actions.uploadButton, 'top');
+                tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
             };
             // Use double rAF to allow layout/render after tab switch
             requestAnimationFrame(() => requestAnimationFrame(run));
@@ -527,6 +532,7 @@ export function init(rootEl) {
             const cleanup = highlightElement(actions.statusText);
             const tip = createTooltip('<strong>Status</strong><br/>See when you are connected and when the AI is thinking.');
             positionTooltip(tip, actions.statusText, 'bottom');
+            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
             return () => { cleanup(); tip.remove(); };
         });
 
@@ -534,8 +540,7 @@ export function init(rootEl) {
         steps.push(() => {
             const tip = createTooltip('<strong>You are ready!</strong><br/>Start a conversation or upload a file to begin.');
             tip.addEventListener('click', () => {
-                tip.remove();
-                nextStep();
+                overlay.dispatchEvent(new Event('click'));
             }, { once: true });
             tip.style.position = 'fixed';
             tip.style.bottom = '32px';
