@@ -1,0 +1,35 @@
+<div class="relative sticky top-0 z-20 px-4 sm:px-6 py-3 shadow-sm border-b border-slate-200/60 dark:border-slate-800/60 backdrop-blur-xl bg-[linear-gradient(120deg,_color-mix(in_srgb,_hsl(var(--card))_94%,_hsl(var(--primary))_6%),_color-mix(in_srgb,_hsl(var(--card))_88%,_hsl(var(--primary))_12%))]" data-chat-header>
+    <div class="max-w-screen-2xl mx-auto">
+        <div class="flex items-center justify-between gap-4">
+            <div class="min-w-0 flex items-center gap-4">
+                <div>
+                    <h1 class="flex items-center gap-3 mb-1">
+                        <span class="text-h2-headline-l font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">InvoiceSurf</span>
+                        <span class="inline-flex items-center justify-center rounded-full text-caption-m-bold px-2.5 py-[2px] bg-[linear-gradient(135deg,_color-mix(in_srgb,_hsl(var(--primary))_90%,_hsl(var(--accent))_10%),_color-mix(in_srgb,_hsl(var(--primary))_70%,_hsl(var(--accent))_30%))] text-white shadow-[0_10px_30px_color-mix(in_srgb,_hsl(var(--primary))_35%,_transparent)] border border-[color-mix(in_srgb,_hsl(var(--primary))_50%,_hsl(var(--accent))_50%)]">AI</span>
+                    </h1>
+                    <div class="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+                        <span class="inline-flex items-center gap-2">
+                            <svg class="w-4 h-4 text-primary drop-shadow-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                            </svg>
+                            AI-powered file assistant
+                        </span>
+                        <div class="inline-flex items-center gap-2" role="status" aria-live="polite">
+                            <div class="relative flex items-center justify-center">
+                                <div id="status-pulse" data-status-pulse class="absolute inset-[-6px] rounded-full blur-[6px] opacity-75 scale-70 bg-[radial-gradient(circle,_rgba(245,158,11,0.4),_transparent_60%)] animate-[status-wave_1.4s_ease-out_infinite]"></div>
+                                <div id="status-indicator" data-status-indicator class="relative w-[14px] h-[14px] rounded-full overflow-hidden bg-[linear-gradient(135deg,_#f59e0b,_#d97706)] shadow-[0_0_0_2px_rgba(245,158,11,0.35),_0_8px_24px_-10px_rgba(217,119,6,0.55)] after:content-[''] after:absolute after:inset-[1.5px] after:rounded-full after:bg-[radial-gradient(circle_at_30%_30%,_rgba(255,255,255,0.9),_transparent_55%)] after:mix-blend-screen after:opacity-90"></div>
+                            </div>
+                            <span id="status-text" data-status-text class="font-mono text-sm font-semibold tracking-tight text-amber-700">Connecting…</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="hidden md:flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 font-mono">
+                <div id="status-time" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800/70 shadow-sm">
+                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                    <span id="time-display" data-status-time class="tracking-tight"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

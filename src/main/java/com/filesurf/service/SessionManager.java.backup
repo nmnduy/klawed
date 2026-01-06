@@ -1,0 +1,826 @@
+package com.filesurf.service;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+/**
+ * Manages session-specific directories for file uploads and AI processing,
+ * including hydrating/persisting per-user persistent folders (TEMPLATES, SKILLS, DATA).
+ */
+@ApplicationScoped
+public class SessionManager {
+
+    private static final Logger LOGGER = Logger.getLogger(SessionManager.class.getName());
+
+    // Map session ID to session directory path
+    private final ConcurrentHashMap<String, Path> sessionDirectories = new ConcurrentHashMap<>();
+
+    // Per-user lock for session operations
+    private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
+
+    // Map user ID to set of session IDs (allowing multiple sessions per user)
+    private final ConcurrentHashMap<String, Set<String>> userToSessions = new ConcurrentHashMap<>();
+
+    // Base temporary directory for all sessions (configurable via property)
+    private Path baseTempDir;
+
+    // Persistent root (configurable via property)
+    private Path persistRoot;
+
+    // Date formatter for backup folders
+    private static final DateTimeFormatter BACKUP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+
+    /**
+     * Initialize a new session directory for a WebSocket session
+     * This creates a directory structure, copies persistent folders (TEMPLATES, SKILLS, DATA)
+     * from per-user storage, and ensures required support files exist.
+     */
+    public Path initializeSession(String sessionId, String userId) throws IOException {
+        Objects.requireNonNull(sessionId, "sessionId");
+        Objects.requireNonNull(userId, "userId");
+
+        String sanitizedUser = sanitizeUserId(userId);
+        ReentrantLock lock = userLocks.computeIfAbsent(sanitizedUser, u -> new ReentrantLock());
+        lock.lock();
+        try {
+            // Create base temp directory on first use
+            if (baseTempDir == null || !Files.exists(baseTempDir)) {
+                baseTempDir = resolveBaseTempDir();
+                Files.createDirectories(baseTempDir);
+                LOGGER.info("Created sessions base directory: " + baseTempDir);
+            }
+
+            // Create session-specific directory
+            Path sessionDir = baseTempDir.resolve(sessionId).normalize();
+            if (!sessionDir.startsWith(baseTempDir)) {
+                throw new IOException("Invalid session directory path");
+            }
+            Files.createDirectories(sessionDir);
+
+            // Create subdirectories (uploads directory will be created on demand)
+
+            LOGGER.info("[SESSION:" + sessionId + "] Created session directory: " + sessionDir);
+
+            // Hydrate persistent folders into session
+            hydratePersistentFolders(sanitizedUser, sessionDir);
+
+            // Copy KLAWED.md to session directory so agent gets proper instructions
+            copyKlawedMdToSession(sessionDir);
+
+            // Copy .fileexplorerignore so explorer can hide unwanted files
+            copyFileExplorerIgnoreToSession(sessionDir);
+
+            // Store in map
+            sessionDirectories.put(sessionId, sessionDir);
+            userToSessions.computeIfAbsent(sanitizedUser, k -> ConcurrentHashMap.newKeySet()).add(sessionId);
+
+            return sessionDir;
+        } finally {
+            lock.unlock();
+        }
+    }
+    
+    /**
+     * Get the session directory for a given session ID
+     * Creates it if it doesn't exist. Requires userId for hydration.
+     */
+    public Path getSessionDirectory(String sessionId, String userId) throws IOException {
+        Path sessionDir = sessionDirectories.get(sessionId);
+        if (sessionDir == null || !Files.exists(sessionDir)) {
+            sessionDir = initializeSession(sessionId, userId);
+        }
+        return sessionDir;
+    }
+    
+    /**
+     * Get the uploads directory for a given session
+     * Creates the directory only when needed (on first file upload)
+     */
+    public Path getUploadsDirectory(String sessionId, String userId) throws IOException {
+        Path sessionDir = getSessionDirectory(sessionId, userId);
+        Path uploadsDir = sessionDir.resolve("uploads");
+
+        // Only create the directory if it doesn't exist
+        if (!Files.exists(uploadsDir)) {
+            Files.createDirectories(uploadsDir);
+            LOGGER.info("Created uploads directory on demand: " + uploadsDir);
+        }
+
+        return uploadsDir;
+    }
+    
+    /**
+     * Copy SKILLS folder to the session directory so the AI can access and use the scripts
+     */
+    private void copySkillsToSession(Path sessionDir) {
+        try {
+            // Try to copy from filesystem first (development mode)
+            // First try: src/main/resources/SKILLS (development mode)
+            Path sourceSkillsDir = Path.of("src/main/resources/SKILLS");
+            if (Files.exists(sourceSkillsDir)) {
+                LOGGER.info("Copying SKILLS from filesystem: " + sourceSkillsDir.toAbsolutePath());
+                Path targetSkillsDir = sessionDir.resolve("SKILLS");
+                copyDirectory(sourceSkillsDir, targetSkillsDir);
+                makeScriptsExecutable(targetSkillsDir);
+                LOGGER.info("Copied SKILLS directory to session: " + targetSkillsDir);
+                return;
+            }
+            
+            // Second try: just SKILLS (alternative location)
+            sourceSkillsDir = Path.of("SKILLS");
+            if (Files.exists(sourceSkillsDir)) {
+                LOGGER.info("Copying SKILLS from filesystem: " + sourceSkillsDir.toAbsolutePath());
+                Path targetSkillsDir = sessionDir.resolve("SKILLS");
+                copyDirectory(sourceSkillsDir, targetSkillsDir);
+                makeScriptsExecutable(targetSkillsDir);
+                LOGGER.info("Copied SKILLS directory to session: " + targetSkillsDir);
+                return;
+            }
+
+            // Try to copy from classpath resources (packaged mode)
+            LOGGER.info("Attempting to copy SKILLS from classpath resources");
+            Path targetSkillsDir = sessionDir.resolve("SKILLS");
+            if (copySkillsFromClasspath(targetSkillsDir)) {
+                makeScriptsExecutable(targetSkillsDir);
+                LOGGER.info("Copied SKILLS from classpath to session: " + targetSkillsDir);
+                return;
+            }
+
+            LOGGER.warning("SKILLS directory not found in filesystem or classpath");
+
+        } catch (IOException e) {
+            LOGGER.warning("Failed to copy SKILLS directory to session: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Copy SKILLS from classpath resources
+     */
+    private boolean copySkillsFromClasspath(Path targetDir) throws IOException {
+        try {
+            // Get the SKILLS directory from classpath
+            var classLoader = Thread.currentThread().getContextClassLoader();
+            var skillsUrl = classLoader.getResource("SKILLS");
+            
+            if (skillsUrl == null) {
+                LOGGER.warning("SKILLS not found in classpath");
+                return false;
+            }
+            
+            LOGGER.info("Found SKILLS in classpath: " + skillsUrl);
+            
+            // For JAR files, we need to extract resources differently
+            if (skillsUrl.getProtocol().equals("jar")) {
+                // Extract from JAR
+                copySkillsFromJar(targetDir);
+            } else {
+                // Copy from regular filesystem
+                Path sourcePath = Path.of(skillsUrl.toURI());
+                copyDirectory(sourcePath, targetDir);
+            }
+            
+            return true;
+            
+        } catch (Exception e) {
+            LOGGER.warning("Failed to copy from classpath: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Extract SKILLS from JAR file
+     */
+    private void copySkillsFromJar(Path targetDir) throws IOException {
+        Files.createDirectories(targetDir);
+        
+        // List of known SKILLS resources to extract
+        String[] skillsResources = {
+            // OCR scripts
+            "SKILLS/ocr/README.md",
+            "SKILLS/ocr/ocr_tesseract.sh",
+            "SKILLS/ocr/ocr_pdf_text.sh",
+            "SKILLS/ocr/ocr_combined.sh",
+            "SKILLS/ocr/ocr_to_json.sh",
+            "SKILLS/ocr/preprocess_image.sh",
+            // LaTeX recipe notes (packaged mode support)
+            "SKILLS/latex-recipes/minimal-invoice-skeleton.txt",
+            "SKILLS/latex-recipes/branded-header-footer.txt",
+            "SKILLS/latex-recipes/typography.txt",
+            "SKILLS/latex-recipes/items-and-totals.txt",
+            "SKILLS/latex-recipes/layout-variants.txt",
+            "SKILLS/latex-recipes/localization.txt",
+            "SKILLS/latex-recipes/compile-tips.txt",
+            // Invoice recipe index
+            "SKILLS/invoice-recipes/README.txt",
+            // Invoice templates
+            "SKILLS/invoice_templates/README.md",
+            "SKILLS/invoice_templates/latex/freelancer_invoice.tex",
+            "SKILLS/invoice_templates/latex/minimal_invoice.tex",
+            "SKILLS/invoice_templates/latex/standard_invoice.tex"
+        };
+        
+        var classLoader = Thread.currentThread().getContextClassLoader();
+        
+        for (String resourcePath : skillsResources) {
+            try (var inputStream = classLoader.getResourceAsStream(resourcePath)) {
+                if (inputStream != null) {
+                    // Create parent directories
+                    Path targetPath = targetDir.resolve(resourcePath.replace("SKILLS/", ""));
+                    Path normalizedTarget = targetPath.normalize();
+                    if (!normalizedTarget.startsWith(targetDir)) {
+                        throw new IOException("Invalid target path for resource " + resourcePath);
+                    }
+                    Files.createDirectories(normalizedTarget.getParent());
+                    
+                    // Copy the file
+                    Files.copy(inputStream, normalizedTarget, StandardCopyOption.REPLACE_EXISTING);
+                    LOGGER.fine("Copied from JAR: " + resourcePath);
+                } else {
+                    LOGGER.warning("Resource not found in JAR: " + resourcePath);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Recursively copy a directory
+     */
+    private void copyDirectory(Path source, Path target) throws IOException {
+        LOGGER.fine("[COPY-DIRECTORY] Starting copy from " + source + " to " + target);
+        if (!Files.exists(source)) {
+            LOGGER.fine("[COPY-DIRECTORY] Source does not exist, skipping: " + source);
+            return;
+        }
+        
+        // Create target directory if it doesn't exist
+        Files.createDirectories(target);
+        
+        int fileCount = 0;
+        int dirCount = 0;
+        
+        // Walk through source directory
+        try (Stream<Path> stream = Files.walk(source, FileVisitOption.FOLLOW_LINKS)) {
+            stream.forEach(sourcePath -> {
+                try {
+                    if (Files.isSymbolicLink(sourcePath)) {
+                        LOGGER.warning("Skipping symbolic link during copy: " + sourcePath);
+                        return;
+                    }
+                    Path targetPath = target.resolve(source.relativize(sourcePath));
+                    if (Files.isDirectory(sourcePath)) {
+                        Files.createDirectories(targetPath);
+                    } else {
+                        Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } catch (IOException e) {
+                    LOGGER.warning("Failed to copy: " + sourcePath + " - " + e.getMessage());
+                }
+            });
+        }
+        
+        LOGGER.fine("[COPY-DIRECTORY] Copy completed from " + source + " to " + target);
+    }
+    
+    /**
+     * Copy .fileexplorerignore to session directory for file explorer filtering
+     */
+    private void copyFileExplorerIgnoreToSession(Path sessionDir) {
+        copyResourceToSession(sessionDir, ".fileexplorerignore");
+    }
+
+    /**
+     * Copy KLAWED.md to session directory so the AI agent gets proper instructions
+     * Appends dynamic content listing files in DATA, TEMPLATES, and SKILLS folders
+     */
+    private void copyKlawedMdToSession(Path sessionDir) {
+        copyResourceToSession(sessionDir, "KLAWED.md");
+    }
+
+    /**
+     * Generic helper to copy a resource to the session dir (classpath first, filesystem fallback)
+     */
+    private void copyResourceToSession(Path sessionDir, String resourceName) {
+        try {
+            Path targetPath = sessionDir.resolve(resourceName).normalize();
+            if (!targetPath.startsWith(sessionDir)) {
+                throw new IOException("Invalid target path for " + resourceName);
+            }
+            
+            // Special handling for KLAWED.md - read content and append dynamic listing
+            if (resourceName.equals("KLAWED.md")) {
+                // Read the original KLAWED.md content
+                String originalContent = "";
+                
+                // Try to read from classpath resources first (packaged mode)
+                var classLoader = Thread.currentThread().getContextClassLoader();
+                try (var inputStream = classLoader.getResourceAsStream(resourceName)) {
+                    if (inputStream != null) {
+                        originalContent = new String(inputStream.readAllBytes());
+                        LOGGER.info("Read KLAWED.md from classpath resources");
+                    }
+                }
+                
+                // Fallback: try to read from filesystem (development mode)
+                if (originalContent.isEmpty()) {
+                    Path sourceKlawedMd = Path.of("src/main/resources/KLAWED.md");
+                    if (Files.exists(sourceKlawedMd)) {
+                        originalContent = Files.readString(sourceKlawedMd);
+                        LOGGER.info("Read KLAWED.md from filesystem: " + sourceKlawedMd);
+                    }
+                }
+                
+                if (originalContent.isEmpty()) {
+                    LOGGER.warning("KLAWED.md not found in classpath resources or filesystem");
+                    return;
+                }
+                
+                // Generate dynamic content listing files in persistent folders
+                String dynamicContent = generatePersistentFoldersListing(sessionDir);
+                
+                // Combine original content with dynamic content
+                String combinedContent = originalContent + "\n\n" + dynamicContent;
+                
+                // Write the combined content to session directory
+                Files.writeString(targetPath, combinedContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                LOGGER.info("Copied KLAWED.md with dynamic content to session: " + targetPath);
+                return;
+            }
+            
+            // For other resources, just copy them directly
+            // Try to copy from classpath resources first (packaged mode)
+            var classLoader = Thread.currentThread().getContextClassLoader();
+            try (var inputStream = classLoader.getResourceAsStream(resourceName)) {
+                if (inputStream != null) {
+                    Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                    LOGGER.info("Copied " + resourceName + " from resources to session: " + targetPath);
+                    return;
+                }
+            }
+
+            // Fallback: try to copy from filesystem (development mode)
+            Path source = Path.of("src/main/resources/" + resourceName);
+            if (Files.exists(source)) {
+                Files.copy(source, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                LOGGER.info("Copied " + resourceName + " from filesystem to session: " + targetPath);
+                return;
+            }
+
+            LOGGER.warning(resourceName + " not found in classpath resources or filesystem");
+
+        } catch (IOException e) {
+            LOGGER.warning("Failed to copy " + resourceName + " to session directory: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Generate a listing of files in DATA, TEMPLATES, and SKILLS folders
+     * Limits to 100 items per folder and adds [...] if truncated
+     */
+    private String generatePersistentFoldersListing(Path sessionDir) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("## Session Files and Directories\n\n");
+        sb.append("The following are files and directories available in your current session's persistent folders:\n\n");
+        
+        String[] folders = {"DATA", "TEMPLATES", "SKILLS"};
+        
+        for (String folderName : folders) {
+            Path folderPath = sessionDir.resolve(folderName);
+            sb.append("### ").append(folderName).append(" Folder\n");
+            
+            if (!Files.exists(folderPath) || !Files.isDirectory(folderPath)) {
+                sb.append("- No files or directories found\n\n");
+                continue;
+            }
+            
+            try (Stream<Path> paths = Files.list(folderPath)) {
+                List<Path> items = paths
+                    .sorted((p1, p2) -> {
+                        boolean d1 = Files.isDirectory(p1);
+                        boolean d2 = Files.isDirectory(p2);
+                        if (d1 && !d2) return -1;
+                        if (!d1 && d2) return 1;
+                        return p1.getFileName().toString().compareToIgnoreCase(p2.getFileName().toString());
+                    })
+                    .collect(Collectors.toList());
+                
+                if (items.isEmpty()) {
+                    sb.append("- No files or directories found\n");
+                } else {
+                    int count = 0;
+                    int maxItems = 100;
+                    boolean truncated = false;
+                    
+                    for (Path item : items) {
+                        if (count >= maxItems) {
+                            truncated = true;
+                            break;
+                        }
+                        
+                        String name = item.getFileName().toString();
+                        if (Files.isDirectory(item)) {
+                            sb.append("- `").append(name).append("/` - Directory\n");
+                        } else {
+                            sb.append("- `").append(name).append("` - File\n");
+                        }
+                        count++;
+                    }
+                    
+                    if (truncated) {
+                        sb.append("- [...] (list truncated at ").append(maxItems).append(" items)\n");
+                    }
+                }
+                
+            } catch (IOException e) {
+                sb.append("- Error reading directory: ").append(e.getMessage()).append("\n");
+            }
+            
+            sb.append("\n");
+        }
+        
+        sb.append("_Note: These are the files available in your current session. " +
+                 "You can upload additional files to the DATA folder or create new templates in the TEMPLATES folder._\n");
+        
+        return sb.toString();
+    }
+    
+    /**
+     * Make all shell scripts executable
+     */
+    private void makeScriptsExecutable(Path skillsDir) throws IOException {
+        if (!Files.exists(skillsDir)) {
+            return;
+        }
+        
+        try (Stream<Path> stream = Files.walk(skillsDir)) {
+            stream.filter(path -> path.toString().endsWith(".sh"))
+                  .forEach(path -> {
+                      try {
+                          // Make executable (read + execute for owner, group, others)
+                          java.util.Set<java.nio.file.attribute.PosixFilePermission> perms = 
+                              new java.util.HashSet<>();
+                          perms.add(java.nio.file.attribute.PosixFilePermission.OWNER_READ);
+                          perms.add(java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
+                          perms.add(java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE);
+                          perms.add(java.nio.file.attribute.PosixFilePermission.GROUP_READ);
+                          perms.add(java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE);
+                          perms.add(java.nio.file.attribute.PosixFilePermission.OTHERS_READ);
+                          perms.add(java.nio.file.attribute.PosixFilePermission.OTHERS_EXECUTE);
+                          
+                          Files.setPosixFilePermissions(path, perms);
+                          LOGGER.fine("Made executable: " + path);
+                      } catch (Exception e) {
+                          LOGGER.warning("Failed to make executable: " + path + " - " + e.getMessage());
+                      }
+                  });
+        }
+    }
+    
+    /**
+     * Clean up a session directory immediately (synchronous).
+     * Prefer scheduling via SessionCleanupJobService for normal flows.
+     */
+    public void cleanupSession(String sessionId) {
+        Path sessionDir = sessionDirectories.remove(sessionId);
+        try {
+            deleteSessionDirectory(sessionDir);
+        } catch (IOException e) {
+            LOGGER.warning("Failed to clean up session directory " + sessionDir + ": " + e.getMessage());
+        }
+        // remove any user mapping pointing to this session
+        userToSessions.forEach((user, sessions) -> sessions.remove(sessionId));
+    }
+
+    /**
+     * Remove in-memory tracking for a session without deleting the filesystem directory.
+     */
+    public void releaseSessionTracking(String sessionId) {
+        sessionDirectories.remove(sessionId);
+        userToSessions.forEach((user, sessions) -> sessions.remove(sessionId));
+        LOGGER.info("[SESSION:" + sessionId + "] Released session tracking (directory not deleted)");
+    }
+
+    /**
+     * Resolve the session directory path even if it is no longer tracked in memory.
+     */
+    public Path resolveSessionPath(String sessionId) {
+        Path tracked = sessionDirectories.get(sessionId);
+        if (tracked != null) {
+            return tracked;
+        }
+        Path base = baseTempDir != null ? baseTempDir : resolveBaseTempDir();
+        return base.resolve(sessionId).normalize();
+    }
+
+    /**
+     * Delete a specific session directory on disk (no in-memory tracking changes).
+     */
+    public void deleteSessionDirectory(Path sessionDir) throws IOException {
+        if (sessionDir == null) {
+            LOGGER.warning("deleteSessionDirectory called with null path");
+            return;
+        }
+        if (!Files.exists(sessionDir)) {
+            LOGGER.info("Session directory already absent: " + sessionDir);
+            return;
+        }
+        deleteDirectory(sessionDir);
+        LOGGER.info("Deleted session directory: " + sessionDir);
+    }
+
+    // ---------- Persistent storage helpers ----------
+
+    private Path resolveBaseTempDir() {
+        String configured = System.getProperty("invoicesurf.sessions.base-dir",
+                System.getenv().getOrDefault("SESSION_BASE_DIR", "/tmp/is-sessions"));
+        Path resolved = Path.of(configured).toAbsolutePath().normalize();
+        LOGGER.info("Base temp dir resolved to: " + resolved + " (configured='" + configured + "')");
+        return resolved;
+    }
+
+    private Path resolvePersistRoot() {
+        if (persistRoot != null && Files.exists(persistRoot)) {
+            return persistRoot;
+        }
+        String configured = System.getProperty("invoicesurf.persist.root",
+                System.getenv().getOrDefault("PERSIST_ROOT", "./data/persistent"));
+        persistRoot = Path.of(configured).toAbsolutePath().normalize();
+        return persistRoot;
+    }
+
+    private Path userRoot(String userId) throws IOException {
+        Path root = resolvePersistRoot().resolve(sanitizeUserId(userId));
+        Files.createDirectories(root);
+        return root;
+    }
+
+    private String sanitizeUserId(String userId) {
+        // Remove path separators and restrict to safe chars
+        return userId.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
+
+    private void hydratePersistentFolders(String userId, Path sessionDir) throws IOException {
+        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Starting hydration for user: " + userId);
+        
+        Path userRoot = userRoot(userId);
+        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] User root path: " + userRoot);
+        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Base temp dir: " + resolveBaseTempDir());
+        
+        Path sessionTemplates = sessionDir.resolve("TEMPLATES").normalize();
+        Path sessionSkills = sessionDir.resolve("SKILLS").normalize();
+        Path sessionData = sessionDir.resolve("DATA").normalize();
+
+        ensureUnderSession(sessionDir, sessionTemplates, sessionSkills, sessionData);
+
+        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Checking persistent folders existence:");
+        Path persistTemplates = userRoot.resolve("TEMPLATES");
+        Path persistSkills = userRoot.resolve("SKILLS");
+        Path persistData = userRoot.resolve("DATA");
+        
+        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "]   - PERSIST TEMPLATES: " + persistTemplates + " exists: " + Files.exists(persistTemplates));
+        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "]   - PERSIST SKILLS: " + persistSkills + " exists: " + Files.exists(persistSkills));
+        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "]   - PERSIST DATA: " + persistData + " exists: " + Files.exists(persistData));
+
+        // Clean session copies before hydration to avoid stale artifacts
+        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Cleaning existing session folders");
+        deleteDirectoryIfExists(sessionTemplates);
+        deleteDirectoryIfExists(sessionSkills);
+        deleteDirectoryIfExists(sessionData);
+
+        Files.createDirectories(sessionTemplates);
+        Files.createDirectories(sessionSkills);
+        Files.createDirectories(sessionData);
+
+        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Copying from persistent to session folders:");
+        copyIfExists(persistTemplates, sessionTemplates, false);
+        copyIfExists(persistSkills, sessionSkills, false);
+        copyIfExists(persistData, sessionData, false);
+        
+        // If SKILLS folder is empty after hydration (no persistent SKILLS), copy default SKILLS from resources
+        if (Files.exists(sessionSkills) && isEmptyDirectory(sessionSkills)) {
+            LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] SKILLS folder is empty, copying default SKILLS from resources");
+            copySkillsToSession(sessionDir);
+        }
+        
+        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Hydration completed");
+        logDirectoryStats("Hydrated SESSION TEMPLATES", sessionTemplates);
+        logDirectoryStats("Hydrated SESSION DATA", sessionData);
+    }
+
+    public void persistSession(String sessionId, String userId) throws IOException {
+        Objects.requireNonNull(sessionId, "sessionId");
+        if (userId == null || userId.isBlank()) {
+            LOGGER.severe("[SESSION:" + sessionId + "] persistSession called without userId; skipping persistence");
+            return;
+        }
+        Objects.requireNonNull(userId, "userId");
+        String sanitizedUser = sanitizeUserId(userId);
+        LOGGER.info("[SESSION:" + sessionId + "] Starting persistence for user: " + sanitizedUser);
+        
+        ReentrantLock lock = userLocks.computeIfAbsent(sanitizedUser, u -> new ReentrantLock());
+        lock.lock();
+        try {
+            Path sessionDir = getSessionDirectory(sessionId, userId);
+            LOGGER.info("[SESSION:" + sessionId + "] Session directory: " + sessionDir);
+
+            Path userRoot = userRoot(sanitizedUser);
+            LOGGER.info("[SESSION:" + sessionId + "] User root path: " + userRoot);
+            
+            Path persistTemplates = userRoot.resolve("TEMPLATES");
+            Path persistSkills = userRoot.resolve("SKILLS");
+            Path persistData = userRoot.resolve("DATA");
+
+            Files.createDirectories(persistTemplates);
+            Files.createDirectories(persistSkills);
+            Files.createDirectories(persistData);
+
+            logDirectoryStats("Persist target TEMPLATES", persistTemplates);
+            logDirectoryStats("Persist target DATA", persistData);
+
+            LOGGER.info("[SESSION:" + sessionId + "] Checking session folders existence:");
+            Path sessionTemplates = sessionDir.resolve("TEMPLATES");
+            Path sessionSkills = sessionDir.resolve("SKILLS");
+            Path sessionData = sessionDir.resolve("DATA");
+            
+            LOGGER.info("[SESSION:" + sessionId + "]   - SESSION TEMPLATES: " + sessionTemplates + " exists: " + Files.exists(sessionTemplates));
+            LOGGER.info("[SESSION:" + sessionId + "]   - SESSION SKILLS: " + sessionSkills + " exists: " + Files.exists(sessionSkills));
+            LOGGER.info("[SESSION:" + sessionId + "]   - SESSION DATA: " + sessionData + " exists: " + Files.exists(sessionData));
+
+            logDirectoryStats("Session TEMPLATES", sessionTemplates);
+            logDirectoryStats("Session DATA", sessionData);
+
+            // Optional backup
+            Path backupRoot = userRoot.resolve(".backup");
+            Files.createDirectories(backupRoot);
+            String stamp = BACKUP_FORMATTER.format(LocalDateTime.now());
+            Path backupDir = backupRoot.resolve(stamp);
+            Files.createDirectories(backupDir);
+            LOGGER.info("[SESSION:" + sessionId + "] Creating backup at: " + backupDir);
+            
+            safeCopyIfExists(persistTemplates, backupDir.resolve("TEMPLATES"));
+            safeCopyIfExists(persistSkills, backupDir.resolve("SKILLS"));
+            safeCopyIfExists(persistData, backupDir.resolve("DATA"));
+
+            LOGGER.info("[SESSION:" + sessionId + "] Copying from session to persistent folders:");
+            // Use rsync-like copy via Java (delete on persist to mirror session state)
+            copyWithDelete(sessionDir.resolve("TEMPLATES"), persistTemplates);
+            copyWithDelete(sessionDir.resolve("SKILLS"), persistSkills);
+            copyWithDelete(sessionDir.resolve("DATA"), persistData);
+            
+            LOGGER.info("[SESSION:" + sessionId + "] Persistence completed for user: " + sanitizedUser);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void copyIfExists(Path source, Path target, boolean deleteFirst) throws IOException {
+        LOGGER.fine("[COPY] Checking source: " + source + " exists: " + Files.exists(source));
+        if (!Files.exists(source)) {
+            LOGGER.fine("[COPY] Source does not exist, skipping: " + source);
+            return;
+        }
+        if (deleteFirst) {
+            LOGGER.fine("[COPY] Deleting target before copy: " + target);
+            deleteDirectoryIfExists(target);
+        }
+        LOGGER.info("[COPY] Copying directory from " + source + " to " + target);
+        copyDirectory(source, target);
+        LOGGER.fine("[COPY] Copy completed: " + source + " -> " + target);
+    }
+
+    private void copyWithDelete(Path source, Path target) throws IOException {
+        LOGGER.info("[COPY-WITH-DELETE] Source: " + source + " exists: " + Files.exists(source));
+        LOGGER.info("[COPY-WITH-DELETE] Target: " + target);
+        
+        if (Files.exists(source)) {
+            try {
+                long fileCount = Files.list(source).count();
+                LOGGER.info("[COPY-WITH-DELETE] Source contains " + fileCount + " files/directories");
+            } catch (IOException e) {
+                LOGGER.warning("[COPY-WITH-DELETE] Failed to count files in source: " + e.getMessage());
+            }
+        }
+        
+        deleteDirectoryIfExists(target);
+        LOGGER.info("[COPY-WITH-DELETE] Copying from " + source + " to " + target);
+        copyDirectory(source, target);
+        LOGGER.info("[COPY-WITH-DELETE] Copy completed");
+    }
+
+    private void safeCopyIfExists(Path source, Path target) {
+        try {
+            copyIfExists(source, target, true);
+        } catch (IOException e) {
+            LOGGER.warning("Backup copy failed from " + source + " to " + target + ": " + e.getMessage());
+        }
+    }
+
+    private void logDirectoryStats(String label, Path dir) {
+        try {
+            boolean exists = Files.exists(dir);
+            long count = exists ? Files.list(dir).count() : 0;
+            long size = exists ? Files.walk(dir).filter(Files::isRegularFile).mapToLong(p -> {
+                try {
+                    return Files.size(p);
+                } catch (IOException e) {
+                    return 0L;
+                }
+            }).sum() : 0;
+            LOGGER.info(label + ": path=" + dir + ", exists=" + exists + ", files=" + count + ", bytes=" + size);
+        } catch (IOException e) {
+            LOGGER.warning("Failed to log stats for " + label + " at " + dir + ": " + e.getMessage());
+        }
+    }
+
+    private void deleteDirectoryIfExists(Path path) throws IOException {
+        if (path != null && Files.exists(path)) {
+            deleteDirectory(path);
+        }
+    }
+
+    // ---------- End persistent storage helpers ----------
+    
+    /**
+     * Recursively delete a directory
+     */
+    private void deleteDirectory(Path directory) throws IOException {
+        if (directory == null || !Files.exists(directory)) {
+            return;
+        }
+
+        try (Stream<Path> stream = Files.walk(directory, FileVisitOption.FOLLOW_LINKS)) {
+            stream.sorted(java.util.Comparator.reverseOrder())
+                  .forEach(path -> {
+                      try {
+                          if (Files.isSymbolicLink(path)) {
+                              Files.delete(path);
+                              return;
+                          }
+                          Files.delete(path);
+                      } catch (IOException e) {
+                          LOGGER.warning("Failed to delete: " + path + " - " + e.getMessage());
+                      }
+                  });
+        }
+    }
+
+    private void ensureUnderSession(Path sessionDir, Path... paths) throws IOException {
+        for (Path p : paths) {
+            if (!p.normalize().startsWith(sessionDir.normalize())) {
+                throw new IOException("Path escapes session directory: " + p);
+            }
+        }
+    }
+    
+    /**
+     * Check if a directory is empty
+     */
+    private boolean isEmptyDirectory(Path dir) throws IOException {
+        if (!Files.exists(dir) || !Files.isDirectory(dir)) {
+            return true;
+        }
+        try (var stream = Files.list(dir)) {
+            return !stream.findAny().isPresent();
+        }
+    }
+    
+    /**
+     * Check if a session exists
+     */
+    public boolean sessionExists(String sessionId) {
+        Path sessionDir = sessionDirectories.get(sessionId);
+        return sessionDir != null && Files.exists(sessionDir);
+    }
+    
+    /**
+     * Get all session IDs for a user
+     * @param userId The user ID
+     * @return Set of session IDs for the user, or empty set if none
+     */
+    public Set<String> getSessionsForUser(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return Set.of();
+        }
+        String sanitizedUser = sanitizeUserId(userId);
+        Set<String> sessions = userToSessions.get(sanitizedUser);
+        return sessions != null ? Set.copyOf(sessions) : Set.of();
+    }
+}

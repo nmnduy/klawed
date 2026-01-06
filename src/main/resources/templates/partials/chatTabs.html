@@ -1,0 +1,51 @@
+<!-- Chat Tabs for Mobile Optimization -->
+<div class="chat-tabs border-b-2 border-layout-border bg-layout-main-container/95 backdrop-blur-lg shadow-sm" data-chat-tabs>
+    <div class="flex items-center justify-center">
+        <nav class="flex items-center gap-1 px-2 py-1" role="tablist" aria-label="Chat and file tabs">
+            <!-- Chat Tab -->
+            <button
+                id="chat-tab"
+                data-tab="chat"
+                class="tab-button tab-button--active relative flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-body-m font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
+                role="tab"
+                aria-selected="true"
+                aria-controls="chat-panel"
+            >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <span class="hidden sm:inline">Chat</span>
+            </button>
+
+            <!-- File Tab -->
+            <button
+                id="file-tab"
+                data-tab="file"
+                class="tab-button relative flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-body-m font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
+                role="tab"
+                aria-selected="false"
+                aria-controls="file-panel"
+            >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                <span class="hidden sm:inline">Files</span>
+            </button>
+
+            <!-- Template Tab -->
+            <button
+                id="template-tab"
+                data-tab="template"
+                class="tab-button relative flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-body-m font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
+                role="tab"
+                aria-selected="false"
+                aria-controls="template-panel"
+            >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span class="hidden sm:inline">Templates</span>
+            </button>
+        </nav>
+    </div>
+</div>

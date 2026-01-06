@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InvoiceSurf - AI Assistant</title>
+    <link rel="stylesheet" href="/assets/main.css">
+    <style>
+        #chat-container::-webkit-scrollbar {
+            width: 10px;
+        }
+        #chat-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #chat-container::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, color-mix(in srgb, hsl(var(--primary)) 80%, hsl(var(--muted)) 20%), color-mix(in srgb, hsl(var(--accent)) 80%, hsl(var(--muted)) 20%));
+            border-radius: 9999px;
+            border: 2px solid color-mix(in srgb, hsl(var(--background)) 92%, transparent);
+            box-shadow: 0 6px 16px color-mix(in srgb, hsl(var(--primary)) 14%, transparent);
+        }
+        #chat-container::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, color-mix(in srgb, hsl(var(--primary)) 82%, hsl(var(--muted)) 18%), color-mix(in srgb, hsl(var(--accent)) 82%, hsl(var(--muted)) 18%));
+        }
+        #chat-container::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+    </style>
+    <script src="/js/fileExplorer.js" defer></script>
+    <script type="module" src="/js/fileChat.js"></script>
+</head>
+<body class="bg-layout-page-background min-h-screen overflow-hidden">
+    <div class="flex flex-col h-screen" data-chat-root>
+        <!-- Header with gradient and status merged -->
+        {#include partials/chatHeader.html /}
+
+        <!-- Tabs for Chat and Files -->
+        {#include partials/chatTabs.html /}
+
+        <!-- Main Content Area with Chat and File Explorer -->
+        <div class="flex flex-1 overflow-hidden">
+            <!-- Chat Panel -->
+            <div id="chat-panel" class="flex-1 flex flex-col overflow-hidden" role="tabpanel" aria-labelledby="chat-tab">
+                <!-- Chat Messages Area with improved scrolling -->
+                <div id="chat-container" data-chat-container class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 bg-[hsl(var(--background))] [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,_hsl(var(--primary))_55%,_hsl(var(--muted))_45%)_transparent]" style="
+                    --scrollbar-thumb-bg: linear-gradient(180deg, color-mix(in srgb, hsl(var(--primary)) 80%, hsl(var(--muted)) 20%), color-mix(in srgb, hsl(var(--accent)) 80%, hsl(var(--muted)) 20%));
+                    --scrollbar-thumb-border: color-mix(in srgb, hsl(var(--background)) 92%, transparent);
+                    --scrollbar-thumb-shadow: 0 6px 16px color-mix(in srgb, hsl(var(--primary)) 14%, transparent);
+                " aria-live="polite">
+                    <!-- Welcome message with modern card -->
+                    {#include partials/chatEmptyState.html /}
+
+                    <div data-typing-indicator class="hidden"></div>
+                </div>
+
+                <!-- Input Area with modern styling -->
+                {#include partials/chatInputBar.html /}
+            </div>
+
+            <!-- File Panel -->
+            <div id="file-panel" class="hidden flex-1 flex flex-col overflow-hidden" role="tabpanel" aria-labelledby="file-tab">
+                <!-- File Explorer Panel (included from separate template) -->
+                {#include fileExplorer.html /}
+            </div>
+
+            <!-- Template Panel -->
+            <div id="template-panel" class="hidden flex-1 flex flex-col overflow-hidden" role="tabpanel" aria-labelledby="template-tab">
+                <!-- Template Browser Panel (included from separate template) -->
+                {#include templateBrowser.html /}
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
