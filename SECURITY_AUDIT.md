@@ -45,11 +45,15 @@ int mkdir_result = system(mkdir_cmd);
 **Severity:** Medium  
 **Location:** `Makefile`  
 **Issue:** While the Makefile includes excellent warning flags, it lacks modern security hardening flags that would provide additional protections.
+**Status:** **FIXED** - Security hardening flags have been added with OS-specific handling.
 
-**Recommendation:** Add the following flags to CFLAGS and LDFLAGS:
+**Fix Applied:** Added the following flags to CFLAGS and LDFLAGS:
 ```makefile
 CFLAGS += -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE
-LDFLAGS += -pie -Wl,-z,relro,-z,now
+LDFLAGS += -Wl,-pie
+ifeq ($(UNAME_S),Linux)
+    LDFLAGS += -Wl,-z,relro -Wl,-z,now
+endif
 ```
 
 ### 4. Potential Shell Injection in Bash Tool

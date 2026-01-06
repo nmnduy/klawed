@@ -7,6 +7,7 @@
 - ✓ Fixed command injection in `save_binary_file()` by replacing `system()` with `mkdir_p()`
 - ✓ Implemented secure memory wiping with `secure_free()` function
 - ✓ Updated AWS credential handling to use `secure_free()`
+- ✓ Added security hardening flags to Makefile (`-fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE -Wl,-pie` with Linux-only `-Wl,-z,relro -Wl,-z,now`)
 
 ## Critical Fixes (Immediate)
 
@@ -85,18 +86,22 @@ void secure_free(void *ptr, size_t size) {
 
 ## Medium Priority Fixes
 
-### 3. Add Security Hardening Flags
+### 3. Add Security Hardening Flags - **COMPLETED**
 **File:** `Makefile`
+**Status:** Fixed in commit [current]
 **Issue:** Missing modern security hardening flags
-**Fix:** Add to CFLAGS and LDFLAGS
+**Fix:** Added to CFLAGS and LDFLAGS with OS-specific handling
 
 **Implementation:**
 ```makefile
-# Add to CFLAGS
+# Added to CFLAGS
 CFLAGS += -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE
 
-# Add to LDFLAGS  
-LDFLAGS += -pie -Wl,-z,relro,-z,now
+# Added to LDFLAGS with macOS/Linux compatibility
+LDFLAGS += -Wl,-pie
+ifeq ($(UNAME_S),Linux)
+    LDFLAGS += -Wl,-z,relro -Wl,-z,now
+endif
 ```
 
 ### 4. Enhance Bash Tool Security
