@@ -270,12 +270,7 @@ public class SessionManager {
             "SKILLS/latex-recipes/localization.txt",
             "SKILLS/latex-recipes/compile-tips.txt",
             // Invoice recipe index
-            "SKILLS/invoice-recipes/README.txt",
-            // Invoice templates
-            "SKILLS/invoice_templates/README.md",
-            "SKILLS/invoice_templates/latex/freelancer_invoice.tex",
-            "SKILLS/invoice_templates/latex/minimal_invoice.tex",
-            "SKILLS/invoice_templates/latex/standard_invoice.tex"
+            "SKILLS/invoice-recipes/README.txt"
         };
         
         var classLoader = Thread.currentThread().getContextClassLoader();
@@ -361,7 +356,7 @@ public class SessionManager {
     
     /**
      * Copy KLAWED.md to session directory so the AI agent gets proper instructions
-     * Appends dynamic content listing files in DATA, TEMPLATES, and SKILLS folders
+     * Appends dynamic content listing files in DATA and SKILLS folders
      */
     private void copyKlawedMdToSession(Path sessionDir) {
         copyResourceToSession(sessionDir, "KLAWED.md");
@@ -577,7 +572,7 @@ public class SessionManager {
     }
     
     /**
-     * Generate a listing of files in DATA, TEMPLATES, and SKILLS folders
+     * Generate a listing of files in DATA and SKILLS folders
      * Limits to 100 items per folder and adds [...] if truncated
      */
     private String generatePersistentFoldersListing(Path sessionDir) {
@@ -585,7 +580,7 @@ public class SessionManager {
         sb.append("## Session Files and Directories\n\n");
         sb.append("The following are files and directories available in your current session's persistent folders:\n\n");
         
-        String[] folders = {"DATA", "TEMPLATES", "SKILLS"};
+        String[] folders = {"DATA", "SKILLS"};
         
         for (String folderName : folders) {
             Path folderPath = sessionDir.resolve(folderName);
@@ -642,7 +637,7 @@ public class SessionManager {
         }
         
         sb.append("_Note: These are the files available in your current session. " +
-                 "You can upload additional files to the DATA folder or create new templates in the TEMPLATES folder._\n");
+                 "You can upload additional files to the DATA folder._\n");
         
         return sb.toString();
     }
@@ -777,33 +772,27 @@ public class SessionManager {
         LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] User root path: " + userRoot);
         LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Base temp dir: " + resolveBaseTempDir());
         
-        Path sessionTemplates = sessionDir.resolve("TEMPLATES").normalize();
         Path sessionSkills = sessionDir.resolve("SKILLS").normalize();
         Path sessionData = sessionDir.resolve("DATA").normalize();
 
-        ensureUnderSession(sessionDir, sessionTemplates, sessionSkills, sessionData);
+        ensureUnderSession(sessionDir, sessionSkills, sessionData);
 
         LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Checking persistent folders existence:");
-        Path persistTemplates = userRoot.resolve("TEMPLATES");
         Path persistSkills = userRoot.resolve("SKILLS");
         Path persistData = userRoot.resolve("DATA");
         
-        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "]   - PERSIST TEMPLATES: " + persistTemplates + " exists: " + Files.exists(persistTemplates));
         LOGGER.info("[SESSION:" + sessionDir.getFileName() + "]   - PERSIST SKILLS: " + persistSkills + " exists: " + Files.exists(persistSkills));
         LOGGER.info("[SESSION:" + sessionDir.getFileName() + "]   - PERSIST DATA: " + persistData + " exists: " + Files.exists(persistData));
 
         // Clean session copies before hydration to avoid stale artifacts
         LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Cleaning existing session folders");
-        deleteDirectoryIfExists(sessionTemplates);
         deleteDirectoryIfExists(sessionSkills);
         deleteDirectoryIfExists(sessionData);
 
-        Files.createDirectories(sessionTemplates);
         Files.createDirectories(sessionSkills);
         Files.createDirectories(sessionData);
 
         LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Copying from persistent to session folders:");
-        copyIfExists(persistTemplates, sessionTemplates, false);
         copyIfExists(persistSkills, sessionSkills, false);
         copyIfExists(persistData, sessionData, false);
         
@@ -814,7 +803,6 @@ public class SessionManager {
         }
         
         LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Hydration completed");
-        logDirectoryStats("Hydrated SESSION TEMPLATES", sessionTemplates);
         logDirectoryStats("Hydrated SESSION DATA", sessionData);
     }
 

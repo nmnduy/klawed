@@ -61,16 +61,7 @@ export function init(rootEl) {
                         fileExplorer.startAutoRefresh();
                     }
                 }
-            } else if (tabId === 'template') {
-                // Ensure template browser is initialized
-                ensureTemplateBrowser();
-                // Set session if available - this will also load templates
-                if (sessionId && templateBrowser && typeof templateBrowser.setSession === 'function') {
-                    templateBrowser.setSession(sessionId, null);
-                } else if (templateBrowser && templateBrowser.sessionId && typeof templateBrowser.loadTemplates === 'function') {
-                    // If session is already set, just reload templates
-                    templateBrowser.loadTemplates();
-                }
+
             } else if (fileExplorer && typeof fileExplorer.stopAutoRefresh === 'function') {
                 // Stop auto-refresh when switching away from Files tab
                 fileExplorer.stopAutoRefresh();
@@ -96,15 +87,7 @@ export function init(rootEl) {
                     fileExplorer.startAutoRefresh();
                 }
             }
-        } else if (activeTab && activeTab.id === 'template') {
-            // Template tab is active, initialize and load template browser
-            ensureTemplateBrowser();
-            if (sessionId && templateBrowser && typeof templateBrowser.setSession === 'function') {
-                templateBrowser.setSession(sessionId, null);
-            } else if (templateBrowser && templateBrowser.sessionId && typeof templateBrowser.loadTemplates === 'function') {
-                // If session is already set, just reload templates
-                templateBrowser.loadTemplates();
-            }
+
         }
     }
 
@@ -112,7 +95,6 @@ export function init(rootEl) {
     let isConnected = false;
     let sessionId = null;
     let fileExplorer = null;
-    let templateBrowser = null;
     let currentStreamMessageId = null;
     let currentStreamContent = '';
     let typingIndicatorEl = rootEl.querySelector('[data-typing-indicator]') || null;
@@ -374,18 +356,6 @@ export function init(rootEl) {
         }
     }
 
-    function ensureTemplateBrowser() {
-        if (templateBrowser) return;
-        // First check if template browser is already initialized globally
-        if (typeof window !== 'undefined' && window.templateBrowser) {
-            templateBrowser = window.templateBrowser;
-        } else if (typeof window !== 'undefined' && window.TemplateBrowser) {
-            templateBrowser = new window.TemplateBrowser();
-            // Also store it globally for consistency
-            window.templateBrowser = templateBrowser;
-        }
-    }
-
     function setFileExplorerSession() {
         if (!sessionId) return;
         ensureFileExplorer();
@@ -404,15 +374,7 @@ export function init(rootEl) {
         }
     }
 
-    function setTemplateBrowserSession() {
-        if (!sessionId) return;
-        ensureTemplateBrowser();
-        // Rely on server-managed session; no need to read cookie in JS.
-        const userId = null;
-        if (templateBrowser && typeof templateBrowser.setSession === 'function') {
-            templateBrowser.setSession(sessionId, userId);
-        }
-    }
+
 
     async function connectWebSocket() {
         try {
@@ -426,7 +388,6 @@ export function init(rootEl) {
             // Server sets HttpOnly cookie; no client write needed.
 
             setFileExplorerSession();
-            setTemplateBrowserSession();
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = protocol + '//' + window.location.host + '/file-chat/ws/' + encodeURIComponent(sessionId);
@@ -574,7 +535,6 @@ export function init(rootEl) {
                     sessionId = parts[0].replace('SESSION_ID:', '');
                     updateStatus(true, 'Connected');
                     setFileExplorerSession();
-                    setTemplateBrowserSession();
                 } else if (event.data.startsWith('CHUNK:')) {
                     const chunkContent = event.data.substring(6);
                     handleStreamChunk(chunkContent);
