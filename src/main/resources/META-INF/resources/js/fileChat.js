@@ -500,10 +500,16 @@ export function init(rootEl) {
         steps.push(() => {
             // Ensure Files tab is visible so the upload button is in DOM/visible
             switchToTab('file');
-            const cleanup = highlightElement(actions.uploadButton);
-            const tip = createTooltip('<strong>Upload files</strong><br/>Attach PDFs, docs, or data so the AI can analyze them.');
-            positionTooltip(tip, actions.uploadButton, 'top');
-            return () => { cleanup(); tip.remove(); switchToTab('chat'); };
+            let cleanup = null;
+            let tip = null;
+            const run = () => {
+                cleanup = highlightElement(actions.uploadButton);
+                tip = createTooltip('<strong>Upload files</strong><br/>Attach PDFs, docs, or data so the AI can analyze them.');
+                positionTooltip(tip, actions.uploadButton, 'top');
+            };
+            // Small delay to allow tab content to render
+            setTimeout(run, 80);
+            return () => { if (cleanup) cleanup(); if (tip) tip.remove(); switchToTab('chat'); };
         });
 
         steps.push(() => {
