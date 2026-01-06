@@ -594,6 +594,7 @@ int history_search_process_key(HistorySearchState *state, int ch) {
         case 27:  // ESC
             return -1;
 
+        case '\r':  // Enter key (with nonl() mode)
         case '\n':  // Enter/Return
         case KEY_ENTER:
             return 1;
