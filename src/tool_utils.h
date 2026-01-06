@@ -22,5 +22,10 @@ int summarize_bash_command(const char *cmd, char *out, size_t outsz);
 // from the end of the string.
 void trim_trailing_whitespace(char *str);
 
+// Securely free memory containing sensitive data
+// Wipes the memory with zeros before freeing to prevent sensitive data
+// from remaining in memory after deallocation
+void secure_free(void *ptr, size_t size);
+
 #endif // TOOL_UTILS_H
 

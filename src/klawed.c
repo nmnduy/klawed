@@ -840,6 +840,44 @@ char* read_file(const char *path) {
     return content;
 }
 
+/**
+ * Create directory recursively (like mkdir -p)
+ * Returns 0 on success, -1 on failure
+ */
+static int mkdir_p(const char *path) {
+    char tmp[PATH_MAX];
+    char *p = NULL;
+    size_t len;
+
+    if (strlcpy(tmp, path, sizeof(tmp)) >= sizeof(tmp)) {
+        return -1; // Path too long
+    }
+    len = strlen(tmp);
+
+    // Remove trailing slash
+    if (len > 0 && tmp[len - 1] == '/') {
+        tmp[len - 1] = '\0';
+    }
+
+    // Create directories recursively
+    for (p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
+                return -1;
+            }
+            *p = '/';
+        }
+    }
+
+    // Create final directory
+    if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
+        return -1;
+    }
+
+    return 0;
+}
+
 int write_file(const char *path, const char *content) {
     // Create parent directories if they don't exist
     char *path_copy = strdup(path);
@@ -849,10 +887,7 @@ int write_file(const char *path, const char *content) {
     char *dir_path = dirname(path_copy);
 
     // Create directory recursively (ignore errors if directory already exists)
-    char mkdir_cmd[PATH_MAX];
-    snprintf(mkdir_cmd, sizeof(mkdir_cmd), "mkdir -p '%s' 2>/dev/null", dir_path);
-    int mkdir_result = system(mkdir_cmd);
-    (void)mkdir_result; // Suppress unused result warning
+    (void)mkdir_p(dir_path); // Ignore errors - directory may already exist
 
     free(path_copy);
 
@@ -1335,10 +1370,7 @@ static int save_binary_file(const char *filename, const void *data, size_t size)
     char *dir_path = dirname(path_copy);
 
     // Create directory recursively (ignore errors if directory already exists)
-    char mkdir_cmd[PATH_MAX];
-    snprintf(mkdir_cmd, sizeof(mkdir_cmd), "mkdir -p '%s' 2>/dev/null", dir_path);
-    int mkdir_result = system(mkdir_cmd);
-    (void)mkdir_result; // Suppress unused result warning
+    (void)mkdir_p(dir_path); // Ignore errors - directory may already exist
 
     free(path_copy);
 

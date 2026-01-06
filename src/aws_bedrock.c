@@ -8,6 +8,7 @@
 #include "aws_bedrock.h"
 #include "logger.h"
 #include "klawed_internal.h"
+#include "tool_utils.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -512,12 +513,19 @@ AWSCredentials* bedrock_load_credentials(const char *profile, const char *region
 void bedrock_creds_free(AWSCredentials *creds) {
     if (!creds) return;
 
-    free(creds->access_key_id);
-    free(creds->secret_access_key);
-    free(creds->session_token);
+    // Securely wipe sensitive data before freeing
+    if (creds->access_key_id) {
+        secure_free(creds->access_key_id, strlen(creds->access_key_id) + 1);
+    }
+    if (creds->secret_access_key) {
+        secure_free(creds->secret_access_key, strlen(creds->secret_access_key) + 1);
+    }
+    if (creds->session_token) {
+        secure_free(creds->session_token, strlen(creds->session_token) + 1);
+    }
     free(creds->region);
     free(creds->profile);
-    free(creds);
+    secure_free(creds, sizeof(*creds));
 }
 
 int bedrock_validate_credentials(AWSCredentials *creds, const char *profile) {

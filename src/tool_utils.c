@@ -134,3 +134,26 @@ void trim_trailing_whitespace(char *str) {
     str[i] = '\0';
 }
 
+void secure_free(void *ptr, size_t size) {
+    if (!ptr) return;
+    
+    // Securely wipe memory before freeing
+    #ifdef __APPLE__
+    // On macOS, use memset_s if available, otherwise use volatile memset
+    #ifdef memset_s
+    memset_s(ptr, size, 0, size);
+    #else
+    // Use volatile pointer to prevent compiler optimization
+    volatile char *vptr = (volatile char *)ptr;
+    for (size_t i = 0; i < size; i++) {
+        vptr[i] = 0;
+    }
+    #endif
+    #else
+    // On other systems, use explicit_bzero from libbsd
+    explicit_bzero(ptr, size);
+    #endif
+    
+    free(ptr);
+}
+
