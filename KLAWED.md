@@ -123,9 +123,3 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 - Verify you're not working in a git worktree
 - Check that template files are in `src/main/resources/templates/`
 - Restart Quarkus if changes aren't picked up automatically
-
-### Known Issues & Fixes
-1. **Template Name Mismatch (Fixed)**: 
-   - Was: Java code expected `invoiceChat.html`, file was `fileChat.html`
-   - Fix: Updated Java code to use `fileChat.html` (correct for FileSurf)
-   - Location: `src/main/resources/templates/fileChat.html`
