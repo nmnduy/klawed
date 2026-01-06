@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include "version.h"
+#include "arena.h"
 
 #ifdef HAVE_ZMQ
 #include "zmq_socket.h"
@@ -151,6 +152,7 @@ typedef struct {
     int tool_count;           // Number of tool calls
     cJSON *raw_response;      // Raw response for adding to history (owned, must be freed)
     char *error_message;      // Error message if API call failed (owned, must be freed)
+    Arena *arena;             // Arena for all allocations (optional, NULL for heap allocation)
 } ApiResponse;
 
 /**

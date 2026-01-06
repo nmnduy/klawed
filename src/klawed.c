@@ -4727,6 +4727,14 @@ unlock:
 void api_response_free(ApiResponse *response) {
     if (!response) return;
 
+    // If arena is present, destroy it (frees all arena-allocated memory)
+    if (response->arena) {
+        arena_destroy(response->arena);
+        // Note: arena_destroy frees all memory allocated from the arena,
+        // including the ApiResponse structure itself if it was allocated from the arena
+        return;
+    }
+
     // Free assistant message text
     free(response->message.text);
 

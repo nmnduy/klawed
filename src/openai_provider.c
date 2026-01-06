@@ -45,6 +45,21 @@ static int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow
     return 0;  // Continue transfer
 }
 
+/**
+ * Duplicate a string using arena allocation
+ * Returns: Newly allocated string from arena, or NULL on error
+ */
+static char* arena_strdup(Arena *arena, const char *str) {
+    if (!str || !arena) return NULL;
+    
+    size_t len = strlen(str) + 1;  // +1 for null terminator
+    char *new_str = arena_alloc(arena, len);
+    if (!new_str) return NULL;
+    
+    strlcpy(new_str, str, len);
+    return new_str;
+}
+
 // ============================================================================
 // Request Building (using new message format)
 // ============================================================================
@@ -579,9 +594,10 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         }
 
         // Extract vendor-agnostic response data
-        ApiResponse *api_response = calloc(1, sizeof(ApiResponse));
-        if (!api_response) {
-            result.error_message = strdup("Failed to allocate ApiResponse");
+        // Create arena for ApiResponse and all its string data
+        Arena *arena = arena_create(16384);  // 16KB arena for API response
+        if (!arena) {
+            result.error_message = strdup("Failed to create arena for ApiResponse");
             result.is_retryable = 0;
             cJSON_Delete(raw_json);
             free(result.headers_json);  // Clean up headers JSON in error paths
@@ -589,6 +605,23 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
             if (enable_streaming) openai_streaming_context_free(&stream_ctx);
             return result;
         }
+        
+        // Allocate ApiResponse from arena
+        ApiResponse *api_response = arena_alloc(arena, sizeof(ApiResponse));
+        if (!api_response) {
+            result.error_message = strdup("Failed to allocate ApiResponse from arena");
+            result.is_retryable = 0;
+            arena_destroy(arena);
+            cJSON_Delete(raw_json);
+            free(result.headers_json);  // Clean up headers JSON in error paths
+            result.headers_json = NULL;
+            if (enable_streaming) openai_streaming_context_free(&stream_ctx);
+            return result;
+        }
+        
+        // Initialize ApiResponse
+        memset(api_response, 0, sizeof(ApiResponse));
+        api_response->arena = arena;
 
         // Initialize error_message to NULL
         api_response->error_message = NULL;
@@ -781,7 +814,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         // Extract text content
         cJSON *content = cJSON_GetObjectItem(message, "content");
         if (content && cJSON_IsString(content) && content->valuestring) {
-            api_response->message.text = strdup(content->valuestring);
+            api_response->message.text = arena_strdup(api_response->arena, content->valuestring);
         } else {
             api_response->message.text = NULL;
         }
@@ -802,9 +835,10 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
             }
 
             if (valid_count > 0) {
-                api_response->tools = calloc((size_t)valid_count, sizeof(ToolCall));
+                api_response->tools = arena_alloc(api_response->arena, 
+                                                 (size_t)valid_count * sizeof(ToolCall));
                 if (!api_response->tools) {
-                    result.error_message = strdup("Failed to allocate tool calls");
+                    result.error_message = strdup("Failed to allocate tool calls from arena");
                     result.is_retryable = 0;
                     if (message_is_synthetic) cJSON_Delete(message);
                     api_response_free(api_response);
@@ -812,6 +846,9 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                     result.headers_json = NULL;
                     return result;
                 }
+                
+                // Initialize tool call array
+                memset(api_response->tools, 0, (size_t)valid_count * sizeof(ToolCall));
 
                 // Second pass: extract valid tool calls
                 int tool_idx = 0;
@@ -828,11 +865,11 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                     cJSON *name = cJSON_GetObjectItem(function, "name");
                     cJSON *arguments = cJSON_GetObjectItem(function, "arguments");
 
-                    // Copy tool call data
+                    // Copy tool call data using arena allocation
                     api_response->tools[tool_idx].id =
-                        (id && cJSON_IsString(id)) ? strdup(id->valuestring) : NULL;
+                        (id && cJSON_IsString(id)) ? arena_strdup(api_response->arena, id->valuestring) : NULL;
                     api_response->tools[tool_idx].name =
-                        (name && cJSON_IsString(name)) ? strdup(name->valuestring) : NULL;
+                        (name && cJSON_IsString(name)) ? arena_strdup(api_response->arena, name->valuestring) : NULL;
 
                     // Parse arguments string to cJSON
                     if (arguments && cJSON_IsString(arguments)) {
