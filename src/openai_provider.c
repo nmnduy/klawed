@@ -21,6 +21,7 @@
 #include <bsd/string.h>
 // Socket support removed - will be reimplemented with ZMQ
 #include "retry_logic.h"  // For common retry logic
+#include "arena.h"        // For arena allocation
 
 // Default Anthropic API URL
 #define DEFAULT_ANTHROPIC_URL "https://api.anthropic.com/v1/messages"
@@ -76,13 +77,21 @@ typedef struct {
     char *message_id;                // Message ID from chunks
     int tool_calls_count;            // Number of tool calls
     cJSON *tool_calls_array;         // Array of accumulated tool calls
+    Arena *arena;                    // Arena for all allocations
 } OpenAIStreamingContext;
 
 static void openai_streaming_context_init(OpenAIStreamingContext *ctx, ConversationState *state) {
     memset(ctx, 0, sizeof(OpenAIStreamingContext));
     ctx->state = state;
+    
+    // Create arena for all allocations (64KB should be enough for streaming)
+    ctx->arena = arena_create(64 * 1024);
+    if (!ctx->arena) {
+        return;
+    }
+    
     ctx->accumulated_capacity = 4096;
-    ctx->accumulated_text = malloc(ctx->accumulated_capacity);
+    ctx->accumulated_text = arena_alloc(ctx->arena, ctx->accumulated_capacity);
     if (ctx->accumulated_text) {
         ctx->accumulated_text[0] = '\0';
     }
@@ -94,12 +103,16 @@ static void openai_streaming_context_init(OpenAIStreamingContext *ctx, Conversat
 
 static void openai_streaming_context_free(OpenAIStreamingContext *ctx) {
     if (!ctx) return;
-    free(ctx->accumulated_text);
-    free(ctx->finish_reason);
-    free(ctx->model);
-    free(ctx->message_id);
+    
+    // Note: accumulated_text, finish_reason, model, and message_id are all
+    // allocated from the arena, so they don't need individual free() calls
+    
     if (ctx->tool_calls_array) {
         cJSON_Delete(ctx->tool_calls_array);
+    }
+    
+    if (ctx->arena) {
+        arena_destroy(ctx->arena);
     }
 }
 
@@ -124,17 +137,31 @@ static int openai_streaming_event_handler(StreamEvent *event, void *userdata) {
 
     // OpenAI chunk format: { "id": "...", "object": "chat.completion.chunk", "choices": [...], ... }
     if (event->type == SSE_EVENT_OPENAI_CHUNK) {
+        // Check if arena was successfully created
+        if (!ctx->arena) {
+            LOG_DEBUG("OpenAI streaming handler: arena not initialized");
+            return 0;  // Continue but don't process
+        }
+        
         // Extract model and id if not yet seen
         if (!ctx->model) {
             cJSON *model = cJSON_GetObjectItem(event->data, "model");
             if (model && cJSON_IsString(model)) {
-                ctx->model = strdup(model->valuestring);
+                size_t len = strlen(model->valuestring) + 1;
+                ctx->model = arena_alloc(ctx->arena, len);
+                if (ctx->model) {
+                    strlcpy(ctx->model, model->valuestring, len);
+                }
             }
         }
         if (!ctx->message_id) {
             cJSON *id = cJSON_GetObjectItem(event->data, "id");
             if (id && cJSON_IsString(id)) {
-                ctx->message_id = strdup(id->valuestring);
+                size_t len = strlen(id->valuestring) + 1;
+                ctx->message_id = arena_alloc(ctx->arena, len);
+                if (ctx->message_id) {
+                    strlcpy(ctx->message_id, id->valuestring, len);
+                }
             }
         }
 
@@ -154,8 +181,12 @@ static int openai_streaming_event_handler(StreamEvent *event, void *userdata) {
                         if (needed > ctx->accumulated_capacity) {
                             size_t new_cap = ctx->accumulated_capacity * 2;
                             if (new_cap < needed) new_cap = needed;
-                            char *new_buf = realloc(ctx->accumulated_text, new_cap);
+                            char *new_buf = arena_alloc(ctx->arena, new_cap);
                             if (new_buf) {
+                                // Copy existing data if any
+                                if (ctx->accumulated_text && ctx->accumulated_size > 0) {
+                                    memcpy(new_buf, ctx->accumulated_text, ctx->accumulated_size);
+                                }
                                 ctx->accumulated_text = new_buf;
                                 ctx->accumulated_capacity = new_cap;
                             }
@@ -253,9 +284,13 @@ static int openai_streaming_event_handler(StreamEvent *event, void *userdata) {
                 // Handle finish_reason
                 cJSON *finish_reason = cJSON_GetObjectItem(choice, "finish_reason");
                 if (finish_reason && cJSON_IsString(finish_reason) && finish_reason->valuestring) {
-                    free(ctx->finish_reason);
-                    ctx->finish_reason = strdup(finish_reason->valuestring);
-                    LOG_DEBUG("OpenAI stream: finish_reason=%s", ctx->finish_reason);
+                    // Note: No need to free previous finish_reason - it's allocated from arena
+                    size_t len = strlen(finish_reason->valuestring) + 1;
+                    ctx->finish_reason = arena_alloc(ctx->arena, len);
+                    if (ctx->finish_reason) {
+                        strlcpy(ctx->finish_reason, finish_reason->valuestring, len);
+                        LOG_DEBUG("OpenAI stream: finish_reason=%s", ctx->finish_reason);
+                    }
                 }
             }
         }
@@ -623,49 +658,47 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                 cJSON *content_array = cJSON_GetObjectItem(message_item, "content");
                 if (content_array && cJSON_IsArray(content_array)) {
                     // Extract text from content array items with type "output_text"
-                    char *text_content = NULL;
-                    size_t text_capacity = 0;
-                    size_t text_length = 0;
-
+                    // First pass: calculate total length needed
+                    size_t total_length = 0;
                     cJSON *content_item = NULL;
                     cJSON_ArrayForEach(content_item, content_array) {
                         cJSON *type = cJSON_GetObjectItem(content_item, "type");
                         if (type && cJSON_IsString(type) && strcmp(type->valuestring, "output_text") == 0) {
                             cJSON *text = cJSON_GetObjectItem(content_item, "text");
                             if (text && cJSON_IsString(text) && text->valuestring) {
-                                size_t text_len = strlen(text->valuestring);
-                                size_t needed = text_length + text_len + 1;
-
-                                if (needed > text_capacity) {
-                                    size_t new_cap = text_capacity ? text_capacity * 2 : 1024;
-                                    if (new_cap < needed) new_cap = needed;
-                                    char *new_buf = realloc(text_content, new_cap);
-                                    if (!new_buf) {
-                                        free(text_content);
-                                        cJSON_Delete(message);
-                                        if (tool_calls_array) cJSON_Delete(tool_calls_array);
-                                        result.error_message = strdup("Failed to allocate text buffer");
-                                        result.is_retryable = 0;
-                                        api_response_free(api_response);
-                                        free(result.headers_json);
-                                        result.headers_json = NULL;
-                                        return result;
-                                    }
-                                    text_content = new_buf;
-                                    text_capacity = new_cap;
-                                }
-
-                                if (text_length == 0) {
-                                    memcpy(text_content, text->valuestring, text_len + 1);
-                                } else {
-                                    memcpy(text_content + text_length, text->valuestring, text_len + 1);
-                                }
-                                text_length += text_len;
+                                total_length += strlen(text->valuestring);
                             }
                         }
                     }
 
-                    if (text_content) {
+                    // Second pass: allocate and copy if we have text
+                    if (total_length > 0) {
+                        char *text_content = malloc(total_length + 1);
+                        if (!text_content) {
+                            cJSON_Delete(message);
+                            if (tool_calls_array) cJSON_Delete(tool_calls_array);
+                            result.error_message = strdup("Failed to allocate text buffer");
+                            result.is_retryable = 0;
+                            api_response_free(api_response);
+                            free(result.headers_json);
+                            result.headers_json = NULL;
+                            return result;
+                        }
+                        
+                        size_t text_length = 0;
+                        cJSON_ArrayForEach(content_item, content_array) {
+                            cJSON *type = cJSON_GetObjectItem(content_item, "type");
+                            if (type && cJSON_IsString(type) && strcmp(type->valuestring, "output_text") == 0) {
+                                cJSON *text = cJSON_GetObjectItem(content_item, "text");
+                                if (text && cJSON_IsString(text) && text->valuestring) {
+                                    size_t text_len = strlen(text->valuestring);
+                                    memcpy(text_content + text_length, text->valuestring, text_len);
+                                    text_length += text_len;
+                                }
+                            }
+                        }
+                        text_content[text_length] = '\0';
+                        
                         cJSON_AddStringToObject(message, "content", text_content);
                         free(text_content);
                     } else {
