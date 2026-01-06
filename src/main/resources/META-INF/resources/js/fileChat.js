@@ -26,7 +26,6 @@ export function init(rootEl) {
         statusIndicator: rootEl.querySelector('[data-status-indicator]'),
         statusPulse: rootEl.querySelector('[data-status-pulse]'),
         statusText: rootEl.querySelector('[data-status-text]'),
-        statusTime: rootEl.querySelector('[data-status-time]'),
         chatContainer: rootEl.querySelector('[data-chat-container]'),
         chatMessages: rootEl.querySelector('[data-chat-messages]'),
         chatEmpty: rootEl.querySelector('[data-chat-empty]'),
@@ -106,14 +105,6 @@ export function init(rootEl) {
     // --- Guided Tour State ---
     let hasCompletedTour = false;
 
-
-    function updateStatusTime() {
-        if (!elements.statusTime) return;
-        const now = new Date();
-        elements.statusTime.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    }
-    updateStatusTime();
-    setInterval(updateStatusTime, 1000);
 
     function setDisabledState(disabled) {
         if (elements.messageInput) elements.messageInput.disabled = disabled;
