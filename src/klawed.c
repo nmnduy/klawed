@@ -408,6 +408,182 @@ static _Thread_local TUIMessageQueue *g_active_tool_queue = NULL;
 // for easier parsing by parent processes or scripts
 static _Thread_local int g_oneshot_mode = 0;
 
+// Output format for oneshot mode: 0=human-readable (default), 1=machine-readable (HTML+JSON)
+static _Thread_local int g_oneshot_output_format = 0;
+
+// Helper function to print human-readable tool output
+static void print_human_readable_tool_output(const char *tool_name, const char *tool_details, cJSON *tool_result) {
+    if (!tool_name) return;
+    
+    // Print tool header - more concise format
+    printf("→ ");
+    if (tool_details && strlen(tool_details) > 0) {
+        printf("%s: %s\n", tool_name, tool_details);
+    } else {
+        printf("%s\n", tool_name);
+    }
+    fflush(stdout);
+    
+    // Print tool result based on tool type
+    if (tool_result) {
+        if (strcmp(tool_name, "Bash") == 0) {
+            cJSON *exit_code = cJSON_GetObjectItem(tool_result, "exit_code");
+            cJSON *output = cJSON_GetObjectItem(tool_result, "output");
+            
+            // Only show exit code if non-zero
+            if (exit_code && cJSON_IsNumber(exit_code) && exit_code->valueint != 0) {
+                printf("  Exit code: %d\n", exit_code->valueint);
+            }
+            
+            if (output && cJSON_IsString(output)) {
+                const char *output_str = output->valuestring;
+                if (output_str && strlen(output_str) > 0) {
+                    // Print output directly without extra indentation
+                    printf("%s", output_str);
+                    // Ensure newline at end if not present
+                    if (output_str[strlen(output_str)-1] != '\n') {
+                        printf("\n");
+                    }
+                }
+            }
+        } else if (strcmp(tool_name, "Read") == 0) {
+            cJSON *content = cJSON_GetObjectItem(tool_result, "content");
+            
+            if (content && cJSON_IsString(content)) {
+                const char *content_str = content->valuestring;
+                if (content_str && strlen(content_str) > 0) {
+                    printf("%s", content_str);
+                    // Ensure newline at end if not present
+                    if (content_str[strlen(content_str)-1] != '\n') {
+                        printf("\n");
+                    }
+                }
+            }
+        } else if (strcmp(tool_name, "Grep") == 0) {
+            cJSON *match_count = cJSON_GetObjectItem(tool_result, "match_count");
+            cJSON *matches = cJSON_GetObjectItem(tool_result, "matches");
+            
+            if (match_count && cJSON_IsNumber(match_count)) {
+                printf("  Found %d match%s\n", match_count->valueint, 
+                       match_count->valueint == 1 ? "" : "es");
+            }
+            
+            if (matches && cJSON_IsArray(matches)) {
+                int array_size = cJSON_GetArraySize(matches);
+                if (array_size > 0) {
+                    for (int i = 0; i < array_size && i < 10; i++) { // Limit to 10 results
+                        cJSON *match = cJSON_GetArrayItem(matches, i);
+                        if (match && cJSON_IsString(match)) {
+                            printf("  %s\n", match->valuestring);
+                        }
+                    }
+                    if (array_size > 10) {
+                        printf("  ... and %d more\n", array_size - 10);
+                    }
+                }
+            }
+        } else if (strcmp(tool_name, "Glob") == 0) {
+            cJSON *files = cJSON_GetObjectItem(tool_result, "files");
+            
+            if (files && cJSON_IsArray(files)) {
+                int array_size = cJSON_GetArraySize(files);
+                printf("  Found %d file%s\n", array_size, array_size == 1 ? "" : "s");
+                
+                if (array_size > 0) {
+                    for (int i = 0; i < array_size && i < 10; i++) { // Limit to 10 files
+                        cJSON *file = cJSON_GetArrayItem(files, i);
+                        if (file && cJSON_IsString(file)) {
+                            printf("  %s\n", file->valuestring);
+                        }
+                    }
+                    if (array_size > 10) {
+                        printf("  ... and %d more\n", array_size - 10);
+                    }
+                }
+            }
+        } else if (strcmp(tool_name, "TodoWrite") == 0) {
+            cJSON *status = cJSON_GetObjectItem(tool_result, "status");
+            cJSON *added = cJSON_GetObjectItem(tool_result, "added");
+            cJSON *total = cJSON_GetObjectItem(tool_result, "total");
+            
+            if (status && cJSON_IsString(status) && strcmp(status->valuestring, "success") == 0) {
+                if (added && cJSON_IsNumber(added) && total && cJSON_IsNumber(total)) {
+                    printf("  Updated todo list: %d/%d tasks\n", added->valueint, total->valueint);
+                }
+            }
+        } else if (strcmp(tool_name, "Edit") == 0 || strcmp(tool_name, "MultiEdit") == 0) {
+            cJSON *status = cJSON_GetObjectItem(tool_result, "status");
+            cJSON *replacements = cJSON_GetObjectItem(tool_result, "replacements");
+            
+            if (status && cJSON_IsString(status) && strcmp(status->valuestring, "success") == 0) {
+                if (replacements && cJSON_IsNumber(replacements)) {
+                    printf("  Made %d change%s\n", replacements->valueint,
+                           replacements->valueint == 1 ? "" : "s");
+                } else {
+                    printf("  Success\n");
+                }
+            }
+        } else if (strcmp(tool_name, "Subagent") == 0) {
+            cJSON *exit_code = cJSON_GetObjectItem(tool_result, "exit_code");
+            cJSON *output = cJSON_GetObjectItem(tool_result, "output");
+            
+            if (exit_code && cJSON_IsNumber(exit_code)) {
+                printf("  Subagent completed with exit code: %d\n", exit_code->valueint);
+            }
+            
+            if (output && cJSON_IsString(output)) {
+                const char *output_str = output->valuestring;
+                if (output_str && strlen(output_str) > 0) {
+                    // Show last few lines of subagent output
+                    char *output_copy = strdup(output_str);
+                    if (output_copy) {
+                        // Count lines
+                        int line_count = 0;
+                        char *p = output_copy;
+                        while (*p) {
+                            if (*p == '\n') line_count++;
+                            p++;
+                        }
+                        
+                        // Show last 3 lines
+                        if (line_count > 3) {
+                            printf("  ...\n");
+                            // Find the start of the last 3 lines
+                            int lines_to_skip = line_count - 3;
+                            p = output_copy;
+                            while (lines_to_skip > 0 && *p) {
+                                if (*p == '\n') lines_to_skip--;
+                                p++;
+                            }
+                            printf("%s", p);
+                        } else {
+                            printf("%s", output_str);
+                        }
+                        free(output_copy);
+                    }
+                }
+            }
+        } else {
+            // For other tools, print a simplified version
+            char *result_str = cJSON_Print(tool_result);
+            if (result_str) {
+                // Truncate if too long
+                size_t len = strlen(result_str);
+                if (len > 100) {
+                    result_str[100] = '\0';
+                    printf("  Result: %s...\n", result_str);
+                } else {
+                    printf("  Result: %s\n", result_str);
+                }
+                free(result_str);
+            }
+        }
+    }
+    
+    printf("\n");
+    fflush(stdout);
+}
+
 // =====================================================================
 // Emergency Cleanup for Subagents
 // =====================================================================
@@ -7113,6 +7289,25 @@ static int single_command_mode(ConversationState *state, const char *prompt) {
 
     // Enable oneshot/subagent mode for structured tool output
     g_oneshot_mode = 1;
+    
+    // Check for output format environment variable
+    const char *output_format = getenv("KLAWED_ONESHOT_FORMAT");
+    if (output_format) {
+        if (strcmp(output_format, "json") == 0 || strcmp(output_format, "machine") == 0) {
+            g_oneshot_output_format = 1; // Machine-readable format
+            LOG_DEBUG("Oneshot mode: using machine-readable output format");
+        } else if (strcmp(output_format, "human") == 0 || strcmp(output_format, "clean") == 0) {
+            g_oneshot_output_format = 0; // Human-readable format (default)
+            LOG_DEBUG("Oneshot mode: using human-readable output format");
+        } else {
+            LOG_WARN("Unknown KLAWED_ONESHOT_FORMAT value: %s, using default (human-readable)", output_format);
+            g_oneshot_output_format = 0;
+        }
+    } else {
+        // Default to human-readable format
+        g_oneshot_output_format = 0;
+        LOG_DEBUG("Oneshot mode: using default human-readable output format");
+    }
 
     // Add user message to conversation
     add_user_message(state, prompt);
@@ -7168,6 +7363,7 @@ static int process_single_command_response(ConversationState *state, ApiResponse
 
         if (*p != '\0') {  // Has non-whitespace content
             printf("%s\n", p);
+            fflush(stdout);
         }
     }
 
@@ -7238,80 +7434,87 @@ static int process_single_command_response(ConversationState *state, ApiResponse
                 // Print tool name header with details
                 char *tool_details = get_tool_details(tool->name, input);
 
-                // Add timestamp to tool details
-                char details_with_timestamp[384]; // 256 for details + 128 for timestamp
-                if (tool_details && strlen(tool_details) > 0) {
-                    char timestamp[32]; // Increased for YYYY-MM-DD HH:MM:SS format
-                    get_current_timestamp(timestamp, sizeof(timestamp));
-                    snprintf(details_with_timestamp, sizeof(details_with_timestamp),
-                             "%s (%s)", tool_details, timestamp);
-                } else {
-                    char timestamp[32]; // Increased for YYYY-MM-DD HH:MM:SS format
-                    get_current_timestamp(timestamp, sizeof(timestamp));
-                    snprintf(details_with_timestamp, sizeof(details_with_timestamp),
-                             "(%s)", timestamp);
-                }
-
-                // Print opening HTML-style tag with tool name and optional details
-                printf("<tool name=\"%s\"", tool->name);
-                if (strlen(details_with_timestamp) > 0) {
-                    // Escape quotes and ampersands in tool details for XML attribute
-                    // Worst case: every character could be & or " requiring 6 chars each
-                    size_t max_escaped_len = strlen(details_with_timestamp) * 6 + 1;
-                    char *escaped_details = malloc(max_escaped_len);
-                    if (escaped_details) {
-                        size_t j = 0;
-                        for (size_t k = 0; details_with_timestamp[k]; k++) {
-                            if (details_with_timestamp[k] == '"') {
-                                escaped_details[j++] = '&';
-                                escaped_details[j++] = 'q';
-                                escaped_details[j++] = 'u';
-                                escaped_details[j++] = 'o';
-                                escaped_details[j++] = 't';
-                                escaped_details[j++] = ';';
-                            } else if (details_with_timestamp[k] == '&') {
-                                escaped_details[j++] = '&';
-                                escaped_details[j++] = 'a';
-                                escaped_details[j++] = 'm';
-                                escaped_details[j++] = 'p';
-                                escaped_details[j++] = ';';
-                            } else if (details_with_timestamp[k] == '<') {
-                                escaped_details[j++] = '&';
-                                escaped_details[j++] = 'l';
-                                escaped_details[j++] = 't';
-                                escaped_details[j++] = ';';
-                            } else if (details_with_timestamp[k] == '>') {
-                                escaped_details[j++] = '&';
-                                escaped_details[j++] = 'g';
-                                escaped_details[j++] = 't';
-                                escaped_details[j++] = ';';
-                            } else {
-                                escaped_details[j++] = details_with_timestamp[k];
-                            }
-                        }
-                        escaped_details[j] = '\0';
-                        printf(" details=\"%s\"", escaped_details);
-                        free(escaped_details);
-                    }
-                }
-                printf(">\n");
-                fflush(stdout);
-
                 // Execute tool synchronously
                 cJSON *tool_result = execute_tool(tool->name, input, state);
 
-                // Print tool result as JSON content inside the tag
-                if (tool_result) {
-                    char *result_str = cJSON_Print(tool_result);
-                    if (result_str) {
-                        printf("%s\n", result_str);
-                        free(result_str);
+                // Print tool output based on format
+                if (g_oneshot_output_format == 1) {
+                    // Machine-readable format (HTML+JSON)
+                    // Add timestamp to tool details
+                    char details_with_timestamp[384]; // 256 for details + 128 for timestamp
+                    if (tool_details && strlen(tool_details) > 0) {
+                        char timestamp[32]; // Increased for YYYY-MM-DD HH:MM:SS format
+                        get_current_timestamp(timestamp, sizeof(timestamp));
+                        snprintf(details_with_timestamp, sizeof(details_with_timestamp),
+                                 "%s (%s)", tool_details, timestamp);
+                    } else {
+                        char timestamp[32]; // Increased for YYYY-MM-DD HH:MM:SS format
+                        get_current_timestamp(timestamp, sizeof(timestamp));
+                        snprintf(details_with_timestamp, sizeof(details_with_timestamp),
+                                 "(%s)", timestamp);
                     }
-                }
 
-                // Print closing HTML-style tag
-                printf("</tool>\n");
-                fflush(stdout);
+                    // Print opening HTML-style tag with tool name and optional details
+                    printf("<tool name=\"%s\"", tool->name);
+                    if (strlen(details_with_timestamp) > 0) {
+                        // Escape quotes and ampersands in tool details for XML attribute
+                        // Worst case: every character could be & or " requiring 6 chars each
+                        size_t max_escaped_len = strlen(details_with_timestamp) * 6 + 1;
+                        char *escaped_details = malloc(max_escaped_len);
+                        if (escaped_details) {
+                            size_t j = 0;
+                            for (size_t k = 0; details_with_timestamp[k]; k++) {
+                                if (details_with_timestamp[k] == '"') {
+                                    escaped_details[j++] = '&';
+                                    escaped_details[j++] = 'q';
+                                    escaped_details[j++] = 'u';
+                                    escaped_details[j++] = 'o';
+                                    escaped_details[j++] = 't';
+                                    escaped_details[j++] = ';';
+                                } else if (details_with_timestamp[k] == '&') {
+                                    escaped_details[j++] = '&';
+                                    escaped_details[j++] = 'a';
+                                    escaped_details[j++] = 'm';
+                                    escaped_details[j++] = 'p';
+                                    escaped_details[j++] = ';';
+                                } else if (details_with_timestamp[k] == '<') {
+                                    escaped_details[j++] = '&';
+                                    escaped_details[j++] = 'l';
+                                    escaped_details[j++] = 't';
+                                    escaped_details[j++] = ';';
+                                } else if (details_with_timestamp[k] == '>') {
+                                    escaped_details[j++] = '&';
+                                    escaped_details[j++] = 'g';
+                                    escaped_details[j++] = 't';
+                                    escaped_details[j++] = ';';
+                                } else {
+                                    escaped_details[j++] = details_with_timestamp[k];
+                                }
+                            }
+                            escaped_details[j] = '\0';
+                            printf(" details=\"%s\"", escaped_details);
+                            free(escaped_details);
+                        }
+                    }
+                    printf(">\n");
+                    fflush(stdout);
+
+                    // Print tool result as JSON content inside the tag
+                    if (tool_result) {
+                        char *result_str = cJSON_Print(tool_result);
+                        if (result_str) {
+                            printf("%s\n", result_str);
+                            free(result_str);
+                        }
+                    }
+
+                    // Print closing HTML-style tag
+                    printf("</tool>\n");
+                    fflush(stdout);
+                } else {
+                    // Human-readable format
+                    print_human_readable_tool_output(tool->name, tool_details, tool_result);
+                }
 
                 // Convert result to InternalContent
                 results[i].type = INTERNAL_TOOL_RESPONSE;
@@ -7788,6 +7991,12 @@ int main(int argc, char *argv[]) {
         printf("                                     Default: 600000 (10 minutes)\n\n");
         printf("  UI Customization:\n");
         printf("    KLAWED_THEME       Optional: Path to Kitty theme file\n\n");
+        printf("  Tools and Output:\n");
+        printf("    KLAWED_ONESHOT_FORMAT  Optional: Output format for one-shot mode\n");
+        printf("                            human (clean, default) or json/machine (HTML+JSON)\n");
+        printf("    KLAWED_BASH_TIMEOUT    Optional: Timeout for bash commands in seconds\n");
+        printf("                            (default: 30, 0=no timeout)\n");
+        printf("    KLAWED_GREP_MAX_RESULTS Optional: Max grep results (default: 100)\n\n");
 #ifdef HAVE_ZMQ
         printf("  ZMQ Socket Mode:\n");
         printf("    KLAWED_ZMQ_ENDPOINT  Optional: ZMQ endpoint (e.g., tcp://127.0.0.1:5555)\n");

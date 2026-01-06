@@ -170,6 +170,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_BASH_TIMEOUT` - Timeout for bash commands in seconds (default: 30, 0=no timeout)
   - `KLAWED_TOOL_VERBOSE` - Verbose tool logging (0=off, 1=basic, 2=detailed, default: 0)
   - `KLAWED_IS_SUBAGENT` - Internal flag set automatically when running as a subagent (1/true/yes=subagent mode). Excludes Subagent, CheckSubagentProgress, and InterruptSubagent tools to prevent recursion
+  - `KLAWED_ONESHOT_FORMAT` - Output format for one-shot mode: `human` (clean, human-readable, default) or `json`/`machine` (HTML+JSON for machine parsing)
 - **API Limits**:
   - `KLAWED_MAX_TOKENS` - Maximum tokens for completion (default: 16384)
 - **Theme**: `KLAWED_THEME` pointing to Kitty .conf file
