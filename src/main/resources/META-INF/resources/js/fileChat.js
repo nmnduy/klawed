@@ -3,6 +3,8 @@ import { TabManager } from './tabManager.js';
 
 const DEBUG = false;
 const PLACEHOLDER_MESSAGES_ENABLED = false; // demo seed disabled
+const TOUR_STORAGE_KEY = 'filesurfTourCompleted';
+const TOUR_URL_FLAG = 'showTour';
 
 function debug(...args) {
     if (DEBUG) {
@@ -100,6 +102,9 @@ export function init(rootEl) {
     let typingIndicatorEl = rootEl.querySelector('[data-typing-indicator]') || null;
     let hasSeededPlaceholders = false;
     let lastApiCallTime = null;
+
+    // --- Guided Tour State ---
+    let hasCompletedTour = false;
 
 
     function updateStatusTime() {
@@ -347,6 +352,223 @@ export function init(rootEl) {
             }, delay);
             delay += 400;
         });
+    }
+
+    // ----------------------
+    // Guided Tour Utilities
+    // ----------------------
+    function shouldForceShowTourFromUrl() {
+        if (typeof window === 'undefined') return false;
+        const params = new URLSearchParams(window.location.search);
+        return params.has(TOUR_URL_FLAG);
+    }
+
+    function hasCompletedTourFlag() {
+        if (typeof window === 'undefined') return false;
+        try {
+            return window.localStorage.getItem(TOUR_STORAGE_KEY) === 'true';
+        } catch (error) {
+            console.warn('[invoice-chat] Unable to read tour flag', error);
+            return false;
+        }
+    }
+
+    function setCompletedTourFlag() {
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(TOUR_STORAGE_KEY, 'true');
+        } catch (error) {
+            console.warn('[invoice-chat] Unable to write tour flag', error);
+        }
+    }
+
+    function shouldShowTour() {
+        if (shouldForceShowTourFromUrl()) return true;
+        return !hasCompletedTourFlag();
+    }
+
+    function getPrimaryActions() {
+        return {
+            chatInput: elements.messageInput,
+            sendButton: elements.sendButton,
+            filesTab: rootEl.querySelector('#file-tab'),
+            chatTab: rootEl.querySelector('#chat-tab'),
+            uploadButton: elements.uploadButton,
+            statusText: elements.statusText,
+            emptyState: rootEl.querySelector('[data-chat-empty]')
+        };
+    }
+
+    function switchToTab(tabId) {
+        const tabButton = rootEl.querySelector(`[data-tab="${tabId}"]`);
+        if (tabButton) {
+            tabButton.click();
+        }
+    }
+
+    function highlightElement(el) {
+        if (!el) return () => {};
+        const prevZ = el.style.zIndex;
+        const prevPos = el.style.position;
+        if (!prevPos || prevPos === 'static') {
+            el.style.position = 'relative';
+        }
+        el.style.zIndex = '40';
+        // Enhanced highlight box - more prominent without background dimming
+        el.classList.add('ring-4', 'ring-amber-500', 'ring-offset-4', 'shadow-2xl', 'shadow-amber-500/30');
+        return () => {
+            el.style.zIndex = prevZ;
+            el.style.position = prevPos;
+            el.classList.remove('ring-4', 'ring-amber-500', 'ring-offset-4', 'shadow-2xl', 'shadow-amber-500/30');
+        };
+    }
+
+    function addOverlay() {
+        const overlay = document.createElement('div');
+        // Transparent overlay for click handling only - no dimming
+        overlay.className = 'fixed inset-0 z-20';
+        overlay.setAttribute('data-tour-overlay', '');
+        document.body.appendChild(overlay);
+        return overlay;
+    }
+
+    function removeOverlay() {
+        const overlay = document.querySelector('[data-tour-overlay]');
+        if (overlay) overlay.remove();
+    }
+
+    function createTooltip(text) {
+        const tooltip = document.createElement('div');
+        tooltip.className = 'fixed z-40 max-w-sm px-4 py-3 rounded-2xl bg-white shadow-2xl border border-slate-200 text-slate-800 text-sm leading-relaxed space-y-2';
+        tooltip.innerHTML = text + '<div class="text-right text-xs text-slate-500">Click to continue</div>';
+        tooltip.setAttribute('data-tour-tooltip', '');
+        document.body.appendChild(tooltip);
+        return tooltip;
+    }
+
+    function positionTooltip(tooltip, target, placement = 'bottom') {
+        if (!tooltip || !target) return;
+        const rect = target.getBoundingClientRect();
+        const margin = 12;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        let top = rect.bottom + margin;
+        let left = rect.left;
+        if (placement === 'top') {
+            top = rect.top - tooltip.offsetHeight - margin;
+        }
+        if (placement === 'right') {
+            top = rect.top;
+            left = rect.right + margin;
+        }
+        if (placement === 'left') {
+            top = rect.top;
+            left = rect.left - tooltip.offsetWidth - margin;
+        }
+        // keep inside viewport
+        top = Math.min(Math.max(top, margin), viewportHeight - tooltip.offsetHeight - margin);
+        left = Math.min(Math.max(left, margin), viewportWidth - tooltip.offsetWidth - margin);
+        tooltip.style.top = `${top}px`;
+        tooltip.style.left = `${left}px`;
+    }
+
+    function runTour() {
+        if (!shouldShowTour()) return;
+        if (hasCompletedTour) return;
+        hasCompletedTour = true;
+
+        const actions = getPrimaryActions();
+        const overlay = addOverlay();
+        const steps = [];
+
+        steps.push(() => {
+            const cleanup = highlightElement(actions.chatInput);
+            const tip = createTooltip('<strong>Start chatting</strong><br/>Type a question or task for the AI assistant here. Press Enter to send, Shift+Enter for a new line.');
+            positionTooltip(tip, actions.chatInput, 'top');
+            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
+            return () => { cleanup(); tip.remove(); };
+        });
+
+        steps.push(() => {
+            const cleanup = highlightElement(actions.sendButton);
+            const tip = createTooltip('<strong>Send your message</strong><br/>Click Send or press Enter to submit.');
+            positionTooltip(tip, actions.sendButton, 'top');
+            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
+            return () => { cleanup(); tip.remove(); };
+        });
+
+        steps.push(() => {
+            // Show the Files tab first so users understand where uploads live
+            switchToTab('file');
+            const cleanup = highlightElement(actions.filesTab);
+            const tip = createTooltip('<strong>Files tab</strong><br/>This is where you manage and upload files.');
+            positionTooltip(tip, actions.filesTab, 'bottom');
+            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
+            return () => { cleanup(); tip.remove(); };
+        });
+
+        steps.push(() => {
+            // Ensure Files tab is visible so the upload button is in DOM/visible
+            switchToTab('file');
+            let cleanup = null;
+            let tip = null;
+            let cancelled = false;
+            const run = () => {
+                if (cancelled) return;
+                cleanup = highlightElement(actions.uploadButton);
+                tip = createTooltip('<strong>Upload files</strong><br/>Attach PDFs, docs, or data so the AI can analyze them.');
+                positionTooltip(tip, actions.uploadButton, 'top');
+                tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
+            };
+            // Use double rAF to allow layout/render after tab switch
+            requestAnimationFrame(() => requestAnimationFrame(run));
+            return () => { cancelled = true; if (cleanup) cleanup(); if (tip) tip.remove(); switchToTab('chat'); };
+        });
+
+        steps.push(() => {
+            const cleanup = highlightElement(actions.statusText);
+            const tip = createTooltip('<strong>Status</strong><br/>See when you are connected and when the AI is thinking.');
+            positionTooltip(tip, actions.statusText, 'bottom');
+            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
+            return () => { cleanup(); tip.remove(); };
+        });
+
+        // Finish message
+        steps.push(() => {
+            const tip = createTooltip('<strong>You are ready!</strong><br/>Start a conversation or upload a file to begin.');
+            tip.addEventListener('click', () => {
+                overlay.dispatchEvent(new Event('click'));
+            }, { once: true });
+            tip.style.position = 'fixed';
+            tip.style.top = '50%';
+            tip.style.left = '50%';
+            tip.style.transform = 'translate(-50%, -50%)';
+            return () => { tip.remove(); };
+        });
+
+        let currentStep = 0;
+        let currentCleanup = null;
+
+        function nextStep() {
+            if (currentCleanup) {
+                currentCleanup();
+            }
+            if (currentStep >= steps.length) {
+                removeOverlay();
+                setCompletedTourFlag();
+                return;
+            }
+            currentCleanup = steps[currentStep++]();
+        }
+
+        overlay.addEventListener('click', nextStep);
+        window.addEventListener('resize', () => {
+            if (currentCleanup) currentCleanup();
+            // Re-run current step positioning
+            currentStep = Math.max(0, currentStep - 1);
+            nextStep();
+        });
+        nextStep();
     }
 
     function ensureFileExplorer() {
@@ -685,6 +907,7 @@ export function init(rootEl) {
     }
 
     seedPlaceholderMessages();
+    runTour();
     connectWebSocket();
 }
 
