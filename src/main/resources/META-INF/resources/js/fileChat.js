@@ -409,12 +409,12 @@ export function init(rootEl) {
             el.style.position = 'relative';
         }
         el.style.zIndex = '40';
-        // Enhanced highlight box - more prominent without background dimming
-        el.classList.add('ring-4', 'ring-amber-500', 'ring-offset-4', 'shadow-2xl', 'shadow-amber-500/30');
+        // Enhanced highlight box - more prominent with primary color and animation
+        el.classList.add('ring-4', 'ring-orange-500', 'ring-offset-4', 'shadow-[0_0_20px_rgba(249,115,22,0.5)]', 'animate-bounce-subtle');
         return () => {
             el.style.zIndex = prevZ;
             el.style.position = prevPos;
-            el.classList.remove('ring-4', 'ring-amber-500', 'ring-offset-4', 'shadow-2xl', 'shadow-amber-500/30');
+            el.classList.remove('ring-4', 'ring-orange-500', 'ring-offset-4', 'shadow-[0_0_20px_rgba(249,115,22,0.5)]', 'animate-bounce-subtle');
         };
     }
 
@@ -434,8 +434,8 @@ export function init(rootEl) {
 
     function createTooltip(text) {
         const tooltip = document.createElement('div');
-        tooltip.className = 'fixed z-40 max-w-sm px-4 py-3 rounded-2xl bg-white shadow-2xl border border-slate-200 text-slate-800 text-sm leading-relaxed space-y-2';
-        tooltip.innerHTML = text + '<div class="text-right text-xs text-slate-500">Click to continue</div>';
+        tooltip.className = 'fixed z-40 max-w-sm px-4 py-3 rounded-2xl bg-white shadow-[0_0_30px_rgba(249,115,22,0.3)] border-2 border-orange-500 text-slate-800 text-sm leading-relaxed space-y-2 animate-pulse-subtle';
+        tooltip.innerHTML = text + '<div class="text-right text-xs text-orange-600 font-medium">Click to continue</div>';
         tooltip.setAttribute('data-tour-tooltip', '');
         document.body.appendChild(tooltip);
         return tooltip;
