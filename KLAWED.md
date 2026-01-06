@@ -167,6 +167,8 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_DB_AUTO_ROTATE` - Enable auto-rotation (default: 1, set to 0 to disable)
 - **Tools**: 
   - `KLAWED_GREP_MAX_RESULTS` - Max grep results (default: 100)
+  - `KLAWED_GREP_DISPLAY_LIMIT` - Max grep results to display in TUI (default: 20)
+  - `KLAWED_GLOB_DISPLAY_LIMIT` - Max glob results to display in TUI (default: 10)
   - `KLAWED_BASH_TIMEOUT` - Timeout for bash commands in seconds (default: 30, 0=no timeout)
   - `KLAWED_TOOL_VERBOSE` - Verbose tool logging (0=off, 1=basic, 2=detailed, default: 0)
   - `KLAWED_IS_SUBAGENT` - Internal flag set automatically when running as a subagent (1/true/yes=subagent mode). Excludes Subagent, CheckSubagentProgress, and InterruptSubagent tools to prevent recursion

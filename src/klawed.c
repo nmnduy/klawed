@@ -414,7 +414,7 @@ static _Thread_local int g_oneshot_output_format = 0;
 // Helper function to print human-readable tool output
 static void print_human_readable_tool_output(const char *tool_name, const char *tool_details, cJSON *tool_result) {
     if (!tool_name) return;
-    
+
     // Print tool header - more concise format
     printf("→ ");
     if (tool_details && strlen(tool_details) > 0) {
@@ -423,18 +423,18 @@ static void print_human_readable_tool_output(const char *tool_name, const char *
         printf("%s\n", tool_name);
     }
     fflush(stdout);
-    
+
     // Print tool result based on tool type
     if (tool_result) {
         if (strcmp(tool_name, "Bash") == 0) {
             cJSON *exit_code = cJSON_GetObjectItem(tool_result, "exit_code");
             cJSON *output = cJSON_GetObjectItem(tool_result, "output");
-            
+
             // Only show exit code if non-zero
             if (exit_code && cJSON_IsNumber(exit_code) && exit_code->valueint != 0) {
                 printf("  Exit code: %d\n", exit_code->valueint);
             }
-            
+
             if (output && cJSON_IsString(output)) {
                 const char *output_str = output->valuestring;
                 if (output_str && strlen(output_str) > 0) {
@@ -448,7 +448,7 @@ static void print_human_readable_tool_output(const char *tool_name, const char *
             }
         } else if (strcmp(tool_name, "Read") == 0) {
             cJSON *content = cJSON_GetObjectItem(tool_result, "content");
-            
+
             if (content && cJSON_IsString(content)) {
                 const char *content_str = content->valuestring;
                 if (content_str && strlen(content_str) > 0) {
@@ -462,42 +462,62 @@ static void print_human_readable_tool_output(const char *tool_name, const char *
         } else if (strcmp(tool_name, "Grep") == 0) {
             cJSON *match_count = cJSON_GetObjectItem(tool_result, "match_count");
             cJSON *matches = cJSON_GetObjectItem(tool_result, "matches");
-            
+
             if (match_count && cJSON_IsNumber(match_count)) {
-                printf("  Found %d match%s\n", match_count->valueint, 
+                printf("  Found %d match%s\n", match_count->valueint,
                        match_count->valueint == 1 ? "" : "es");
             }
-            
+
             if (matches && cJSON_IsArray(matches)) {
                 int array_size = cJSON_GetArraySize(matches);
                 if (array_size > 0) {
-                    for (int i = 0; i < array_size && i < 10; i++) { // Limit to 10 results
+                    // Get display limit from environment or use default (increased from 10 to 20)
+                    int display_limit = 20;  // Default limit
+                    const char *display_env = getenv("KLAWED_GREP_DISPLAY_LIMIT");
+                    if (display_env) {
+                        int display_val = atoi(display_env);
+                        if (display_val > 0) {
+                            display_limit = display_val;
+                        }
+                    }
+
+                    for (int i = 0; i < array_size && i < display_limit; i++) {
                         cJSON *match = cJSON_GetArrayItem(matches, i);
                         if (match && cJSON_IsString(match)) {
                             printf("  %s\n", match->valuestring);
                         }
                     }
-                    if (array_size > 10) {
-                        printf("  ... and %d more\n", array_size - 10);
+                    if (array_size > display_limit) {
+                        printf("  ... and %d more\n", array_size - display_limit);
                     }
                 }
             }
         } else if (strcmp(tool_name, "Glob") == 0) {
             cJSON *files = cJSON_GetObjectItem(tool_result, "files");
-            
+
             if (files && cJSON_IsArray(files)) {
                 int array_size = cJSON_GetArraySize(files);
                 printf("  Found %d file%s\n", array_size, array_size == 1 ? "" : "s");
-                
+
                 if (array_size > 0) {
-                    for (int i = 0; i < array_size && i < 10; i++) { // Limit to 10 files
+                    // Get display limit from environment or use default
+                    int display_limit = 10;  // Default limit for Glob
+                    const char *display_env = getenv("KLAWED_GLOB_DISPLAY_LIMIT");
+                    if (display_env) {
+                        int display_val = atoi(display_env);
+                        if (display_val > 0) {
+                            display_limit = display_val;
+                        }
+                    }
+
+                    for (int i = 0; i < array_size && i < display_limit; i++) {
                         cJSON *file = cJSON_GetArrayItem(files, i);
                         if (file && cJSON_IsString(file)) {
                             printf("  %s\n", file->valuestring);
                         }
                     }
-                    if (array_size > 10) {
-                        printf("  ... and %d more\n", array_size - 10);
+                    if (array_size > display_limit) {
+                        printf("  ... and %d more\n", array_size - display_limit);
                     }
                 }
             }
@@ -505,7 +525,7 @@ static void print_human_readable_tool_output(const char *tool_name, const char *
             cJSON *status = cJSON_GetObjectItem(tool_result, "status");
             cJSON *added = cJSON_GetObjectItem(tool_result, "added");
             cJSON *total = cJSON_GetObjectItem(tool_result, "total");
-            
+
             if (status && cJSON_IsString(status) && strcmp(status->valuestring, "success") == 0) {
                 if (added && cJSON_IsNumber(added) && total && cJSON_IsNumber(total)) {
                     printf("  Updated todo list: %d/%d tasks\n", added->valueint, total->valueint);
@@ -514,7 +534,7 @@ static void print_human_readable_tool_output(const char *tool_name, const char *
         } else if (strcmp(tool_name, "Edit") == 0 || strcmp(tool_name, "MultiEdit") == 0) {
             cJSON *status = cJSON_GetObjectItem(tool_result, "status");
             cJSON *replacements = cJSON_GetObjectItem(tool_result, "replacements");
-            
+
             if (status && cJSON_IsString(status) && strcmp(status->valuestring, "success") == 0) {
                 if (replacements && cJSON_IsNumber(replacements)) {
                     printf("  Made %d change%s\n", replacements->valueint,
@@ -526,11 +546,11 @@ static void print_human_readable_tool_output(const char *tool_name, const char *
         } else if (strcmp(tool_name, "Subagent") == 0) {
             cJSON *exit_code = cJSON_GetObjectItem(tool_result, "exit_code");
             cJSON *output = cJSON_GetObjectItem(tool_result, "output");
-            
+
             if (exit_code && cJSON_IsNumber(exit_code)) {
                 printf("  Subagent completed with exit code: %d\n", exit_code->valueint);
             }
-            
+
             if (output && cJSON_IsString(output)) {
                 const char *output_str = output->valuestring;
                 if (output_str && strlen(output_str) > 0) {
@@ -544,7 +564,7 @@ static void print_human_readable_tool_output(const char *tool_name, const char *
                             if (*p == '\n') line_count++;
                             p++;
                         }
-                        
+
                         // Show last 3 lines
                         if (line_count > 3) {
                             printf("  ...\n");
@@ -579,7 +599,7 @@ static void print_human_readable_tool_output(const char *tool_name, const char *
             }
         }
     }
-    
+
     printf("\n");
     fflush(stdout);
 }
@@ -1731,7 +1751,7 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     }
 
     const char *command = cmd_json->valuestring;
-    
+
     // Create a copy of the command to trim trailing whitespace
     char *command_copy = strdup(command);
     if (!command_copy) {
@@ -1739,7 +1759,7 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
         cJSON_AddStringToObject(error, "error", "Memory allocation failed for command copy");
         return error;
     }
-    
+
     // Trim trailing whitespace from the command copy
     trim_trailing_whitespace(command_copy);
 
@@ -6655,7 +6675,7 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         LOG_ERROR("Failed to allocate memory for command copy");
         return 0;
     }
-    
+
     // Trim trailing whitespace from the command copy
     trim_trailing_whitespace(cmd_copy);
 
@@ -6896,15 +6916,15 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
     if (strcmp(cmd_copy, "git") == 0) {
         // Check cached vim-fugitive availability first
         int fugitive_available = tui_get_vim_fugitive_available(tui);
-        
+
         // If not checked yet, run the check synchronously (this will be slow)
         if (fugitive_available == -1) {
             ui_set_status(tui, queue, "Checking vim-fugitive availability...");
-            
+
             char test_cmd[512];
-            snprintf(test_cmd, sizeof(test_cmd), 
+            snprintf(test_cmd, sizeof(test_cmd),
                      "vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" 2>&1");
-            
+
             FILE *fp = popen(test_cmd, "r");
             if (!fp) {
                 ui_show_error(tui, queue, "Failed to check vim-fugitive availability");
@@ -6912,68 +6932,68 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
                 free(cmd_copy);
                 return 0;
             }
-            
+
             char buffer[256];
             // Read output to check for errors
             while (fgets(buffer, sizeof(buffer), fp) != NULL) {
                 // Just consume output
             }
-            
+
             int rc = pclose(fp);
             fugitive_available = (rc == 0) ? 1 : 0;
-            
+
             // Cache the result for future use
             if (tui->vim_fugitive_mutex_initialized) {
                 pthread_mutex_lock(&tui->vim_fugitive_mutex);
                 tui->vim_fugitive_available = fugitive_available;
                 pthread_mutex_unlock(&tui->vim_fugitive_mutex);
             }
-            
+
             ui_set_status(tui, queue, "");
         }
-        
+
         if (fugitive_available == 1) {
             // vim-fugitive is available, open vim with :Git command
             const char *shell_cmd = "vim -c Git";
             char status_msg[256];
             snprintf(status_msg, sizeof(status_msg), "Opening vim-fugitive: %s", shell_cmd);
             ui_set_status(tui, queue, status_msg);
-            
+
             // Suspend TUI to run command
             if (tui_suspend(tui) != 0) {
                 ui_show_error(tui, queue, "Failed to suspend TUI for shell command");
                 free(cmd_copy);
                 return 0;
             }
-            
+
             // Run vim with Git command
             int vim_rc = system(shell_cmd);
             (void)vim_rc;
-            
+
             // Vim-style: wait for Enter before resuming
             printf("\nPress ENTER or type command to continue");
             fflush(stdout);
-            
+
             // Read a line from stdin
             char *line = NULL;
             size_t linecap = 0;
             ssize_t linelen = getline(&line, &linecap, stdin);
-            
+
             if (linelen == -1) {
                 LOG_DEBUG("EOF or error reading from stdin after shell command");
             } else if (linelen > 0 && line[linelen-1] == '\n') {
                 line[linelen-1] = '\0';
                 linelen--;
             }
-            
+
             // If user typed a command (not just Enter), run it
             if (linelen > 0) {
                 int rc2 = system(line);
                 (void)rc2;
             }
-            
+
             free(line);
-            
+
             // Resume TUI
             if (tui_resume(tui) != 0) {
                 ui_show_error(tui, queue, "Failed to resume TUI after shell command");
@@ -6986,7 +7006,7 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
             ui_append_line(tui, queue, "[Info]", "  Vundle: Plugin 'tpope/vim-fugitive'", COLOR_PAIR_STATUS);
             ui_append_line(tui, queue, "[Info]", "  Pathogen: git clone https://github.com/tpope/vim-fugitive ~/.vim/bundle/vim-fugitive", COLOR_PAIR_STATUS);
         }
-        
+
         ui_set_status(tui, queue, "");
         free(cmd_copy);
         return 0;
@@ -7289,7 +7309,7 @@ static int single_command_mode(ConversationState *state, const char *prompt) {
 
     // Enable oneshot/subagent mode for structured tool output
     g_oneshot_mode = 1;
-    
+
     // Check for output format environment variable
     const char *output_format = getenv("KLAWED_ONESHOT_FORMAT");
     if (output_format) {
@@ -7996,7 +8016,9 @@ int main(int argc, char *argv[]) {
         printf("                            human (clean, default) or json/machine (HTML+JSON)\n");
         printf("    KLAWED_BASH_TIMEOUT    Optional: Timeout for bash commands in seconds\n");
         printf("                            (default: 30, 0=no timeout)\n");
-        printf("    KLAWED_GREP_MAX_RESULTS Optional: Max grep results (default: 100)\n\n");
+        printf("    KLAWED_GREP_MAX_RESULTS Optional: Max grep results (default: 100)\n");
+        printf("    KLAWED_GREP_DISPLAY_LIMIT Optional: Max grep results to display (default: 20)\n");
+        printf("    KLAWED_GLOB_DISPLAY_LIMIT Optional: Max glob results to display (default: 10)\n\n");
 #ifdef HAVE_ZMQ
         printf("  ZMQ Socket Mode:\n");
         printf("    KLAWED_ZMQ_ENDPOINT  Optional: ZMQ endpoint (e.g., tcp://127.0.0.1:5555)\n");
