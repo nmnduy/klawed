@@ -45,6 +45,21 @@ static int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow
     return 0;
 }
 
+/**
+ * Duplicate a string using arena allocation
+ * Returns: Newly allocated string from arena, or NULL on error
+ */
+static char* arena_strdup(Arena *arena, const char *str) {
+    if (!str || !arena) return NULL;
+    
+    size_t len = strlen(str) + 1;  // +1 for null terminator
+    char *new_str = arena_alloc(arena, len);
+    if (!new_str) return NULL;
+    
+    strlcpy(new_str, str, len);
+    return new_str;
+}
+
 // Convert curl_slist headers to JSON string for logging
 // Note: Using http_headers_to_json from http_client.h instead
 
@@ -361,6 +376,7 @@ typedef struct {
     size_t tool_input_capacity;
     cJSON *message_start_data;       // Message metadata from message_start
     char *stop_reason;               // Stop reason from message_delta
+    Arena *arena;                    // Arena for all allocations (optional, NULL for heap allocation)
 } StreamingContext;
 
 static void streaming_context_init(StreamingContext *ctx, ConversationState *state) {
@@ -368,19 +384,44 @@ static void streaming_context_init(StreamingContext *ctx, ConversationState *sta
     ctx->state = state;
     ctx->content_block_index = -1;
     ctx->accumulated_capacity = 4096;
-    ctx->accumulated_text = malloc(ctx->accumulated_capacity);
-    if (ctx->accumulated_text) {
-        ctx->accumulated_text[0] = '\0';
-    }
-    ctx->tool_input_capacity = 4096;
-    ctx->tool_input_json = malloc(ctx->tool_input_capacity);
-    if (ctx->tool_input_json) {
-        ctx->tool_input_json[0] = '\0';
+    
+    // Create arena for streaming context allocations
+    ctx->arena = arena_create(65536);  // 64KB arena for streaming context
+    if (ctx->arena) {
+        // Use arena allocation
+        ctx->accumulated_text = arena_alloc(ctx->arena, ctx->accumulated_capacity);
+        if (ctx->accumulated_text) {
+            ctx->accumulated_text[0] = '\0';
+        }
+        ctx->tool_input_capacity = 4096;
+        ctx->tool_input_json = arena_alloc(ctx->arena, ctx->tool_input_capacity);
+        if (ctx->tool_input_json) {
+            ctx->tool_input_json[0] = '\0';
+        }
+    } else {
+        // Fallback to heap allocation
+        ctx->accumulated_text = malloc(ctx->accumulated_capacity);
+        if (ctx->accumulated_text) {
+            ctx->accumulated_text[0] = '\0';
+        }
+        ctx->tool_input_capacity = 4096;
+        ctx->tool_input_json = malloc(ctx->tool_input_capacity);
+        if (ctx->tool_input_json) {
+            ctx->tool_input_json[0] = '\0';
+        }
     }
 }
 
 static void streaming_context_free(StreamingContext *ctx) {
     if (!ctx) return;
+    
+    // If arena is present, destroy it (frees all arena-allocated memory)
+    if (ctx->arena) {
+        arena_destroy(ctx->arena);
+        return;
+    }
+    
+    // Fallback to individual free calls
     free(ctx->accumulated_text);
     free(ctx->content_block_type);
     free(ctx->tool_use_id);
@@ -436,18 +477,18 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
                 cJSON *type = cJSON_GetObjectItem(content_block, "type");
                 if (type && cJSON_IsString(type)) {
                     free(ctx->content_block_type);
-                    ctx->content_block_type = strdup(type->valuestring);
+                    ctx->content_block_type = ctx->arena ? arena_strdup(ctx->arena, type->valuestring) : strdup(type->valuestring);
 
                     if (strcmp(type->valuestring, "tool_use") == 0) {
                         cJSON *id = cJSON_GetObjectItem(content_block, "id");
                         cJSON *name = cJSON_GetObjectItem(content_block, "name");
                         if (id && cJSON_IsString(id)) {
                             free(ctx->tool_use_id);
-                            ctx->tool_use_id = strdup(id->valuestring);
+                            ctx->tool_use_id = ctx->arena ? arena_strdup(ctx->arena, id->valuestring) : strdup(id->valuestring);
                         }
                         if (name && cJSON_IsString(name)) {
                             free(ctx->tool_use_name);
-                            ctx->tool_use_name = strdup(name->valuestring);
+                            ctx->tool_use_name = ctx->arena ? arena_strdup(ctx->arena, name->valuestring) : strdup(name->valuestring);
                         }
                         ctx->tool_input_size = 0;
                         if (ctx->tool_input_json) {
@@ -477,10 +518,24 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
                             if (needed > ctx->accumulated_capacity) {
                                 size_t new_cap = ctx->accumulated_capacity * 2;
                                 if (new_cap < needed) new_cap = needed;
-                                char *new_buf = realloc(ctx->accumulated_text, new_cap);
-                                if (new_buf) {
-                                    ctx->accumulated_text = new_buf;
-                                    ctx->accumulated_capacity = new_cap;
+                                
+                                if (ctx->arena) {
+                                    // Use arena allocation with copy
+                                    char *new_buf = arena_alloc(ctx->arena, new_cap);
+                                    if (new_buf) {
+                                        if (ctx->accumulated_text) {
+                                            memcpy(new_buf, ctx->accumulated_text, ctx->accumulated_size + 1);
+                                        }
+                                        ctx->accumulated_text = new_buf;
+                                        ctx->accumulated_capacity = new_cap;
+                                    }
+                                } else {
+                                    // Fallback to realloc
+                                    char *new_buf = realloc(ctx->accumulated_text, new_cap);
+                                    if (new_buf) {
+                                        ctx->accumulated_text = new_buf;
+                                        ctx->accumulated_capacity = new_cap;
+                                    }
                                 }
                             }
 
@@ -505,10 +560,24 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
                             if (needed > ctx->tool_input_capacity) {
                                 size_t new_cap = ctx->tool_input_capacity * 2;
                                 if (new_cap < needed) new_cap = needed;
-                                char *new_buf = realloc(ctx->tool_input_json, new_cap);
-                                if (new_buf) {
-                                    ctx->tool_input_json = new_buf;
-                                    ctx->tool_input_capacity = new_cap;
+                                
+                                if (ctx->arena) {
+                                    // Use arena allocation with copy
+                                    char *new_buf = arena_alloc(ctx->arena, new_cap);
+                                    if (new_buf) {
+                                        if (ctx->tool_input_json) {
+                                            memcpy(new_buf, ctx->tool_input_json, ctx->tool_input_size + 1);
+                                        }
+                                        ctx->tool_input_json = new_buf;
+                                        ctx->tool_input_capacity = new_cap;
+                                    }
+                                } else {
+                                    // Fallback to realloc
+                                    char *new_buf = realloc(ctx->tool_input_json, new_cap);
+                                    if (new_buf) {
+                                        ctx->tool_input_json = new_buf;
+                                        ctx->tool_input_capacity = new_cap;
+                                    }
                                 }
                             }
 
@@ -535,7 +604,7 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
                 cJSON *stop_reason = cJSON_GetObjectItem(delta, "stop_reason");
                 if (stop_reason && cJSON_IsString(stop_reason)) {
                     free(ctx->stop_reason);
-                    ctx->stop_reason = strdup(stop_reason->valuestring);
+                    ctx->stop_reason = ctx->arena ? arena_strdup(ctx->arena, stop_reason->valuestring) : strdup(stop_reason->valuestring);
                     LOG_DEBUG("Stream: stop_reason=%s", ctx->stop_reason);
                 }
             }
@@ -816,9 +885,10 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
             return result;
         }
 
-        ApiResponse *api_resp = calloc(1, sizeof(ApiResponse));
-        if (!api_resp) {
-            result.error_message = strdup("Failed to allocate ApiResponse");
+        // Create arena for ApiResponse and all its string data
+        Arena *arena = arena_create(16384);  // 16KB arena for API response
+        if (!arena) {
+            result.error_message = strdup("Failed to create arena for ApiResponse");
             result.is_retryable = 0;
             cJSON_Delete(openai_like);
             free(result.headers_json);
@@ -826,7 +896,23 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
             free(openai_req);
             return result;
         }
-
+        
+        // Allocate ApiResponse from arena
+        ApiResponse *api_resp = arena_alloc(arena, sizeof(ApiResponse));
+        if (!api_resp) {
+            result.error_message = strdup("Failed to allocate ApiResponse from arena");
+            result.is_retryable = 0;
+            arena_destroy(arena);
+            cJSON_Delete(openai_like);
+            free(result.headers_json);
+            result.headers_json = NULL;
+            free(openai_req);
+            return result;
+        }
+        
+        // Initialize ApiResponse
+        memset(api_resp, 0, sizeof(ApiResponse));
+        api_resp->arena = arena;
         api_resp->raw_response = openai_like;
 
         cJSON *choices = cJSON_GetObjectItem(openai_like, "choices");
@@ -853,7 +939,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
 
         cJSON *content = cJSON_GetObjectItem(message, "content");
         if (content && cJSON_IsString(content) && content->valuestring) {
-            api_resp->message.text = strdup(content->valuestring);
+            api_resp->message.text = arena_strdup(api_resp->arena, content->valuestring);
         }
 
         cJSON *tool_calls = cJSON_GetObjectItem(message, "tool_calls");
@@ -865,9 +951,10 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
                 if (cJSON_GetObjectItem(tc, "function")) valid++;
             }
             if (valid > 0) {
-                api_resp->tools = calloc((size_t)valid, sizeof(ToolCall));
+                api_resp->tools = arena_alloc(api_resp->arena, 
+                                             (size_t)valid * sizeof(ToolCall));
                 if (!api_resp->tools) {
-                    result.error_message = strdup("Failed to allocate tool calls");
+                    result.error_message = strdup("Failed to allocate tool calls from arena");
                     result.is_retryable = 0;
                     api_response_free(api_resp);
                     free(result.headers_json);
@@ -875,6 +962,9 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
                     free(openai_req);
                     return result;
                 }
+                
+                // Initialize tool call array
+                memset(api_resp->tools, 0, (size_t)valid * sizeof(ToolCall));
                 int idx = 0;
                 for (int i = 0; i < raw_count; i++) {
                     cJSON *tc = cJSON_GetArrayItem(tool_calls, i);
@@ -883,8 +973,8 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
                     if (!fn) continue;
                     cJSON *name = cJSON_GetObjectItem(fn, "name");
                     cJSON *args = cJSON_GetObjectItem(fn, "arguments");
-                    api_resp->tools[idx].id = (id && cJSON_IsString(id)) ? strdup(id->valuestring) : NULL;
-                    api_resp->tools[idx].name = (name && cJSON_IsString(name)) ? strdup(name->valuestring) : NULL;
+                    api_resp->tools[idx].id = (id && cJSON_IsString(id)) ? arena_strdup(api_resp->arena, id->valuestring) : NULL;
+                    api_resp->tools[idx].name = (name && cJSON_IsString(name)) ? arena_strdup(api_resp->arena, name->valuestring) : NULL;
                     if (args && cJSON_IsString(args)) {
                         api_resp->tools[idx].parameters = cJSON_Parse(args->valuestring);
                         if (!api_resp->tools[idx].parameters) api_resp->tools[idx].parameters = cJSON_CreateObject();

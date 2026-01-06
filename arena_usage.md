@@ -3,9 +3,9 @@
 - [x] src/openai_provider.c:85-160 - Streaming context with accumulated text buffer allocations
 - [x] src/openai_provider.c:547-800 - API response parsing with tool call allocations and error messages
 - [x] src/openai_provider.c:772-802 - Tool call array allocation and string duplication
-- [ ] src/anthropic_provider.c:371-389 - Streaming context with multiple text buffers
-- [ ] src/anthropic_provider.c:819-890 - Anthropic API response parsing with tool allocations
-- [ ] src/anthropic_provider.c:868-887 - Tool call array and string allocations
+- [x] src/anthropic_provider.c:371-389 - Streaming context with multiple text buffers
+- [x] src/anthropic_provider.c:819-890 - Anthropic API response parsing with tool allocations
+- [x] src/anthropic_provider.c:868-887 - Tool call array and string allocations
 
 ## Progress Summary
 
@@ -36,6 +36,19 @@
   - Added `arena_strdup()` helper function for safe string duplication
   - Single `arena_destroy()` call frees all ApiResponse memory
 
+- ✅ Anthropic provider streaming context (anthropic_provider.c:371-389) now uses arena allocation
+  - Added `Arena *arena` field to `StreamingContext` structure
+  - Created arena (64KB) during context initialization
+  - All strings (accumulated_text, content_block_type, tool_use_id, tool_use_name, tool_input_json, stop_reason) allocated from arena
+  - Buffer growth uses arena allocation with copy instead of `realloc`
+  - Single `arena_destroy` call in `streaming_context_free` frees all memory
+
+- ✅ Anthropic provider API response parsing (anthropic_provider.c:819-890) now uses arena allocation
+  - Created arena (16KB) for each ApiResponse in anthropic provider
+  - All ApiResponse structures, tool arrays, and strings allocated from arena
+  - Reused `arena_strdup()` helper function for safe string duplication
+  - Single `arena_destroy()` call frees all ApiResponse memory
+
 **Patterns established:**
 1. Embed arena pointer in wrapper structure with magic number (completion system)
 2. Add arena pointer directly to existing structure (streaming context, ApiResponse)
@@ -44,6 +57,7 @@
 5. Maintain backward compatibility with existing API
 6. For temporary buffers: consider algorithmic optimization (two-pass) instead of arena
 7. Create helper functions for common operations (e.g., `arena_strdup()`)
+8. Handle buffer growth with arena allocation + copy instead of `realloc`
 
 **Solutions for challenges:**
 - Streaming contexts: Use arena allocation with copy instead of `realloc`
@@ -51,18 +65,18 @@
 - Tool call allocations: Modified `ApiResponse` structure to include arena pointer
   - Added `Arena *arena` field to `ApiResponse`
   - Updated `api_response_free()` to handle both allocation methods
-  - Created arena for each ApiResponse in OpenAI provider
+  - Created arena for each ApiResponse in OpenAI and anthropic providers
   - All strings and arrays allocated from arena (cJSON objects still use heap)
+- Buffer growth in streaming: Use arena allocation with copy for both accumulated_text and tool_input_json buffers
 
 **Remaining challenges:**
-- Need to update other providers (anthropic, bedrock, openai_responses) to use arena allocation for consistency
+- Need to update other providers (bedrock, openai_responses) to use arena allocation for consistency
 - cJSON objects still use heap allocation (cJSON_Parse, cJSON_CreateObject)
 - Need to handle potential arena size limits for variable-length data
 - Other providers still use old allocation method (arena = NULL)
 
 **Next steps/TODO:**
-1. Update anthropic provider to use arena allocation for ApiResponse
-2. Update bedrock provider to use arena allocation for ApiResponse  
-3. Update openai_responses.c to use arena allocation for ApiResponse
-4. Consider adding arena to anthropic StreamingContext structure
-5. Investigate if cJSON objects can be allocated from arena (may require cJSON modification)
+1. Update bedrock provider to use arena allocation for ApiResponse  
+2. Update openai_responses.c to use arena allocation for ApiResponse
+3. Investigate if cJSON objects can be allocated from arena (may require cJSON modification)
+4. Consider adding arena to bedrock provider structures if applicable
