@@ -399,6 +399,13 @@ export function init(rootEl) {
         };
     }
 
+    function switchToTab(tabId) {
+        const tabButton = rootEl.querySelector(`[data-tab="${tabId}"]`);
+        if (tabButton) {
+            tabButton.click();
+        }
+    }
+
     function highlightElement(el) {
         if (!el) return () => {};
         const prevZ = el.style.zIndex;
@@ -487,10 +494,12 @@ export function init(rootEl) {
         });
 
         steps.push(() => {
+            // Ensure Files tab is visible so the upload button is in DOM/visible
+            switchToTab('file');
             const cleanup = highlightElement(actions.uploadButton);
             const tip = createTooltip('<strong>Upload files</strong><br/>Attach PDFs, docs, or data so the AI can analyze them.');
             positionTooltip(tip, actions.uploadButton, 'top');
-            return () => { cleanup(); tip.remove(); };
+            return () => { cleanup(); tip.remove(); switchToTab('chat'); };
         });
 
         steps.push(() => {
