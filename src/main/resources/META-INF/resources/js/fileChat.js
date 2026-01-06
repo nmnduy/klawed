@@ -540,8 +540,9 @@ export function init(rootEl) {
                 overlay.dispatchEvent(new Event('click'));
             }, { once: true });
             tip.style.position = 'fixed';
-            tip.style.bottom = '32px';
-            tip.style.right = '32px';
+            tip.style.top = '50%';
+            tip.style.left = '50%';
+            tip.style.transform = 'translate(-50%, -50%)';
             return () => { tip.remove(); };
         });
 
