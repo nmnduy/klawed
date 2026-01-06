@@ -1,0 +1,18 @@
+Goal: quick layout variants the agent can assemble.
+
+Accent band:
+- Use a colored rule under header: \noindent\color{Primary}{\rule{\textwidth}{0.8pt}}
+- For a shaded header row: \rowcolor{Primary!12} on the header line in the items table
+
+Shaded panels (lightweight):
+- Use xcolor rowcolors or a simple color box with \fcolorbox{white}{Primary!8}{...} for a small meta panel
+
+No heavy TikZ needed:
+- If a band is desired, a simple rule is enough; avoid full TikZ backgrounds for performance
+
+Multi-column header block:
+- tabularx with two columns: From / Bill To
+- Add a right-aligned Invoice number/date block using a second tabularx or a parbox
+
+Space tuning:
+- Use \vspace{<len>} sparingly; prefer consistent vertical rhythm (e.g., 0.6–1em between sections)

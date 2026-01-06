@@ -1,0 +1,48 @@
+Goal: fast, reliable compilation guidance for the agent.
+
+Defaults:
+- Use pdflatex unless custom fonts/RTL/non-Latin are needed
+- If custom fonts or RTL: switch to xelatex; keep dependencies minimal
+- For Unicode/non-ASCII characters (Vietnamese, Chinese, Arabic, etc.): ALWAYS use xelatex
+- The frontend now defaults to xelatex for better Unicode support
+
+Package discipline:
+- Prefer core packages: geometry, tabularx, booktabs, array, xcolor, fancyhdr, lastpage
+- Add hyperref only if links are desired; place it near the end of the preamble
+- Avoid heavy packages (full TikZ) unless user requests graphics
+
+Pre-flight checks:
+- Ensure logo paths exist before \includegraphics; gate logo inclusion on user confirmation
+- Keep placeholders as {{LIKE_THIS}}; do not hardcode sample data
+
+Compilation commands:
+- pdflatex -interaction=nonstopmode -halt-on-error <file.tex>
+- xelatex -interaction=nonstopmode -halt-on-error <file.tex>
+
+When errors occur:
+- If font not found under xelatex, fall back to a TeX Live bundled font or pdflatex-safe default and warn the user
+- If a package is missing on minimal TeX, suggest installing latexextra/required collections; keep templates slim to avoid this
+
+Common LaTeX Syntax Errors to Check:
+1. Tabular environments: Check for broken column specifications
+   - Common error: `@{\\extracolsep{\\fill}}` should be `@{\extracolsep{\\fill}}` (single backslash)
+   - Never split column specs across lines
+2. Mismatched braces: Count opening `{` and closing `}` - must be equal
+3. Unicode with pdflatex: If using pdflatex and file has non-ASCII, either:
+   - Switch to xelatex (recommended)
+   - Add `\usepackage[utf8]{inputenc}` and `\usepackage[T1]{fontenc}`
+4. Broken commands: Check for double backslashes in wrong places
+
+Pre-compilation Validation (Now implemented in LatexCompilerService):
+- Syntax validation runs before compilation
+- Checks for mismatched braces, broken tabular specs, Unicode issues
+- Returns clear error messages before attempting compilation
+
+Debugging Steps for AI Agent:
+1. Test compilation manually: `pdflatex -interaction=nonstopmode -halt-on-error file.tex`
+2. Check log file for specific error lines
+3. Common fixes:
+   - Tabular errors: Fix column specifications
+   - Unicode errors: Switch to xelatex
+   - Missing packages: Add required \usepackage statements
+4. Always validate template before giving to customer

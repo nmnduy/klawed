@@ -1,0 +1,41 @@
+Goal: minimal, dependency-light invoice scaffold the agent can copy and extend.
+
+Preamble (pdflatex-friendly):
+- \documentclass[11pt]{article}
+- \usepackage[margin=1in]{geometry}
+- \usepackage{tabularx,booktabs,array,xcolor}
+- Optional: \usepackage{hyperref} (only if links are desired)
+
+Layout blocks to include:
+1) Header (from/to/meta): two-column tabularx block is enough; no images by default.
+2) Invoice meta: small tabular (Invoice #, Issue date, Due date, PO, Currency).
+3) Line items: tabularx with columns: Description | Qty | Unit | Line Total.
+   Example col spec: {@{} X r r r @{}}, header with booktabs. Use \rowcolors{2}{gray!6}{white} if desired.
+4) Totals: small tabular (Subtotal, Tax, Discount, Shipping, Total Due in bold).
+5) Terms/Notes: simple itemize or paragraph text.
+
+Placeholders: use double braces, e.g., {{INVOICE_NUMBER}}, {{CUSTOMER_NAME}}, {{LINE_1_DESCRIPTION}}. Duplicate line rows as needed.
+
+Compilation defaults:
+- Prefer pdflatex unless custom fonts/RTL are needed.
+- Keep packages standard; avoid uncommon fonts or heavy TikZ here.
+
+IMPORTANT: TEST COMPILATION IMMEDIATELY
+=======================================
+After creating template from this skeleton:
+
+1. Save as .tex file in session directory
+2. Test compilation:
+   ```bash
+   pdflatex -interaction=nonstopmode -halt-on-error template.tex
+   ```
+3. If Unicode/non-ASCII needed:
+   ```bash
+   xelatex -interaction=nonstopmode -halt-on-error template.tex
+   ```
+4. Check for common errors:
+   - Tabular column specs: `@{\extracolsep{\fill}}` (single backslash)
+   - Mismatched braces: `{` and `}` count must match
+   - Unicode characters: Use xelatex
+
+DO NOT proceed without successful compilation test.

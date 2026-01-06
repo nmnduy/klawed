@@ -1,0 +1,46 @@
+Goal: handle locale/currency/date nuances with minimal friction.
+
+Dates:
+- If user needs specific formats, use datetime2: \usepackage{datetime2}; \DTMsetstyle{en-GB} or locale-specific styles
+- Otherwise keep dates as plain placeholders ({{ISSUE_DATE}}) and let upstream format them
+
+Currency/number formatting:
+- Keep placeholders literal unless user requests formatting
+- If alignment is needed, consider siunitx with locale options, e.g., \sisetup{locale=DE, detect-weight=true}
+
+RTL/non-Latin:
+- Switch to xelatex (or lualatex); use fontspec + appropriate fonts
+- For RTL scripts, consider bidi/polyglossia; keep it minimal unless requested
+
+Decimal separators:
+- If user specifies comma decimals, note it in placeholders or use siunitx locale settings
+
+CRITICAL: TEST UNICODE/RTL TEMPLATES
+====================================
+For any non-Latin/Unicode/RTL content:
+
+1. **ALWAYS use xelatex** (NOT pdflatex):
+   ```bash
+   xelatex -interaction=nonstopmode -halt-on-error template.tex
+   ```
+
+2. **Common Unicode errors**:
+   - pdflatex: "Unicode character X not set up for use with LaTeX"
+   - Solution: Switch to xelatex immediately
+
+3. **Test with actual Unicode content**:
+   - Don't assume it works - test with sample Vietnamese/Chinese/Arabic text
+   - Verify characters display correctly in generated PDF
+
+4. **Font availability**:
+   - xelatex uses system fonts
+   - Test with common fonts (Arial, Times New Roman) first
+   - Warn user if custom fonts might not be available
+
+5. **Validation before delivery**:
+   - [ ] Template compiles with xelatex
+   - [ ] All Unicode characters display correctly
+   - [ ] RTL text flows right-to-left if applicable
+   - [ ] Fonts render as expected
+
+NEVER deliver international template without xelatex compilation test.
