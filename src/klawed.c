@@ -3667,13 +3667,13 @@ static cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
         cJSON_AddStringToObject(error, "error", "Memvid not initialized");
         return error;
     }
-    
+
     int64_t card_id = memvid_put_memory(handle, entity, slot, value, kind, relation);
     if (card_id < 0) {
         const char *err_msg = memvid_last_error();
         cJSON *error = cJSON_CreateObject();
         char error_buf[512];
-        snprintf(error_buf, sizeof(error_buf), "Failed to store memory: %s", 
+        snprintf(error_buf, sizeof(error_buf), "Failed to store memory: %s",
                  err_msg ? err_msg : "unknown error");
         cJSON_AddStringToObject(error, "error", error_buf);
         return error;
@@ -5325,8 +5325,8 @@ char* build_request_json_from_state(ConversationState *state) {
                         for (int j = 0; j < state->messages[i].content_count; j++) {
                             InternalContent *cb = &state->messages[i].contents[j];
 
-                            if (cb->type == INTERNAL_TEXT) {
-                                // Text content
+                            if (cb->type == INTERNAL_TEXT && cb->text && cb->text[0]) {
+                                // Text content (skip empty strings)
                                 cJSON *text_block = cJSON_CreateObject();
                                 cJSON_AddStringToObject(text_block, "type", "text");
                                 cJSON_AddStringToObject(text_block, "text", cb->text);
@@ -5375,7 +5375,8 @@ char* build_request_json_from_state(ConversationState *state) {
             for (int j = 0; j < state->messages[i].content_count; j++) {
                 InternalContent *cb = &state->messages[i].contents[j];
 
-                if (cb->type == INTERNAL_TEXT) {
+                if (cb->type == INTERNAL_TEXT && cb->text && cb->text[0]) {
+                    // Only use non-empty text content
                     text_content = cb->text;
                 } else if (cb->type == INTERNAL_TOOL_CALL) {
                     if (!tool_calls) {

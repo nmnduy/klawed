@@ -229,8 +229,8 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
 
-                if (c->type == INTERNAL_TEXT && c->text) {
-                    // Regular user text
+                if (c->type == INTERNAL_TEXT && c->text && c->text[0]) {
+                    // Regular user text (skip empty strings)
                     cJSON *user_msg = cJSON_CreateObject();
                     cJSON_AddStringToObject(user_msg, "role", "user");
 
@@ -269,11 +269,11 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
             cJSON *asst_msg = cJSON_CreateObject();
             cJSON_AddStringToObject(asst_msg, "role", "assistant");
 
-            // Collect text content
+            // Collect text content (skip empty strings)
             char *text_content = NULL;
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
-                if (c->type == INTERNAL_TEXT && c->text) {
+                if (c->type == INTERNAL_TEXT && c->text && c->text[0]) {
                     text_content = c->text;
                     break;
                 }
