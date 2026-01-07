@@ -327,7 +327,6 @@ Parameters:
   void *region    |   The region to be arena-fyed.
   size_t size     |   The size of the region in bytes.
 */
-void arena_init(Arena *arena, void *region, size_t size);
 
 
 
@@ -343,7 +342,6 @@ Parameters:
 Return:
   Pointer to arena on success, NULL on failure
 */
-Arena* arena_create(size_t size);
 
 
 
@@ -368,7 +366,6 @@ Return:
   Pointer to arena region segment on success, NULL on
   failure.
 */
-void* arena_alloc(Arena *arena, size_t size);
 
 
 
@@ -396,7 +393,6 @@ Return:
   Pointer to arena region segment on success, NULL on
   failure.
 */
-void* arena_alloc_aligned(Arena *arena, size_t size, unsigned int alignment);
 
 
 
@@ -411,7 +407,6 @@ Parameters:
 Return:
   Number of bytes copied.
 */
-size_t arena_copy(Arena *dest, Arena *src);
 
 
 
@@ -423,7 +418,6 @@ expensive frees.
 Parameters:
   Arena *arena    |    The arena to be cleared.
 */
-void arena_clear(Arena* arena);
 
 
 
@@ -433,7 +427,6 @@ Free the memory allocated for the entire arena region.
 Parameters:
   Arena *arena    |    The arena to be destroyed.
 */
-void arena_destroy(Arena *arena);
 
 
 
@@ -591,7 +584,7 @@ void* arena_alloc_aligned(Arena *arena, size_t size, unsigned int alignment)
 
     if (alignment != 0)
     {
-        offset = (size_t)(arena->region + arena->index) % alignment;
+        offset = (unsigned int)((size_t)(arena->region + arena->index) % alignment);
         if (offset > 0)
         {
             arena->index = arena->index - offset + alignment;

@@ -140,6 +140,7 @@ ifeq ($(ZMQ),1)
     ZMQ_LIBS = -lzmq
     LDFLAGS += $(ZMQ_LIBS)
     DEBUG_LDFLAGS += $(ZMQ_LIBS)
+    ZMQ_TESTS = test-zmq-socket
 else ifeq ($(ZMQ),0)
     # Explicitly disable ZMQ
     CFLAGS += -DDISABLE_ZMQ=1
@@ -148,6 +149,7 @@ else ifeq ($(ZMQ),0)
     ZMQ_CLIENT_SRC = src/zmq_client_stub.c
     ZMQ_DAEMON_SRC = src/zmq_daemon_stub.c
     ZMQ_LIBS =
+    ZMQ_TESTS =
 else
     # Default: auto-detect
     # Check if libzmq is available via pkg-config
@@ -160,6 +162,7 @@ else
         ZMQ_LIBS = $(shell pkg-config --libs libzmq)
         LDFLAGS += $(ZMQ_LIBS)
         DEBUG_LDFLAGS += $(ZMQ_LIBS)
+        ZMQ_TESTS = test-zmq-socket
     else
         # ZMQ not available, disable it
         CFLAGS += -DDISABLE_ZMQ=1
@@ -168,6 +171,7 @@ else
         ZMQ_CLIENT_SRC = src/zmq_client_stub.c
         ZMQ_DAEMON_SRC = src/zmq_daemon_stub.c
         ZMQ_LIBS =
+        ZMQ_TESTS =
     endif
 endif
 
@@ -422,7 +426,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-zmq-socket test-file-search
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client $(ZMQ_TESTS) test-file-search
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
