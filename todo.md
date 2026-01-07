@@ -5,4 +5,5 @@
     - [ ] python, latex, klawed binary
 - [ ] alert
     - [ ] cpu, memory, error
+- privacy policies
 - [ ] review `src/main/java/com/filesurf/service/SessionFileCleanupService.java`
