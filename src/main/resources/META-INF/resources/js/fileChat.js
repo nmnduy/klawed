@@ -161,7 +161,7 @@ export function init(rootEl) {
 
     function hideEmptyState() {
         if (elements.chatEmpty) {
-            elements.chatEmpty.classList.add('hidden');
+            elements.chatEmpty.remove();
         }
         const demoSeed = rootEl.querySelector('[data-chat-demo-seed]');
         if (demoSeed) {
