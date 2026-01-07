@@ -13,6 +13,8 @@ import jakarta.ws.rs.ext.Provider;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Logger;
 
 /**
@@ -25,6 +27,7 @@ public class AuthenticationFilter implements ContainerRequestFilter {
 
     private static final Logger LOGGER = Logger.getLogger(AuthenticationFilter.class.getName());
     private static final String USER_COOKIE_NAME = "filesurf_userId";
+    private static final String DEFAULT_REDIRECT_PATH = "/file-chat";
 
     @Inject
     UserService userService;
@@ -61,36 +64,44 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         LOGGER.fine("Authenticated user: " + user.getEmail() + " accessing: " + path);
     }
 
-    private boolean shouldSkipAuthentication(String path) {
-        // Skip auth endpoints (handle both with and without leading slash)
-        if (path.startsWith("auth/") || path.equals("auth") ||
-            path.startsWith("/auth/") || path.equals("/auth")) {
+    /**
+     * Determines if authentication should be skipped for the given path.
+     * Public for testing purposes.
+     */
+    public boolean shouldSkipAuthentication(String path) {
+        if (path == null) {
+            return false;
+        }
+
+        // Normalize path by removing leading slash for comparison
+        String normalizedPath = path.startsWith("/") ? path.substring(1) : path;
+
+        // Skip auth endpoints
+        if (normalizedPath.startsWith("auth/") || normalizedPath.equals("auth")) {
             return true;
         }
 
-        // Skip static assets (handle both with and without leading slash)
-        if (path.startsWith("assets/") || path.startsWith("/assets/") ||
-            path.startsWith("js/") || path.startsWith("/js/") ||
-            path.startsWith("css/") || path.startsWith("/css/") ||
-            path.endsWith(".css") ||
-            path.endsWith(".js") ||
-            path.endsWith(".png") ||
-            path.endsWith(".jpg") ||
-            path.endsWith(".jpeg") ||
-            path.endsWith(".gif") ||
-            path.endsWith(".svg") ||
-            path.endsWith(".ico") ||
-            path.endsWith(".woff") ||
-            path.endsWith(".woff2")) {
+        // Skip static assets
+        if (normalizedPath.startsWith("assets/") || 
+            normalizedPath.startsWith("js/") || 
+            normalizedPath.startsWith("css/")) {
             return true;
         }
 
-        // Skip health/metrics endpoints (handle both with and without leading slash)
-        if (path.equals("health") || path.equals("/health") ||
-            path.equals("health/live") || path.equals("/health/live") ||
-            path.equals("health/ready") || path.equals("/health/ready") ||
-            path.equals("metrics") || path.equals("/metrics") ||
-            path.startsWith("q/") || path.startsWith("/q/")) {  // Quarkus dev endpoints
+        // Skip files by extension
+        if (path.endsWith(".css") || path.endsWith(".js") ||
+            path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg") ||
+            path.endsWith(".gif") || path.endsWith(".svg") || path.endsWith(".ico") ||
+            path.endsWith(".woff") || path.endsWith(".woff2")) {
+            return true;
+        }
+
+        // Skip health/metrics endpoints
+        if (normalizedPath.equals("health") || 
+            normalizedPath.equals("health/live") || 
+            normalizedPath.equals("health/ready") ||
+            normalizedPath.equals("metrics") ||
+            normalizedPath.startsWith("q/")) {  // Quarkus dev endpoints
             return true;
         }
 
@@ -98,18 +109,7 @@ public class AuthenticationFilter implements ContainerRequestFilter {
     }
 
     private void handleUnauthenticated(ContainerRequestContext requestContext, String path) {
-        // For API calls (JSON requests), return 401
-        String accept = requestContext.getHeaderString("Accept");
-        String contentType = requestContext.getHeaderString("Content-Type");
-        
-        boolean isApiRequest = (accept != null && accept.contains("application/json")) ||
-                               (contentType != null && contentType.contains("application/json")) ||
-                               path.startsWith("file-chat/http/") ||
-                               path.startsWith("session/") ||
-                               path.startsWith("file-chat/upload") ||
-                               path.startsWith("file-chat/explorer/");
-
-        if (isApiRequest) {
+        if (isApiRequest(requestContext, path)) {
             requestContext.abortWith(
                 Response.status(Response.Status.UNAUTHORIZED)
                     .entity("{\"error\": \"Authentication required\", \"redirect\": \"/auth/login\"}")
@@ -118,7 +118,8 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             );
         } else {
             // For browser requests, redirect to login page
-            String redirectUrl = "/auth/login?redirect=" + encodeRedirect("/" + path);
+            String targetPath = normalizeRedirectPath(path);
+            String redirectUrl = buildLoginRedirectUrl(targetPath);
             requestContext.abortWith(
                 Response.seeOther(URI.create(redirectUrl))
                     .build()
@@ -126,10 +127,71 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         }
     }
 
-    private String encodeRedirect(String url) {
+    /**
+     * Determines if the request is an API request (should get JSON 401 response).
+     * Public for testing purposes.
+     */
+    public boolean isApiRequest(ContainerRequestContext requestContext, String path) {
+        String accept = requestContext.getHeaderString("Accept");
+        String contentType = requestContext.getHeaderString("Content-Type");
+        
+        // Check headers
+        if ((accept != null && accept.contains("application/json")) ||
+            (contentType != null && contentType.contains("application/json"))) {
+            return true;
+        }
+
+        // Check path patterns
+        if (path == null) {
+            return false;
+        }
+        
+        String normalizedPath = path.startsWith("/") ? path.substring(1) : path;
+        return normalizedPath.startsWith("file-chat/http/") ||
+               normalizedPath.startsWith("session/") ||
+               normalizedPath.startsWith("file-chat/upload") ||
+               normalizedPath.startsWith("file-chat/explorer/");
+    }
+
+    /**
+     * Normalizes the redirect path to ensure it's a valid target.
+     * Handles empty paths, root paths, and paths with/without leading slashes.
+     * Public for testing purposes.
+     */
+    public String normalizeRedirectPath(String path) {
+        if (path == null || path.isEmpty() || path.equals("/")) {
+            return DEFAULT_REDIRECT_PATH;
+        }
+
+        // Ensure path starts with a single slash
+        if (path.startsWith("/")) {
+            return path;
+        }
+        
+        return "/" + path;
+    }
+
+    /**
+     * Builds the login redirect URL with properly encoded redirect parameter.
+     * Public for testing purposes.
+     */
+    public String buildLoginRedirectUrl(String targetPath) {
+        String encodedPath = encodeRedirect(targetPath);
+        return "/auth/login?redirect=" + encodedPath;
+    }
+
+    /**
+     * URL-encodes the redirect path.
+     * Public for testing purposes.
+     */
+    public String encodeRedirect(String url) {
+        if (url == null) {
+            return "";
+        }
         try {
-            return java.net.URLEncoder.encode(url, "UTF-8");
+            return URLEncoder.encode(url, StandardCharsets.UTF_8);
         } catch (Exception e) {
+            LOGGER.warning("Failed to encode redirect URL: " + url + ", error: " + e.getMessage());
             return url;
         }
     }
