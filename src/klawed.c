@@ -3661,10 +3661,21 @@ static cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
     }
 
     // Call memvid API
-    int64_t card_id = memvid_put_memory(memvid_get_global(), entity, slot, value, kind, relation);
-    if (card_id < 0) {
+    MemvidHandle *handle = memvid_get_global();
+    if (handle == NULL) {
         cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Failed to store memory");
+        cJSON_AddStringToObject(error, "error", "Memvid not initialized");
+        return error;
+    }
+    
+    int64_t card_id = memvid_put_memory(handle, entity, slot, value, kind, relation);
+    if (card_id < 0) {
+        const char *err_msg = memvid_last_error();
+        cJSON *error = cJSON_CreateObject();
+        char error_buf[512];
+        snprintf(error_buf, sizeof(error_buf), "Failed to store memory: %s", 
+                 err_msg ? err_msg : "unknown error");
+        cJSON_AddStringToObject(error, "error", error_buf);
         return error;
     }
 
