@@ -2678,7 +2678,8 @@ STATIC cJSON* tool_write(cJSON *params, ConversationState *state) {
 
     if (!content_json || !cJSON_IsString(content_json)) {
         cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Missing 'content' parameter");
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'content' parameter. Write tool requires both 'file_path' and 'content' parameters.");
         return error;
     }
 
@@ -3054,9 +3055,24 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
     const cJSON *old_json = cJSON_GetObjectItem(params, "old_string");
     const cJSON *new_json = cJSON_GetObjectItem(params, "new_string");
 
-    if (!path_json || !new_json) {
+    if (!path_json || !cJSON_IsString(path_json)) {
         cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Missing required parameters");
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'file_path' parameter. Edit tool requires 'file_path', 'old_string', and 'new_string'.");
+        return error;
+    }
+
+    if (!old_json || !cJSON_IsString(old_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'old_string' parameter. Edit tool requires 'file_path', 'old_string', and 'new_string'.");
+        return error;
+    }
+
+    if (!new_json || !cJSON_IsString(new_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'new_string' parameter. Edit tool requires 'file_path', 'old_string', and 'new_string'.");
         return error;
     }
 
@@ -3149,9 +3165,17 @@ static cJSON* tool_multiedit(cJSON *params, ConversationState *state) {
     const cJSON *path_json = cJSON_GetObjectItem(params, "file_path");
     const cJSON *edits_json = cJSON_GetObjectItem(params, "edits");
 
-    if (!path_json || !edits_json || !cJSON_IsArray(edits_json)) {
+    if (!path_json || !cJSON_IsString(path_json)) {
         cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Missing required parameters: file_path and edits array");
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'file_path' parameter. MultiEdit requires 'file_path' (string) and 'edits' (array).");
+        return error;
+    }
+
+    if (!edits_json || !cJSON_IsArray(edits_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'edits' parameter. MultiEdit requires 'file_path' (string) and 'edits' (array of {old_string, new_string}).");
         return error;
     }
 
@@ -4741,7 +4765,7 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddStringToObject(write_func, "name", "Write");
         // Write tool description
         cJSON_AddStringToObject(write_func, "description",
-            "Writes content to a file.");
+            "Writes content to a file. Requires both 'file_path' (path string) and 'content' (file content string) parameters.");
         cJSON *write_params = cJSON_CreateObject();
         cJSON_AddStringToObject(write_params, "type", "object");
         cJSON *write_props = cJSON_CreateObject();
