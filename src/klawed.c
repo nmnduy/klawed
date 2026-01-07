@@ -139,6 +139,7 @@ static void ensure_tool_results(struct ConversationState *state) {
 
 // Internal API for module access
 #include "klawed_internal.h"
+#include "compaction.h"
 
 // Session management
 #ifndef TEST_BUILD
@@ -2678,7 +2679,8 @@ STATIC cJSON* tool_write(cJSON *params, ConversationState *state) {
 
     if (!content_json || !cJSON_IsString(content_json)) {
         cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Missing 'content' parameter");
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'content' parameter. Write tool requires both 'file_path' and 'content' parameters.");
         return error;
     }
 
@@ -3054,9 +3056,24 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
     const cJSON *old_json = cJSON_GetObjectItem(params, "old_string");
     const cJSON *new_json = cJSON_GetObjectItem(params, "new_string");
 
-    if (!path_json || !new_json) {
+    if (!path_json || !cJSON_IsString(path_json)) {
         cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Missing required parameters");
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'file_path' parameter. Edit tool requires 'file_path', 'old_string', and 'new_string'.");
+        return error;
+    }
+
+    if (!old_json || !cJSON_IsString(old_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'old_string' parameter. Edit tool requires 'file_path', 'old_string', and 'new_string'.");
+        return error;
+    }
+
+    if (!new_json || !cJSON_IsString(new_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'new_string' parameter. Edit tool requires 'file_path', 'old_string', and 'new_string'.");
         return error;
     }
 
@@ -3149,9 +3166,17 @@ static cJSON* tool_multiedit(cJSON *params, ConversationState *state) {
     const cJSON *path_json = cJSON_GetObjectItem(params, "file_path");
     const cJSON *edits_json = cJSON_GetObjectItem(params, "edits");
 
-    if (!path_json || !edits_json || !cJSON_IsArray(edits_json)) {
+    if (!path_json || !cJSON_IsString(path_json)) {
         cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Missing required parameters: file_path and edits array");
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'file_path' parameter. MultiEdit requires 'file_path' (string) and 'edits' (array).");
+        return error;
+    }
+
+    if (!edits_json || !cJSON_IsArray(edits_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error",
+            "Missing required 'edits' parameter. MultiEdit requires 'file_path' (string) and 'edits' (array of {old_string, new_string}).");
         return error;
     }
 
@@ -4741,7 +4766,7 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddStringToObject(write_func, "name", "Write");
         // Write tool description
         cJSON_AddStringToObject(write_func, "description",
-            "Writes content to a file.");
+            "Writes content to a file. Requires both 'file_path' (path string) and 'content' (file content string) parameters.");
         cJSON *write_params = cJSON_CreateObject();
         cJSON_AddStringToObject(write_params, "type", "object");
         cJSON *write_props = cJSON_CreateObject();
@@ -5682,6 +5707,14 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         // Send API_CALL message to indicate waiting for API response
         send_api_call_message(state, state->model, state->provider->name);
 
+        // Check and perform compaction if needed (before API call)
+        if (state->compaction_config && compaction_should_trigger(state, state->compaction_config)) {
+            LOG_INFO("Context compaction triggered before API call");
+            if (compaction_perform(state, state->compaction_config, state->session_id) != 0) {
+                LOG_WARN("Compaction failed, continuing with API call");
+            }
+        }
+
         ApiCallResult result = state->provider->call_api(state->provider, state);
 
         // Success case
@@ -6372,6 +6405,9 @@ int conversation_state_init(ConversationState *state) {
     // Socket streaming support removed - will be reimplemented with ZMQ
 
     // Initialize subagent manager
+
+    // Initialize compaction config (NULL by default)
+    state->compaction_config = NULL;
     state->subagent_manager = malloc(sizeof(SubagentManager));
     if (state->subagent_manager) {
         if (subagent_manager_init(state->subagent_manager) != 0) {
@@ -6398,6 +6434,12 @@ void conversation_state_destroy(ConversationState *state) {
     }
 
     // Clean up subagent manager
+
+    // Clean up compaction config
+    if (state->compaction_config) {
+        free(state->compaction_config);
+        state->compaction_config = NULL;
+    }
     if (state->subagent_manager) {
         // Unregister from emergency cleanup
         register_subagent_manager_for_cleanup(NULL);
@@ -8623,7 +8665,7 @@ static int get_env_int_retry(const char *name, int default_value) {
 #ifndef TEST_BUILD
 #include "dump_utils.h"
 // Dump conversation from database by session ID
-static int dump_conversation_from_db(const char *session_id) {
+static int dump_conversation_from_db(const char *session_id, const char *format) {
     PersistenceDB *db = persistence_init(NULL);
     if (!db) {
         fprintf(stderr, "Error: Failed to open persistence database\n");
@@ -8680,112 +8722,188 @@ static int dump_conversation_from_db(const char *session_id) {
 
     sqlite3_bind_text(stmt, 1, session_id, -1, SQLITE_TRANSIENT);
 
-    fprintf(stdout, "\n");
-    fprintf(stdout, "=================================================================\n");
-    fprintf(stdout, "                    CONVERSATION DUMP\n");
-    fprintf(stdout, "=================================================================\n");
-    fprintf(stdout, "Session ID: %s\n", session_id);
-    fprintf(stdout, "=================================================================\n\n");
+    // Default format if not specified
+    if (!format) {
+        format = "default";
+    }
 
     int call_num = 0;
     int step_rc;
-    while ((step_rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-        call_num++;
 
-        const char *timestamp = (const char *)sqlite3_column_text(stmt, 0);
-        const char *request_json = (const char *)sqlite3_column_text(stmt, 1);
-        const char *response_json = (const char *)sqlite3_column_text(stmt, 2);
-        const char *model = (const char *)sqlite3_column_text(stmt, 3);
-        const char *status = (const char *)sqlite3_column_text(stmt, 4);
-        const char *error_msg = (const char *)sqlite3_column_text(stmt, 5);
+    // For JSON format, we need to output a complete JSON array
+    if (strcmp(format, "json") == 0) {
+        fprintf(stdout, "{\n");
+        fprintf(stdout, "  \"session_id\": \"%s\",\n", session_id);
+        fprintf(stdout, "  \"api_calls\": [\n");
 
-        fprintf(stdout, "-----------------------------------------------------------------\n");
-        fprintf(stdout, "API Call #%d - %s\n", call_num, timestamp ? timestamp : "unknown");
-        fprintf(stdout, "Model: %s\n", model ? model : "unknown");
-        fprintf(stdout, "Status: %s\n", status ? status : "unknown");
-        fprintf(stdout, "-----------------------------------------------------------------\n\n");
+        int first_call = 1;
+        while ((step_rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+            call_num++;
 
-        // Parse and display request
-        if (request_json) {
-            cJSON *request = cJSON_Parse(request_json);
-            if (request) {
-                cJSON *messages = cJSON_GetObjectItem(request, "messages");
-                if (messages && cJSON_IsArray(messages)) {
-                    fprintf(stdout, "REQUEST MESSAGES:\n");
-                    int msg_count = cJSON_GetArraySize(messages);
-                    for (int i = 0; i < msg_count; i++) {
-                        cJSON *msg = cJSON_GetArrayItem(messages, i);
-                        cJSON *role = cJSON_GetObjectItem(msg, "role");
-                        cJSON *content = cJSON_GetObjectItem(msg, "content");
+            const char *timestamp = (const char *)sqlite3_column_text(stmt, 0);
+            const char *request_json = (const char *)sqlite3_column_text(stmt, 1);
+            const char *response_json = (const char *)sqlite3_column_text(stmt, 2);
+            const char *model = (const char *)sqlite3_column_text(stmt, 3);
+            const char *status = (const char *)sqlite3_column_text(stmt, 4);
+            const char *error_msg = (const char *)sqlite3_column_text(stmt, 5);
 
-                        if (role && cJSON_IsString(role)) {
-                            fprintf(stdout, "\n  [%s]\n", role->valuestring);
-                        }
+            if (!first_call) {
+                fprintf(stdout, ",\n");
+            }
+            first_call = 0;
 
-                        if (content) {
-                            if (cJSON_IsString(content)) {
-                                fprintf(stdout, "  %s\n", content->valuestring);
-                            } else if (cJSON_IsArray(content)) {
-                                int content_count = cJSON_GetArraySize(content);
-                                for (int j = 0; j < content_count; j++) {
-                                    cJSON *block = cJSON_GetArrayItem(content, j);
-                                    cJSON *type = cJSON_GetObjectItem(block, "type");
+            // Use the JSON dump function
+            dump_api_call_json(timestamp, request_json, response_json, model, status, error_msg, call_num, stdout);
+        }
 
-                                    if (type && cJSON_IsString(type)) {
-                                        if (strcmp(type->valuestring, "text") == 0) {
-                                            cJSON *text = cJSON_GetObjectItem(block, "text");
-                                            if (text && cJSON_IsString(text)) {
-                                                fprintf(stdout, "  %s\n", text->valuestring);
+        fprintf(stdout, "\n  ]");
+
+        // Check for SQLite errors
+        if (step_rc != SQLITE_DONE) {
+            fprintf(stderr, "Error: SQLite error while reading rows: %s\n", sqlite3_errmsg(db->db));
+        }
+
+        // Output empty array message as a JSON field if no calls
+        if (call_num == 0) {
+            fprintf(stdout, ",\n  \"message\": \"No API calls found for this session.\"");
+        }
+
+        fprintf(stdout, "\n}\n");
+    }
+    // For Markdown format
+    else if (strcmp(format, "markdown") == 0 || strcmp(format, "md") == 0) {
+        fprintf(stdout, "# Conversation: %s\n\n", session_id);
+
+        while ((step_rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+            call_num++;
+
+            const char *timestamp = (const char *)sqlite3_column_text(stmt, 0);
+            const char *request_json = (const char *)sqlite3_column_text(stmt, 1);
+            const char *response_json = (const char *)sqlite3_column_text(stmt, 2);
+            const char *model = (const char *)sqlite3_column_text(stmt, 3);
+            const char *status = (const char *)sqlite3_column_text(stmt, 4);
+            const char *error_msg = (const char *)sqlite3_column_text(stmt, 5);
+
+            // Use the Markdown dump function
+            dump_api_call_markdown(timestamp, request_json, response_json, model, status, error_msg, call_num, stdout);
+        }
+
+        // Check for SQLite errors
+        if (step_rc != SQLITE_DONE) {
+            fprintf(stderr, "Error: SQLite error while reading rows: %s\n", sqlite3_errmsg(db->db));
+        }
+
+        if (call_num == 0) {
+            fprintf(stdout, "*No API calls found for this session.*\n\n");
+        }
+    }
+    // Default format (original format)
+    else {
+        fprintf(stdout, "\n");
+        fprintf(stdout, "=================================================================\n");
+        fprintf(stdout, "                    CONVERSATION DUMP\n");
+        fprintf(stdout, "=================================================================\n");
+        fprintf(stdout, "Session ID: %s\n", session_id);
+        fprintf(stdout, "=================================================================\n\n");
+
+        while ((step_rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+            call_num++;
+
+            const char *timestamp = (const char *)sqlite3_column_text(stmt, 0);
+            const char *request_json = (const char *)sqlite3_column_text(stmt, 1);
+            const char *response_json = (const char *)sqlite3_column_text(stmt, 2);
+            const char *model = (const char *)sqlite3_column_text(stmt, 3);
+            const char *status = (const char *)sqlite3_column_text(stmt, 4);
+            const char *error_msg = (const char *)sqlite3_column_text(stmt, 5);
+
+            fprintf(stdout, "-----------------------------------------------------------------\n");
+            fprintf(stdout, "API Call #%d - %s\n", call_num, timestamp ? timestamp : "unknown");
+            fprintf(stdout, "Model: %s\n", model ? model : "unknown");
+            fprintf(stdout, "Status: %s\n", status ? status : "unknown");
+            fprintf(stdout, "-----------------------------------------------------------------\n\n");
+
+            // Parse and display request
+            if (request_json) {
+                cJSON *request = cJSON_Parse(request_json);
+                if (request) {
+                    cJSON *messages = cJSON_GetObjectItem(request, "messages");
+                    if (messages && cJSON_IsArray(messages)) {
+                        fprintf(stdout, "REQUEST MESSAGES:\n");
+                        int msg_count = cJSON_GetArraySize(messages);
+                        for (int i = 0; i < msg_count; i++) {
+                            cJSON *msg = cJSON_GetArrayItem(messages, i);
+                            cJSON *role = cJSON_GetObjectItem(msg, "role");
+                            cJSON *content = cJSON_GetObjectItem(msg, "content");
+
+                            if (role && cJSON_IsString(role)) {
+                                fprintf(stdout, "\n  [%s]\n", role->valuestring);
+                            }
+
+                            if (content) {
+                                if (cJSON_IsString(content)) {
+                                    fprintf(stdout, "  %s\n", content->valuestring);
+                                } else if (cJSON_IsArray(content)) {
+                                    int content_count = cJSON_GetArraySize(content);
+                                    for (int j = 0; j < content_count; j++) {
+                                        cJSON *block = cJSON_GetArrayItem(content, j);
+                                        cJSON *type = cJSON_GetObjectItem(block, "type");
+
+                                        if (type && cJSON_IsString(type)) {
+                                            if (strcmp(type->valuestring, "text") == 0) {
+                                                cJSON *text = cJSON_GetObjectItem(block, "text");
+                                                if (text && cJSON_IsString(text)) {
+                                                    fprintf(stdout, "  %s\n", text->valuestring);
+                                                }
+                                            } else if (strcmp(type->valuestring, "tool_use") == 0) {
+                                                cJSON *name = cJSON_GetObjectItem(block, "name");
+                                                cJSON *id = cJSON_GetObjectItem(block, "id");
+                                                fprintf(stdout, "  [TOOL_USE: %s", name && cJSON_IsString(name) ? name->valuestring : "unknown");
+                                                if (id && cJSON_IsString(id)) {
+                                                    fprintf(stdout, " (id: %s)", id->valuestring);
+                                                }
+                                                fprintf(stdout, "]\n");
+                                            } else if (strcmp(type->valuestring, "tool_result") == 0) {
+                                                cJSON *tool_use_id = cJSON_GetObjectItem(block, "tool_use_id");
+                                                fprintf(stdout, "  [TOOL_RESULT");
+                                                if (tool_use_id && cJSON_IsString(tool_use_id)) {
+                                                    fprintf(stdout, " for %s", tool_use_id->valuestring);
+                                                }
+                                                fprintf(stdout, "]\n");
                                             }
-                                        } else if (strcmp(type->valuestring, "tool_use") == 0) {
-                                            cJSON *name = cJSON_GetObjectItem(block, "name");
-                                            cJSON *id = cJSON_GetObjectItem(block, "id");
-                                            fprintf(stdout, "  [TOOL_USE: %s", name && cJSON_IsString(name) ? name->valuestring : "unknown");
-                                            if (id && cJSON_IsString(id)) {
-                                                fprintf(stdout, " (id: %s)", id->valuestring);
-                                            }
-                                            fprintf(stdout, "]\n");
-                                        } else if (strcmp(type->valuestring, "tool_result") == 0) {
-                                            cJSON *tool_use_id = cJSON_GetObjectItem(block, "tool_use_id");
-                                            fprintf(stdout, "  [TOOL_RESULT");
-                                            if (tool_use_id && cJSON_IsString(tool_use_id)) {
-                                                fprintf(stdout, " for %s", tool_use_id->valuestring);
-                                            }
-                                            fprintf(stdout, "]\n");
                                         }
                                     }
                                 }
                             }
                         }
                     }
+                    cJSON_Delete(request);
                 }
-                cJSON_Delete(request);
             }
+
+            // Parse and display response
+            fprintf(stdout, "\nRESPONSE:\n");
+            if (status && strcmp(status, "error") == 0 && error_msg) {
+                fprintf(stdout, "  [ERROR] %s\n", error_msg);
+            } else if (response_json) {
+                (void)dump_response_content(response_json, stdout);
+            }
+
+            fprintf(stdout, "\n");
         }
 
-        // Parse and display response
-        fprintf(stdout, "\nRESPONSE:\n");
-        if (status && strcmp(status, "error") == 0 && error_msg) {
-            fprintf(stdout, "  [ERROR] %s\n", error_msg);
-        } else if (response_json) {
-            (void)dump_response_content(response_json, stdout);
+        // Check for SQLite errors
+        if (step_rc != SQLITE_DONE) {
+            fprintf(stderr, "Error: SQLite error while reading rows: %s\n", sqlite3_errmsg(db->db));
         }
 
-        fprintf(stdout, "\n");
-    }
+        if (call_num == 0) {
+            fprintf(stdout, "No API calls found for this session.\n");
+        }
 
-    // Check for SQLite errors
-    if (step_rc != SQLITE_DONE) {
-        fprintf(stderr, "Error: SQLite error while reading rows: %s\n", sqlite3_errmsg(db->db));
+        fprintf(stdout, "=================================================================\n");
+        fprintf(stdout, "                    END OF CONVERSATION\n");
+        fprintf(stdout, "=================================================================\n\n");
     }
-
-    if (call_num == 0) {
-        fprintf(stdout, "No API calls found for this session.\n");
-    }
-
-    fprintf(stdout, "=================================================================\n");
-    fprintf(stdout, "                    END OF CONVERSATION\n");
-    fprintf(stdout, "=================================================================\n\n");
 
     sqlite3_finalize(stmt);
     persistence_close(db);
@@ -8835,6 +8953,8 @@ int main(int argc, char *argv[]) {
         printf("  %s \"PROMPT\"                       Execute single command and exit\n", argv[0]);
         printf("  %s -d, --dump-conversation [ID]  Dump conversation to console and exit\n", argv[0]);
         printf("                                      (defaults to most recent session if no ID given)\n");
+        printf("  %s -dj, --dump-json [ID]         Dump conversation as JSON\n", argv[0]);
+        printf("  %s -dm, --dump-md [ID]           Dump conversation as Markdown\n", argv[0]);
         printf("  %s -r, --resume [ID]             Resume a previous conversation session\n", argv[0]);
         printf("                                      (defaults to most recent session if no ID given)\n");
         printf("  %s -l, --list-sessions [N]       List available sessions (N = max to show)\n", argv[0]);
@@ -8843,6 +8963,7 @@ int main(int argc, char *argv[]) {
         printf("  %s -c, --zmq-client ENDPOINT    Run as ZMQ client (connect to daemon)\n", argv[0]);
 #endif
         printf("  %s -h, --help                     Show this help message\n", argv[0]);
+        printf("  %s --auto-compact               Enable automatic context compaction\n", argv[0]);
         printf("  %s --version                      Show version information\n\n", argv[0]);
         printf("Environment Variables:\n");
         printf("  API Configuration:\n");
@@ -8874,7 +8995,10 @@ int main(int argc, char *argv[]) {
         printf("                            (default: 30, 0=no timeout)\n");
         printf("    KLAWED_GREP_MAX_RESULTS Optional: Max grep results (default: 100)\n");
         printf("    KLAWED_GREP_DISPLAY_LIMIT Optional: Max grep results to display (default: 20)\n");
-        printf("    KLAWED_GLOB_DISPLAY_LIMIT Optional: Max glob results to display (default: 10)\n\n");
+        printf("    KLAWED_GLOB_DISPLAY_LIMIT Optional: Max glob results to display (default: 10)\n");
+        printf("    KLAWED_AUTO_COMPACT       Optional: Enable automatic context compaction (1=true, 0=false)\n");
+        printf("    KLAWED_COMPACT_THRESHOLD  Optional: Trigger compaction at this %% of max messages (default: 60)\n");
+        printf("    KLAWED_COMPACT_KEEP_RECENT Optional: Number of recent messages to keep (default: 20)\n\n");
 #ifdef HAVE_ZMQ
         printf("  ZMQ Socket Mode:\n");
         printf("    KLAWED_ZMQ_ENDPOINT  Optional: ZMQ endpoint (e.g., tcp://127.0.0.1:5555)\n");
@@ -8893,12 +9017,34 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    // Check for dump conversation flag
+    // Check for dump conversation flags
 #ifndef TEST_BUILD
-    if ((argc == 2 || argc == 3) && (strcmp(argv[1], "-d") == 0 || strcmp(argv[1], "--dump-conversation") == 0)) {
-        // Dump conversation mode: query database and display
-        const char *session_id = (argc == 3) ? argv[2] : NULL;  // NULL = most recent session
-        return dump_conversation_from_db(session_id);
+    if ((argc == 2 || argc == 3 || argc == 4) &&
+        (strcmp(argv[1], "-d") == 0 || strcmp(argv[1], "--dump-conversation") == 0 ||
+         strcmp(argv[1], "-dj") == 0 || strcmp(argv[1], "--dump-json") == 0 ||
+         strcmp(argv[1], "-dm") == 0 || strcmp(argv[1], "--dump-md") == 0)) {
+
+        // Determine format based on flag
+        const char *format = "default";
+        if (strcmp(argv[1], "-dj") == 0 || strcmp(argv[1], "--dump-json") == 0) {
+            format = "json";
+        } else if (strcmp(argv[1], "-dm") == 0 || strcmp(argv[1], "--dump-md") == 0) {
+            format = "markdown";
+        }
+
+        // Determine session ID (position depends on number of args)
+        const char *session_id = NULL;
+        if (argc == 3) {
+            // Format: klawed -d <session_id> or klawed -dj <session_id>
+            session_id = argv[2];
+        } else if (argc == 4) {
+            // Format: klawed -d --format json <session_id> (legacy style, not currently used)
+            // For now, treat as session_id in position 3
+            session_id = argv[3];
+        }
+        // argc == 2: use most recent session
+
+        return dump_conversation_from_db(session_id, format);
     }
 #endif
 
@@ -8961,6 +9107,26 @@ int main(int argc, char *argv[]) {
         LOG_INFO("ZMQ client mode enabled, connecting to: %s", zmq_client_endpoint);
     }
 #endif
+
+    // Check for auto-compact flag (can appear anywhere in argv)
+    int auto_compact_enabled = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--auto-compact") == 0) {
+            auto_compact_enabled = 1;
+            LOG_INFO("Auto-compact mode enabled via command line flag");
+            break;
+        }
+    }
+    // Also check environment variable
+    if (!auto_compact_enabled) {
+        const char *auto_compact_env = getenv("KLAWED_AUTO_COMPACT");
+        if (auto_compact_env && (strcmp(auto_compact_env, "1") == 0 ||
+                               strcasecmp(auto_compact_env, "true") == 0 ||
+                               strcasecmp(auto_compact_env, "yes") == 0)) {
+            auto_compact_enabled = 1;
+            LOG_INFO("Auto-compact mode enabled via environment variable");
+        }
+    }
 
     // Check for SQLite queue daemon mode
     int sqlite_daemon_mode = 0;
@@ -9207,6 +9373,17 @@ int main(int argc, char *argv[]) {
 
     // Initialize todo list
     state.todo_list = calloc(1, sizeof(TodoList));  // Use calloc to zero-initialize
+
+    // Initialize compaction configuration
+    if (auto_compact_enabled) {
+        state.compaction_config = malloc(sizeof(CompactionConfig));
+        if (state.compaction_config) {
+            compaction_init_config(state.compaction_config, auto_compact_enabled);
+            LOG_INFO("Compaction configuration initialized");
+        } else {
+            LOG_ERROR("Failed to allocate memory for compaction config");
+        }
+    }
     if (state.todo_list) {
         if (todo_init(state.todo_list) == 0) {
             LOG_DEBUG("Todo list initialized");

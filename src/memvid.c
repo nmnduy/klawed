@@ -8,6 +8,7 @@
 #include "memvid.h"
 #include "logger.h"
 
+#include <bsd/string.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -68,22 +69,6 @@ static int mkdir_p(const char *path) {
 
     return 0;
 }
-
-/*
- * External FFI declarations for libmemvid
- * These are the actual symbols from the Rust library
- */
-extern MemvidHandle* memvid_open(const char *path);
-extern void memvid_close(MemvidHandle *handle);
-extern int64_t memvid_put_memory(MemvidHandle *handle, const char *entity,
-                                  const char *slot, const char *value,
-                                  uint8_t kind, uint8_t relation);
-extern char* memvid_get_current(MemvidHandle *handle, const char *entity, const char *slot);
-extern char* memvid_search(MemvidHandle *handle, const char *query, uint32_t top_k);
-extern char* memvid_get_entity_memories(MemvidHandle *handle, const char *entity);
-extern int memvid_commit(MemvidHandle *handle);
-extern void memvid_free_string(char *s);
-extern const char* memvid_last_error(void);
 
 /*
  * Internal initialization function (called via pthread_once)

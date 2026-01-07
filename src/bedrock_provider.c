@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>  // for strcasecmp
+#include <bsd/string.h>  // for strlcpy
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>  // for usleep
