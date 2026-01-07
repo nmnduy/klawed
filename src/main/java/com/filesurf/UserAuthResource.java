@@ -42,7 +42,7 @@ public class UserAuthResource {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.APPLICATION_JSON)
     public Response login(@FormParam("email") String email,
-                          @QueryParam("redirect") String redirect) {
+                          @FormParam("redirect") String redirect) {
         LOGGER.info("Login attempt with email: " + (email != null ? email : "null"));
 
         // Validate email
