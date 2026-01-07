@@ -9,6 +9,7 @@
 #include "voice_input.h"
 #include "tui.h"
 #include "theme_explorer.h"
+#include "help_modal.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
 #include <bsd/string.h>
@@ -216,7 +217,37 @@ static int cmd_voice(ConversationState *state, const char *args) {
 static int cmd_help(ConversationState *state, const char *args) {
     (void)args;
 
-    // Build help text
+    // In TUI mode, show help modal
+    if (tui_mode_enabled && state && state->tui) {
+        // Suspend the TUI temporarily
+        if (tui_suspend(state->tui) != 0) {
+            LOG_ERROR("[CMD_HELP] Failed to suspend TUI");
+            return -1;
+        }
+
+        // Initialize and run help modal
+        HelpModalState help_state;
+        if (help_modal_init(&help_state) != 0) {
+            LOG_ERROR("[CMD_HELP] Failed to initialize help modal");
+            tui_resume(state->tui);
+            return -1;
+        }
+
+        // Get terminal dimensions
+        int max_y, max_x;
+        getmaxyx(stdscr, max_y, max_x);
+
+        // Run the modal
+        help_modal_run(&help_state, max_y, max_x);
+
+        // Clean up and resume TUI
+        help_modal_cleanup(&help_state);
+        tui_resume(state->tui);
+
+        return 0;
+    }
+
+    // Non-TUI mode: print help text to stdout
     char help_text[2048];
     size_t pos = 0;
 
@@ -248,15 +279,7 @@ static int cmd_help(ConversationState *state, const char *args) {
         strlcpy(help_text + pos, footer, sizeof(help_text) - pos);
     }
 
-    // Show help in appropriate way
-    if (tui_mode_enabled && state && state->tui) {
-        // In TUI mode: add to conversation
-        tui_add_conversation_line(state->tui, "[System]", help_text, COLOR_PAIR_STATUS);
-    } else {
-        // In non-TUI mode: print to stdout
-        print_status(help_text);
-    }
-
+    print_status(help_text);
     return 0;
 }
 
