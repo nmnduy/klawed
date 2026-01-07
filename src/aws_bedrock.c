@@ -635,8 +635,6 @@ int bedrock_authenticate(const char *profile) {
         LOG_INFO("AWS_AUTH_COMMAND=%s", custom_auth_cmd);
         LOG_DEBUG("Using custom authentication command: %s", custom_auth_cmd);
         LOG_INFO("Using custom authentication command from AWS_AUTH_COMMAND");
-        printf("\nAWS credentials not found or expired. Starting authentication...\n");
-        printf("Running custom auth command...\n\n");
 
         snprintf(command, sizeof(command), "%s", custom_auth_cmd);
     } else {
@@ -648,8 +646,6 @@ int bedrock_authenticate(const char *profile) {
 
         LOG_DEBUG("Using AWS SSO login for profile: %s", profile);
         LOG_INFO("Starting AWS SSO login for profile: %s", profile);
-        printf("\nAWS credentials not found or expired. Starting authentication...\n");
-        printf("Running: aws sso login --profile %s\n\n", profile);
 
         snprintf(command, sizeof(command), "aws sso login --profile %s", profile);
     }
@@ -660,12 +656,10 @@ int bedrock_authenticate(const char *profile) {
     if (result == 0) {
         LOG_DEBUG("Authentication command completed with exit code 0");
         LOG_INFO("Authentication completed successfully");
-        printf("\nAuthentication successful! Continuing...\n\n");
         return 0;
     } else {
         LOG_DEBUG("Authentication command failed with exit code %d", result);
         LOG_ERROR("Authentication failed with exit code: %d", result);
-        printf("\nAuthentication failed. Please check your AWS configuration.\n");
         return -1;
     }
 }
@@ -768,7 +762,6 @@ int bedrock_handle_auth_error(BedrockConfig *config, long http_status, const cha
             LOG_INFO("✓ Detected externally rotated credentials (access keys differ)");
             LOG_DEBUG("Old key (first 10 chars): %.10s...", old_access_key);
             LOG_DEBUG("New key (first 10 chars): %.10s...", fresh_creds->access_key_id);
-            printf("\nDetected new AWS credentials from external source. Using updated credentials...\n\n");
 
             // Free old credentials and use new ones
             if (config->creds) {
@@ -802,7 +795,6 @@ int bedrock_handle_auth_error(BedrockConfig *config, long http_status, const cha
     // Try to refresh AWS credentials
     LOG_DEBUG("=== INITIATING CREDENTIAL REFRESH ===");
     LOG_WARN("AWS credentials expired or invalid (HTTP %ld), attempting to re-authenticate", http_status);
-    printf("\nAWS credentials are expired or invalid. Starting re-authentication...\n");
 
     // Attempt to re-authenticate
     LOG_DEBUG("Calling bedrock_authenticate with profile: %s", profile ? profile : "default");
@@ -843,7 +835,6 @@ int bedrock_handle_auth_error(BedrockConfig *config, long http_status, const cha
     // Update config with fresh credentials
     config->creds = new_creds;
 
-    printf("Credentials refreshed successfully. Retrying request...\n\n");
     LOG_INFO("AWS credentials successfully refreshed and reloaded");
     free(old_access_key);
     LOG_DEBUG("=== BEDROCK AUTH ERROR HANDLER END (success) ===");

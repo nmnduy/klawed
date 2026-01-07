@@ -728,7 +728,6 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
     // === STEP 0: If no credentials, authenticate first ===
     if (!config->creds) {
         LOG_INFO("No credentials available on startup, authenticating...");
-        printf("\nAWS credentials not found. Starting authentication...\n");
 
         if (bedrock_authenticate(profile) == 0) {
             LOG_INFO("Authentication successful, loading credentials...");
@@ -850,7 +849,6 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
             if (externally_rotated) {
                 // === STEP 4a: External rotation detected - use new credentials ===
                 LOG_INFO("✓ Detected externally rotated credentials (another process updated tokens)");
-                printf("\nDetected new AWS credentials from external source. Using updated credentials...\n");
 
                 // Update config with externally rotated credentials
                 bedrock_creds_free(config->creds);
