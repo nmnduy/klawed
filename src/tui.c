@@ -502,6 +502,12 @@ static void init_ncurses_colors(void) {
                 rgb_to_ncurses(g_theme.tool_rgb.g),
                 rgb_to_ncurses(g_theme.tool_rgb.b));
 
+            // Search highlight color (magenta/color5 from theme)
+            init_color(22,
+                rgb_to_ncurses(g_theme.search_rgb.r),
+                rgb_to_ncurses(g_theme.search_rgb.g),
+                rgb_to_ncurses(g_theme.search_rgb.b));
+
             // Initialize color pairs with custom colors
             init_pair(NCURSES_PAIR_FOREGROUND, 16, -1);  // -1 = default background
             init_pair(NCURSES_PAIR_USER, 17, -1);
@@ -516,7 +522,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_COMPLETED, 17, -1);    // Green (same as USER)
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, 19, -1);  // Yellow (same as STATUS)
             init_pair(NCURSES_PAIR_TODO_PENDING, 18, -1);      // Cyan (same as ASSISTANT)
-            init_pair(NCURSES_PAIR_SEARCH, 21, -1);            // Magenta for search highlights
+            init_pair(NCURSES_PAIR_SEARCH, 22, -1);            // Search highlight (color5 from theme)
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -526,6 +532,7 @@ static void init_ncurses_colors(void) {
             int assistant_idx = rgb_to_256_index(g_theme.assistant_rgb);
             int status_idx = rgb_to_256_index(g_theme.status_rgb);
             int error_idx = rgb_to_256_index(g_theme.error_rgb);
+            int search_idx = rgb_to_256_index(g_theme.search_rgb);
 
             init_pair(NCURSES_PAIR_FOREGROUND, (short)fg_idx, (short)-1);
             init_pair(NCURSES_PAIR_USER, (short)user_idx, (short)-1);
@@ -539,7 +546,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_COMPLETED, (short)user_idx, (short)-1);
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, (short)status_idx, (short)-1);
             init_pair(NCURSES_PAIR_TODO_PENDING, (short)assistant_idx, (short)-1);
-            init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Magenta for search highlights
+            init_pair(NCURSES_PAIR_SEARCH, (short)search_idx, (short)-1);  // Search highlight (color5 from theme)
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -558,7 +565,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, -1);
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, -1);
             init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
-            init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Magenta for search highlights
+            init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -576,7 +583,7 @@ static void init_ncurses_colors(void) {
         init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, -1);
         init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, -1);
         init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
-        init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Magenta for search highlights
+        init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
     }
 }
 

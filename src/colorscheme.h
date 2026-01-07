@@ -29,7 +29,8 @@ typedef enum {
     COLORSCHEME_DIFF_ADD,      // Added lines in diffs (green)
     COLORSCHEME_DIFF_REMOVE,   // Removed lines in diffs (red)
     COLORSCHEME_DIFF_HEADER,   // Diff metadata/headers (cyan)
-    COLORSCHEME_DIFF_CONTEXT   // Line numbers and context (dim)
+    COLORSCHEME_DIFF_CONTEXT,  // Line numbers and context (dim)
+    COLORSCHEME_SEARCH         // Search highlight (magenta/color5)
 } ColorschemeElement;
 
 // RGB color structure (0-255 values)
@@ -52,6 +53,7 @@ typedef struct {
     RGB diff_remove_rgb; // Removed lines (red)
     RGB diff_header_rgb; // Diff metadata (cyan)
     RGB diff_context_rgb; // Line numbers/context (dim gray)
+    RGB search_rgb;      // Search highlight (magenta/color5)
 } Theme;
 
 // Global theme state (non-static so it's shared across compilation units)
@@ -169,6 +171,9 @@ static int get_colorscheme_color(ColorschemeElement element, char *buf, size_t b
         case COLORSCHEME_DIFF_CONTEXT:
             rgb = g_theme.diff_context_rgb;
             break;
+        case COLORSCHEME_SEARCH:
+            rgb = g_theme.search_rgb;
+            break;
         default:
             return -1;
     }
@@ -221,6 +226,9 @@ static int load_kitty_theme_buf(const char *buf_data, Theme *theme) {
                 theme->tool_rgb = rgb; parsed_count++;
             } else if (strcmp(key, "color1") == 0) {
                 theme->error_rgb = rgb; parsed_count++;
+            } else if (strcmp(key, "color5") == 0) {
+                // Magenta (color5) for search highlighting
+                theme->search_rgb = rgb; parsed_count++;
             } else if (strcmp(key, "color6") == 0) {
                 theme->header_rgb = rgb;
                 if (found_foreground) theme->assistant_rgb = rgb;
@@ -326,6 +334,12 @@ static int load_kitty_theme(const char *filepath, Theme *theme) {
                 parsed_count++;
                 found_color1 = 1;
                 LOG_DEBUG("[THEME]   -> Set error_rgb = RGB(%d,%d,%d)", rgb.r, rgb.g, rgb.b);
+            }
+            else if (strcmp(key, "color5") == 0) {
+                // Magenta (color5) for search highlighting
+                theme->search_rgb = rgb;
+                parsed_count++;
+                LOG_DEBUG("[THEME]   -> Set search_rgb = RGB(%d,%d,%d)", rgb.r, rgb.g, rgb.b);
             }
             else if (strcmp(key, "color6") == 0) {
                 theme->header_rgb = rgb;
