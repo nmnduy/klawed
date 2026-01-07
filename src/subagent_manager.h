@@ -4,6 +4,13 @@
  * This module provides tracking for active subagent processes spawned by
  * the Subagent tool, allowing the TUI to display their status and log output
  * in real-time during terminal redraws.
+ *
+ * Process Group Management:
+ * Subagents are spawned in their own process group (via setsid() or setpgid()).
+ * When terminating subagents, signals are sent to the entire process group
+ * using kill(-pid, sig), ensuring that all child processes spawned by the
+ * subagent (e.g., Bash commands, nested processes) are also terminated.
+ * This prevents orphan processes when klawed is killed.
  */
 
 #ifndef SUBAGENT_MANAGER_H
@@ -74,6 +81,8 @@ int subagent_manager_get_running_count(SubagentManager *manager);
 int subagent_manager_get_process(SubagentManager *manager, int index, SubagentProcess *out_process);
 
 // Terminate all running subagents (sends SIGTERM, then SIGKILL if needed)
+// Signals are sent to the entire process group (-pid) to ensure child processes
+// spawned by the subagent are also terminated.
 // manager: SubagentManager instance
 // grace_period_ms: Milliseconds to wait after SIGTERM before sending SIGKILL (default: 2000ms)
 // Returns: Number of processes terminated

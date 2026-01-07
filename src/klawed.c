@@ -2117,7 +2117,18 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     }
 
     if (pid == 0) {
-        // Child process - set environment variable to indicate this is a subagent
+        // Child process - create a new process group so we can kill all descendants
+        // setsid() creates a new session AND a new process group with the child as leader
+        // This allows us to use kill(-pid, sig) to terminate the entire subtree
+        if (setsid() == -1) {
+            // setsid() can fail if we're already a session leader, which shouldn't happen
+            // Fall back to setpgid() which just creates a new process group
+            if (setpgid(0, 0) != 0) {
+                fprintf(stderr, "Warning: Failed to create new process group: %s\n", strerror(errno));
+            }
+        }
+
+        // Set environment variable to indicate this is a subagent
         if (setenv("KLAWED_IS_SUBAGENT", "1", 1) != 0) {
             fprintf(stderr, "Warning: Failed to set KLAWED_IS_SUBAGENT environment variable: %s\n", strerror(errno));
         }
@@ -2362,14 +2373,15 @@ STATIC cJSON* tool_interrupt_subagent(cJSON *params, ConversationState *state) {
         return error;
     }
 
-    // Try to kill the process
+    // Try to kill the process group (subagent + all its children)
     int killed = 0;
-    char kill_msg[256];
+    char kill_msg[512];
 
-    // First try SIGTERM (graceful shutdown)
-    if (kill(pid, SIGTERM) == 0) {
+    // First try SIGTERM to the entire process group (graceful shutdown)
+    // Using -pid sends signal to all processes in the group led by pid
+    if (kill(-pid, SIGTERM) == 0) {
         snprintf(kill_msg, sizeof(kill_msg),
-                 "Sent SIGTERM to subagent with PID %d. Waiting 2 seconds for graceful shutdown...",
+                 "Sent SIGTERM to subagent process group %d. Waiting 2 seconds for graceful shutdown...",
                  pid);
 
         // Wait a bit for graceful shutdown
@@ -2378,11 +2390,21 @@ STATIC cJSON* tool_interrupt_subagent(cJSON *params, ConversationState *state) {
         // Check if it's still running
         int status;
         if (waitpid(pid, &status, WNOHANG) == 0) {
-            // Still running, send SIGKILL
-            if (kill(pid, SIGKILL) == 0) {
+            // Still running, send SIGKILL to entire process group
+            if (kill(-pid, SIGKILL) == 0) {
                 snprintf(kill_msg + strlen(kill_msg), sizeof(kill_msg) - strlen(kill_msg),
-                         " Process did not terminate gracefully. Sent SIGKILL.");
+                         " Process group did not terminate gracefully. Sent SIGKILL to all.");
                 killed = 1;
+            } else if (errno == ESRCH) {
+                // Process group gone, try direct kill
+                if (kill(pid, SIGKILL) == 0) {
+                    snprintf(kill_msg + strlen(kill_msg), sizeof(kill_msg) - strlen(kill_msg),
+                             " Sent SIGKILL to PID %d.", pid);
+                    killed = 1;
+                } else {
+                    snprintf(kill_msg + strlen(kill_msg), sizeof(kill_msg) - strlen(kill_msg),
+                             " Failed to send SIGKILL: %s", strerror(errno));
+                }
             } else {
                 snprintf(kill_msg + strlen(kill_msg), sizeof(kill_msg) - strlen(kill_msg),
                          " Failed to send SIGKILL: %s", strerror(errno));
@@ -2390,12 +2412,34 @@ STATIC cJSON* tool_interrupt_subagent(cJSON *params, ConversationState *state) {
         } else {
             // Process terminated
             snprintf(kill_msg + strlen(kill_msg), sizeof(kill_msg) - strlen(kill_msg),
-                     " Process terminated gracefully.");
+                     " Process group terminated gracefully.");
             killed = 1;
         }
-    } else {
-        // SIGTERM failed, maybe process doesn't exist or we don't have permission
-        if (errno == ESRCH) {
+    } else if (errno == ESRCH) {
+        // Process group doesn't exist - try direct process kill
+        if (kill(pid, SIGTERM) == 0) {
+            snprintf(kill_msg, sizeof(kill_msg),
+                     "Sent SIGTERM to subagent PID %d (no process group). Waiting 2 seconds...",
+                     pid);
+
+            sleep(2);
+
+            int status;
+            if (waitpid(pid, &status, WNOHANG) == 0) {
+                if (kill(pid, SIGKILL) == 0) {
+                    snprintf(kill_msg + strlen(kill_msg), sizeof(kill_msg) - strlen(kill_msg),
+                             " Sent SIGKILL.");
+                    killed = 1;
+                } else {
+                    snprintf(kill_msg + strlen(kill_msg), sizeof(kill_msg) - strlen(kill_msg),
+                             " Failed to send SIGKILL: %s", strerror(errno));
+                }
+            } else {
+                snprintf(kill_msg + strlen(kill_msg), sizeof(kill_msg) - strlen(kill_msg),
+                         " Process terminated gracefully.");
+                killed = 1;
+            }
+        } else if (errno == ESRCH) {
             snprintf(kill_msg, sizeof(kill_msg),
                      "No subagent process found with PID %d (may have already terminated).",
                      pid);
@@ -2408,6 +2452,14 @@ STATIC cJSON* tool_interrupt_subagent(cJSON *params, ConversationState *state) {
                      "Failed to send SIGTERM to PID %d: %s",
                      pid, strerror(errno));
         }
+    } else if (errno == EPERM) {
+        snprintf(kill_msg, sizeof(kill_msg),
+                 "Permission denied: cannot kill subagent process group %d.",
+                 pid);
+    } else {
+        snprintf(kill_msg, sizeof(kill_msg),
+                 "Failed to send SIGTERM to process group %d: %s",
+                 pid, strerror(errno));
     }
 
     // Build result
