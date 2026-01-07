@@ -62,15 +62,16 @@ public class AuthenticationFilter implements ContainerRequestFilter {
     }
 
     private boolean shouldSkipAuthentication(String path) {
-        // Skip auth endpoints
-        if (path.startsWith("auth/") || path.equals("auth")) {
+        // Skip auth endpoints (handle both with and without leading slash)
+        if (path.startsWith("auth/") || path.equals("auth") ||
+            path.startsWith("/auth/") || path.equals("/auth")) {
             return true;
         }
 
-        // Skip static assets
-        if (path.startsWith("assets/") || 
-            path.startsWith("js/") || 
-            path.startsWith("css/") ||
+        // Skip static assets (handle both with and without leading slash)
+        if (path.startsWith("assets/") || path.startsWith("/assets/") ||
+            path.startsWith("js/") || path.startsWith("/js/") ||
+            path.startsWith("css/") || path.startsWith("/css/") ||
             path.endsWith(".css") ||
             path.endsWith(".js") ||
             path.endsWith(".png") ||
@@ -84,12 +85,12 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             return true;
         }
 
-        // Skip health/metrics endpoints
-        if (path.equals("health") || 
-            path.equals("health/live") || 
-            path.equals("health/ready") ||
-            path.equals("metrics") ||
-            path.startsWith("q/")) {  // Quarkus dev endpoints
+        // Skip health/metrics endpoints (handle both with and without leading slash)
+        if (path.equals("health") || path.equals("/health") ||
+            path.equals("health/live") || path.equals("/health/live") ||
+            path.equals("health/ready") || path.equals("/health/ready") ||
+            path.equals("metrics") || path.equals("/metrics") ||
+            path.startsWith("q/") || path.startsWith("/q/")) {  // Quarkus dev endpoints
             return true;
         }
 
