@@ -4,8 +4,10 @@ export class TabManager {
         this.rootEl = rootEl;
         this.tabs = [];
         this.activeTab = null;
+        this.isDesktop = window.innerWidth >= 1024; // lg breakpoint
         
         this.init();
+        this.setupResizeHandler();
     }
     
     init() {
@@ -31,29 +33,58 @@ export class TabManager {
             
             this.tabs.push(tab);
             
-            // Set initial state
-            if (tab.isActive) {
-                this.activeTab = tab;
-                panel.classList.remove('hidden');
-                button.classList.add('tab-button--active');
-            } else {
-                panel.classList.add('hidden');
-                button.classList.remove('tab-button--active');
-            }
-            
             // Add click event
             button.addEventListener('click', () => this.switchTab(tabId));
         });
         
-        // Set default active tab if none is active
-        if (!this.activeTab && this.tabs.length > 0) {
-            this.switchTab(this.tabs[0].id);
-        }
+        // Apply initial state based on screen size
+        this.updateLayoutForScreenSize();
         
         console.log(`[tab-manager] Initialized ${this.tabs.length} tabs`);
     }
     
+    setupResizeHandler() {
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                const wasDesktop = this.isDesktop;
+                this.isDesktop = window.innerWidth >= 1024;
+                
+                if (wasDesktop !== this.isDesktop) {
+                    this.updateLayoutForScreenSize();
+                }
+            }, 150);
+        });
+    }
+    
+    updateLayoutForScreenSize() {
+        if (this.isDesktop) {
+            // Desktop: show both panels
+            this.tabs.forEach(tab => {
+                tab.panel.classList.remove('hidden');
+                // Don't change button states on desktop as tabs are hidden
+            });
+            console.log('[tab-manager] Desktop mode: showing both panels');
+        } else {
+            // Mobile: use tab switching
+            if (!this.activeTab && this.tabs.length > 0) {
+                this.switchTab(this.tabs[0].id);
+            } else if (this.activeTab) {
+                // Restore the active tab state
+                this.switchTab(this.activeTab.id);
+            }
+            console.log('[tab-manager] Mobile mode: using tab switching');
+        }
+    }
+    
     switchTab(tabId) {
+        // On desktop, don't switch tabs - both are always visible
+        if (this.isDesktop) {
+            console.log(`[tab-manager] Desktop mode: ignoring tab switch to ${tabId}`);
+            return;
+        }
+        
         const targetTab = this.tabs.find(tab => tab.id === tabId);
         
         if (!targetTab) {

@@ -355,6 +355,27 @@
   }
 }
 
+/* Desktop dual-panel optimization */
+@media (min-width: 1024px) {
+  /* On desktop, both panels are visible side-by-side */
+  #chat-panel {
+    flex: 1 1 0%;
+    min-width: 0; /* Allow flex shrinking */
+  }
+  
+  #file-panel {
+    flex: 0 0 auto;
+    width: 28rem; /* max-w-md = 28rem */
+  }
+  
+  /* Adjust for extra large screens */
+  @media (min-width: 1280px) {
+    #file-panel {
+      width: 32rem; /* max-w-lg = 32rem */
+    }
+  }
+}
+
 /* Print Styles */
 @media print {
   .no-print {

@@ -517,6 +517,7 @@ export function init(rootEl) {
                         <span><strong>Remember Preferences</strong> — Tell me to remember things and I will</span>
                     </li>
                 </ul>
+                
             </div>
             
             <div class="flex flex-col sm:flex-row gap-3">
@@ -594,17 +595,33 @@ export function init(rootEl) {
             return () => { cleanup(); tip.remove(); };
         });
 
-        // Step 3: Files tab
+        // Step 3: Files tab / File Explorer
         steps.push(() => {
-            switchToTab('file');
-            const cleanup = highlightElement(actions.filesTab);
-            const tip = createTooltip(`
-                <strong>📂 Your file workspace</strong><br/>
-                <p class="mt-1">The Files tab shows all your uploaded files and anything the AI creates for you. You can browse, download, preview, and manage your files here.</p>
-            `);
-            positionTooltip(tip, actions.filesTab, 'bottom');
-            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
-            return () => { cleanup(); tip.remove(); switchToTab('chat'); };
+            const isDesktop = window.innerWidth >= 1024;
+            
+            if (isDesktop) {
+                // On larger screens, highlight the file panel directly since it's always visible
+                const filePanel = rootEl.querySelector('#file-panel');
+                const cleanup = highlightElement(filePanel);
+                const tip = createTooltip(`
+                    <strong>📂 Your file workspace</strong><br/>
+                    <p class="mt-1">Your file explorer is always visible here. Browse, download, preview, and manage all your uploaded files and anything the AI creates for you.</p>
+                `);
+                positionTooltip(tip, filePanel, 'left');
+                tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
+                return () => { cleanup(); tip.remove(); };
+            } else {
+                // On smaller screens, show the Files tab
+                switchToTab('file');
+                const cleanup = highlightElement(actions.filesTab);
+                const tip = createTooltip(`
+                    <strong>📂 Your file workspace</strong><br/>
+                    <p class="mt-1">The Files tab shows all your uploaded files and anything the AI creates for you. You can browse, download, preview, and manage your files here.</p>
+                `);
+                positionTooltip(tip, actions.filesTab, 'bottom');
+                tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
+                return () => { cleanup(); tip.remove(); switchToTab('chat'); };
+            }
         });
 
         // Step 4: Status indicator
