@@ -7830,7 +7830,7 @@ static void interactive_mode(ConversationState *state) {
 
     // Build initial status line
     char status_msg[256];
-    snprintf(status_msg, sizeof(status_msg), "Commands: /help for list | Ctrl+D to exit");
+    snprintf(status_msg, sizeof(status_msg), "Enter `:help` for list | Ctrl+D to exit");
     tui_update_status(&tui, status_msg);
 
     // Display startup banner with mascot in the TUI
