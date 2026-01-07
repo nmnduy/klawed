@@ -57,9 +57,17 @@
                 
                 <button 
                     type="submit"
-                    class="w-full py-3 sm:py-3.5 px-4 bg-[linear-gradient(135deg,_color-mix(in_srgb,_hsl(var(--primary))_90%,_hsl(var(--accent))_10%),_color-mix(in_srgb,_hsl(var(--primary))_70%,_hsl(var(--accent))_30%))] hover:bg-[linear-gradient(135deg,_color-mix(in_srgb,_hsl(var(--primary))_95%,_hsl(var(--accent))_5%),_color-mix(in_srgb,_hsl(var(--primary))_75%,_hsl(var(--accent))_25%))] text-white font-semibold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 shadow-[0_4px_14px_0_color-mix(in_srgb,_hsl(var(--primary))_40%,_transparent)] hover:shadow-[0_6px_20px_0_color-mix(in_srgb,_hsl(var(--primary))_50%,_transparent)] hover:translate-y-[-1px] active:translate-y-0"
+                    id="submit-btn"
+                    class="w-full py-3 sm:py-3.5 px-4 bg-[linear-gradient(135deg,_color-mix(in_srgb,_hsl(var(--primary))_90%,_hsl(var(--accent))_10%),_color-mix(in_srgb,_hsl(var(--primary))_70%,_hsl(var(--accent))_30%))] hover:bg-[linear-gradient(135deg,_color-mix(in_srgb,_hsl(var(--primary))_95%,_hsl(var(--accent))_5%),_color-mix(in_srgb,_hsl(var(--primary))_75%,_hsl(var(--accent))_25%))] text-white font-semibold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 shadow-[0_4px_14px_0_color-mix(in_srgb,_hsl(var(--primary))_40%,_transparent)] hover:shadow-[0_6px_20px_0_color-mix(in_srgb,_hsl(var(--primary))_50%,_transparent)] hover:translate-y-[-1px] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    Continue with Email
+                    <span id="btn-text">Continue with Email</span>
+                    <span id="btn-spinner" class="hidden">
+                        <svg class="inline-block animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Signing in...
+                    </span>
                 </button>
             </form>
             
@@ -86,7 +94,12 @@
     </div>
     
     <script>
-        document.getElementById('login-form').addEventListener('submit', function(e) {
+        const form = document.getElementById('login-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const btnText = document.getElementById('btn-text');
+        const btnSpinner = document.getElementById('btn-spinner');
+        
+        form.addEventListener('submit', function(e) {
             const email = document.getElementById('email').value.trim();
             const errorDiv = document.getElementById('error-message');
             
@@ -104,7 +117,11 @@
                 return;
             }
             
+            // Hide error and show spinner
             errorDiv.classList.add('hidden');
+            submitBtn.disabled = true;
+            btnText.classList.add('hidden');
+            btnSpinner.classList.remove('hidden');
         });
     </script>
     {/if}

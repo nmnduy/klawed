@@ -96,7 +96,10 @@ public class UserAuthResource {
 
             // If redirect param is provided, redirect there
             if (redirect != null && !redirect.isEmpty()) {
-                return Response.seeOther(URI.create(redirect))
+                LOGGER.info("Redirecting to: " + redirect);
+                // Ensure redirect is a relative path starting with /
+                String redirectPath = redirect.startsWith("/") ? redirect : "/" + redirect;
+                return Response.seeOther(URI.create(redirectPath))
                         .cookie(userCookie)
                         .build();
             }
@@ -207,8 +210,9 @@ public class UserAuthResource {
             }
         }
 
-        // Return login page template
-        return login.data("authenticated", false).data("redirect", redirect);
+        // Return login page template with default redirect if none provided
+        String redirectPath = (redirect != null && !redirect.isEmpty()) ? redirect : "/file-chat";
+        return login.data("authenticated", false).data("redirect", redirectPath);
     }
 
     private String extractUserIdFromCookies(HttpHeaders headers) {
