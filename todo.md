@@ -3,7 +3,12 @@
 - [ ] production
     - [ ] install tools
     - [ ] python, latex, klawed binary
+- [ ] file explorer side by side with chat when we have space
 - [ ] alert
     - [ ] cpu, memory, error
-- privacy policies
+- [ ] privacy policies
 - [ ] review `src/main/java/com/filesurf/service/SessionFileCleanupService.java`
+
+---
+
+- [ ] meter for storage used, cpu
