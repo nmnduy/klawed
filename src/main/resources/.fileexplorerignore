@@ -1,0 +1,11 @@
+# Klawed agent files
+.klawed/
+klawed.pid
+klawed-*.db
+klawed-*.db-shm
+klawed-*.db-wal
+
+# Application metadata
+KLAWED.md
+SKILLS/
+.fileexplorerignore
