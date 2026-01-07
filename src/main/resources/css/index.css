@@ -366,6 +366,24 @@
   }
 }
 
+/* Login Page Animations */
+@keyframes float-animation {
+  0%, 100% { 
+    transform: translateY(0px); 
+  }
+  50% { 
+    transform: translateY(-10px); 
+  }
+}
+
+.float-animation {
+  animation: float-animation 6s ease-in-out infinite;
+}
+
+.login-card {
+  transition: all 0.3s ease;
+}
+
 /* LaTeX Syntax Highlighting */
 .latex-highlight {
   color: #24292f;
