@@ -79,6 +79,9 @@ public class SessionCleanupJobService {
     
     @Inject
     FileChatService fileChatService;
+    
+    @Inject
+    KlawedAgentManager klawedAgentManager;
 
     @PostConstruct
     void init() {
@@ -161,6 +164,21 @@ public class SessionCleanupJobService {
                     }
                     
                     Path sessionDir = sessionManager.resolveSessionPath(job.sessionId);
+                    
+                    // First, ensure any klawed agent processes are stopped
+                    try {
+                        KlawedAgentManager.AgentStatus agentStatus = klawedAgentManager.getAgentStatus(job.sessionId);
+                        if (agentStatus != null && agentStatus.isProcessAlive()) {
+                            LOGGER.info("Stopping klawed agent for session " + job.sessionId + " before cleanup");
+                            klawedAgentManager.stopAgentForSession(job.sessionId);
+                            // Give process a moment to shut down
+                            Thread.sleep(1000);
+                        }
+                    } catch (Exception e) {
+                        LOGGER.warning("Error checking/stopping agent for session " + job.sessionId + ": " + e.getMessage());
+                    }
+                    
+                    // Delete the session directory (includes SQLite files)
                     sessionManager.deleteSessionDirectory(sessionDir);
                     markDone(job.id);
                 } catch (Exception e) {
