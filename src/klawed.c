@@ -34,7 +34,6 @@
 #include <ctype.h>
 #include <strings.h>
 #include <signal.h>
-#include <stdatomic.h>
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
@@ -181,6 +180,9 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 
 // Base64 encoding/decoding for binary content
 #include "base64.h"
+
+// Arena allocator for per-thread memory management
+#include "arena.h"
 
 #ifdef TEST_BUILD
 #define main klawed_main
@@ -2750,59 +2752,36 @@ typedef struct {
     AIWorkerContext *worker_ctx;
 } ToolCallbackContext;
 
-// Forward declaration for ref-counted args context
-typedef struct ToolArgsContext ToolArgsContext;
-
+// Tool thread argument structure using per-thread arena allocation.
+// Each thread owns its arena and all data allocated from it.
+// When the thread finishes (normally or via cancellation), arena_destroy()
+// frees everything in one shot - no reference counting needed.
 typedef struct {
-    char *tool_use_id;            // duplicated tool_call id
-    const char *tool_name;        // name of the tool
-    cJSON *input;                 // arguments for tool
-    ConversationState *state;     // conversation state
-    InternalContent *result_block;   // pointer to results array slot
-    ToolExecutionTracker *tracker;  // shared tracker for completion signaling
+    char *tool_use_id;            // allocated from arena
+    char *tool_name;              // allocated from arena
+    cJSON *input;                 // NOT arena-managed (uses cJSON allocator)
+    ConversationState *state;     // shared pointer (not owned)
+    InternalContent *result_block;   // shared pointer (not owned)
+    ToolExecutionTracker *tracker;  // shared pointer (not owned)
     int notified;                  // guard against double notification
-    TUIMessageQueue *queue;        // active TUI queue for tool output
-    ToolArgsContext *args_ctx;    // ref-counted context for memory management
+    TUIMessageQueue *queue;        // shared pointer (not owned)
+    Arena *arena;                 // arena that owns this arg and its strings
 } ToolThreadArg;
 
-// Reference-counted container for tool thread arguments
-// This ensures the args array isn't freed until all threads (including detached ones)
-// have finished using it, preventing use-after-free bugs.
-struct ToolArgsContext {
-    _Atomic int ref_count;        // atomic reference count
-    int arg_count;                // number of args in array
-    ToolThreadArg args[];         // flexible array member
-};
+// Arena size for per-thread allocation
+// Holds: ToolThreadArg (~80 bytes) + tool_use_id (~50 bytes) + tool_name (~30 bytes)
+// 512 bytes provides comfortable headroom
+#define TOOL_THREAD_ARENA_SIZE 512
 
-// Create a new args context with space for n args
-static ToolArgsContext *tool_args_context_create(int n) {
-    if (n <= 0) return NULL;
-    ToolArgsContext *ctx = calloc(1, sizeof(ToolArgsContext) + (size_t)n * sizeof(ToolThreadArg));
-    if (!ctx) return NULL;
-    atomic_store(&ctx->ref_count, 1);  // Main thread holds initial ref
-    ctx->arg_count = n;
-    return ctx;
-}
-
-// Acquire a reference (call before starting each thread)
-static void tool_args_context_acquire(ToolArgsContext *ctx) {
-    if (ctx) {
-        atomic_fetch_add(&ctx->ref_count, 1);
+// Duplicate a string into an arena
+static char *arena_strdup(Arena *arena, const char *src) {
+    if (!arena || !src) return NULL;
+    size_t len = strlen(src) + 1;
+    char *dst = arena_alloc(arena, len);
+    if (dst) {
+        memcpy(dst, src, len);
     }
-}
-
-// Release a reference (call when thread finishes or is detached)
-// Returns 1 if this was the last reference (caller should NOT access ctx after)
-static int tool_args_context_release(ToolArgsContext *ctx) {
-    if (!ctx) return 0;
-    int old_count = atomic_fetch_sub(&ctx->ref_count, 1);
-    if (old_count == 1) {
-        // We were the last reference, free the context
-        LOG_DEBUG("Freeing tool args context (all references released)");
-        free(ctx);
-        return 1;
-    }
-    return 0;
+    return dst;
 }
 
 static int tool_tracker_init(ToolExecutionTracker *tracker,
@@ -2912,7 +2891,7 @@ static void tool_progress_callback(const ToolCompletion *completion, void *user_
 static void tool_thread_cleanup(void *arg) {
     ToolThreadArg *t = (ToolThreadArg *)arg;
 
-    // Free input JSON if not already freed
+    // Free input JSON if not already freed (cJSON uses its own allocator, not arena)
     if (t->input) {
         cJSON_Delete(t->input);
         t->input = NULL;
@@ -2934,7 +2913,8 @@ static void tool_thread_cleanup(void *arg) {
     // Only write cancellation result if not already completed
     if (should_write_result && t->result_block) {
         t->result_block->type = INTERNAL_TOOL_RESPONSE;
-        t->result_block->tool_id = t->tool_use_id;
+        // Must strdup because result_block outlives our arena
+        t->result_block->tool_id = strdup(t->tool_use_id);
         t->result_block->tool_name = strdup(t->tool_name);
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error", "Tool execution cancelled by user");
@@ -2944,9 +2924,9 @@ static void tool_thread_cleanup(void *arg) {
 
     tool_tracker_notify_completion(t);
 
-    // Release reference to args context - this is safe even for detached threads
-    // because the context won't be freed until ALL references are released
-    tool_args_context_release(t->args_ctx);
+    // Destroy the arena - frees the ToolThreadArg and all its arena-allocated strings
+    // This is safe even for detached threads because each thread owns its own arena
+    arena_destroy(t->arena);
 }
 
 static void *tool_thread_func(void *arg) {
@@ -2983,16 +2963,17 @@ static void *tool_thread_func(void *arg) {
     } else {
         // Regular tool response
         t->result_block->type = INTERNAL_TOOL_RESPONSE;
-        t->result_block->tool_id = t->tool_use_id;
-        t->result_block->tool_name = strdup(t->tool_name);  // Store tool name for error reporting
+        // Must strdup because result_block outlives our arena
+        t->result_block->tool_id = strdup(t->tool_use_id);
+        t->result_block->tool_name = strdup(t->tool_name);
         t->result_block->tool_output = res;
         t->result_block->is_error = cJSON_HasObjectItem(res, "error");
     }
 
     tool_tracker_notify_completion(t);
 
-    // Release reference to args context on normal exit
-    tool_args_context_release(t->args_ctx);
+    // Destroy the arena on normal exit - frees ToolThreadArg and all arena-allocated strings
+    arena_destroy(t->arena);
 
     // Pop cleanup handler (execute=0 means don't run it on normal exit)
     pthread_cleanup_pop(0);
@@ -6259,19 +6240,13 @@ static void process_response(ConversationState *state,
         }
 
         pthread_t *threads = NULL;
-        ToolArgsContext *args_ctx = NULL;
-        ToolThreadArg *args = NULL;
         if (valid_tool_calls > 0) {
             threads = calloc((size_t)valid_tool_calls, sizeof(pthread_t));
-            args_ctx = tool_args_context_create(valid_tool_calls);
-            if (!threads || !args_ctx) {
-                ui_show_error(tui, queue, "Failed to allocate tool thread structures");
-                free(threads);
-                if (args_ctx) tool_args_context_release(args_ctx);
+            if (!threads) {
+                ui_show_error(tui, queue, "Failed to allocate tool thread array");
                 free_internal_contents(results, tool_count);
                 return;
             }
-            args = args_ctx->args;  // Point to flexible array member
         }
 
         ToolCallbackContext callback_ctx = {
@@ -6304,7 +6279,6 @@ static void process_response(ConversationState *state,
                     spinner_stop(tool_spinner, "Tool execution failed to start", 0);
                 }
                 free(threads);
-                tool_args_context_release(args_ctx);
                 free_internal_contents(results, tool_count);
                 return;
             }
@@ -6422,26 +6396,63 @@ static void process_response(ConversationState *state,
                 continue;
             }
 
-            ToolThreadArg *current = &args[started_threads];
-            current->tool_use_id = strdup(tool->id);
-            current->tool_name = tool->name;
-            current->input = input;
+            // Create per-thread arena for this tool's arguments
+            Arena *thread_arena = arena_create(TOOL_THREAD_ARENA_SIZE);
+            if (!thread_arena) {
+                LOG_ERROR("Failed to create arena for tool thread %s", tool->name);
+                cJSON_Delete(input);
+                result_slot->tool_id = strdup(tool->id);
+                result_slot->tool_name = strdup(tool->name);
+                cJSON *error = cJSON_CreateObject();
+                cJSON_AddStringToObject(error, "error", "Failed to allocate memory for tool thread");
+                result_slot->tool_output = error;
+                result_slot->is_error = 1;
+                continue;
+            }
+
+            // Allocate ToolThreadArg from the arena
+            ToolThreadArg *current = arena_alloc(thread_arena, sizeof(ToolThreadArg));
+            if (!current) {
+                LOG_ERROR("Failed to allocate ToolThreadArg from arena for %s", tool->name);
+                arena_destroy(thread_arena);
+                cJSON_Delete(input);
+                result_slot->tool_id = strdup(tool->id);
+                result_slot->tool_name = strdup(tool->name);
+                cJSON *error = cJSON_CreateObject();
+                cJSON_AddStringToObject(error, "error", "Failed to allocate memory for tool thread");
+                result_slot->tool_output = error;
+                result_slot->is_error = 1;
+                continue;
+            }
+
+            // Clone strings into the arena
+            current->tool_use_id = arena_strdup(thread_arena, tool->id);
+            current->tool_name = arena_strdup(thread_arena, tool->name);
+            if (!current->tool_use_id || !current->tool_name) {
+                LOG_ERROR("Failed to clone strings into arena for %s", tool->name);
+                arena_destroy(thread_arena);
+                cJSON_Delete(input);
+                result_slot->tool_id = strdup(tool->id);
+                result_slot->tool_name = strdup(tool->name);
+                cJSON *error = cJSON_CreateObject();
+                cJSON_AddStringToObject(error, "error", "Failed to allocate memory for tool thread");
+                result_slot->tool_output = error;
+                result_slot->is_error = 1;
+                continue;
+            }
+
+            // Set up remaining fields
+            current->input = input;  // Ownership transferred
             current->state = state;
             current->result_block = result_slot;
             current->tracker = &tracker;
             current->notified = 0;
             current->queue = queue;
-            current->args_ctx = args_ctx;
-
-            // Acquire a reference for this thread before creating it
-            tool_args_context_acquire(args_ctx);
+            current->arena = thread_arena;  // Thread owns the arena
 
             int rc = pthread_create(&threads[started_threads], NULL, tool_thread_func, current);
             if (rc != 0) {
                 LOG_ERROR("Failed to create tool thread for %s (rc=%d)", tool->name, rc);
-
-                // Release the ref we acquired since thread won't run
-                tool_args_context_release(args_ctx);
 
                 // CRITICAL FIX: Cancel already-started threads on failure
                 // This prevents zombie threads if we fail mid-creation
@@ -6450,17 +6461,16 @@ static void process_response(ConversationState *state,
                 }
                 // Threads will be joined later in the cleanup path
 
+                // Clean up this thread's resources
                 cJSON_Delete(input);
-                current->input = NULL;
+                arena_destroy(thread_arena);
 
-                result_slot->tool_id = current->tool_use_id;
+                result_slot->tool_id = strdup(tool->id);
                 result_slot->tool_name = strdup(tool->name);
                 cJSON *error = cJSON_CreateObject();
                 cJSON_AddStringToObject(error, "error", "Failed to start tool thread");
                 result_slot->tool_output = error;
                 result_slot->is_error = 1;
-                tool_tracker_notify_completion(current);
-                current->tool_use_id = NULL;
                 continue;
             }
 
@@ -6551,28 +6561,18 @@ static void process_response(ConversationState *state,
                     pthread_join(threads[t], NULL);
                 }
             } else {
-                // Some threads still running - we need to handle this carefully.
-                // With ref-counted args context, detached threads will release their
-                // reference when their cleanup handler runs, ensuring memory is freed
-                // only when all threads are done.
-                LOG_WARN("Only %d/%d tool threads responded to cancellation within %dms",
+                // Some threads still running after cancellation timeout.
+                // With the arena approach, each thread owns its own memory, so
+                // detaching is safe - the thread will destroy its arena when done.
+                LOG_WARN("Only %d/%d tool threads responded to cancellation within %dms, detaching remaining",
                          final_completed, started_threads, max_wait_ms);
 
+                // We can't easily tell which threads completed vs which are still running
+                // without per-thread state. Use pthread_tryjoin_np on Linux or just
+                // detach all remaining threads. Detaching is safe because each thread
+                // owns its arena and will clean up when it eventually exits.
                 for (int t = 0; t < started_threads; t++) {
-                    // Check if this specific thread has notified (completed)
-                    // This is safe to read without lock because notified is only
-                    // set to 1 (never back to 0) and we're checking after cancellation
-                    if (args[t].notified) {
-                        // Thread completed - safe to join
-                        pthread_join(threads[t], NULL);
-                    } else {
-                        // Thread still running - detach it
-                        // The thread's cleanup handler will release its reference to
-                        // args_ctx, and the args will be freed when all refs are gone.
-                        pthread_detach(threads[t]);
-                        LOG_WARN("Detached tool thread %d (%s) - will be cleaned up when thread exits",
-                                 t, args[t].tool_name ? args[t].tool_name : "unknown");
-                    }
+                    pthread_detach(threads[t]);
                 }
             }
         } else {
@@ -6650,11 +6650,8 @@ static void process_response(ConversationState *state,
         }
 
         free(threads);
-        // Release main thread's reference to args context.
-        // If all threads have completed (joined or cleanup handlers ran), this will
-        // free the args. If some threads are still detached and running, the args
-        // will be freed when the last thread's cleanup handler releases its ref.
-        tool_args_context_release(args_ctx);
+        // With the arena approach, each thread owns and destroys its own arena.
+        // No shared args context to release - memory management is fully distributed.
 
         // Extract TodoWrite information BEFORE transferring ownership to add_tool_results
         int todo_write_executed = check_todo_write_executed(results, tool_count);
