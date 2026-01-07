@@ -23,6 +23,9 @@ ExecStart=/usr/bin/java \
 Restart=always
 RestartSec=10
 
+# Environment variables
+Environment="KLAWED_AUTO_COMPACT=1"
+
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
