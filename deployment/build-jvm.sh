@@ -8,6 +8,10 @@ echo ""
 echo "Building optimized JVM package (faster than native, but uses more memory)"
 echo ""
 
+# Set JAVA_HOME for Maven
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export PATH=$JAVA_HOME/bin:$PATH
+
 echo "Step 1: Clean previous builds..."
 mvn clean
 
