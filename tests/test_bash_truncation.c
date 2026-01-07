@@ -222,9 +222,12 @@ static void test_truncation_with_stderr(void) {
     setup_environment();
 
     // Create a command that generates both stdout and stderr exceeding the limit
+    // Use 7000 bytes each so combined output (~14000) exceeds limit but both prefixes
+    // are visible in the first ~12228 bytes before truncation
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "command",
-        "printf 'stdout: %*s' 8000 | tr ' ' 'x' && printf 'stderr: %*s' 8000 | tr ' ' 'y' >&2");
+        "printf 'stdout:' && printf '%*s' 7000 | tr ' ' 'x' && "
+        "printf 'stderr:' >&2 && printf '%*s' 7000 | tr ' ' 'y' >&2");
 
     cJSON *result = tool_bash(params, NULL);
 
