@@ -1,1 +1,8 @@
+- [ ] better tour
+- [ ] context size limit. it should be able to continue indefinitely
+- [ ] production
+    - [ ] install tools
+    - [ ] python, latex, klawed binary
+- [ ] alert
+    - [ ] cpu, memory, error
 - [ ] review `src/main/java/com/filesurf/service/SessionFileCleanupService.java`
