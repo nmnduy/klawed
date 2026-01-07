@@ -254,6 +254,13 @@ public class KlawedAgentManager {
     }
     
     /**
+     * Check if an agent exists for a session
+     */
+    public boolean hasAgentForSession(String sessionId) {
+        return agents.containsKey(sessionId);
+    }
+    
+    /**
      * Stop and cleanup agent for a session
      */
     public void stopAgentForSession(String sessionId) {
