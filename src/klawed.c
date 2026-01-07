@@ -34,6 +34,7 @@
 #include <ctype.h>
 #include <strings.h>
 #include <signal.h>
+#include <stdatomic.h>
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
@@ -2749,6 +2750,9 @@ typedef struct {
     AIWorkerContext *worker_ctx;
 } ToolCallbackContext;
 
+// Forward declaration for ref-counted args context
+typedef struct ToolArgsContext ToolArgsContext;
+
 typedef struct {
     char *tool_use_id;            // duplicated tool_call id
     const char *tool_name;        // name of the tool
@@ -2758,7 +2762,48 @@ typedef struct {
     ToolExecutionTracker *tracker;  // shared tracker for completion signaling
     int notified;                  // guard against double notification
     TUIMessageQueue *queue;        // active TUI queue for tool output
+    ToolArgsContext *args_ctx;    // ref-counted context for memory management
 } ToolThreadArg;
+
+// Reference-counted container for tool thread arguments
+// This ensures the args array isn't freed until all threads (including detached ones)
+// have finished using it, preventing use-after-free bugs.
+struct ToolArgsContext {
+    _Atomic int ref_count;        // atomic reference count
+    int arg_count;                // number of args in array
+    ToolThreadArg args[];         // flexible array member
+};
+
+// Create a new args context with space for n args
+static ToolArgsContext *tool_args_context_create(int n) {
+    if (n <= 0) return NULL;
+    ToolArgsContext *ctx = calloc(1, sizeof(ToolArgsContext) + (size_t)n * sizeof(ToolThreadArg));
+    if (!ctx) return NULL;
+    atomic_store(&ctx->ref_count, 1);  // Main thread holds initial ref
+    ctx->arg_count = n;
+    return ctx;
+}
+
+// Acquire a reference (call before starting each thread)
+static void tool_args_context_acquire(ToolArgsContext *ctx) {
+    if (ctx) {
+        atomic_fetch_add(&ctx->ref_count, 1);
+    }
+}
+
+// Release a reference (call when thread finishes or is detached)
+// Returns 1 if this was the last reference (caller should NOT access ctx after)
+static int tool_args_context_release(ToolArgsContext *ctx) {
+    if (!ctx) return 0;
+    int old_count = atomic_fetch_sub(&ctx->ref_count, 1);
+    if (old_count == 1) {
+        // We were the last reference, free the context
+        LOG_DEBUG("Freeing tool args context (all references released)");
+        free(ctx);
+        return 1;
+    }
+    return 0;
+}
 
 static int tool_tracker_init(ToolExecutionTracker *tracker,
                              int total,
@@ -2898,6 +2943,10 @@ static void tool_thread_cleanup(void *arg) {
     }
 
     tool_tracker_notify_completion(t);
+
+    // Release reference to args context - this is safe even for detached threads
+    // because the context won't be freed until ALL references are released
+    tool_args_context_release(t->args_ctx);
 }
 
 static void *tool_thread_func(void *arg) {
@@ -2941,6 +2990,9 @@ static void *tool_thread_func(void *arg) {
     }
 
     tool_tracker_notify_completion(t);
+
+    // Release reference to args context on normal exit
+    tool_args_context_release(t->args_ctx);
 
     // Pop cleanup handler (execute=0 means don't run it on normal exit)
     pthread_cleanup_pop(0);
@@ -6207,17 +6259,19 @@ static void process_response(ConversationState *state,
         }
 
         pthread_t *threads = NULL;
+        ToolArgsContext *args_ctx = NULL;
         ToolThreadArg *args = NULL;
         if (valid_tool_calls > 0) {
             threads = calloc((size_t)valid_tool_calls, sizeof(pthread_t));
-            args = calloc((size_t)valid_tool_calls, sizeof(ToolThreadArg));
-            if (!threads || !args) {
+            args_ctx = tool_args_context_create(valid_tool_calls);
+            if (!threads || !args_ctx) {
                 ui_show_error(tui, queue, "Failed to allocate tool thread structures");
                 free(threads);
-                free(args);
+                if (args_ctx) tool_args_context_release(args_ctx);
                 free_internal_contents(results, tool_count);
                 return;
             }
+            args = args_ctx->args;  // Point to flexible array member
         }
 
         ToolCallbackContext callback_ctx = {
@@ -6250,7 +6304,7 @@ static void process_response(ConversationState *state,
                     spinner_stop(tool_spinner, "Tool execution failed to start", 0);
                 }
                 free(threads);
-                free(args);
+                tool_args_context_release(args_ctx);
                 free_internal_contents(results, tool_count);
                 return;
             }
@@ -6377,10 +6431,17 @@ static void process_response(ConversationState *state,
             current->tracker = &tracker;
             current->notified = 0;
             current->queue = queue;
+            current->args_ctx = args_ctx;
+
+            // Acquire a reference for this thread before creating it
+            tool_args_context_acquire(args_ctx);
 
             int rc = pthread_create(&threads[started_threads], NULL, tool_thread_func, current);
             if (rc != 0) {
                 LOG_ERROR("Failed to create tool thread for %s (rc=%d)", tool->name, rc);
+
+                // Release the ref we acquired since thread won't run
+                tool_args_context_release(args_ctx);
 
                 // CRITICAL FIX: Cancel already-started threads on failure
                 // This prevents zombie threads if we fail mid-creation
@@ -6458,7 +6519,6 @@ static void process_response(ConversationState *state,
 
         // Join or detach threads based on whether we were interrupted
         // If interrupted, use timed waiting to prevent deadlock from stuck threads
-        int threads_detached = 0;  // Track if any threads were detached (can't free args if so)
         if (interrupted) {
             // When interrupted, threads may be stuck in blocking calls that don't
             // respond to pthread_cancel. We wait for a short period for threads to
@@ -6491,12 +6551,10 @@ static void process_response(ConversationState *state,
                     pthread_join(threads[t], NULL);
                 }
             } else {
-                // Some threads still running - we need to handle this carefully
-                // to avoid use-after-free when cleanup handlers access thread args.
-                //
-                // For threads that completed (notified), we can safely join them.
-                // For threads that haven't completed, we detach them BUT we must
-                // NOT free the args array because they still reference it.
+                // Some threads still running - we need to handle this carefully.
+                // With ref-counted args context, detached threads will release their
+                // reference when their cleanup handler runs, ensuring memory is freed
+                // only when all threads are done.
                 LOG_WARN("Only %d/%d tool threads responded to cancellation within %dms",
                          final_completed, started_threads, max_wait_ms);
 
@@ -6509,12 +6567,10 @@ static void process_response(ConversationState *state,
                         pthread_join(threads[t], NULL);
                     } else {
                         // Thread still running - detach it
-                        // WARNING: This thread still references args[t], so we cannot
-                        // free the args array. This is a memory leak, but it's safer
-                        // than use-after-free which can cause crashes and deadlocks.
+                        // The thread's cleanup handler will release its reference to
+                        // args_ctx, and the args will be freed when all refs are gone.
                         pthread_detach(threads[t]);
-                        threads_detached = 1;
-                        LOG_WARN("Detached tool thread %d (%s) - args will be leaked to prevent use-after-free",
+                        LOG_WARN("Detached tool thread %d (%s) - will be cleaned up when thread exits",
                                  t, args[t].tool_name ? args[t].tool_name : "unknown");
                     }
                 }
@@ -6594,16 +6650,11 @@ static void process_response(ConversationState *state,
         }
 
         free(threads);
-        // CRITICAL: Only free args if no threads were detached.
-        // Detached threads still reference their args, so freeing would cause
-        // use-after-free when their cleanup handlers run. This is a deliberate
-        // memory leak to prevent crashes and deadlocks.
-        if (!threads_detached) {
-            free(args);
-        } else {
-            LOG_WARN("Leaking tool thread args (%d entries) to prevent use-after-free from detached threads",
-                     started_threads);
-        }
+        // Release main thread's reference to args context.
+        // If all threads have completed (joined or cleanup handlers ran), this will
+        // free the args. If some threads are still detached and running, the args
+        // will be freed when the last thread's cleanup handler releases its ref.
+        tool_args_context_release(args_ctx);
 
         // Extract TodoWrite information BEFORE transferring ownership to add_tool_results
         int todo_write_executed = check_todo_write_executed(results, tool_count);
