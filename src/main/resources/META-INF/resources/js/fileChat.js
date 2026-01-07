@@ -280,13 +280,13 @@ export function init(rootEl) {
         wrapper.setAttribute('data-typing-indicator', '');
 
         const bubble = document.createElement('div');
-        bubble.className = 'w-full max-w-[90%] sm:max-w-2xl px-4 sm:px-5 py-3 rounded-2xl border shadow-sm bg-[color-mix(in_srgb,_hsl(var(--muted))_90%,_hsl(var(--primary))_10%)] border-[color-mix(in_srgb,_hsl(var(--primary))_16%,_hsl(var(--border))_84%)] border-l-[color-mix(in_srgb,_hsl(var(--primary))_24%,_hsl(var(--border))_76%)]';
+        bubble.className = 'inline-flex items-center px-4 py-3 rounded-2xl border shadow-sm bg-[color-mix(in_srgb,_hsl(var(--muted))_90%,_hsl(var(--primary))_10%)] border-[color-mix(in_srgb,_hsl(var(--primary))_16%,_hsl(var(--border))_84%)] border-l-[color-mix(in_srgb,_hsl(var(--primary))_24%,_hsl(var(--border))_76%)] ml-4';
 
         const dots = document.createElement('div');
-        dots.className = 'flex gap-1.5';
+        dots.className = 'flex gap-1.5 px-1';
         for (let i = 0; i < 3; i++) {
             const dot = document.createElement('div');
-            dot.className = 'w-2 h-2 rounded-full bg-[color-mix(in_srgb,_hsl(var(--primary))_30%,_hsl(var(--muted))_70%)]';
+            dot.className = 'w-2.5 h-2.5 rounded-full bg-[color-mix(in_srgb,_hsl(var(--primary))_40%,_hsl(var(--muted))_60%)]';
             // Add animation delay for each dot
             dot.style.animation = `bounce 1.4s infinite ${i * 0.16}s`;
             dots.appendChild(dot);
