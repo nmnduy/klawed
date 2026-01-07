@@ -60,24 +60,33 @@ export function init(rootEl) {
         // Listen for tab switches to load file explorer when Files tab is activated
         rootEl.addEventListener('tab-switched', (event) => {
             const { tabId } = event.detail;
+            console.log('[file-chat] Tab switched to:', tabId);
             if (tabId === 'file') {
+                console.log('[file-chat] Files tab activated, sessionId:', sessionId);
                 // Ensure file explorer is initialized
                 ensureFileExplorer();
                 // Set session if available
                 if (sessionId && fileExplorer && typeof fileExplorer.setSession === 'function') {
+                    console.log('[file-chat] Setting file explorer session');
                     fileExplorer.setSession(sessionId, null);
+                } else {
+                    console.warn('[file-chat] Cannot set session - sessionId:', sessionId, 'fileExplorer:', !!fileExplorer);
                 }
                 // Load the file explorer when Files tab is activated
                 if (fileExplorer) {
+                    console.log('[file-chat] Loading file explorer directory');
                     fileExplorer.loadDirectory();
                     // Start auto-refresh for file explorer
                     if (typeof fileExplorer.startAutoRefresh === 'function') {
                         fileExplorer.startAutoRefresh();
                     }
+                } else {
+                    console.error('[file-chat] fileExplorer is null, cannot load directory');
                 }
 
             } else if (fileExplorer && typeof fileExplorer.stopAutoRefresh === 'function') {
                 // Stop auto-refresh when switching away from Files tab
+                console.log('[file-chat] Stopping auto-refresh for Files tab');
                 fileExplorer.stopAutoRefresh();
             }
         });
@@ -88,6 +97,11 @@ export function init(rootEl) {
     // NOTE: Don't load file explorer on page load - wait for WebSocket connection
     // to establish and set sessionId first. This is handled in setFileExplorerSession()
     // which is called after connectWebSocket() completes.
+    console.log('[file-chat] Page load - checking active tab');
+    if (tabManager) {
+        const activeTab = tabManager.getActiveTab();
+        console.log('[file-chat] Active tab on page load:', activeTab ? activeTab.id : 'none');
+    }
 
     let ws = null;
     let isConnected = false;
@@ -686,29 +700,40 @@ export function init(rootEl) {
     }
 
     function ensureFileExplorer() {
+        console.log('[file-chat] ensureFileExplorer called, fileExplorer exists:', !!fileExplorer);
         if (fileExplorer) return;
         if (typeof window !== 'undefined' && window.FileExplorer) {
+            console.log('[file-chat] Creating new FileExplorer instance');
             fileExplorer = new window.FileExplorer();
+        } else {
+            console.error('[file-chat] window.FileExplorer not available!');
         }
     }
 
     function setFileExplorerSession() {
+        console.log('[file-chat] setFileExplorerSession called, sessionId:', sessionId);
         if (!sessionId) return;
         ensureFileExplorer();
+        console.log('[file-chat] fileExplorer instance:', fileExplorer ? 'exists' : 'null');
         // Rely on server-managed session; no need to read cookie in JS.
         const userId = null;
         if (fileExplorer && typeof fileExplorer.setSession === 'function') {
             fileExplorer.setSession(sessionId, userId);
+            console.log('[file-chat] fileExplorer session set with sessionId:', sessionId);
             
             // If Files tab is currently active, load the directory and start auto-refresh
             if (tabManager) {
                 const activeTab = tabManager.getActiveTab();
+                console.log('[file-chat] Current active tab:', activeTab ? activeTab.id : 'none');
                 if (activeTab && activeTab.id === 'file') {
+                    console.log('[file-chat] Files tab is active, loading directory...');
                     fileExplorer.loadDirectory();
                     // Start auto-refresh for file explorer
                     if (typeof fileExplorer.startAutoRefresh === 'function') {
                         fileExplorer.startAutoRefresh();
                     }
+                } else {
+                    console.log('[file-chat] Files tab is NOT active, skipping directory load');
                 }
             }
         }
@@ -717,7 +742,9 @@ export function init(rootEl) {
 
 
     async function connectWebSocket() {
+        console.log('[file-chat] connectWebSocket called');
         try {
+            console.log('[file-chat] Fetching session from /session/generate');
             const response = await fetch('/session/generate');
             if (!response.ok) {
                 // Check if it's an authentication error
@@ -729,9 +756,11 @@ export function init(rootEl) {
             }
             const sessionData = await response.json();
             sessionId = sessionData.sessionId;
+            console.log('[file-chat] Session generated:', sessionId);
 
             // Server sets HttpOnly cookie; no client write needed.
 
+            console.log('[file-chat] Calling setFileExplorerSession');
             setFileExplorerSession();
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
