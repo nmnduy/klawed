@@ -129,6 +129,7 @@ class FileExplorer {
 
     // Set session ID and user ID
     setSession(sessionId, userId) {
+        console.log('[file-explorer] setSession called, sessionId:', sessionId, 'userId:', userId);
         this.sessionId = sessionId;
         this.userId = userId;
     }
@@ -341,19 +342,26 @@ class FileExplorer {
 
     // Fetch directory listing
     async fetchDirectory(path) {
+        console.log('[file-explorer] fetchDirectory called, path:', path, 'sessionId:', this.sessionId);
         if (!this.sessionId) {
+            console.error('[file-explorer] No sessionId available, showing error');
             this.showError('Connecting to server... Please wait or try refreshing.');
             return null;
         }
 
         try {
-            const response = await fetch(`/file-chat/explorer/list?path=${encodeURIComponent(path)}`, {
+            const url = `/file-chat/explorer/list?path=${encodeURIComponent(path)}`;
+            console.log('[file-explorer] Fetching directory:', url);
+            const response = await fetch(url, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
             });
 
+            console.log('[file-explorer] Response status:', response.status);
+
             if (isAuthRequired(response)) {
+                console.warn('[file-explorer] Auth required, redirecting');
                 await handleAuthError(response);
                 return null;
             }
@@ -362,7 +370,9 @@ class FileExplorer {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            return await response.json();
+            const data = await response.json();
+            console.log('[file-explorer] Directory data received:', data);
+            return data;
         } catch (error) {
             console.error('Failed to fetch directory:', error);
             this.showError(error.message);
@@ -518,6 +528,7 @@ class FileExplorer {
 
     // Load directory
     async loadDirectory(path = '/') {
+        console.log('[file-explorer] loadDirectory called, path:', path, 'sessionId:', this.sessionId);
         this.currentPath = path;
         this.fileExplorerPath.textContent = path || '/';
         this.renderBreadcrumbs(path);
@@ -525,9 +536,13 @@ class FileExplorer {
         this.showLoading();
 
         const data = await this.fetchDirectory(path);
+        console.log('[file-explorer] fetchDirectory returned:', data);
         if (data && data.success) {
             this.rawItems = data.items || [];
+            console.log('[file-explorer] Loading', this.rawItems.length, 'items');
             this.applyFiltersAndSort();
+        } else {
+            console.error('[file-explorer] Failed to fetch directory or no success flag');
         }
     }
 
