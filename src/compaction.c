@@ -1,6 +1,7 @@
 #include "klawed_internal.h"
 #include "compaction.h"
 #include "tool_utils.h"
+#include "logger.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -122,6 +123,7 @@ static int compaction_store_message(const InternalMessage *msg, int msg_index, c
         case MSG_USER: role_str = "user"; break;
         case MSG_ASSISTANT: role_str = "assistant"; break;
         case MSG_SYSTEM: role_str = "system"; break;
+        default: role_str = "unknown"; break;
     }
 
     // Store as simple text: "role: content"
@@ -133,10 +135,17 @@ static int compaction_store_message(const InternalMessage *msg, int msg_index, c
     snprintf(value, value_len, "%s: %s", role_str, text);
 
     // Store in memvid
-    int result = memvid_store(entity, slot, value, "event");
+    MemvidHandle *handle = memvid_get_global();
+    if (!handle) {
+        free(value);
+        return -1;
+    }
+
+    int64_t card_id = memvid_put_memory(handle, entity, slot, value,
+                                        MEMVID_KIND_EVENT, MEMVID_RELATION_SETS);
     free(value);
 
-    return result;
+    return (card_id >= 0) ? 0 : -1;
 }
 #endif /* HAVE_MEMVID */
 
