@@ -363,6 +363,7 @@ int subagent_manager_terminate_all(SubagentManager *manager, int grace_period_ms
     pid_t *running_pids = NULL;
 
     // First pass: Send SIGTERM to all running subagents
+    // Use negative PID to send signal to entire process group (subagent + its children)
     for (int i = 0; i < manager->process_count; i++) {
         SubagentProcess *proc = manager->processes[i];
         if (!proc || proc->completed) {
@@ -373,16 +374,26 @@ int subagent_manager_terminate_all(SubagentManager *manager, int grace_period_ms
         int status;
         pid_t result = waitpid(proc->pid, &status, WNOHANG);
         if (result == 0) {
-            // Still running - send SIGTERM
-            if (kill(proc->pid, SIGTERM) == 0) {
-                LOG_INFO("SubagentManager: Sent SIGTERM to subagent PID %d", proc->pid);
+            // Still running - send SIGTERM to the entire process group
+            // Using -pid sends to all processes in the group led by pid
+            if (kill(-proc->pid, SIGTERM) == 0) {
+                LOG_INFO("SubagentManager: Sent SIGTERM to subagent process group %d", proc->pid);
                 still_running_count++;
             } else if (errno == ESRCH) {
-                // Process doesn't exist
-                proc->completed = 1;
-                proc->exit_code = -999;
+                // Process group doesn't exist - try direct process kill as fallback
+                if (kill(proc->pid, SIGTERM) == 0) {
+                    LOG_INFO("SubagentManager: Sent SIGTERM to subagent PID %d (no process group)", proc->pid);
+                    still_running_count++;
+                } else if (errno == ESRCH) {
+                    // Process doesn't exist
+                    proc->completed = 1;
+                    proc->exit_code = -999;
+                } else {
+                    LOG_WARN("SubagentManager: Failed to send SIGTERM to PID %d: %s",
+                             proc->pid, strerror(errno));
+                }
             } else {
-                LOG_WARN("SubagentManager: Failed to send SIGTERM to PID %d: %s",
+                LOG_WARN("SubagentManager: Failed to send SIGTERM to process group %d: %s",
                          proc->pid, strerror(errno));
             }
         } else {
@@ -419,6 +430,7 @@ int subagent_manager_terminate_all(SubagentManager *manager, int grace_period_ms
         int running_idx = 0;
 
         // Second pass: Check status and send SIGKILL if needed
+        // Use negative PID to send to entire process group
         for (int i = 0; i < manager->process_count; i++) {
             SubagentProcess *proc = manager->processes[i];
             if (!proc || proc->completed) {
@@ -429,18 +441,27 @@ int subagent_manager_terminate_all(SubagentManager *manager, int grace_period_ms
             pid_t result = waitpid(proc->pid, &status, WNOHANG);
 
             if (result == 0) {
-                // Still running after grace period - force kill
+                // Still running after grace period - force kill entire process group
                 running_pids[running_idx++] = proc->pid;
-                if (kill(proc->pid, SIGKILL) == 0) {
-                    LOG_WARN("SubagentManager: Sent SIGKILL to stubborn subagent PID %d", proc->pid);
+                if (kill(-proc->pid, SIGKILL) == 0) {
+                    LOG_WARN("SubagentManager: Sent SIGKILL to stubborn subagent process group %d", proc->pid);
                     terminated_count++;
                 } else if (errno == ESRCH) {
-                    // Race condition: process terminated between checks
-                    proc->completed = 1;
-                    proc->exit_code = -999;
-                    terminated_count++;
+                    // Process group doesn't exist - try direct kill as fallback
+                    if (kill(proc->pid, SIGKILL) == 0) {
+                        LOG_WARN("SubagentManager: Sent SIGKILL to stubborn subagent PID %d (no process group)", proc->pid);
+                        terminated_count++;
+                    } else if (errno == ESRCH) {
+                        // Race condition: process terminated between checks
+                        proc->completed = 1;
+                        proc->exit_code = -999;
+                        terminated_count++;
+                    } else {
+                        LOG_ERROR("SubagentManager: Failed to send SIGKILL to PID %d: %s",
+                                 proc->pid, strerror(errno));
+                    }
                 } else {
-                    LOG_ERROR("SubagentManager: Failed to send SIGKILL to PID %d: %s",
+                    LOG_ERROR("SubagentManager: Failed to send SIGKILL to process group %d: %s",
                              proc->pid, strerror(errno));
                 }
             } else if (result == proc->pid) {
