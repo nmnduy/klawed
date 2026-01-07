@@ -520,7 +520,7 @@ void arena_init(Arena *arena, void *region, size_t size)
     {
         return;
     }
-    
+
     if ((region == NULL) ^ (size == 0))
     {
         return;

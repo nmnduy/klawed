@@ -27,7 +27,7 @@
  */
 static char* arena_strdup(Arena *arena, const char *str) {
     if (!str) return NULL;
-    
+
     if (arena) {
         size_t len = strlen(str) + 1;
         char *copy = arena_alloc(arena, len);
@@ -427,7 +427,7 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
 
         // Allocate for tool calls
         if (tool_call_count > 0) {
-            api_response->tools = arena_alloc(api_response->arena, 
+            api_response->tools = arena_alloc(api_response->arena,
                                              (size_t)tool_call_count * sizeof(ToolCall));
             if (!api_response->tools) {
                 LOG_ERROR("Failed to allocate tool calls from arena");
@@ -473,7 +473,7 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
                             if (needed > text_capacity) {
                                 size_t new_cap = text_capacity ? text_capacity * 2 : 1024;
                                 if (new_cap < needed) new_cap = needed;
-                                
+
                                 // Allocate new buffer from arena
                                 char *new_buf = arena_alloc(api_response->arena, new_cap);
                                 if (!new_buf) {
@@ -481,7 +481,7 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
                                     api_response_free(api_response);
                                     return NULL;
                                 }
-                                
+
                                 // Copy existing content if any
                                 if (combined_text && text_length > 0) {
                                     memcpy(new_buf, combined_text, text_length);
@@ -810,6 +810,55 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
                         "(3) avoiding context limit issues. Note: The subagent has full tool access "
                         "including Write, Edit, and Bash.",
                         subagent_params);
+
+            // CheckSubagentProgress tool
+            cJSON *check_progress_params = cJSON_CreateObject();
+            cJSON_AddStringToObject(check_progress_params, "type", "object");
+            cJSON *check_progress_props = cJSON_CreateObject();
+            cJSON *check_pid = cJSON_CreateObject();
+            cJSON_AddStringToObject(check_pid, "type", "integer");
+            cJSON_AddStringToObject(check_pid, "description",
+                "Process ID of the subagent (from Subagent tool response)");
+            cJSON_AddItemToObject(check_progress_props, "pid", check_pid);
+            cJSON *check_log = cJSON_CreateObject();
+            cJSON_AddStringToObject(check_log, "type", "string");
+            cJSON_AddStringToObject(check_log, "description",
+                "Path to subagent log file (from Subagent tool response)");
+            cJSON_AddItemToObject(check_progress_props, "log_file", check_log);
+            cJSON *check_tail = cJSON_CreateObject();
+            cJSON_AddStringToObject(check_tail, "type", "integer");
+            cJSON_AddStringToObject(check_tail, "description",
+                "Optional: Number of lines to read from end of log (default: 50)");
+            cJSON_AddItemToObject(check_progress_props, "tail_lines", check_tail);
+            cJSON_AddItemToObject(check_progress_params, "properties", check_progress_props);
+
+            cJSON *check_progress_tool;
+            CREATE_TOOL(check_progress_tool, "CheckSubagentProgress",
+                        "Checks the progress of a running subagent by reading its log file. "
+                        "Returns whether the subagent is still running and the tail of its output. "
+                        "Use this to monitor long-running subagent tasks.",
+                        check_progress_params);
+
+            // InterruptSubagent tool
+            cJSON *interrupt_params = cJSON_CreateObject();
+            cJSON_AddStringToObject(interrupt_params, "type", "object");
+            cJSON *interrupt_props = cJSON_CreateObject();
+            cJSON *interrupt_pid = cJSON_CreateObject();
+            cJSON_AddStringToObject(interrupt_pid, "type", "integer");
+            cJSON_AddStringToObject(interrupt_pid, "description",
+                "Process ID of the subagent to interrupt (from Subagent tool response)");
+            cJSON_AddItemToObject(interrupt_props, "pid", interrupt_pid);
+            cJSON_AddItemToObject(interrupt_params, "properties", interrupt_props);
+            cJSON *interrupt_req = cJSON_CreateArray();
+            cJSON_AddItemToArray(interrupt_req, cJSON_CreateString("pid"));
+            cJSON_AddItemToObject(interrupt_params, "required", interrupt_req);
+
+            cJSON *interrupt_tool;
+            CREATE_TOOL(interrupt_tool, "InterruptSubagent",
+                        "Interrupts and stops a running subagent. Use this to cancel a subagent "
+                        "that is stuck, taking too long, or no longer needed. "
+                        "You can interrupt a subagent at any time.",
+                        interrupt_params);
         }
 
         // Write tool

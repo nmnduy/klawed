@@ -90,34 +90,34 @@ static CompletionResult* completion_result_create_with_arena(size_t arena_size) 
     if (!acr) {
         return NULL;
     }
-    
+
     // Create arena for string allocations
     Arena *arena = arena_create(arena_size);
     if (!arena) {
         free(acr);
         return NULL;
     }
-    
+
     // Initialize structure
     acr->magic = COMPLETION_ARENA_MAGIC;
     acr->arena = arena;
     acr->result.options = NULL;
     acr->result.count = 0;
     acr->result.selected = 0;
-    
+
     return &acr->result;
 }
 
 // Helper to check if CompletionResult is arena-allocated
 static int completion_result_is_arena_allocated(CompletionResult *result) {
     if (!result) return 0;
-    
+
     // Check if pointer is at least sizeof(uint32_t) + sizeof(Arena*) before result
     // Use memcpy to avoid alignment issues
     uint32_t magic;
     char *ptr = (char*)result - offsetof(ArenaCompletionResult, result);
     memcpy(&magic, ptr, sizeof(uint32_t));
-    
+
     // Verify magic number
     return (magic == COMPLETION_ARENA_MAGIC);
 }
@@ -127,7 +127,7 @@ static Arena* completion_result_get_arena(CompletionResult *result) {
     if (!result || !completion_result_is_arena_allocated(result)) {
         return NULL;
     }
-    
+
     // Get arena pointer using memcpy to avoid alignment issues
     Arena *arena;
     char *ptr = (char*)result - offsetof(ArenaCompletionResult, result) + offsetof(ArenaCompletionResult, arena);
@@ -138,17 +138,17 @@ static Arena* completion_result_get_arena(CompletionResult *result) {
 // Free a CompletionResult (handles both arena and regular allocations)
 void completion_free_result(CompletionResult *result) {
     if (!result) return;
-    
+
     if (completion_result_is_arena_allocated(result)) {
         // Get arena pointer using memcpy to avoid alignment issues
         Arena *arena;
         char *ptr = (char*)result - offsetof(ArenaCompletionResult, result) + offsetof(ArenaCompletionResult, arena);
         memcpy(&arena, ptr, sizeof(Arena*));
-        
+
         if (arena) {
             arena_destroy(arena);
         }
-        
+
         // Free the ArenaCompletionResult structure
         char *acr_ptr = (char*)result - offsetof(ArenaCompletionResult, result);
         free(acr_ptr);
@@ -187,7 +187,7 @@ static CompletionResult* complete_path_internal(const char *partial, int dirs_on
         closedir(dir);
         return NULL;
     }
-    
+
     Arena *arena = completion_result_get_arena(result);
 
     result->options = NULL;

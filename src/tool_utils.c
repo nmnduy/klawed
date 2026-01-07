@@ -120,23 +120,23 @@ int summarize_bash_command(const char *cmd, char *out, size_t outsz) {
 
 void trim_trailing_whitespace(char *str) {
     if (!str) return;
-    
+
     size_t len = strlen(str);
     if (len == 0) return;
-    
+
     // Start from the end and move backwards while we find whitespace
     size_t i = len;
     while (i > 0 && isspace((unsigned char)str[i - 1])) {
         i--;
     }
-    
+
     // Null-terminate at the new end
     str[i] = '\0';
 }
 
 void secure_free(void *ptr, size_t size) {
     if (!ptr) return;
-    
+
     // Securely wipe memory before freeing
     #ifdef __APPLE__
     // On macOS, use memset_s if available, otherwise use volatile memset
@@ -153,7 +153,7 @@ void secure_free(void *ptr, size_t size) {
     // On other systems, use explicit_bzero from libbsd
     explicit_bzero(ptr, size);
     #endif
-    
+
     free(ptr);
 }
 

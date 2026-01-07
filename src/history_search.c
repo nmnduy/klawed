@@ -57,7 +57,7 @@ static int fuzzy_score(const char *haystack, const char *needle) {
             }
 
             // Bonus for matches after a separator or word boundary
-            if (hidx == 0 || haystack[hidx - 1] == ' ' || haystack[hidx - 1] == '_' || 
+            if (hidx == 0 || haystack[hidx - 1] == ' ' || haystack[hidx - 1] == '_' ||
                 haystack[hidx - 1] == '-' || haystack[hidx - 1] == '/') {
                 score += FUZZY_SEPARATOR_BONUS;
             }
@@ -164,7 +164,7 @@ static int filter_results(HistorySearchState *state) {
     if (start_idx < 0) {
         start_idx = 0;
     }
-    
+
     for (int i = start_idx; i < state->history_count; i++) {
         int score = fuzzy_score(state->history_entries[i], pattern);
         if (score > 0) {
@@ -259,7 +259,7 @@ int history_search_start(HistorySearchState *state, int screen_height, int scree
     }
 
     LOG_DEBUG("[HistorySearch] Starting history search with %d history entries", history_count);
-    
+
     // Store history reference (can be NULL if no history yet)
     state->history_entries = history_entries;
     state->history_count = history_count;
@@ -283,9 +283,9 @@ int history_search_start(HistorySearchState *state, int screen_height, int scree
         return -1;
     }
 
-    LOG_DEBUG("[HistorySearch] Created popup window: %dx%d at (%d,%d)", 
+    LOG_DEBUG("[HistorySearch] Created popup window: %dx%d at (%d,%d)",
               state->popup_width, state->popup_height, state->popup_x, state->popup_y);
-    
+
     keypad(state->popup_win, TRUE);
     state->is_active = 1;
 
@@ -431,7 +431,7 @@ void history_search_page_down(HistorySearchState *state) {
 }
 
 const char *history_search_get_selected(HistorySearchState *state) {
-    if (!state || !state->is_active || state->result_count == 0 || 
+    if (!state || !state->is_active || state->result_count == 0 ||
         state->selected_index < 0 || state->selected_index >= state->result_count) {
         return NULL;
     }

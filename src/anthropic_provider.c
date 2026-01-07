@@ -51,11 +51,11 @@ static int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow
  */
 static char* arena_strdup(Arena *arena, const char *str) {
     if (!str || !arena) return NULL;
-    
+
     size_t len = strlen(str) + 1;  // +1 for null terminator
     char *new_str = arena_alloc(arena, len);
     if (!new_str) return NULL;
-    
+
     strlcpy(new_str, str, len);
     return new_str;
 }
@@ -384,7 +384,7 @@ static void streaming_context_init(StreamingContext *ctx, ConversationState *sta
     ctx->state = state;
     ctx->content_block_index = -1;
     ctx->accumulated_capacity = 4096;
-    
+
     // Create arena for streaming context allocations
     ctx->arena = arena_create(65536);  // 64KB arena for streaming context
     if (ctx->arena) {
@@ -414,13 +414,13 @@ static void streaming_context_init(StreamingContext *ctx, ConversationState *sta
 
 static void streaming_context_free(StreamingContext *ctx) {
     if (!ctx) return;
-    
+
     // If arena is present, destroy it (frees all arena-allocated memory)
     if (ctx->arena) {
         arena_destroy(ctx->arena);
         return;
     }
-    
+
     // Fallback to individual free calls
     free(ctx->accumulated_text);
     free(ctx->content_block_type);
@@ -518,7 +518,7 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
                             if (needed > ctx->accumulated_capacity) {
                                 size_t new_cap = ctx->accumulated_capacity * 2;
                                 if (new_cap < needed) new_cap = needed;
-                                
+
                                 if (ctx->arena) {
                                     // Use arena allocation with copy
                                     char *new_buf = arena_alloc(ctx->arena, new_cap);
@@ -560,7 +560,7 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
                             if (needed > ctx->tool_input_capacity) {
                                 size_t new_cap = ctx->tool_input_capacity * 2;
                                 if (new_cap < needed) new_cap = needed;
-                                
+
                                 if (ctx->arena) {
                                     // Use arena allocation with copy
                                     char *new_buf = arena_alloc(ctx->arena, new_cap);
@@ -896,7 +896,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
             free(openai_req);
             return result;
         }
-        
+
         // Allocate ApiResponse from arena
         ApiResponse *api_resp = arena_alloc(arena, sizeof(ApiResponse));
         if (!api_resp) {
@@ -909,7 +909,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
             free(openai_req);
             return result;
         }
-        
+
         // Initialize ApiResponse
         memset(api_resp, 0, sizeof(ApiResponse));
         api_resp->arena = arena;
@@ -951,7 +951,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
                 if (cJSON_GetObjectItem(tc, "function")) valid++;
             }
             if (valid > 0) {
-                api_resp->tools = arena_alloc(api_resp->arena, 
+                api_resp->tools = arena_alloc(api_resp->arena,
                                              (size_t)valid * sizeof(ToolCall));
                 if (!api_resp->tools) {
                     result.error_message = strdup("Failed to allocate tool calls from arena");
@@ -962,7 +962,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
                     free(openai_req);
                     return result;
                 }
-                
+
                 // Initialize tool call array
                 memset(api_resp->tools, 0, (size_t)valid * sizeof(ToolCall));
                 int idx = 0;

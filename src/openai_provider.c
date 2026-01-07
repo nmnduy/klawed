@@ -51,11 +51,11 @@ static int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow
  */
 static char* arena_strdup(Arena *arena, const char *str) {
     if (!str || !arena) return NULL;
-    
+
     size_t len = strlen(str) + 1;  // +1 for null terminator
     char *new_str = arena_alloc(arena, len);
     if (!new_str) return NULL;
-    
+
     strlcpy(new_str, str, len);
     return new_str;
 }
@@ -98,13 +98,13 @@ typedef struct {
 static void openai_streaming_context_init(OpenAIStreamingContext *ctx, ConversationState *state) {
     memset(ctx, 0, sizeof(OpenAIStreamingContext));
     ctx->state = state;
-    
+
     // Create arena for all allocations (64KB should be enough for streaming)
     ctx->arena = arena_create(64 * 1024);
     if (!ctx->arena) {
         return;
     }
-    
+
     ctx->accumulated_capacity = 4096;
     ctx->accumulated_text = arena_alloc(ctx->arena, ctx->accumulated_capacity);
     if (ctx->accumulated_text) {
@@ -118,14 +118,14 @@ static void openai_streaming_context_init(OpenAIStreamingContext *ctx, Conversat
 
 static void openai_streaming_context_free(OpenAIStreamingContext *ctx) {
     if (!ctx) return;
-    
+
     // Note: accumulated_text, finish_reason, model, and message_id are all
     // allocated from the arena, so they don't need individual free() calls
-    
+
     if (ctx->tool_calls_array) {
         cJSON_Delete(ctx->tool_calls_array);
     }
-    
+
     if (ctx->arena) {
         arena_destroy(ctx->arena);
     }
@@ -157,7 +157,7 @@ static int openai_streaming_event_handler(StreamEvent *event, void *userdata) {
             LOG_DEBUG("OpenAI streaming handler: arena not initialized");
             return 0;  // Continue but don't process
         }
-        
+
         // Extract model and id if not yet seen
         if (!ctx->model) {
             cJSON *model = cJSON_GetObjectItem(event->data, "model");
@@ -605,7 +605,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
             if (enable_streaming) openai_streaming_context_free(&stream_ctx);
             return result;
         }
-        
+
         // Allocate ApiResponse from arena
         ApiResponse *api_response = arena_alloc(arena, sizeof(ApiResponse));
         if (!api_response) {
@@ -618,7 +618,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
             if (enable_streaming) openai_streaming_context_free(&stream_ctx);
             return result;
         }
-        
+
         // Initialize ApiResponse
         memset(api_response, 0, sizeof(ApiResponse));
         api_response->arena = arena;
@@ -717,7 +717,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                             result.headers_json = NULL;
                             return result;
                         }
-                        
+
                         size_t text_length = 0;
                         cJSON_ArrayForEach(content_item, content_array) {
                             cJSON *type = cJSON_GetObjectItem(content_item, "type");
@@ -731,7 +731,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                             }
                         }
                         text_content[text_length] = '\0';
-                        
+
                         cJSON_AddStringToObject(message, "content", text_content);
                         free(text_content);
                     } else {
@@ -835,7 +835,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
             }
 
             if (valid_count > 0) {
-                api_response->tools = arena_alloc(api_response->arena, 
+                api_response->tools = arena_alloc(api_response->arena,
                                                  (size_t)valid_count * sizeof(ToolCall));
                 if (!api_response->tools) {
                     result.error_message = strdup("Failed to allocate tool calls from arena");
@@ -846,7 +846,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                     result.headers_json = NULL;
                     return result;
                 }
-                
+
                 // Initialize tool call array
                 memset(api_response->tools, 0, (size_t)valid_count * sizeof(ToolCall));
 

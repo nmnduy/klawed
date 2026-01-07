@@ -47,11 +47,11 @@ static int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow
  */
 static char* arena_strdup(Arena *arena, const char *str) {
     if (!str || !arena) return NULL;
-    
+
     size_t len = strlen(str) + 1;  // +1 for null terminator
     char *new_str = arena_alloc(arena, len);
     if (!new_str) return NULL;
-    
+
     strlcpy(new_str, str, len);
     return new_str;
 }
@@ -94,7 +94,7 @@ static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, Convers
     ctx->state = state;
     ctx->content_block_index = -1;
     ctx->accumulated_capacity = 4096;
-    
+
     // Create arena for streaming context allocations
     ctx->arena = arena_create(65536);  // 64KB arena for streaming context
     if (ctx->arena) {
@@ -127,7 +127,7 @@ static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, Convers
 
 static void bedrock_streaming_context_free(BedrockStreamingContext *ctx) {
     if (!ctx) return;
-    
+
     // If arena is present, destroy it (frees all arena-allocated memory)
     if (ctx->arena) {
         arena_destroy(ctx->arena);
@@ -140,7 +140,7 @@ static void bedrock_streaming_context_free(BedrockStreamingContext *ctx) {
         free(ctx->tool_input_json);
         free(ctx->stop_reason);
     }
-    
+
     // cJSON objects still use heap allocation
     if (ctx->message_start_data) {
         cJSON_Delete(ctx->message_start_data);
@@ -232,7 +232,7 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
                             if (needed > ctx->accumulated_capacity) {
                                 size_t new_cap = ctx->accumulated_capacity * 2;
                                 if (new_cap < needed) new_cap = needed;
-                                
+
                                 if (ctx->arena) {
                                     // Use arena allocation with copy
                                     char *new_buf = arena_alloc(ctx->arena, new_cap);
@@ -277,7 +277,7 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
                             if (needed > ctx->tool_input_capacity) {
                                 size_t new_cap = ctx->tool_input_capacity * 2;
                                 if (new_cap < needed) new_cap = needed;
-                                
+
                                 if (ctx->arena) {
                                     // Use arena allocation with copy
                                     char *new_buf = arena_alloc(ctx->arena, new_cap);
@@ -548,7 +548,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             free(tmp_headers);  // Clean up headers JSON in error paths
             return result;
         }
-        
+
         // Allocate ApiResponse from arena
         ApiResponse *api_response = arena_alloc(arena, sizeof(ApiResponse));
         if (!api_response) {
@@ -561,7 +561,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             free(tmp_headers);  // Clean up headers JSON in error paths
             return result;
         }
-        
+
         // Initialize ApiResponse
         memset(api_response, 0, sizeof(ApiResponse));
         api_response->arena = arena;
@@ -617,7 +617,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             }
 
             if (valid_count > 0) {
-                api_response->tools = arena_alloc(api_response->arena, 
+                api_response->tools = arena_alloc(api_response->arena,
                                                  (size_t)valid_count * sizeof(ToolCall));
                 if (!api_response->tools) {
                     result.error_message = strdup("Failed to allocate tool calls from arena");
@@ -628,7 +628,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
                     free(tmp_headers);  // Clean up headers JSON in error paths
                     return result;
                 }
-                
+
                 // Initialize tool call array
                 memset(api_response->tools, 0, (size_t)valid_count * sizeof(ToolCall));
 

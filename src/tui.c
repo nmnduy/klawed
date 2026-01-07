@@ -1093,7 +1093,7 @@ static int input_insert_string(TUIInputBuffer *input, const char *str) {
             __builtin_add_overflow(new_capacity, (size_t)1024, &new_capacity)) {
             return -1;  // Overflow
         }
-        
+
         void *buf_ptr = (void *)input->buffer;
         if (buffer_reserve(&buf_ptr, &input->capacity, new_capacity) != 0) {
             return -1;  // Resize failed
@@ -1846,80 +1846,80 @@ static void* check_vim_fugitive_thread(void *arg) {
 
     // Check if vim-fugitive is available by running vim with a test command
     char test_cmd[512];
-    snprintf(test_cmd, sizeof(test_cmd), 
+    snprintf(test_cmd, sizeof(test_cmd),
              "vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" 2>&1");
-    
+
     FILE *fp = popen(test_cmd, "r");
     if (!fp) {
         LOG_WARN("[TUI] Failed to check vim-fugitive availability in background thread");
         return NULL;
     }
-    
+
     char buffer[256];
     // Read output to check for errors
     while (fgets(buffer, sizeof(buffer), fp) != NULL) {
         // Just consume output
     }
-    
+
     int rc = pclose(fp);
     // vim returns 0 if fugitive exists (Git command exists), non-zero otherwise
-    
+
     int available = (rc == 0) ? 1 : 0;
-    
+
     // Update the cached value with thread-safe mutex
     if (tui->vim_fugitive_mutex_initialized) {
         pthread_mutex_lock(&tui->vim_fugitive_mutex);
         tui->vim_fugitive_available = available;
         pthread_mutex_unlock(&tui->vim_fugitive_mutex);
-        
-        LOG_DEBUG("[TUI] Background check complete: vim-fugitive %s", 
+
+        LOG_DEBUG("[TUI] Background check complete: vim-fugitive %s",
                   available ? "available" : "not available");
     } else {
         LOG_WARN("[TUI] Cannot update vim-fugitive availability - mutex not initialized");
     }
-    
+
     return NULL;
 }
 
 void tui_start_vim_fugitive_check(TUIState *tui) {
     if (!tui) return;
-    
+
     // Only start check if we haven't checked yet
     if (tui->vim_fugitive_mutex_initialized) {
         pthread_mutex_lock(&tui->vim_fugitive_mutex);
         int current = tui->vim_fugitive_available;
         pthread_mutex_unlock(&tui->vim_fugitive_mutex);
-        
+
         if (current != -1) {
             LOG_DEBUG("[TUI] vim-fugitive availability already checked: %d", current);
             return;
         }
     }
-    
+
     // Start background thread
     pthread_t thread;
     if (pthread_create(&thread, NULL, check_vim_fugitive_thread, tui) != 0) {
         LOG_WARN("[TUI] Failed to create background thread for vim-fugitive check");
         return;
     }
-    
+
     // Detach thread so it cleans up automatically
     pthread_detach(thread);
-    
+
     LOG_DEBUG("[TUI] Started background thread to check vim-fugitive availability");
 }
 
 int tui_get_vim_fugitive_available(TUIState *tui) {
     if (!tui) return -1;
-    
+
     if (!tui->vim_fugitive_mutex_initialized) {
         return -1;
     }
-    
+
     pthread_mutex_lock(&tui->vim_fugitive_mutex);
     int result = tui->vim_fugitive_available;
     pthread_mutex_unlock(&tui->vim_fugitive_mutex);
-    
+
     return result;
 }
 
@@ -2387,13 +2387,13 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
     const char *ver = version;
     const char *mod = model;
     const char *dir = working_dir;
-    
+
     // If parameters are NULL but we have conversation state, try to get from there
     if (tui->conversation_state) {
         if (!mod) mod = tui->conversation_state->model;
         if (!dir) dir = tui->conversation_state->working_dir;
     }
-    
+
     // Show mascot if we have at least model and working directory
     // Version can be NULL - we'll show placeholder in that case
     if (mod && dir) {

@@ -4315,6 +4315,63 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToObject(subagent_func, "parameters", subagent_params);
             cJSON_AddItemToObject(subagent, "function", subagent_func);
             cJSON_AddItemToArray(tool_array, subagent);
+
+        // CheckSubagentProgress tool
+        cJSON *check_progress = cJSON_CreateObject();
+        cJSON_AddStringToObject(check_progress, "type", "function");
+        cJSON *check_progress_func = cJSON_CreateObject();
+        cJSON_AddStringToObject(check_progress_func, "name", "CheckSubagentProgress");
+        cJSON_AddStringToObject(check_progress_func, "description",
+            "Checks the progress of a running subagent by reading its log file. "
+            "Returns whether the subagent is still running and the tail of its output. "
+            "Use this to monitor long-running subagent tasks.");
+        cJSON *check_progress_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(check_progress_params, "type", "object");
+        cJSON *check_progress_props = cJSON_CreateObject();
+        cJSON *check_pid = cJSON_CreateObject();
+        cJSON_AddStringToObject(check_pid, "type", "integer");
+        cJSON_AddStringToObject(check_pid, "description",
+            "Process ID of the subagent (from Subagent tool response)");
+        cJSON_AddItemToObject(check_progress_props, "pid", check_pid);
+        cJSON *check_log = cJSON_CreateObject();
+        cJSON_AddStringToObject(check_log, "type", "string");
+        cJSON_AddStringToObject(check_log, "description",
+            "Path to subagent log file (from Subagent tool response)");
+        cJSON_AddItemToObject(check_progress_props, "log_file", check_log);
+        cJSON *check_tail = cJSON_CreateObject();
+        cJSON_AddStringToObject(check_tail, "type", "integer");
+        cJSON_AddStringToObject(check_tail, "description",
+            "Optional: Number of lines to read from end of log (default: 50)");
+        cJSON_AddItemToObject(check_progress_props, "tail_lines", check_tail);
+        cJSON_AddItemToObject(check_progress_params, "properties", check_progress_props);
+        cJSON_AddItemToObject(check_progress_func, "parameters", check_progress_params);
+        cJSON_AddItemToObject(check_progress, "function", check_progress_func);
+        cJSON_AddItemToArray(tool_array, check_progress);
+
+        // InterruptSubagent tool
+        cJSON *interrupt = cJSON_CreateObject();
+        cJSON_AddStringToObject(interrupt, "type", "function");
+        cJSON *interrupt_func = cJSON_CreateObject();
+        cJSON_AddStringToObject(interrupt_func, "name", "InterruptSubagent");
+        cJSON_AddStringToObject(interrupt_func, "description",
+            "Interrupts and stops a running subagent. Use this to cancel a subagent "
+            "that is stuck, taking too long, or no longer needed. "
+            "You can interrupt a subagent at any time.");
+        cJSON *interrupt_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(interrupt_params, "type", "object");
+        cJSON *interrupt_props = cJSON_CreateObject();
+        cJSON *interrupt_pid = cJSON_CreateObject();
+        cJSON_AddStringToObject(interrupt_pid, "type", "integer");
+        cJSON_AddStringToObject(interrupt_pid, "description",
+            "Process ID of the subagent to interrupt (from Subagent tool response)");
+        cJSON_AddItemToObject(interrupt_props, "pid", interrupt_pid);
+        cJSON_AddItemToObject(interrupt_params, "properties", interrupt_props);
+        cJSON *interrupt_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(interrupt_req, cJSON_CreateString("pid"));
+        cJSON_AddItemToObject(interrupt_params, "required", interrupt_req);
+        cJSON_AddItemToObject(interrupt_func, "parameters", interrupt_params);
+        cJSON_AddItemToObject(interrupt, "function", interrupt_func);
+        cJSON_AddItemToArray(tool_array, interrupt);
         }
 
         // Write tool
@@ -6399,8 +6456,53 @@ static void process_response(ConversationState *state,
             }
         }
 
-        for (int t = 0; t < started_threads; t++) {
-            pthread_join(threads[t], NULL);
+        // Join or detach threads based on whether we were interrupted
+        // If interrupted, use timed waiting to prevent deadlock from stuck threads
+        if (interrupted) {
+            // When interrupted, threads may be stuck in blocking calls that don't
+            // respond to pthread_cancel. We wait for a short period for threads to
+            // terminate via the tracker, then detach any that are still running.
+
+            // Wait up to 500ms for all threads to complete (100ms polls)
+            const int max_wait_ms = 500;
+            int waited_ms = 0;
+            while (waited_ms < max_wait_ms) {
+                pthread_mutex_lock(&tracker.mutex);
+                int all_completed = (tracker.completed >= started_threads);
+                pthread_mutex_unlock(&tracker.mutex);
+
+                if (all_completed) {
+                    break;
+                }
+
+                usleep(100 * 1000);  // 100ms
+                waited_ms += 100;
+            }
+
+            // Check final completion status
+            pthread_mutex_lock(&tracker.mutex);
+            int final_completed = tracker.completed;
+            pthread_mutex_unlock(&tracker.mutex);
+
+            if (final_completed >= started_threads) {
+                // All threads completed - safe to join
+                for (int t = 0; t < started_threads; t++) {
+                    pthread_join(threads[t], NULL);
+                }
+            } else {
+                // Some threads still running - detach them to prevent deadlock
+                // They will clean themselves up when they eventually terminate
+                LOG_WARN("Only %d/%d tool threads responded to cancellation within %dms, detaching remaining",
+                         final_completed, started_threads, max_wait_ms);
+                for (int t = 0; t < started_threads; t++) {
+                    pthread_detach(threads[t]);
+                }
+            }
+        } else {
+            // Normal completion - join all threads
+            for (int t = 0; t < started_threads; t++) {
+                pthread_join(threads[t], NULL);
+            }
         }
 
         clock_gettime(CLOCK_MONOTONIC, &tool_end);
@@ -6565,7 +6667,14 @@ static void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstructi
     ui_set_status(NULL, ctx->tui_queue, "");
 
     if (!response) {
-        ui_show_error(NULL, ctx->tui_queue, "Failed to get response from API");
+        // Check if this was due to an interrupt - if so, show appropriate message
+        // and ensure the interrupt flag is cleared for the next instruction
+        if (ctx->state && ctx->state->interrupt_requested) {
+            ui_set_status(NULL, ctx->tui_queue, "Operation interrupted by user");
+            ctx->state->interrupt_requested = 0;  // Clear for next instruction
+        } else {
+            ui_show_error(NULL, ctx->tui_queue, "Failed to get response from API");
+        }
         return;
     }
 
@@ -6584,8 +6693,6 @@ static void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstructi
         api_response_free(response);
         return;
     }
-
-
 
     process_response(ctx->state, response, NULL, ctx->tui_queue, ctx);
     api_response_free(response);
