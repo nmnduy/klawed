@@ -10,6 +10,7 @@ FileSurf v2 is a Quarkus-based application for file management and chat function
 - ✅ Database directory (`data/`) exists and is ready
 - ✅ Logging configuration is properly set up
 - ✅ **Email-based authentication** added (2026-01-07)
+- ✅ **Dark mode support** with system preference detection (2026-01-07)
 
 ## Quick Start
 ```bash
@@ -177,6 +178,7 @@ CREATE TABLE users (
 - SQLite JDBC
 - Tailwind CSS (via npm)
 - **Monitoring**: Micrometer + Prometheus registry
+- **Dark Mode**: Class-based theming with localStorage persistence (see `docs/DARK_MODE.md`)
 
 ## Building for Production
 ```bash

@@ -4,6 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FileSurf - Login</title>
+    <!-- Prevent flash of wrong theme -->
+    <script>
+        (function() {
+            try {
+                const theme = localStorage.getItem('filesurf-theme') || 
+                              (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="/assets/main.css">
     {#if authenticated is true}
     <meta http-equiv="refresh" content="0; url={redirectUrl}">
