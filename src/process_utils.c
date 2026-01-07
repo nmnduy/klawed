@@ -101,7 +101,11 @@ int execute_command_with_timeout(
     int process_exited = 0;
     int exit_status = -1;
 
-    while (!process_exited) {
+    // Track whether both pipes have been closed (EOF reached)
+    int stdout_eof = 0;
+    int stderr_eof = 0;
+
+    while (!process_exited || !stdout_eof || !stderr_eof) {
         // Check for interrupt
         if (*interrupt_requested) {
             LOG_DEBUG("Command interrupted by user");
@@ -122,37 +126,52 @@ int execute_command_with_timeout(
             break;
         }
 
-        // Check if process has exited
-        int status;
-        pid_t wait_result = waitpid(pid, &status, WNOHANG);
-        if (wait_result == pid) {
-            process_exited = 1;
-            if (WIFEXITED(status)) {
-                exit_status = WEXITSTATUS(status);
-            } else if (WIFSIGNALED(status)) {
-                exit_status = 128 + WTERMSIG(status);  // Standard shell convention
+        // Check if process has exited (only if not already known)
+        if (!process_exited) {
+            int status;
+            pid_t wait_result = waitpid(pid, &status, WNOHANG);
+            if (wait_result == pid) {
+                process_exited = 1;
+                if (WIFEXITED(status)) {
+                    exit_status = WEXITSTATUS(status);
+                } else if (WIFSIGNALED(status)) {
+                    exit_status = 128 + WTERMSIG(status);  // Standard shell convention
+                }
+            } else if (wait_result == -1) {
+                LOG_ERROR("waitpid failed: %s", strerror(errno));
+                break;
             }
-        } else if (wait_result == -1) {
-            LOG_ERROR("waitpid failed: %s", strerror(errno));
-            break;
         }
 
-        // Read available output from stdout
+        // Read available output from pipes
         fd_set readfds;
         FD_ZERO(&readfds);
-        FD_SET(stdout_pipe[0], &readfds);
-        FD_SET(stderr_pipe[0], &readfds);
+        int max_fd = -1;
+        if (stdout_pipe[0] != -1) {
+            FD_SET(stdout_pipe[0], &readfds);
+            if (stdout_pipe[0] > max_fd) max_fd = stdout_pipe[0];
+        }
+        if (stderr_pipe[0] != -1) {
+            FD_SET(stderr_pipe[0], &readfds);
+            if (stderr_pipe[0] > max_fd) max_fd = stderr_pipe[0];
+        }
+
+        // If both pipes are closed, we're done reading
+        if (max_fd == -1) {
+            stdout_eof = 1;
+            stderr_eof = 1;
+            continue;
+        }
 
         struct timeval timeout;
         timeout.tv_sec = 0;
         timeout.tv_usec = 100000;  // 100ms
 
-        int max_fd = (stdout_pipe[0] > stderr_pipe[0]) ? stdout_pipe[0] : stderr_pipe[0];
         int select_result = select(max_fd + 1, &readfds, NULL, NULL, &timeout);
 
         if (select_result > 0) {
             // Read from stdout
-            if (FD_ISSET(stdout_pipe[0], &readfds)) {
+            if (stdout_pipe[0] != -1 && FD_ISSET(stdout_pipe[0], &readfds)) {
                 ssize_t bytes_read = read(stdout_pipe[0], buffer, sizeof(buffer) - 1);
                 if (bytes_read > 0) {
                     buffer[bytes_read] = '\0';
@@ -176,11 +195,12 @@ int execute_command_with_timeout(
                     // EOF on stdout
                     close(stdout_pipe[0]);
                     stdout_pipe[0] = -1;
+                    stdout_eof = 1;
                 }
             }
 
             // Read from stderr (append to same output)
-            if (FD_ISSET(stderr_pipe[0], &readfds)) {
+            if (stderr_pipe[0] != -1 && FD_ISSET(stderr_pipe[0], &readfds)) {
                 ssize_t bytes_read = read(stderr_pipe[0], buffer, sizeof(buffer) - 1);
                 if (bytes_read > 0) {
                     buffer[bytes_read] = '\0';
@@ -204,18 +224,15 @@ int execute_command_with_timeout(
                     // EOF on stderr
                     close(stderr_pipe[0]);
                     stderr_pipe[0] = -1;
+                    stderr_eof = 1;
                 }
             }
         } else if (select_result == -1 && errno != EINTR) {
             LOG_ERROR("select failed: %s", strerror(errno));
             break;
-        }
-
-        // If both pipes are closed and process hasn't exited yet, wait a bit
-        if ((stdout_pipe[0] == -1 || !FD_ISSET(stdout_pipe[0], &readfds)) &&
-            (stderr_pipe[0] == -1 || !FD_ISSET(stderr_pipe[0], &readfds)) &&
-            !process_exited) {
-            usleep(100000);  // 100ms
+        } else if (select_result == 0) {
+            // Timeout on select - if process exited and both pipes are at EOF, we're done
+            // Otherwise, keep waiting for more data
         }
     }
 

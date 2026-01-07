@@ -129,7 +129,9 @@ static void test_output_below_limit_no_truncation(void) {
     ASSERT(cJSON_IsNumber(exit_code), "Exit code should be a number");
     ASSERT(cJSON_IsString(output), "Output should be a string");
     // Don't check exit code for large output commands as they might get killed
-    ASSERT_STRING_CONTAINS(output->valuestring, "Hello World", "Output should contain expected text");
+    if (cJSON_IsString(output)) {
+        ASSERT_STRING_CONTAINS(output->valuestring, "Hello World", "Output should contain expected text");
+    }
 
     // No truncation warning should be present
     ASSERT(truncation_warning == NULL, "No truncation warning should be present for small output");
@@ -164,16 +166,20 @@ static void test_output_exceeds_limit_truncated(void) {
     ASSERT(cJSON_IsString(output), "Output should be a string");
     // Don't check exit code for large output commands as they might get killed
 
-    // Output should be truncated to BASH_OUTPUT_MAX_SIZE or less
-    ASSERT_NUMBER_LESS_THAN(strlen(output->valuestring), BASH_OUTPUT_MAX_SIZE + 100,
-                           "Output should be truncated to near the limit");
+    if (cJSON_IsString(output)) {
+        // Output should be truncated to BASH_OUTPUT_MAX_SIZE or less
+        ASSERT_NUMBER_LESS_THAN(strlen(output->valuestring), BASH_OUTPUT_MAX_SIZE + 100,
+                               "Output should be truncated to near the limit");
+    }
 
     // Truncation warning should be present
     ASSERT(cJSON_IsString(truncation_warning), "Truncation warning should be present");
-    ASSERT_STRING_CONTAINS(truncation_warning->valuestring, "truncated",
-                          "Truncation warning should mention truncation");
-    ASSERT_STRING_CONTAINS(truncation_warning->valuestring, "bytes",
-                          "Truncation warning should mention bytes");
+    if (cJSON_IsString(truncation_warning)) {
+        ASSERT_STRING_CONTAINS(truncation_warning->valuestring, "truncated",
+                              "Truncation warning should mention truncation");
+        ASSERT_STRING_CONTAINS(truncation_warning->valuestring, "bytes",
+                              "Truncation warning should mention bytes");
+    }
 
     cJSON_Delete(params);
     cJSON_Delete(result);
@@ -202,10 +208,14 @@ static void test_exact_limit_output(void) {
 
     ASSERT(cJSON_IsNumber(exit_code), "Exit code should be a number");
     ASSERT(cJSON_IsString(output), "Output should be a string");
-    ASSERT_NUMBER_EQUAL(exit_code->valueint, 0, "Exit code should be 0 for successful command");
+    if (cJSON_IsNumber(exit_code)) {
+        ASSERT_NUMBER_EQUAL(exit_code->valueint, 0, "Exit code should be 0 for successful command");
+    }
 
     // Output should be close to the limit
-    ASSERT(strlen(output->valuestring) > 0, "Output should not be empty");
+    if (cJSON_IsString(output)) {
+        ASSERT(strlen(output->valuestring) > 0, "Output should not be empty");
+    }
 
     // Note: We don't check truncation_warning here since it might be present
     // even when output is at exact limit due to implementation details
@@ -222,12 +232,13 @@ static void test_truncation_with_stderr(void) {
     setup_environment();
 
     // Create a command that generates both stdout and stderr exceeding the limit
-    // Use 7000 bytes each so combined output (~14000) exceeds limit but both prefixes
-    // are visible in the first ~12228 bytes before truncation
+    // Write prefixes first (both stdout and stderr) before bulk data to ensure
+    // both appear in the output regardless of pipe interleaving order.
+    // Total: ~14100 bytes (7 + 7000 + 7 + 7000 + some overhead)
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "command",
-        "printf 'stdout:' && printf '%*s' 7000 | tr ' ' 'x' && "
-        "printf 'stderr:' >&2 && printf '%*s' 7000 | tr ' ' 'y' >&2");
+        "printf 'stdout:'; printf 'stderr:' >&2; "
+        "printf '%*s' 7000 | tr ' ' 'x'; printf '%*s' 7000 | tr ' ' 'y' >&2");
 
     cJSON *result = tool_bash(params, NULL);
 
@@ -240,17 +251,21 @@ static void test_truncation_with_stderr(void) {
 
     ASSERT(cJSON_IsNumber(exit_code), "Exit code should be a number");
     ASSERT(cJSON_IsString(output), "Output should be a string");
-    ASSERT_NUMBER_EQUAL(exit_code->valueint, 0, "Exit code should be 0 for successful command");
+    if (cJSON_IsNumber(exit_code)) {
+        ASSERT_NUMBER_EQUAL(exit_code->valueint, 0, "Exit code should be 0 for successful command");
+    }
 
-    // Output should be truncated
-    ASSERT_NUMBER_LESS_THAN(strlen(output->valuestring), BASH_OUTPUT_MAX_SIZE + 100,
-                           "Output should be truncated to near the limit");
+    if (cJSON_IsString(output)) {
+        // Output should be truncated
+        ASSERT_NUMBER_LESS_THAN(strlen(output->valuestring), BASH_OUTPUT_MAX_SIZE + 100,
+                               "Output should be truncated to near the limit");
 
-    // Both stdout and stderr should be present in truncated output
-    ASSERT_STRING_CONTAINS(output->valuestring, "stdout",
-                          "Truncated output should contain stdout");
-    ASSERT_STRING_CONTAINS(output->valuestring, "stderr",
-                          "Truncated output should contain stderr");
+        // Both stdout and stderr should be present in truncated output
+        ASSERT_STRING_CONTAINS(output->valuestring, "stdout",
+                              "Truncated output should contain stdout");
+        ASSERT_STRING_CONTAINS(output->valuestring, "stderr",
+                              "Truncated output should contain stderr");
+    }
 
     // Truncation warning should be present
     ASSERT(cJSON_IsString(truncation_warning), "Truncation warning should be present");
