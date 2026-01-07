@@ -56,3 +56,6 @@ src/main/resources/META-INF/resources/assets/
 test-docs/
 
 tags
+-e 
+# Git worktrees
+worktree_*/
