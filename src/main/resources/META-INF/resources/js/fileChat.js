@@ -435,8 +435,11 @@ export function init(rootEl) {
 
     function createTooltip(text) {
         const tooltip = document.createElement('div');
-        tooltip.className = 'fixed z-40 max-w-sm px-4 py-3 rounded-2xl bg-white shadow-[0_0_30px_rgba(249,115,22,0.3)] border-2 border-orange-500 text-slate-800 text-sm leading-relaxed space-y-2 animate-pulse-subtle';
-        tooltip.innerHTML = text + '<div class="text-right text-xs text-orange-600 font-medium">Click to continue</div>';
+        tooltip.className = 'fixed z-40 max-w-md px-5 py-4 rounded-2xl bg-white shadow-[0_0_30px_rgba(249,115,22,0.3)] border-2 border-orange-500 text-slate-800 text-sm leading-relaxed animate-pulse-subtle';
+        tooltip.innerHTML = `
+            <div class="space-y-1">${text}</div>
+            <div class="text-right text-xs text-orange-600 font-medium mt-3 pt-2 border-t border-slate-100">Click to continue →</div>
+        `;
         tooltip.setAttribute('data-tour-tooltip', '');
         document.body.appendChild(tooltip);
         return tooltip;
@@ -468,101 +471,180 @@ export function init(rootEl) {
         tooltip.style.left = `${left}px`;
     }
 
+    function createWelcomeModal(onContinue, onSkip) {
+        // Create backdrop
+        const backdrop = document.createElement('div');
+        backdrop.className = 'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4';
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-8 animate-fade-in';
+        modal.innerHTML = `
+            <div class="text-center mb-6">
+                <div class="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg shadow-orange-200/70">
+                    <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-3">Welcome to FileSurf</h2>
+                <p class="text-slate-600 dark:text-slate-300 text-lg mb-4">Your personal AI-powered computer in the cloud</p>
+            </div>
+            
+            <div class="space-y-4 text-left mb-8">
+                <p class="text-slate-700 dark:text-slate-200 leading-relaxed">
+                    FileSurf is far more than a file editor. Think of it as your personal workspace where an AI assistant can help you with almost anything:
+                </p>
+                
+                <ul class="space-y-3 text-slate-600 dark:text-slate-300">
+                    <li class="flex items-start gap-3">
+                        <span class="text-orange-500 mt-1">📁</span>
+                        <span><strong>File Management & Analysis</strong> — Upload, organize, and analyze any files</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="text-orange-500 mt-1">💻</span>
+                        <span><strong>Write & Run Code</strong> — Create scripts, apps, and automate tasks</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="text-orange-500 mt-1">🎬</span>
+                        <span><strong>YouTube Transcripts</strong> — Fetch and analyze video transcripts instantly</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="text-orange-500 mt-1">🎨</span>
+                        <span><strong>Create UI & Prototypes</strong> — Generate interfaces and prototypes <em class="text-slate-400">(coming soon)</em></span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <span class="text-orange-500 mt-1">🧠</span>
+                        <span><strong>Remember Preferences</strong> — Tell me to remember things and I will</span>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button id="tour-continue-btn" class="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-200/50 hover:shadow-orange-300/60 transition-all duration-200 hover:scale-[1.02]">
+                    Take a Quick Tour
+                </button>
+                <button id="tour-skip-btn" class="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors duration-200">
+                    Skip for Now
+                </button>
+            </div>
+        `;
+        
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+        
+        // Add event listeners
+        modal.querySelector('#tour-continue-btn').addEventListener('click', () => {
+            backdrop.remove();
+            onContinue();
+        });
+        
+        modal.querySelector('#tour-skip-btn').addEventListener('click', () => {
+            backdrop.remove();
+            onSkip();
+        });
+        
+        return backdrop;
+    }
+
     function runTour() {
         if (!shouldShowTour()) return;
         if (hasCompletedTour) return;
         hasCompletedTour = true;
 
+        // Show welcome modal first
+        createWelcomeModal(
+            // On continue - run the tour
+            () => {
+                runTourSteps();
+            },
+            // On skip - just mark as completed
+            () => {
+                setCompletedTourFlag();
+            }
+        );
+    }
+
+    function runTourSteps() {
         const actions = getPrimaryActions();
         const overlay = addOverlay();
         const steps = [];
 
+        // Step 1: Chat input - the main way to interact
         steps.push(() => {
             const cleanup = highlightElement(actions.chatInput);
-            const tip = createTooltip('<strong>Start chatting</strong><br/>Type a question or task for the AI assistant here. Press Enter to send, Shift+Enter for a new line.');
+            const tip = createTooltip(`
+                <strong>💬 Chat with your AI assistant</strong><br/>
+                <p class="mt-1">This is your main way to interact. Ask questions, give tasks, or have a conversation. The AI can help you with almost anything — from analyzing files to writing code to fetching YouTube transcripts.</p>
+                <p class="mt-2 text-slate-500 text-xs">Tip: Press Enter to send, Shift+Enter for a new line</p>
+            `);
             positionTooltip(tip, actions.chatInput, 'top');
             tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
             return () => { cleanup(); tip.remove(); };
         });
 
-        steps.push(() => {
-            const cleanup = highlightElement(actions.sendButton);
-            const tip = createTooltip('<strong>Send your message</strong><br/>Click Send or press Enter to submit.');
-            positionTooltip(tip, actions.sendButton, 'top');
-            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
-            return () => { cleanup(); tip.remove(); };
-        });
-
+        // Step 2: Upload button
         steps.push(() => {
             const cleanup = highlightElement(actions.uploadButton);
-            const tip = createTooltip('<strong>Upload files directly</strong><br/>Click here to upload files without switching tabs. You can also use the Files tab for more file management options.');
+            const tip = createTooltip(`
+                <strong>📎 Upload files instantly</strong><br/>
+                <p class="mt-1">Click here to upload documents, images, code, or any files you want to work with. The AI can read, analyze, edit, and create files for you.</p>
+            `);
             positionTooltip(tip, actions.uploadButton, 'top');
             tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
             return () => { cleanup(); tip.remove(); };
         });
 
+        // Step 3: Files tab
         steps.push(() => {
-            // Show the Files tab first so users understand where uploads live
             switchToTab('file');
             const cleanup = highlightElement(actions.filesTab);
-            const tip = createTooltip('<strong>Files tab</strong><br/>This is where you manage and upload files.');
+            const tip = createTooltip(`
+                <strong>📂 Your file workspace</strong><br/>
+                <p class="mt-1">The Files tab shows all your uploaded files and anything the AI creates for you. You can browse, download, preview, and manage your files here.</p>
+            `);
             positionTooltip(tip, actions.filesTab, 'bottom');
             tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
-            return () => { cleanup(); tip.remove(); };
+            return () => { cleanup(); tip.remove(); switchToTab('chat'); };
         });
 
-        steps.push(() => {
-            // Ensure Files tab is visible so the upload button is in DOM/visible
-            switchToTab('file');
-            let cleanup = null;
-            let tip = null;
-            let cancelled = false;
-            const run = () => {
-                if (cancelled) return;
-                cleanup = highlightElement(actions.fileExplorerUploadButton);
-                tip = createTooltip('<strong>File explorer upload</strong><br/>You can also upload files here in the Files tab for more control over file management.');
-                positionTooltip(tip, actions.uploadButton, 'top');
-                tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
-            };
-            // Use double rAF to allow layout/render after tab switch
-            requestAnimationFrame(() => requestAnimationFrame(run));
-            return () => { cancelled = true; if (cleanup) cleanup(); if (tip) tip.remove(); switchToTab('chat'); };
-        });
-
+        // Step 4: Status indicator
         steps.push(() => {
             const cleanup = highlightElement(actions.statusText);
-            const tip = createTooltip('<strong>Status</strong><br/>See when you are connected and when the AI is thinking.');
+            const tip = createTooltip(`
+                <strong>🟢 Connection status</strong><br/>
+                <p class="mt-1">This shows your connection status and lets you know when the AI is thinking or working on a task.</p>
+            `);
             positionTooltip(tip, actions.statusText, 'bottom');
             tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
             return () => { cleanup(); tip.remove(); };
         });
 
-        // Finish message
+        // Final step: You're ready!
         steps.push(() => {
-            // Create a wrapper div that will handle centering
             const wrapper = document.createElement('div');
-            wrapper.style.position = 'fixed';
-            wrapper.style.top = '0';
-            wrapper.style.left = '0';
-            wrapper.style.width = '100%';
-            wrapper.style.height = '100%';
-            wrapper.style.display = 'flex';
-            wrapper.style.alignItems = 'center';
-            wrapper.style.justifyContent = 'center';
-            wrapper.style.zIndex = '40';
-            wrapper.style.pointerEvents = 'none'; // Allow clicks to pass through to overlay
+            wrapper.className = 'fixed inset-0 z-40 flex items-center justify-center pointer-events-none';
             
-            // Create the tooltip
-            const tip = createTooltip('<strong>You are ready!</strong><br/>Start a conversation or upload a file to begin.');
+            const tip = document.createElement('div');
+            tip.className = 'max-w-md px-6 py-5 rounded-2xl bg-white shadow-[0_0_40px_rgba(249,115,22,0.3)] border-2 border-orange-500 text-slate-800 pointer-events-auto cursor-pointer';
+            tip.innerHTML = `
+                <div class="text-center">
+                    <div class="text-3xl mb-3">🎉</div>
+                    <h3 class="text-xl font-bold text-slate-900 mb-2">You're all set!</h3>
+                    <p class="text-slate-600 mb-3">Start by typing a message or uploading a file. Here are some things you can try:</p>
+                    <div class="text-left space-y-2 text-sm text-slate-500 bg-slate-50 rounded-lg p-3">
+                        <p>• "Summarize this document for me"</p>
+                        <p>• "Get the transcript from [YouTube URL]"</p>
+                        <p>• "Write a Python script that..."</p>
+                        <p>• "Remember that I prefer dark mode"</p>
+                    </div>
+                    <p class="mt-4 text-xs text-orange-600 font-medium">Click anywhere to start</p>
+                </div>
+            `;
+            
             tip.addEventListener('click', () => {
                 overlay.dispatchEvent(new Event('click'));
             }, { once: true });
             
-            // Remove pointer-events: none from tooltip so it's clickable
-            tip.style.pointerEvents = 'auto';
-            
-            // Remove the tooltip from body and add to wrapper
-            tip.remove();
             wrapper.appendChild(tip);
             document.body.appendChild(wrapper);
             
@@ -587,7 +669,6 @@ export function init(rootEl) {
         overlay.addEventListener('click', nextStep);
         window.addEventListener('resize', () => {
             if (currentCleanup) currentCleanup();
-            // Re-run current step positioning
             currentStep = Math.max(0, currentStep - 1);
             nextStep();
         });
