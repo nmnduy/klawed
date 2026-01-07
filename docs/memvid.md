@@ -191,7 +191,7 @@ Use descriptive, lowercase slot names with underscores:
 
 ## Limitations
 
-1. **Build dependency** - Requires the memvid-ffi Rust library (vendored as git submodule)
+1. **Build dependency** - Requires Rust toolchain to build memvid-ffi (fetches memvid-core from crates.io)
 2. **No encryption** - Memory file is stored in plaintext
 3. **Local only** - Memories are stored per-project directory
 4. **No sync** - No built-in mechanism to sync across machines

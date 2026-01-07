@@ -173,7 +173,7 @@ endif
 
 # Optional Memvid support for video-based memory storage (MEMVID=auto|1|0)
 # Memvid FFI library path (uses vendored submodule)
-MEMVID_FFI_DIR = $(CURDIR)/vendor/memvid-ffi/memvid-ffi
+MEMVID_FFI_DIR = $(CURDIR)/vendor/memvid-ffi
 MEMVID_FFI_LIB = $(MEMVID_FFI_DIR)/target/release/libmemvid_ffi.a
 MEMVID ?= auto
 
