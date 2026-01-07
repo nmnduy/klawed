@@ -143,16 +143,16 @@ void provider_init(const char *model,
     // Determine provider based on environment variables and URL
     // Priority: Check for OpenAI indicators first, then Anthropic
     int use_anthropic = 0;
-    
+
     // Check if OpenAI-specific variables are set (indicates OpenAI preference)
     const char *openai_base = getenv("OPENAI_API_BASE");
-    
+
     // Check if Anthropic-specific variables are set
     const char *anth_env = getenv("ANTHROPIC_API_URL");
     if (!anth_env || anth_env[0] == '\0') {
         anth_env = getenv("ANTHROPIC_BASE_URL");
     }
-    
+
     // If OPENAI_API_BASE is explicitly set, prefer OpenAI provider
     if (openai_base && openai_base[0] != '\0') {
         use_anthropic = 0;
