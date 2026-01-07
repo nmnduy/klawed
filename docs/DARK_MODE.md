@@ -1,7 +1,7 @@
 # Dark Mode Implementation
 
 ## Overview
-FileSurf v2 now includes a comprehensive dark mode implementation with automatic system preference detection and persistent user preference storage.
+FileSurf v2 uses a comprehensive dark mode implementation with automatic system preference detection and persistent user preference storage.
 
 ## Features
 - ✅ Toggle button in the header (sun/moon icons)
@@ -86,13 +86,66 @@ The header includes a beautiful animated toggle button with:
 
 ### For Developers
 
-#### Using Dark Mode Classes in Templates
-Tailwind's `dark:` variant is available for all utilities:
+#### Color System Hierarchy
 
+We use a **unified color system** with clear precedence:
+
+| Approach | When to Use | Example |
+|----------|-------------|---------|
+| **Semantic tokens** | Default choice for all themed elements | `bg-background`, `text-foreground`, `bg-card` |
+| **Layout tokens** | Semantic colors for specific UI contexts | `bg-layout-surface`, `text-layout-content-high` |
+| **Explicit dark variants** | Only when semantic tokens don't provide the needed contrast | `bg-white dark:bg-slate-900` |
+
+#### ✅ Correct Patterns
+
+**Using semantic tokens (preferred)**:
 ```html
-<div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
+<!-- Background and text automatically adapt to theme -->
+<div class="bg-background text-foreground">
   Content that adapts to theme
 </div>
+
+<!-- Card surfaces -->
+<div class="bg-card text-card-foreground border-border rounded-lg">
+  Card content
+</div>
+
+<!-- Primary actions -->
+<button class="bg-primary text-primary-foreground hover:bg-primary/90">
+  Click me
+</button>
+
+<!-- Muted/secondary content -->
+<p class="text-muted-foreground">Secondary text</p>
+```
+
+**Using layout tokens**:
+```html
+<div class="bg-layout-surface text-layout-content-high">
+  <span class="text-layout-content-medium">Subtitle</span>
+</div>
+```
+
+**Using explicit dark variants (when necessary)**:
+```html
+<!-- When you need specific color control beyond tokens -->
+<div class="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+  <h2 class="text-slate-900 dark:text-slate-100">Title</h2>
+  <p class="text-slate-600 dark:text-slate-400">Description</p>
+</div>
+```
+
+#### ❌ Incorrect Patterns
+
+```html
+<!-- WRONG: Hardcoded colors that don't respond to theme -->
+<div class="bg-white text-black">
+
+<!-- WRONG: Mixing semantic tokens with explicit overrides -->
+<div class="bg-background dark:bg-slate-900">
+
+<!-- WRONG: Using arbitrary color values for themed elements -->
+<div class="bg-[#ffffff] dark:bg-[#1e293b]">
 ```
 
 #### Listening to Theme Changes
@@ -122,48 +175,76 @@ if (darkMode.isDark()) {
 }
 ```
 
-## Design Guidelines
+## Blessed Patterns
 
-### Color Tokens
-Always use design tokens instead of hard-coded colors:
+Copy-paste these patterns for consistent UI components.
 
-✅ **Good:**
+### Card Component
 ```html
-<div class="bg-background text-foreground border-border">
-```
-
-❌ **Bad:**
-```html
-<div class="bg-white text-black border-gray-200">
-```
-
-### Testing Dark Mode
-When adding new components:
-1. Build CSS: `npm run build`
-2. Test in both light and dark modes
-3. Ensure proper contrast ratios (WCAG AA minimum)
-4. Check animations and transitions work smoothly
-
-### Common Patterns
-
-#### Card Component
-```html
-<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
-  <h2 class="text-slate-900 dark:text-slate-100">Title</h2>
-  <p class="text-slate-600 dark:text-slate-400">Description</p>
+<div class="bg-card text-card-foreground border border-border rounded-lg shadow-sm p-4">
+  <h2 class="text-h4-headline-s mb-2">Card Title</h2>
+  <p class="text-muted-foreground">Card description goes here.</p>
 </div>
 ```
 
-#### Button Component
+### Primary Button
 ```html
-<button class="bg-primary hover:bg-primary/90 text-primary-foreground">
-  Click me
+<button class="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 text-body-s-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
+  Button Text
 </button>
 ```
 
-#### Input Component
+### Secondary/Outline Button
 ```html
-<input class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100" />
+<button class="inline-flex items-center justify-center rounded-lg border-2 border-border bg-background text-foreground hover:bg-muted h-10 px-4 py-2 text-body-s-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
+  Button Text
+</button>
+```
+
+### Text Input
+```html
+<input 
+  type="text"
+  class="flex h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 text-body-m placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+  placeholder="Enter text..."
+/>
+```
+
+### Alert/Banner - Info
+```html
+<div class="rounded-lg border border-semantic-info/30 bg-semantic-info-bg p-4">
+  <p class="text-body-s text-semantic-info">Information message here.</p>
+</div>
+```
+
+### Alert/Banner - Error
+```html
+<div class="rounded-lg border border-semantic-error/30 bg-semantic-error-bg p-4">
+  <p class="text-body-s text-semantic-error">Error message here.</p>
+</div>
+```
+
+### Empty State
+```html
+<div class="flex flex-col items-center justify-center py-12 px-4 text-center">
+  <svg class="w-12 h-12 text-muted-foreground/50 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <!-- icon path -->
+  </svg>
+  <h3 class="text-h5-headline-xs text-foreground mb-1">No items found</h3>
+  <p class="text-body-s text-muted-foreground">Try adjusting your search or filters.</p>
+</div>
+```
+
+### Loading State
+```html
+<div class="flex items-center justify-center py-8">
+  <div class="inline-flex items-center gap-2 px-4 py-2 bg-muted rounded-lg">
+    <svg class="w-4 h-4 animate-spin text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+    <span class="text-body-s text-muted-foreground">Loading...</span>
+  </div>
+</div>
 ```
 
 ## Browser Support
@@ -176,12 +257,6 @@ When adding new components:
 Theme preference is stored in `localStorage` with key: `filesurf-theme`
 Possible values: `'light'` or `'dark'`
 
-## Future Enhancements
-- [ ] Add system theme sync option in settings
-- [ ] Add theme transition animations
-- [ ] Add more theme variants (high contrast, etc.)
-- [ ] Add custom color scheme picker
-
 ## Troubleshooting
 
 ### Theme not persisting
@@ -191,9 +266,12 @@ Check browser localStorage permissions and ensure the domain has storage access.
 Verify the inline script in `<head>` is executing before CSS loads.
 
 ### Colors not updating
-Ensure you're using design tokens (HSL variables) instead of hard-coded colors.
+Ensure you're using semantic tokens (CSS variables) instead of hardcoded colors.
 
 ### Dark mode not activating
 1. Check browser console for errors
 2. Verify `darkMode.js` is loading correctly
 3. Check if `.dark` class is being applied to `<html>` element
+
+### Inconsistent colors between light/dark
+Check if you're mixing color approaches. Use semantic tokens consistently, or use explicit `dark:` variants consistently—don't mix both on the same element.

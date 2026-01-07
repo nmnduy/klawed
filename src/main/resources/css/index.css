@@ -185,25 +185,29 @@
   }
 }
 
-/* Status Indicator Styles */
+/* ==========================================================================
+   Status Indicator States
+   These classes are toggled by JavaScript to reflect connection/working states.
+   Naming: .status-[component]--[state] (connected, error, working)
+   ========================================================================== */
 .status-indicator {
   transition: all 0.3s ease;
 }
 
 .status-indicator--connected {
-  background: linear-gradient(135deg, #10b981, #059669) !important;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35), 0 8px 24px -10px rgba(5, 150, 105, 0.55) !important;
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35), 0 8px 24px -10px rgba(5, 150, 105, 0.55);
 }
 
 .status-indicator--error {
-  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35), 0 8px 24px -10px rgba(220, 38, 38, 0.55) !important;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35), 0 8px 24px -10px rgba(220, 38, 38, 0.55);
 }
 
 .status-indicator--working {
-  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35), 0 8px 24px -10px rgba(217, 119, 6, 0.55) !important;
-  animation: status-spin 1.5s linear infinite !important;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35), 0 8px 24px -10px rgba(217, 119, 6, 0.55);
+  animation: status-spin 1.5s linear infinite;
 }
 
 .status-pulse {
@@ -211,16 +215,16 @@
 }
 
 .status-pulse--connected {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.4), transparent 60%) !important;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.4), transparent 60%);
 }
 
 .status-pulse--error {
-  background: radial-gradient(circle, rgba(239, 68, 68, 0.4), transparent 60%) !important;
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.4), transparent 60%);
 }
 
 .status-pulse--working {
-  background: radial-gradient(circle, rgba(245, 158, 11, 0.4), transparent 60%) !important;
-  animation: status-pulse 1.4s ease-out infinite !important;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.4), transparent 60%);
+  animation: status-pulse 1.4s ease-out infinite;
 }
 
 .status-text {
@@ -228,15 +232,15 @@
 }
 
 .status-text--connected {
-  color: #059669 !important;
+  color: #059669;
 }
 
 .status-text--error {
-  color: #dc2626 !important;
+  color: #dc2626;
 }
 
 .status-text--working {
-  color: #d97706 !important;
+  color: #d97706;
 }
 
 @keyframes gradient {
@@ -277,7 +281,11 @@
   75% { background-position: 50% 100%; }
 }
 
-/* Three-dot loading animation */
+/* ==========================================================================
+   Animation Helpers
+   These classes provide complex animations that cannot be achieved with
+   Tailwind utilities alone. Used for loading states and visual feedback.
+   ========================================================================== */
 @keyframes bounce {
   0%, 80%, 100% {
     transform: scale(0);
@@ -312,7 +320,11 @@
   animation-delay: -0.16s;
 }
 
-/* Chat Tabs Styles */
+/* ==========================================================================
+   Chat Tab States
+   These classes are toggled by JavaScript to manage tab selection state.
+   The .tab-button--active class is applied to the currently selected tab.
+   ========================================================================== */
 .chat-tabs .tab-button {
   color: hsl(var(--muted-foreground));
   background: transparent;
@@ -387,7 +399,12 @@
   }
 }
 
-/* Login Page Animations */
+/* ==========================================================================
+   Login Page Animation Helpers
+   These classes provide decorative animations for the login page.
+   .float-animation - gentle floating effect for visual interest
+   .login-card - transition helper for card interactions
+   ========================================================================== */
 @keyframes float-animation {
   0%, 100% { 
     transform: translateY(0px); 

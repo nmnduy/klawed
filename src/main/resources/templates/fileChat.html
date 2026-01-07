@@ -17,6 +17,11 @@
         })();
     </script>
     <link rel="stylesheet" href="/assets/main.css">
+    <!-- 
+      Inline styles for scrollbar customization.
+      Required because Tailwind doesn't support ::-webkit-scrollbar pseudo-elements.
+      Colors use CSS variables for theme consistency.
+    -->
     <style>
         #chat-container::-webkit-scrollbar {
             width: 10px;
