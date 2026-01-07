@@ -195,12 +195,6 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 - Check that template files are in `src/main/resources/templates/`
 - Restart Quarkus if changes aren't picked up automatically
 
-### Monitoring Issues
-- **Metrics endpoint not available**: Check if Micrometer dependencies are added to pom.xml
-- **No custom metrics appearing**: Verify MetricsService is properly injected and initialized
-- **High memory usage from metrics**: Consider reducing metric cardinality or increasing scrape intervals
-- **Prometheus configuration warnings**: Some Micrometer properties may have changed in Quarkus 3.16.4
-
 ### Security Considerations for Production
 - **Email-based authentication**: Users must provide email to access the app. No password required.
 - **Session isolation**: Each user session is isolated based on their userId
