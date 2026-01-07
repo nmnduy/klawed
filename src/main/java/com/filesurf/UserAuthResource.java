@@ -54,15 +54,25 @@ public class UserAuthResource {
         }
 
         try {
-            // Find or create user by email
-            UserRecord user = userService.findOrCreateUserByEmail(email);
+            // Check if user exists (invite-only - no auto-registration)
+            UserRecord user = userService.getUserByEmail(email);
 
             if (user == null) {
-                LOGGER.severe("Failed to create/find user for email: " + email);
-                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                        .entity("{\"error\": \"Failed to process login\"}")
+                LOGGER.warning("Login attempt with non-invited email: " + email);
+                return Response.status(Response.Status.FORBIDDEN)
+                        .entity("{\"error\": \"Access denied. This application is invite-only. Please contact the administrator.\"}")
                         .build();
             }
+
+            if (!user.isActive()) {
+                LOGGER.warning("Login attempt with deactivated account: " + email);
+                return Response.status(Response.Status.FORBIDDEN)
+                        .entity("{\"error\": \"Your account has been deactivated. Please contact the administrator.\"}")
+                        .build();
+            }
+
+            // Update last login timestamp
+            userService.updateLastLogin(user.getUserId());
 
             LOGGER.info("Login successful for email: " + email + " with userId: " + user.getUserId());
 
@@ -227,7 +237,7 @@ public class UserAuthResource {
                     <div class="bg-[hsl(var(--card))] rounded-xl shadow-lg p-8 border border-[hsl(var(--border))]">
                         <div class="text-center mb-8">
                             <h1 class="text-2xl font-bold text-[hsl(var(--foreground))]">Welcome to FileSurf</h1>
-                            <p class="text-[hsl(var(--muted-foreground))] mt-2">Enter your email to continue</p>
+                            <p class="text-[hsl(var(--muted-foreground))] mt-2">Enter your email to continue (invite only)</p>
                         </div>
                         
                         <form action="/auth/login" method="POST" id="login-form">
@@ -256,7 +266,7 @@ public class UserAuthResource {
                         </form>
                         
                         <p class="text-center text-sm text-[hsl(var(--muted-foreground))] mt-6">
-                            By continuing, you agree to our terms of service.
+                            This application is invite-only. Contact the administrator for access.
                         </p>
                         
                         <div id="error-message" class="hidden mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center"></div>

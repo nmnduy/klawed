@@ -113,14 +113,30 @@ logs/                          # Application logs
 
 ## Authentication
 
-### Email-Based Authentication
-Users must provide their email address to use the application. The authentication flow:
+### Email-Based Authentication (Invite-Only)
+Users must be invited before they can access the application. The authentication flow:
 
-1. **First Visit**: Users without a valid `filesurf_userId` cookie are redirected to `/auth/login`
-2. **Login**: User enters email address on the login page
-3. **User Creation/Lookup**: System finds existing user by email or creates new user
-4. **Cookie Set**: `filesurf_userId` cookie is set with 365-day expiration
-5. **Access Granted**: User can now access all protected endpoints
+1. **Admin Invites User**: Admin runs `./scripts/invite-user.sh user@example.com`
+2. **First Visit**: Users without a valid `filesurf_userId` cookie are redirected to `/auth/login`
+3. **Login**: User enters their invited email address on the login page
+4. **User Lookup**: System verifies email exists in database (no auto-registration)
+5. **Cookie Set**: `filesurf_userId` cookie is set with 365-day expiration
+6. **Access Granted**: User can now access all protected endpoints
+
+### Managing Users (Admin Scripts)
+```bash
+# Invite a new user
+./scripts/invite-user.sh user@example.com
+
+# List all invited users
+./scripts/invite-user.sh --list
+
+# Deactivate a user (they can no longer log in)
+./scripts/invite-user.sh --deactivate user@example.com
+
+# Re-activate a user
+./scripts/invite-user.sh --activate user@example.com
+```
 
 ### Auth Endpoints
 - `GET /auth/login` - Login page (HTML form)
@@ -196,7 +212,7 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 - Restart Quarkus if changes aren't picked up automatically
 
 ### Security Considerations for Production
-- **Email-based authentication**: Users must provide email to access the app. No password required.
+- **Invite-only authentication**: Only pre-invited email addresses can access the app. No self-registration.
 - **Session isolation**: Each user session is isolated based on their userId
 - **Exposed endpoints**: Protected endpoints require valid authentication cookie
 - **File uploads**: Users can upload any files to their session directories

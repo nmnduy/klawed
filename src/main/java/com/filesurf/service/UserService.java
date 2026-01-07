@@ -97,6 +97,47 @@ public class UserService {
     }
 
     /**
+     * Update the last login timestamp for a user
+     *
+     * @param userId The userId to update
+     */
+    public void updateLastLogin(String userId) {
+        userRepository.updateLastLogin(userId);
+    }
+
+    /**
+     * Invite a new user by email (admin function).
+     * Creates a new user account that can then log in.
+     *
+     * @param email The email to invite
+     * @return The created UserRecord
+     * @throws IllegalArgumentException if email is invalid or already exists
+     */
+    public UserRecord inviteUser(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be null or empty");
+        }
+
+        if (!isValidEmail(email)) {
+            throw new IllegalArgumentException("Invalid email format: " + email);
+        }
+
+        String normalizedEmail = email.toLowerCase().trim();
+        
+        // Check if user already exists
+        UserRecord existingUser = userRepository.findByEmail(normalizedEmail);
+        if (existingUser != null) {
+            throw new IllegalArgumentException("User already exists with email: " + normalizedEmail);
+        }
+
+        // Create new user with generated userId
+        String newUserId = "user-" + java.util.UUID.randomUUID().toString();
+        UserRecord newUser = userRepository.createUser(normalizedEmail, newUserId);
+        LOGGER.info("Invited new user with email: " + normalizedEmail + " userId: " + newUserId);
+        return newUser;
+    }
+
+    /**
      * Validate email format
      *
      * @param email The email to validate
