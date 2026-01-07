@@ -98,9 +98,25 @@ export function init(rootEl) {
     // to establish and set sessionId first. This is handled in setFileExplorerSession()
     // which is called after connectWebSocket() completes.
     console.log('[file-chat] Page load - checking active tab');
+    let isFilesTabVisibleOnLoad = false;
     if (tabManager) {
         const activeTab = tabManager.getActiveTab();
         console.log('[file-chat] Active tab on page load:', activeTab ? activeTab.id : 'none');
+        
+        // On desktop (>= 1024px), both panels are visible and activeTab is null
+        // On mobile, only the active tab is visible
+        const isDesktop = window.innerWidth >= 1024;
+        console.log('[file-chat] Is desktop:', isDesktop);
+        
+        if (isDesktop) {
+            // On desktop, file explorer panel is always visible
+            isFilesTabVisibleOnLoad = true;
+            console.log('[file-chat] Desktop mode: file explorer is visible');
+        } else if (activeTab && activeTab.id === 'file') {
+            // On mobile, check if files tab is the active one
+            isFilesTabVisibleOnLoad = true;
+            console.log('[file-chat] Mobile mode: files tab is active');
+        }
     }
 
     let ws = null;
@@ -721,19 +737,34 @@ export function init(rootEl) {
             fileExplorer.setSession(sessionId, userId);
             console.log('[file-chat] fileExplorer session set with sessionId:', sessionId);
             
-            // If Files tab is currently active, load the directory and start auto-refresh
-            if (tabManager) {
+            // Check if Files tab is visible
+            // On desktop (>= 1024px), both panels are always visible
+            // On mobile, check if files tab is the active one
+            const isDesktop = window.innerWidth >= 1024;
+            let shouldLoadExplorer = false;
+            
+            if (isDesktop) {
+                // On desktop, file explorer is always visible
+                shouldLoadExplorer = true;
+                console.log('[file-chat] Desktop mode: loading file explorer (always visible)');
+            } else if (tabManager) {
+                // On mobile, check active tab
                 const activeTab = tabManager.getActiveTab();
-                console.log('[file-chat] Current active tab:', activeTab ? activeTab.id : 'none');
+                console.log('[file-chat] Mobile mode, current active tab:', activeTab ? activeTab.id : 'none');
                 if (activeTab && activeTab.id === 'file') {
+                    shouldLoadExplorer = true;
                     console.log('[file-chat] Files tab is active, loading directory...');
-                    fileExplorer.loadDirectory();
-                    // Start auto-refresh for file explorer
-                    if (typeof fileExplorer.startAutoRefresh === 'function') {
-                        fileExplorer.startAutoRefresh();
-                    }
                 } else {
                     console.log('[file-chat] Files tab is NOT active, skipping directory load');
+                }
+            }
+            
+            if (shouldLoadExplorer) {
+                console.log('[file-chat] Loading file explorer directory');
+                fileExplorer.loadDirectory();
+                // Start auto-refresh for file explorer
+                if (typeof fileExplorer.startAutoRefresh === 'function') {
+                    fileExplorer.startAutoRefresh();
                 }
             }
         }
