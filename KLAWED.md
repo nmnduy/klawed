@@ -9,6 +9,7 @@ FileSurf v2 is a Quarkus-based application for file management and chat function
 - ✅ Ports 8080, 8081, and 8082 are now available
 - ✅ Database directory (`data/`) exists and is ready
 - ✅ Logging configuration is properly set up
+- ✅ **Email-based authentication** added (2026-01-07)
 
 ## Quick Start
 ```bash
@@ -71,6 +72,31 @@ logs/                          # Application logs
 - `GET /file-chat` - Main chat interface
 - WebSocket: `/file-chat/ws/{sessionId}`
 - REST API: Various endpoints under `/file-chat/http/`
+- **Monitoring**: `GET /metrics` - Prometheus metrics endpoint (standard format)
+
+## REST API Endpoints
+### Authentication
+- `GET /auth/login` - Login page
+- `POST /auth/login` - Login with email
+- `GET /auth/status` - Check auth status
+- `POST /auth/logout` - Logout
+
+### Session Management
+- `GET /session/generate` - Generate new session (requires auth)
+- `GET /session/count` - Get session count
+- `POST /file-chat/upload` - Upload files
+- `GET /file-chat/upload/list` - List uploaded files
+- `GET /file-chat/explorer/list` - List files in session
+- `GET /file-chat/explorer/metadata` - Get file metadata
+- `GET /file-chat/explorer/open` - Open/download file
+- `GET /file-chat/explorer/preview` - Preview text file
+- `POST /file-chat/explorer/compile-latex` - Compile LaTeX
+- `POST /file-chat/http/session/{sessionId}` - Create/update session
+- `DELETE /file-chat/http/session/{sessionId}` - Delete session
+- `POST /file-chat/http/session/{sessionId}/conclude` - Conclude session
+- `POST /file-chat/http/message/{sessionId}` - Send message
+- `GET /file-chat/http/messages/{sessionId}` - Get messages
+- `GET /file-chat/http/poll/{sessionId}` - Poll for messages
 
 ## Database
 - SQLite database: `data/filesurf.db`
@@ -82,7 +108,51 @@ logs/                          # Application logs
 - Cookie path: `/` (root path)
 - HttpOnly: `true` (secure, not accessible from JavaScript)
 - Secure: Configurable via `cookie.secure` property (defaults to `false` for development)
+- Cookie duration: 365 days
 - The cookie name is specific to FileSurf to prevent interference with other applications running on the same host
+
+## Authentication
+
+### Email-Based Authentication
+Users must provide their email address to use the application. The authentication flow:
+
+1. **First Visit**: Users without a valid `filesurf_userId` cookie are redirected to `/auth/login`
+2. **Login**: User enters email address on the login page
+3. **User Creation/Lookup**: System finds existing user by email or creates new user
+4. **Cookie Set**: `filesurf_userId` cookie is set with 365-day expiration
+5. **Access Granted**: User can now access all protected endpoints
+
+### Auth Endpoints
+- `GET /auth/login` - Login page (HTML form)
+- `POST /auth/login` - Submit login (form or JSON)
+- `GET /auth/status` - Check authentication status (JSON)
+- `POST /auth/logout` - Clear authentication cookie
+
+### Protected vs Public Endpoints
+**Public (no auth required):**
+- `/auth/*` - Authentication endpoints
+- `/assets/*`, `/js/*`, `/css/*` - Static assets
+- `/health/*`, `/metrics`, `/q/*` - Health and monitoring
+
+**Protected (auth required):**
+- `/file-chat` - Main chat interface
+- `/session/*` - Session management
+- `/file-chat/upload/*` - File uploads
+- `/file-chat/explorer/*` - File explorer
+- All WebSocket connections
+
+### Database Schema
+The `users` table links emails to userIds:
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL UNIQUE,      -- Cookie value (e.g., "user-uuid")
+    email TEXT NOT NULL UNIQUE,         -- User's email address
+    created_at TIMESTAMP NOT NULL,
+    last_login_at TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+```
 
 ## Dependencies
 - Quarkus 3.16.4
@@ -90,6 +160,7 @@ logs/                          # Application logs
 - WebSockets
 - SQLite JDBC
 - Tailwind CSS (via npm)
+- **Monitoring**: Micrometer + Prometheus registry
 
 ## Building for Production
 ```bash
@@ -123,3 +194,16 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 - Verify you're not working in a git worktree
 - Check that template files are in `src/main/resources/templates/`
 - Restart Quarkus if changes aren't picked up automatically
+
+### Monitoring Issues
+- **Metrics endpoint not available**: Check if Micrometer dependencies are added to pom.xml
+- **No custom metrics appearing**: Verify MetricsService is properly injected and initialized
+- **High memory usage from metrics**: Consider reducing metric cardinality or increasing scrape intervals
+- **Prometheus configuration warnings**: Some Micrometer properties may have changed in Quarkus 3.16.4
+
+### Security Considerations for Production
+- **Email-based authentication**: Users must provide email to access the app. No password required.
+- **Session isolation**: Each user session is isolated based on their userId
+- **Exposed endpoints**: Protected endpoints require valid authentication cookie
+- **File uploads**: Users can upload any files to their session directories
+- **Monitoring**: `/metrics` endpoint is publicly accessible. Consider IP whitelisting or basic auth
