@@ -231,18 +231,63 @@ public class UserAuthResource {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>FileSurf - Login</title>
                 <link rel="stylesheet" href="/assets/main.css">
+                <style>
+                    .login-gradient {
+                        background: linear-gradient(135deg, 
+                            hsl(var(--background)) 0%%, 
+                            hsl(var(--muted)) 50%%, 
+                            hsl(var(--background)) 100%%);
+                    }
+                    .login-card {
+                        backdrop-filter: blur(10px);
+                        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25),
+                                    0 0 0 1px rgba(255, 255, 255, 0.05);
+                    }
+                    .login-icon {
+                        background: linear-gradient(135deg, hsl(var(--primary)) 0%%, hsl(var(--primary)/0.8) 100%%);
+                        box-shadow: 0 10px 40px -10px hsl(var(--primary)/0.5);
+                    }
+                    .input-focus-glow:focus {
+                        box-shadow: 0 0 0 3px hsl(var(--primary)/0.2);
+                    }
+                    .btn-glow {
+                        box-shadow: 0 4px 14px 0 hsl(var(--primary)/0.4);
+                    }
+                    .btn-glow:hover {
+                        box-shadow: 0 6px 20px 0 hsl(var(--primary)/0.5);
+                        transform: translateY(-1px);
+                    }
+                    @keyframes float {
+                        0%%, 100%% { transform: translateY(0px); }
+                        50%% { transform: translateY(-10px); }
+                    }
+                    .float-animation {
+                        animation: float 6s ease-in-out infinite;
+                    }
+                </style>
             </head>
-            <body class="bg-layout-page-background min-h-screen flex items-center justify-center">
-                <div class="w-full max-w-md p-8">
-                    <div class="bg-[hsl(var(--card))] rounded-xl shadow-lg p-8 border border-[hsl(var(--border))]">
-                        <div class="text-center mb-8">
-                            <h1 class="text-2xl font-bold text-[hsl(var(--foreground))]">Welcome to FileSurf</h1>
-                            <p class="text-[hsl(var(--muted-foreground))] mt-2">Enter your email to continue (invite only)</p>
+            <body class="login-gradient min-h-screen flex items-center justify-center p-4 sm:p-6 md:p-8">
+                <div class="w-full max-w-md">
+                    <div class="login-card bg-[hsl(var(--card)/0.95)] rounded-2xl p-6 sm:p-8 md:p-10 border border-[hsl(var(--border)/0.5)]">
+                        <!-- Icon -->
+                        <div class="flex justify-center mb-6">
+                            <div class="login-icon float-animation w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center">
+                                <svg class="w-8 h-8 sm:w-10 sm:h-10 text-[hsl(var(--primary-foreground))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                                </svg>
+                            </div>
                         </div>
                         
-                        <form action="/auth/login" method="POST" id="login-form">
+                        <!-- Header -->
+                        <div class="text-center mb-8">
+                            <h1 class="text-2xl sm:text-3xl font-bold text-[hsl(var(--foreground))] mb-2">Welcome to FileSurf</h1>
+                            <p class="text-[hsl(var(--muted-foreground))] text-sm sm:text-base">Enter your email to continue</p>
+                        </div>
+                        
+                        <!-- Form -->
+                        <form action="/auth/login" method="POST" id="login-form" class="space-y-6">
                             %s
-                            <div class="mb-6">
+                            <div>
                                 <label for="email" class="block text-sm font-medium text-[hsl(var(--foreground))] mb-2">
                                     Email Address
                                 </label>
@@ -253,24 +298,38 @@ public class UserAuthResource {
                                     required
                                     autofocus
                                     placeholder="you@example.com"
-                                    class="w-full px-4 py-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] focus:border-transparent transition-all"
+                                    class="input-focus-glow w-full px-4 py-3 sm:py-3.5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))] focus:outline-none focus:border-[hsl(var(--primary))] transition-all duration-200"
                                 />
                             </div>
                             
                             <button 
                                 type="submit"
-                                class="w-full py-3 px-4 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-[hsl(var(--primary-foreground))] font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] focus:ring-offset-2"
+                                class="btn-glow w-full py-3 sm:py-3.5 px-4 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.9)] text-[hsl(var(--primary-foreground))] font-semibold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] focus:ring-offset-2 focus:ring-offset-[hsl(var(--card))]"
                             >
                                 Continue with Email
                             </button>
                         </form>
                         
-                        <p class="text-center text-sm text-[hsl(var(--muted-foreground))] mt-6">
-                            This application is invite-only. Contact the administrator for access.
-                        </p>
+                        <!-- Error Message -->
+                        <div id="error-message" class="hidden mt-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center"></div>
                         
-                        <div id="error-message" class="hidden mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center"></div>
+                        <!-- Footer -->
+                        <div class="mt-8 pt-6 border-t border-[hsl(var(--border)/0.5)]">
+                            <p class="text-center text-xs sm:text-sm text-[hsl(var(--muted-foreground))]">
+                                <span class="inline-flex items-center gap-1">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                    </svg>
+                                    Invite-only access
+                                </span>
+                            </p>
+                        </div>
                     </div>
+                    
+                    <!-- Branding -->
+                    <p class="text-center text-xs text-[hsl(var(--muted-foreground)/0.6)] mt-6">
+                        FileSurf &copy; 2026
+                    </p>
                 </div>
                 
                 <script>
