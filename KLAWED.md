@@ -27,6 +27,7 @@ Project instructions for Klawed when working with this codebase.
 - **TODO system**: `src/todo.c`, `src/todo.h`
 - **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/normal-mode.md`
 - **Arena allocator**: `src/arena.h` (region-based memory management, single-header library)
+- **Memvid integration**: `src/memvid.c`, `src/memvid.h`, `docs/memvid.md` (persistent memory)
 
 **Data & State:**
 - **Database/Persistence**: `src/persistence.c`, `src/sqlite_queue.c`, `docs/sqlite-queue.md`
@@ -138,6 +139,14 @@ make ZMQ=0        # Explicitly disable ZMQ support
 make              # Will auto-detect libzmq if available
 ```
 
+**With Memvid support (persistent memory):**
+```bash
+make MEMVID=1     # Build with memvid support (requires memvid-ffi library)
+make MEMVID=0     # Explicitly disable memvid support
+# Or let it auto-detect (default):
+make              # Will auto-detect if libmemvid_ffi is available
+```
+
 `make test` can take a while, most likely more than the default bash command timeout. So increase timeout value if required.
 
 **Running:**
@@ -181,6 +190,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
 - **ZMQ Socket**: `KLAWED_ZMQ_ENDPOINT` - ZMQ endpoint (e.g., "tcp://127.0.0.1:5555" or "ipc:///tmp/klawed.sock")
   - `KLAWED_ZMQ_MODE` - ZMQ mode ("daemon")
+- **Memory**: `KLAWED_MEMORY_PATH` for custom memory file location (default: `.klawed/memory.mv2`)
 
 **Defaults:**
 - Logs: `./.klawed/logs/klawed.log` (project-local)
@@ -188,6 +198,7 @@ export OPENAI_API_KEY="your-api-key"
 - Prompt caching: Enabled
 - Max tokens: 16384 (configurable via `KLAWED_MAX_TOKENS`)
 - Token usage tracking: Enabled (stores in `token_usage` table)
+- Memory file: `./.klawed/memory.mv2` (project-local, when memvid enabled)
 
 ## Development
 

@@ -4,6 +4,12 @@
 #   make VOICE=1  - Enable voice input (requires ffmpeg + whisper.cpp submodule)
 #   make VOICE=0  - Disable voice input (default)
 #   make          - Disabled by default
+#
+# Memvid Integration (video-based memory storage):
+#   make MEMVID=1 - Enable memvid support (requires memvid-ffi library)
+#   make MEMVID=0 - Disable memvid support (default)
+#   make          - Auto-detect if libmemvid_ffi is available
+#   Memvid FFI path: /Users/puter/github/memvid/memvid-ffi/
 
 CC ?= gcc
 CLANG = clang
@@ -165,6 +171,55 @@ else
     endif
 endif
 
+# Optional Memvid support for video-based memory storage (MEMVID=auto|1|0)
+# Memvid FFI library path
+MEMVID_FFI_DIR = /Users/puter/github/memvid/memvid-ffi
+MEMVID_FFI_LIB = $(MEMVID_FFI_DIR)/target/release/libmemvid_ffi.a
+MEMVID ?= auto
+
+ifeq ($(MEMVID),1)
+    # Explicitly enable memvid
+    CFLAGS += -DHAVE_MEMVID=1
+    DEBUG_CFLAGS += -DHAVE_MEMVID=1
+    MEMVID_SRC = src/memvid.c
+    MEMVID_LIBS = -L$(MEMVID_FFI_DIR)/target/release -lmemvid_ffi
+    # Add Rust stdlib dependencies based on OS
+    ifeq ($(UNAME_S),Darwin)
+        MEMVID_LIBS += -framework Security -framework CoreFoundation
+    else ifeq ($(UNAME_S),Linux)
+        MEMVID_LIBS += -lpthread -ldl -lm
+    endif
+    LDFLAGS += $(MEMVID_LIBS)
+    DEBUG_LDFLAGS += $(MEMVID_LIBS)
+else ifeq ($(MEMVID),0)
+    # Explicitly disable memvid
+    CFLAGS += -DDISABLE_MEMVID=1
+    DEBUG_CFLAGS += -DDISABLE_MEMVID=1
+    MEMVID_SRC = src/memvid.c
+    MEMVID_LIBS =
+else
+    # Default: auto-detect by checking if libmemvid_ffi exists
+    ifeq ($(shell test -f $(MEMVID_FFI_LIB) && echo yes),yes)
+        CFLAGS += -DHAVE_MEMVID=1
+        DEBUG_CFLAGS += -DHAVE_MEMVID=1
+        MEMVID_SRC = src/memvid.c
+        MEMVID_LIBS = -L$(MEMVID_FFI_DIR)/target/release -lmemvid_ffi
+        ifeq ($(UNAME_S),Darwin)
+            MEMVID_LIBS += -framework Security -framework CoreFoundation
+        else ifeq ($(UNAME_S),Linux)
+            MEMVID_LIBS += -lpthread -ldl -lm
+        endif
+        LDFLAGS += $(MEMVID_LIBS)
+        DEBUG_LDFLAGS += $(MEMVID_LIBS)
+    else
+        # Memvid not available, disable it
+        CFLAGS += -DDISABLE_MEMVID=1
+        DEBUG_CFLAGS += -DDISABLE_MEMVID=1
+        MEMVID_SRC = src/memvid.c
+        MEMVID_LIBS =
+    endif
+endif
+
 BUILD_DIR = build
 
 TARGET = $(BUILD_DIR)/klawed
@@ -203,6 +258,7 @@ TEST_WM_TARGET = $(BUILD_DIR)/test_window_manager
 TEST_TOOL_RESULTS_REGRESSION_TARGET = $(BUILD_DIR)/test_tool_results_regression
 TEST_ARRAY_RESIZE_TARGET = $(BUILD_DIR)/test_array_resize
 TEST_ARENA_TARGET = $(BUILD_DIR)/test_arena
+TEST_MEMVID_TARGET = $(BUILD_DIR)/test_memvid
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 TEST_ZMQ_SOCKET_TARGET = $(BUILD_DIR)/test_zmq_socket
@@ -268,6 +324,7 @@ ZMQ_THREAD_POOL_OBJ = $(BUILD_DIR)/zmq_thread_pool.o
 # ZMQ_CLIENT_OBJ = $(BUILD_DIR)/zmq_client.o
 SQLITE_QUEUE_SRC = src/sqlite_queue.c
 SQLITE_QUEUE_OBJ = $(BUILD_DIR)/sqlite_queue.o
+MEMVID_OBJ = $(BUILD_DIR)/memvid.o
 
 MCP_SRC = src/mcp.c
 MCP_OBJ = $(BUILD_DIR)/mcp.o
@@ -338,6 +395,7 @@ TEST_TUI_AUTO_SCROLL_SRC = tests/test_tui_auto_scroll.c
 TEST_TOOL_DETAILS_SRC = tests/test_tool_details_simple.c
 TEST_ARRAY_RESIZE_SRC = tests/test_array_resize.c
 TEST_ARENA_SRC = tests/test_arena.c
+TEST_MEMVID_SRC = tests/test_memvid.c
 TEST_TOKEN_USAGE_SRC = tests/test_token_usage.c
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
 TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
@@ -349,7 +407,7 @@ TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 # Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -587,6 +645,12 @@ test-arena: check-deps $(TEST_ARENA_TARGET)
 	@echo ""
 	@./$(TEST_ARENA_TARGET)
 
+test-memvid: check-deps $(TEST_MEMVID_TARGET)
+	@echo ""
+	@echo "Running Memvid Memory Tool tests..."
+	@echo ""
+	@./$(TEST_MEMVID_TARGET)
+
 test-token-usage: check-deps $(TEST_TOKEN_USAGE_TARGET)
 	@echo ""
 	@echo "Running Token Usage tests..."
@@ -627,9 +691,9 @@ test-file-search: check-deps $(TEST_FILE_SEARCH_TARGET)
 
 # Socket test removed - will be reimplemented with ZMQ
 
-$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(VERSION_H)
+$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MEMVID_OBJ) $(VERSION_H)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MEMVID_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Build successful!"
 	@echo "Version: $(VERSION)"
@@ -699,6 +763,12 @@ $(BUILD_DIR)/zmq_daemon.o: $(ZMQ_DAEMON_SRC) src/zmq_daemon.h src/zmq_message_qu
 $(BUILD_DIR)/sqlite_queue.o: $(SQLITE_QUEUE_SRC) src/sqlite_queue.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/sqlite_queue.o $(SQLITE_QUEUE_SRC)
+
+# Build memvid object (video-based memory storage)
+# MEMVID_SRC can be src/memvid.c (real) or src/memvid_stub.c (stub)
+$(BUILD_DIR)/memvid.o: $(MEMVID_SRC)
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/memvid.o $(MEMVID_SRC)
 
 # Build ZMQ reliable queue object
 
@@ -1370,6 +1440,17 @@ $(TEST_ARENA_TARGET): $(TEST_ARENA_SRC)
 	@echo "✓ Arena Allocator test build successful!"
 	@echo ""
 
+# Test target for Memvid Memory Tools - tests parameter validation and availability
+# Note: We compile memvid.c directly here with matching HAVE_MEMVID setting
+$(TEST_MEMVID_TARGET): $(TEST_MEMVID_SRC) $(LOGGER_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Memvid Memory Tool test suite..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/memvid_test.o src/memvid.c
+	@$(CC) $(CFLAGS) -DTEST_BUILD -o $(TEST_MEMVID_TARGET) $(TEST_MEMVID_SRC) $(BUILD_DIR)/memvid_test.o $(LOGGER_OBJ) $(MEMVID_LIBS) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Memvid Memory Tool test build successful!"
+	@echo ""
+
 # Test target for Token Usage - tests token usage tracking functionality
 $(TEST_TOKEN_USAGE_TARGET): $(TEST_TOKEN_USAGE_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ)
 	@mkdir -p $(BUILD_DIR)
@@ -1651,6 +1732,16 @@ check-deps:
 		pkg-config --exists libzmq 2>/dev/null || { echo "Error: libzmq not found. Install with: brew install zeromq (macOS) or apt-get install libzmq3-dev (Linux)"; exit 1; }; \
 		echo "✓ ZeroMQ found"; \
 	fi
+	@# Check for memvid-ffi if explicitly enabled
+	@if [ "$(MEMVID)" = "1" ]; then \
+		echo "Checking for memvid-ffi (MEMVID=1 specified)..."; \
+		if [ ! -f "$(MEMVID_FFI_LIB)" ]; then \
+			echo "Error: memvid-ffi library not found at $(MEMVID_FFI_LIB)"; \
+			echo "Build it with: make memvid-ffi"; \
+			exit 1; \
+		fi; \
+		echo "✓ memvid-ffi found"; \
+	fi
 	@echo "✓ All dependencies found"
 	@echo ""
 
@@ -1735,6 +1826,14 @@ help:
 	@echo "Static Analysis Tools (optional):"
 	@echo "  macOS: brew install llvm cppcheck flawfinder"
 	@echo "  Linux: sudo apt-get install clang-tidy cppcheck flawfinder"
+	@echo ""
+	@echo "Memvid Integration (video-based memory storage):"
+	@echo "  make MEMVID=1       - Build with memvid support enabled"
+	@echo "  make MEMVID=0       - Build with memvid support disabled"
+	@echo "  make memvid-ffi     - Build the Rust memvid-ffi library"
+	@echo "  make memvid-ffi-clean - Clean the Rust build artifacts"
+	@echo "  make check-memvid   - Check memvid-ffi library status"
+	@echo "  FFI path: $(MEMVID_FFI_DIR)"
 	@echo ""
 	@echo "AWS Bedrock Configuration:"
 	@echo "  export CLAUDE_CODE_USE_BEDROCK=true"
@@ -1982,7 +2081,7 @@ $(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET): $(TEST_TOKEN_USAGE_SESSION_TOTALS_SRC
 SQLITE_QUEUE_TEST_OBJ = $(BUILD_DIR)/sqlite_queue_test.o
 # Common objects needed by tests that compile claude.c
 
-TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ)
+TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(MEMVID_OBJ)
 
 test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET)
 	@echo ""
@@ -2164,4 +2263,64 @@ setup-voice: $(WHISPER_LIB) download-model
 	@echo ""
 	@echo "Available models in whisper_models/:"
 	@ls -lh whisper_models/*.bin 2>/dev/null || echo "  (none yet - run make download-model)"
+	@echo ""
+
+#
+# Memvid FFI Integration
+#
+
+# Build the Rust memvid-ffi library
+.PHONY: memvid-ffi
+memvid-ffi:
+	@if [ ! -d "$(MEMVID_FFI_DIR)" ]; then \
+		echo ""; \
+		echo "❌ Error: memvid-ffi directory not found at $(MEMVID_FFI_DIR)"; \
+		echo ""; \
+		echo "Please clone the memvid repository:"; \
+		echo "  git clone https://github.com/your/memvid.git $(dir $(MEMVID_FFI_DIR))"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "Building memvid-ffi Rust library..."
+	@echo ""
+	@cd $(MEMVID_FFI_DIR) && cargo build --release
+	@echo ""
+	@echo "✓ memvid-ffi library built successfully"
+	@echo "  Library: $(MEMVID_FFI_LIB)"
+	@echo ""
+	@echo "Now build klawed with: make MEMVID=1"
+	@echo ""
+
+# Clean the memvid-ffi build artifacts
+.PHONY: memvid-ffi-clean
+memvid-ffi-clean:
+	@echo "Cleaning memvid-ffi build artifacts..."
+	@if [ -d "$(MEMVID_FFI_DIR)" ]; then \
+		cd $(MEMVID_FFI_DIR) && cargo clean; \
+		echo "✓ memvid-ffi build cleaned"; \
+	else \
+		echo "memvid-ffi directory not found, nothing to clean"; \
+	fi
+
+# Check memvid-ffi status
+.PHONY: check-memvid
+check-memvid:
+	@echo ""
+	@echo "Memvid FFI Status:"
+	@echo "  Directory: $(MEMVID_FFI_DIR)"
+	@if [ -d "$(MEMVID_FFI_DIR)" ]; then \
+		echo "  ✓ Directory exists"; \
+		if [ -f "$(MEMVID_FFI_LIB)" ]; then \
+			echo "  ✓ Library built: $(MEMVID_FFI_LIB)"; \
+			ls -lh $(MEMVID_FFI_LIB); \
+		else \
+			echo "  ○ Library not built yet"; \
+			echo "    Run: make memvid-ffi"; \
+		fi; \
+	else \
+		echo "  ✗ Directory not found"; \
+	fi
+	@echo ""
+	@echo "Current MEMVID setting: $(MEMVID)"
 	@echo ""

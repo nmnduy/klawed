@@ -61,6 +61,22 @@ make VOICE=1 install
 
 **Note:** Voice input adds significant build time and dependencies. Most users don't need it.
 
+### Persistent Memory (Optional)
+
+Memvid integration enables persistent memory across sessions, allowing the agent to remember facts, preferences, and context.
+
+**To enable persistent memory:**
+```bash
+# 1. Build memvid-ffi library (see memvid repo)
+cd /path/to/memvid/memvid-ffi
+cargo build --release
+
+# 2. Build klawed with memvid support
+make MEMVID=1
+```
+
+See `docs/memvid.md` for detailed documentation.
+
 ## Usage
 
 ### Quick start

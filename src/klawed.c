@@ -184,6 +184,11 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 // Arena allocator for per-thread memory management
 #include "arena.h"
 
+// Memvid persistent memory support (optional)
+#ifdef HAVE_MEMVID
+#include "memvid.h"
+#endif
+
 #ifdef TEST_BUILD
 #define main klawed_main
 #endif
@@ -1007,6 +1012,10 @@ static cJSON* tool_upload_image(cJSON *params, ConversationState *state);
 static cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *state);
 static cJSON* tool_interrupt_subagent(cJSON *params, ConversationState *state);
 static cJSON* tool_multiedit(cJSON *params, ConversationState *state);
+// Memory tools (conditional on HAVE_MEMVID)
+static cJSON* tool_memory_store(cJSON *params, ConversationState *state);
+static cJSON* tool_memory_recall(cJSON *params, ConversationState *state);
+static cJSON* tool_memory_search(cJSON *params, ConversationState *state);
 #else
 #define STATIC static
 // Forward declarations
@@ -3580,6 +3589,257 @@ STATIC cJSON* tool_sleep(cJSON *params, ConversationState *state) {
     return result;
 }
 
+// ============================================================================
+// Memory Tools Implementation (Memvid)
+// ============================================================================
+
+/**
+ * tool_memory_store - Store a memory card about the user or project
+ * params: { entity, slot, value, kind, relation (optional) }
+ */
+static cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
+    (void)state;
+
+#ifdef HAVE_MEMVID
+    // Extract required parameters
+    cJSON *entity_json = cJSON_GetObjectItem(params, "entity");
+    cJSON *slot_json = cJSON_GetObjectItem(params, "slot");
+    cJSON *value_json = cJSON_GetObjectItem(params, "value");
+    cJSON *kind_json = cJSON_GetObjectItem(params, "kind");
+    cJSON *relation_json = cJSON_GetObjectItem(params, "relation");
+
+    if (!entity_json || !cJSON_IsString(entity_json) ||
+        !slot_json || !cJSON_IsString(slot_json) ||
+        !value_json || !cJSON_IsString(value_json) ||
+        !kind_json || !cJSON_IsString(kind_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Missing required parameters: entity, slot, value, kind");
+        return error;
+    }
+
+    const char *entity = entity_json->valuestring;
+    const char *slot = slot_json->valuestring;
+    const char *value = value_json->valuestring;
+    const char *kind_str = kind_json->valuestring;
+    const char *relation_str = relation_json && cJSON_IsString(relation_json)
+                               ? relation_json->valuestring : "sets";
+
+    // Parse kind string to enum value
+    uint8_t kind = MEMVID_KIND_FACT;  // default
+    if (strcmp(kind_str, "fact") == 0) {
+        kind = MEMVID_KIND_FACT;
+    } else if (strcmp(kind_str, "preference") == 0) {
+        kind = MEMVID_KIND_PREFERENCE;
+    } else if (strcmp(kind_str, "event") == 0) {
+        kind = MEMVID_KIND_EVENT;
+    } else if (strcmp(kind_str, "profile") == 0) {
+        kind = MEMVID_KIND_PROFILE;
+    } else if (strcmp(kind_str, "relationship") == 0) {
+        kind = MEMVID_KIND_RELATIONSHIP;
+    } else if (strcmp(kind_str, "goal") == 0) {
+        kind = MEMVID_KIND_GOAL;
+    } else {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Invalid kind: must be one of fact, preference, event, profile, relationship, goal");
+        return error;
+    }
+
+    // Parse relation string to enum value
+    uint8_t relation = MEMVID_RELATION_SETS;  // default
+    if (strcmp(relation_str, "sets") == 0) {
+        relation = MEMVID_RELATION_SETS;
+    } else if (strcmp(relation_str, "updates") == 0) {
+        relation = MEMVID_RELATION_UPDATES;
+    } else if (strcmp(relation_str, "extends") == 0) {
+        relation = MEMVID_RELATION_EXTENDS;
+    } else if (strcmp(relation_str, "retracts") == 0) {
+        relation = MEMVID_RELATION_RETRACTS;
+    } else {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Invalid relation: must be one of sets, updates, extends, retracts");
+        return error;
+    }
+
+    // Call memvid API
+    int64_t card_id = memvid_put_memory(memvid_get_global(), entity, slot, value, kind, relation);
+    if (card_id < 0) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to store memory");
+        return error;
+    }
+
+    // Auto-commit to persist the memory
+    int commit_result = memvid_commit(memvid_get_global());
+
+    cJSON *result = cJSON_CreateObject();
+    cJSON_AddStringToObject(result, "status", "success");
+    cJSON_AddNumberToObject(result, "card_id", (double)card_id);
+    cJSON_AddStringToObject(result, "entity", entity);
+    cJSON_AddStringToObject(result, "slot", slot);
+    cJSON_AddStringToObject(result, "kind", kind_str);
+    cJSON_AddStringToObject(result, "relation", relation_str);
+    if (commit_result != 0) {
+        cJSON_AddStringToObject(result, "warning", "Memory stored but commit failed - may not persist");
+    }
+    return result;
+#else
+    (void)params;
+    cJSON *error = cJSON_CreateObject();
+    cJSON_AddStringToObject(error, "error", "Memory tools not available - rebuild with MEMVID=1");
+    return error;
+#endif
+}
+
+/**
+ * tool_memory_recall - Recall the current value for an entity's attribute
+ * params: { entity, slot }
+ */
+static cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
+    (void)state;
+
+#ifdef HAVE_MEMVID
+    cJSON *entity_json = cJSON_GetObjectItem(params, "entity");
+    cJSON *slot_json = cJSON_GetObjectItem(params, "slot");
+
+    if (!entity_json || !cJSON_IsString(entity_json) ||
+        !slot_json || !cJSON_IsString(slot_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Missing required parameters: entity, slot");
+        return error;
+    }
+
+    const char *entity = entity_json->valuestring;
+    const char *slot = slot_json->valuestring;
+
+    // Call memvid API - returns JSON string or NULL
+    char *json_result = memvid_get_current(memvid_get_global(), entity, slot);
+    if (!json_result) {
+        cJSON *result = cJSON_CreateObject();
+        cJSON_AddStringToObject(result, "status", "not_found");
+        cJSON_AddStringToObject(result, "entity", entity);
+        cJSON_AddStringToObject(result, "slot", slot);
+        cJSON_AddNullToObject(result, "value");
+        return result;
+    }
+
+    // Parse the JSON result
+    cJSON *memory_data = cJSON_Parse(json_result);
+    memvid_free_string(json_result);
+
+    if (!memory_data) {
+        cJSON *result = cJSON_CreateObject();
+        cJSON_AddStringToObject(result, "status", "error");
+        cJSON_AddStringToObject(result, "error", "Failed to parse memory data");
+        return result;
+    }
+
+    // Build response with memory data
+    cJSON *result = cJSON_CreateObject();
+    cJSON_AddStringToObject(result, "status", "found");
+    cJSON_AddStringToObject(result, "entity", entity);
+    cJSON_AddStringToObject(result, "slot", slot);
+
+    // Extract value from memory data
+    cJSON *value = cJSON_GetObjectItem(memory_data, "value");
+    if (value) {
+        cJSON_AddItemToObject(result, "value", cJSON_Duplicate(value, 1));
+    } else {
+        cJSON_AddNullToObject(result, "value");
+    }
+
+    // Include card_id if present
+    cJSON *card_id = cJSON_GetObjectItem(memory_data, "card_id");
+    if (card_id && cJSON_IsNumber(card_id)) {
+        cJSON_AddNumberToObject(result, "card_id", card_id->valuedouble);
+    }
+
+    // Include kind if present
+    cJSON *kind = cJSON_GetObjectItem(memory_data, "kind");
+    if (kind && cJSON_IsString(kind)) {
+        cJSON_AddStringToObject(result, "kind", kind->valuestring);
+    }
+
+    // Include timestamp if present
+    cJSON *timestamp = cJSON_GetObjectItem(memory_data, "timestamp");
+    if (timestamp && cJSON_IsString(timestamp)) {
+        cJSON_AddStringToObject(result, "timestamp", timestamp->valuestring);
+    }
+
+    cJSON_Delete(memory_data);
+    return result;
+#else
+    (void)params;
+    cJSON *error = cJSON_CreateObject();
+    cJSON_AddStringToObject(error, "error", "Memory tools not available - rebuild with MEMVID=1");
+    return error;
+#endif
+}
+
+/**
+ * tool_memory_search - Search all memories by text query
+ * params: { query, top_k (optional, default 10) }
+ */
+static cJSON* tool_memory_search(cJSON *params, ConversationState *state) {
+    (void)state;
+
+#ifdef HAVE_MEMVID
+    cJSON *query_json = cJSON_GetObjectItem(params, "query");
+    cJSON *top_k_json = cJSON_GetObjectItem(params, "top_k");
+
+    if (!query_json || !cJSON_IsString(query_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Missing required parameter: query");
+        return error;
+    }
+
+    const char *query = query_json->valuestring;
+    uint32_t top_k = 10;  // default
+    if (top_k_json && cJSON_IsNumber(top_k_json)) {
+        int val = top_k_json->valueint;
+        if (val > 0 && val <= 100) {
+            top_k = (uint32_t)val;
+        }
+    }
+
+    // Call memvid API - returns JSON array string
+    char *json_result = memvid_search(memvid_get_global(), query, top_k);
+    if (!json_result) {
+        cJSON *result = cJSON_CreateObject();
+        cJSON_AddStringToObject(result, "status", "success");
+        cJSON_AddStringToObject(result, "query", query);
+        cJSON_AddItemToObject(result, "results", cJSON_CreateArray());
+        cJSON_AddNumberToObject(result, "count", 0);
+        return result;
+    }
+
+    // Parse the JSON array result
+    cJSON *search_results = cJSON_Parse(json_result);
+    memvid_free_string(json_result);
+
+    if (!search_results || !cJSON_IsArray(search_results)) {
+        if (search_results) cJSON_Delete(search_results);
+        cJSON *result = cJSON_CreateObject();
+        cJSON_AddStringToObject(result, "status", "error");
+        cJSON_AddStringToObject(result, "error", "Failed to parse search results");
+        return result;
+    }
+
+    // Build response
+    cJSON *result = cJSON_CreateObject();
+    cJSON_AddStringToObject(result, "status", "success");
+    cJSON_AddStringToObject(result, "query", query);
+    cJSON_AddNumberToObject(result, "count", cJSON_GetArraySize(search_results));
+    cJSON_AddItemToObject(result, "results", search_results);
+
+    return result;
+#else
+    (void)params;
+    cJSON *error = cJSON_CreateObject();
+    cJSON_AddStringToObject(error, "error", "Memory tools not available - rebuild with MEMVID=1");
+    return error;
+#endif
+}
+
 #ifndef TEST_BUILD
 // MCP ListMcpResources tool handler
 static cJSON* tool_list_mcp_resources(cJSON *params, ConversationState *state) {
@@ -3930,6 +4190,10 @@ static Tool tools[] = {
     {"Grep", tool_grep},
     {"TodoWrite", tool_todo_write},
     {"UploadImage", tool_upload_image},
+    // Memory tools (always registered, but return error if HAVE_MEMVID not defined)
+    {"MemoryStore", tool_memory_store},
+    {"MemoryRecall", tool_memory_recall},
+    {"MemorySearch", tool_memory_search},
 #ifndef TEST_BUILD
     {"ListMcpResources", tool_list_mcp_resources},
     {"ReadMcpResource", tool_read_mcp_resource},
@@ -4663,6 +4927,129 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     }
 
     cJSON_AddItemToArray(tool_array, todo_tool);
+
+    // MemoryStore tool
+    cJSON *memory_store_tool = cJSON_CreateObject();
+    cJSON_AddStringToObject(memory_store_tool, "type", "function");
+    cJSON *memory_store_func = cJSON_CreateObject();
+    cJSON_AddStringToObject(memory_store_func, "name", "MemoryStore");
+    cJSON_AddStringToObject(memory_store_func, "description",
+        "Store a memory about the user or project. Use for facts, preferences, events, goals. Memories persist across sessions.");
+    cJSON *memory_store_params = cJSON_CreateObject();
+    cJSON_AddStringToObject(memory_store_params, "type", "object");
+    cJSON *memory_store_props = cJSON_CreateObject();
+
+    cJSON *ms_entity = cJSON_CreateObject();
+    cJSON_AddStringToObject(ms_entity, "type", "string");
+    cJSON_AddStringToObject(ms_entity, "description",
+        "Who/what this is about (e.g., 'user', 'project.klawed', 'user.team')");
+    cJSON_AddItemToObject(memory_store_props, "entity", ms_entity);
+
+    cJSON *ms_slot = cJSON_CreateObject();
+    cJSON_AddStringToObject(ms_slot, "type", "string");
+    cJSON_AddStringToObject(ms_slot, "description",
+        "The attribute (e.g., 'employer', 'preferred_language', 'coding_style')");
+    cJSON_AddItemToObject(memory_store_props, "slot", ms_slot);
+
+    cJSON *ms_value = cJSON_CreateObject();
+    cJSON_AddStringToObject(ms_value, "type", "string");
+    cJSON_AddStringToObject(ms_value, "description", "The value to store");
+    cJSON_AddItemToObject(memory_store_props, "value", ms_value);
+
+    cJSON *ms_kind = cJSON_CreateObject();
+    cJSON_AddStringToObject(ms_kind, "type", "string");
+    cJSON *ms_kind_enum = cJSON_CreateArray();
+    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("fact"));
+    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("preference"));
+    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("event"));
+    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("profile"));
+    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("relationship"));
+    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("goal"));
+    cJSON_AddItemToObject(ms_kind, "enum", ms_kind_enum);
+    cJSON_AddStringToObject(ms_kind, "description", "Type of memory");
+    cJSON_AddItemToObject(memory_store_props, "kind", ms_kind);
+
+    cJSON *ms_relation = cJSON_CreateObject();
+    cJSON_AddStringToObject(ms_relation, "type", "string");
+    cJSON *ms_relation_enum = cJSON_CreateArray();
+    cJSON_AddItemToArray(ms_relation_enum, cJSON_CreateString("sets"));
+    cJSON_AddItemToArray(ms_relation_enum, cJSON_CreateString("updates"));
+    cJSON_AddItemToArray(ms_relation_enum, cJSON_CreateString("extends"));
+    cJSON_AddItemToArray(ms_relation_enum, cJSON_CreateString("retracts"));
+    cJSON_AddItemToObject(ms_relation, "enum", ms_relation_enum);
+    cJSON_AddStringToObject(ms_relation, "description",
+        "How this relates to existing values (default: sets)");
+    cJSON_AddItemToObject(memory_store_props, "relation", ms_relation);
+
+    cJSON_AddItemToObject(memory_store_params, "properties", memory_store_props);
+    cJSON *memory_store_req = cJSON_CreateArray();
+    cJSON_AddItemToArray(memory_store_req, cJSON_CreateString("entity"));
+    cJSON_AddItemToArray(memory_store_req, cJSON_CreateString("slot"));
+    cJSON_AddItemToArray(memory_store_req, cJSON_CreateString("value"));
+    cJSON_AddItemToArray(memory_store_req, cJSON_CreateString("kind"));
+    cJSON_AddItemToObject(memory_store_params, "required", memory_store_req);
+    cJSON_AddItemToObject(memory_store_func, "parameters", memory_store_params);
+    cJSON_AddItemToObject(memory_store_tool, "function", memory_store_func);
+    cJSON_AddItemToArray(tool_array, memory_store_tool);
+
+    // MemoryRecall tool
+    cJSON *memory_recall_tool = cJSON_CreateObject();
+    cJSON_AddStringToObject(memory_recall_tool, "type", "function");
+    cJSON *memory_recall_func = cJSON_CreateObject();
+    cJSON_AddStringToObject(memory_recall_func, "name", "MemoryRecall");
+    cJSON_AddStringToObject(memory_recall_func, "description",
+        "Recall the current value for an entity's attribute from persistent memory");
+    cJSON *memory_recall_params = cJSON_CreateObject();
+    cJSON_AddStringToObject(memory_recall_params, "type", "object");
+    cJSON *memory_recall_props = cJSON_CreateObject();
+
+    cJSON *mr_entity = cJSON_CreateObject();
+    cJSON_AddStringToObject(mr_entity, "type", "string");
+    cJSON_AddStringToObject(mr_entity, "description", "Who/what to look up");
+    cJSON_AddItemToObject(memory_recall_props, "entity", mr_entity);
+
+    cJSON *mr_slot = cJSON_CreateObject();
+    cJSON_AddStringToObject(mr_slot, "type", "string");
+    cJSON_AddStringToObject(mr_slot, "description", "The attribute to recall");
+    cJSON_AddItemToObject(memory_recall_props, "slot", mr_slot);
+
+    cJSON_AddItemToObject(memory_recall_params, "properties", memory_recall_props);
+    cJSON *memory_recall_req = cJSON_CreateArray();
+    cJSON_AddItemToArray(memory_recall_req, cJSON_CreateString("entity"));
+    cJSON_AddItemToArray(memory_recall_req, cJSON_CreateString("slot"));
+    cJSON_AddItemToObject(memory_recall_params, "required", memory_recall_req);
+    cJSON_AddItemToObject(memory_recall_func, "parameters", memory_recall_params);
+    cJSON_AddItemToObject(memory_recall_tool, "function", memory_recall_func);
+    cJSON_AddItemToArray(tool_array, memory_recall_tool);
+
+    // MemorySearch tool
+    cJSON *memory_search_tool = cJSON_CreateObject();
+    cJSON_AddStringToObject(memory_search_tool, "type", "function");
+    cJSON *memory_search_func = cJSON_CreateObject();
+    cJSON_AddStringToObject(memory_search_func, "name", "MemorySearch");
+    cJSON_AddStringToObject(memory_search_func, "description",
+        "Search all memories by text query");
+    cJSON *memory_search_params = cJSON_CreateObject();
+    cJSON_AddStringToObject(memory_search_params, "type", "object");
+    cJSON *memory_search_props = cJSON_CreateObject();
+
+    cJSON *msearch_query = cJSON_CreateObject();
+    cJSON_AddStringToObject(msearch_query, "type", "string");
+    cJSON_AddStringToObject(msearch_query, "description", "Search query");
+    cJSON_AddItemToObject(memory_search_props, "query", msearch_query);
+
+    cJSON *msearch_top_k = cJSON_CreateObject();
+    cJSON_AddStringToObject(msearch_top_k, "type", "integer");
+    cJSON_AddStringToObject(msearch_top_k, "description", "Number of results (default: 10)");
+    cJSON_AddItemToObject(memory_search_props, "top_k", msearch_top_k);
+
+    cJSON_AddItemToObject(memory_search_params, "properties", memory_search_props);
+    cJSON *memory_search_req = cJSON_CreateArray();
+    cJSON_AddItemToArray(memory_search_req, cJSON_CreateString("query"));
+    cJSON_AddItemToObject(memory_search_params, "required", memory_search_req);
+    cJSON_AddItemToObject(memory_search_func, "parameters", memory_search_params);
+    cJSON_AddItemToObject(memory_search_tool, "function", memory_search_func);
+    cJSON_AddItemToArray(tool_array, memory_search_tool);
 
 #ifndef TEST_BUILD
     // Add MCP tools if MCP is enabled and configured
@@ -5677,6 +6064,226 @@ char* build_system_prompt(ConversationState *state) {
 
     return prompt;
 }
+
+// ============================================================================
+// Memory Context Injection (requires HAVE_MEMVID)
+// ============================================================================
+
+#ifdef HAVE_MEMVID
+/**
+ * Build memory context string from memvid searches.
+ * Queries for user preferences, active tasks, and project knowledge.
+ *
+ * Returns: Newly allocated string with formatted context, or NULL if no memories found.
+ * Caller must free the returned string.
+ */
+static char* build_memory_context(const char *working_dir) {
+    MemvidHandle *handle = memvid_get_global();
+    if (!handle) {
+        LOG_DEBUG("Memory context: No memvid handle available");
+        return NULL;
+    }
+
+    // Extract project name from working directory
+    char project_name[256] = {0};
+    if (working_dir) {
+        // Make a copy since basename may modify the input
+        char *dir_copy = strdup(working_dir);
+        if (dir_copy) {
+            char *name = basename(dir_copy);
+            if (name && name[0] != '\0') {
+                strlcpy(project_name, name, sizeof(project_name));
+            }
+            free(dir_copy);
+        }
+    }
+
+    // Build context buffer - start with reasonable size
+    size_t buf_size = 4096;
+    char *context = malloc(buf_size);
+    if (!context) {
+        LOG_ERROR("Memory context: Failed to allocate buffer");
+        return NULL;
+    }
+    context[0] = '\0';
+    size_t offset = 0;
+    int has_content = 0;
+
+    // Helper macro to safely append to context buffer
+    #define CONTEXT_APPEND(...) do { \
+        int written = snprintf(context + offset, buf_size - offset, __VA_ARGS__); \
+        if (written > 0 && (size_t)written < buf_size - offset) { \
+            offset += (size_t)written; \
+        } \
+    } while(0)
+
+    // 1. Search for user preferences
+    char *user_memories = memvid_get_entity_memories(handle, "user");
+    if (user_memories) {
+        cJSON *memories = cJSON_Parse(user_memories);
+        memvid_free_string(user_memories);
+
+        if (memories && cJSON_IsArray(memories) && cJSON_GetArraySize(memories) > 0) {
+            CONTEXT_APPEND("### User Preferences\n");
+            int count = cJSON_GetArraySize(memories);
+            for (int i = 0; i < count && i < 10; i++) {  // Limit to 10 preferences
+                cJSON *mem = cJSON_GetArrayItem(memories, i);
+                cJSON *slot = cJSON_GetObjectItem(mem, "slot");
+                cJSON *value = cJSON_GetObjectItem(mem, "value");
+                if (slot && cJSON_IsString(slot) && value && cJSON_IsString(value)) {
+                    CONTEXT_APPEND("- %s: %s\n", slot->valuestring, value->valuestring);
+                    has_content = 1;
+                }
+            }
+            CONTEXT_APPEND("\n");
+        }
+        if (memories) cJSON_Delete(memories);
+    }
+
+    // 2. Search for active tasks/goals
+    char *task_results = memvid_search(handle, "task: goal:", 10);
+    if (task_results) {
+        cJSON *results = cJSON_Parse(task_results);
+        memvid_free_string(task_results);
+
+        if (results && cJSON_IsArray(results) && cJSON_GetArraySize(results) > 0) {
+            CONTEXT_APPEND("### Active Tasks\n");
+            int count = cJSON_GetArraySize(results);
+            for (int i = 0; i < count && i < 5; i++) {  // Limit to 5 tasks
+                cJSON *mem = cJSON_GetArrayItem(results, i);
+                cJSON *entity = cJSON_GetObjectItem(mem, "entity");
+                cJSON *value = cJSON_GetObjectItem(mem, "value");
+                // Check if entity starts with "task:" or "goal:"
+                if (entity && cJSON_IsString(entity)) {
+                    const char *ent = entity->valuestring;
+                    if (strncmp(ent, "task:", 5) == 0 || strncmp(ent, "goal:", 5) == 0) {
+                        if (value && cJSON_IsString(value)) {
+                            CONTEXT_APPEND("- %s\n", value->valuestring);
+                            has_content = 1;
+                        }
+                    }
+                }
+            }
+            CONTEXT_APPEND("\n");
+        }
+        if (results) cJSON_Delete(results);
+    }
+
+    // 3. Search for project-specific knowledge
+    if (project_name[0] != '\0') {
+        char project_entity[300];
+        snprintf(project_entity, sizeof(project_entity), "project.%s", project_name);
+
+        char *project_memories = memvid_get_entity_memories(handle, project_entity);
+        if (project_memories) {
+            cJSON *memories = cJSON_Parse(project_memories);
+            memvid_free_string(project_memories);
+
+            if (memories && cJSON_IsArray(memories) && cJSON_GetArraySize(memories) > 0) {
+                CONTEXT_APPEND("### Project Knowledge (%s)\n", project_name);
+                int count = cJSON_GetArraySize(memories);
+                for (int i = 0; i < count && i < 10; i++) {  // Limit to 10 items
+                    cJSON *mem = cJSON_GetArrayItem(memories, i);
+                    cJSON *slot = cJSON_GetObjectItem(mem, "slot");
+                    cJSON *value = cJSON_GetObjectItem(mem, "value");
+                    if (slot && cJSON_IsString(slot) && value && cJSON_IsString(value)) {
+                        CONTEXT_APPEND("- %s: %s\n", slot->valuestring, value->valuestring);
+                        has_content = 1;
+                    }
+                }
+                CONTEXT_APPEND("\n");
+            }
+            if (memories) cJSON_Delete(memories);
+        }
+    }
+
+    #undef CONTEXT_APPEND
+
+    if (!has_content) {
+        free(context);
+        LOG_DEBUG("Memory context: No relevant memories found");
+        return NULL;
+    }
+
+    LOG_DEBUG("Memory context: Built context with %zu bytes", offset);
+    return context;
+}
+
+/**
+ * Inject memory context into conversation state.
+ * Called after memvid is initialized and before the conversation loop starts.
+ *
+ * The memory context is appended to the system prompt if available.
+ * Returns: 0 on success (or if no memories to inject), -1 on error.
+ */
+static int inject_memory_context(ConversationState *state) {
+    if (!state) {
+        return -1;
+    }
+
+    // Check if memvid is available
+    if (!memvid_is_available() || !memvid_get_global()) {
+        LOG_DEBUG("Memory context injection: Memvid not available");
+        return 0;  // Not an error, just nothing to inject
+    }
+
+    // Build memory context
+    char *memory_context = build_memory_context(state->working_dir);
+    if (!memory_context) {
+        return 0;  // No memories to inject
+    }
+
+    // Get the current system message (should be the first message)
+    if (state->count == 0 || state->messages[0].role != MSG_SYSTEM) {
+        LOG_WARN("Memory context injection: No system message found");
+        free(memory_context);
+        return 0;
+    }
+
+    // Get current system prompt text
+    InternalMessage *sys_msg = &state->messages[0];
+    if (sys_msg->content_count == 0 || sys_msg->contents[0].type != INTERNAL_TEXT ||
+        !sys_msg->contents[0].text) {
+        LOG_WARN("Memory context injection: System message has no text content");
+        free(memory_context);
+        return 0;
+    }
+
+    const char *current_prompt = sys_msg->contents[0].text;
+
+    // Calculate new prompt size
+    // Format: current_prompt + "\n\n## Background Knowledge (from memory)\n\n" + memory_context
+    const char *header = "\n\n## Background Knowledge (from memory)\n\n";
+    size_t header_len = strlen(header);
+    size_t current_len = strlen(current_prompt);
+    size_t context_len = strlen(memory_context);
+    size_t new_size = current_len + header_len + context_len + 1;
+
+    char *new_prompt = malloc(new_size);
+    if (!new_prompt) {
+        LOG_ERROR("Memory context injection: Failed to allocate memory for new prompt");
+        free(memory_context);
+        return -1;
+    }
+
+    // Build the new prompt
+    size_t pos = strlcpy(new_prompt, current_prompt, new_size);
+    if (pos < new_size) {
+        pos += strlcpy(new_prompt + pos, header, new_size - pos);
+    }
+    if (pos < new_size) {
+        strlcpy(new_prompt + pos, memory_context, new_size - pos);
+    }
+
+    // Replace the system prompt
+    free(sys_msg->contents[0].text);
+    sys_msg->contents[0].text = new_prompt;
+
+    LOG_INFO("Memory context injected into system prompt (%zu bytes added)", header_len + context_len);
+    free(memory_context);
+    return 0;
+}
+#endif /* HAVE_MEMVID */
 
 // ============================================================================
 // Message Management
@@ -8480,6 +9087,16 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
+#ifdef HAVE_MEMVID
+    // Initialize Memvid persistent memory subsystem
+    // Memory file is stored in .klawed/memory.mv2 relative to working directory
+    if (memvid_init_global(NULL) == 0) {
+        LOG_INFO("Memvid memory subsystem initialized");
+    } else {
+        LOG_WARN("Failed to initialize Memvid memory subsystem - memory tools will not be available");
+    }
+#endif
+
     // Generate unique session ID for this conversation
     char *session_id = generate_session_id();
     if (!session_id) {
@@ -8501,6 +9118,9 @@ int main(int argc, char *argv[]) {
         if (persistence_db) {
             persistence_close(persistence_db);
         }
+#ifdef HAVE_MEMVID
+        memvid_cleanup_global();
+#endif
         curl_global_cleanup();
         log_shutdown();
         return 1;
@@ -8568,6 +9188,9 @@ int main(int argc, char *argv[]) {
             if (persistence_db) {
                 persistence_close(persistence_db);
             }
+#ifdef HAVE_MEMVID
+            memvid_cleanup_global();
+#endif
             curl_global_cleanup();
             log_shutdown();
             return 1;
@@ -8646,6 +9269,9 @@ int main(int argc, char *argv[]) {
             free(state.todo_list);
         }
         conversation_state_destroy(&state);
+#ifdef HAVE_MEMVID
+        memvid_cleanup_global();
+#endif
         curl_global_cleanup();
         return 1;
     }
@@ -8656,6 +9282,9 @@ int main(int argc, char *argv[]) {
         free(state.api_url);
         free(state.model);
         conversation_state_destroy(&state);
+#ifdef HAVE_MEMVID
+        memvid_cleanup_global();
+#endif
         curl_global_cleanup();
         return 1;
     }
@@ -8666,14 +9295,27 @@ int main(int argc, char *argv[]) {
     char *system_prompt = build_system_prompt(&state);
     if (system_prompt) {
         add_system_message(&state, system_prompt);
+        free(system_prompt);
+        LOG_DEBUG("System prompt added with environment context");
+
+#ifdef HAVE_MEMVID
+        // Inject memory context from persistent memory (if available)
+        if (inject_memory_context(&state) == 0) {
+            LOG_DEBUG("Memory context injection completed");
+        } else {
+            LOG_WARN("Memory context injection failed");
+        }
+#endif
 
         // Debug: print system prompt if DEBUG_PROMPT environment variable is set
         if (getenv("DEBUG_PROMPT")) {
-            printf("\n=== SYSTEM PROMPT (DEBUG) ===\n%s\n=== END SYSTEM PROMPT ===\n\n", system_prompt);
+            // Print the final system prompt (may include injected memory context)
+            if (state.count > 0 && state.messages[0].role == MSG_SYSTEM &&
+                state.messages[0].content_count > 0 && state.messages[0].contents[0].text) {
+                printf("\n=== SYSTEM PROMPT (DEBUG) ===\n%s\n=== END SYSTEM PROMPT ===\n\n",
+                       state.messages[0].contents[0].text);
+            }
         }
-
-        free(system_prompt);
-        LOG_DEBUG("System prompt added with environment context");
     } else {
         LOG_WARN("Failed to build system prompt");
     }
@@ -8771,6 +9413,12 @@ int main(int argc, char *argv[]) {
     // Clean up MCP subsystem
     mcp_cleanup();
     LOG_INFO("MCP subsystem cleaned up");
+#endif
+
+#ifdef HAVE_MEMVID
+    // Clean up Memvid memory subsystem
+    memvid_cleanup_global();
+    LOG_INFO("Memvid memory subsystem cleaned up");
 #endif
 
     curl_global_cleanup();
