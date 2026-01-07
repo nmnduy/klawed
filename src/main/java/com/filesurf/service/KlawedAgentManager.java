@@ -193,8 +193,9 @@ public class KlawedAgentManager {
         // Write PID file to session directory for management
         writePidFile(sessionDir, pid, sqliteDbPath);
         
-        // Wait for socket to be created
-        int maxAttempts = 100; // 10 seconds
+        // Give klawed a grace period to initialize (klawed creates DB lazily on first message)
+        // We just need to make sure the process starts successfully
+        int maxAttempts = 30; // 3 seconds should be plenty
         for (int i = 0; i < maxAttempts; i++) {
             // Check if process is still alive
             if (!process.isAlive()) {
@@ -210,15 +211,11 @@ public class KlawedAgentManager {
                 throw new IOException("Session directory disappeared: " + sessionDir);
             }
             
-            // Check if SQLite database file exists and is readable
-            if (Files.exists(dbPath) && Files.isReadable(dbPath)) {
-                LOGGER.info("[SESSION:" + sessionId + "] SQLite database is ready after " + (i * 100) + "ms: " + sqliteDbPath);
+            // After 1 second, if process is still alive, we're good
+            // (klawed creates DB lazily when first message arrives)
+            if (i >= 10) {
+                LOGGER.info("[SESSION:" + sessionId + "] Klawed process stable after " + (i * 100) + "ms");
                 break;
-            }
-            
-            // Log progress every second
-            if (i > 0 && i % 10 == 0) {
-                LOGGER.info("[SESSION:" + sessionId + "] Still waiting for SQLite database... (" + (i / 10) + "s elapsed, process alive: " + process.isAlive() + ")");
             }
             
             try {
@@ -226,26 +223,8 @@ public class KlawedAgentManager {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 process.destroy();
-                throw new IOException("Interrupted while waiting for socket", e);
+                throw new IOException("Interrupted while waiting for process to stabilize", e);
             }
-        }
-        
-        if (!Files.exists(dbPath) || !Files.isReadable(dbPath)) {
-            LOGGER.severe("[SESSION:" + sessionId + "] SQLite database not ready after 10 seconds");
-            LOGGER.severe("[SESSION:" + sessionId + "] Process alive: " + process.isAlive());
-            LOGGER.severe("[SESSION:" + sessionId + "] Session directory exists: " + Files.exists(sessionDir));
-            LOGGER.severe("[SESSION:" + sessionId + "] SQLite database path: " + sqliteDbPath);
-            
-            // Try to list directory contents
-            try {
-                LOGGER.info("[SESSION:" + sessionId + "] Listing session directory contents:");
-                Files.list(sessionDir).forEach(p -> LOGGER.info("  - " + p.getFileName()));
-            } catch (IOException e) {
-                LOGGER.severe("[SESSION:" + sessionId + "] Could not list directory: " + e.getMessage());
-            }
-            
-            process.destroy();
-            throw new IOException("SQLite database not ready after 10 seconds: " + sqliteDbPath);
         }
         
         KlawedAgentInstance instance = new KlawedAgentInstance(sessionId, process, sqliteDbPath, sessionDir);
