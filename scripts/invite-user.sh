@@ -105,15 +105,17 @@ deactivate_user() {
         exit 1
     fi
 
+    # Check if user exists first
+    EXISTING=$(sqlite3 "$DB_PATH" "SELECT email FROM users WHERE LOWER(email) = LOWER('${EMAIL}');")
+    if [ -z "$EXISTING" ]; then
+        echo -e "${YELLOW}No user found with email: ${EMAIL}${NC}"
+        exit 0
+    fi
+
     sqlite3 "$DB_PATH" "UPDATE users SET is_active = 0 WHERE LOWER(email) = LOWER('${EMAIL}');"
     
     if [ $? -eq 0 ]; then
-        ROWS=$(sqlite3 "$DB_PATH" "SELECT changes();")
-        if [ "$ROWS" -gt 0 ]; then
-            echo -e "${GREEN}✓ User deactivated: ${EMAIL}${NC}"
-        else
-            echo -e "${YELLOW}No user found with email: ${EMAIL}${NC}"
-        fi
+        echo -e "${GREEN}✓ User deactivated: ${EMAIL}${NC}"
     else
         echo -e "${RED}Error: Failed to deactivate user${NC}"
         exit 1
@@ -129,15 +131,17 @@ activate_user() {
         exit 1
     fi
 
+    # Check if user exists first
+    EXISTING=$(sqlite3 "$DB_PATH" "SELECT email FROM users WHERE LOWER(email) = LOWER('${EMAIL}');")
+    if [ -z "$EXISTING" ]; then
+        echo -e "${YELLOW}No user found with email: ${EMAIL}${NC}"
+        exit 0
+    fi
+
     sqlite3 "$DB_PATH" "UPDATE users SET is_active = 1 WHERE LOWER(email) = LOWER('${EMAIL}');"
     
     if [ $? -eq 0 ]; then
-        ROWS=$(sqlite3 "$DB_PATH" "SELECT changes();")
-        if [ "$ROWS" -gt 0 ]; then
-            echo -e "${GREEN}✓ User activated: ${EMAIL}${NC}"
-        else
-            echo -e "${YELLOW}No user found with email: ${EMAIL}${NC}"
-        fi
+        echo -e "${GREEN}✓ User activated: ${EMAIL}${NC}"
     else
         echo -e "${RED}Error: Failed to activate user${NC}"
         exit 1
