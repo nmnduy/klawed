@@ -36,6 +36,9 @@ public class FileExplorerResource {
     @Inject
     com.filesurf.service.LatexCompilerService latexCompilerService;
     
+    @Inject
+    com.filesurf.service.MetricsService metricsService;
+    
     // Maximum size for text file preview (in bytes)
     private static final long MAX_PREVIEW_SIZE = 100 * 1024; // 100KB
     
@@ -168,11 +171,16 @@ public class FileExplorerResource {
                         items.add(item);
                     } catch (IOException e) {
                         LOGGER.warning("Failed to read file attributes for: " + path + " - " + e.getMessage());
+                        metricsService.incrementErrors("file_attribute_read");
                     }
                 });
             }
             
             LOGGER.fine("File listing complete. Total files: " + totalFiles.get() + ", Ignored: " + ignoredFiles.get() + ", Showing: " + items.size());
+            
+            // Track metrics for file operation
+            metricsService.incrementFileOperations();
+            metricsService.trackUserActivity(userId);
             
             // Sort: directories first, then files, both alphabetically
             items.sort((a, b) -> {
@@ -199,6 +207,7 @@ public class FileExplorerResource {
             
         } catch (IOException e) {
             LOGGER.severe("Failed to list directory: " + e.getMessage());
+            metricsService.incrementErrors("directory_listing");
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity("{\"error\": \"Failed to list directory: " + e.getMessage() + "\"}")
                     .build();

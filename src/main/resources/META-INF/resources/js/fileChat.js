@@ -1,5 +1,6 @@
 // Invoice Chat module
 import { TabManager } from './tabManager.js';
+import { handleAuthError, isAuthRequired } from './authUtils.js';
 
 const DEBUG = false;
 const PLACEHOLDER_MESSAGES_ENABLED = false; // demo seed disabled
@@ -624,6 +625,11 @@ export function init(rootEl) {
         try {
             const response = await fetch('/session/generate');
             if (!response.ok) {
+                // Check if it's an authentication error
+                if (isAuthRequired(response)) {
+                    await handleAuthError(response);
+                    return;
+                }
                 throw new Error('Failed to generate session');
             }
             const sessionData = await response.json();
@@ -926,6 +932,9 @@ export function init(rootEl) {
                         const uploadMessage = "I've uploaded the following files: " + result.files.join(', ') + '. Please analyze them.';
                         sendMessage(uploadMessage);
                     }
+                } else if (isAuthRequired(response)) {
+                    await handleAuthError(response);
+                    return;
                 } else {
                     const errorText = await response.text();
                     addSystemMessage('✗ Upload failed: ' + errorText, 'error');

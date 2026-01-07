@@ -74,6 +74,9 @@ public class FileChatWebSocket {
     @Inject
     FileChatService fileChatService;
 
+    @Inject
+    com.filesurf.service.MetricsService metricsService;
+
     @OnOpen
     @ActivateRequestContext
     public String onOpen(WebSocketConnection connection) {
@@ -174,9 +177,16 @@ public class FileChatWebSocket {
                 } catch (Exception dbEx) {
                     LOGGER.warning("[SESSION:" + sessionId + "] Failed to save status message to database: " + dbEx.getMessage());
                 }
+                // Track metrics for successful WebSocket connection
+                metricsService.incrementWebSocketConnections();
+                metricsService.incrementChatSessions();
+                metricsService.trackUserActivity(userId);
+                
                 return objectMapper.writeValueAsString(KlawedSocketMessage.createStatus(statusMessage));
             } catch (Exception e) {
                 LOGGER.severe("Failed to serialize status message: " + e.getMessage());
+                // Track error in metrics
+                metricsService.incrementErrors("websocket_serialization");
                 return "{\"messageType\":\"STATUS\",\"content\":\"Connected\"}";
             }
 
@@ -241,6 +251,8 @@ public class FileChatWebSocket {
             LOGGER.info("[SESSION:" + sessionId + "] Client message marked as sent");
         } catch (Exception dbEx) {
             LOGGER.warning("[SESSION:" + sessionId + "] Failed to save incoming message to database: " + dbEx.getMessage());
+            // Track error in metrics
+            metricsService.incrementErrors("database_save");
         }
         
         // Determine user ID from cookies (HandshakeRequest); if absent, fail message handling
@@ -269,6 +281,10 @@ public class FileChatWebSocket {
             }
             return;
         }
+        
+        // Track metrics for chat message
+        metricsService.incrementChatMessages();
+        metricsService.trackUserActivity(userId);
 
         try {
             // Try to get existing agent first
@@ -377,6 +393,11 @@ public class FileChatWebSocket {
 
         // Unregister connection from polling service
         chatMessagePollingService.unregisterConnection(sessionId);
+        
+        // Track metrics for WebSocket connection closure
+        metricsService.decrementWebSocketConnections();
+        metricsService.decrementChatSessions();
+        LOGGER.info("[SESSION:" + sessionId + "] Metrics updated for closed connection");
     }
     
 

@@ -1,5 +1,7 @@
 package com.filesurf;
 
+import com.filesurf.model.UserRecord;
+import com.filesurf.service.UserService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -27,6 +29,9 @@ public class SessionResource {
 
     private static final Logger LOGGER = Logger.getLogger(SessionResource.class.getName());
     
+    @Inject
+    UserService userService;
+    
     @ConfigProperty(name = "cookie.secure", defaultValue = "false")
     Optional<Boolean> cookieSecure;
     
@@ -34,27 +39,40 @@ public class SessionResource {
     private static final ConcurrentHashMap<String, String> sessionStore = new ConcurrentHashMap<>();
     
     /**
-     * Generate a new session ID and ensure a user ID cookie is set
-     * @return JSON response with session ID
+     * Generate a new session ID for authenticated users.
+     * Requires the user to have a valid userId cookie linked to an email.
+     * @return JSON response with session ID and user info
      */
     @GET
     @Path("/generate")
     @Produces(MediaType.APPLICATION_JSON)
     public Response generateSession(@Context HttpHeaders headers) {
-        String sessionId = UUID.randomUUID().toString();
-
-        // Ensure userId cookie exists or generate one
+        // Get userId from cookie - user must already be authenticated
         String userId = extractUserIdFromCookies(headers);
         if (userId == null || userId.isBlank()) {
-            userId = "user-" + UUID.randomUUID();
-            LOGGER.info("Generated new userId cookie: " + userId);
+            LOGGER.warning("Session generate request without userId cookie");
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity("{\"error\": \"Authentication required\", \"redirect\": \"/auth/login\"}")
+                    .build();
         }
 
-        // Store the session ID with a placeholder identity
-        sessionStore.put(sessionId, "client-" + System.currentTimeMillis());
+        // Verify user exists in database (has email)
+        UserRecord user = userService.getUserByUserId(userId);
+        if (user == null) {
+            LOGGER.warning("Session generate request with unregistered userId: " + userId);
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity("{\"error\": \"Please log in with your email\", \"redirect\": \"/auth/login\"}")
+                    .build();
+        }
 
-        LOGGER.info("Generated new session ID: " + sessionId + " for user: " + userId);
+        String sessionId = UUID.randomUUID().toString();
 
+        // Store the session ID with user identity
+        sessionStore.put(sessionId, user.getEmail());
+
+        LOGGER.info("Generated new session ID: " + sessionId + " for user: " + user.getEmail() + " (userId: " + userId + ")");
+
+        // Refresh the cookie with 365 day expiration
         boolean secure = cookieSecure.orElse(false);
         NewCookie userCookie = new NewCookie(
                 "filesurf_userId",
@@ -67,10 +85,10 @@ public class SessionResource {
                 true     // httpOnly: true for security
         );
 
-        // Return session ID as JSON and set cookie
+        // Return session ID as JSON and refresh cookie
         return Response.ok()
                 .cookie(userCookie)
-                .entity("{\"sessionId\": \"" + sessionId + "\" , \"userId\": \"" + userId + "\"}")
+                .entity("{\"sessionId\": \"" + sessionId + "\", \"userId\": \"" + userId + "\", \"email\": \"" + user.getEmail() + "\"}")
                 .build();
     }
     

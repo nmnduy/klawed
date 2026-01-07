@@ -1,4 +1,28 @@
 // File Explorer Module
+
+// Authentication helper functions (inline to avoid module issues)
+function isAuthRequired(response) {
+    return response.status === 401 || response.status === 403;
+}
+
+async function handleAuthError(response, currentPath = null) {
+    if (!isAuthRequired(response)) {
+        return false;
+    }
+    const path = currentPath || window.location.pathname;
+    let redirectUrl = '/auth/login';
+    try {
+        const errorData = await response.json();
+        if (errorData.redirect) {
+            redirectUrl = errorData.redirect;
+        }
+    } catch (e) {
+        // Ignore JSON parse errors, use default redirect
+    }
+    window.location.href = redirectUrl + '?redirect=' + encodeURIComponent(path);
+    return true;
+}
+
 class FileExplorer {
     constructor() {
         // DOM Elements
@@ -328,6 +352,11 @@ class FileExplorer {
                     'X-Session-ID': this.sessionId
                 }
             });
+
+            if (isAuthRequired(response)) {
+                await handleAuthError(response);
+                return null;
+            }
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
