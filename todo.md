@@ -1,3 +1,7 @@
+- [ ] [Error] litellm.BadRequestError: BedrockException - {"message":"The text field in the ContentBlock object at messages.43.content.1 is blank. Add text to the text field, and try aga
+in."}. Received Model Group=opus-4-5
+Available Model Group Fallbacks=None
+
 - [ ] /help doesn't show shit
 - [ ] doesn't auto-scroll at 100% scroll position or near it. even in normal mode, it should autos-scroll near 100%
 - [x] search results are not highlihted when using '/' and '?' in normal mode

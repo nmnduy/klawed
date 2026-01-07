@@ -9,7 +9,7 @@
 #   make MEMVID=1 - Enable memvid support (requires memvid-ffi library)
 #   make MEMVID=0 - Disable memvid support (default)
 #   make          - Auto-detect if libmemvid_ffi is available
-#   Memvid FFI path: /Users/puter/github/memvid/memvid-ffi/
+#   Memvid FFI is vendored in: vendor/memvid-ffi/memvid-ffi/
 
 CC ?= gcc
 CLANG = clang
@@ -172,8 +172,8 @@ else
 endif
 
 # Optional Memvid support for video-based memory storage (MEMVID=auto|1|0)
-# Memvid FFI library path
-MEMVID_FFI_DIR = /Users/puter/github/memvid/memvid-ffi
+# Memvid FFI library path (uses vendored submodule)
+MEMVID_FFI_DIR = $(CURDIR)/vendor/memvid-ffi
 MEMVID_FFI_LIB = $(MEMVID_FFI_DIR)/target/release/libmemvid_ffi.a
 MEMVID ?= auto
 
@@ -2280,8 +2280,7 @@ memvid-ffi:
 		echo ""; \
 		echo "❌ Error: memvid-ffi directory not found at $(MEMVID_FFI_DIR)"; \
 		echo ""; \
-		echo "Please clone the memvid repository:"; \
-		echo "  git clone https://github.com/your/memvid.git $(dir $(MEMVID_FFI_DIR))"; \
+		echo "The memvid-ffi vendored library may be missing."; \
 		echo ""; \
 		exit 1; \
 	fi
@@ -2324,6 +2323,7 @@ check-memvid:
 		fi; \
 	else \
 		echo "  ✗ Directory not found"; \
+		echo "    The memvid-ffi vendored library may be missing"; \
 	fi
 	@echo ""
 	@echo "Current MEMVID setting: $(MEMVID)"

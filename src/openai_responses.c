@@ -102,8 +102,8 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
 
-                if (c->type == INTERNAL_TEXT && c->text) {
-                    // Regular user text -> message item
+                if (c->type == INTERNAL_TEXT && c->text && c->text[0]) {
+                    // Regular user text -> message item (skip empty strings)
                     cJSON *text_item = cJSON_CreateObject();
                     cJSON_AddStringToObject(text_item, "type", "message");
                     cJSON_AddStringToObject(text_item, "role", "user");
@@ -150,8 +150,8 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
 
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
-                if (c->type == INTERNAL_TEXT && c->text) {
-                    // Add output_text to content array
+                if (c->type == INTERNAL_TEXT && c->text && c->text[0]) {
+                    // Add output_text to content array (skip empty strings)
                     cJSON *text_obj = cJSON_CreateObject();
                     cJSON_AddStringToObject(text_obj, "type", "output_text");
                     cJSON_AddStringToObject(text_obj, "text", c->text);

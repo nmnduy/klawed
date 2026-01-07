@@ -12,9 +12,11 @@ Memvid provides persistent memory for klawed, enabling the agent to remember fac
 ## Building with Memvid Support
 
 ```bash
-# Build the FFI library first (in memvid repo)
-cd /path/to/memvid/memvid-ffi
-cargo build --release
+# Initialize the memvid submodule (first time only)
+git submodule update --init vendor/memvid
+
+# Build the FFI library
+make memvid-ffi
 
 # Build klawed with memvid support
 make MEMVID=1
@@ -189,7 +191,7 @@ Use descriptive, lowercase slot names with underscores:
 
 ## Limitations
 
-1. **Build dependency** - Requires the memvid-ffi Rust library to be built
+1. **Build dependency** - Requires Rust toolchain to build memvid-ffi (fetches memvid-core from crates.io)
 2. **No encryption** - Memory file is stored in plaintext
 3. **Local only** - Memories are stored per-project directory
 4. **No sync** - No built-in mechanism to sync across machines

@@ -159,8 +159,29 @@ static char* openai_to_anthropic_request(const char *openai_req) {
                 if (cJSON_IsString(content)) {
                     cJSON_AddStringToObject(anth_m, "content", content->valuestring);
                 } else if (cJSON_IsArray(content)) {
-                    // Pass through content blocks (we already build image blocks for Bedrock)
-                    cJSON_AddItemToObject(anth_m, "content", cJSON_Duplicate(content, 1));
+                    // Validate and filter content blocks - remove empty text blocks
+                    cJSON *filtered_content = cJSON_CreateArray();
+                    cJSON *block = NULL;
+                    cJSON_ArrayForEach(block, content) {
+                        cJSON *type = cJSON_GetObjectItem(block, "type");
+                        if (type && cJSON_IsString(type) && strcmp(type->valuestring, "text") == 0) {
+                            cJSON *text = cJSON_GetObjectItem(block, "text");
+                            // Skip text blocks with empty or missing text
+                            if (!text || !cJSON_IsString(text) || !text->valuestring || !text->valuestring[0]) {
+                                LOG_DEBUG("Skipping empty text block in user content array");
+                                continue;
+                            }
+                        }
+                        cJSON_AddItemToArray(filtered_content, cJSON_Duplicate(block, 1));
+                    }
+                    if (cJSON_GetArraySize(filtered_content) > 0) {
+                        cJSON_AddItemToObject(anth_m, "content", filtered_content);
+                    } else {
+                        cJSON_Delete(filtered_content);
+                        // No valid content - skip this message
+                        cJSON_Delete(anth_m);
+                        anth_m = NULL;
+                    }
                 }
             } else if (strcmp(r, "tool") == 0) {
                 cJSON *tool_call_id = cJSON_GetObjectItem(m, "tool_call_id");

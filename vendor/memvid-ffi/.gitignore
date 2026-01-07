@@ -1,0 +1,9 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Build outputs
+*.a
+*.so
+*.dylib
+*.dll
