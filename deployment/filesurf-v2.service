@@ -1,0 +1,27 @@
+[Unit]
+Description=FileSurf v2 Web Application (Quarkus)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/filesurf_v2
+ExecStart=/root/filesurf_v2/target/filesurf-1.0.0-SNAPSHOT-runner -Dquarkus.profile=prod
+Restart=always
+RestartSec=10
+
+# Environment variables
+Environment="JAVA_OPTS=-Xmx256m -Xms128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m"
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=filesurf-v2
+
+[Install]
+WantedBy=multi-user.target
