@@ -85,25 +85,9 @@ export function init(rootEl) {
         console.warn('[invoice-chat] Failed to initialize tab manager:', error);
     }
 
-    // Check if Files or Template tab is already active on page load
-    if (tabManager) {
-        const activeTab = tabManager.getActiveTab();
-        if (activeTab && activeTab.id === 'file') {
-            // Files tab is active, initialize and load file explorer
-            ensureFileExplorer();
-            if (sessionId && fileExplorer && typeof fileExplorer.setSession === 'function') {
-                fileExplorer.setSession(sessionId, null);
-            }
-            if (fileExplorer) {
-                fileExplorer.loadDirectory();
-                // Start auto-refresh for file explorer
-                if (typeof fileExplorer.startAutoRefresh === 'function') {
-                    fileExplorer.startAutoRefresh();
-                }
-            }
-
-        }
-    }
+    // NOTE: Don't load file explorer on page load - wait for WebSocket connection
+    // to establish and set sessionId first. This is handled in setFileExplorerSession()
+    // which is called after connectWebSocket() completes.
 
     let ws = null;
     let isConnected = false;
@@ -716,11 +700,15 @@ export function init(rootEl) {
         if (fileExplorer && typeof fileExplorer.setSession === 'function') {
             fileExplorer.setSession(sessionId, userId);
             
-            // If Files tab is currently active, reload the directory
+            // If Files tab is currently active, load the directory and start auto-refresh
             if (tabManager) {
                 const activeTab = tabManager.getActiveTab();
                 if (activeTab && activeTab.id === 'file') {
                     fileExplorer.loadDirectory();
+                    // Start auto-refresh for file explorer
+                    if (typeof fileExplorer.startAutoRefresh === 'function') {
+                        fileExplorer.startAutoRefresh();
+                    }
                 }
             }
         }
