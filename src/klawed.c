@@ -6458,6 +6458,7 @@ static void process_response(ConversationState *state,
 
         // Join or detach threads based on whether we were interrupted
         // If interrupted, use timed waiting to prevent deadlock from stuck threads
+        int threads_detached = 0;  // Track if any threads were detached (can't free args if so)
         if (interrupted) {
             // When interrupted, threads may be stuck in blocking calls that don't
             // respond to pthread_cancel. We wait for a short period for threads to
@@ -6490,12 +6491,32 @@ static void process_response(ConversationState *state,
                     pthread_join(threads[t], NULL);
                 }
             } else {
-                // Some threads still running - detach them to prevent deadlock
-                // They will clean themselves up when they eventually terminate
-                LOG_WARN("Only %d/%d tool threads responded to cancellation within %dms, detaching remaining",
+                // Some threads still running - we need to handle this carefully
+                // to avoid use-after-free when cleanup handlers access thread args.
+                //
+                // For threads that completed (notified), we can safely join them.
+                // For threads that haven't completed, we detach them BUT we must
+                // NOT free the args array because they still reference it.
+                LOG_WARN("Only %d/%d tool threads responded to cancellation within %dms",
                          final_completed, started_threads, max_wait_ms);
+
                 for (int t = 0; t < started_threads; t++) {
-                    pthread_detach(threads[t]);
+                    // Check if this specific thread has notified (completed)
+                    // This is safe to read without lock because notified is only
+                    // set to 1 (never back to 0) and we're checking after cancellation
+                    if (args[t].notified) {
+                        // Thread completed - safe to join
+                        pthread_join(threads[t], NULL);
+                    } else {
+                        // Thread still running - detach it
+                        // WARNING: This thread still references args[t], so we cannot
+                        // free the args array. This is a memory leak, but it's safer
+                        // than use-after-free which can cause crashes and deadlocks.
+                        pthread_detach(threads[t]);
+                        threads_detached = 1;
+                        LOG_WARN("Detached tool thread %d (%s) - args will be leaked to prevent use-after-free",
+                                 t, args[t].tool_name ? args[t].tool_name : "unknown");
+                    }
                 }
             }
         } else {
@@ -6573,7 +6594,16 @@ static void process_response(ConversationState *state,
         }
 
         free(threads);
-        free(args);
+        // CRITICAL: Only free args if no threads were detached.
+        // Detached threads still reference their args, so freeing would cause
+        // use-after-free when their cleanup handlers run. This is a deliberate
+        // memory leak to prevent crashes and deadlocks.
+        if (!threads_detached) {
+            free(args);
+        } else {
+            LOG_WARN("Leaking tool thread args (%d entries) to prevent use-after-free from detached threads",
+                     started_threads);
+        }
 
         // Extract TodoWrite information BEFORE transferring ownership to add_tool_results
         int todo_write_executed = check_todo_write_executed(results, tool_count);
