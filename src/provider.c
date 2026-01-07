@@ -31,7 +31,7 @@ static int is_bedrock_enabled(void) {
  * Get API URL from environment, or return default
  */
 static char *get_api_url_from_env(void) {
-    // Prefer explicit Anthropic URLs, but keep OpenAI-compatible env for backward compatibility
+    // Prefer OpenAI-compatible env first, then Anthropic URLs as fallback
     const char *env_url = getenv("OPENAI_API_BASE");
     if (!env_url || env_url[0] == '\0') {
         env_url = getenv("ANTHROPIC_API_URL");
@@ -140,16 +140,38 @@ void provider_init(const char *model,
         return;
     }
 
+    // Determine provider based on environment variables and URL
+    // Priority: Check for OpenAI indicators first, then Anthropic
     int use_anthropic = 0;
+    
+    // Check if OpenAI-specific variables are set (indicates OpenAI preference)
+    const char *openai_base = getenv("OPENAI_API_BASE");
+    
+    // Check if Anthropic-specific variables are set
     const char *anth_env = getenv("ANTHROPIC_API_URL");
     if (!anth_env || anth_env[0] == '\0') {
         anth_env = getenv("ANTHROPIC_BASE_URL");
     }
-    if (anth_env && anth_env[0] != '\0') {
-        use_anthropic = 1;
+    
+    // If OPENAI_API_BASE is explicitly set, prefer OpenAI provider
+    if (openai_base && openai_base[0] != '\0') {
+        use_anthropic = 0;
+        LOG_INFO("OPENAI_API_BASE is set, using OpenAI-compatible provider");
     }
-    if (strstr(base_url, "anthropic.com") != NULL || strstr(base_url, "/anthropic") != NULL) {
+    // Only use Anthropic if Anthropic-specific URLs are set and OpenAI base is not
+    else if (anth_env && anth_env[0] != '\0') {
         use_anthropic = 1;
+        LOG_INFO("Anthropic-specific URL set, using Anthropic provider");
+    }
+    // Check URL patterns as final fallback
+    else if (strstr(base_url, "anthropic.com") != NULL || strstr(base_url, "/anthropic") != NULL) {
+        use_anthropic = 1;
+        LOG_INFO("Anthropic URL detected, using Anthropic provider");
+    }
+    else {
+        // Default to OpenAI if no clear indicators
+        use_anthropic = 0;
+        LOG_INFO("No specific provider indicators, defaulting to OpenAI-compatible provider");
     }
 
     if (use_anthropic) {
