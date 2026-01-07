@@ -33,13 +33,15 @@
         <!-- Header with gradient and status merged -->
         {#include partials/chatHeader.html /}
 
-        <!-- Tabs for Chat and Files -->
-        {#include partials/chatTabs.html /}
+        <!-- Tabs for Chat and Files (shown only on mobile/tablet) -->
+        <div class="lg:hidden">
+            {#include partials/chatTabs.html /}
+        </div>
 
         <!-- Main Content Area with Chat and File Explorer -->
         <div class="flex flex-1 overflow-hidden">
             <!-- Chat Panel -->
-            <div id="chat-panel" class="flex-1 flex flex-col overflow-hidden" role="tabpanel" aria-labelledby="chat-tab">
+            <div id="chat-panel" class="flex-1 flex flex-col overflow-hidden lg:border-r-2 lg:border-layout-border" role="tabpanel" aria-labelledby="chat-tab">
                 <!-- Chat Messages Area with improved scrolling -->
                 <div id="chat-container" data-chat-container class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-4 bg-[hsl(var(--background))] [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,_hsl(var(--primary))_55%,_hsl(var(--muted))_45%)_transparent]" style="
                     --scrollbar-thumb-bg: linear-gradient(180deg, color-mix(in srgb, hsl(var(--primary)) 80%, hsl(var(--muted)) 20%), color-mix(in srgb, hsl(var(--accent)) 80%, hsl(var(--muted)) 20%));
@@ -55,7 +57,7 @@
             </div>
 
             <!-- File Panel -->
-            <div id="file-panel" class="hidden flex-1 flex flex-col overflow-hidden" role="tabpanel" aria-labelledby="file-tab">
+            <div id="file-panel" class="hidden lg:flex flex-1 flex-col overflow-hidden lg:max-w-md xl:max-w-lg" role="tabpanel" aria-labelledby="file-tab">
                 <!-- File Explorer Panel (included from separate template) -->
                 {#include fileExplorer.html /}
             </div>
