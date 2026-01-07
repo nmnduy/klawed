@@ -9,6 +9,7 @@ import com.filesurf.model.KlawedSocketMessage;
 import com.filesurf.service.KlawedAgentManager;
 import com.filesurf.service.SessionManager;
 import com.filesurf.service.SessionCleanupJobService;
+import com.filesurf.service.AgentShutdownJobService;
 import com.filesurf.service.FileChatService;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -43,6 +44,9 @@ public class FileChatHttpResource {
 
     @Inject
     SessionCleanupJobService cleanupJobService;
+    
+    @Inject
+    AgentShutdownJobService agentShutdownJobService;
 
     @Inject
     FileChatService fileChatService;
@@ -99,14 +103,24 @@ public class FileChatHttpResource {
             // Cancel any pending cleanup jobs for this session since it's being resumed
             cleanupJobService.cancelCleanupJobs(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Cleanup jobs cancelled (if any)");
+            
+            // Cancel any pending agent shutdown jobs for this session since it's reconnecting
+            agentShutdownJobService.cancelShutdownJob(sessionId);
+            LOGGER.info("[SESSION:" + sessionId + "] Agent shutdown jobs cancelled (if any)");
 
             // Initialize session directory with persistent folders
             java.nio.file.Path sessionDir = sessionManager.initializeSession(sessionId, userId);
             LOGGER.info("[SESSION:" + sessionId + "] Session directory initialized: " + sessionDir);
 
-            // Start dedicated klawed agent for this session (will return existing if already started)
-            KlawedAgentManager.KlawedAgentInstance agent = agentManager.startAgentForSession(sessionId, sessionDir);
-            LOGGER.info("[SESSION:" + sessionId + "] Dedicated klawed agent started or retrieved");
+            // Check if agent already exists for this session (from previous connection)
+            KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(sessionId);
+            if (agent != null) {
+                LOGGER.info("[SESSION:" + sessionId + "] Reusing existing klawed agent from previous connection");
+            } else {
+                // Start new dedicated klawed agent for this session
+                agent = agentManager.startAgentForSession(sessionId, sessionDir);
+                LOGGER.info("[SESSION:" + sessionId + "] Started new dedicated klawed agent");
+            }
 
             // Connect to the agent
             agent.connect();
@@ -380,9 +394,10 @@ public class FileChatHttpResource {
         }
 
         try {
-            // Stop the dedicated klawed agent
-            agentManager.stopAgentForSession(sessionId);
-            LOGGER.info("[SESSION:" + sessionId + "] Klawed agent stopped");
+            // Schedule agent shutdown with grace period instead of immediate stop
+            // This allows user to reconnect and reuse the agent if it's just a temporary disconnect
+            agentShutdownJobService.enqueueShutdown(sessionId);
+            LOGGER.info("[SESSION:" + sessionId + "] Klawed agent shutdown scheduled (grace period: 5 minutes)");
 
             // Persist session folders back to per-user storage
             if (userId != null && !userId.isBlank()) {
