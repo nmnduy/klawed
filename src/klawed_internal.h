@@ -231,6 +231,9 @@ typedef struct ConversationState {
 
     // Subagent process management
     SubagentManager *subagent_manager;  // Tracks running subagent processes
+
+    // Context compaction configuration
+    struct CompactionConfig *compaction_config;  // Auto-compaction settings (NULL if not enabled)
 } ConversationState;
 
 // ============================================================================

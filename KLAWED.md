@@ -28,6 +28,7 @@ Project instructions for Klawed when working with this codebase.
 - **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/normal-mode.md`
 - **Arena allocator**: `src/arena.h` (region-based memory management, single-header library)
 - **Memvid integration**: `src/memvid.c`, `src/memvid.h`, `docs/memvid.md` (persistent memory)
+- **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management)
 
 **Data & State:**
 - **Database/Persistence**: `src/persistence.c`, `src/sqlite_queue.c`, `docs/sqlite-queue.md`
@@ -191,6 +192,9 @@ export OPENAI_API_KEY="your-api-key"
 - **ZMQ Socket**: `KLAWED_ZMQ_ENDPOINT` - ZMQ endpoint (e.g., "tcp://127.0.0.1:5555" or "ipc:///tmp/klawed.sock")
   - `KLAWED_ZMQ_MODE` - ZMQ mode ("daemon")
 - **Memory**: `KLAWED_MEMORY_PATH` for custom memory file location (default: `.klawed/memory.mv2`)
+- **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes, requires memvid)
+  - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of MAX_MESSAGES (default: 60)
+  - `KLAWED_COMPACT_KEEP_RECENT` - Keep this many recent messages after compaction (default: 20)
 
 **Defaults:**
 - Logs: `./.klawed/logs/klawed.log` (project-local)

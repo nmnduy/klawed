@@ -139,6 +139,7 @@ static void ensure_tool_results(struct ConversationState *state) {
 
 // Internal API for module access
 #include "klawed_internal.h"
+#include "compaction.h"
 
 // Session management
 #ifndef TEST_BUILD
@@ -5706,6 +5707,14 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         // Send API_CALL message to indicate waiting for API response
         send_api_call_message(state, state->model, state->provider->name);
 
+        // Check and perform compaction if needed (before API call)
+        if (state->compaction_config && compaction_should_trigger(state, state->compaction_config)) {
+            LOG_INFO("Context compaction triggered before API call");
+            if (compaction_perform(state, state->compaction_config, state->session_id) != 0) {
+                LOG_WARN("Compaction failed, continuing with API call");
+            }
+        }
+
         ApiCallResult result = state->provider->call_api(state->provider, state);
 
         // Success case
@@ -6396,6 +6405,9 @@ int conversation_state_init(ConversationState *state) {
     // Socket streaming support removed - will be reimplemented with ZMQ
 
     // Initialize subagent manager
+
+    // Initialize compaction config (NULL by default)
+    state->compaction_config = NULL;
     state->subagent_manager = malloc(sizeof(SubagentManager));
     if (state->subagent_manager) {
         if (subagent_manager_init(state->subagent_manager) != 0) {
@@ -6422,6 +6434,12 @@ void conversation_state_destroy(ConversationState *state) {
     }
 
     // Clean up subagent manager
+
+    // Clean up compaction config
+    if (state->compaction_config) {
+        free(state->compaction_config);
+        state->compaction_config = NULL;
+    }
     if (state->subagent_manager) {
         // Unregister from emergency cleanup
         register_subagent_manager_for_cleanup(NULL);
@@ -8867,6 +8885,7 @@ int main(int argc, char *argv[]) {
         printf("  %s -c, --zmq-client ENDPOINT    Run as ZMQ client (connect to daemon)\n", argv[0]);
 #endif
         printf("  %s -h, --help                     Show this help message\n", argv[0]);
+        printf("  %s --auto-compact               Enable automatic context compaction\n", argv[0]);
         printf("  %s --version                      Show version information\n\n", argv[0]);
         printf("Environment Variables:\n");
         printf("  API Configuration:\n");
@@ -8898,7 +8917,10 @@ int main(int argc, char *argv[]) {
         printf("                            (default: 30, 0=no timeout)\n");
         printf("    KLAWED_GREP_MAX_RESULTS Optional: Max grep results (default: 100)\n");
         printf("    KLAWED_GREP_DISPLAY_LIMIT Optional: Max grep results to display (default: 20)\n");
-        printf("    KLAWED_GLOB_DISPLAY_LIMIT Optional: Max glob results to display (default: 10)\n\n");
+        printf("    KLAWED_GLOB_DISPLAY_LIMIT Optional: Max glob results to display (default: 10)\n");
+        printf("    KLAWED_AUTO_COMPACT       Optional: Enable automatic context compaction (1=true, 0=false)\n");
+        printf("    KLAWED_COMPACT_THRESHOLD  Optional: Trigger compaction at this %% of max messages (default: 60)\n");
+        printf("    KLAWED_COMPACT_KEEP_RECENT Optional: Number of recent messages to keep (default: 20)\n\n");
 #ifdef HAVE_ZMQ
         printf("  ZMQ Socket Mode:\n");
         printf("    KLAWED_ZMQ_ENDPOINT  Optional: ZMQ endpoint (e.g., tcp://127.0.0.1:5555)\n");
@@ -8985,6 +9007,26 @@ int main(int argc, char *argv[]) {
         LOG_INFO("ZMQ client mode enabled, connecting to: %s", zmq_client_endpoint);
     }
 #endif
+
+    // Check for auto-compact flag (can appear anywhere in argv)
+    int auto_compact_enabled = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--auto-compact") == 0) {
+            auto_compact_enabled = 1;
+            LOG_INFO("Auto-compact mode enabled via command line flag");
+            break;
+        }
+    }
+    // Also check environment variable
+    if (!auto_compact_enabled) {
+        const char *auto_compact_env = getenv("KLAWED_AUTO_COMPACT");
+        if (auto_compact_env && (strcmp(auto_compact_env, "1") == 0 ||
+                               strcasecmp(auto_compact_env, "true") == 0 ||
+                               strcasecmp(auto_compact_env, "yes") == 0)) {
+            auto_compact_enabled = 1;
+            LOG_INFO("Auto-compact mode enabled via environment variable");
+        }
+    }
 
     // Check for SQLite queue daemon mode
     int sqlite_daemon_mode = 0;
@@ -9231,6 +9273,17 @@ int main(int argc, char *argv[]) {
 
     // Initialize todo list
     state.todo_list = calloc(1, sizeof(TodoList));  // Use calloc to zero-initialize
+
+    // Initialize compaction configuration
+    if (auto_compact_enabled) {
+        state.compaction_config = malloc(sizeof(CompactionConfig));
+        if (state.compaction_config) {
+            compaction_init_config(state.compaction_config, auto_compact_enabled);
+            LOG_INFO("Compaction configuration initialized");
+        } else {
+            LOG_ERROR("Failed to allocate memory for compaction config");
+        }
+    }
     if (state.todo_list) {
         if (todo_init(state.todo_list) == 0) {
             LOG_DEBUG("Todo list initialized");
