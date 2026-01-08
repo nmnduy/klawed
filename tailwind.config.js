@@ -5,8 +5,12 @@ export default {
     "./src/main/resources/templates/**/*.{html,qute}",
     "./src/main/resources/META-INF/resources/**/*.html",
     "./src/main/resources/META-INF/resources/**/*.js",
+    "./src/main/resources/css/**/*.css",  // Scans source CSS for @apply and class references
   ],
-  safelist: [],
+  safelist: [
+    // No longer needed - classes are referenced in css/class-reference.html
+    // which Tailwind scans via the content glob pattern
+  ],
   theme: {
     container: {
       center: true,

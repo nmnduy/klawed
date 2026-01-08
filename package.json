@@ -3,15 +3,18 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npx tailwindcss -i ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css --watch",
-    "prebuild": "node -e \"const fs = require('fs'); const path = require('path'); const assetsDir = path.join(__dirname, 'src/main/resources/META-INF/resources/assets'); try { fs.rmSync(assetsDir, { recursive: true, force: true }); } catch(e) {}\"",
-    "build": "npx tailwindcss -i ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css --minify",
-    "watch": "npx tailwindcss -i ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css --watch",
+    "dev": "npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css --watch",
+    "prebuild": "node scripts/validate-dynamic-css.js && node -e \"const fs = require('fs'); const path = require('path'); const assetsDir = path.join(__dirname, 'src/main/resources/META-INF/resources/assets'); try { fs.rmSync(assetsDir, { recursive: true, force: true }); } catch(e) {}\"",
+    "build": "NODE_ENV=production npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css",
+    "watch": "npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css --watch",
     "preview": "echo 'Preview not configured for CSS-only build'"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",
+    "cssnano": "^7.1.2",
     "postcss": "^8.4.32",
+    "postcss-cli": "^11.0.1",
+    "postcss-import": "^16.1.1",
     "tailwindcss": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "vite": "^5.0.8"
