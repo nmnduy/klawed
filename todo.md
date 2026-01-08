@@ -15,3 +15,6 @@
 ---
 
 - [ ] meter for storage used, cpu
+
+---
+- [ ] network access. hmm seems like can be a security issue
