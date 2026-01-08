@@ -195,7 +195,7 @@ ifeq ($(MEMVID),1)
     else ifeq ($(UNAME_S),Linux)
         MEMVID_LIBS += -lpthread -ldl -lm
         # Add rpath for Linux (relative to binary location)
-        MEMVID_LIBS += -Wl,-rpath,$$ORIGIN/../vendor/memvid-ffi/target/release
+        MEMVID_LIBS += -Wl,-rpath,'$$ORIGIN'/../vendor/memvid-ffi/target/release
     endif
     LDFLAGS += $(MEMVID_LIBS)
     DEBUG_LDFLAGS += $(MEMVID_LIBS)
@@ -219,7 +219,7 @@ else
         else ifeq ($(UNAME_S),Linux)
             MEMVID_LIBS += -lpthread -ldl -lm
             # Add rpath for Linux (relative to binary location)
-            MEMVID_LIBS += -Wl,-rpath,$$ORIGIN/../vendor/memvid-ffi/target/release
+            MEMVID_LIBS += -Wl,-rpath,'$$ORIGIN'/../vendor/memvid-ffi/target/release
         endif
         LDFLAGS += $(MEMVID_LIBS)
         DEBUG_LDFLAGS += $(MEMVID_LIBS)
