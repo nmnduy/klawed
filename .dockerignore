@@ -1,0 +1,43 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.dylib
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Documentation and development files
+*.md
+!README.md
+docs/
+assets/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Project-specific directories
+.klawed/
+whisper_models/
+
+# Test files
+tests/
+
+# Logs
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp

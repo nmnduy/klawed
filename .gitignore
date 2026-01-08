@@ -54,3 +54,12 @@ whisper_models/*.pt
 .voice_recording.wav
 
 .envrc
+
+# Docker and Podman
+.env
+!.env.example
+docker-compose.override.yml
+
+# Container build cache
+.buildx-cache/
+
