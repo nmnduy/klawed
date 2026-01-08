@@ -8,7 +8,7 @@
     - [x] cpu, memory, error
     - [ ] disk size
 - [ ] /metrics should not be public
-- [ ] version the js, css files
+- [x] version the js, css files
 - [ ] privacy policies
 - [ ] review `src/main/java/com/filesurf/service/SessionFileCleanupService.java`
 - [x] context size limit. it should be able to continue indefinitely
@@ -18,10 +18,3 @@
         - [ ] klawed with memvid
         - [ ] latex
         - [ ] bun
-
----
-
-- [ ] meter for storage used, cpu
-
----
-- [ ] network access. hmm seems like can be a security issue
