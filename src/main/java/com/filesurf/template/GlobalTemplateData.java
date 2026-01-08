@@ -57,19 +57,20 @@ public class GlobalTemplateData {
     
     /**
      * Get the hashed JS path for a given base name.
-     * Usage in templates: <script src="{jsPath('fileChat')}"></script>
+     * NOT a TemplateGlobal because it takes parameters.
+     * Access via CDI bean injection in templates.
+     * Usage in templates: <script src="{inject:jsHelper.path('fileChat')}"></script>
      */
-    @TemplateGlobal
-    public static String jsPath(String baseName) {
+    public String jsPath(String baseName) {
         return jsVersionProvider != null ? jsVersionProvider.getJsPath(baseName) : "/js/" + baseName + ".js";
     }
     
     /**
      * Get the JS filename only (without /js/ prefix).
-     * Usage in templates: {jsFilename('fileChat')}
+     * NOT a TemplateGlobal because it takes parameters.
+     * Usage in templates: {inject:jsHelper.filename('fileChat')}
      */
-    @TemplateGlobal
-    public static String jsFilename(String baseName) {
+    public String jsFilename(String baseName) {
         return jsVersionProvider != null ? jsVersionProvider.getJsFilename(baseName) : baseName + ".js";
     }
 }
