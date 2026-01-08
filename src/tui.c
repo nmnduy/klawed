@@ -2738,6 +2738,12 @@ static int handle_command_mode_input(TUIState *tui, int ch, const char *prompt) 
             input_redraw(tui, prompt);
         }
         return 0;
+    } else if (ch == 12) {  // Ctrl+L: clear command buffer (keep just ':')
+        tui->command_buffer[0] = ':';
+        tui->command_buffer[1] = '\0';
+        tui->command_buffer_len = 1;
+        input_redraw(tui, prompt);
+        return 0;
     } else if (ch == 13 || ch == 10) {  // Enter - execute command
         // Parse and execute command
         const char *cmd = tui->command_buffer + 1;  // Skip the ':'
@@ -3069,6 +3075,11 @@ static int handle_search_mode_input(TUIState *tui, int ch, const char *prompt) {
             }
             input_redraw(tui, prompt);
         }
+        return 0;
+    } else if (ch == 12) {  // Ctrl+L: clear search buffer
+        tui->search_buffer[0] = '\0';
+        tui->search_buffer_len = 0;
+        input_redraw(tui, prompt);
         return 0;
     } else if (ch == 13 || ch == 10) {  // Enter - execute search
         // Execute search with current pattern
