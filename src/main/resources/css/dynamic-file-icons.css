@@ -1,0 +1,66 @@
+/**
+ * Dynamic File Icon Classes
+ * 
+ * Used in fileExplorer.js getFileIcon() to colorize file type icons.
+ * These classes are dynamically applied based on file extension.
+ * 
+ * Note: These classes must be referenced in class-reference.html to ensure
+ * they're included in the build.
+ */
+
+@layer components {
+  /* PDF files - red */
+  .dynamic-icon-pdf {
+    @apply text-red-500;
+  }
+
+  /* Text/document files - blue */
+  .dynamic-icon-text {
+    @apply text-blue-500;
+  }
+
+  /* Spreadsheet files - green */
+  .dynamic-icon-spreadsheet {
+    @apply text-green-500;
+  }
+
+  /* Code files - indigo */
+  .dynamic-icon-code {
+    @apply text-indigo-500;
+  }
+
+  /* Script files - purple */
+  .dynamic-icon-script {
+    @apply text-purple-500;
+  }
+
+  /* Database files - cyan */
+  .dynamic-icon-database {
+    @apply text-cyan-500;
+  }
+
+  /* Archive files - amber */
+  .dynamic-icon-archive {
+    @apply text-amber-600;
+  }
+
+  /* Image files - emerald */
+  .dynamic-icon-image {
+    @apply text-emerald-500;
+  }
+
+  /* LaTeX files - orange */
+  .dynamic-icon-latex {
+    @apply text-orange-500;
+  }
+
+  /* Default file icon - slate */
+  .dynamic-icon-default {
+    @apply text-slate-400;
+  }
+
+  /* Folder icon - amber */
+  .dynamic-icon-folder {
+    @apply text-amber-500;
+  }
+}

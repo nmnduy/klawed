@@ -1,0 +1,45 @@
+/**
+ * Dynamic LaTeX Compilation Feedback Classes
+ * 
+ * Used in fileExplorer.js renderLatexPreview() for compilation status messages.
+ * These classes are dynamically applied based on compilation result.
+ * 
+ * Note: These classes must be referenced in class-reference.html to ensure
+ * they're included in the build.
+ */
+
+@layer components {
+  /* LaTeX compilation error container */
+  .dynamic-latex-error {
+    @apply bg-red-50 border border-red-200 rounded-lg p-4;
+  }
+
+  .dynamic-latex-error-icon {
+    @apply w-5 h-5 text-red-500;
+  }
+
+  .dynamic-latex-error-title {
+    @apply text-caption-m-bold text-red-700;
+  }
+
+  .dynamic-latex-error-message {
+    @apply text-caption-s text-red-600 mt-1;
+  }
+
+  .dynamic-latex-error-button {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-caption-m-bold transition-all duration-200;
+  }
+
+  /* LaTeX compilation loading state */
+  .dynamic-latex-loading-icon {
+    @apply w-8 h-8 animate-spin text-blue-500;
+  }
+
+  .dynamic-latex-loading-title {
+    @apply text-caption-m-bold text-blue-700;
+  }
+
+  .dynamic-latex-loading-message {
+    @apply text-caption-s text-blue-600 mt-1;
+  }
+}

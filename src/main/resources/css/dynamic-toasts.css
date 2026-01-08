@@ -1,0 +1,26 @@
+/**
+ * Dynamic Toast Notification Classes
+ * 
+ * Used in fileChat.js showToast() for success, error, and info messages.
+ * These classes are dynamically applied based on toast type.
+ * 
+ * Note: These classes must be referenced in class-reference.html to ensure
+ * they're included in the build.
+ */
+
+@layer components {
+  /* Success toast */
+  .dynamic-toast-success {
+    @apply bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800;
+  }
+
+  /* Error toast */
+  .dynamic-toast-error {
+    @apply bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800;
+  }
+
+  /* Info toast */
+  .dynamic-toast-info {
+    @apply bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800;
+  }
+}

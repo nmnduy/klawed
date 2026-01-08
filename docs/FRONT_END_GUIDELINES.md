@@ -12,6 +12,94 @@
 
 ## Styling
 
+### CSS Build Pipeline
+
+The CSS build uses PostCSS with Tailwind. Key points:
+
+- **Entry point**: `src/main/resources/css/index.css`
+- **Output**: `src/main/resources/META-INF/resources/assets/main.css`
+- **Build command**: `npm run build` (validates + builds + minifies)
+- **Watch command**: `npm run dev` (rebuilds on changes)
+
+**Build pipeline:**
+1. `postcss-import` - resolves `@import` statements
+2. `tailwindcss` - processes Tailwind directives and scans for classes
+3. `autoprefixer` - adds vendor prefixes
+4. `cssnano` - minifies (production only)
+
+### CSS File Organization
+
+```
+src/main/resources/css/
+├── index.css                    # Main entry point (imports dynamic-*.css files)
+├── class-reference.html         # Class names for Tailwind scanner (required!)
+├── dynamic-file-icons.css       # File icon color classes
+├── dynamic-toasts.css           # Toast notification classes
+├── dynamic-latex.css            # LaTeX compilation feedback classes
+└── (add more dynamic-*.css files as needed)
+```
+
+**File purposes:**
+- **`index.css`**: Imports dynamic CSS files, Tailwind directives, base layer, global styles
+- **`class-reference.html`**: Contains all dynamic class names so Tailwind includes them
+- **`dynamic-*.css`**: Modular files for classes constructed dynamically in JavaScript
+
+### Dynamic CSS Classes
+
+**The Problem**: Tailwind's JIT compiler only includes classes it finds in scanned files. Classes constructed dynamically in JavaScript (template strings, concatenation, ternaries) won't be detected.
+
+```javascript
+// ❌ PROBLEM: Tailwind can't detect these class names
+const icon = `<svg class="text-${color}-500">...</svg>`;
+const toast = type === 'error' ? 'bg-red-50' : 'bg-green-50';
+```
+
+**The Solution**: Define semantic classes in `dynamic-*.css` files and reference them in `class-reference.html`.
+
+**Adding new dynamic classes (step-by-step):**
+
+1. **Create or edit a `dynamic-[feature].css` file:**
+   ```css
+   /* src/main/resources/css/dynamic-myfeature.css */
+   @layer components {
+     .dynamic-myfeature-active {
+       @apply bg-green-500 text-white;
+     }
+     .dynamic-myfeature-inactive {
+       @apply bg-gray-200 text-gray-600;
+     }
+   }
+   ```
+
+2. **Import it in `index.css`** (before `@tailwind` directives):
+   ```css
+   @import './dynamic-myfeature.css';
+   ```
+
+3. **Add class names to `class-reference.html`:**
+   ```html
+   <!-- MyFeature (dynamic-myfeature.css) -->
+   <div class="dynamic-myfeature-active"></div>
+   <div class="dynamic-myfeature-inactive"></div>
+   ```
+
+4. **Use in JavaScript:**
+   ```javascript
+   const className = isActive ? 'dynamic-myfeature-active' : 'dynamic-myfeature-inactive';
+   ```
+
+5. **Run build** - validation will catch any missing references:
+   ```bash
+   npm run build
+   # ❌ MISSING from class-reference.html: dynamic-myfeature-active
+   ```
+
+**Why this approach?**
+- **Fail-fast**: Build fails immediately if you forget to add a class reference
+- **Self-documenting**: CSS files show what each class does, reference file shows what exists
+- **No safelist maintenance**: Tailwind finds classes naturally by scanning the reference file
+- **Semantic names**: `dynamic-icon-pdf` is clearer than `text-red-500` scattered in JS
+
 ### Design Token System
 We use a **unified color system** based on CSS HSL variables. All colors should reference these tokens.
 
@@ -42,9 +130,15 @@ We use a **unified color system** based on CSS HSL variables. All colors should 
 2. **Stateful UI patterns** - Classes that represent dynamic states controlled by JavaScript (e.g., `.status-indicator--connected`, `.status-indicator--error`)
 3. **Complex animations** - Keyframe animations and their associated classes that cannot be expressed as Tailwind utilities
 
+**In `dynamic-*.css` files**: For classes that are **dynamically generated in JavaScript**:
+1. **File type icons** - Classes like `.dynamic-icon-pdf`, `.dynamic-icon-text`
+2. **Toast notifications** - Classes like `.dynamic-toast-success`, `.dynamic-toast-error`
+3. **Any dynamically constructed class** - String concatenation, ternaries, template literals
+
 **Naming conventions for permitted custom classes**:
 - State classes: `[component]--[state]` (e.g., `status-indicator--working`)
 - Animation classes: Descriptive kebab-case (e.g., `float-animation`, `three-dot-loader`)
+- Dynamic classes: `dynamic-[category]-[name]` (e.g., `dynamic-icon-pdf`, `dynamic-toast-success`)
 
 **What is NOT permitted**:
 - Generic component classes (`.btn`, `.card`, `.input-field`)
@@ -53,9 +147,12 @@ We use a **unified color system** based on CSS HSL variables. All colors should 
 
 ### `@apply` Usage
 
-`@apply` is permitted in **`@layer base` only** for global element styling:
+`@apply` is permitted in:
+1. **`@layer base`** - for global element styling in `index.css`
+2. **`@layer components`** - for dynamic classes in `dynamic-*.css` files
+
 ```css
-/* ✅ CORRECT: Base layer element defaults */
+/* ✅ CORRECT: Base layer element defaults (index.css) */
 @layer base {
   body {
     @apply bg-background text-foreground;
@@ -65,7 +162,14 @@ We use a **unified color system** based on CSS HSL variables. All colors should 
   }
 }
 
-/* ❌ WRONG: Component class using @apply */
+/* ✅ CORRECT: Dynamic classes (dynamic-*.css) */
+@layer components {
+  .dynamic-icon-pdf {
+    @apply text-red-500;
+  }
+}
+
+/* ❌ WRONG: Component class outside of dynamic-* pattern */
 .btn-primary {
   @apply bg-primary text-white px-4 py-2 rounded-lg;
 }
@@ -176,6 +280,7 @@ Never mix approaches on the same element:
 - [ ] No inline JS; JS module exposes `init(rootEl)`.
 - [ ] Uses data-* hooks, not styling classes, for behavior.
 - [ ] Tailwind classes use semantic tokens; no hardcoded colors for themed elements.
+- [ ] **Dynamic classes added to `dynamic-*.css` AND `class-reference.html`.**
 - [ ] Arbitrary values documented or extracted if used more than twice.
 - [ ] No `!important` without documented justification.
 - [ ] Empty/error/loading states covered.
@@ -183,3 +288,4 @@ Never mix approaches on the same element:
 - [ ] Validation UX consistent; errors surfaced inline.
 - [ ] Tests target stable hooks (`data-testid`), not presentation.
 - [ ] Dark mode tested and working.
+- [ ] `npm run build` passes without errors.

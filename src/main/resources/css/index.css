@@ -1,3 +1,13 @@
+/* 
+ * Dynamic utility classes for JavaScript-generated content.
+ * These use @layer components to ensure they're always included in output.
+ * Split into separate files by feature for maintainability.
+ * Note: @import must precede @tailwind directives for postcss-import to work.
+ */
+@import './dynamic-file-icons.css';
+@import './dynamic-toasts.css';
+@import './dynamic-latex.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
