@@ -126,17 +126,18 @@ Users must be invited before they can access the application. The authentication
 
 ### Managing Users (Admin Scripts)
 ```bash
-# Invite a new user
+# Invite a new user (creates if doesn't exist)
 ./scripts/invite-user.sh user@example.com
+
+# Activate a user (creates if doesn't exist)
+./scripts/invite-user.sh --activate user@example.com
+# or: ./scripts/invite-user.sh -a user@example.com
 
 # List all invited users
 ./scripts/invite-user.sh --list
 
 # Deactivate a user (they can no longer log in)
 ./scripts/invite-user.sh --deactivate user@example.com
-
-# Re-activate a user
-./scripts/invite-user.sh --activate user@example.com
 ```
 
 ### Auth Endpoints
