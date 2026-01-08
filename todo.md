@@ -10,8 +10,13 @@
 - [ ] version the js, css files
 - [ ] privacy policies
 - [ ] review `src/main/java/com/filesurf/service/SessionFileCleanupService.java`
-- [ ] context size limit. it should be able to continue indefinitely
+- [x] context size limit. it should be able to continue indefinitely
+    - [x] autocompaction
 - [ ] agent sandbox
+    - [ ] docker image packages
+        - [ ] klawed with memvid
+        - [ ] latex
+        - [ ] bun
 
 ---
 
