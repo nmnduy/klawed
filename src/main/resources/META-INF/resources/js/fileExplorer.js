@@ -698,19 +698,11 @@ class FileExplorer {
 
         if (isHidden) {
             this.fileExplorerPanel.classList.remove('hidden');
-            this.fileExplorerPanel.classList.remove('w-0');
-            this.fileExplorerPanel.classList.add('w-96');
-            this.fileExplorerPanel.classList.add('md:max-w-[24rem]');
-            this.fileExplorerPanel.classList.add('min-w-0');
 
             this.loadDirectory();
             this.startAutoRefresh();
         } else {
             this.fileExplorerPanel.classList.add('hidden');
-            this.fileExplorerPanel.classList.add('w-0');
-            this.fileExplorerPanel.classList.remove('w-96');
-            this.fileExplorerPanel.classList.remove('md:max-w-[24rem]');
-            this.fileExplorerPanel.classList.remove('min-w-0');
 
             this.stopAutoRefresh();
         }
@@ -740,10 +732,6 @@ class FileExplorer {
         if (this.fileExplorerClose) {
             this.fileExplorerClose.addEventListener('click', () => {
                 this.fileExplorerPanel.classList.add('hidden');
-                this.fileExplorerPanel.classList.add('w-0');
-                this.fileExplorerPanel.classList.remove('w-96');
-                this.fileExplorerPanel.classList.remove('md:max-w-[24rem]');
-                this.fileExplorerPanel.classList.remove('min-w-0');
                 this.stopAutoRefresh();
             });
         }
@@ -817,11 +805,7 @@ class FileExplorer {
             });
         }
 
-        // Ensure panel width constraints remain applied after script initialization
-        if (this.fileExplorerPanel) {
-            this.fileExplorerPanel.classList.add('min-w-0');
-            this.fileExplorerPanel.classList.add('md:max-w-[24rem]');
-        }
+        // Panel width constraints are now handled by CSS (see index.css @media queries)
 
         if (this.fileExplorerUp) {
             this.fileExplorerUp.addEventListener('click', () => {
