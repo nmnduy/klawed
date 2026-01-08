@@ -7,7 +7,7 @@ echo "================================"
 echo ""
 
 # Configuration
-DEPLOY_DIR="/root/filesurf_v2_work"
+DEPLOY_DIR="/root/filesurf_v2"
 DATA_DIR="/var/lib/filesurf"
 LOG_DIR="/var/log/filesurf"
 SERVICE_NAME="filesurf-v2"

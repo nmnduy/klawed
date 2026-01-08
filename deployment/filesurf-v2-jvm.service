@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/root/filesurf_v2_work
+WorkingDirectory=/root/filesurf_v2
 
 # Run the Quarkus uber-jar with memory optimizations
 ExecStart=/usr/bin/java \
