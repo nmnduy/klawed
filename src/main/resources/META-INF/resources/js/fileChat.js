@@ -1054,7 +1054,7 @@ export function init(rootEl) {
     rootEl.querySelectorAll('[data-quick-prompt]').forEach((button) => {
         button.addEventListener('click', () => {
             if (isConnected && elements.messageForm && elements.messageInput) {
-                elements.messageInput.value = button.textContent || '';
+                elements.messageInput.value = (button.textContent || '').trim();
                 elements.messageForm.dispatchEvent(new Event('submit'));
             }
         });
