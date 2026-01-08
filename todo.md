@@ -7,6 +7,7 @@
 - [x] alert
     - [x] cpu, memory, error
     - [ ] disk size
+- [ ] /metrics should not be public
 - [ ] version the js, css files
 - [ ] privacy policies
 - [ ] review `src/main/java/com/filesurf/service/SessionFileCleanupService.java`
