@@ -6,7 +6,7 @@
 - [x] dark mode
 - [x] alert
     - [x] cpu, memory, error
-    - [ ] disk size
+    - [x] disk size
 - [ ] /metrics should not be public
 - [x] version the js, css files
 - [ ] privacy policies
