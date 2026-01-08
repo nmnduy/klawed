@@ -81,6 +81,11 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             return true;
         }
 
+        // Skip privacy policy page
+        if (normalizedPath.equals("privacy") || normalizedPath.startsWith("privacy/")) {
+            return true;
+        }
+
         // Skip static assets
         if (normalizedPath.startsWith("assets/") || 
             normalizedPath.startsWith("js/") || 
