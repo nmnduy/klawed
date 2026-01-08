@@ -32,7 +32,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libbsd-dev \
     libncursesw5-dev \
-    libzmq3-dev \
     \
     # Rust and Cargo (for memvid-ffi)
     curl \
@@ -74,8 +73,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Install htmq via cargo (HTML parsing tool)
-RUN cargo install htmq
+# Note: htmq removed as it's not available in crates.io and not used by klawed
 
 # Set working directory
 WORKDIR /build
@@ -86,24 +84,27 @@ COPY . .
 # Build memvid-ffi Rust library first
 RUN cd vendor/memvid-ffi && \
     cargo build --release && \
-    ls -lh target/release/libmemvid_ffi.a
+    ls -lh target/release/libmemvid_ffi.a && \
+    ls -lh target/release/libmemvid_ffi.so
 
-# Build klawed with memvid support enabled
+# Build klawed with memvid support enabled (without ZMQ to avoid format string issues)
 RUN make clean && \
-    make MEMVID=1 ZMQ=1 && \
+    make MEMVID=1 ZMQ=0 && \
     ls -lh build/klawed
 
-# Install klawed to /usr/local/bin
+# Install klawed and memvid shared library to system paths
 RUN cp build/klawed /usr/local/bin/klawed && \
-    chmod +x /usr/local/bin/klawed
+    chmod +x /usr/local/bin/klawed && \
+    cp vendor/memvid-ffi/target/release/libmemvid_ffi.so /usr/local/lib/ && \
+    ldconfig
 
 # Create working directory for user code
 RUN mkdir -p /workspace && \
     chmod 777 /workspace
 
 # Clean up build artifacts to reduce image size
-RUN rm -rf /build && \
-    cargo cache --autoclean && \
+RUN cargo cache --autoclean || true && \
+    rm -rf /build && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -131,7 +132,6 @@ RUN echo "=== Installed Tools ===" && \
     echo "gs: $(gs --version)" && \
     echo "latex: $(latex --version | head -1)" && \
     echo "jq: $(jq --version)" && \
-    echo "htmq: $(htmq --version || echo 'installed')" && \
     echo "sqlite3: $(sqlite3 --version)" && \
     echo "curl: $(curl --version | head -1)" && \
     echo "klawed: $(klawed --version 2>&1 || echo 'installed')" && \

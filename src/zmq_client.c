@@ -22,6 +22,7 @@
 #include <bsd/string.h>
 #include <time.h>
 #include <arpa/inet.h>
+#include <inttypes.h>
 
 // ZMQ client configuration
 #define ZMQ_CLIENT_BUFFER_SIZE 65536

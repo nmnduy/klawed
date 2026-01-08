@@ -1135,9 +1135,14 @@ int zmq_check_and_resend_pending(ZMQContext *ctx, int64_t current_time_ms) {
                 }
 
                 ctx->pending_queue.count--;
+                // Save message_id before freeing (avoid use-after-free)
+                char msg_id_copy[64] = {0};
+                if (to_delete->message_id) {
+                    strlcpy(msg_id_copy, to_delete->message_id, sizeof(msg_id_copy));
+                }
                 free_pending_message(to_delete);
                 LOG_DEBUG("ZMQ: Dropped message %s from pending queue (new count: %d)",
-                          to_delete->message_id, ctx->pending_queue.count);
+                          msg_id_copy, ctx->pending_queue.count);
                 continue;
             }
 
