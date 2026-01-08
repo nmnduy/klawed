@@ -231,6 +231,9 @@ public class KlawedAgentManager {
         copyEnvIfPresent(processBuilder, "AWS_SECRET_ACCESS_KEY");
         copyEnvIfPresent(processBuilder, "AWS_SESSION_TOKEN");
         
+        // Forward LD_LIBRARY_PATH for shared libraries (e.g., libmemvid_ffi.so)
+        copyEnvIfPresent(processBuilder, "LD_LIBRARY_PATH");
+        
         // API configuration - prioritize OPENAI_* environment variables for simplicity
         // This aligns with the user's request to use only OpenAI-compatible environment variables
         // Configuration properties are now openai.api.base and openai.api.model
@@ -271,6 +274,9 @@ public class KlawedAgentManager {
         // Enable verbose tool output for debugging
         processBuilder.environment().put("KLAWED_TOOL_VERBOSE", "1");
         LOGGER.info("[SESSION:" + sessionId + "] Set KLAWED_TOOL_VERBOSE=1");
+        
+        // Ensure klawed can find shared libraries (e.g., libmemvid_ffi.so)
+        copyEnvIfPresent(processBuilder, "LD_LIBRARY_PATH");
         
         LOGGER.info("[SESSION:" + sessionId + "] API configuration - Base: " + apiBaseUrl + ", Model: " + modelName);
 
