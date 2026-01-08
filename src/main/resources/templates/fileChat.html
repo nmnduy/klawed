@@ -4,15 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FileSurf - AI Assistant</title>
-    <!-- Prevent flash of wrong theme -->
+    <!-- Force light mode only -->
     <script>
         (function() {
             try {
-                const theme = localStorage.getItem('filesurf-theme') || 
-                              (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-                if (theme === 'dark') {
-                    document.documentElement.classList.add('dark');
-                }
+                // Remove dark class if it exists
+                document.documentElement.classList.remove('dark');
             } catch (e) {}
         })();
     </script>
