@@ -6,6 +6,8 @@
 - [x] dark mode
 - [x] alert
     - [x] cpu, memory, error
+    - [ ] disk size
+- [ ] version the js, css files
 - [ ] privacy policies
 - [ ] review `src/main/java/com/filesurf/service/SessionFileCleanupService.java`
 - [ ] context size limit. it should be able to continue indefinitely
