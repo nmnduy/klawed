@@ -18,8 +18,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
 
-const CSS_SOURCE = join(projectRoot, 'src/main/resources/META-INF/resources/assets/main.css');
-const ASSETS_DIR = join(projectRoot, 'src/main/resources/META-INF/resources/assets');
+const CSS_SOURCE = join(projectRoot, 'src/main/resources/META-INF/resources/dist/main.css');
+const DIST_DIR = join(projectRoot, 'src/main/resources/META-INF/resources/dist');
 const VERSION_FILE = join(projectRoot, 'src/main/resources/css-version.properties');
 
 function generateHash(filePath) {
@@ -60,7 +60,7 @@ css.generated=${new Date().toISOString()}
     // Generate hash
     const hash = generateHash(CSS_SOURCE);
     const hashedFilename = `main.${hash}.css`;
-    const hashedFilePath = join(ASSETS_DIR, hashedFilename);
+    const hashedFilePath = join(DIST_DIR, hashedFilename);
     
     console.log(`   Hash: ${hash}`);
     console.log(`   Hashed filename: ${hashedFilename}`);

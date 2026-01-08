@@ -46,10 +46,10 @@ public class CssVersionProvider {
     }
     
     /**
-     * Get the full CSS path including /assets/ prefix.
+     * Get the full CSS path including /dist/ prefix.
      */
     public String getCssPath() {
-        return "/assets/" + cssFilename;
+        return "/dist/" + cssFilename;
     }
     
     private Properties loadProperties() {

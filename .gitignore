@@ -51,8 +51,8 @@ package-lock.json
 dist/
 .vite/
 
-# CSS Build Output (generated)
-src/main/resources/META-INF/resources/assets/
+# CSS/JS Build Output (generated)
+src/main/resources/META-INF/resources/dist/
 # we build this on server so no need to track
 # only created file with hashes to combat CDN caching
 src/main/resources/css-version.properties

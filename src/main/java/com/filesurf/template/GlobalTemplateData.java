@@ -34,11 +34,11 @@ public class GlobalTemplateData {
      */
     @TemplateGlobal
     public static String cssPath() {
-        return cssVersionProvider != null ? cssVersionProvider.getCssPath() : "/assets/main.css";
+        return cssVersionProvider != null ? cssVersionProvider.getCssPath() : "/dist/main.css";
     }
     
     /**
-     * Get the CSS filename only (without /assets/ prefix).
+     * Get the CSS filename only (without /dist/ prefix).
      * Usage in templates: {cssFilename}
      */
     @TemplateGlobal
@@ -62,11 +62,11 @@ public class GlobalTemplateData {
      * Usage in templates: <script src="{inject:jsHelper.path('fileChat')}"></script>
      */
     public String jsPath(String baseName) {
-        return jsVersionProvider != null ? jsVersionProvider.getJsPath(baseName) : "/js/" + baseName + ".js";
+        return jsVersionProvider != null ? jsVersionProvider.getJsPath(baseName) : "/dist/" + baseName + ".js";
     }
     
     /**
-     * Get the JS filename only (without /js/ prefix).
+     * Get the JS filename only (without /dist/ prefix).
      * NOT a TemplateGlobal because it takes parameters.
      * Usage in templates: {inject:jsHelper.filename('fileChat')}
      */

@@ -12,8 +12,8 @@ NODE_MODULES := node_modules
 VITE := $(NPM) run
 TAILWIND_CONFIG := tailwind.config.js
 CSS_SOURCE := src/main/resources/css/index.css
-CSS_OUTPUT := src/main/resources/META-INF/resources/assets/main.css
-ASSETS_DIR := src/main/resources/META-INF/resources/assets
+CSS_OUTPUT := src/main/resources/META-INF/resources/dist/main.css
+DIST_DIR := src/main/resources/META-INF/resources/dist
 TARGET_DIR := target
 
 .PHONY: help build-dist dev css css-dev clean install-deps
@@ -50,19 +50,19 @@ dev: css
 # Build Tailwind CSS output (production with cache busting)
 css: install-deps
 	@echo "Building Tailwind CSS with cache busting (production)..."
-	@mkdir -p $(ASSETS_DIR)
+	@mkdir -p $(DIST_DIR)
 	@$(NPM) run build
-	@echo "CSS built with hash to $(ASSETS_DIR)"
+	@echo "CSS built with hash to $(DIST_DIR)"
 
 # Build Tailwind CSS output (development, no hashing)
 css-dev: install-deps
 	@echo "Building Tailwind CSS (development, no cache busting)..."
-	@mkdir -p $(ASSETS_DIR)
+	@mkdir -p $(DIST_DIR)
 	@$(NPM) run build:dev
-	@echo "CSS built to $(ASSETS_DIR)/main.css"
+	@echo "CSS built to $(DIST_DIR)/main.css"
 
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -rf $(ASSETS_DIR)/*
+	@rm -rf $(DIST_DIR)/*
 	@echo "Clean complete!"

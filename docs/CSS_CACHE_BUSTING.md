@@ -9,6 +9,7 @@ This project implements content-based cache busting for CSS files to prevent bro
    - Generates an MD5 hash of the CSS content
    - Creates a hashed copy: `main.[hash].css` (e.g., `main.b017b445.css`)
    - Creates `css-version.properties` with the hashed filename
+   - Outputs all files to `dist/` directory
 
 2. **Java Backend**: The `CssVersionProvider` class:
    - Reads `css-version.properties` on startup
@@ -22,7 +23,7 @@ This project implements content-based cache busting for CSS files to prevent bro
    
    This automatically renders as:
    ```html
-   <link rel="stylesheet" href="/assets/main.b017b445.css">
+   <link rel="stylesheet" href="/dist/main.b017b445.css">
    ```
 
 ## Benefits
@@ -98,19 +99,17 @@ We use MD5 (8 characters) for the hash because:
 ### Template Global Variables
 
 The `@TemplateGlobal` annotation in `GlobalTemplateData` makes these available in all templates:
-- `{cssPath}` - Full path: `/assets/main.[hash].css`
+- `{cssPath}` - Full path: `/dist/main.[hash].css`
 - `{cssFilename}` - Filename only: `main.[hash].css`
 - `{cssHash}` - Hash only: `b017b445`
 
 ### Git Tracking
 
 - ✅ **Tracked**: `css-version.properties` (needed for deployments)
-- ❌ **Ignored**: `src/main/resources/META-INF/resources/assets/*` (build artifacts)
+- ❌ **Ignored**: `src/main/resources/META-INF/resources/dist/*` (build artifacts)
 
-The `.gitignore` has a special entry to track the version file:
+The `.gitignore` has an entry to ignore the dist folder:
 ```gitignore
-# CSS Build Output (generated)
-src/main/resources/META-INF/resources/assets/
-# Track CSS version file for cache busting
-!src/main/resources/css-version.properties
+# CSS/JS Build Output (generated)
+src/main/resources/META-INF/resources/dist/
 ```

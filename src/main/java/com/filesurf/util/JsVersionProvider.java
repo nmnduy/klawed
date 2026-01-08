@@ -37,10 +37,10 @@ public class JsVersionProvider {
     }
     
     /**
-     * Get the full JS path including /js/ prefix.
+     * Get the full JS path including /dist/ prefix.
      */
     public String getJsPath(String baseName) {
-        return "/js/" + getJsFilename(baseName);
+        return "/dist/" + getJsFilename(baseName);
     }
     
     /**

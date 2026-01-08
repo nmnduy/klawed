@@ -19,6 +19,7 @@ const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
 
 const JS_SOURCE_DIR = join(projectRoot, 'src/main/resources/META-INF/resources/js');
+const JS_DIST_DIR = join(projectRoot, 'src/main/resources/META-INF/resources/dist');
 const VERSION_FILE = join(projectRoot, 'src/main/resources/js-version.properties');
 
 function generateHash(filePath) {
@@ -68,6 +69,11 @@ function main() {
         process.exit(1);
     }
     
+    // Ensure dist directory exists
+    if (!existsSync(JS_DIST_DIR)) {
+        mkdirSync(JS_DIST_DIR, { recursive: true });
+    }
+    
     // Get all JS files
     const jsFiles = readdirSync(JS_SOURCE_DIR)
         .filter(f => f.endsWith('.js') && !f.match(/\.[a-f0-9]{8}\.js$/)); // Exclude already hashed files
@@ -86,15 +92,15 @@ function main() {
         const hash = generateHash(sourcePath);
         const baseName = basename(filename, '.js');
         const hashedFilename = `${baseName}.${hash}.js`;
-        const hashedFilePath = join(JS_SOURCE_DIR, hashedFilename);
+        const hashedFilePath = join(JS_DIST_DIR, hashedFilename);
         
-        // Copy JS file with hash
+        // Copy JS file with hash to dist directory
         copyFileSync(sourcePath, hashedFilePath);
         
         // Store mapping
         hashedFiles[baseName] = hashedFilename;
         
-        console.log(`   ✓ ${filename} → ${hashedFilename}`);
+        console.log(`   ✓ ${filename} → dist/${hashedFilename}`);
     });
     
     // Create properties file

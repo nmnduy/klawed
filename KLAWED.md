@@ -13,6 +13,7 @@ FileSurf v2 is a Quarkus-based application for file management and chat function
 - ✅ **Dark mode support** with system preference detection (2026-01-07)
 - ✅ **CSS cache busting** with content-based hashing (2026-01-08)
 - ✅ **JS cache busting** with content-based hashing (2026-01-08)
+- ✅ **Hashed assets in `dist/` folder** - All CSS/JS hashed files go to `dist/` (2026-01-08)
 
 ## Quick Start
 ```bash
@@ -211,10 +212,11 @@ Both CSS and JS files are automatically hashed during **production** builds to p
 - **Production** (`npm run build`):
   - CSS: Generates `main.[hash].css` (e.g., `main.d44edce3.css`)
   - JS: Generates `[name].[hash].js` (e.g., `fileChat.9bc4af5d.js`)
+  - All hashed files are output to `dist/` directory
 - **Development** (`npm run build:dev`): 
   - CSS: Generates `main.css` (no hash)
   - JS: Generates standard filenames (no hashes, faster iteration)
-- Templates use `{cssPath}` and `{jsPath('name')}` which automatically resolve to correct filenames
+- Templates use `{cssPath}` and `{inject:jsHelper.path('name')}` which automatically resolve to correct filenames
 - Hashes change whenever content changes, forcing browser cache invalidation
 - See `docs/CSS_CACHE_BUSTING.md` and `docs/JS_CACHE_BUSTING.md` for full details
 

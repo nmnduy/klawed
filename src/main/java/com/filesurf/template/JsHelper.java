@@ -24,10 +24,10 @@ public class JsHelper {
     /**
      * Get the hashed JS path for a given base name.
      * @param baseName The base name of the JS file (e.g., "fileChat")
-     * @return Full path with hash (e.g., "/js/fileChat.abc123.js")
+     * @return Full path with hash (e.g., "/dist/fileChat.abc123.js")
      */
     public String path(String baseName) {
-        return jsVersionProvider != null ? jsVersionProvider.getJsPath(baseName) : "/js/" + baseName + ".js";
+        return jsVersionProvider != null ? jsVersionProvider.getJsPath(baseName) : "/dist/" + baseName + ".js";
     }
     
     /**

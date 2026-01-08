@@ -23,7 +23,7 @@ JavaScript files are automatically hashed during **production** builds to preven
 1. **Build Script** (`scripts/hash-js.js`):
    - Scans `src/main/resources/META-INF/resources/js/` directory
    - Generates MD5 hash (first 8 chars) for each JS file
-   - Copies each file with hash: `[name].[hash].js`
+   - Copies each file with hash to `dist/`: `[name].[hash].js`
    - Creates `js-version.properties` with mappings
 
 2. **Java Provider** (`JsVersionProvider.java`):
@@ -31,14 +31,15 @@ JavaScript files are automatically hashed during **production** builds to preven
    - Provides methods to get hashed filenames
    - Caches mappings in memory
 
-3. **Template Globals** (`GlobalTemplateData.java`):
-   - Exposes `jsPath(baseName)` function to templates
-   - Example: `{jsPath('fileChat')}` → `/js/fileChat.9bc4af5d.js`
+3. **Template Helper** (`JsHelper.java`):
+   - Injectable bean exposed as `jsHelper` in templates
+   - Provides `path(baseName)` method for full paths
+   - Example: `{inject:jsHelper.path('fileChat')}` → `/dist/fileChat.9bc4af5d.js`
 
 4. **Template Usage** (`fileChat.html`):
    ```html
-   <script src="{jsPath('fileExplorer')}" defer></script>
-   <script type="module" src="{jsPath('fileChat')}"></script>
+   <script src="{inject:jsHelper.path('fileExplorer')}" defer></script>
+   <script type="module" src="{inject:jsHelper.path('fileChat')}"></script>
    ```
 
 ## Files Generated
@@ -69,17 +70,17 @@ js.tabManager=tabManager.e0dfd2f6.js
 
 ### Basic Usage
 ```html
-<!-- Use jsPath() to get the full path with hash -->
-<script src="{jsPath('fileChat')}"></script>
-<script src="{jsPath('fileExplorer')}" defer></script>
-<script type="module" src="{jsPath('darkMode')}"></script>
+<!-- Use inject:jsHelper.path() to get the full path with hash -->
+<script src="{inject:jsHelper.path('fileChat')}"></script>
+<script src="{inject:jsHelper.path('fileExplorer')}" defer></script>
+<script type="module" src="{inject:jsHelper.path('darkMode')}"></script>
 ```
 
 ### Getting Just the Filename
 ```html
-<!-- If you need just the filename without /js/ prefix -->
+<!-- If you need just the filename without /dist/ prefix -->
 <script>
-  const filename = '{jsFilename('fileChat')}'; // fileChat.9bc4af5d.js
+  const filename = '{inject:jsHelper.filename('fileChat')}'; // fileChat.9bc4af5d.js
 </script>
 ```
 
@@ -101,14 +102,14 @@ make build-dist
 When you add a new JS file to `src/main/resources/META-INF/resources/js/`:
 
 1. The file will be automatically detected during build
-2. It will be hashed in production mode
-3. Use `{jsPath('yourFileName')}` in templates (without .js extension)
+2. It will be hashed and copied to `dist/` in production mode
+3. Use `{inject:jsHelper.path('yourFileName')}` in templates (without .js extension)
 
 Example:
 - File: `myNewScript.js`
-- Template: `<script src="{jsPath('myNewScript')}"></script>`
-- Result (prod): `/js/myNewScript.a1b2c3d4.js`
-- Result (dev): `/js/myNewScript.js`
+- Template: `<script src="{inject:jsHelper.path('myNewScript')}"></script>`
+- Result (prod): `/dist/myNewScript.a1b2c3d4.js`
+- Result (dev): `/dist/myNewScript.js`
 
 ## Cache Invalidation Strategy
 
@@ -133,10 +134,11 @@ The system integrates seamlessly with Quarkus:
 - Check that files exist in `src/main/resources/META-INF/resources/js/`
 - Run `npm run build` (not `build:dev`)
 
-### Template errors with jsPath
+### Template errors with jsHelper
 - Verify `JsVersionProvider` is loaded (check startup logs)
-- Ensure `GlobalTemplateData` has both CSS and JS providers injected
+- Ensure `JsHelper` bean is available (should be auto-discovered)
 - Check that the base name matches the file name (without .js)
+- Use `{inject:jsHelper.path('name')}` syntax (not `{jsPath()}`)
 
 ### Old JS files being served
 - Clear browser cache (hard refresh: Cmd+Shift+R / Ctrl+Shift+F5)
@@ -147,6 +149,6 @@ The system integrates seamlessly with Quarkus:
 
 - `scripts/hash-js.js` - Build script for hashing
 - `src/main/java/com/filesurf/util/JsVersionProvider.java` - Java provider
-- `src/main/java/com/filesurf/template/GlobalTemplateData.java` - Template globals
+- `src/main/java/com/filesurf/template/JsHelper.java` - Template helper bean
 - `src/main/resources/js-version.properties` - Generated mappings
 - `docs/CSS_CACHE_BUSTING.md` - Similar system for CSS
