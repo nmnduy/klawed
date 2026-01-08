@@ -866,8 +866,11 @@ class FileExplorer {
             this.fileExplorerUpload.disabled = true;
 
             // Send upload request
-            const response = await fetch('/api/files/upload', {
+            const response = await fetch('/file-chat/upload', {
                 method: 'POST',
+                headers: {
+                    'X-Session-ID': this.sessionId
+                },
                 body: formData
             });
 
