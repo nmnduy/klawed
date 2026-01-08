@@ -8,6 +8,9 @@ User=root
 Group=root
 WorkingDirectory=/root/filesurf_v2
 
+# Load environment file
+EnvironmentFile=-/etc/filesurf/.env
+
 # Run the Quarkus uber-jar with memory optimizations
 ExecStart=/usr/bin/java \
     -Xmx256m \
@@ -22,6 +25,12 @@ ExecStart=/usr/bin/java \
 
 Restart=always
 RestartSec=10
+
+# Environment variables
+Environment="KLAWED_AUTO_COMPACT=1"
+Environment="KLAWED_USE_BEDROCK=1"
+Environment="ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+Environment="AWS_REGION=us-west-2"
 
 # Security hardening
 NoNewPrivileges=true
