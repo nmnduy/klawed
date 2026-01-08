@@ -1,0 +1,135 @@
+# klawed Sandbox Container - Minimal Runtime Image
+# Multi-stage build to keep the final image compact (~250MB)
+#
+# Build on fandalf (same x86_64 arch as production):
+#   docker build -f Dockerfile.sandbox -t klawed-sandbox:latest .
+#
+# Transfer to production:
+#   docker save klawed-sandbox:latest | ssh filesurf-0 'docker load'
+#
+# Run:
+#   docker run -it --rm -e OPENAI_API_KEY=$OPENAI_API_KEY \
+#     -v /path/to/workspace:/workspace klawed-sandbox:latest
+
+# =============================================================================
+# Stage 1: Build Stage - Full build environment
+# =============================================================================
+FROM debian:12-slim AS builder
+
+LABEL stage="builder"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build essentials
+    build-essential \
+    gcc \
+    make \
+    pkg-config \
+    git \
+    ca-certificates \
+    curl \
+    \
+    # klawed C dependencies (dev packages)
+    libcurl4-openssl-dev \
+    libcjson-dev \
+    libsqlite3-dev \
+    libssl-dev \
+    libbsd-dev \
+    libncursesw5-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust (needed for memvid-ffi)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+WORKDIR /build
+
+# Copy source code
+COPY . .
+
+# Build memvid-ffi Rust library
+RUN cd vendor/memvid-ffi && \
+    cargo build --release && \
+    ls -lh target/release/libmemvid_ffi.a && \
+    ls -lh target/release/libmemvid_ffi.so
+
+# Build klawed with memvid enabled, ZMQ disabled (keeps it simple)
+RUN make clean && \
+    make MEMVID=1 ZMQ=0 && \
+    ls -lh build/klawed && \
+    # Verify memvid is linked
+    ldd build/klawed | grep -q memvid || echo "WARNING: memvid not dynamically linked (may be static)"
+
+# =============================================================================
+# Stage 2: Runtime Stage - Minimal production image
+# =============================================================================
+FROM debian:12-slim
+
+LABEL maintainer="FileSurf Team"
+LABEL description="Sandbox container for running the klawed AI agent"
+LABEL version="1.0"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install only runtime dependencies (not dev packages)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Networking
+    curl \
+    wget \
+    ca-certificates \
+    \
+    # Git for agent workspace operations
+    git \
+    openssh-client \
+    \
+    # Python for agent tasks
+    python3 \
+    python3-pip \
+    python3-venv \
+    \
+    # Essential CLI tools
+    jq \
+    unzip \
+    zip \
+    \
+    # Runtime libraries for klawed (NOT -dev packages)
+    libcjson1 \
+    libcurl4 \
+    libsqlite3-0 \
+    libssl3 \
+    libbsd0 \
+    libncursesw6 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for running the agent
+RUN useradd -m -u 1000 -s /bin/bash agent
+
+# Copy klawed binary from builder
+COPY --from=builder /build/build/klawed /usr/local/bin/klawed
+
+# Copy memvid shared library from builder
+COPY --from=builder /build/vendor/memvid-ffi/target/release/libmemvid_ffi.so /usr/local/lib/libmemvid_ffi.so
+
+# Set up library paths and verify
+RUN chmod +x /usr/local/bin/klawed && ldconfig
+
+# Create workspace directory
+RUN mkdir -p /workspace && chown agent:agent /workspace
+
+# Set up default working directory
+WORKDIR /workspace
+
+# Switch to non-root user
+USER agent
+
+# Configure git for the agent user
+RUN git config --global init.defaultBranch main \
+    && git config --global user.email "agent@sandbox.local" \
+    && git config --global user.name "Klawed Agent"
+
+# Default entrypoint
+ENTRYPOINT ["/usr/local/bin/klawed"]
