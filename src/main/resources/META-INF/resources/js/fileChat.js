@@ -137,6 +137,12 @@ export function init(rootEl) {
         if (elements.messageInput) elements.messageInput.disabled = disabled;
         if (elements.sendButton) elements.sendButton.disabled = disabled;
         if (elements.uploadButton) elements.uploadButton.disabled = disabled;
+        // Also update all upload buttons (including file explorer upload button)
+        if (elements.uploadButtons && elements.uploadButtons.length > 0) {
+            elements.uploadButtons.forEach(btn => {
+                btn.disabled = disabled;
+            });
+        }
     }
 
     function updateStatus(connected, message) {
