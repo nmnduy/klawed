@@ -1,5 +1,6 @@
 package com.filesurf;
 
+import com.filesurf.util.CssVersionProvider;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
@@ -20,11 +21,14 @@ public class FileChatResource {
     @Inject
     @Location("fileChat.html")
     Template fileChat;
+    
+    @Inject
+    CssVersionProvider cssVersionProvider;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
     public TemplateInstance get() {
         LOGGER.info("Loading File Chat interface");
-        return fileChat.instance();
+        return fileChat.data("cssPath", cssVersionProvider.getCssPath());
     }
 }
