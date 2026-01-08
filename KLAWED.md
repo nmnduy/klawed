@@ -220,3 +220,7 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 - **Exposed endpoints**: Protected endpoints require valid authentication cookie
 - **File uploads**: Users can upload any files to their session directories
 - **Monitoring**: `/metrics` endpoint is publicly accessible. Consider IP whitelisting or basic auth
+
+## Deployment
+
+See files in `deployment/`
