@@ -55,6 +55,9 @@ public class PodmanSandboxService {
     @ConfigProperty(name = "sandbox.podman.pids-limit", defaultValue = "512")
     int pidsLimit;
     
+    @ConfigProperty(name = "klawed.path", defaultValue = "/usr/local/bin/klawed")
+    String klawedPath;
+    
     /**
      * Check if Podman sandbox mode is enabled
      */
@@ -163,6 +166,10 @@ public class PodmanSandboxService {
         command.add("-v");
         command.add(workspaceDir.toAbsolutePath() + ":/workspace:Z");
         
+        // Note: klawed binary is baked into the container image (v1.2+)
+        // Note: libmemvid_ffi.so is baked into the container image (v1.1+)
+        // No need to mount them separately
+        
         // Working directory inside container
         command.add("-w");
         command.add("/workspace");
@@ -215,6 +222,10 @@ public class PodmanSandboxService {
         // Extra headers for custom API endpoints
         addEnvIfPresent(command, "OPENAI_AUTH_HEADER");
         addEnvIfPresent(command, "OPENAI_EXTRA_HEADERS");
+        
+        // LD_LIBRARY_PATH for shared libraries (libmemvid_ffi.so)
+        command.add("-e");
+        command.add("LD_LIBRARY_PATH=/usr/local/lib");
         
         // Always enable verbose tool output for debugging
         command.add("-e");
