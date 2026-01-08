@@ -190,12 +190,14 @@ ifeq ($(MEMVID),1)
     # Add Rust stdlib dependencies based on OS
     ifeq ($(UNAME_S),Darwin)
         MEMVID_LIBS += -framework Security -framework CoreFoundation
-        # Add rpath for macOS (relative to binary location)
+        # Add rpath for macOS (relative to binary location and installed location)
         MEMVID_LIBS += -Wl,-rpath,@loader_path/../vendor/memvid-ffi/target/release
+        MEMVID_LIBS += -Wl,-rpath,@loader_path/../lib
     else ifeq ($(UNAME_S),Linux)
         MEMVID_LIBS += -lpthread -ldl -lm
-        # Add rpath for Linux (relative to binary location)
+        # Add rpath for Linux (relative to binary location and installed location)
         MEMVID_LIBS += -Wl,-rpath,'$$ORIGIN'/../vendor/memvid-ffi/target/release
+        MEMVID_LIBS += -Wl,-rpath,'$$ORIGIN'/../lib
     endif
     LDFLAGS += $(MEMVID_LIBS)
     DEBUG_LDFLAGS += $(MEMVID_LIBS)
@@ -214,12 +216,14 @@ else
         MEMVID_LIBS = -L$(MEMVID_FFI_DIR)/target/release -lmemvid_ffi
         ifeq ($(UNAME_S),Darwin)
             MEMVID_LIBS += -framework Security -framework CoreFoundation
-            # Add rpath for macOS (relative to binary location)
+            # Add rpath for macOS (relative to binary location and installed location)
             MEMVID_LIBS += -Wl,-rpath,@loader_path/../vendor/memvid-ffi/target/release
+            MEMVID_LIBS += -Wl,-rpath,@loader_path/../lib
         else ifeq ($(UNAME_S),Linux)
             MEMVID_LIBS += -lpthread -ldl -lm
-            # Add rpath for Linux (relative to binary location)
+            # Add rpath for Linux (relative to binary location and installed location)
             MEMVID_LIBS += -Wl,-rpath,'$$ORIGIN'/../vendor/memvid-ffi/target/release
+            MEMVID_LIBS += -Wl,-rpath,'$$ORIGIN'/../lib
         endif
         LDFLAGS += $(MEMVID_LIBS)
         DEBUG_LDFLAGS += $(MEMVID_LIBS)
@@ -1745,10 +1749,32 @@ ifndef GITHUB_ACTIONS
 	@codesign --force --deep --sign - $(INSTALL_PREFIX)/bin/klawed 2>/dev/null || echo "Warning: Code signing failed (non-fatal)"
 endif
 endif
+# Install memvid shared library if it exists
+ifneq ($(wildcard $(MEMVID_FFI_DIR)/target/release/libmemvid_ffi.so),)
+	@echo "Installing memvid shared library..."
+	@mkdir -p $(INSTALL_PREFIX)/lib
+	@cp $(MEMVID_FFI_DIR)/target/release/libmemvid_ffi.so $(INSTALL_PREFIX)/lib/
+	@echo "Note: Added $(INSTALL_PREFIX)/lib to library search path"
+endif
+ifneq ($(wildcard $(MEMVID_FFI_DIR)/target/release/libmemvid_ffi.dylib),)
+	@echo "Installing memvid shared library..."
+	@mkdir -p $(INSTALL_PREFIX)/lib
+	@cp $(MEMVID_FFI_DIR)/target/release/libmemvid_ffi.dylib $(INSTALL_PREFIX)/lib/
+	@echo "Note: Added $(INSTALL_PREFIX)/lib to library search path"
+endif
 	@echo "✓ Installation complete! Run 'klawed' from anywhere."
 	@echo ""
 	@echo "Note: Make sure $(INSTALL_PREFIX)/bin is in your PATH:"
 	@echo "  export PATH=\"$(INSTALL_PREFIX)/bin:$$PATH\""
+ifneq ($(wildcard $(INSTALL_PREFIX)/lib/libmemvid_ffi.*),)
+	@echo ""
+	@echo "Also add $(INSTALL_PREFIX)/lib to your library path:"
+ifeq ($(UNAME_S),Darwin)
+	@echo "  export DYLD_LIBRARY_PATH=\"$(INSTALL_PREFIX)/lib:$$DYLD_LIBRARY_PATH\""
+else
+	@echo "  export LD_LIBRARY_PATH=\"$(INSTALL_PREFIX)/lib:$$LD_LIBRARY_PATH\""
+endif
+endif
 
 clean:
 	rm -rf $(BUILD_DIR)
