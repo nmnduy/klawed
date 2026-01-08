@@ -34,11 +34,9 @@ export function init(rootEl) {
         messageForm: rootEl.querySelector('[data-message-form]'),
         messageInput: rootEl.querySelector('[data-message-input]'),
         sendButton: rootEl.querySelector('[data-send-button]'),
-        uploadButton: rootEl.querySelector('[data-upload-button]'),
-        fileInput: rootEl.querySelector('[data-file-input]'),
-        // Select all upload buttons and file inputs since we now have multiple
-        uploadButtons: rootEl.querySelectorAll('[data-upload-button]'),
-        fileInputs: rootEl.querySelectorAll('[data-file-input]'),
+        // Chat-specific upload components (scoped to avoid conflicts with file explorer)
+        chatUploadButton: rootEl.querySelector('[data-chat-upload-button]'),
+        chatFileInput: rootEl.querySelector('[data-chat-file-input]'),
         darkModeToggle: document.querySelector('[data-dark-mode-toggle]')
     };
 
@@ -136,13 +134,7 @@ export function init(rootEl) {
     function setDisabledState(disabled) {
         if (elements.messageInput) elements.messageInput.disabled = disabled;
         if (elements.sendButton) elements.sendButton.disabled = disabled;
-        if (elements.uploadButton) elements.uploadButton.disabled = disabled;
-        // Also update all upload buttons (including file explorer upload button)
-        if (elements.uploadButtons && elements.uploadButtons.length > 0) {
-            elements.uploadButtons.forEach(btn => {
-                btn.disabled = disabled;
-            });
-        }
+        if (elements.chatUploadButton) elements.chatUploadButton.disabled = disabled;
     }
 
     function updateStatus(connected, message) {
@@ -417,7 +409,7 @@ export function init(rootEl) {
             sendButton: elements.sendButton,
             filesTab: rootEl.querySelector('#file-tab'),
             chatTab: rootEl.querySelector('#chat-tab'),
-            uploadButton: elements.uploadButton, // This will be the chat upload button (first one)
+            uploadButton: elements.chatUploadButton,
             fileExplorerUploadButton: rootEl.querySelector('#file-explorer-upload'), // Specific ID for file explorer upload
             statusText: elements.statusText,
             emptyState: rootEl.querySelector('[data-chat-empty]')
@@ -1066,23 +1058,15 @@ export function init(rootEl) {
         });
     });
 
-    // Set up upload functionality for all upload buttons
-    if (elements.uploadButtons && elements.uploadButtons.length > 0 && elements.fileInputs && elements.fileInputs.length > 0) {
-        // For each upload button, wire it to the corresponding file input
-        // The chat upload button (first) should use the chat file input (first)
-        // The file explorer upload button (second) should use the file explorer file input (second)
-        elements.uploadButtons.forEach((uploadButton, index) => {
-            if (index < elements.fileInputs.length) {
-                const fileInput = elements.fileInputs[index];
-                uploadButton.addEventListener('click', () => {
-                    fileInput.click();
-                });
-            }
+    // Set up chat upload functionality (scoped to chat components only)
+    if (elements.chatUploadButton && elements.chatFileInput) {
+        // Wire chat upload button to chat file input
+        elements.chatUploadButton.addEventListener('click', () => {
+            elements.chatFileInput.click();
         });
 
-        // Set up change handlers for all file inputs
-        elements.fileInputs.forEach((fileInput) => {
-            fileInput.addEventListener('change', async (e) => {
+        // Set up change handler for chat file input
+        elements.chatFileInput.addEventListener('change', async (e) => {
             const files = Array.from(e.target.files || []);
             if (files.length === 0) return;
 
@@ -1126,8 +1110,7 @@ export function init(rootEl) {
                 addSystemMessage('✗ Upload error: ' + error.message, 'error');
             }
 
-            fileInput.value = '';
-            });
+            elements.chatFileInput.value = '';
         });
     }
 

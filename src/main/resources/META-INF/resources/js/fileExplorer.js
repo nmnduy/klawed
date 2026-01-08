@@ -770,7 +770,7 @@ class FileExplorer {
             });
         }
 
-        // Upload functionality
+        // Upload functionality (file explorer manages its own upload components)
         if (this.fileExplorerUpload && this.fileExplorerFileInput) {
             this.fileExplorerUpload.addEventListener('click', () => {
                 this.fileExplorerFileInput.click();
