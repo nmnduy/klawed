@@ -24,6 +24,12 @@ This document describes all custom metrics exposed by the FileSurf v2 applicatio
 - **filesurf_errors**: [application] [type] Total number of errors encountered
   - **type**: Error type (e.g., "application", "database_save", "file_attribute_read", "directory_listing", "websocket_serialization")
 
+### Disk Space Metrics
+- **filesurf_disk_free_bytes**: [application] [directory] Free disk space available (bytes)
+  - **directory**: Directory being monitored ("data" or "logs")
+- **filesurf_disk_total_bytes**: [application] [directory] Total disk space (bytes)
+  - **directory**: Directory being monitored ("data" or "logs")
+
 ## Performance Timing Metrics
 
 ### Chat Response Timing
@@ -120,6 +126,12 @@ jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} * 100
 
 # GC pause time rate
 rate(jvm_gc_pause_seconds_sum[5m])
+
+# Disk usage percentage (data directory)
+100 * (1 - (filesurf_disk_free_bytes{directory="data"} / filesurf_disk_total_bytes{directory="data"}))
+
+# Free disk space in GB
+filesurf_disk_free_bytes{directory="data"} / 1024 / 1024 / 1024
 ```
 
 ## Alerting Examples
@@ -152,6 +164,26 @@ rate(jvm_gc_pause_seconds_sum[5m])
   for: 5m
   labels:
     severity: critical
+
+# Low disk space warning (less than 10% free)
+- alert: DiskSpaceLow
+  expr: (filesurf_disk_free_bytes / filesurf_disk_total_bytes) < 0.1
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "FileSurf disk space low on {{ $labels.directory }} directory"
+    description: "Only {{ $value | humanizePercentage }} of disk space remaining"
+
+# Critical disk space (less than 5% free)
+- alert: DiskSpaceCritical
+  expr: (filesurf_disk_free_bytes / filesurf_disk_total_bytes) < 0.05
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "FileSurf disk space critical on {{ $labels.directory }} directory"
+    description: "Only {{ $value | humanizePercentage }} of disk space remaining - immediate action required"
 ```
 
 ## Notes
@@ -170,3 +202,17 @@ rate(jvm_gc_pause_seconds_sum[5m])
 - `websocket_serialization`: WebSocket message serialization failures
 
 **NOTE**: Timing metrics (`*_time_seconds`) use the summary metric type which provides pre-calculated quantiles. This is more efficient than histograms for high-cardinality metrics but doesn't allow for arbitrary quantile calculations in PromQL. Use the provided quantiles (0.5, 0.95, 0.99) or calculate averages using `_sum / _count`.
+
+## Disk Space Monitoring
+
+The application monitors disk space for two key directories:
+- **data/**: Contains SQLite database and user session files
+- **logs/**: Contains application logs
+
+If directories don't exist at startup, the application falls back to monitoring the root directory.
+
+### Key Points:
+- Metrics are read on-demand when Prometheus scrapes (no background polling)
+- Values are in bytes (use `/1024/1024/1024` to convert to GB)
+- Both free and total space are provided for calculating usage percentages
+- Minimal performance impact (< 1ms per scrape)

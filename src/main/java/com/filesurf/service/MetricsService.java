@@ -7,6 +7,7 @@ import io.micrometer.core.instrument.Timer;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.io.File;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,6 +43,10 @@ public class MetricsService {
     
     // Custom metrics tracking
     private ConcurrentHashMap<String, AtomicInteger> userActivityMap = new ConcurrentHashMap<>();
+    
+    // Disk space monitoring
+    private File dataDirectory;
+    private File logsDirectory;
 
     public void initializeMetrics() {
         LOGGER.info("Initializing application metrics");
@@ -105,7 +110,56 @@ public class MetricsService {
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
         
+        // Initialize disk space monitoring
+        initializeDiskSpaceMetrics();
+        
         LOGGER.info("Application metrics initialized successfully");
+    }
+    
+    private void initializeDiskSpaceMetrics() {
+        // Monitor data directory (where database and session files are stored)
+        dataDirectory = new File("data");
+        if (!dataDirectory.exists()) {
+            dataDirectory = new File(".");
+            LOGGER.warning("Data directory not found, monitoring root directory instead");
+        }
+        
+        // Monitor logs directory
+        logsDirectory = new File("logs");
+        if (!logsDirectory.exists()) {
+            logsDirectory = dataDirectory;
+            LOGGER.warning("Logs directory not found, using data directory for monitoring");
+        }
+        
+        // Free disk space for data directory (in bytes)
+        Gauge.builder("filesurf_disk_free_bytes", dataDirectory, File::getUsableSpace)
+                .description("Free disk space available for data storage (bytes)")
+                .tag("application", "filesurf")
+                .tag("directory", "data")
+                .register(meterRegistry);
+        
+        // Total disk space for data directory (in bytes)
+        Gauge.builder("filesurf_disk_total_bytes", dataDirectory, File::getTotalSpace)
+                .description("Total disk space for data storage (bytes)")
+                .tag("application", "filesurf")
+                .tag("directory", "data")
+                .register(meterRegistry);
+        
+        // Free disk space for logs directory (in bytes)
+        Gauge.builder("filesurf_disk_free_bytes", logsDirectory, File::getUsableSpace)
+                .description("Free disk space available for logs (bytes)")
+                .tag("application", "filesurf")
+                .tag("directory", "logs")
+                .register(meterRegistry);
+        
+        // Total disk space for logs directory (in bytes)
+        Gauge.builder("filesurf_disk_total_bytes", logsDirectory, File::getTotalSpace)
+                .description("Total disk space for logs (bytes)")
+                .tag("application", "filesurf")
+                .tag("directory", "logs")
+                .register(meterRegistry);
+        
+        LOGGER.info("Disk space metrics initialized - monitoring data and logs directories");
     }
     
     // Session tracking methods
