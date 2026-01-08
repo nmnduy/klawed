@@ -11,16 +11,16 @@
 @layer components {
   /* Success toast */
   .dynamic-toast-success {
-    @apply bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800;
+    @apply bg-green-50 text-green-800 border border-green-200;
   }
 
   /* Error toast */
   .dynamic-toast-error {
-    @apply bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800;
+    @apply bg-red-50 text-red-800 border border-red-200;
   }
 
   /* Info toast */
   .dynamic-toast-info {
-    @apply bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800;
+    @apply bg-blue-50 text-blue-800 border border-blue-200;
   }
 }

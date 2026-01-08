@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: ["class"],
+  // Dark mode disabled - light mode only
+  // darkMode: ["class"],
   content: [
     "./src/main/resources/templates/**/*.{html,qute}",
     "./src/main/resources/META-INF/resources/**/*.html",
