@@ -1,5 +1,8 @@
 data/
 
+# we build this on server so no need to track
+src/main/resources/css-version.properties
+
 # Maven
 target/
 pom.xml.tag
