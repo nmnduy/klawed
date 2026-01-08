@@ -132,6 +132,12 @@ class FileExplorer {
         console.log('[file-explorer] setSession called, sessionId:', sessionId, 'userId:', userId);
         this.sessionId = sessionId;
         this.userId = userId;
+        
+        // Enable upload button when session is set
+        if (this.fileExplorerUpload && sessionId) {
+            this.fileExplorerUpload.disabled = false;
+            console.log('[file-explorer] Upload button enabled');
+        }
     }
 
     // Format file size
