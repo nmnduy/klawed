@@ -80,18 +80,21 @@
                             <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                             </svg>
-                            Enterprise-Grade LLM Security
+                            Enterprise-Grade LLM Security (AWS Bedrock)
                         </h3>
                         <p class="text-body-m text-foreground/80 leading-relaxed mb-3">
-                            We use enterprise-grade AI services with the following data protection guarantees:
+                            We use <strong>Amazon Bedrock</strong> for AI-powered features. AWS Bedrock provides enterprise-grade data protection guarantees:
                         </p>
                         <ul class="list-disc list-inside text-body-s text-foreground/70 space-y-1 ml-4">
-                            <li><strong>No data storage:</strong> Your prompts and completions are not stored or logged by the AI service</li>
-                            <li><strong>No training data:</strong> Your content is never used to train AI models</li>
-                            <li><strong>No third-party sharing:</strong> Your data is never distributed to third parties</li>
-                            <li><strong>Encrypted in transit:</strong> All communications use TLS 1.2+ encryption</li>
-                            <li><strong>Isolated processing:</strong> AI models run in service-controlled accounts with strict access controls</li>
+                            <li><strong>No data storage:</strong> Your prompts and completions are not stored or logged by Amazon Bedrock</li>
+                            <li><strong>No training data:</strong> Your content is never used to train any AWS models or distributed to third parties</li>
+                            <li><strong>No provider access:</strong> Model providers have no access to your prompts, completions, or Amazon Bedrock logs</li>
+                            <li><strong>Encrypted in transit:</strong> All communications use TLS 1.2+ encryption (AWS requires TLS 1.2 minimum, recommends 1.3)</li>
+                            <li><strong>Isolated processing:</strong> Models run in AWS-controlled deployment accounts with strict access controls</li>
                         </ul>
+                        <p class="text-caption-s text-muted-foreground mt-3">
+                            Learn more: <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/data-protection.html" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">AWS Bedrock Data Protection</a>
+                        </p>
                     </div>
 
                     <div class="bg-primary/5 dark:bg-primary/10 rounded-lg p-4 border border-primary/20">
@@ -200,8 +203,8 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                         </svg>
                         <div>
-                            <p class="text-body-s font-medium text-foreground">Database Security</p>
-                            <p class="text-body-xs text-muted-foreground">SQLite with WAL mode</p>
+                            <p class="text-body-s font-medium text-foreground">Secure Data Storage</p>
+                            <p class="text-body-xs text-muted-foreground">Industry-standard encryption</p>
                         </div>
                     </div>
                 </div>
