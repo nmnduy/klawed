@@ -391,7 +391,7 @@ class FileExplorer {
 
         const rootCrumb = document.createElement('button');
         rootCrumb.type = 'button';
-        rootCrumb.className = 'text-caption-s text-slate-700 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 whitespace-nowrap';
+        rootCrumb.className = 'text-caption-s text-slate-700 hover:text-orange-600 whitespace-nowrap';
         rootCrumb.textContent = '/';
         rootCrumb.addEventListener('click', () => this.loadDirectory('/'));
         this.fileExplorerBreadcrumbs.appendChild(rootCrumb);
@@ -399,14 +399,14 @@ class FileExplorer {
         let accumulated = [];
         parts.forEach((part, index) => {
             const sep = document.createElement('span');
-            sep.className = 'text-slate-300 dark:text-slate-600';
+            sep.className = 'text-slate-300
             sep.textContent = '›';
             this.fileExplorerBreadcrumbs.appendChild(sep);
 
             accumulated.push(part);
             const crumb = document.createElement('button');
             crumb.type = 'button';
-            crumb.className = 'text-caption-s text-slate-700 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 truncate max-w-[10ch]';
+            crumb.className = 'text-caption-s text-slate-700 hover:text-orange-600 truncate max-w-[10ch]';
             crumb.title = part;
             crumb.textContent = part;
             crumb.addEventListener('click', () => this.loadDirectory(accumulated.join('/')));
@@ -435,7 +435,7 @@ class FileExplorer {
             const date = this.formatDate(item.modified);
 
             const itemElement = document.createElement('div');
-            itemElement.className = 'file-item group px-3 py-2 hover:bg-orange-50/60 dark:hover:bg-orange-950/40 transition cursor-pointer';
+            itemElement.className = 'file-item group px-3 py-2 hover:bg-orange-50/60 transition cursor-pointer';
             itemElement.dataset.path = item.path;
             itemElement.dataset.type = item.type;
             itemElement.dataset.name = item.name;
@@ -446,18 +446,18 @@ class FileExplorer {
                         <div class="flex-shrink-0">${icon}</div>
                         <div class="min-w-0">
                             <div class="flex items-center gap-2 min-w-0">
-                                <span class="truncate text-body-s ${isDirectory ? 'text-slate-900 dark:text-slate-100 font-semibold' : 'text-slate-700 dark:text-slate-300'}" title="${item.name}">${item.name}</span>
-                                ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-800">Folder</span>' : ''}
+                                <span class="truncate text-body-s ${isDirectory ? 'text-slate-900 font-semibold' : 'text-slate-700" title="${item.name}">${item.name}</span>
+                                ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">Folder</span>' : ''}
                             </div>
-                            <div class="flex items-center gap-3 text-caption-s text-slate-500 dark:text-slate-400 truncate lg:hidden">
+                            <div class="flex items-center gap-3 text-caption-s text-slate-500 truncate lg:hidden">
                                 <span class="tabular-nums">${size || ''}</span>
                                 <span class="whitespace-nowrap">${date}</span>
                             </div>
                         </div>
                     </div>
-                    <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-slate-500 dark:text-slate-400 text-right tabular-nums">
+                    <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-slate-500 text-right tabular-nums">
                         <span>${size}</span>
-                        <button type="button" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-orange-700 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950 rounded transition open-file-btn ${isDirectory ? 'hidden' : ''}" title="${isMac ? 'Open in Finder' : 'Open in Explorer'}">
+                        <button type="button" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-orange-700 hover:text-orange-800 hover:bg-orange-50 rounded transition open-file-btn ${isDirectory ? 'hidden' : ''}" title="${isMac ? 'Open in Finder' : 'Open in Explorer'}">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17H7a2 2 0 01-2-2V7a2 2 0 012-2h6" />
@@ -904,9 +904,9 @@ class FileExplorer {
         // Create toast element
         const toast = document.createElement('div');
         toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg animate-fade-in ${
-            type === 'success' ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800' :
-            type === 'error' ? 'bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800' :
-            'bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800'
+            type === 'success' ? 'bg-green-50 text-green-800 border border-green-200 :
+            type === 'error' ? 'bg-red-50 text-red-800 border border-red-200 :
+            'bg-blue-50 text-blue-800 border border-blue-200
         }`;
         
         toast.innerHTML = `

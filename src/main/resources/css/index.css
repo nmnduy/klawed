@@ -69,27 +69,7 @@
     --z-tooltip: 1070;
   }
 
-  .dark {
-    --background: 222 84% 5%; /* Slate 950 - Deep, rich dark */
-    --foreground: 222 47% 98%; /* Slate 50 */
-    --card: 215 25% 17%; /* Slate 800 - Elevated surface */
-    --card-foreground: 222 47% 98%;
-    --popover: 222 47% 11%; /* Slate 900 */
-    --popover-foreground: 222 47% 98%;
-    --primary: 25 95% 62%; /* Orange 400 - Brighter for dark mode */
-    --primary-foreground: 222 47% 11%;
-    --secondary: 189 94% 51%; /* Cyan 400 - Vibrant on dark */
-    --secondary-foreground: 222 47% 11%;
-    --muted: 215 28% 17%; /* Slate 800 */
-    --muted-foreground: 215 20% 65%; /* Slate 400 */
-    --accent: 25 95% 62%; /* Orange 400 */
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 73% 56%; /* Coral 500 - Softer in dark */
-    --destructive-foreground: 0 0% 100%;
-    --border: 215 25% 27%; /* Slate 700 */
-    --input: 215 25% 27%;
-    --ring: 25 95% 62%; /* Orange 400 */
-  }
+
 }
 
 /* Base Styles */

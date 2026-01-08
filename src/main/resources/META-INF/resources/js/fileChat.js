@@ -283,10 +283,10 @@ export function init(rootEl) {
 
         const span = document.createElement('span');
         const colors = {
-            info: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300 dark:border-cyan-500/30',
-            success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30',
-            error: 'bg-coral-100 text-coral-700 dark:bg-coral-500/20 dark:text-coral-300 dark:border-coral-500/30',
-            warning: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30'
+            info: 'bg-cyan-100 text-cyan-700
+            success: 'bg-emerald-100 text-emerald-700
+            error: 'bg-coral-100 text-coral-700
+            warning: 'bg-amber-100 text-amber-700
         };
         span.className = 'inline-flex items-center gap-2 px-4 py-2 rounded-full text-caption-m-bold border border-transparent shadow-sm ' + (colors[type] || colors.info);
         span.textContent = content;
@@ -501,7 +501,7 @@ export function init(rootEl) {
         
         // Create modal
         const modal = document.createElement('div');
-        modal.className = 'bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-8 animate-fade-in';
+        modal.className = 'bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 animate-fade-in';
         modal.innerHTML = `
             <div class="text-center mb-6">
                 <div class="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg shadow-orange-200/70">
@@ -509,16 +509,16 @@ export function init(rootEl) {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                 </div>
-                <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-3">Welcome to FileSurf</h2>
-                <p class="text-slate-600 dark:text-slate-300 text-lg mb-4">Your personal AI-powered computer in the cloud</p>
+                <h2 class="text-2xl font-bold text-slate-900 mb-3">Welcome to FileSurf</h2>
+                <p class="text-slate-600 text-lg mb-4">Your personal AI-powered computer in the cloud</p>
             </div>
             
             <div class="space-y-4 text-left mb-8">
-                <p class="text-slate-700 dark:text-slate-200 leading-relaxed">
+                <p class="text-slate-700 leading-relaxed">
                     FileSurf is far more than a file editor. Think of it as your personal workspace where an AI assistant can help you with almost anything:
                 </p>
                 
-                <ul class="space-y-3 text-slate-600 dark:text-slate-300">
+                <ul class="space-y-3 text-slate-600">
                     <li class="flex items-start gap-3">
                         <span class="text-orange-500 mt-1">📁</span>
                         <span><strong>File Management & Analysis</strong> — Upload, organize, and analyze any files</span>
@@ -547,7 +547,7 @@ export function init(rootEl) {
                 <button id="tour-continue-btn" class="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-200/50 hover:shadow-orange-300/60 transition-all duration-200 hover:scale-[1.02]">
                     Take a Quick Tour
                 </button>
-                <button id="tour-skip-btn" class="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors duration-200">
+                <button id="tour-skip-btn" class="flex-1 px-6 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition-colors duration-200">
                     Skip for Now
                 </button>
             </div>
