@@ -10,7 +10,7 @@
 - [ ] no spinner in file explorer since it's periodical and seeing it a lot is just annoying
 - [ ] /metrics should not be public
 - [x] version the js, css files
-- [ ] privacy policies
+- [x] privacy policies
 - [ ] review `src/main/java/com/filesurf/service/SessionFileCleanupService.java`
 - [x] context size limit. it should be able to continue indefinitely
     - [x] autocompaction
@@ -19,3 +19,7 @@
         - [ ] klawed with memvid
         - [ ] latex
         - [ ] bun
+
+---
+
+- [ ] file download button
