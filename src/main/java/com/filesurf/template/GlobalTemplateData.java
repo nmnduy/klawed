@@ -1,13 +1,14 @@
 package com.filesurf.template;
 
 import com.filesurf.util.CssVersionProvider;
+import com.filesurf.util.JsVersionProvider;
 import io.quarkus.qute.TemplateGlobal;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
  * Provides global data to all Qute templates.
- * Makes CSS version information available for cache busting.
+ * Makes CSS and JS version information available for cache busting.
  * 
  * Note: Methods must be static for @TemplateGlobal to work.
  */
@@ -15,10 +16,16 @@ import jakarta.inject.Inject;
 public class GlobalTemplateData {
     
     private static CssVersionProvider cssVersionProvider;
+    private static JsVersionProvider jsVersionProvider;
     
     @Inject
     public void setCssVersionProvider(CssVersionProvider provider) {
         GlobalTemplateData.cssVersionProvider = provider;
+    }
+    
+    @Inject
+    public void setJsVersionProvider(JsVersionProvider provider) {
+        GlobalTemplateData.jsVersionProvider = provider;
     }
     
     /**
@@ -46,5 +53,23 @@ public class GlobalTemplateData {
     @TemplateGlobal
     public static String cssHash() {
         return cssVersionProvider != null ? cssVersionProvider.getCssHash() : "unknown";
+    }
+    
+    /**
+     * Get the hashed JS path for a given base name.
+     * Usage in templates: <script src="{jsPath('fileChat')}"></script>
+     */
+    @TemplateGlobal
+    public static String jsPath(String baseName) {
+        return jsVersionProvider != null ? jsVersionProvider.getJsPath(baseName) : "/js/" + baseName + ".js";
+    }
+    
+    /**
+     * Get the JS filename only (without /js/ prefix).
+     * Usage in templates: {jsFilename('fileChat')}
+     */
+    @TemplateGlobal
+    public static String jsFilename(String baseName) {
+        return jsVersionProvider != null ? jsVersionProvider.getJsFilename(baseName) : baseName + ".js";
     }
 }

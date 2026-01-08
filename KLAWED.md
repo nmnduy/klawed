@@ -12,6 +12,7 @@ FileSurf v2 is a Quarkus-based application for file management and chat function
 - ✅ **Email-based authentication** added (2026-01-07)
 - ✅ **Dark mode support** with system preference detection (2026-01-07)
 - ✅ **CSS cache busting** with content-based hashing (2026-01-08)
+- ✅ **JS cache busting** with content-based hashing (2026-01-08)
 
 ## Quick Start
 ```bash
@@ -184,34 +185,38 @@ CREATE TABLE users (
 
 ## Building for Production
 ```bash
-# Build CSS and Quarkus JAR (production mode with cache busting)
+# Build CSS, JS, and Quarkus JAR (production mode with cache busting)
 make build-dist
 
 # Or manually:
-npm run build          # Build Tailwind CSS with cache busting (production)
+npm run build          # Build Tailwind CSS + hash JS files (production)
 mvn clean package -DskipTests
 ```
 
 ## Building for Development
 ```bash
-# Build CSS without cache busting (faster for development)
-npm run build:dev      # Creates main.css (no hash)
+# Build CSS and JS without cache busting (faster for development)
+npm run build:dev      # Creates main.css and *.js (no hashes)
 # OR
 make css-dev           # Same as above
 
-# Build CSS with cache busting (production mode)
-npm run build          # Creates main.[hash].css
+# Build CSS and JS with cache busting (production mode)
+npm run build          # Creates main.[hash].css and *.[hash].js
 # OR
 make css               # Same as above
 ```
 
-### CSS Cache Busting
-CSS files are automatically hashed during **production** builds to prevent browser caching issues:
-- **Production** (`npm run build`): Generates `main.[hash].css` (e.g., `main.b017b445.css`)
-- **Development** (`npm run build:dev`): Generates `main.css` (no hash, faster iteration)
-- Templates use `{cssPath}` which automatically resolves to the correct filename
-- Hash changes whenever CSS content changes, forcing browser cache invalidation
-- See `docs/CSS_CACHE_BUSTING.md` for full details
+### CSS & JS Cache Busting
+Both CSS and JS files are automatically hashed during **production** builds to prevent browser caching issues:
+- **Production** (`npm run build`):
+  - CSS: Generates `main.[hash].css` (e.g., `main.d44edce3.css`)
+  - JS: Generates `[name].[hash].js` (e.g., `fileChat.9bc4af5d.js`)
+- **Development** (`npm run build:dev`): 
+  - CSS: Generates `main.css` (no hash)
+  - JS: Generates standard filenames (no hashes, faster iteration)
+- Templates use `{cssPath}` and `{jsPath('name')}` which automatically resolve to correct filenames
+- Hashes change whenever content changes, forcing browser cache invalidation
+- See `docs/CSS_CACHE_BUSTING.md` and `docs/JS_CACHE_BUSTING.md` for full details
 
 ## Troubleshooting
 
