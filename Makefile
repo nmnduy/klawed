@@ -48,10 +48,10 @@ dev: css
 
 # Build Tailwind CSS output
 css: install-deps
-	@echo "Building Tailwind CSS..."
+	@echo "Building Tailwind CSS with cache busting..."
 	@mkdir -p $(ASSETS_DIR)
-	@npx tailwindcss -i $(CSS_SOURCE) -o $(CSS_OUTPUT) --minify
-	@echo "CSS built to $(CSS_OUTPUT)"
+	@$(NPM) run build
+	@echo "CSS built with hash to $(ASSETS_DIR)"
 
 # Clean build artifacts
 clean:

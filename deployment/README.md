@@ -65,6 +65,11 @@ sudo systemctl start filesurf-v2
 ./deployment/build-jvm.sh
 ```
 
+**What it does:**
+1. Cleans previous builds
+2. Builds Tailwind CSS with cache-busting hashes
+3. Packages Quarkus application as JAR
+
 **Output:** `target/quarkus-app/quarkus-run.jar`
 
 ### Native Build (Lower Memory)
@@ -82,6 +87,11 @@ sudo systemctl start filesurf-v2
 ```bash
 ./deployment/build-native.sh
 ```
+
+**What it does:**
+1. Cleans previous builds
+2. Builds Tailwind CSS with cache-busting hashes
+3. Compiles native executable with GraalVM (5-10 minutes)
 
 **Output:** `target/filesurf-1.0.0-SNAPSHOT-runner`
 
@@ -113,6 +123,14 @@ Choose either JVM or Native build:
 # OR Native build (for low-memory VPS)
 ./deployment/build-native.sh
 ```
+
+**Note:** Both build scripts automatically:
+- Build Tailwind CSS with content-based cache busting
+- Generate hashed CSS files (e.g., `main.b017b445.css`)
+- Create `css-version.properties` for template resolution
+- Package everything into the deployment artifact
+
+CSS cache busting ensures browsers always load the latest styles without manual cache clearing.
 
 #### 2. Create Required Directories
 The deployment scripts handle this automatically, but if needed manually:
