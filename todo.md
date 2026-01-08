@@ -11,6 +11,7 @@
 - [ ] privacy policies
 - [ ] review `src/main/java/com/filesurf/service/SessionFileCleanupService.java`
 - [ ] context size limit. it should be able to continue indefinitely
+- [ ] agent sandbox
 
 ---
 
