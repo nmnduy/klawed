@@ -188,10 +188,11 @@ public class PodmanSandboxService {
         // Image name
         command.add(podmanImage);
         
-        // Klawed command inside container
-        command.add("/usr/local/bin/klawed");
-        command.add("--sqlite-queue");
-        command.add(sqliteDbPath);
+        // Use shell to create log directory before starting klawed
+        // This prevents "Failed to open log file: ./.klawed/logs/klawed.log" warning
+        command.add("/bin/sh");
+        command.add("-c");
+        command.add("mkdir -p /workspace/.klawed/logs && /usr/local/bin/klawed --sqlite-queue " + sqliteDbPath);
         
         return command;
     }
