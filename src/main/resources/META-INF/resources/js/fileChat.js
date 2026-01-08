@@ -497,55 +497,57 @@ export function init(rootEl) {
         const backdrop = document.createElement('div');
         backdrop.className = 'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4';
         
-        // Create modal
+        // Create modal with scrollable content
         const modal = document.createElement('div');
-        modal.className = 'bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 animate-fade-in';
+        modal.className = 'bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col animate-fade-in';
         modal.innerHTML = `
-            <div class="text-center mb-6">
-                <div class="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg shadow-orange-200/70">
-                    <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
+            <div class="overflow-y-auto flex-1 p-4 sm:p-8">
+                <div class="text-center mb-4 sm:mb-6">
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 sm:mb-5 shadow-lg shadow-orange-200/70">
+                        <svg class="w-8 h-8 sm:w-10 sm:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-2 sm:mb-3">Welcome to FileSurf</h2>
+                    <p class="text-slate-600 text-base sm:text-lg mb-3 sm:mb-4">Your personal AI-powered computer in the cloud</p>
                 </div>
-                <h2 class="text-2xl font-bold text-slate-900 mb-3">Welcome to FileSurf</h2>
-                <p class="text-slate-600 text-lg mb-4">Your personal AI-powered computer in the cloud</p>
+                
+                <div class="space-y-3 sm:space-y-4 text-left mb-6 sm:mb-8">
+                    <p class="text-slate-700 text-sm sm:text-base leading-relaxed">
+                        FileSurf is far more than a file editor. Think of it as your personal workspace where an AI assistant can help you with almost anything:
+                    </p>
+                    
+                    <ul class="space-y-2 sm:space-y-3 text-slate-600 text-sm sm:text-base">
+                        <li class="flex items-start gap-2 sm:gap-3">
+                            <span class="text-orange-500 mt-1">📁</span>
+                            <span><strong>File Management & Analysis</strong> — Upload, organize, and analyze any files</span>
+                        </li>
+                        <li class="flex items-start gap-2 sm:gap-3">
+                            <span class="text-orange-500 mt-1">💻</span>
+                            <span><strong>Write & Run Code</strong> — Create scripts, apps, and automate tasks</span>
+                        </li>
+                        <li class="flex items-start gap-2 sm:gap-3">
+                            <span class="text-orange-500 mt-1">🎬</span>
+                            <span><strong>YouTube Transcripts</strong> — Fetch and analyze video transcripts instantly</span>
+                        </li>
+                        <li class="flex items-start gap-2 sm:gap-3">
+                            <span class="text-orange-500 mt-1">🎨</span>
+                            <span><strong>Create UI & Prototypes</strong> — Generate interfaces and prototypes <em class="text-slate-400">(coming soon)</em></span>
+                        </li>
+                        <li class="flex items-start gap-2 sm:gap-3">
+                            <span class="text-orange-500 mt-1">🧠</span>
+                            <span><strong>Remember Preferences</strong> — Tell me to remember things and I will</span>
+                        </li>
+                    </ul>
+                    
+                </div>
             </div>
             
-            <div class="space-y-4 text-left mb-8">
-                <p class="text-slate-700 leading-relaxed">
-                    FileSurf is far more than a file editor. Think of it as your personal workspace where an AI assistant can help you with almost anything:
-                </p>
-                
-                <ul class="space-y-3 text-slate-600">
-                    <li class="flex items-start gap-3">
-                        <span class="text-orange-500 mt-1">📁</span>
-                        <span><strong>File Management & Analysis</strong> — Upload, organize, and analyze any files</span>
-                    </li>
-                    <li class="flex items-start gap-3">
-                        <span class="text-orange-500 mt-1">💻</span>
-                        <span><strong>Write & Run Code</strong> — Create scripts, apps, and automate tasks</span>
-                    </li>
-                    <li class="flex items-start gap-3">
-                        <span class="text-orange-500 mt-1">🎬</span>
-                        <span><strong>YouTube Transcripts</strong> — Fetch and analyze video transcripts instantly</span>
-                    </li>
-                    <li class="flex items-start gap-3">
-                        <span class="text-orange-500 mt-1">🎨</span>
-                        <span><strong>Create UI & Prototypes</strong> — Generate interfaces and prototypes <em class="text-slate-400">(coming soon)</em></span>
-                    </li>
-                    <li class="flex items-start gap-3">
-                        <span class="text-orange-500 mt-1">🧠</span>
-                        <span><strong>Remember Preferences</strong> — Tell me to remember things and I will</span>
-                    </li>
-                </ul>
-                
-            </div>
-            
-            <div class="flex flex-col sm:flex-row gap-3">
-                <button id="tour-continue-btn" class="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-200/50 hover:shadow-orange-300/60 transition-all duration-200 hover:scale-[1.02]">
+            <div class="flex flex-col sm:flex-row gap-3 p-4 sm:p-6 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+                <button id="tour-continue-btn" class="flex-1 px-4 sm:px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-200/50 hover:shadow-orange-300/60 transition-all duration-200 hover:scale-[1.02] text-sm sm:text-base">
                     Take a Quick Tour
                 </button>
-                <button id="tour-skip-btn" class="flex-1 px-6 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition-colors duration-200">
+                <button id="tour-skip-btn" class="flex-1 px-4 sm:px-6 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition-colors duration-200 text-sm sm:text-base">
                     Skip for Now
                 </button>
             </div>
