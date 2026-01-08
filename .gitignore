@@ -52,6 +52,8 @@ dist/
 
 # CSS Build Output (generated)
 src/main/resources/META-INF/resources/assets/
+# Track CSS version file for cache busting (negation to include it)
+!src/main/resources/css-version.properties
 
 test-docs/
 

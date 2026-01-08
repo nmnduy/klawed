@@ -11,6 +11,7 @@ FileSurf v2 is a Quarkus-based application for file management and chat function
 - ✅ Logging configuration is properly set up
 - ✅ **Email-based authentication** added (2026-01-07)
 - ✅ **Dark mode support** with system preference detection (2026-01-07)
+- ✅ **CSS cache busting** with content-based hashing (2026-01-08)
 
 ## Quick Start
 ```bash
@@ -187,9 +188,16 @@ CREATE TABLE users (
 make build-dist
 
 # Or manually:
-npm run build  # Build Tailwind CSS
+npm run build  # Build Tailwind CSS with cache busting
 mvn clean package -DskipTests
 ```
+
+### CSS Cache Busting
+CSS files are automatically hashed during build to prevent browser caching issues:
+- Build generates `main.[hash].css` (e.g., `main.b017b445.css`)
+- Templates use `{cssPath}` which automatically resolves to the hashed filename
+- Hash changes whenever CSS content changes, forcing browser cache invalidation
+- See `docs/CSS_CACHE_BUSTING.md` for full details
 
 ## Troubleshooting
 
