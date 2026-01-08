@@ -3,18 +3,6 @@
 ## Project Overview
 FileSurf v2 is a Quarkus-based application for file management and chat functionality with AI integration.
 
-## Current Status (2026-01-06)
-- ✅ Application codebase is clean and ready for development
-- ✅ All previous Quarkus processes have been cleaned up
-- ✅ Ports 8080, 8081, and 8082 are now available
-- ✅ Database directory (`data/`) exists and is ready
-- ✅ Logging configuration is properly set up
-- ✅ **Email-based authentication** added (2026-01-07)
-- ✅ **Dark mode support** with system preference detection (2026-01-07)
-- ✅ **CSS cache busting** with content-based hashing (2026-01-08)
-- ✅ **JS cache busting** with content-based hashing (2026-01-08)
-- ✅ **Hashed assets in `dist/` folder** - All CSS/JS hashed files go to `dist/` (2026-01-08)
-
 ## Quick Start
 ```bash
 # 1. Start Quarkus in development mode (in a separate terminal)

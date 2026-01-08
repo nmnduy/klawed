@@ -85,20 +85,47 @@ function main() {
     
     console.log(`   Found ${jsFiles.length} JS files to hash`);
     
-    // Process each JS file
+    // First pass: Generate hashes and create mapping
     const hashedFiles = {};
     jsFiles.forEach(filename => {
         const sourcePath = join(JS_SOURCE_DIR, filename);
         const hash = generateHash(sourcePath);
         const baseName = basename(filename, '.js');
         const hashedFilename = `${baseName}.${hash}.js`;
-        const hashedFilePath = join(JS_DIST_DIR, hashedFilename);
-        
-        // Copy JS file with hash to dist directory
-        copyFileSync(sourcePath, hashedFilePath);
         
         // Store mapping
         hashedFiles[baseName] = hashedFilename;
+    });
+    
+    // Second pass: Copy files and update imports
+    jsFiles.forEach(filename => {
+        const sourcePath = join(JS_SOURCE_DIR, filename);
+        const baseName = basename(filename, '.js');
+        const hashedFilename = hashedFiles[baseName];
+        const hashedFilePath = join(JS_DIST_DIR, hashedFilename);
+        
+        // Read the file content
+        let content = readFileSync(sourcePath, 'utf8');
+        
+        // Update all import paths to use hashed filenames
+        // Match patterns like: './moduleName.js' or '/dist/moduleName.js'
+        Object.entries(hashedFiles).forEach(([name, hashedName]) => {
+            if (name !== baseName) { // Don't replace self-reference
+                // Replace relative imports: './name.js' or './name'
+                content = content.replace(
+                    new RegExp(`(['"])\\./${name}(\\.js)?\\1`, 'g'),
+                    `$1./${hashedName}$1`
+                );
+                // Replace absolute dist imports: '/dist/name.js' or '/dist/name'
+                content = content.replace(
+                    new RegExp(`(['"'])/dist/${name}(\\.js)?\\1`, 'g'),
+                    `$1/dist/${hashedName}$1`
+                );
+            }
+        });
+        
+        // Write the modified content to dist directory
+        writeFileSync(hashedFilePath, content);
         
         console.log(`   ✓ ${filename} → dist/${hashedFilename}`);
     });
