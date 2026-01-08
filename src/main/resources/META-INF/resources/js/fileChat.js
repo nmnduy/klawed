@@ -775,19 +775,32 @@ export function init(rootEl) {
     async function connectWebSocket() {
         console.log('[file-chat] connectWebSocket called');
         try {
-            console.log('[file-chat] Fetching session from /session/generate');
-            const response = await fetch('/session/generate');
-            if (!response.ok) {
-                // Check if it's an authentication error
-                if (isAuthRequired(response)) {
-                    await handleAuthError(response);
-                    return;
+            // Check sessionStorage for existing session ID
+            const storedSessionId = sessionStorage.getItem('filesurf_sessionId');
+            
+            if (storedSessionId) {
+                // Reuse existing session
+                sessionId = storedSessionId;
+                console.log('[file-chat] Reusing session from sessionStorage:', sessionId);
+            } else {
+                // Generate new session
+                console.log('[file-chat] Fetching session from /session/generate');
+                const response = await fetch('/session/generate');
+                if (!response.ok) {
+                    // Check if it's an authentication error
+                    if (isAuthRequired(response)) {
+                        await handleAuthError(response);
+                        return;
+                    }
+                    throw new Error('Failed to generate session');
                 }
-                throw new Error('Failed to generate session');
+                const sessionData = await response.json();
+                sessionId = sessionData.sessionId;
+                console.log('[file-chat] Session generated:', sessionId);
+                
+                // Store in sessionStorage for reuse on reconnect
+                sessionStorage.setItem('filesurf_sessionId', sessionId);
             }
-            const sessionData = await response.json();
-            sessionId = sessionData.sessionId;
-            console.log('[file-chat] Session generated:', sessionId);
 
             // Server sets HttpOnly cookie; no client write needed.
 
@@ -840,6 +853,14 @@ export function init(rootEl) {
                         updateStatus(true, 'Connected');
                         break;
                     case 'ERROR':
+                        // Check if this is an invalid session error
+                        if (content && (content.includes('Invalid session') || content.includes('No session ID'))) {
+                            console.warn('[file-chat] Invalid session detected, clearing sessionStorage');
+                            sessionStorage.removeItem('filesurf_sessionId');
+                            // Don't show error to user, just reconnect with new session
+                            ws.close();
+                            return;
+                        }
                         addSystemMessage('✗ ' + (content || 'Error occurred'), 'error');
                         removeTypingIndicator();
                         // Reset API call time when we get an error

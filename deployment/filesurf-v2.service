@@ -13,6 +13,7 @@ RestartSec=10
 
 # Environment variables
 Environment="JAVA_OPTS=-Xmx256m -Xms128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m"
+Environment="KLAWED_AUTO_COMPACT=1"
 
 # Security hardening
 NoNewPrivileges=true
