@@ -1,7 +1,5 @@
 data/
 
-# we build this on server so no need to track
-src/main/resources/css-version.properties
 
 # Maven
 target/
@@ -55,8 +53,10 @@ dist/
 
 # CSS Build Output (generated)
 src/main/resources/META-INF/resources/assets/
-# Track CSS version file for cache busting (negation to include it)
-!src/main/resources/css-version.properties
+# we build this on server so no need to track
+# only created file with hashes to combat CDN caching
+src/main/resources/css-version.properties
+src/main/resources/js-version.properties
 
 test-docs/
 
