@@ -399,7 +399,7 @@ class FileExplorer {
         let accumulated = [];
         parts.forEach((part, index) => {
             const sep = document.createElement('span');
-            sep.className = 'text-slate-300
+            sep.className = 'text-slate-300';
             sep.textContent = '›';
             this.fileExplorerBreadcrumbs.appendChild(sep);
 
@@ -446,7 +446,7 @@ class FileExplorer {
                         <div class="flex-shrink-0">${icon}</div>
                         <div class="min-w-0">
                             <div class="flex items-center gap-2 min-w-0">
-                                <span class="truncate text-body-s ${isDirectory ? 'text-slate-900 font-semibold' : 'text-slate-700" title="${item.name}">${item.name}</span>
+                                <span class="truncate text-body-s ${isDirectory ? 'text-slate-900 font-semibold' : 'text-slate-700'}" title="${item.name}">${item.name}</span>
                                 ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">Folder</span>' : ''}
                             </div>
                             <div class="flex items-center gap-3 text-caption-s text-slate-500 truncate lg:hidden">
@@ -904,9 +904,9 @@ class FileExplorer {
         // Create toast element
         const toast = document.createElement('div');
         toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg animate-fade-in ${
-            type === 'success' ? 'bg-green-50 text-green-800 border border-green-200 :
-            type === 'error' ? 'bg-red-50 text-red-800 border border-red-200 :
-            'bg-blue-50 text-blue-800 border border-blue-200
+            type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
+            type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
+            'bg-blue-50 text-blue-800 border border-blue-200'
         }`;
         
         toast.innerHTML = `

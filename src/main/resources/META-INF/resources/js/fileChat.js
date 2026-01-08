@@ -283,10 +283,10 @@ export function init(rootEl) {
 
         const span = document.createElement('span');
         const colors = {
-            info: 'bg-cyan-100 text-cyan-700
-            success: 'bg-emerald-100 text-emerald-700
-            error: 'bg-coral-100 text-coral-700
-            warning: 'bg-amber-100 text-amber-700
+            info: 'bg-cyan-100 text-cyan-700',
+            success: 'bg-emerald-100 text-emerald-700',
+            error: 'bg-coral-100 text-coral-700',
+            warning: 'bg-amber-100 text-amber-700'
         };
         span.className = 'inline-flex items-center gap-2 px-4 py-2 rounded-full text-caption-m-bold border border-transparent shadow-sm ' + (colors[type] || colors.info);
         span.textContent = content;
