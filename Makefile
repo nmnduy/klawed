@@ -16,14 +16,15 @@ CSS_OUTPUT := src/main/resources/META-INF/resources/assets/main.css
 ASSETS_DIR := src/main/resources/META-INF/resources/assets
 TARGET_DIR := target
 
-.PHONY: help build-dist dev css clean install-deps
+.PHONY: help build-dist dev css css-dev clean install-deps
 
 # Default target
 help:
 	@echo "Available targets:"
 	@echo "  build-dist  - Build CSS + Quarkus production JAR"
 	@echo "  dev         - Start Quarkus development server (mvn quarkus:dev)"
-	@echo "  css         - Build Tailwind CSS output (npm run build)"
+	@echo "  css         - Build Tailwind CSS output (production with cache busting)"
+	@echo "  css-dev     - Build Tailwind CSS output (development, no cache busting)"
 	@echo "  install-deps - Install npm dependencies"
 	@echo "  clean       - Clean build artifacts"
 
@@ -46,12 +47,19 @@ dev: css
 	@echo "Starting Quarkus development server..."
 	@$(MAVEN) quarkus:dev
 
-# Build Tailwind CSS output
+# Build Tailwind CSS output (production with cache busting)
 css: install-deps
-	@echo "Building Tailwind CSS with cache busting..."
+	@echo "Building Tailwind CSS with cache busting (production)..."
 	@mkdir -p $(ASSETS_DIR)
 	@$(NPM) run build
 	@echo "CSS built with hash to $(ASSETS_DIR)"
+
+# Build Tailwind CSS output (development, no hashing)
+css-dev: install-deps
+	@echo "Building Tailwind CSS (development, no cache busting)..."
+	@mkdir -p $(ASSETS_DIR)
+	@$(NPM) run build:dev
+	@echo "CSS built to $(ASSETS_DIR)/main.css"
 
 # Clean build artifacts
 clean:

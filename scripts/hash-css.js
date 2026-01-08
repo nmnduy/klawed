@@ -29,7 +29,26 @@ function generateHash(filePath) {
 }
 
 function main() {
-    console.log('🔨 Generating CSS hash for cache busting...');
+    // Skip hashing in development mode
+    const isDev = process.env.NODE_ENV !== 'production';
+    
+    if (isDev) {
+        console.log('🔧 Development mode: Skipping CSS hashing');
+        // Create a simple properties file pointing to main.css
+        const devPropertiesContent = `# CSS version file for development (no cache busting)
+css.filename=main.css
+css.hash=dev
+css.generated=${new Date().toISOString()}
+`;
+        writeFileSync(VERSION_FILE, devPropertiesContent);
+        console.log(`✅ Created dev version file: ${VERSION_FILE}`);
+        console.log(`   CSS filename: main.css (no hash)`);
+        console.log('');
+        console.log('💡 Tip: Run "npm run build" for production build with cache busting');
+        return;
+    }
+    
+    console.log('🔨 Generating CSS hash for cache busting (production mode)...');
     
     // Check if CSS file exists
     if (!existsSync(CSS_SOURCE)) {

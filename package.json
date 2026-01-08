@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css --watch",
     "prebuild": "node scripts/validate-dynamic-css.js && node -e \"const fs = require('fs'); const path = require('path'); const assetsDir = path.join(__dirname, 'src/main/resources/META-INF/resources/assets'); try { fs.rmSync(assetsDir, { recursive: true, force: true }); } catch(e) {}\"",
-    "build": "NODE_ENV=production npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css && node scripts/hash-css.js",
+    "build": "NODE_ENV=production npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css && NODE_ENV=production node scripts/hash-css.js",
+    "build:dev": "NODE_ENV=development npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css && NODE_ENV=development node scripts/hash-css.js",
     "watch": "npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/assets/main.css --watch",
     "preview": "echo 'Preview not configured for CSS-only build'"
   },
