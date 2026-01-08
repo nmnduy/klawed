@@ -13,6 +13,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DB_PATH="${PROJECT_DIR}/data/filesurf.db"
 
+# If database doesn't exist in current directory, check parent (for worktrees)
+if [ ! -f "$DB_PATH" ]; then
+    PARENT_PROJECT_DIR="$(dirname "$PROJECT_DIR")"
+    PARENT_DB_PATH="${PARENT_PROJECT_DIR}/data/filesurf.db"
+    if [ -f "$PARENT_DB_PATH" ]; then
+        DB_PATH="$PARENT_DB_PATH"
+        PROJECT_DIR="$PARENT_PROJECT_DIR"
+    fi
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -25,12 +35,16 @@ usage() {
     echo "Invite a user to FileSurf by adding their email to the database."
     echo ""
     echo "Examples:"
-    echo "  $0 user@example.com"
-    echo "  $0 john.doe@company.org"
+    echo "  $0 user@example.com                 # Invite/create a new user"
+    echo "  $0 -a user@example.com              # Activate user (or create if doesn't exist)"
+    echo "  $0 -d user@example.com              # Deactivate user"
+    echo "  $0 -l                               # List all users"
     echo ""
     echo "Options:"
-    echo "  -l, --list    List all invited users"
-    echo "  -h, --help    Show this help message"
+    echo "  -a, --activate     Activate a user (or create if doesn't exist)"
+    echo "  -d, --deactivate   Deactivate a user"
+    echo "  -l, --list         List all invited users"
+    echo "  -h, --help         Show this help message"
     exit 1
 }
 
@@ -134,7 +148,8 @@ activate_user() {
     # Check if user exists first
     EXISTING=$(sqlite3 "$DB_PATH" "SELECT email FROM users WHERE LOWER(email) = LOWER('${EMAIL}');")
     if [ -z "$EXISTING" ]; then
-        echo -e "${YELLOW}No user found with email: ${EMAIL}${NC}"
+        echo -e "${YELLOW}User not found. Creating new user: ${EMAIL}${NC}"
+        invite_user "$EMAIL"
         exit 0
     fi
 
