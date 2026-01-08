@@ -219,7 +219,7 @@ export function init(rootEl) {
                 'bg-[color-mix(in_srgb,_hsl(var(--card))_98%,_hsl(var(--muted))_2%)] border-[hsl(var(--border))] border-l-[color-mix(in_srgb,_hsl(var(--primary))_18%,_hsl(var(--border))_82%)] shadow-[0_4px_12px_color-mix(in_srgb,_hsl(var(--primary))_6%,_transparent)]');
 
             const textDiv = document.createElement('div');
-            textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed text-slate-800';
+            textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed text-foreground';
             textDiv.textContent = String(content);
 
             const timestamp = document.createElement('div');
