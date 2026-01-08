@@ -184,18 +184,32 @@ CREATE TABLE users (
 
 ## Building for Production
 ```bash
-# Build CSS and Quarkus JAR
+# Build CSS and Quarkus JAR (production mode with cache busting)
 make build-dist
 
 # Or manually:
-npm run build  # Build Tailwind CSS with cache busting
+npm run build          # Build Tailwind CSS with cache busting (production)
 mvn clean package -DskipTests
 ```
 
+## Building for Development
+```bash
+# Build CSS without cache busting (faster for development)
+npm run build:dev      # Creates main.css (no hash)
+# OR
+make css-dev           # Same as above
+
+# Build CSS with cache busting (production mode)
+npm run build          # Creates main.[hash].css
+# OR
+make css               # Same as above
+```
+
 ### CSS Cache Busting
-CSS files are automatically hashed during build to prevent browser caching issues:
-- Build generates `main.[hash].css` (e.g., `main.b017b445.css`)
-- Templates use `{cssPath}` which automatically resolves to the hashed filename
+CSS files are automatically hashed during **production** builds to prevent browser caching issues:
+- **Production** (`npm run build`): Generates `main.[hash].css` (e.g., `main.b017b445.css`)
+- **Development** (`npm run build:dev`): Generates `main.css` (no hash, faster iteration)
+- Templates use `{cssPath}` which automatically resolves to the correct filename
 - Hash changes whenever CSS content changes, forcing browser cache invalidation
 - See `docs/CSS_CACHE_BUSTING.md` for full details
 
