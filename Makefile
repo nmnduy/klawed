@@ -190,8 +190,12 @@ ifeq ($(MEMVID),1)
     # Add Rust stdlib dependencies based on OS
     ifeq ($(UNAME_S),Darwin)
         MEMVID_LIBS += -framework Security -framework CoreFoundation
+        # Add rpath for macOS (relative to binary location)
+        MEMVID_LIBS += -Wl,-rpath,@loader_path/../vendor/memvid-ffi/target/release
     else ifeq ($(UNAME_S),Linux)
         MEMVID_LIBS += -lpthread -ldl -lm
+        # Add rpath for Linux (relative to binary location)
+        MEMVID_LIBS += -Wl,-rpath,$$ORIGIN/../vendor/memvid-ffi/target/release
     endif
     LDFLAGS += $(MEMVID_LIBS)
     DEBUG_LDFLAGS += $(MEMVID_LIBS)
@@ -210,8 +214,12 @@ else
         MEMVID_LIBS = -L$(MEMVID_FFI_DIR)/target/release -lmemvid_ffi
         ifeq ($(UNAME_S),Darwin)
             MEMVID_LIBS += -framework Security -framework CoreFoundation
+            # Add rpath for macOS (relative to binary location)
+            MEMVID_LIBS += -Wl,-rpath,@loader_path/../vendor/memvid-ffi/target/release
         else ifeq ($(UNAME_S),Linux)
             MEMVID_LIBS += -lpthread -ldl -lm
+            # Add rpath for Linux (relative to binary location)
+            MEMVID_LIBS += -Wl,-rpath,$$ORIGIN/../vendor/memvid-ffi/target/release
         endif
         LDFLAGS += $(MEMVID_LIBS)
         DEBUG_LDFLAGS += $(MEMVID_LIBS)
