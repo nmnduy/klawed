@@ -50,6 +50,9 @@ public class KlawedAgentManager {
     @Inject
     FileChatService fileChatService;
     
+    @Inject
+    PodmanSandboxService podmanSandboxService;
+    
     // Thread pool for async polling
     private final ExecutorService asyncPollingExecutor = Executors.newCachedThreadPool();
     
@@ -57,7 +60,9 @@ public class KlawedAgentManager {
      * Start a new klawed agent for a session
      */
     public KlawedAgentInstance startAgentForSession(String sessionId, Path sessionDir) throws IOException {
-        LOGGER.info("[SESSION:" + sessionId + "] Starting dedicated klawed agent");
+        boolean sandboxMode = podmanSandboxService.isEnabled();
+        LOGGER.info("[SESSION:" + sessionId + "] Starting dedicated klawed agent" + 
+                   (sandboxMode ? " (sandbox mode)" : " (direct mode)"));
         
         // Check if agent already exists for this session
         KlawedAgentInstance existingAgent = agents.get(sessionId);
@@ -81,9 +86,103 @@ public class KlawedAgentManager {
         // Create SQLite database path for this session
         String dbFileName = "klawed_messages_" + sessionId + ".db";
         Path dbPath = sessionDir.resolve(dbFileName);
+        // Host path for SQLite queue client to connect to
         String sqliteDbPath = dbPath.toString();
+        // Container path (if sandbox mode) - workspace is mounted at /workspace
+        String containerDbPath = "/workspace/" + dbFileName;
         LOGGER.info("[SESSION:" + sessionId + "] SQLite database will be: " + sqliteDbPath);
         
+        KlawedAgentInstance instance;
+        
+        if (sandboxMode) {
+            // --- Sandbox mode: Run klawed in a Podman container ---
+            instance = startAgentInContainer(sessionId, sessionDir, sqliteDbPath, containerDbPath);
+        } else {
+            // --- Direct mode: Run klawed via ProcessBuilder ---
+            instance = startAgentDirectly(sessionId, sessionDir, sqliteDbPath);
+        }
+        
+        agents.put(sessionId, instance);
+        
+        // Connect to SQLite queue (starts continuous async polling)
+        try {
+            instance.connect();
+            LOGGER.info("[SESSION:" + sessionId + "] Klawed agent instance created and connected");
+        } catch (IOException e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to connect to SQLite queue (but continuing): " + e.getMessage());
+            // Don't throw - the agent might still work if connect is retried later
+        }
+        
+        return instance;
+    }
+    
+    /**
+     * Start klawed agent in a Podman container (sandbox mode)
+     */
+    private KlawedAgentInstance startAgentInContainer(String sessionId, Path sessionDir, 
+                                                       String sqliteDbPath, String containerDbPath) throws IOException {
+        LOGGER.info("[SESSION:" + sessionId + "] Starting klawed in Podman container");
+        
+        // Start container via PodmanSandboxService
+        // Note: containerDbPath is the path inside the container (/workspace/...)
+        String containerId = podmanSandboxService.startContainer(sessionId, sessionDir, containerDbPath);
+        
+        LOGGER.info("[SESSION:" + sessionId + "] Container started: " + containerId);
+        
+        // Give container a grace period to initialize
+        int maxAttempts = 30; // 3 seconds should be plenty
+        for (int i = 0; i < maxAttempts; i++) {
+            // Check if container is still running
+            if (!podmanSandboxService.isContainerRunning(containerId)) {
+                String logs = "";
+                try {
+                    logs = podmanSandboxService.getContainerLogs(containerId, 50);
+                } catch (Exception e) {
+                    logs = "(could not fetch logs: " + e.getMessage() + ")";
+                }
+                LOGGER.severe("[SESSION:" + sessionId + "] Container died unexpectedly. Logs:\n" + logs);
+                throw new IOException("Container died unexpectedly");
+            }
+            
+            // Check if directory still exists
+            if (!Files.exists(sessionDir)) {
+                LOGGER.severe("[SESSION:" + sessionId + "] Session directory disappeared: " + sessionDir);
+                try {
+                    podmanSandboxService.stopContainer(containerId);
+                } catch (Exception e) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Failed to stop container after error: " + e.getMessage());
+                }
+                throw new IOException("Session directory disappeared: " + sessionDir);
+            }
+            
+            // After 1 second, if container is still running, we're good
+            if (i >= 10) {
+                LOGGER.info("[SESSION:" + sessionId + "] Container stable after " + (i * 100) + "ms");
+                break;
+            }
+            
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                try {
+                    podmanSandboxService.stopContainer(containerId);
+                } catch (Exception ex) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Failed to stop container: " + ex.getMessage());
+                }
+                throw new IOException("Interrupted while waiting for container to stabilize", e);
+            }
+        }
+        
+        // Create instance with container ID (no direct process handle)
+        return new KlawedAgentInstance(sessionId, null, sqliteDbPath, sessionDir, containerId);
+    }
+    
+    /**
+     * Start klawed agent directly via ProcessBuilder (direct mode)
+     */
+    private KlawedAgentInstance startAgentDirectly(String sessionId, Path sessionDir, 
+                                                    String sqliteDbPath) throws IOException {
         // Get agent binary path - try config first, then which command, finally default
         String klawedBinary = klawedPath.orElseGet(() -> {
             try {
@@ -227,19 +326,7 @@ public class KlawedAgentManager {
             }
         }
         
-        KlawedAgentInstance instance = new KlawedAgentInstance(sessionId, process, sqliteDbPath, sessionDir);
-        agents.put(sessionId, instance);
-        
-        // Connect to SQLite queue (starts continuous async polling)
-        try {
-            instance.connect();
-            LOGGER.info("[SESSION:" + sessionId + "] Klawed agent instance created and connected");
-        } catch (IOException e) {
-            LOGGER.warning("[SESSION:" + sessionId + "] Failed to connect to SQLite queue (but continuing): " + e.getMessage());
-            // Don't throw - the agent might still work if connect is retried later
-        }
-        
-        return instance;
+        return new KlawedAgentInstance(sessionId, process, sqliteDbPath, sessionDir);
     }
     
     /**
@@ -281,6 +368,12 @@ public class KlawedAgentManager {
             instance.stop();
         });
         agents.clear();
+        
+        // Also stop any orphaned containers when in sandbox mode
+        if (podmanSandboxService.isEnabled()) {
+            LOGGER.info("Stopping all Podman containers (sandbox mode)");
+            podmanSandboxService.stopAllContainers();
+        }
     }
     
     /**
@@ -318,29 +411,57 @@ public class KlawedAgentManager {
      */
     public class KlawedAgentInstance {
         private final String sessionId;
-        private final Process process;
+        private final Process process;  // null if running in container
         private final String sqliteDbPath;
         private final Path sessionDir;
+        private final String containerId;  // null if running directly (not in container)
         private SQLiteQueueClient sqliteQueueClient;
         private volatile boolean asyncPollingActive = false;
         private volatile boolean shouldPollContinuously = false;
         
         public KlawedAgentInstance(String sessionId, Process process, String sqliteDbPath, Path sessionDir) {
+            this(sessionId, process, sqliteDbPath, sessionDir, null);
+        }
+        
+        public KlawedAgentInstance(String sessionId, Process process, String sqliteDbPath, Path sessionDir, String containerId) {
             this.sessionId = sessionId;
             this.process = process;
             this.sqliteDbPath = sqliteDbPath;
             this.sessionDir = sessionDir;
+            this.containerId = containerId;
             
-            LOGGER.info("[SESSION:" + sessionId + "] Agent instance created with SQLite database: " + sqliteDbPath + 
-                       ", sessionDir: " + sessionDir);
+            String modeInfo = containerId != null ? "sandbox mode (container: " + containerId + ")" : "direct mode";
+            LOGGER.info("[SESSION:" + sessionId + "] Agent instance created in " + modeInfo + 
+                       " with SQLite database: " + sqliteDbPath + ", sessionDir: " + sessionDir);
         }
         
         public String getSessionId() {
             return sessionId;
         }
         
+        /**
+         * Get the container ID if running in sandbox mode.
+         * @return container ID, or null if running directly (not in container)
+         */
+        public String getContainerId() {
+            return containerId;
+        }
+        
+        /**
+         * Check if this instance is running in a Podman container.
+         */
+        public boolean isRunningInContainer() {
+            return containerId != null;
+        }
+        
         public boolean isRunning() {
-            return process != null && process.isAlive();
+            if (containerId != null) {
+                // Running in container - check container status
+                return podmanSandboxService.isContainerRunning(containerId);
+            } else {
+                // Running directly - check process status
+                return process != null && process.isAlive();
+            }
         }
         
         /**
@@ -530,22 +651,14 @@ public class KlawedAgentManager {
          * Stop the agent process and cleanup
          */
         public void stop() {
-            LOGGER.info("[SESSION:" + sessionId + "] Stopping klawed agent instance");
+            String modeInfo = containerId != null ? "sandbox mode (container: " + containerId + ")" : "direct mode";
+            LOGGER.info("[SESSION:" + sessionId + "] Stopping klawed agent instance (" + modeInfo + ")");
             
             // Stop continuous async polling
             shouldPollContinuously = false;
             asyncPollingActive = false;
             
-            // Log PID if process is still alive
-            if (process != null && process.isAlive()) {
-                try {
-                    long pid = process.pid();
-                    LOGGER.info("[SESSION:" + sessionId + "] Stopping klawed process with PID: " + pid);
-                } catch (Exception e) {
-                    LOGGER.warning("[SESSION:" + sessionId + "] Could not get PID: " + e.getMessage());
-                }
-            }
-            
+            // Shutdown SQLite queue client first
             if (sqliteQueueClient != null) {
                 try {
                     sqliteQueueClient.shutdown();
@@ -555,25 +668,54 @@ public class KlawedAgentManager {
                 sqliteQueueClient = null;
             }
             
-            if (process != null && process.isAlive()) {
-                process.destroy();
+            if (containerId != null) {
+                // Running in container - stop via PodmanSandboxService
                 try {
-                    if (process.isAlive()) {
-                        process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-                        if (process.isAlive()) {
-                            process.destroyForcibly();
-                        }
+                    LOGGER.info("[SESSION:" + sessionId + "] Stopping container: " + containerId);
+                    podmanSandboxService.stopContainer(containerId);
+                } catch (Exception e) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Error stopping container: " + e.getMessage());
+                    // Try force kill
+                    try {
+                        podmanSandboxService.killContainer(containerId);
+                    } catch (Exception killEx) {
+                        LOGGER.severe("[SESSION:" + sessionId + "] Failed to kill container: " + killEx.getMessage());
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    process.destroyForcibly();
+                }
+            } else {
+                // Running directly - stop via Process
+                // Log PID if process is still alive
+                if (process != null && process.isAlive()) {
+                    try {
+                        long pid = process.pid();
+                        LOGGER.info("[SESSION:" + sessionId + "] Stopping klawed process with PID: " + pid);
+                    } catch (Exception e) {
+                        LOGGER.warning("[SESSION:" + sessionId + "] Could not get PID: " + e.getMessage());
+                    }
+                }
+                
+                if (process != null && process.isAlive()) {
+                    process.destroy();
+                    try {
+                        if (process.isAlive()) {
+                            process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+                            if (process.isAlive()) {
+                                process.destroyForcibly();
+                            }
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        process.destroyForcibly();
+                    }
                 }
             }
             
             LOGGER.info("[SESSION:" + sessionId + "] Klawed agent instance stopped");
             
-            // Delete PID file when agent is stopped
-            deletePidFile(sessionId, sessionDir);
+            // Delete PID file when agent is stopped (only for direct mode)
+            if (containerId == null) {
+                deletePidFile(sessionId, sessionDir);
+            }
         }
     }
     
