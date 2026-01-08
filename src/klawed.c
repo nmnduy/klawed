@@ -5022,7 +5022,14 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON *memory_store_func = cJSON_CreateObject();
     cJSON_AddStringToObject(memory_store_func, "name", "MemoryStore");
     cJSON_AddStringToObject(memory_store_func, "description",
-        "Store a memory about the user or project. Use for facts, preferences, events, goals. Memories persist across sessions.");
+        "Store a memory about the user or project. Memories persist across sessions. "
+        "BE PROACTIVE - Store important information when you notice: "
+        "(1) User preferences: 'I prefer...', 'I don't like...', 'always use...', 'never use...'; "
+        "(2) User facts: 'I work at...', 'I'm learning...', 'my team uses...'; "
+        "(3) Project constraints: 'we use tabs', 'we follow style X', 'this project requires Y'; "
+        "(4) Recurring patterns in their coding style or requests; "
+        "(5) User explicitly asks 'remember that...' or 'keep in mind...'. "
+        "DO NOT store: temporary context, sensitive data (API keys/passwords), transient state, or information already in KLAWED.md.");
     cJSON *memory_store_params = cJSON_CreateObject();
     cJSON_AddStringToObject(memory_store_params, "type", "object");
     cJSON *memory_store_props = cJSON_CreateObject();
@@ -5086,7 +5093,10 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON *memory_recall_func = cJSON_CreateObject();
     cJSON_AddStringToObject(memory_recall_func, "name", "MemoryRecall");
     cJSON_AddStringToObject(memory_recall_func, "description",
-        "Recall the current value for an entity's attribute from persistent memory");
+        "Recall the current value for an entity's attribute from persistent memory. "
+        "Use this when: (1) You need to check what you already know about user preferences or project details; "
+        "(2) Starting a new conversation and want to recall context from previous sessions; "
+        "(3) User mentions something you may have stored before.");
     cJSON *memory_recall_params = cJSON_CreateObject();
     cJSON_AddStringToObject(memory_recall_params, "type", "object");
     cJSON *memory_recall_props = cJSON_CreateObject();
@@ -5116,7 +5126,10 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON *memory_search_func = cJSON_CreateObject();
     cJSON_AddStringToObject(memory_search_func, "name", "MemorySearch");
     cJSON_AddStringToObject(memory_search_func, "description",
-        "Search all memories by text query");
+        "Search all memories by text query. Use this when: (1) You need to find related past context but don't know the specific entity/slot; "
+        "(2) User asks about something you may have discussed before; "
+        "(3) After auto-compaction notice - search for relevant past conversation context; "
+        "(4) Starting a complex task and want to check for relevant project knowledge.");
     cJSON *memory_search_params = cJSON_CreateObject();
     cJSON_AddStringToObject(memory_search_params, "type", "object");
     cJSON *memory_search_props = cJSON_CreateObject();
