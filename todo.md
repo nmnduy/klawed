@@ -7,16 +7,15 @@
 - [x] alert
     - [x] cpu, memory, error
     - [x] disk size
-- [ ] write filesurf KLAWED.md
-    - [ ] /tmp usage
-    - [ ] workspace is persistent
-    - [ ] organizzation
-    - [ ] how to show SKILLS
-- [ ] connection indicator rewrite
-- [ ] no spinner in file explorer since it's periodical and seeing it a lot is just annoying
+
+- [ ] write filesurf KLAWED.md inside the workspace agent
+    - [ ] agent should organize files and clean up files often. sometimes agent write lots of files. or put random files in workspace root.
+- [ ] connection indicator rewrite completely. styles do not show up correctly
+- [ ] dont show the spinner in file explorer since it's periodical and seeing it a lot is just annoying. also, any way to avoid the jitter when the file reload?
 - [ ] chat view is ugly
-- [ ] /metrics should not be public
+- [ ] /metrics endpoint should not be public. we expose the application via cloudflare. prometheus server is scraping the server metrics via tailscale, network group 100.x.x.x
 - [ ] upload button in file explorer only allow folder upload. not sure if input box upload button has the same issue
+
 - [x] version the js, css files
 - [x] privacy policies
 - [x] context size limit. it should be able to continue indefinitely
@@ -28,4 +27,5 @@
 
 ---
 
+- [ ] how to show SKILLS
 - [ ] file download button
