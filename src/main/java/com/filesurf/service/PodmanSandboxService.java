@@ -99,7 +99,7 @@ public class PodmanSandboxService {
         // Build podman run command with security options
         List<String> command = buildPodmanRunCommand(containerName, workspaceDir, sqliteDbPath);
         
-        LOGGER.info("[SESSION:" + sessionId + "] Podman command: " + String.join(" ", command));
+        LOGGER.info("[SESSION:" + sessionId + "] Podman command: " + obfuscateCommand(command));
         
         ProcessBuilder processBuilder = new ProcessBuilder(command);
         processBuilder.redirectErrorStream(true);
@@ -135,6 +135,44 @@ public class PodmanSandboxService {
         LOGGER.info("[SESSION:" + sessionId + "] Started container: " + containerId + " (name: " + containerName + ")");
         
         return containerId;
+    }
+    
+    /**
+     * List of environment variable names that contain secrets and should be obfuscated in logs.
+     */
+    private static final List<String> SECRET_ENV_VARS = List.of(
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "OPENAI_AUTH_HEADER",
+        "OPENAI_EXTRA_HEADERS"
+    );
+    
+    /**
+     * Obfuscate secrets in a podman command for safe logging.
+     * Replaces sensitive environment variable values with "[REDACTED]".
+     */
+    private String obfuscateCommand(List<String> command) {
+        List<String> obfuscated = new ArrayList<>();
+        for (int i = 0; i < command.size(); i++) {
+            String arg = command.get(i);
+            boolean isSecret = false;
+            
+            // Check if this argument is a secret environment variable (format: VAR_NAME=value)
+            for (String secretVar : SECRET_ENV_VARS) {
+                if (arg.startsWith(secretVar + "=")) {
+                    obfuscated.add(secretVar + "=[REDACTED]");
+                    isSecret = true;
+                    break;
+                }
+            }
+            
+            if (!isSecret) {
+                obfuscated.add(arg);
+            }
+        }
+        return String.join(" ", obfuscated);
     }
     
     /**
