@@ -44,29 +44,75 @@
                         </svg>
                     </button>
                 </div>
-                <!-- Upload Button -->
-                <button 
-                    id="file-explorer-upload"
-                    data-explorer-upload-button
-                    class="inline-flex items-center justify-center rounded-lg border-2 border-orange-500 text-orange-600 bg-white hover:bg-orange-50 hover:border-orange-600 h-12 px-4 gap-2 disabled:pointer-events-none disabled:opacity-40 disabled:border-gray-300 disabled:text-gray-400 disabled:bg-gray-50 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 shadow-sm hover:shadow-md"
-                    disabled
-                    title="Upload files"
-                    aria-label="Upload files"
-                >
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    <span class="hidden sm:inline">Upload</span>
-                </button>
+                <!-- Upload Button Group -->
+                <div class="relative" id="file-explorer-upload-group">
+                    <button 
+                        id="file-explorer-upload"
+                        data-explorer-upload-button
+                        class="inline-flex items-center justify-center rounded-lg border-2 border-orange-500 text-orange-600 bg-white hover:bg-orange-50 hover:border-orange-600 h-12 px-4 gap-2 disabled:pointer-events-none disabled:opacity-40 disabled:border-gray-300 disabled:text-gray-400 disabled:bg-gray-50 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 shadow-sm hover:shadow-md"
+                        disabled
+                        title="Upload files or folders"
+                        aria-label="Upload files or folders"
+                        aria-haspopup="true"
+                        aria-expanded="false"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <span class="hidden sm:inline">Upload</span>
+                        <svg class="w-4 h-4 hidden sm:inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                    <!-- Dropdown Menu -->
+                    <div 
+                        id="file-explorer-upload-menu"
+                        class="hidden absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 z-50"
+                        role="menu"
+                        aria-orientation="vertical"
+                    >
+                        <div class="py-1">
+                            <button
+                                id="file-explorer-upload-files"
+                                class="w-full text-left px-4 py-2 text-body-s text-slate-700 dark:text-slate-200 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center gap-2"
+                                role="menuitem"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                                Upload Files
+                            </button>
+                            <button
+                                id="file-explorer-upload-folder"
+                                class="w-full text-left px-4 py-2 text-body-s text-slate-700 dark:text-slate-200 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center gap-2"
+                                role="menuitem"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                </svg>
+                                Upload Folder
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <!-- Hidden file input for upload -->
+        <!-- Hidden file inputs for upload -->
         <input 
             type="file" 
             id="file-explorer-file-input" 
             data-explorer-file-input
             class="hidden" 
             accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,.xml"
+            multiple
+        />
+        <input 
+            type="file" 
+            id="file-explorer-folder-input" 
+            data-explorer-folder-input
+            class="hidden" 
+            webkitdirectory
+            directory
             multiple
         />
     </div>

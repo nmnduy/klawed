@@ -51,7 +51,12 @@ class FileExplorer {
         
         // Upload elements
         this.fileExplorerUpload = document.getElementById('file-explorer-upload');
+        this.fileExplorerUploadMenu = document.getElementById('file-explorer-upload-menu');
+        this.fileExplorerUploadFiles = document.getElementById('file-explorer-upload-files');
+        this.fileExplorerUploadFolder = document.getElementById('file-explorer-upload-folder');
         this.fileExplorerFileInput = document.getElementById('file-explorer-file-input');
+        this.fileExplorerFolderInput = document.getElementById('file-explorer-folder-input');
+
 
         this.filePreviewPanel = document.getElementById('file-preview-panel');
         this.filePreviewClose = document.getElementById('file-preview-close');
@@ -813,15 +818,52 @@ class FileExplorer {
         }
 
         // Upload functionality (file explorer manages its own upload components)
-        if (this.fileExplorerUpload && this.fileExplorerFileInput) {
-            this.fileExplorerUpload.addEventListener('click', () => {
-                this.fileExplorerFileInput.click();
+        if (this.fileExplorerUpload && this.fileExplorerUploadMenu) {
+            // Toggle dropdown menu
+            this.fileExplorerUpload.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isExpanded = this.fileExplorerUpload.getAttribute('aria-expanded') === 'true';
+                this.fileExplorerUpload.setAttribute('aria-expanded', !isExpanded);
+                this.fileExplorerUploadMenu.classList.toggle('hidden');
             });
-            
-            this.fileExplorerFileInput.addEventListener('change', (e) => {
-                this.handleFileUpload(e.target.files);
+
+            // Close menu when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!this.fileExplorerUpload.contains(e.target) && !this.fileExplorerUploadMenu.contains(e.target)) {
+                    this.fileExplorerUpload.setAttribute('aria-expanded', 'false');
+                    this.fileExplorerUploadMenu.classList.add('hidden');
+                }
             });
+
+            // Upload files option
+            if (this.fileExplorerUploadFiles && this.fileExplorerFileInput) {
+                this.fileExplorerUploadFiles.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.fileExplorerUploadMenu.classList.add('hidden');
+                    this.fileExplorerUpload.setAttribute('aria-expanded', 'false');
+                    this.fileExplorerFileInput.click();
+                });
+
+                this.fileExplorerFileInput.addEventListener('change', (e) => {
+                    this.handleFileUpload(e.target.files);
+                });
+            }
+
+            // Upload folder option
+            if (this.fileExplorerUploadFolder && this.fileExplorerFolderInput) {
+                this.fileExplorerUploadFolder.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.fileExplorerUploadMenu.classList.add('hidden');
+                    this.fileExplorerUpload.setAttribute('aria-expanded', 'false');
+                    this.fileExplorerFolderInput.click();
+                });
+
+                this.fileExplorerFolderInput.addEventListener('change', (e) => {
+                    this.handleFileUpload(e.target.files);
+                });
+            }
         }
+
 
         // Filters
         if (this.fileExplorerFilterButtons && this.fileExplorerFilterButtons.length) {
@@ -937,9 +979,12 @@ class FileExplorer {
             this.fileExplorerUpload.innerHTML = originalText;
             this.fileExplorerUpload.disabled = false;
             
-            // Clear file input
+            // Clear file inputs
             if (this.fileExplorerFileInput) {
                 this.fileExplorerFileInput.value = '';
+            }
+            if (this.fileExplorerFolderInput) {
+                this.fileExplorerFolderInput.value = '';
             }
         }
     }
