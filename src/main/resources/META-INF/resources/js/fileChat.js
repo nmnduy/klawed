@@ -135,6 +135,7 @@ export function init(rootEl) {
     let reconnectTimeoutId = null;
     let isManuallyDisconnected = false;
     let isAuthFailure = false; // Prevent reconnection after auth failure
+    let isSessionExpired = false; // Track if session expired due to inactivity
 
     // --- Guided Tour State ---
     let hasCompletedTour = false;
@@ -221,9 +222,9 @@ export function init(rootEl) {
             messageDiv.className = 'flex ' + (isUser ? 'justify-end' : 'justify-start') + ' animate-fade-in';
 
             const bubble = document.createElement('div');
-            bubble.className = 'w-full max-w-[90%] sm:max-w-2xl px-4 sm:px-5 py-3 rounded-2xl border shadow-sm ' + (isUser ? 
-                'bg-[color-mix(in_srgb,_hsl(var(--primary))_14%,_hsl(var(--card))_86%)] border-[color-mix(in_srgb,_hsl(var(--primary))_26%,_hsl(var(--border))_74%)] border-l-[color-mix(in_srgb,_hsl(var(--primary))_38%,_hsl(var(--border))_62%)] shadow-[0_6px_16px_color-mix(in_srgb,_hsl(var(--primary))_12%,_transparent)]' : 
-                'bg-[color-mix(in_srgb,_hsl(var(--card))_98%,_hsl(var(--muted))_2%)] border-[hsl(var(--border))] border-l-[color-mix(in_srgb,_hsl(var(--primary))_18%,_hsl(var(--border))_82%)] shadow-[0_4px_12px_color-mix(in_srgb,_hsl(var(--primary))_6%,_transparent)]');
+            bubble.className = 'w-full max-w-[92%] sm:max-w-2xl lg:max-w-3xl px-4 sm:px-5 py-3.5 rounded-2xl border shadow-md ' + (isUser ? 
+                'bg-[color-mix(in_srgb,_hsl(var(--primary))_14%,_hsl(var(--card))_86%)] border-[color-mix(in_srgb,_hsl(var(--primary))_26%,_hsl(var(--border))_74%)] border-l-[color-mix(in_srgb,_hsl(var(--primary))_38%,_hsl(var(--border))_62%)] shadow-[0_8px_20px_color-mix(in_srgb,_hsl(var(--primary))_16%,_transparent)]' : 
+                'bg-[color-mix(in_srgb,_hsl(var(--card))_98%,_hsl(var(--muted))_2%)] border-[hsl(var(--border))] border-l-[color-mix(in_srgb,_hsl(var(--primary))_18%,_hsl(var(--border))_82%)] shadow-[0_6px_16px_color-mix(in_srgb,_hsl(var(--primary))_8%,_transparent)]');
 
             const textDiv = document.createElement('div');
             textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed text-foreground';
@@ -290,10 +291,10 @@ export function init(rootEl) {
 
         const span = document.createElement('span');
         const colors = {
-            info: 'bg-cyan-100 text-cyan-700',
-            success: 'bg-emerald-100 text-emerald-700',
-            error: 'bg-coral-100 text-coral-700',
-            warning: 'bg-amber-100 text-amber-700'
+            info: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300',
+            success: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+            error: 'bg-coral-100 dark:bg-coral-900/30 text-coral-700 dark:text-coral-300',
+            warning: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
         };
         span.className = 'inline-flex items-center gap-2 px-4 py-2 rounded-full text-caption-m-bold border border-transparent shadow-sm ' + (colors[type] || colors.info);
         span.textContent = content;
@@ -779,7 +780,76 @@ export function init(rootEl) {
         }
     }
 
-
+    /**
+     * Show UI notification when session has expired due to inactivity
+     */
+    function showSessionExpiredUI() {
+        // Update status indicator to show session expired
+        updateStatus(false, 'Session expired');
+        
+        // Create a prominent notification message
+        const expiryNotification = document.createElement('div');
+        expiryNotification.className = 'session-expired-notification';
+        expiryNotification.innerHTML = `
+            <div class="dynamic-notification-session-expired">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <svg class="dynamic-notification-icon-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <div class="ml-4 flex-1">
+                        <h3 class="dynamic-notification-heading">
+                            Session Ended Due to Inactivity
+                        </h3>
+                        <p class="dynamic-notification-message">
+                            Your chat session has been closed after a period of inactivity. This helps us manage server resources efficiently.
+                        </p>
+                        <div class="flex gap-3">
+                            <button 
+                                onclick="window.location.reload()" 
+                                class="dynamic-notification-btn-primary">
+                                <svg class="dynamic-notification-btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Start New Session
+                            </button>
+                            <a 
+                                href="/" 
+                                class="dynamic-notification-btn-secondary">
+                                Return to Home
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Insert at the top of the chat messages container
+        if (messageParent) {
+            // Clear any existing expired notification
+            const existing = messageParent.querySelector('.session-expired-notification');
+            if (existing) {
+                existing.remove();
+            }
+            
+            // Insert at the beginning
+            if (messageParent.firstChild) {
+                messageParent.insertBefore(expiryNotification, messageParent.firstChild);
+            } else {
+                messageParent.appendChild(expiryNotification);
+            }
+            
+            // Scroll to show the notification
+            scrollToBottom();
+        }
+        
+        // Disable input controls
+        setDisabledState(true);
+        
+        // Add a subtle system message to chat history as well
+        addSystemMessage('⚠️ Your session has ended due to inactivity. Please start a new session to continue.', 'warning');
+    }
 
     function scheduleReconnect() {
         // Clear any existing reconnect timeout
@@ -817,6 +887,12 @@ export function init(rootEl) {
         
         if (isAuthFailure) {
             console.log('[file-chat] Auth failure detected - not reconnecting');
+            return;
+        }
+        
+        // Don't reconnect if session has expired - UI already shown
+        if (isSessionExpired) {
+            console.log('[file-chat] Session expired - not reconnecting');
             return;
         }
         
@@ -929,11 +1005,13 @@ export function init(rootEl) {
                         updateStatus(true, 'Connected');
                         break;
                     case 'ERROR':
-                        // Check if this is an invalid session error
+                        // Check if this is an invalid session error (session expired)
                         if (content && (content.includes('Invalid session') || content.includes('No session ID'))) {
-                            console.warn('[file-chat] Invalid session detected, clearing sessionStorage');
+                            console.warn('[file-chat] Invalid session detected - session likely expired due to inactivity');
                             sessionStorage.removeItem('filesurf_sessionId');
-                            // Don't show error to user, just reconnect with new session
+                            isSessionExpired = true;
+                            // Show session expired UI
+                            showSessionExpiredUI();
                             ws.close();
                             return;
                         }
@@ -1085,6 +1163,12 @@ export function init(rootEl) {
             // Don't reconnect if this was a manual disconnect
             if (isManuallyDisconnected) {
                 updateStatus(false, 'Disconnected');
+                return;
+            }
+            
+            // Don't reconnect if session has expired - UI already shown
+            if (isSessionExpired) {
+                updateStatus(false, 'Session expired');
                 return;
             }
             
