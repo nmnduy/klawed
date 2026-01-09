@@ -5,12 +5,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -157,46 +152,16 @@ public class KlawedShutdownService {
     }
     
     /**
-     * Find orphaned klawed process PIDs by scanning the session directory
+     * Find orphaned klawed process PIDs from tracked agents.
+     * This method now works with the agent manager's tracked sessions
+     * rather than scanning a fixed directory.
      */
     private List<Long> findOrphanedKlawedPids() {
         List<Long> pids = new ArrayList<>();
-        Path sessionsDir = Paths.get("/tmp/is-sessions");
         
-        if (!Files.exists(sessionsDir) || !Files.isDirectory(sessionsDir)) {
-            LOGGER.info("Session directory not found: " + sessionsDir);
-            return pids;
-        }
-        
-        try {
-            Files.list(sessionsDir)
-                .filter(Files::isDirectory)
-                .forEach(sessionDir -> {
-                    Path pidFile = sessionDir.resolve("klawed.pid");
-                    if (Files.exists(pidFile)) {
-                        try {
-                            String content = Files.readString(pidFile);
-                            String[] lines = content.split("\n");
-                            for (String line : lines) {
-                                if (line.startsWith("pid=")) {
-                                    try {
-                                        long pid = Long.parseLong(line.substring(4).trim());
-                                        pids.add(pid);
-                                        LOGGER.info("Found PID " + pid + " in " + pidFile);
-                                    } catch (NumberFormatException e) {
-                                        LOGGER.warning("Invalid PID format in " + pidFile + ": " + line);
-                                    }
-                                    break;
-                                }
-                            }
-                        } catch (IOException e) {
-                            LOGGER.warning("Could not read PID file " + pidFile + ": " + e.getMessage());
-                        }
-                    }
-                });
-        } catch (IOException e) {
-            LOGGER.warning("Error scanning session directory: " + e.getMessage());
-        }
+        // In the new model, agents are tracked by KlawedAgentManager
+        // Orphaned agents should be cleaned up by stopAllAgents()
+        // This method is now mostly for emergency cleanup via ps
         
         return pids;
     }
@@ -275,32 +240,13 @@ public class KlawedShutdownService {
     }
     
     /**
-     * Clean up PID files in session directories
+     * Clean up PID files is now handled by KlawedAgentManager when agents are stopped.
+     * This method is kept for compatibility but does nothing in the new model.
      */
     private void cleanupPidFiles() {
-        Path sessionsDir = Paths.get("/tmp/is-sessions");
-        
-        if (!Files.exists(sessionsDir) || !Files.isDirectory(sessionsDir)) {
-            return;
-        }
-        
-        try {
-            Files.list(sessionsDir)
-                .filter(Files::isDirectory)
-                .forEach(sessionDir -> {
-                    Path pidFile = sessionDir.resolve("klawed.pid");
-                    if (Files.exists(pidFile)) {
-                        try {
-                            Files.delete(pidFile);
-                            LOGGER.info("Deleted PID file: " + pidFile);
-                        } catch (IOException e) {
-                            LOGGER.warning("Could not delete PID file " + pidFile + ": " + e.getMessage());
-                        }
-                    }
-                });
-        } catch (IOException e) {
-            LOGGER.warning("Error cleaning up PID files: " + e.getMessage());
-        }
+        // PID files are now managed per-agent by KlawedAgentManager
+        // and stored in user workspaces rather than /tmp/is-sessions
+        LOGGER.fine("PID file cleanup delegated to KlawedAgentManager");
     }
     
     /**

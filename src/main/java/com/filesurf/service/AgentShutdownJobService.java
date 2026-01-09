@@ -6,17 +6,24 @@ import jakarta.inject.Inject;
 import jakarta.annotation.PostConstruct;
 import io.quarkus.scheduler.Scheduled;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 /**
  * Manages delayed shutdown of klawed agents to allow for reconnections.
  * When a user disconnects, the agent is scheduled for shutdown after a grace period
- * (default 5 minutes). If the user reconnects before the grace period expires,
+ * (default 30 seconds). If the user reconnects before the grace period expires,
  * the shutdown job is cancelled and the agent is reused.
+ * 
+ * After stopping the agent/container, this service also cleans up klawed artifacts
+ * from the user's workspace (.klawed/ directory and SQLite queue files).
  */
 @ApplicationScoped
 public class AgentShutdownJobService {
@@ -82,6 +89,9 @@ public class AgentShutdownJobService {
 
     @Inject
     KlawedAgentManager agentManager;
+    
+    @Inject
+    SessionManager sessionManager;
 
     @PostConstruct
     void init() {
@@ -119,10 +129,12 @@ public class AgentShutdownJobService {
     }
 
     /**
-     * Enqueue an agent shutdown job with default grace period (5 minutes).
+     * Enqueue an agent shutdown job with default grace period (30 seconds).
+     * This allows brief network blips without losing the agent, while still
+     * cleaning up promptly when the user has actually disconnected.
      */
     public void enqueueShutdown(String sessionId) {
-        enqueueShutdown(sessionId, Instant.now().plusSeconds(300)); // 5 minutes default
+        enqueueShutdown(sessionId, Instant.now().plusSeconds(30)); // 30 seconds default
     }
 
     /**
@@ -149,9 +161,9 @@ public class AgentShutdownJobService {
 
     /**
      * Scheduled worker to claim and execute shutdown jobs.
-     * Runs every 30 seconds to check for agents ready to be shut down.
+     * Runs every 10 seconds to check for agents ready to be shut down.
      */
-    @Scheduled(every = "30s")
+    @Scheduled(every = "10s")
     void processQueue() {
         try {
             Optional<Job> jobOpt = claimJob();
@@ -159,16 +171,24 @@ public class AgentShutdownJobService {
                 LOGGER.info("[SESSION:" + job.sessionId + "] Processing agent shutdown job id=" + job.id + 
                            " scheduled_at=" + Instant.ofEpochSecond(job.scheduledAt));
                 try {
+                    // Get the workspace path before stopping the agent
+                    Path workspace = sessionManager.getWorkspaceForSession(job.sessionId);
+                    
                     // Check if agent still exists for this session
                     KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(job.sessionId);
                     if (agent != null) {
                         LOGGER.info("[SESSION:" + job.sessionId + "] Stopping klawed agent after grace period");
                         agentManager.stopAgentForSession(job.sessionId);
-                        markDone(job.id);
                     } else {
-                        LOGGER.info("[SESSION:" + job.sessionId + "] Agent already stopped, marking job as done");
-                        markDone(job.id);
+                        LOGGER.info("[SESSION:" + job.sessionId + "] Agent already stopped");
                     }
+                    
+                    // Clean up klawed artifacts from workspace
+                    if (workspace != null) {
+                        cleanupKlawedArtifacts(job.sessionId, workspace);
+                    }
+                    
+                    markDone(job.id);
                 } catch (Exception e) {
                     LOGGER.warning("[SESSION:" + job.sessionId + "] Shutdown job failed: " + e.getMessage());
                     try {
@@ -180,6 +200,64 @@ public class AgentShutdownJobService {
             });
         } catch (Exception e) {
             LOGGER.severe("Error while processing agent shutdown queue: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Clean up klawed artifacts from the user's workspace.
+     * This includes:
+     * - .klawed/ directory (logs, config)
+     * - klawed_messages_{sessionId}.db and related WAL files
+     */
+    private void cleanupKlawedArtifacts(String sessionId, Path workspace) {
+        LOGGER.info("[SESSION:" + sessionId + "] Cleaning up klawed artifacts from workspace: " + workspace);
+        
+        // Delete .klawed/ directory
+        Path klawedDir = workspace.resolve(".klawed");
+        if (Files.exists(klawedDir)) {
+            try {
+                deleteDirectory(klawedDir);
+                LOGGER.info("[SESSION:" + sessionId + "] Deleted .klawed/ directory");
+            } catch (IOException e) {
+                LOGGER.warning("[SESSION:" + sessionId + "] Failed to delete .klawed/ directory: " + e.getMessage());
+            }
+        }
+        
+        // Delete SQLite queue files (klawed_messages_{sessionId}.db, .db-shm, .db-wal)
+        String dbFileName = "klawed_messages_" + sessionId + ".db";
+        String[] sqliteExtensions = {"", "-shm", "-wal"};
+        
+        for (String ext : sqliteExtensions) {
+            Path dbFile = workspace.resolve(dbFileName + ext);
+            if (Files.exists(dbFile)) {
+                try {
+                    Files.delete(dbFile);
+                    LOGGER.info("[SESSION:" + sessionId + "] Deleted " + dbFile.getFileName());
+                } catch (IOException e) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Failed to delete " + dbFile.getFileName() + ": " + e.getMessage());
+                }
+            }
+        }
+        
+        LOGGER.info("[SESSION:" + sessionId + "] Klawed artifact cleanup completed");
+    }
+    
+    /**
+     * Recursively delete a directory.
+     */
+    private void deleteDirectory(Path dir) throws IOException {
+        if (!Files.exists(dir)) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted((a, b) -> b.compareTo(a)) // reverse order to delete children first
+                .forEach(path -> {
+                    try {
+                        Files.delete(path);
+                    } catch (IOException e) {
+                        LOGGER.warning("Failed to delete: " + path + " - " + e.getMessage());
+                    }
+                });
         }
     }
     
