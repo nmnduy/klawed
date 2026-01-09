@@ -51,6 +51,10 @@
 #include <zmq.h>
 #endif
 
+#ifdef HAVE_UDS
+#include "uds_socket.h"
+#endif
+
 #include "sqlite_queue.h"
 #ifndef TEST_BUILD
 #include "openai_messages.h"
@@ -9207,6 +9211,36 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
+    // Check for UDS daemon mode
+#ifdef HAVE_UDS
+    int uds_daemon_mode = 0;
+    const char *uds_socket_path = NULL;
+
+    if (argc == 3 && (strcmp(argv[1], "-u") == 0 || strcmp(argv[1], "--uds") == 0)) {
+        uds_daemon_mode = 1;
+        uds_socket_path = argv[2];
+        LOG_INFO("UDS daemon mode enabled, socket path: %s", uds_socket_path);
+    }
+
+    // Also check environment variable for UDS socket path
+    if (!uds_socket_path) {
+        uds_socket_path = getenv("KLAWED_UNIX_SOCKET_PATH");
+        if (uds_socket_path) {
+            uds_daemon_mode = 1;
+            LOG_INFO("UDS daemon mode enabled via environment, socket path: %s", uds_socket_path);
+        }
+    }
+
+    // UDS and ZMQ are mutually exclusive
+#ifdef HAVE_ZMQ
+    if (uds_daemon_mode && (zmq_daemon_mode || zmq_client_mode_flag)) {
+        LOG_ERROR("UDS and ZMQ modes are mutually exclusive");
+        fprintf(stderr, "Error: Cannot use UDS (-u/--uds) and ZMQ (-z/--zmq) at the same time.\n");
+        return 1;
+    }
+#endif
+#endif
+
     // Check for auto-compact flag (can appear anywhere in argv)
     int auto_compact_enabled = 0;
     for (int i = 1; i < argc; i++) {
@@ -9278,6 +9312,11 @@ int main(int argc, char *argv[]) {
     int socket_ipc_enabled = zmq_daemon_mode || zmq_client_mode_flag;
 #else
     int socket_ipc_enabled = 0;
+#endif
+#ifdef HAVE_UDS
+    if (uds_daemon_mode) {
+        socket_ipc_enabled = 1;
+    }
 #endif
     if (sqlite_daemon_mode) {
         socket_ipc_enabled = 1;
@@ -9691,9 +9730,23 @@ int main(int argc, char *argv[]) {
             exit_code = zmq_socket_daemon_mode(zmq_ctx, &state);
             zmq_socket_cleanup(zmq_ctx);
         }
-    } else
+    }
 #endif
-    if (is_single_command_mode) {
+#ifdef HAVE_UDS
+    else if (uds_daemon_mode) {
+        // UDS daemon mode
+        LOG_INFO("Starting UDS daemon mode on %s", uds_socket_path);
+        UDSContext *uds_ctx = uds_socket_init(uds_socket_path);
+        if (!uds_ctx) {
+            LOG_ERROR("Failed to initialize UDS socket");
+            exit_code = 1;
+        } else {
+            exit_code = uds_socket_daemon_mode(uds_ctx, &state);
+            uds_socket_cleanup(uds_ctx);
+        }
+    }
+#endif
+    else if (is_single_command_mode) {
         exit_code = single_command_mode(&state, single_command);
     } else {
         interactive_mode(&state);

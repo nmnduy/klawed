@@ -49,6 +49,7 @@ Project instructions for Klawed when working with this codebase.
 
 **Network & Communication:**
 - **ZMQ socket**: `src/zmq_socket.c`, `src/zmq_socket.h`, `docs/zmq_input_output.md`
+- **Unix domain socket**: `src/uds_socket.c`, `src/uds_socket.h` (synchronous peer-to-peer IPC)
 
 **Tests**: `tests/test_*.c` (unit tests for all major components)
 **Build**: `Makefile`
@@ -193,6 +194,9 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
 - **ZMQ Socket**: `KLAWED_ZMQ_ENDPOINT` - ZMQ endpoint (e.g., "tcp://127.0.0.1:5555" or "ipc:///tmp/klawed.sock")
   - `KLAWED_ZMQ_MODE` - ZMQ mode ("daemon")
+- **Unix Socket**: `KLAWED_UNIX_SOCKET_PATH` - Unix domain socket path (e.g., "/tmp/klawed.sock")
+  - `KLAWED_UNIX_SOCKET_RETRIES` - Max reconnection attempts (default: 5)
+  - `KLAWED_UNIX_SOCKET_TIMEOUT` - Timeout for operations in seconds (default: 30)
 - **Memory**: `KLAWED_MEMORY_PATH` for custom memory file location (default: `.klawed/memory.mv2`)
 - **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes, requires memvid)
   - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of MAX_MESSAGES (default: 60)
