@@ -474,9 +474,21 @@ static void print_human_readable_tool_output(const char *tool_name, const char *
             }
         } else if (strcmp(tool_name, "Grep") == 0) {
             cJSON *match_count = cJSON_GetObjectItem(tool_result, "match_count");
+            cJSON *total_matches = cJSON_GetObjectItem(tool_result, "total_matches");
             cJSON *matches = cJSON_GetObjectItem(tool_result, "matches");
 
-            if (match_count && cJSON_IsNumber(match_count)) {
+            if (match_count && cJSON_IsNumber(match_count) && 
+                total_matches && cJSON_IsNumber(total_matches)) {
+                int shown = match_count->valueint;
+                int total = total_matches->valueint;
+                
+                if (shown < total) {
+                    printf("  Found %d/%d matches (showing first %d)\n", shown, total, shown);
+                } else {
+                    printf("  Found %d match%s\n", total, total == 1 ? "" : "es");
+                }
+            } else if (match_count && cJSON_IsNumber(match_count)) {
+                // Fallback for older format without total_matches
                 printf("  Found %d match%s\n", match_count->valueint,
                        match_count->valueint == 1 ? "" : "es");
             }
@@ -3425,6 +3437,7 @@ static int command_exists(const char *cmd) {
 static cJSON* tool_grep(cJSON *params, ConversationState *state) {
     const cJSON *pattern_json = cJSON_GetObjectItem(params, "pattern");
     const cJSON *path_json = cJSON_GetObjectItem(params, "path");
+    const cJSON *max_results_json = cJSON_GetObjectItem(params, "max_results");
 
     if (!pattern_json || !cJSON_IsString(pattern_json)) {
         cJSON *error = cJSON_CreateObject();
@@ -3436,19 +3449,40 @@ static cJSON* tool_grep(cJSON *params, ConversationState *state) {
     const char *path = path_json && cJSON_IsString(path_json) ?
                        path_json->valuestring : ".";
 
-    // Get max results from environment or use default
+    // Get max results: parameter > environment > default
     int max_results = 100;  // Default limit
-    const char *max_env = getenv("KLAWED_GREP_MAX_RESULTS");
-    if (max_env) {
-        int max_val = atoi(max_env);
-        if (max_val > 0) {
-            max_results = max_val;
+    int warn_large_request = 0;
+    
+    // First check if AI provided a value
+    if (max_results_json && cJSON_IsNumber(max_results_json)) {
+        int requested = max_results_json->valueint;
+        if (requested > 0) {
+            max_results = requested;
+            if (requested > 300) {
+                warn_large_request = 1;
+            }
         }
+    } else {
+        // Fall back to environment variable
+        const char *max_env = getenv("KLAWED_GREP_MAX_RESULTS");
+        if (max_env) {
+            int max_val = atoi(max_env);
+            if (max_val > 0) {
+                max_results = max_val;
+            }
+        }
+    }
+    
+    // Print warning for large requests
+    if (warn_large_request) {
+        printf("\n⚠️  Warning: Grep requested %d matches (>300). This may produce a lot of output.\n\n", max_results);
+        fflush(stdout);
     }
 
     cJSON *result = cJSON_CreateObject();
     cJSON *matches = cJSON_CreateArray();
     int match_count = 0;
+    int total_matches = 0;
     int truncated = 0;
 
     // Determine which grep tool to use (prefer rg > ag > grep)
@@ -3558,6 +3592,64 @@ static cJSON* tool_grep(cJSON *params, ConversationState *state) {
             "--exclude='.DS_Store' ";
     }
 
+    // First pass: count total matches across all directories
+    char count_command[BUFFER_SIZE * 2];
+    
+    if (strcmp(grep_tool, "rg") == 0) {
+        snprintf(count_command, sizeof(count_command),
+                 "cd %s && rg -n %s '%s' %s 2>/dev/null | wc -l || echo 0",
+                 state->working_dir, exclusions, pattern, path);
+    } else if (strcmp(grep_tool, "ag") == 0) {
+        snprintf(count_command, sizeof(count_command),
+                 "cd %s && ag -n %s '%s' %s 2>/dev/null | wc -l || echo 0",
+                 state->working_dir, exclusions, pattern, path);
+    } else {
+        snprintf(count_command, sizeof(count_command),
+                 "cd %s && grep -r -n %s '%s' %s 2>/dev/null | wc -l || echo 0",
+                 state->working_dir, exclusions, pattern, path);
+    }
+
+    FILE *count_pipe = popen(count_command, "r");
+    if (count_pipe) {
+        char count_buffer[32];
+        if (fgets(count_buffer, sizeof(count_buffer), count_pipe)) {
+            total_matches += atoi(count_buffer);
+        }
+        pclose(count_pipe);
+    }
+
+    // Count matches in additional working directories
+    for (int dir_idx = 0; dir_idx < state->additional_dirs_count; dir_idx++) {
+        if (strcmp(grep_tool, "rg") == 0) {
+            snprintf(count_command, sizeof(count_command),
+                     "cd %s && rg -n %s '%s' %s 2>/dev/null | wc -l || echo 0",
+                     state->additional_dirs[dir_idx], exclusions, pattern, path);
+        } else if (strcmp(grep_tool, "ag") == 0) {
+            snprintf(count_command, sizeof(count_command),
+                     "cd %s && ag -n %s '%s' %s 2>/dev/null | wc -l || echo 0",
+                     state->additional_dirs[dir_idx], exclusions, pattern, path);
+        } else {
+            snprintf(count_command, sizeof(count_command),
+                     "cd %s && grep -r -n %s '%s' %s 2>/dev/null | wc -l || echo 0",
+                     state->additional_dirs[dir_idx], exclusions, pattern, path);
+        }
+
+        count_pipe = popen(count_command, "r");
+        if (count_pipe) {
+            char count_buffer[32];
+            if (fgets(count_buffer, sizeof(count_buffer), count_pipe)) {
+                total_matches += atoi(count_buffer);
+            }
+            pclose(count_pipe);
+        }
+    }
+
+    // Set truncation flag if total exceeds limit
+    if (total_matches > max_results) {
+        truncated = 1;
+    }
+
+    // Second pass: collect matches up to the limit
     // Search in main working directory
     char command[BUFFER_SIZE * 2];
     if (strcmp(grep_tool, "rg") == 0) {
@@ -3640,12 +3732,13 @@ static cJSON* tool_grep(cJSON *params, ConversationState *state) {
     if (truncated) {
         char warning[256];
         snprintf(warning, sizeof(warning),
-                "Results truncated at %d matches. Use KLAWED_GREP_MAX_RESULTS to adjust limit, or refine your search pattern.",
-                max_results);
+                "Results truncated: showing %d/%d matches. Use KLAWED_GREP_MAX_RESULTS to adjust limit, or refine your search pattern.",
+                match_count, total_matches);
         cJSON_AddStringToObject(result, "warning", warning);
     }
 
     cJSON_AddNumberToObject(result, "match_count", match_count);
+    cJSON_AddNumberToObject(result, "total_matches", total_matches);
 
     return result;
 }
@@ -4989,10 +5082,11 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON *grep_func = cJSON_CreateObject();
     cJSON_AddStringToObject(grep_func, "name", "Grep");
     cJSON_AddStringToObject(grep_func, "description",
-        "Searches for patterns in files. Results limited to 100 matches by default "
-        "(configurable via KLAWED_GREP_MAX_RESULTS). Automatically excludes common "
-        "build directories, dependencies, and binary files (.git, node_modules, build/, "
-        "*.min.js, etc). Returns 'match_count' and 'warning' if truncated.");
+        "Searches for patterns in files. Results limited to 100 matches by default. "
+        "Use max_results parameter to request more (warning printed if >300). "
+        "Automatically excludes common build directories, dependencies, and binary files "
+        "(.git, node_modules, build/, *.min.js, etc). Returns 'match_count', 'total_matches', "
+        "and 'warning' if truncated.");
     cJSON *grep_params = cJSON_CreateObject();
     cJSON_AddStringToObject(grep_params, "type", "object");
     cJSON *grep_props = cJSON_CreateObject();
@@ -5004,6 +5098,10 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON_AddStringToObject(grep_path, "type", "string");
     cJSON_AddStringToObject(grep_path, "description", "Path to search in (default: .)");
     cJSON_AddItemToObject(grep_props, "path", grep_path);
+    cJSON *grep_max_results = cJSON_CreateObject();
+    cJSON_AddStringToObject(grep_max_results, "type", "integer");
+    cJSON_AddStringToObject(grep_max_results, "description", "Optional: Maximum number of matches to return (default: 100). Values >300 will print a warning.");
+    cJSON_AddItemToObject(grep_props, "max_results", grep_max_results);
     cJSON_AddItemToObject(grep_params, "properties", grep_props);
     cJSON *grep_req = cJSON_CreateArray();
     cJSON_AddItemToArray(grep_req, cJSON_CreateString("pattern"));
