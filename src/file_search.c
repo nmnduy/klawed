@@ -815,7 +815,7 @@ void file_search_render(FileSearchState *state) {
     }
 
     // Footer with hints (with status color)
-    const char *hints = " ESC:cancel  Enter:select  j/k:navigate  Alt+B/F:word  Alt+D/⌫:del";
+    const char *hints = " ESC:cancel  Enter:select  ↑↓:navigate  Alt+B/F:word  Alt+D/⌫:del";
     int hints_x = (width - (int)strlen(hints)) / 2;
     if (hints_x < 1) hints_x = 1;
     if (use_colors) {
@@ -1055,13 +1055,11 @@ int file_search_process_key(FileSearchState *state, int ch) {
 
         case KEY_UP:
         case 16:  // Ctrl+P
-        case 'k':  // vim-style up
             file_search_select_prev(state);
             break;
 
         case KEY_DOWN:
         case 14:  // Ctrl+N
-        case 'j':  // vim-style down
             file_search_select_next(state);
             break;
 

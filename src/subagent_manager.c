@@ -61,7 +61,7 @@ void subagent_manager_free(SubagentManager *manager) {
             free(manager->processes[i]->log_file);
             free(manager->processes[i]->prompt);
             free(manager->processes[i]->last_log_tail);
-            
+
             // Free environment variables
             if (manager->processes[i]->env_vars) {
                 for (int j = 0; j < manager->processes[i]->env_var_count; j++) {
@@ -69,7 +69,7 @@ void subagent_manager_free(SubagentManager *manager) {
                 }
                 free(manager->processes[i]->env_vars);
             }
-            
+
             free(manager->processes[i]);
         }
     }
@@ -145,7 +145,7 @@ int subagent_manager_add(SubagentManager *manager, pid_t pid, const char *log_fi
             pthread_mutex_unlock(&manager->mutex);
             return -1;
         }
-        
+
         proc->env_var_count = env_var_count;
         for (int i = 0; i < env_var_count; i++) {
             if (env_vars[i]) {
@@ -321,7 +321,7 @@ int subagent_manager_cleanup_completed(SubagentManager *manager, int keep_recent
                 free(proc->log_file);
                 free(proc->prompt);
                 free(proc->last_log_tail);
-                
+
                 // Free environment variables
                 if (proc->env_vars) {
                     for (int k = 0; k < proc->env_var_count; k++) {
@@ -329,7 +329,7 @@ int subagent_manager_cleanup_completed(SubagentManager *manager, int keep_recent
                     }
                     free(proc->env_vars);
                 }
-                
+
                 free(proc);
 
                 // Shift remaining processes down
@@ -394,7 +394,7 @@ int subagent_manager_get_process(SubagentManager *manager, int index, SubagentPr
     out_process->exit_code = proc->exit_code;
     out_process->last_log_tail = proc->last_log_tail ? strdup(proc->last_log_tail) : NULL;
     out_process->tail_lines = proc->tail_lines;
-    
+
     // Copy environment variables
     out_process->env_var_count = proc->env_var_count;
     if (proc->env_vars && proc->env_var_count > 0) {

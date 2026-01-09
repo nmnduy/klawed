@@ -59,7 +59,7 @@ void subagent_manager_free(SubagentManager *manager);
 // env_var_count: Number of environment variables
 // Returns: 0 on success, -1 on failure
 int subagent_manager_add(SubagentManager *manager, pid_t pid, const char *log_file,
-                         const char *prompt, int timeout_seconds, 
+                         const char *prompt, int timeout_seconds,
                          const char **env_vars, int env_var_count);
 
 // Update status of all tracked subagents (check if still running, read log tails)

@@ -2022,7 +2022,7 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     const cJSON *env_vars_json = cJSON_GetObjectItem(params, "env_vars");
     char **env_var_array = NULL;
     int env_var_count = 0;
-    
+
     if (env_vars_json && cJSON_IsObject(env_vars_json)) {
         // Count the number of environment variables
         env_var_count = cJSON_GetArraySize(env_vars_json);
@@ -2034,7 +2034,7 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
                 cJSON_AddStringToObject(error, "error", "Out of memory allocating env_vars");
                 return error;
             }
-            
+
             // Convert JSON object to array of "KEY=VALUE" strings
             const cJSON *env_item = NULL;
             int idx = 0;
@@ -2044,7 +2044,7 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
                     size_t key_len = strlen(env_item->string);
                     size_t value_len = strlen(env_item->valuestring);
                     size_t total_len = key_len + 1 + value_len + 1; // +1 for '=', +1 for null terminator
-                    
+
                     env_var_array[idx] = malloc(total_len);
                     if (!env_var_array[idx]) {
                         // Cleanup on failure
@@ -2056,7 +2056,7 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
                         cJSON_AddStringToObject(error, "error", "Out of memory creating env_var string");
                         return error;
                     }
-                    
+
                     snprintf(env_var_array[idx], total_len, "%s=%s", env_item->string, env_item->valuestring);
                     idx++;
                 }
@@ -2233,9 +2233,9 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
                         *equals = '\0'; // Temporarily null-terminate the key
                         const char *key = env_var_array[i];
                         const char *value = equals + 1;
-                        
+
                         if (setenv(key, value, 1) != 0) {
-                            fprintf(stderr, "Warning: Failed to set environment variable %s: %s\n", 
+                            fprintf(stderr, "Warning: Failed to set environment variable %s: %s\n",
                                     key, strerror(errno));
                         }
                         *equals = '='; // Restore the string
@@ -2256,7 +2256,7 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
 
     // Register the subagent with the manager for real-time monitoring
     if (state->subagent_manager) {
-        if (subagent_manager_add(state->subagent_manager, pid, log_file, prompt, timeout_seconds, 
+        if (subagent_manager_add(state->subagent_manager, pid, log_file, prompt, timeout_seconds,
                                  (const char**)env_var_array, env_var_count) == 0) {
             LOG_DEBUG("Registered subagent PID %d with manager", pid);
         } else {
@@ -2413,33 +2413,33 @@ STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *sta
                 if (current_line >= start_line) {
                     size_t line_len = strlen(line);
                     int truncated = 0;
-                    
+
                     // Truncate line if it exceeds character limit
                     if ((int)line_len > max_line_chars) {
                         // Find a good place to truncate (preserve newline if present)
                         int truncate_pos = max_line_chars - 15;  // Leave space for "...[truncated]"
                         if (truncate_pos < 0) truncate_pos = 0;
-                        
+
                         // Try to avoid breaking in the middle of a word
-                        while (truncate_pos > 0 && truncate_pos < (int)line_len && 
-                               !isspace((unsigned char)line[truncate_pos]) && 
+                        while (truncate_pos > 0 && truncate_pos < (int)line_len &&
+                               !isspace((unsigned char)line[truncate_pos]) &&
                                truncate_pos > max_line_chars - 50) {
                             truncate_pos--;
                         }
-                        
+
                         line[truncate_pos] = '\0';
                         strlcat(line, "...[truncated]", sizeof(line));
-                        
+
                         // Add back newline if original line had one
                         if (line_len > 0 && (line[line_len-1] == '\n' || line[line_len-1] == '\r')) {
                             strlcat(line, "\n", sizeof(line));
                         }
-                        
+
                         line_len = strlen(line);
                         truncated = 1;
                         lines_truncated++;
                     }
-                    
+
                     char *new_output = realloc(tail_output, tail_size + line_len + 1);
                     if (!new_output) {
                         free(tail_output);
@@ -2461,10 +2461,10 @@ STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *sta
             // Add truncation warning if any lines were truncated
             if (lines_truncated > 0) {
                 char truncation_msg[256];
-                snprintf(truncation_msg, sizeof(truncation_msg), 
+                snprintf(truncation_msg, sizeof(truncation_msg),
                          "\n[Note: %d lines were truncated to %d characters each to preserve context]\n",
                          lines_truncated, max_line_chars);
-                
+
                 char *new_output = realloc(tail_output, tail_size + strlen(truncation_msg) + 1);
                 if (new_output) {
                     tail_output = new_output;

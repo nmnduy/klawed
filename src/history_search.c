@@ -600,13 +600,11 @@ int history_search_process_key(HistorySearchState *state, int ch) {
             return 1;
 
         case KEY_UP:
-        case 'k':
         case 16:  // Ctrl+P - previous (like readline)
             history_search_select_prev(state);
             break;
 
         case KEY_DOWN:
-        case 'j':
         case 14:  // Ctrl+N - next (like readline)
             history_search_select_next(state);
             break;
@@ -616,7 +614,6 @@ int history_search_process_key(HistorySearchState *state, int ch) {
             break;
 
         case KEY_NPAGE:
-        case ' ':
         case 4:   // Ctrl+D - page down (like file search)
             history_search_page_down(state);
             break;
