@@ -427,70 +427,102 @@ class FileExplorer {
 
     renderFileTree(items) {
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-        this.fileExplorerTree.innerHTML = '';
 
         if (!items || items.length === 0) {
             this.showEmpty();
             return;
         }
 
-        items.forEach(item => {
+        // Get existing items to minimize DOM changes
+        const existingElements = Array.from(this.fileExplorerTree.children);
+        const existingPaths = new Set(existingElements.map(el => el.dataset.path));
+        const newPaths = new Set(items.map(item => item.path));
+
+        // Remove items that no longer exist
+        existingElements.forEach(el => {
+            if (!newPaths.has(el.dataset.path)) {
+                el.remove();
+            }
+        });
+
+        // Update or add items
+        items.forEach((item, index) => {
             const isDirectory = item.type === 'directory';
             const icon = this.fileIcons[item.icon] || this.fileIcons.file;
             const size = isDirectory ? '' : `${this.formatFileSize(item.size)}`;
             const date = this.formatDate(item.modified);
 
-            const itemElement = document.createElement('div');
-            itemElement.className = 'file-item group px-3 py-2 hover:bg-orange-50/60 transition cursor-pointer';
-            itemElement.dataset.path = item.path;
-            itemElement.dataset.type = item.type;
-            itemElement.dataset.name = item.name;
+            // Check if this item already exists in the DOM
+            let itemElement = existingElements.find(el => el.dataset.path === item.path);
+            const isNewElement = !itemElement;
 
-            itemElement.innerHTML = `
-                <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_112px] items-center gap-3">
-                    <div class="flex items-center gap-3 min-w-0">
-                        <div class="flex-shrink-0">${icon}</div>
-                        <div class="min-w-0">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <span class="truncate text-body-s ${isDirectory ? 'text-slate-900 font-semibold' : 'text-slate-700'}" title="${item.name}">${item.name}</span>
-                                ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">Folder</span>' : ''}
-                            </div>
-                            <div class="flex items-center gap-3 text-caption-s text-slate-500 truncate lg:hidden">
-                                <span class="tabular-nums">${size || ''}</span>
-                                <span class="whitespace-nowrap">${date}</span>
+            if (isNewElement) {
+                // Create new element
+                itemElement = document.createElement('div');
+                itemElement.className = 'file-item group px-3 py-2 hover:bg-orange-50/60 transition cursor-pointer';
+                itemElement.dataset.path = item.path;
+                itemElement.dataset.type = item.type;
+                itemElement.dataset.name = item.name;
+
+                itemElement.innerHTML = `
+                    <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_112px] items-center gap-3">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="flex-shrink-0">${icon}</div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="truncate text-body-s ${isDirectory ? 'text-slate-900 font-semibold' : 'text-slate-700'}" title="${item.name}">${item.name}</span>
+                                    ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">Folder</span>' : ''}
+                                </div>
+                                <div class="flex items-center gap-3 text-caption-s text-slate-500 truncate lg:hidden">
+                                    <span class="tabular-nums">${size || ''}</span>
+                                    <span class="whitespace-nowrap">${date}</span>
+                                </div>
                             </div>
                         </div>
+                        <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-slate-500 text-right tabular-nums">
+                            <span>${size}</span>
+                            <button type="button" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-orange-700 hover:text-orange-800 hover:bg-orange-50 rounded transition open-file-btn ${isDirectory ? 'hidden' : ''}" title="${isMac ? 'Open in Finder' : 'Open in Explorer'}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17H7a2 2 0 01-2-2V7a2 2 0 012-2h6" />
+                                </svg>
+                                <span class="hidden xl:inline">Open</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-slate-500 text-right tabular-nums">
-                        <span>${size}</span>
-                        <button type="button" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-orange-700 hover:text-orange-800 hover:bg-orange-50 rounded transition open-file-btn ${isDirectory ? 'hidden' : ''}" title="${isMac ? 'Open in Finder' : 'Open in Explorer'}">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16" />
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17H7a2 2 0 01-2-2V7a2 2 0 012-2h6" />
-                            </svg>
-                            <span class="hidden xl:inline">Open</span>
-                        </button>
-                    </div>
-                </div>
-            `;
+                `;
 
-            itemElement.addEventListener('click', () => {
-                if (isDirectory) {
-                    this.loadDirectory(item.path);
-                } else {
-                    this.previewFile(item.path, item.name, item.size);
-                }
-            });
-
-            const openButton = itemElement.querySelector('.open-file-btn');
-            if (openButton) {
-                openButton.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.openFile(item.path, item.name);
+                // Add event listeners for new elements
+                itemElement.addEventListener('click', () => {
+                    if (isDirectory) {
+                        this.loadDirectory(item.path);
+                    } else {
+                        this.previewFile(item.path, item.name, item.size);
+                    }
                 });
+
+                const openButton = itemElement.querySelector('.open-file-btn');
+                if (openButton) {
+                    openButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.openFile(item.path, item.name);
+                    });
+                }
+            } else {
+                // Update existing element's data attributes (in case they changed)
+                itemElement.dataset.type = item.type;
+                itemElement.dataset.name = item.name;
             }
 
-            this.fileExplorerTree.appendChild(itemElement);
+            // Ensure proper order (append to end, or insert at correct position)
+            const currentPosition = Array.from(this.fileExplorerTree.children).indexOf(itemElement);
+            if (currentPosition !== index) {
+                if (index >= this.fileExplorerTree.children.length) {
+                    this.fileExplorerTree.appendChild(itemElement);
+                } else {
+                    this.fileExplorerTree.insertBefore(itemElement, this.fileExplorerTree.children[index]);
+                }
+            }
         });
 
         this.showFileTree();
@@ -533,13 +565,16 @@ class FileExplorer {
     }
 
     // Load directory
-    async loadDirectory(path = '/') {
-        console.log('[file-explorer] loadDirectory called, path:', path, 'sessionId:', this.sessionId);
+    async loadDirectory(path = '/', silent = false) {
+        console.log('[file-explorer] loadDirectory called, path:', path, 'sessionId:', this.sessionId, 'silent:', silent);
         this.currentPath = path;
         this.fileExplorerPath.textContent = path || '/';
         this.renderBreadcrumbs(path);
 
-        this.showLoading();
+        // Only show loading spinner if not a silent background refresh
+        if (!silent) {
+            this.showLoading();
+        }
 
         const data = await this.fetchDirectory(path);
         console.log('[file-explorer] fetchDirectory returned:', data);
@@ -718,7 +753,8 @@ class FileExplorer {
     startAutoRefresh() {
         this.stopAutoRefresh(); // Clear any existing interval
         this.autoRefreshInterval = setInterval(() => {
-            this.loadDirectory(this.currentPath);
+            // Use silent mode for background refreshes to avoid showing spinner
+            this.loadDirectory(this.currentPath, true);
         }, 30000); // Refresh every 30 seconds
     }
 
