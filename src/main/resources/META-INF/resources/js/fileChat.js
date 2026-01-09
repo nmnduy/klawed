@@ -221,7 +221,7 @@ export function init(rootEl) {
             messageDiv.className = 'flex ' + (isUser ? 'justify-end' : 'justify-start') + ' animate-fade-in';
 
             const bubble = document.createElement('div');
-            bubble.className = 'w-full max-w-[90%] sm:max-w-2xl px-5 sm:px-6 py-4 rounded-2xl border-2 ' + (isUser ? 
+            bubble.className = 'inline-block max-w-[85%] sm:max-w-2xl px-5 sm:px-6 py-4 rounded-2xl border-2 ' + (isUser ? 
                 'bg-gradient-to-br from-orange-50 to-orange-100/80 dark:from-orange-950/40 dark:to-orange-900/30 border-orange-200 dark:border-orange-800/60 shadow-sm shadow-orange-200/50 dark:shadow-orange-900/20' : 
                 'bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-800/40 dark:to-slate-900/60 border-slate-200 dark:border-slate-700 shadow-sm shadow-slate-200/50 dark:shadow-slate-900/30');
 
