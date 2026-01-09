@@ -41,9 +41,6 @@ public class SessionManager {
     // Map user ID to set of session IDs (allowing multiple sessions per user)
     private final ConcurrentHashMap<String, Set<String>> userToSessions = new ConcurrentHashMap<>();
 
-    // Base temporary directory for all sessions (configurable via property)
-    private Path baseTempDir;
-
     // Persistent root (configurable via property)
     private Path persistRoot;
 
@@ -675,8 +672,8 @@ public class SessionManager {
     }
     
     /**
-     * Clean up a session directory immediately (synchronous).
-     * Prefer scheduling via SessionCleanupJobService for normal flows.
+     * Clean up a session's tmp folder immediately (synchronous).
+     * The workspace itself persists - only temporary files are removed.
      */
     public void cleanupSession(String sessionId) {
         Path workspace = sessionDirectories.remove(sessionId);
@@ -705,44 +702,43 @@ public class SessionManager {
         userToSessions.forEach((user, sessions) -> sessions.remove(sessionId));
         LOGGER.info("[SESSION:" + sessionId + "] Released session tracking (directory not deleted)");
     }
-
+    
     /**
-     * Resolve the session directory path even if it is no longer tracked in memory.
+     * Get the workspace path for a session if it's currently tracked.
+     * Returns null if the session is not currently tracked.
+     * This is useful for cleanup operations that don't have the userId available.
      */
-    public Path resolveSessionPath(String sessionId) {
-        Path tracked = sessionDirectories.get(sessionId);
-        if (tracked != null) {
-            return tracked;
-        }
-        Path base = baseTempDir != null ? baseTempDir : resolveBaseTempDir();
-        return base.resolve(sessionId).normalize();
+    public Path getWorkspaceForSession(String sessionId) {
+        return sessionDirectories.get(sessionId);
     }
 
     /**
-     * Delete a specific session directory on disk (no in-memory tracking changes).
+     * Resolve the session directory path if it is tracked in memory.
+     * Returns null if the session is not currently tracked.
+     * @deprecated Use getWorkspaceForSession instead
      */
-    public void deleteSessionDirectory(Path sessionDir) throws IOException {
-        if (sessionDir == null) {
-            LOGGER.warning("deleteSessionDirectory called with null path");
+    @Deprecated
+    public Path resolveSessionPath(String sessionId) {
+        return sessionDirectories.get(sessionId);
+    }
+
+    /**
+     * Delete a specific directory on disk (no in-memory tracking changes).
+     */
+    public void deleteDirectory(Path dir) throws IOException {
+        if (dir == null) {
+            LOGGER.warning("deleteDirectory called with null path");
             return;
         }
-        if (!Files.exists(sessionDir)) {
-            LOGGER.info("Session directory already absent: " + sessionDir);
+        if (!Files.exists(dir)) {
+            LOGGER.info("Directory already absent: " + dir);
             return;
         }
-        deleteDirectory(sessionDir);
-        LOGGER.info("Deleted session directory: " + sessionDir);
+        deleteDirectoryRecursive(dir);
+        LOGGER.info("Deleted directory: " + dir);
     }
 
     // ---------- Persistent storage helpers ----------
-
-    private Path resolveBaseTempDir() {
-        String configured = System.getProperty("filesurf.sessions.base-dir",
-                System.getenv().getOrDefault("SESSION_BASE_DIR", "/tmp/is-sessions"));
-        Path resolved = Path.of(configured).toAbsolutePath().normalize();
-        LOGGER.info("Base temp dir resolved to: " + resolved + " (configured='" + configured + "')");
-        return resolved;
-    }
 
     private Path resolvePersistRoot() {
         if (persistRoot != null && Files.exists(persistRoot)) {
@@ -763,47 +759,6 @@ public class SessionManager {
     private String sanitizeUserId(String userId) {
         // Remove path separators and restrict to safe chars
         return userId.replaceAll("[^a-zA-Z0-9._-]", "_");
-    }
-
-    private void hydratePersistentFolders(String userId, Path sessionDir) throws IOException {
-        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Starting hydration for user: " + userId);
-        
-        Path userRoot = userRoot(userId);
-        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] User root path: " + userRoot);
-        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Base temp dir: " + resolveBaseTempDir());
-        
-        Path sessionSkills = sessionDir.resolve("SKILLS").normalize();
-        Path sessionData = sessionDir.resolve("DATA").normalize();
-
-        ensureUnderSession(sessionDir, sessionSkills, sessionData);
-
-        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Checking persistent folders existence:");
-        Path persistSkills = userRoot.resolve("SKILLS");
-        Path persistData = userRoot.resolve("DATA");
-        
-        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "]   - PERSIST SKILLS: " + persistSkills + " exists: " + Files.exists(persistSkills));
-        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "]   - PERSIST DATA: " + persistData + " exists: " + Files.exists(persistData));
-
-        // Clean session copies before hydration to avoid stale artifacts
-        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Cleaning existing session folders");
-        deleteDirectoryIfExists(sessionSkills);
-        deleteDirectoryIfExists(sessionData);
-
-        Files.createDirectories(sessionSkills);
-        Files.createDirectories(sessionData);
-
-        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Copying from persistent to session folders:");
-        copyIfExists(persistSkills, sessionSkills, false);
-        copyIfExists(persistData, sessionData, false);
-        
-        // If SKILLS folder is empty after hydration (no persistent SKILLS), copy default SKILLS from resources
-        if (Files.exists(sessionSkills) && isEmptyDirectory(sessionSkills)) {
-            LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] SKILLS folder is empty, copying default SKILLS from resources");
-            copySkillsToSession(sessionDir);
-        }
-        
-        LOGGER.info("[SESSION:" + sessionDir.getFileName() + "] Hydration completed");
-        logDirectoryStats("Hydrated SESSION DATA", sessionData);
     }
 
     public void persistSession(String sessionId, String userId) throws IOException {
@@ -901,7 +856,7 @@ public class SessionManager {
 
     private void deleteDirectoryIfExists(Path path) throws IOException {
         if (path != null && Files.exists(path)) {
-            deleteDirectory(path);
+            deleteDirectoryRecursive(path);
         }
     }
 
@@ -910,7 +865,7 @@ public class SessionManager {
     /**
      * Recursively delete a directory
      */
-    private void deleteDirectory(Path directory) throws IOException {
+    private void deleteDirectoryRecursive(Path directory) throws IOException {
         if (directory == null || !Files.exists(directory)) {
             return;
         }

@@ -790,22 +790,34 @@ public class KlawedAgentManager {
     
     /**
      * Delete PID file for a session (overload without sessionDir)
+     * Only works if agent is still tracked in memory.
      */
     private void deletePidFile(String sessionId) {
-        try {
-            Path sessionDir = Path.of("/tmp/is-sessions", sessionId);
-            deletePidFile(sessionId, sessionDir);
-        } catch (Exception e) {
-            LOGGER.warning("[SESSION:" + sessionId + "] Failed to delete PID file: " + e.getMessage());
+        KlawedAgentInstance agent = agents.get(sessionId);
+        if (agent != null && agent.sessionDir != null) {
+            deletePidFile(sessionId, agent.sessionDir);
+        } else {
+            LOGGER.warning("[SESSION:" + sessionId + "] Cannot delete PID file: agent not tracked in memory");
         }
     }
     
     /**
-     * Read PID file from session directory
+     * Read PID file from session directory.
+     * Only works for agents tracked in memory or in container mode.
+     * Returns null if agent is not tracked or running in container.
      */
     public AgentPidInfo readPidFile(String sessionId) throws IOException {
-        Path sessionDir = Path.of("/tmp/is-sessions", sessionId);
-        Path pidFile = sessionDir.resolve("klawed.pid");
+        KlawedAgentInstance agent = agents.get(sessionId);
+        if (agent == null || agent.sessionDir == null) {
+            return null;
+        }
+        
+        // In container mode, there's no PID file
+        if (agent.isRunningInContainer()) {
+            return null;
+        }
+        
+        Path pidFile = agent.sessionDir.resolve("klawed.pid");
         
         if (!Files.exists(pidFile)) {
             return null;
@@ -833,9 +845,17 @@ public class KlawedAgentManager {
     }
     
     /**
-     * Check if agent process is still alive by PID
+     * Check if agent process is still alive.
+     * For container mode, checks if container is running.
+     * For direct mode, checks if process PID is alive.
      */
     public boolean isAgentAlive(String sessionId) throws IOException {
+        KlawedAgentInstance agent = agents.get(sessionId);
+        if (agent != null) {
+            return agent.isRunning();
+        }
+        
+        // Agent not in memory - for direct mode, check PID file
         AgentPidInfo pidInfo = readPidFile(sessionId);
         if (pidInfo == null) {
             return false;
@@ -882,38 +902,27 @@ public class KlawedAgentManager {
     }
     
     /**
-     * Clean up orphaned agents (those with PID files but no active process)
+     * Clean up orphaned agents that are tracked in memory but not running.
+     * In container mode, this stops any orphaned containers.
+     * In direct mode, this deletes PID files for dead processes.
      */
-    public void cleanupOrphanedAgents() throws IOException {
-        Path baseDir = Path.of("/tmp/is-sessions");
-        if (!Files.exists(baseDir)) {
-            return;
+    public void cleanupOrphanedAgents() {
+        // Check all tracked agents
+        for (String sessionId : new java.util.ArrayList<>(agents.keySet())) {
+            try {
+                KlawedAgentInstance agent = agents.get(sessionId);
+                if (agent != null && !agent.isRunning()) {
+                    LOGGER.info("[SESSION:" + sessionId + "] Found orphaned agent, cleaning up");
+                    stopAgentForSession(sessionId);
+                }
+            } catch (Exception e) {
+                LOGGER.warning("[SESSION:" + sessionId + "] Error checking/cleaning orphaned agent: " + e.getMessage());
+            }
         }
         
-        try (java.util.stream.Stream<Path> dirs = Files.list(baseDir)) {
-            dirs.filter(Files::isDirectory)
-                .forEach(dir -> {
-                    String sessionId = dir.getFileName().toString();
-                    try {
-                        AgentPidInfo pidInfo = readPidFile(sessionId);
-                        if (pidInfo != null && !isAgentAlive(sessionId)) {
-                            LOGGER.info("[SESSION:" + sessionId + "] Found orphaned agent PID: " + 
-                                       pidInfo.getPid() + ", cleaning up");
-                            deletePidFile(sessionId);
-                            
-                            // Also clean up session directory if it exists
-                            try {
-                                SessionManager sessionManager = new SessionManager();
-                                sessionManager.cleanupSession(sessionId);
-                            } catch (Exception e) {
-                                LOGGER.warning("[SESSION:" + sessionId + "] Failed to cleanup session directory: " + 
-                                              e.getMessage());
-                            }
-                        }
-                    } catch (IOException e) {
-                        LOGGER.warning("[SESSION:" + sessionId + "] Error checking orphaned agent: " + e.getMessage());
-                    }
-                });
+        // In container mode, also check for orphaned containers via PodmanSandboxService
+        if (podmanSandboxService.isEnabled()) {
+            podmanSandboxService.cleanupOrphanedContainers();
         }
     }
     

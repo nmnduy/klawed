@@ -8,7 +8,6 @@ import com.filesurf.model.ChatSessionRecord;
 import com.filesurf.model.KlawedSocketMessage;
 import com.filesurf.service.KlawedAgentManager;
 import com.filesurf.service.SessionManager;
-import com.filesurf.service.SessionCleanupJobService;
 import com.filesurf.service.AgentShutdownJobService;
 import com.filesurf.service.FileChatService;
 import jakarta.inject.Inject;
@@ -41,9 +40,6 @@ public class FileChatHttpResource {
     
     @Inject
     SessionManager sessionManager;
-
-    @Inject
-    SessionCleanupJobService cleanupJobService;
     
     @Inject
     AgentShutdownJobService agentShutdownJobService;
@@ -100,10 +96,6 @@ public class FileChatHttpResource {
             ChatSessionRecord chatSession = fileChatService.createOrUpdateChatSession(sessionId, clientIdentity);
             LOGGER.info("[SESSION:" + sessionId + "] Chat session created/updated in database");
 
-            // Cancel any pending cleanup jobs for this session since it's being resumed
-            cleanupJobService.cancelCleanupJobs(sessionId);
-            LOGGER.info("[SESSION:" + sessionId + "] Cleanup jobs cancelled (if any)");
-            
             // Cancel any pending agent shutdown jobs for this session since it's reconnecting
             agentShutdownJobService.cancelShutdownJob(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Agent shutdown jobs cancelled (if any)");
@@ -394,10 +386,11 @@ public class FileChatHttpResource {
         }
 
         try {
-            // Schedule agent shutdown with grace period instead of immediate stop
+            // Schedule agent shutdown with grace period (30 seconds)
             // This allows user to reconnect and reuse the agent if it's just a temporary disconnect
+            // When the shutdown job executes, it will also clean up klawed artifacts
             agentShutdownJobService.enqueueShutdown(sessionId);
-            LOGGER.info("[SESSION:" + sessionId + "] Klawed agent shutdown scheduled (grace period: 5 minutes)");
+            LOGGER.info("[SESSION:" + sessionId + "] Klawed agent shutdown scheduled (grace period: 30 seconds)");
 
             // Persist session folders back to per-user storage
             if (userId != null && !userId.isBlank()) {
@@ -406,10 +399,9 @@ public class FileChatHttpResource {
                 LOGGER.info("[SESSION:" + sessionId + "] Session data persisted for user=" + userId);
             }
 
-            // Schedule cleanup instead of immediate delete to avoid race with persistence
-            cleanupJobService.enqueueCleanup(sessionId);
+            // Release session tracking (workspace stays, klawed artifacts cleaned by shutdown job)
             sessionManager.releaseSessionTracking(sessionId);
-            LOGGER.info("[SESSION:" + sessionId + "] Session cleanup enqueued");
+            LOGGER.info("[SESSION:" + sessionId + "] Session tracking released");
 
             // Remove session from session store
             SessionResource.removeSession(sessionId);
@@ -462,6 +454,9 @@ public class FileChatHttpResource {
         }
 
         try {
+            // Get workspace path before stopping agent
+            java.nio.file.Path workspace = sessionManager.getWorkspaceForSession(sessionId);
+            
             // Stop the dedicated klawed agent if it exists
             try {
                 agentManager.stopAgentForSession(sessionId);
@@ -470,18 +465,18 @@ public class FileChatHttpResource {
                 LOGGER.warning("[SESSION:" + sessionId + "] Failed to stop agent (may not exist): " + e.getMessage());
             }
             
+            // Clean up klawed artifacts from workspace (.klawed/, SQLite queue files)
+            if (workspace != null) {
+                cleanupKlawedArtifacts(sessionId, workspace);
+            }
+            
             // Persist session folders back to per-user storage
             LOGGER.info("[SESSION:" + sessionId + "] Conclude: Persisting session data for user=" + userId);
             sessionManager.persistSession(sessionId, userId);
             LOGGER.info("[SESSION:" + sessionId + "] Conclude: Session data persisted for user=" + userId);
             
-            // Clean up session directory immediately (not scheduled)
-            try {
-                sessionManager.cleanupSession(sessionId);
-                LOGGER.info("[SESSION:" + sessionId + "] Session directory cleaned up");
-            } catch (Exception e) {
-                LOGGER.warning("[SESSION:" + sessionId + "] Failed to cleanup session directory: " + e.getMessage());
-            }
+            // Release session tracking
+            sessionManager.releaseSessionTracking(sessionId);
             
             // Remove session from session store
             SessionResource.removeSession(sessionId);
@@ -493,7 +488,7 @@ public class FileChatHttpResource {
             
             return Response.ok()
                     .entity("{\"status\": \"concluded\", \"sessionId\": \"" + sessionId + 
-                            "\", \"message\": \"Session concluded. Persistent files saved and temporary directory cleaned up.\"}")
+                            "\", \"message\": \"Session concluded. Klawed artifacts cleaned up.\"}")
                     .build();
 
         } catch (Exception e) {
@@ -502,6 +497,59 @@ public class FileChatHttpResource {
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity("{\"error\": \"Failed to conclude session: " + e.getMessage() + "\"}")
                     .build();
+        }
+    }
+    
+    /**
+     * Clean up klawed artifacts from the user's workspace.
+     */
+    private void cleanupKlawedArtifacts(String sessionId, java.nio.file.Path workspace) {
+        LOGGER.info("[SESSION:" + sessionId + "] Cleaning up klawed artifacts from workspace: " + workspace);
+        
+        // Delete .klawed/ directory
+        java.nio.file.Path klawedDir = workspace.resolve(".klawed");
+        if (java.nio.file.Files.exists(klawedDir)) {
+            try {
+                deleteDirectory(klawedDir);
+                LOGGER.info("[SESSION:" + sessionId + "] Deleted .klawed/ directory");
+            } catch (java.io.IOException e) {
+                LOGGER.warning("[SESSION:" + sessionId + "] Failed to delete .klawed/ directory: " + e.getMessage());
+            }
+        }
+        
+        // Delete SQLite queue files
+        String dbFileName = "klawed_messages_" + sessionId + ".db";
+        String[] sqliteExtensions = {"", "-shm", "-wal"};
+        
+        for (String ext : sqliteExtensions) {
+            java.nio.file.Path dbFile = workspace.resolve(dbFileName + ext);
+            if (java.nio.file.Files.exists(dbFile)) {
+                try {
+                    java.nio.file.Files.delete(dbFile);
+                    LOGGER.info("[SESSION:" + sessionId + "] Deleted " + dbFile.getFileName());
+                } catch (java.io.IOException e) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Failed to delete " + dbFile.getFileName() + ": " + e.getMessage());
+                }
+            }
+        }
+    }
+    
+    /**
+     * Recursively delete a directory.
+     */
+    private void deleteDirectory(java.nio.file.Path dir) throws java.io.IOException {
+        if (!java.nio.file.Files.exists(dir)) {
+            return;
+        }
+        try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(dir)) {
+            walk.sorted((a, b) -> b.compareTo(a))
+                .forEach(path -> {
+                    try {
+                        java.nio.file.Files.delete(path);
+                    } catch (java.io.IOException e) {
+                        LOGGER.warning("Failed to delete: " + path + " - " + e.getMessage());
+                    }
+                });
         }
     }
     
