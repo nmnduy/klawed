@@ -162,7 +162,7 @@ static void ensure_tool_results(struct ConversationState *state) {
 typedef struct SubagentManager { int dummy; } SubagentManager;
 static int subagent_manager_init(SubagentManager *manager) { (void)manager; return 0; }
 static void subagent_manager_free(SubagentManager *manager) { (void)manager; }
-static int subagent_manager_add(SubagentManager *manager, pid_t pid, const char *log_file, const char *prompt, int timeout_seconds) { (void)manager; (void)pid; (void)log_file; (void)prompt; (void)timeout_seconds; return -1; }
+static int subagent_manager_add(SubagentManager *manager, pid_t pid, const char *log_file, const char *prompt, int timeout_seconds, const char **env_vars, int env_var_count) { (void)manager; (void)pid; (void)log_file; (void)prompt; (void)timeout_seconds; (void)env_vars; (void)env_var_count; return -1; }
 static int subagent_manager_terminate_all(SubagentManager *manager, int grace_period_ms) { (void)manager; (void)grace_period_ms; return 0; }
 static int subagent_manager_get_running_count(SubagentManager *manager) { (void)manager; return 0; }
 #else
@@ -2018,8 +2018,62 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         }
     }
 
+    // Parse optional env_vars parameter (JSON object of key-value pairs)
+    const cJSON *env_vars_json = cJSON_GetObjectItem(params, "env_vars");
+    char **env_var_array = NULL;
+    int env_var_count = 0;
+    
+    if (env_vars_json && cJSON_IsObject(env_vars_json)) {
+        // Count the number of environment variables
+        env_var_count = cJSON_GetArraySize(env_vars_json);
+        if (env_var_count > 0) {
+            // Allocate array for environment variable strings
+            env_var_array = calloc((size_t)env_var_count, sizeof(char*));
+            if (!env_var_array) {
+                cJSON *error = cJSON_CreateObject();
+                cJSON_AddStringToObject(error, "error", "Out of memory allocating env_vars");
+                return error;
+            }
+            
+            // Convert JSON object to array of "KEY=VALUE" strings
+            const cJSON *env_item = NULL;
+            int idx = 0;
+            cJSON_ArrayForEach(env_item, env_vars_json) {
+                if (cJSON_IsString(env_item) && env_item->string) {
+                    // Calculate size needed for "KEY=VALUE"
+                    size_t key_len = strlen(env_item->string);
+                    size_t value_len = strlen(env_item->valuestring);
+                    size_t total_len = key_len + 1 + value_len + 1; // +1 for '=', +1 for null terminator
+                    
+                    env_var_array[idx] = malloc(total_len);
+                    if (!env_var_array[idx]) {
+                        // Cleanup on failure
+                        for (int j = 0; j < idx; j++) {
+                            free(env_var_array[j]);
+                        }
+                        free(env_var_array);
+                        cJSON *error = cJSON_CreateObject();
+                        cJSON_AddStringToObject(error, "error", "Out of memory creating env_var string");
+                        return error;
+                    }
+                    
+                    snprintf(env_var_array[idx], total_len, "%s=%s", env_item->string, env_item->valuestring);
+                    idx++;
+                }
+            }
+            env_var_count = idx; // Update count to actual number processed
+        }
+    }
+
     // Create unique log file in .klawed/subagent/ directory
     if (!state) {
+        // Cleanup env_var_array before returning error
+        if (env_var_array) {
+            for (int i = 0; i < env_var_count; i++) {
+                free(env_var_array[i]);
+            }
+            free(env_var_array);
+        }
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error", "Internal error: null state");
         return error;
@@ -2029,6 +2083,13 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
 
     // Create directory if it doesn't exist
     if (mkdir(log_dir, 0755) != 0 && errno != EEXIST) {
+        // Cleanup env_var_array before returning error
+        if (env_var_array) {
+            for (int i = 0; i < env_var_count; i++) {
+                free(env_var_array[i]);
+            }
+            free(env_var_array);
+        }
         cJSON *error = cJSON_CreateObject();
         char err_msg[256];
         snprintf(err_msg, sizeof(err_msg), "Failed to create subagent log directory: %s", strerror(errno));
@@ -2046,6 +2107,13 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     size_t log_file_size = strlen(log_dir) + 64; // Extra space for suffix
     char *log_file = malloc(log_file_size);
     if (!log_file) {
+        // Cleanup env_var_array before returning error
+        if (env_var_array) {
+            for (int i = 0; i < env_var_count; i++) {
+                free(env_var_array[i]);
+            }
+            free(env_var_array);
+        }
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error", "Out of memory");
         return error;
@@ -2061,6 +2129,13 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         uint32_t size = sizeof(exe_path);
         if (_NSGetExecutablePath(exe_path, &size) != 0) {
             free(log_file);
+            // Cleanup env_var_array before returning error
+            if (env_var_array) {
+                for (int i = 0; i < env_var_count; i++) {
+                    free(env_var_array[i]);
+                }
+                free(env_var_array);
+            }
             cJSON *error = cJSON_CreateObject();
             cJSON_AddStringToObject(error, "error", "Failed to determine executable path");
             return error;
@@ -2083,6 +2158,13 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     char *escaped_prompt = malloc(escaped_size);
     if (!escaped_prompt) {
         free(log_file);
+        // Cleanup env_var_array before returning error
+        if (env_var_array) {
+            for (int i = 0; i < env_var_count; i++) {
+                free(env_var_array[i]);
+            }
+            free(env_var_array);
+        }
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error", "Out of memory");
         return error;
@@ -2112,6 +2194,13 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     pid_t pid = fork();
     if (pid < 0) {
         free(log_file);
+        // Cleanup env_var_array before returning error
+        if (env_var_array) {
+            for (int i = 0; i < env_var_count; i++) {
+                free(env_var_array[i]);
+            }
+            free(env_var_array);
+        }
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error", "Failed to fork subagent process");
         return error;
@@ -2134,6 +2223,27 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
             fprintf(stderr, "Warning: Failed to set KLAWED_IS_SUBAGENT environment variable: %s\n", strerror(errno));
         }
 
+        // Set custom environment variables if provided
+        if (env_var_array && env_var_count > 0) {
+            for (int i = 0; i < env_var_count; i++) {
+                if (env_var_array[i]) {
+                    // Split the "KEY=VALUE" string
+                    char *equals = strchr(env_var_array[i], '=');
+                    if (equals) {
+                        *equals = '\0'; // Temporarily null-terminate the key
+                        const char *key = env_var_array[i];
+                        const char *value = equals + 1;
+                        
+                        if (setenv(key, value, 1) != 0) {
+                            fprintf(stderr, "Warning: Failed to set environment variable %s: %s\n", 
+                                    key, strerror(errno));
+                        }
+                        *equals = '='; // Restore the string
+                    }
+                }
+            }
+        }
+
         // Execute the command
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);
         // If we get here, exec failed
@@ -2146,7 +2256,8 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
 
     // Register the subagent with the manager for real-time monitoring
     if (state->subagent_manager) {
-        if (subagent_manager_add(state->subagent_manager, pid, log_file, prompt, timeout_seconds) == 0) {
+        if (subagent_manager_add(state->subagent_manager, pid, log_file, prompt, timeout_seconds, 
+                                 (const char**)env_var_array, env_var_count) == 0) {
             LOG_DEBUG("Registered subagent PID %d with manager", pid);
         } else {
             LOG_WARN("Failed to register subagent PID %d with manager", pid);
@@ -2172,6 +2283,14 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     } else {
         // Fallback if malloc fails
         cJSON_AddStringToObject(result, "message", "Subagent started. Check log file for progress.");
+    }
+
+    // Cleanup env_var_array
+    if (env_var_array) {
+        for (int i = 0; i < env_var_count; i++) {
+            free(env_var_array[i]);
+        }
+        free(env_var_array);
     }
 
     free(log_file);
@@ -4693,6 +4812,12 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
             "Optional: Number of lines to return from end of log. Default: 100. "
             "The summary is usually at the end.");
         cJSON_AddItemToObject(subagent_props, "tail_lines", subagent_tail);
+        cJSON *subagent_env_vars = cJSON_CreateObject();
+        cJSON_AddStringToObject(subagent_env_vars, "type", "object");
+        cJSON_AddStringToObject(subagent_env_vars, "description",
+            "Optional: Environment variables to set in the subagent process. "
+            "JSON object with string keys and values (e.g., {\"OPENAI_MODEL\": \"gpt-4\", \"DEBUG\": \"1\"}).");
+        cJSON_AddItemToObject(subagent_props, "env_vars", subagent_env_vars);
         cJSON_AddItemToObject(subagent_params, "properties", subagent_props);
         cJSON *subagent_req = cJSON_CreateArray();
         cJSON_AddItemToArray(subagent_req, cJSON_CreateString("prompt"));

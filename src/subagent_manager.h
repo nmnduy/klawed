@@ -30,6 +30,8 @@ typedef struct SubagentProcess {
     int exit_code;                 // Exit code if completed
     char *last_log_tail;           // Last N lines of log (owned, must be freed)
     int tail_lines;                // Number of lines in last_log_tail
+    char **env_vars;               // Array of environment variables (owned, must be freed)
+    int env_var_count;             // Number of environment variables
 } SubagentProcess;
 
 typedef struct SubagentManager {
@@ -53,9 +55,12 @@ void subagent_manager_free(SubagentManager *manager);
 // log_file: Path to the log file (will be copied)
 // prompt: Original prompt (will be copied)
 // timeout_seconds: Timeout in seconds (0 = no timeout)
+// env_vars: Array of environment variable strings in "KEY=VALUE" format (will be copied)
+// env_var_count: Number of environment variables
 // Returns: 0 on success, -1 on failure
 int subagent_manager_add(SubagentManager *manager, pid_t pid, const char *log_file,
-                         const char *prompt, int timeout_seconds);
+                         const char *prompt, int timeout_seconds, 
+                         const char **env_vars, int env_var_count);
 
 // Update status of all tracked subagents (check if still running, read log tails)
 // manager: SubagentManager instance
