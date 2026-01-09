@@ -182,8 +182,13 @@ public class PodmanSandboxService {
         command.add("--rm");
         
         // Mount workspace directory
+        // Use :Z suffix on Linux for SELinux relabeling, skip on macOS
         command.add("-v");
-        command.add(workspaceDir.toAbsolutePath() + ":/workspace:Z");
+        String volumeMount = workspaceDir.toAbsolutePath() + ":/workspace";
+        if (System.getProperty("os.name").toLowerCase().contains("linux")) {
+            volumeMount += ":Z";
+        }
+        command.add(volumeMount);
         
         // Note: klawed binary is baked into the container image (v1.2+)
         // Note: libmemvid_ffi.so is baked into the container image (v1.1+)
