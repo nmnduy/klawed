@@ -126,6 +126,15 @@ export function init(rootEl) {
     let typingIndicatorEl = rootEl.querySelector('[data-typing-indicator]') || null;
     let hasSeededPlaceholders = false;
     let lastApiCallTime = null;
+    
+    // Reconnection logic with exponential backoff
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const BASE_RECONNECT_DELAY = 1000; // Start with 1 second
+    const MAX_RECONNECT_DELAY = 30000; // Cap at 30 seconds
+    let reconnectTimeoutId = null;
+    let isManuallyDisconnected = false;
+    let isAuthFailure = false; // Prevent reconnection after auth failure
 
     // --- Guided Tour State ---
     let hasCompletedTour = false;
@@ -772,8 +781,63 @@ export function init(rootEl) {
 
 
 
+    function scheduleReconnect() {
+        // Clear any existing reconnect timeout
+        if (reconnectTimeoutId) {
+            clearTimeout(reconnectTimeoutId);
+        }
+        
+        reconnectAttempts++;
+        
+        // Calculate delay with exponential backoff: delay = baseDelay * 2^attempts
+        // Add jitter (±25%) to prevent thundering herd
+        const exponentialDelay = Math.min(
+            BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1),
+            MAX_RECONNECT_DELAY
+        );
+        const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1); // ±25%
+        const delay = Math.round(exponentialDelay + jitter);
+        
+        console.log(`[file-chat] Scheduling reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`);
+        updateStatus(false, `Reconnecting in ${Math.round(delay / 1000)}s... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        
+        reconnectTimeoutId = setTimeout(() => {
+            connectWebSocket();
+        }, delay);
+    }
+
     async function connectWebSocket() {
-        console.log('[file-chat] connectWebSocket called');
+        console.log('[file-chat] connectWebSocket called, attempt:', reconnectAttempts + 1);
+        
+        // Don't reconnect if manually disconnected or after auth failure
+        if (isManuallyDisconnected) {
+            console.log('[file-chat] Manual disconnect - not reconnecting');
+            return;
+        }
+        
+        if (isAuthFailure) {
+            console.log('[file-chat] Auth failure detected - not reconnecting');
+            return;
+        }
+        
+        // Check if we've exceeded max reconnect attempts
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            console.error('[file-chat] Max reconnect attempts reached');
+            updateStatus(false, 'Connection failed. Click to retry.');
+            // Add a reconnect button to the status
+            if (elements.statusIndicator) {
+                elements.statusIndicator.style.cursor = 'pointer';
+                elements.statusIndicator.onclick = () => {
+                    console.log('[file-chat] Manual reconnect triggered');
+                    reconnectAttempts = 0; // Reset counter
+                    elements.statusIndicator.onclick = null;
+                    elements.statusIndicator.style.cursor = 'default';
+                    connectWebSocket();
+                };
+            }
+            return;
+        }
+        
         try {
             // Check sessionStorage for existing session ID
             const storedSessionId = sessionStorage.getItem('filesurf_sessionId');
@@ -789,6 +853,13 @@ export function init(rootEl) {
                 if (!response.ok) {
                     // Check if it's an authentication error
                     if (isAuthRequired(response)) {
+                        console.log('[file-chat] Authentication required - stopping reconnection');
+                        isAuthFailure = true;
+                        // Clear any pending reconnection attempts
+                        if (reconnectTimeoutId) {
+                            clearTimeout(reconnectTimeoutId);
+                            reconnectTimeoutId = null;
+                        }
                         await handleAuthError(response);
                         return;
                     }
@@ -814,14 +885,19 @@ export function init(rootEl) {
             ws = new WebSocket(wsUrl);
         } catch (error) {
             console.error('Failed to generate session:', error);
-            updateStatus(false, 'Failed to connect. Retrying in 3 seconds...');
-            setTimeout(connectWebSocket, 3000);
+            scheduleReconnect();
             return;
         }
 
         ws.onopen = () => {
             console.info('WebSocket connected');
             updateStatus(true, 'Connected');
+            // Reset reconnection counter on successful connection
+            reconnectAttempts = 0;
+            if (reconnectTimeoutId) {
+                clearTimeout(reconnectTimeoutId);
+                reconnectTimeoutId = null;
+            }
         };
 
         ws.onmessage = (event) => {
@@ -1001,11 +1077,20 @@ export function init(rootEl) {
             updateStatus(false, 'Connection error');
         };
 
-        ws.onclose = () => {
-            console.info('WebSocket closed');
+        ws.onclose = (event) => {
+            console.info('WebSocket closed', event.code, event.reason);
             removeTypingIndicator();
+            isConnected = false;
+            
+            // Don't reconnect if this was a manual disconnect
+            if (isManuallyDisconnected) {
+                updateStatus(false, 'Disconnected');
+                return;
+            }
+            
+            // Use exponential backoff for automatic reconnection
             updateStatus(false, 'Disconnected');
-            setTimeout(connectWebSocket, 3000);
+            scheduleReconnect();
         };
     }
 
