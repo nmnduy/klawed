@@ -1,10 +1,11 @@
+## General
+
+- [ ] file download button
 - [ ] we can preview more common files: html
 - [ ] put some stuff in the starting workspace for everyone
     - [ ] stock analysis
     - [ ] youtube transcriber
     - [ ] reminders
-- [ ] file download button
-- [ ] should i warn about certain file types
 
 ---
 
@@ -37,9 +38,27 @@
 
 ---
 
+## Improvements
+
 - [ ] s3 as workspace backend
     - [ ] progress bar for sync status
-- [ ] what if someone upload a file that
-    - [ ] is a virus program
-    - [ ] spin CPU cycles
-    - [ ] run a bitcoin miner
+
+---
+
+## Security Hardening
+
+### Download Safety
+- [ ] Add confirmation modal for risky file extensions (.exe, .bat, .sh, .zip, .dmg, etc.)
+- [ ] Detect and warn about double extensions (e.g., invoice.pdf.exe)
+- [ ] Add `X-Content-Type-Options: nosniff` header to downloads
+
+### Upload Controls
+- [ ] Warn user on files > 200MB before upload
+- [ ] Per-user storage quota (e.g., 500MB in total workspace
+- [ ] Allow user to upload any files (if not already)
+
+## Keeps me up at night
+
+- [ ] Long running script that keeps spinning CPU
+- [ ] Malicious script that tries to break out of the sandbox
+- [ ] Script that keeps using LLM tokens
