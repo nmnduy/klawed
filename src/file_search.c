@@ -1055,11 +1055,13 @@ int file_search_process_key(FileSearchState *state, int ch) {
 
         case KEY_UP:
         case 16:  // Ctrl+P
+        case 'k':  // vim-style up
             file_search_select_prev(state);
             break;
 
         case KEY_DOWN:
         case 14:  // Ctrl+N
+        case 'j':  // vim-style down
             file_search_select_next(state);
             break;
 
@@ -1091,12 +1093,7 @@ int file_search_process_key(FileSearchState *state, int ch) {
             break;
 
         default:
-            // Handle vim-style j/k navigation
-            if (ch == 'j' && state->pattern_len == 0) {
-                file_search_select_next(state);
-            } else if (ch == 'k' && state->pattern_len == 0) {
-                file_search_select_prev(state);
-            } else if (ch >= 32 && ch < 127) {
+            if (ch >= 32 && ch < 127) {
                 // Printable character - add to pattern
                 file_search_add_char(state, (char)ch);
             }
