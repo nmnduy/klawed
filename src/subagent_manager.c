@@ -62,14 +62,6 @@ void subagent_manager_free(SubagentManager *manager) {
             free(manager->processes[i]->prompt);
             free(manager->processes[i]->last_log_tail);
 
-            // Free environment variables
-            if (manager->processes[i]->env_vars) {
-                for (int j = 0; j < manager->processes[i]->env_var_count; j++) {
-                    free(manager->processes[i]->env_vars[j]);
-                }
-                free(manager->processes[i]->env_vars);
-            }
-
             free(manager->processes[i]);
         }
     }
@@ -87,8 +79,7 @@ void subagent_manager_free(SubagentManager *manager) {
 }
 
 int subagent_manager_add(SubagentManager *manager, pid_t pid, const char *log_file,
-                         const char *prompt, int timeout_seconds,
-                         const char **env_vars, int env_var_count) {
+                         const char *prompt, int timeout_seconds) {
     if (!manager || !log_file || !prompt || pid <= 0) {
         return -1;
     }
@@ -124,8 +115,6 @@ int subagent_manager_add(SubagentManager *manager, pid_t pid, const char *log_fi
     proc->exit_code = -1;
     proc->last_log_tail = NULL;
     proc->tail_lines = 0;
-    proc->env_vars = NULL;
-    proc->env_var_count = 0;
 
     if (!proc->log_file || !proc->prompt) {
         free(proc->log_file);
@@ -133,37 +122,6 @@ int subagent_manager_add(SubagentManager *manager, pid_t pid, const char *log_fi
         free(proc);
         pthread_mutex_unlock(&manager->mutex);
         return -1;
-    }
-
-    // Copy environment variables if provided
-    if (env_vars && env_var_count > 0) {
-        proc->env_vars = calloc((size_t)env_var_count, sizeof(char*));
-        if (!proc->env_vars) {
-            free(proc->log_file);
-            free(proc->prompt);
-            free(proc);
-            pthread_mutex_unlock(&manager->mutex);
-            return -1;
-        }
-
-        proc->env_var_count = env_var_count;
-        for (int i = 0; i < env_var_count; i++) {
-            if (env_vars[i]) {
-                proc->env_vars[i] = strdup(env_vars[i]);
-                if (!proc->env_vars[i]) {
-                    // Cleanup on failure
-                    for (int j = 0; j < i; j++) {
-                        free(proc->env_vars[j]);
-                    }
-                    free(proc->env_vars);
-                    free(proc->log_file);
-                    free(proc->prompt);
-                    free(proc);
-                    pthread_mutex_unlock(&manager->mutex);
-                    return -1;
-                }
-            }
-        }
     }
 
     manager->processes[manager->process_count++] = proc;
@@ -322,14 +280,6 @@ int subagent_manager_cleanup_completed(SubagentManager *manager, int keep_recent
                 free(proc->prompt);
                 free(proc->last_log_tail);
 
-                // Free environment variables
-                if (proc->env_vars) {
-                    for (int k = 0; k < proc->env_var_count; k++) {
-                        free(proc->env_vars[k]);
-                    }
-                    free(proc->env_vars);
-                }
-
                 free(proc);
 
                 // Shift remaining processes down
@@ -394,21 +344,6 @@ int subagent_manager_get_process(SubagentManager *manager, int index, SubagentPr
     out_process->exit_code = proc->exit_code;
     out_process->last_log_tail = proc->last_log_tail ? strdup(proc->last_log_tail) : NULL;
     out_process->tail_lines = proc->tail_lines;
-
-    // Copy environment variables
-    out_process->env_var_count = proc->env_var_count;
-    if (proc->env_vars && proc->env_var_count > 0) {
-        out_process->env_vars = calloc((size_t)proc->env_var_count, sizeof(char*));
-        if (out_process->env_vars) {
-            for (int i = 0; i < proc->env_var_count; i++) {
-                if (proc->env_vars[i]) {
-                    out_process->env_vars[i] = strdup(proc->env_vars[i]);
-                }
-            }
-        }
-    } else {
-        out_process->env_vars = NULL;
-    }
 
     pthread_mutex_unlock(&manager->mutex);
     return 0;
