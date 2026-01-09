@@ -180,55 +180,96 @@
    These classes are toggled by JavaScript to reflect connection/working states.
    Naming: .status-[component]--[state] (connected, error, working)
    ========================================================================== */
+
+/* Base status indicator container */
 .status-indicator {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  overflow: hidden;
   transition: all 0.3s ease;
 }
 
+/* Glass-like shine effect (pseudo-element) */
+.status-indicator::after {
+  content: '';
+  position: absolute;
+  inset: 1.5px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9), transparent 55%);
+  mix-blend-mode: screen;
+  opacity: 0.9;
+}
+
+/* Connected state - Green */
 .status-indicator--connected {
   background: linear-gradient(135deg, #10b981, #059669);
   box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35), 0 8px 24px -10px rgba(5, 150, 105, 0.55);
 }
 
+/* Error/Disconnected state - Red */
 .status-indicator--error {
   background: linear-gradient(135deg, #ef4444, #dc2626);
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35), 0 8px 24px -10px rgba(220, 38, 38, 0.55);
 }
 
+/* Working/Thinking state - Amber with spin animation */
 .status-indicator--working {
   background: linear-gradient(135deg, #f59e0b, #d97706);
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35), 0 8px 24px -10px rgba(217, 119, 6, 0.55);
   animation: status-spin 1.5s linear infinite;
 }
 
+/* Base pulse effect container */
 .status-pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  opacity: 0.75;
+  transform: scale(0.7);
   transition: all 0.3s ease;
+  filter: blur(6px);
 }
 
+/* Connected pulse - Green */
 .status-pulse--connected {
   background: radial-gradient(circle, rgba(16, 185, 129, 0.4), transparent 60%);
+  animation: status-wave 1.4s ease-out infinite;
 }
 
+/* Error pulse - Red */
 .status-pulse--error {
   background: radial-gradient(circle, rgba(239, 68, 68, 0.4), transparent 60%);
+  animation: status-wave 1.4s ease-out infinite;
 }
 
+/* Working pulse - Amber with enhanced animation */
 .status-pulse--working {
   background: radial-gradient(circle, rgba(245, 158, 11, 0.4), transparent 60%);
-  animation: status-pulse 1.4s ease-out infinite;
+  animation: status-wave 1.4s ease-out infinite;
 }
 
+/* Base status text */
 .status-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
   transition: all 0.3s ease;
 }
 
+/* Connected text - Green */
 .status-text--connected {
   color: #059669;
 }
 
+/* Error text - Red */
 .status-text--error {
   color: #dc2626;
 }
 
+/* Working text - Amber */
 .status-text--working {
   color: #d97706;
 }

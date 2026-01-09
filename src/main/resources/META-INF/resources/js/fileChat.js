@@ -153,7 +153,7 @@ export function init(rootEl) {
             elements.statusPulse && (elements.statusPulse.className = 'status-pulse status-pulse--connected');
             if (elements.statusText) {
                 elements.statusText.textContent = message || 'Connected';
-                elements.statusText.className = 'font-mono text-sm font-semibold tracking-tight status-text status-text--connected';
+                elements.statusText.className = 'status-text status-text--connected';
             }
             setDisabledState(false);
         } else {
@@ -161,7 +161,7 @@ export function init(rootEl) {
             elements.statusPulse && (elements.statusPulse.className = 'status-pulse status-pulse--error');
             if (elements.statusText) {
                 elements.statusText.textContent = message || 'Disconnected';
-                elements.statusText.className = 'font-mono text-sm font-semibold tracking-tight status-text status-text--error';
+                elements.statusText.className = 'status-text status-text--error';
             }
             setDisabledState(true);
         }
@@ -180,7 +180,7 @@ export function init(rootEl) {
             } else {
                 elements.statusText.textContent = statusMessage;
             }
-            elements.statusText.className = 'font-mono text-sm font-semibold tracking-tight status-text status-text--working';
+            elements.statusText.className = 'status-text status-text--working';
         }
 
         if (statusMessage && (statusMessage.includes('completed processing') || statusMessage.includes('timeout reached'))) {
