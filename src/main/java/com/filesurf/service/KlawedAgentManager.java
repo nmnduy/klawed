@@ -586,6 +586,12 @@ public class KlawedAgentManager {
                     LOGGER.info("[SESSION:" + sessionId + "] Starting continuous async polling for responses");
                     
                     while (shouldPollContinuously && asyncPollingActive) {
+                        // Check if client is still connected before polling
+                        if (sqliteQueueClient == null || !sqliteQueueClient.isConnected()) {
+                            LOGGER.fine("[SESSION:" + sessionId + "] SQLiteQueueClient no longer connected, exiting poll loop");
+                            break;
+                        }
+                        
                         try {
                             // Poll for messages with a short timeout
                             List<String> messages = sqliteQueueClient.receiveMessages(500);
@@ -598,6 +604,11 @@ public class KlawedAgentManager {
                             // Sleep a bit before polling again
                             Thread.sleep(100);
                         } catch (IOException e) {
+                            // Check if client is still connected - if not, stop polling
+                            if (sqliteQueueClient == null || !sqliteQueueClient.isConnected()) {
+                                LOGGER.fine("[SESSION:" + sessionId + "] SQLiteQueueClient disconnected, stopping async polling");
+                                break;
+                            }
                             LOGGER.warning("[SESSION:" + sessionId + "] Error in async polling: " + e.getMessage());
                             // Continue polling despite errors
                         } catch (InterruptedException e) {

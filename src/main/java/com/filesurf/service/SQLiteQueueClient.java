@@ -479,6 +479,10 @@ public class SQLiteQueueClient {
                 }
                 
             } catch (SQLException e) {
+                // Check if this is due to connection being closed
+                if (!connected.get() || connection == null) {
+                    throw new IOException("SQLiteQueueClient disconnected during receive", e);
+                }
                 throw new IOException("Failed to receive messages via SQLite queue", e);
             }
             
