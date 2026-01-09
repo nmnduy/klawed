@@ -179,6 +179,7 @@
    Status Indicator States
    These classes are toggled by JavaScript to reflect connection/working states.
    Naming: .status-[component]--[state] (connected, error, working)
+   Uses Tailwind color tokens for consistency and dark mode support.
    ========================================================================== */
 
 /* Base status indicator container */
@@ -202,23 +203,41 @@
   opacity: 0.9;
 }
 
-/* Connected state - Green */
+/* Connected state - Emerald Green (semantic success color) */
 .status-indicator--connected {
-  background: linear-gradient(135deg, #10b981, #059669);
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35), 0 8px 24px -10px rgba(5, 150, 105, 0.55);
+  @apply bg-gradient-to-br from-emerald-500 to-emerald-600;
+  box-shadow: 0 0 0 2px theme('colors.emerald.500 / 0.35'), 0 8px 24px -10px theme('colors.emerald.600 / 0.55');
 }
 
-/* Error/Disconnected state - Red */
+/* Dark mode: brighter for better visibility */
+.dark .status-indicator--connected {
+  @apply from-emerald-400 to-emerald-500;
+  box-shadow: 0 0 0 2px theme('colors.emerald.400 / 0.4'), 0 8px 24px -10px theme('colors.emerald.500 / 0.6');
+}
+
+/* Error/Disconnected state - Coral Red (semantic error color) */
 .status-indicator--error {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35), 0 8px 24px -10px rgba(220, 38, 38, 0.55);
+  @apply bg-gradient-to-br from-coral-600 to-coral-700;
+  box-shadow: 0 0 0 2px theme('colors.coral.600 / 0.35'), 0 8px 24px -10px theme('colors.coral.700 / 0.55');
 }
 
-/* Working/Thinking state - Amber with spin animation */
+/* Dark mode: adjusted for visibility */
+.dark .status-indicator--error {
+  @apply from-coral-500 to-coral-600;
+  box-shadow: 0 0 0 2px theme('colors.coral.500 / 0.4'), 0 8px 24px -10px theme('colors.coral.600 / 0.6');
+}
+
+/* Working/Thinking state - Amber (semantic warning color) with spin animation */
 .status-indicator--working {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35), 0 8px 24px -10px rgba(217, 119, 6, 0.55);
+  @apply bg-gradient-to-br from-amber-500 to-amber-600;
+  box-shadow: 0 0 0 2px theme('colors.amber.500 / 0.35'), 0 8px 24px -10px theme('colors.amber.600 / 0.55');
   animation: status-spin 1.5s linear infinite;
+}
+
+/* Dark mode: brighter amber for visibility */
+.dark .status-indicator--working {
+  @apply from-amber-400 to-amber-500;
+  box-shadow: 0 0 0 2px theme('colors.amber.400 / 0.4'), 0 8px 24px -10px theme('colors.amber.500 / 0.6');
 }
 
 /* Base pulse effect container */
@@ -232,22 +251,37 @@
   filter: blur(6px);
 }
 
-/* Connected pulse - Green */
+/* Connected pulse - Emerald Green */
 .status-pulse--connected {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.4), transparent 60%);
+  background: radial-gradient(circle, theme('colors.emerald.500 / 0.4'), transparent 60%);
   animation: status-wave 1.4s ease-out infinite;
 }
 
-/* Error pulse - Red */
+/* Dark mode: brighter pulse */
+.dark .status-pulse--connected {
+  background: radial-gradient(circle, theme('colors.emerald.400 / 0.5'), transparent 60%);
+}
+
+/* Error pulse - Coral Red */
 .status-pulse--error {
-  background: radial-gradient(circle, rgba(239, 68, 68, 0.4), transparent 60%);
+  background: radial-gradient(circle, theme('colors.coral.600 / 0.4'), transparent 60%);
   animation: status-wave 1.4s ease-out infinite;
+}
+
+/* Dark mode: adjusted pulse */
+.dark .status-pulse--error {
+  background: radial-gradient(circle, theme('colors.coral.500 / 0.5'), transparent 60%);
 }
 
 /* Working pulse - Amber with enhanced animation */
 .status-pulse--working {
-  background: radial-gradient(circle, rgba(245, 158, 11, 0.4), transparent 60%);
+  background: radial-gradient(circle, theme('colors.amber.500 / 0.4'), transparent 60%);
   animation: status-wave 1.4s ease-out infinite;
+}
+
+/* Dark mode: brighter amber pulse */
+.dark .status-pulse--working {
+  background: radial-gradient(circle, theme('colors.amber.400 / 0.5'), transparent 60%);
 }
 
 /* Base status text */
@@ -259,19 +293,34 @@
   transition: all 0.3s ease;
 }
 
-/* Connected text - Green */
+/* Connected text - Emerald Green */
 .status-text--connected {
-  color: #059669;
+  @apply text-emerald-600;
 }
 
-/* Error text - Red */
+/* Dark mode: brighter for better contrast */
+.dark .status-text--connected {
+  @apply text-emerald-400;
+}
+
+/* Error text - Coral Red */
 .status-text--error {
-  color: #dc2626;
+  @apply text-coral-700;
+}
+
+/* Dark mode: adjusted for visibility */
+.dark .status-text--error {
+  @apply text-coral-400;
 }
 
 /* Working text - Amber */
 .status-text--working {
-  color: #d97706;
+  @apply text-amber-600;
+}
+
+/* Dark mode: brighter amber */
+.dark .status-text--working {
+  @apply text-amber-400;
 }
 
 @keyframes gradient {
