@@ -181,6 +181,12 @@ public class PodmanSandboxService {
         // Auto-remove container on exit
         command.add("--rm");
         
+        // Override the image's ENTRYPOINT so we can run our shell command directly
+        // The Dockerfile has ENTRYPOINT ["/usr/local/bin/klawed"] but we need to run
+        // /bin/sh -c "... && exec klawed ..." to set up log directories first
+        command.add("--entrypoint");
+        command.add("");
+        
         // Mount workspace directory
         // Use :Z suffix on Linux for SELinux relabeling, skip on macOS
         command.add("-v");
