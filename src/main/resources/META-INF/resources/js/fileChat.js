@@ -221,16 +221,20 @@ export function init(rootEl) {
             messageDiv.className = 'flex ' + (isUser ? 'justify-end' : 'justify-start') + ' animate-fade-in';
 
             const bubble = document.createElement('div');
-            bubble.className = 'w-full max-w-[90%] sm:max-w-2xl px-4 sm:px-5 py-3 rounded-2xl border shadow-sm ' + (isUser ? 
-                'bg-[color-mix(in_srgb,_hsl(var(--primary))_14%,_hsl(var(--card))_86%)] border-[color-mix(in_srgb,_hsl(var(--primary))_26%,_hsl(var(--border))_74%)] border-l-[color-mix(in_srgb,_hsl(var(--primary))_38%,_hsl(var(--border))_62%)] shadow-[0_6px_16px_color-mix(in_srgb,_hsl(var(--primary))_12%,_transparent)]' : 
-                'bg-[color-mix(in_srgb,_hsl(var(--card))_98%,_hsl(var(--muted))_2%)] border-[hsl(var(--border))] border-l-[color-mix(in_srgb,_hsl(var(--primary))_18%,_hsl(var(--border))_82%)] shadow-[0_4px_12px_color-mix(in_srgb,_hsl(var(--primary))_6%,_transparent)]');
+            bubble.className = 'w-full max-w-[90%] sm:max-w-2xl px-5 sm:px-6 py-4 rounded-2xl border-2 ' + (isUser ? 
+                'bg-gradient-to-br from-orange-50 to-orange-100/80 dark:from-orange-950/40 dark:to-orange-900/30 border-orange-200 dark:border-orange-800/60 shadow-sm shadow-orange-200/50 dark:shadow-orange-900/20' : 
+                'bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-800/40 dark:to-slate-900/60 border-slate-200 dark:border-slate-700 shadow-sm shadow-slate-200/50 dark:shadow-slate-900/30');
 
             const textDiv = document.createElement('div');
-            textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed text-foreground';
+            textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed ' + (isUser ? 
+                'text-slate-900 dark:text-slate-100' : 
+                'text-slate-800 dark:text-slate-200');
             textDiv.textContent = String(content);
 
             const timestamp = document.createElement('div');
-            timestamp.className = 'text-caption-s mt-2 text-[hsl(var(--muted-foreground))] opacity-80 ' + (isUser ? 'opacity-70' : 'opacity-80');
+            timestamp.className = 'text-caption-s mt-2 ' + (isUser ? 
+                'text-orange-600/70 dark:text-orange-400/60' : 
+                'text-slate-500 dark:text-slate-400');
             timestamp.textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
             bubble.appendChild(textDiv);
@@ -290,12 +294,12 @@ export function init(rootEl) {
 
         const span = document.createElement('span');
         const colors = {
-            info: 'bg-cyan-100 text-cyan-700',
-            success: 'bg-emerald-100 text-emerald-700',
-            error: 'bg-coral-100 text-coral-700',
-            warning: 'bg-amber-100 text-amber-700'
+            info: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
+            success: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+            error: 'bg-coral-50 dark:bg-coral-950/40 text-coral-700 dark:text-coral-300 border-coral-200 dark:border-coral-800',
+            warning: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
         };
-        span.className = 'inline-flex items-center gap-2 px-4 py-2 rounded-full text-caption-m-bold border border-transparent shadow-sm ' + (colors[type] || colors.info);
+        span.className = 'inline-flex items-center gap-2 px-4 py-2 rounded-full text-caption-m-bold border shadow-sm ' + (colors[type] || colors.info);
         span.textContent = content;
 
         messageDiv.appendChild(span);
@@ -311,13 +315,13 @@ export function init(rootEl) {
         wrapper.setAttribute('data-typing-indicator', '');
 
         const bubble = document.createElement('div');
-        bubble.className = 'inline-flex items-center px-4 py-3 rounded-2xl border shadow-sm bg-[color-mix(in_srgb,_hsl(var(--muted))_90%,_hsl(var(--primary))_10%)] border-[color-mix(in_srgb,_hsl(var(--primary))_16%,_hsl(var(--border))_84%)] border-l-[color-mix(in_srgb,_hsl(var(--primary))_24%,_hsl(var(--border))_76%)] ml-4';
+        bubble.className = 'inline-flex items-center px-5 py-3 rounded-2xl border-2 shadow-sm bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-800/40 dark:to-slate-900/60 border-slate-200 dark:border-slate-700';
 
         const dots = document.createElement('div');
         dots.className = 'flex gap-1.5 px-1';
         for (let i = 0; i < 3; i++) {
             const dot = document.createElement('div');
-            dot.className = 'w-2.5 h-2.5 rounded-full bg-[color-mix(in_srgb,_hsl(var(--primary))_40%,_hsl(var(--muted))_60%)]';
+            dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400 dark:bg-slate-500';
             // Add animation delay for each dot
             dot.style.animation = `bounce 1.4s infinite ${i * 0.16}s`;
             dots.appendChild(dot);

@@ -406,19 +406,33 @@
    The .tab-button--active class is applied to the currently selected tab.
    ========================================================================== */
 .chat-tabs .tab-button {
-  color: hsl(var(--muted-foreground));
+  color: theme('colors.slate.600');
   background: transparent;
 }
 
+.dark .chat-tabs .tab-button {
+  color: theme('colors.slate.400');
+}
+
 .chat-tabs .tab-button:hover:not(.tab-button--active) {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  background: theme('colors.slate.100');
+  color: theme('colors.slate.900');
+}
+
+.dark .chat-tabs .tab-button:hover:not(.tab-button--active) {
+  background: theme('colors.slate.700');
+  color: theme('colors.slate.100');
 }
 
 .chat-tabs .tab-button--active {
-  color: hsl(var(--primary));
-  background: color-mix(in srgb, hsl(var(--primary)) 8%, transparent);
+  color: theme('colors.orange.600');
+  background: theme('colors.orange.50');
   font-weight: 600;
+}
+
+.dark .chat-tabs .tab-button--active {
+  color: theme('colors.orange.400');
+  background: theme('colors.orange.950/0.4');
 }
 
 .chat-tabs .tab-button--active::after {
@@ -429,8 +443,12 @@
   transform: translateX(-50%);
   width: 60%;
   height: 3px;
-  background: hsl(var(--primary));
+  background: theme('colors.orange.500');
   border-radius: 9999px;
+}
+
+.dark .chat-tabs .tab-button--active::after {
+  background: theme('colors.orange.400');
 }
 
 /* Mobile optimization */
