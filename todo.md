@@ -1,6 +1,6 @@
-- [ ] allow setting env vars when spawning subagents to change model, provider, etc.
-- [ ] in CheckSubAgentProgress tool, also enforce max char count. to avoid line that is huge and consumes lots of context
-- [ ] j and k can't be used in file search model
+- [x] allow setting env vars when spawning subagents to change model, provider, etc.
+- [x] in CheckSubAgentProgress tool, also enforce max char count. to avoid line that is huge and consumes lots of context
+- [x] j and k can't be used in file search model
 
 ---
 
