@@ -3,6 +3,7 @@
     - [ ] youtube transcriber
     - [ ] reminders
 - [ ] s3 as workspace backend
+    - [ ] progress bar for sync status
 
 - [x] better tour
 - [x] production
