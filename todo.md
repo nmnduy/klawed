@@ -8,6 +8,7 @@
     - [x] cpu, memory, error
     - [x] disk size
 - [ ] no spinner in file explorer since it's periodical and seeing it a lot is just annoying
+- [ ] chat view is ugly
 - [ ] /metrics should not be public
 - [x] version the js, css files
 - [x] privacy policies
