@@ -180,6 +180,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_GREP_DISPLAY_LIMIT` - Max grep results to display in TUI (default: 20)
   - `KLAWED_GLOB_DISPLAY_LIMIT` - Max glob results to display in TUI (default: 10)
   - `KLAWED_BASH_TIMEOUT` - Timeout for bash commands in seconds (default: 30, 0=no timeout)
+  - `KLAWED_SUBAGENT_LOG_LINE_MAX_CHARS` - Maximum characters per log line in CheckSubagentProgress (default: 1500)
   - `KLAWED_TOOL_VERBOSE` - Verbose tool logging (0=off, 1=basic, 2=detailed, default: 0)
   - `KLAWED_IS_SUBAGENT` - Internal flag set automatically when running as a subagent (1/true/yes=subagent mode). Excludes Subagent, CheckSubagentProgress, and InterruptSubagent tools to prevent recursion
   - `KLAWED_ONESHOT_FORMAT` - Output format for one-shot mode: `human` (clean, human-readable, default) or `json`/`machine` (HTML+JSON for machine parsing)

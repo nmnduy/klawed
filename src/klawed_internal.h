@@ -39,6 +39,7 @@
 #define BUFFER_SIZE 8192
 #define BASH_OUTPUT_MAX_SIZE 12228  // 12,228 byte limit for bash output
 #define MAX_MESSAGES 10000
+#define SUBAGENT_LOG_LINE_MAX_CHARS 1500  // Maximum characters per log line (configurable via env var)
 
 // Retry configuration for rate limiting (429 errors)
 #define MAX_RETRY_DURATION_MS 600000     // Maximum retry duration (10 minutes)

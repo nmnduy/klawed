@@ -2374,6 +2374,16 @@ STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *sta
     if (log_file) {
         FILE *log_fp = fopen(log_file, "r");
         if (log_fp) {
+            // Get configurable character limit per line
+            int max_line_chars = SUBAGENT_LOG_LINE_MAX_CHARS;
+            const char *env_max_chars = getenv("KLAWED_SUBAGENT_LOG_LINE_MAX_CHARS");
+            if (env_max_chars) {
+                int parsed_limit = atoi(env_max_chars);
+                if (parsed_limit > 0) {
+                    max_line_chars = parsed_limit;
+                }
+            }
+
             // Count total lines first
             char line[BUFFER_SIZE];
             while (fgets(line, sizeof(line), log_fp)) {
@@ -2397,10 +2407,39 @@ STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *sta
             }
             errno = saved_errno;
             int current_line = 0;
+            int lines_truncated = 0;
 
             while (fgets(line, sizeof(line), log_fp)) {
                 if (current_line >= start_line) {
                     size_t line_len = strlen(line);
+                    int truncated = 0;
+                    
+                    // Truncate line if it exceeds character limit
+                    if ((int)line_len > max_line_chars) {
+                        // Find a good place to truncate (preserve newline if present)
+                        int truncate_pos = max_line_chars - 15;  // Leave space for "...[truncated]"
+                        if (truncate_pos < 0) truncate_pos = 0;
+                        
+                        // Try to avoid breaking in the middle of a word
+                        while (truncate_pos > 0 && truncate_pos < (int)line_len && 
+                               !isspace((unsigned char)line[truncate_pos]) && 
+                               truncate_pos > max_line_chars - 50) {
+                            truncate_pos--;
+                        }
+                        
+                        line[truncate_pos] = '\0';
+                        strlcat(line, "...[truncated]", sizeof(line));
+                        
+                        // Add back newline if original line had one
+                        if (line_len > 0 && (line[line_len-1] == '\n' || line[line_len-1] == '\r')) {
+                            strlcat(line, "\n", sizeof(line));
+                        }
+                        
+                        line_len = strlen(line);
+                        truncated = 1;
+                        lines_truncated++;
+                    }
+                    
                     char *new_output = realloc(tail_output, tail_size + line_len + 1);
                     if (!new_output) {
                         free(tail_output);
@@ -2418,6 +2457,22 @@ STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *sta
             }
 
             fclose(log_fp);
+
+            // Add truncation warning if any lines were truncated
+            if (lines_truncated > 0) {
+                char truncation_msg[256];
+                snprintf(truncation_msg, sizeof(truncation_msg), 
+                         "\n[Note: %d lines were truncated to %d characters each to preserve context]\n",
+                         lines_truncated, max_line_chars);
+                
+                char *new_output = realloc(tail_output, tail_size + strlen(truncation_msg) + 1);
+                if (new_output) {
+                    tail_output = new_output;
+                    memcpy(tail_output + tail_size, truncation_msg, strlen(truncation_msg));
+                    tail_size += strlen(truncation_msg);
+                    tail_output[tail_size] = '\0';
+                }
+            }
         }
     }
 
