@@ -7,7 +7,6 @@
 @import './dynamic-file-icons.css';
 @import './dynamic-toasts.css';
 @import './dynamic-latex.css';
-@import './dynamic-notifications.css';
 
 @tailwind base;
 @tailwind components;
