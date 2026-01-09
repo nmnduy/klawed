@@ -188,11 +188,12 @@ public class PodmanSandboxService {
         // Image name
         command.add(podmanImage);
         
-        // Use shell to create log directory before starting klawed
+        // Use shell to create log directory and file before starting klawed
         // This prevents "Failed to open log file: ./.klawed/logs/klawed.log" warning
+        // We also touch the log file to ensure klawed can open it
         command.add("/bin/sh");
         command.add("-c");
-        command.add("mkdir -p /workspace/.klawed/logs && /usr/local/bin/klawed --sqlite-queue " + sqliteDbPath);
+        command.add("mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed --sqlite-queue " + sqliteDbPath);
         
         return command;
     }
