@@ -2328,7 +2328,6 @@ STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *sta
             while (fgets(line, sizeof(line), log_fp)) {
                 if (current_line >= start_line) {
                     size_t line_len = strlen(line);
-                    int truncated = 0;
 
                     // Truncate line if it exceeds character limit
                     if ((int)line_len > max_line_chars) {
@@ -2352,7 +2351,6 @@ STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *sta
                         }
 
                         line_len = strlen(line);
-                        truncated = 1;
                         lines_truncated++;
                     }
 
@@ -9244,7 +9242,7 @@ int main(int argc, char *argv[]) {
     // Check for auto-compact flag (can appear anywhere in argv)
     int auto_compact_enabled = 0;
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--auto-compact") == 0) {
+        if (argv[i] && strcmp(argv[i], "--auto-compact") == 0) {
             auto_compact_enabled = 1;
             LOG_INFO("Auto-compact mode enabled via command line flag");
             break;
