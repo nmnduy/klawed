@@ -29,3 +29,30 @@
 
 - [ ] how to show SKILLS
 - [ ] file download button
+
+---
+
+## Security Hardening
+
+### Download Safety
+- [ ] Add confirmation modal for risky file extensions (.exe, .bat, .sh, .zip, .dmg, etc.)
+- [ ] Detect and warn about double extensions (e.g., invoice.pdf.exe)
+- [ ] Add `X-Content-Type-Options: nosniff` header to downloads
+
+### Upload Controls
+- [ ] Remove per-file size limit (currently 10MB)
+- [ ] Warn user on files > 200MB before upload
+- [ ] Per-user storage quota (e.g., 500MB total across all sessions)
+- [ ] Per-session storage quota (e.g., 200MB)
+- [ ] File count limit per session (e.g., 200 files)
+- [ ] Expand allowed upload extensions (add .py, .js, .md, .json, .html, .css, .tex, etc.)
+
+### AI Agent Sandbox
+- [ ] Container execution timeout (e.g., 30 min max)
+- [ ] Workspace disk quota monitoring - kill agent if exceeded
+- [ ] Watchdog to kill long-running/stuck containers
+- [ ] Update AI system prompt: never execute files from uploads/ directly
+
+### Session Management
+- [ ] Auto-cleanup old/inactive sessions (e.g., > 30 days)
+- [ ] Verify session ownership on all endpoints
