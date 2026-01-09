@@ -85,6 +85,17 @@ public class PodmanSandboxService {
             return containerName;
         }
         
+        // Pre-create the .klawed/logs directory on the HOST before starting container
+        // This ensures the directory exists with correct host permissions before any container operations
+        Path klawedLogsDir = workspaceDir.resolve(".klawed").resolve("logs");
+        try {
+            java.nio.file.Files.createDirectories(klawedLogsDir);
+            LOGGER.info("[SESSION:" + sessionId + "] Created .klawed/logs directory on host: " + klawedLogsDir);
+        } catch (IOException e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to create .klawed/logs directory on host: " + e.getMessage());
+            // Continue anyway - the container shell command will try again
+        }
+        
         // Build podman run command with security options
         List<String> command = buildPodmanRunCommand(containerName, workspaceDir, sqliteDbPath);
         
