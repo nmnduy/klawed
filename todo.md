@@ -13,7 +13,7 @@
 - [ ] connection indicator rewrite completely. styles do not show up correctly
 - [ ] dont show the spinner in file explorer since it's periodical and seeing it a lot is just annoying. also, any way to avoid the jitter when the file reload?
 - [ ] chat view is ugly
-- [ ] /metrics endpoint should not be public. we expose the application via cloudflare. prometheus server is scraping the server metrics via tailscale, network group 100.x.x.x
+- [x] /metrics endpoint should not be public. we expose the application via cloudflare. prometheus server is scraping the server metrics via tailscale, network group 100.x.x.x
 - [ ] upload button in file explorer only allow folder upload. not sure if input box upload button has the same issue
 
 - [x] version the js, css files

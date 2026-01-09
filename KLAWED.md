@@ -141,7 +141,10 @@ Users must be invited before they can access the application. The authentication
 **Public (no auth required):**
 - `/auth/*` - Authentication endpoints
 - `/assets/*`, `/js/*`, `/css/*` - Static assets
-- `/health/*`, `/metrics`, `/q/*` - Health and monitoring
+- `/health/*`, `/q/*` - Health and monitoring
+
+**Network-Restricted (Tailscale only):**
+- `/metrics` - Prometheus metrics endpoint (only accessible from 100.x.x.x network)
 
 **Protected (auth required):**
 - `/file-chat` - Main chat interface
@@ -236,7 +239,7 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 - **Session isolation**: Each user session is isolated based on their userId
 - **Exposed endpoints**: Protected endpoints require valid authentication cookie
 - **File uploads**: Users can upload any files to their session directories
-- **Monitoring**: `/metrics` endpoint is publicly accessible. Consider IP whitelisting or basic auth
+- **Monitoring**: `/metrics` endpoint is restricted to Tailscale network (100.x.x.x) only
 
 ## Deployment
 
