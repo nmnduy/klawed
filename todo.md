@@ -16,16 +16,15 @@
 - [ ] no spinner in file explorer since it's periodical and seeing it a lot is just annoying
 - [ ] chat view is ugly
 - [ ] /metrics should not be public
+- [ ] upload button in file explorer only allow folder upload. not sure if input box upload button has the same issue
 - [x] version the js, css files
 - [x] privacy policies
-- [ ] review `src/main/java/com/filesurf/service/SessionFileCleanupService.java`
 - [x] context size limit. it should be able to continue indefinitely
     - [x] autocompaction
-- [ ] agent sandbox
-    - [ ] docker image packages
-        - [ ] klawed with memvid
-        - [ ] latex
-        - [ ] bun
+- [x] agent sandbox
+    - [x] docker image packages
+        - [x] klawed with memvid
+        - [x] latex
 
 ---
 
