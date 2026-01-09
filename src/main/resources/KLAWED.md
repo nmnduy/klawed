@@ -1,5 +1,108 @@
 # Workspace Agent Instructions
 
+## Privacy and Security
+
+### Overview
+FileSurf v2 is built with privacy and security as core principles. This section explains how user data is protected and what measures are in place to ensure isolation and confidentiality.
+
+### How We Protect User Data
+
+#### 1. Sandboxed AI Processing
+All AI agents run in **isolated, sandboxed containers**. This ensures that processing happens in a secure environment with strict access controls, preventing unauthorized access to user data.
+
+**Container Isolation (Podman/Docker)**:
+- Each agent session runs in its own container
+- Filesystem is read-only except for the workspace directory
+- Network access is controlled (can be enabled or disabled per container)
+- Resource limits enforced (memory, CPU, process limits)
+- No privileged access or capabilities
+- Containers are automatically removed after session ends
+
+**Sandbox Security Features**:
+- `--security-opt=no-new-privileges` - Prevents privilege escalation
+- `--cap-drop=ALL` - Drops all Linux capabilities
+- `--read-only` - Root filesystem is read-only
+- `--tmpfs /tmp` - Temporary files exist only during session
+- Resource limits: `--memory`, `--cpus`, `--pids-limit`
+
+#### 2. Enterprise-Grade LLM Security (AWS Bedrock)
+FileSurf uses **Amazon Bedrock** for AI-powered features. AWS Bedrock provides enterprise-grade data protection guarantees:
+
+- **No data storage**: Your prompts and completions are not stored or logged by Amazon Bedrock
+- **No training data**: Your content is never used to train any AWS models or distributed to third parties
+- **No provider access**: Model providers have no access to your prompts, completions, or Amazon Bedrock logs
+- **Encrypted in transit**: All communications use TLS 1.2+ encryption (AWS requires TLS 1.2 minimum, recommends 1.3)
+- **Isolated processing**: Models run in AWS-controlled deployment accounts with strict access controls
+
+Reference: [AWS Bedrock Data Protection](https://docs.aws.amazon.com/bedrock/latest/userguide/data-protection.html)
+
+#### 3. Session Isolation
+Each user session is completely isolated:
+
+- **Separate workspaces**: Each session has its own isolated directory (`/srv/agent-workspaces/{sessionId}`)
+- **No cross-session access**: Files and conversations from one session cannot be accessed by other sessions
+- **User-scoped data**: All database queries are filtered by userId to prevent cross-user data access
+- **Container per session**: Each agent runs in its own sandboxed container
+
+#### 4. Secure Authentication
+- **HttpOnly cookies**: `filesurf_userId` cookie with HttpOnly flag (365-day expiration)
+- **Cookie security**: Prevents XSS attacks, configurable secure flag for production HTTPS
+
+### What Data We Collect
+
+#### Account Information
+- Email address (for invite-only authentication)
+- User ID (automatically generated UUID)
+- Login timestamps
+
+#### Files and Content
+- Files you upload to your sessions
+- Chat messages and conversations with AI
+- Session metadata (session names, creation times, status)
+
+### Data Retention
+
+- **Session Data**: Your files and chat history remain stored until you explicitly delete them or conclude your session
+- **Account Data**: Your email and user ID are retained for the lifetime of your account unless you request deletion
+- **AI Processing**: Your prompts and responses are processed in real-time by AWS Bedrock and are not retained by AWS or model providers
+
+### User Rights
+
+You have the following rights regarding your data:
+
+- **Access**: View what data we have about you
+- **Deletion**: Delete your sessions, files, and conversations at any time through the UI
+- **Export**: Download your files from any session
+- **Account Closure**: Request complete account deletion by contacting the administrator
+
+### Technical Security Measures
+
+- **TLS 1.2+ Encryption**: All data in transit is encrypted
+- **HttpOnly Cookies**: Protected from XSS attacks
+- **Container Isolation**: AI agents run in sandboxed containers with strict resource limits
+- **Secure Data Storage**: Industry-standard encryption and access controls
+- **Path Validation**: All file operations validate paths to prevent directory traversal
+- **Prepared Statements**: Database queries use parameterized statements to prevent SQL injection
+
+### Network Security
+
+- **Network-Restricted Endpoints**: `/metrics` endpoint is restricted to Tailscale network (100.x.x.x) only
+- **Protected Endpoints**: All session and file management endpoints require authentication
+- **Public Endpoints**: Only authentication pages and static assets are publicly accessible
+
+### Important Privacy Considerations
+
+**AI Processing**: When you interact with the AI chat:
+- Your messages and uploaded files are sent to AWS Bedrock for processing
+- AWS Bedrock does not store, log, or use your data for training
+- Processing happens in real-time and data is not retained by AWS
+- All communication with AWS is encrypted via TLS 1.2+
+
+**Session Isolation**: Your sessions are private:
+- Other users cannot view your sessions, files, or conversations
+- Each session runs in an isolated container environment
+- Files are stored in session-specific directories with proper permissions
+
 ## File Organization and Cleanup Guidelines
 
 ### Core Principles
