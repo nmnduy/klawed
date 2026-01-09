@@ -36,11 +36,7 @@ export function init(rootEl) {
         sendButton: rootEl.querySelector('[data-send-button]'),
         // Chat-specific upload components (scoped to avoid conflicts with file explorer)
         chatUploadButton: rootEl.querySelector('[data-chat-upload-button]'),
-        chatUploadMenu: document.getElementById('chat-upload-menu'),
-        chatUploadFiles: document.getElementById('chat-upload-files'),
-        chatUploadFolder: document.getElementById('chat-upload-folder'),
         chatFileInput: rootEl.querySelector('[data-chat-file-input]'),
-        chatFolderInput: rootEl.querySelector('[data-chat-folder-input]'),
         darkModeToggle: document.querySelector('[data-dark-mode-toggle]')
     };
 
@@ -1154,100 +1150,60 @@ export function init(rootEl) {
     });
 
     // Set up chat upload functionality (scoped to chat components only)
-    if (elements.chatUploadButton && elements.chatUploadMenu) {
-        // Toggle dropdown menu
-        elements.chatUploadButton.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isExpanded = elements.chatUploadButton.getAttribute('aria-expanded') === 'true';
-            elements.chatUploadButton.setAttribute('aria-expanded', !isExpanded);
-            elements.chatUploadMenu.classList.toggle('hidden');
+    if (elements.chatUploadButton && elements.chatFileInput) {
+        // Wire chat upload button to chat file input
+        elements.chatUploadButton.addEventListener('click', () => {
+            elements.chatFileInput.click();
         });
 
-        // Close menu when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!elements.chatUploadButton.contains(e.target) && !elements.chatUploadMenu.contains(e.target)) {
-                elements.chatUploadButton.setAttribute('aria-expanded', 'false');
-                elements.chatUploadMenu.classList.add('hidden');
-            }
-        });
+        // Set up change handler for chat file input
+        elements.chatFileInput.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length === 0) return;
 
-        // Handle file upload option
-        if (elements.chatUploadFiles && elements.chatFileInput) {
-            elements.chatUploadFiles.addEventListener('click', (e) => {
-                e.stopPropagation();
-                elements.chatUploadMenu.classList.add('hidden');
-                elements.chatUploadButton.setAttribute('aria-expanded', 'false');
-                elements.chatFileInput.click();
-            });
-
-            elements.chatFileInput.addEventListener('change', async (e) => {
-                await handleChatUpload(e.target.files);
-                elements.chatFileInput.value = '';
-            });
-        }
-
-        // Handle folder upload option
-        if (elements.chatUploadFolder && elements.chatFolderInput) {
-            elements.chatUploadFolder.addEventListener('click', (e) => {
-                e.stopPropagation();
-                elements.chatUploadMenu.classList.add('hidden');
-                elements.chatUploadButton.setAttribute('aria-expanded', 'false');
-                elements.chatFolderInput.click();
-            });
-
-            elements.chatFolderInput.addEventListener('change', async (e) => {
-                await handleChatUpload(e.target.files);
-                elements.chatFolderInput.value = '';
-            });
-        }
-    }
-
-    // Shared upload handler for both file and folder uploads
-    async function handleChatUpload(files) {
-        const fileList = Array.from(files || []);
-        if (fileList.length === 0) return;
-
-        if (!sessionId) {
-            addSystemMessage('✗ No session available. Please reconnect.', 'error');
-            return;
-        }
-
-        const fileNames = fileList.map(f => f.name).join(', ');
-        addSystemMessage('📤 Uploading ' + fileList.length + ' file(s): ' + fileNames + '...', 'info');
-
-        const formData = new FormData();
-        fileList.forEach(file => formData.append('files', file));
-
-        try {
-            const response = await fetch('/file-chat/upload', {
-                method: 'POST',
-                headers: {
-                    'X-Session-ID': sessionId
-                },
-                body: formData
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                addSystemMessage('✓ Successfully uploaded ' + result.count + ' file(s)', 'success');
-
-                if (isConnected && result.files && result.files.length > 0) {
-                    const uploadMessage = "I've uploaded the following files: " + result.files.join(', ') + '. Please analyze them.';
-                    sendMessage(uploadMessage);
-                }
-            } else if (isAuthRequired(response)) {
-                await handleAuthError(response);
+            if (!sessionId) {
+                addSystemMessage('✗ No session available. Please reconnect.', 'error');
                 return;
-            } else {
-                const errorText = await response.text();
-                addSystemMessage('✗ Upload failed: ' + errorText, 'error');
             }
-        } catch (error) {
-            console.error('Upload error:', error);
-            addSystemMessage('✗ Upload error: ' + error.message, 'error');
-        }
-    }
 
+            const fileNames = files.map(f => f.name).join(', ');
+            addSystemMessage('📤 Uploading ' + files.length + ' file(s): ' + fileNames + '...', 'info');
+
+            const formData = new FormData();
+            files.forEach(file => formData.append('files', file));
+
+            try {
+                const response = await fetch('/file-chat/upload', {
+                    method: 'POST',
+                    headers: {
+                        'X-Session-ID': sessionId
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    addSystemMessage('✓ Successfully uploaded ' + result.count + ' file(s)', 'success');
+
+                    if (isConnected && result.files && result.files.length > 0) {
+                        const uploadMessage = "I've uploaded the following files: " + result.files.join(', ') + '. Please analyze them.';
+                        sendMessage(uploadMessage);
+                    }
+                } else if (isAuthRequired(response)) {
+                    await handleAuthError(response);
+                    return;
+                } else {
+                    const errorText = await response.text();
+                    addSystemMessage('✗ Upload failed: ' + errorText, 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                addSystemMessage('✗ Upload error: ' + error.message, 'error');
+            }
+
+            elements.chatFileInput.value = '';
+        });
+    }
 
     seedPlaceholderMessages();
     runTour();
