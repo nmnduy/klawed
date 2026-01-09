@@ -1,8 +1,10 @@
+- [ ] we can preview more common files: html
 - [ ] put some stuff in the starting workspace for everyone
     - [ ] stock analysis
     - [ ] youtube transcriber
     - [ ] reminders
 - [ ] file download button
+- [ ] should i warn about certain file types
 
 ---
 
