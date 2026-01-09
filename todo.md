@@ -7,6 +7,12 @@
 - [x] alert
     - [x] cpu, memory, error
     - [x] disk size
+- [ ] write filesurf KLAWED.md
+    - [ ] /tmp usage
+    - [ ] workspace is persistent
+    - [ ] organizzation
+    - [ ] how to show SKILLS
+- [ ] connection indicator rewrite
 - [ ] no spinner in file explorer since it's periodical and seeing it a lot is just annoying
 - [ ] chat view is ugly
 - [ ] /metrics should not be public
