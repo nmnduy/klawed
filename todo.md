@@ -2,12 +2,9 @@
     - [ ] stock analysis
     - [ ] youtube transcriber
     - [ ] reminders
-- [ ] s3 as workspace backend
-    - [ ] progress bar for sync status
-- [ ] what if someone upload a file that
-    - [ ] is a virus program
-    - [ ] spin CPU cycles
-    - [ ] run a bitcoin miner
+- [ ] file download button
+
+---
 
 - [x] better tour
 - [x] production
@@ -38,5 +35,9 @@
 
 ---
 
-- [ ] how to show SKILLS
-- [ ] file download button
+- [ ] s3 as workspace backend
+    - [ ] progress bar for sync status
+- [ ] what if someone upload a file that
+    - [ ] is a virus program
+    - [ ] spin CPU cycles
+    - [ ] run a bitcoin miner
