@@ -106,14 +106,8 @@ public class FileUploadResource {
                     continue;
                 }
 
-                // Validate file type
-                String fileName = fileUpload.fileName();
-                if (!isValidFileType(fileName)) {
-                    errors.add(fileName + " has invalid file type");
-                    continue;
-                }
-
                 // Generate safe file name to prevent path traversal
+                String fileName = fileUpload.fileName();
                 String safeFileName = sanitizeFileName(fileName, uploadPath);
                 java.nio.file.Path targetPath = uploadPath.resolve(safeFileName);
 
@@ -143,17 +137,6 @@ public class FileUploadResource {
         UploadResponse response = new UploadResponse(uploadedFiles.size(), uploadedFiles, message);
         
         return Response.ok(response).build();
-    }
-
-    private boolean isValidFileType(String fileName) {
-        String lowerName = fileName.toLowerCase();
-        return lowerName.endsWith(".pdf") 
-                || lowerName.endsWith(".png") 
-                || lowerName.endsWith(".jpg") 
-                || lowerName.endsWith(".jpeg") 
-                || lowerName.endsWith(".txt") 
-                || lowerName.endsWith(".csv")
-                || lowerName.endsWith(".xml");
     }
 
     private String sanitizeFileName(String fileName, java.nio.file.Path uploadDir) {
