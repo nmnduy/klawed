@@ -477,11 +477,11 @@ static void print_human_readable_tool_output(const char *tool_name, const char *
             cJSON *total_matches = cJSON_GetObjectItem(tool_result, "total_matches");
             cJSON *matches = cJSON_GetObjectItem(tool_result, "matches");
 
-            if (match_count && cJSON_IsNumber(match_count) && 
+            if (match_count && cJSON_IsNumber(match_count) &&
                 total_matches && cJSON_IsNumber(total_matches)) {
                 int shown = match_count->valueint;
                 int total = total_matches->valueint;
-                
+
                 if (shown < total) {
                     printf("  Found %d/%d matches (showing first %d)\n", shown, total, shown);
                 } else {
@@ -3452,7 +3452,7 @@ static cJSON* tool_grep(cJSON *params, ConversationState *state) {
     // Get max results: parameter > environment > default
     int max_results = 100;  // Default limit
     int warn_large_request = 0;
-    
+
     // First check if AI provided a value
     if (max_results_json && cJSON_IsNumber(max_results_json)) {
         int requested = max_results_json->valueint;
@@ -3472,7 +3472,7 @@ static cJSON* tool_grep(cJSON *params, ConversationState *state) {
             }
         }
     }
-    
+
     // Print warning for large requests
     if (warn_large_request) {
         printf("\n⚠️  Warning: Grep requested %d matches (>300). This may produce a lot of output.\n\n", max_results);
@@ -3594,7 +3594,7 @@ static cJSON* tool_grep(cJSON *params, ConversationState *state) {
 
     // First pass: count total matches across all directories
     char count_command[BUFFER_SIZE * 2];
-    
+
     if (strcmp(grep_tool, "rg") == 0) {
         snprintf(count_command, sizeof(count_command),
                  "cd %s && rg -n %s '%s' %s 2>/dev/null | wc -l || echo 0",
@@ -9161,6 +9161,9 @@ int main(int argc, char *argv[]) {
         printf("  %s -z, --zmq ENDPOINT           Run in ZMQ daemon mode (e.g., tcp://127.0.0.1:5555)\n", argv[0]);
         printf("  %s -c, --zmq-client ENDPOINT    Run as ZMQ client (connect to daemon)\n", argv[0]);
 #endif
+#ifdef HAVE_UDS
+        printf("  %s -u, --uds SOCKET_PATH        Run in Unix socket daemon mode (e.g., /tmp/klawed.sock)\n", argv[0]);
+#endif
         printf("  %s -h, --help                     Show this help message\n", argv[0]);
         printf("  %s --auto-compact               Enable automatic context compaction\n", argv[0]);
         printf("  %s --version                      Show version information\n\n", argv[0]);
@@ -9202,6 +9205,12 @@ int main(int argc, char *argv[]) {
         printf("  ZMQ Socket Mode:\n");
         printf("    KLAWED_ZMQ_ENDPOINT  Optional: ZMQ endpoint (e.g., tcp://127.0.0.1:5555)\n");
         printf("    KLAWED_ZMQ_MODE      Optional: ZMQ mode (daemon)\n\n");
+#endif
+#ifdef HAVE_UDS
+        printf("  Unix Socket Mode:\n");
+        printf("    KLAWED_UNIX_SOCKET_PATH    Optional: Path to Unix socket file (e.g., /tmp/klawed.sock)\n");
+        printf("    KLAWED_UNIX_SOCKET_RETRIES Optional: Max reconnection attempts (default: 5)\n");
+        printf("    KLAWED_UNIX_SOCKET_TIMEOUT Optional: Timeout for operations in seconds (default: 30)\n\n");
 #endif
         printf("  SQLite Queue Mode:\n");
         printf("    KLAWED_SQLITE_DB_PATH  Optional: Path to SQLite database for message queue\n");
