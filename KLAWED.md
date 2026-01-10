@@ -76,8 +76,17 @@ logs/                          # Application logs
 ### Session Management
 - `GET /session/generate` - Generate new session (requires auth)
 - `GET /session/count` - Get session count
-- `POST /file-chat/upload` - Upload files
+
+### File Upload
+- `POST /file-chat/upload` - Upload files (standard, up to 100 MB)
 - `GET /file-chat/upload/list` - List uploaded files
+- `POST /file-chat/upload/chunked/init` - Initialize chunked upload (for large files up to 1 GB)
+- `POST /file-chat/upload/chunked/chunk` - Upload file chunk
+- `GET /file-chat/upload/chunked/status/{uploadId}` - Get chunked upload status
+- `DELETE /file-chat/upload/chunked/{uploadId}` - Cancel chunked upload
+
+### File Explorer
+
 - `GET /file-chat/explorer/list` - List files in session
 - `GET /file-chat/explorer/metadata` - Get file metadata
 - `GET /file-chat/explorer/open` - Open/download file

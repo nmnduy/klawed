@@ -23,7 +23,7 @@ import java.util.logging.Logger;
 public class FileUploadResource {
 
     private static final Logger LOGGER = Logger.getLogger(FileUploadResource.class.getName());
-    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+    private static final long MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
     @Inject
     SessionManager sessionManager;
