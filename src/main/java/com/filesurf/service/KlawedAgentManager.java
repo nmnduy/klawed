@@ -855,6 +855,9 @@ public class KlawedAgentManager {
                 }
             }
             
+            // Clean up klawed database files
+            cleanupKlawedDbFiles(sessionId, sessionDir);
+            
             LOGGER.info("[SESSION:" + sessionId + "] Klawed agent instance stopped");
             
             // Delete PID file when agent is stopped (only for direct mode)
@@ -887,6 +890,37 @@ public class KlawedAgentManager {
         }
         
         LOGGER.info("KlawedAgentManager shutdown complete");
+    }
+    
+    /**
+     * Clean up klawed database files from the session directory.
+     * This includes:
+     * - klawed_messages_{sessionId}.db
+     * - klawed_messages_{sessionId}.db-shm (shared memory)
+     * - klawed_messages_{sessionId}.db-wal (write-ahead log)
+     */
+    private void cleanupKlawedDbFiles(String sessionId, Path sessionDir) {
+        if (sessionDir == null) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Cannot cleanup klawed DB files: sessionDir is null");
+            return;
+        }
+        
+        LOGGER.info("[SESSION:" + sessionId + "] Cleaning up klawed database files from: " + sessionDir);
+        
+        String dbFileName = "klawed_messages_" + sessionId + ".db";
+        String[] sqliteExtensions = {"", "-shm", "-wal"};
+        
+        for (String ext : sqliteExtensions) {
+            Path dbFile = sessionDir.resolve(dbFileName + ext);
+            if (Files.exists(dbFile)) {
+                try {
+                    Files.delete(dbFile);
+                    LOGGER.info("[SESSION:" + sessionId + "] Deleted " + dbFile.getFileName());
+                } catch (IOException e) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Failed to delete " + dbFile.getFileName() + ": " + e.getMessage());
+                }
+            }
+        }
     }
     
     /**
