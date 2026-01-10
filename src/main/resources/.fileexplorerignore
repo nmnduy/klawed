@@ -20,11 +20,6 @@ logs/
 *.tmp
 tmp/
 
-# Database files
-*.sqlite
-*.db
-*.db-*
-
 # Compiled files
 *.class
 *.jar

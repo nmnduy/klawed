@@ -1,5 +1,8 @@
 ## General
 
+- [ ] lots of left over klawed db files in the workspace. maybe klawed files dont get cleaned up?
+    - [ ] log when file is deleleted
+- [ ] unset KLAWED_TOOL_DEBUG
 - [ ] file download button
 - [ ] we can preview more common files: html
 - [ ] put some stuff in the starting workspace for everyone

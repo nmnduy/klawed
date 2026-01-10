@@ -54,23 +54,23 @@ tail -f logs/application.log
 ### Klawed Communication Modes
 FileSurf v2 supports two communication modes for klawed agents:
 
-#### 1. SQLite Queue Mode (Default)
-- Uses SQLite database for message passing
-- More reliable for long-running sessions
-- Better for debugging (messages persist in database)
-- Enabled by default or with `KLAWED_COMMUNICATION_MODE=sqlite-queue`
-
-#### 2. Unix Socket Mode (Higher Performance)
+#### 1. Unix Socket Mode (Default)
 - Uses Unix domain sockets for direct communication
 - Lower latency and overhead
 - Better for high-performance scenarios
-- Enabled with `KLAWED_COMMUNICATION_MODE=unix-socket`
+- Enabled by default or with `KLAWED_COMMUNICATION_MODE=unix-socket`
+
+#### 2. SQLite Queue Mode (Alternative)
+- Uses SQLite database for message passing
+- More reliable for long-running sessions
+- Better for debugging (messages persist in database)
+- Enabled with `KLAWED_COMMUNICATION_MODE=sqlite-queue`
 
 #### Configuration
 ```properties
 # Communication mode for klawed agents
-# Options: "sqlite-queue" (default) or "unix-socket"
-klawed.communication.mode=${KLAWED_COMMUNICATION_MODE:sqlite-queue}
+# Options: "unix-socket" (default) or "sqlite-queue"
+klawed.communication.mode=${KLAWED_COMMUNICATION_MODE:unix-socket}
 
 # Unix socket configuration (only used when klawed.communication.mode=unix-socket)
 klawed.unix-socket.filename=klawed.sock
@@ -80,11 +80,10 @@ klawed.unix-socket.max-message-size=67108864  # 64 MB
 
 #### Switching Modes
 ```bash
-# Use Unix socket mode
-export KLAWED_COMMUNICATION_MODE=unix-socket
+# Use Unix socket mode (default)
 mvn quarkus:dev
 
-# Use SQLite queue mode (default)
+# Use SQLite queue mode (for debugging)
 export KLAWED_COMMUNICATION_MODE=sqlite-queue
 mvn quarkus:dev
 ```
