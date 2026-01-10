@@ -15,7 +15,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.Map;
@@ -48,7 +47,7 @@ public class ChunkedUploadResource {
         String fileName;
         long totalSize;
         long uploadedSize;
-        Path tempFile;
+        java.nio.file.Path tempFile;
         MessageDigest md5;
         long lastActivity;
 
@@ -291,17 +290,17 @@ public class ChunkedUploadResource {
     private Response finalizeUpload(UploadSession session) {
         try {
             // Get session directory
-            File sessionDir = sessionManager.getSessionDirectory(session.sessionId, session.userId);
-            if (sessionDir == null || !sessionDir.exists()) {
+            java.nio.file.Path sessionDir = sessionManager.getSessionDirectory(session.sessionId, session.userId);
+            if (sessionDir == null || !Files.exists(sessionDir)) {
                 throw new IOException("Session directory not found");
             }
 
             // Sanitize filename
             String safeFileName = session.fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
-            File targetFile = new File(sessionDir, safeFileName);
+            java.nio.file.Path targetFile = sessionDir.resolve(safeFileName);
 
             // Move file to session directory
-            Files.move(session.tempFile, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            Files.move(session.tempFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
 
             String md5Hash = session.getMd5Hash();
             
