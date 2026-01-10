@@ -1076,18 +1076,23 @@ class FileExplorer {
 
         console.log(`[file-explorer] Uploading ${files.length} file(s)`);
         
-        // Create FormData
-        const formData = new FormData();
+        const MAX_STANDARD_UPLOAD = 100 * 1024 * 1024; // 100 MB
+        const largeFiles = [];
+        const standardFiles = [];
+        
+        // Separate large files from standard files
         for (let i = 0; i < files.length; i++) {
-            formData.append('files', files[i]);
+            if (files[i].size > MAX_STANDARD_UPLOAD) {
+                largeFiles.push(files[i]);
+            } else {
+                standardFiles.push(files[i]);
+            }
         }
         
-        // Add current path
-        formData.append('path', this.currentPath);
+        const originalText = this.fileExplorerUpload.innerHTML;
         
         try {
             // Show loading state
-            const originalText = this.fileExplorerUpload.innerHTML;
             this.fileExplorerUpload.innerHTML = `
                 <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1096,27 +1101,88 @@ class FileExplorer {
             `;
             this.fileExplorerUpload.disabled = true;
 
-            // Send upload request
-            const response = await fetch('/file-chat/upload', {
-                method: 'POST',
-                headers: {
-                    'X-Session-ID': this.sessionId
-                },
-                body: formData
-            });
+            let uploadedCount = 0;
+            const errors = [];
 
-            if (!response.ok) {
-                throw new Error(`Upload failed: ${response.status}`);
+            // Upload standard files using regular upload
+            if (standardFiles.length > 0) {
+                try {
+                    console.log(`[file-explorer] Uploading ${standardFiles.length} standard file(s)`);
+                    const formData = new FormData();
+                    standardFiles.forEach(file => formData.append('files', file));
+                    formData.append('path', this.currentPath);
+
+                    const response = await fetch('/file-chat/upload', {
+                        method: 'POST',
+                        headers: {
+                            'X-Session-ID': this.sessionId
+                        },
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('[file-explorer] Standard upload failed:', response.status, errorText);
+                        throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
+                    }
+
+                    const result = await response.json();
+                    console.log('[file-explorer] Standard upload successful:', result);
+                    uploadedCount += result.count || standardFiles.length;
+                } catch (error) {
+                    console.error('[file-explorer] Standard upload error:', error);
+                    errors.push(`Standard files: ${error.message}`);
+                }
             }
 
-            const result = await response.json();
-            console.log('[file-explorer] Upload successful:', result);
+            // Upload large files using chunked upload
+            if (largeFiles.length > 0) {
+                if (typeof ChunkedUploader === 'undefined') {
+                    const errorMsg = 'ChunkedUploader not available. Cannot upload large files.';
+                    console.error('[file-explorer]', errorMsg);
+                    errors.push(errorMsg);
+                } else {
+                    for (const file of largeFiles) {
+                        try {
+                            console.log(`[file-explorer] Uploading large file via chunked upload: ${file.name} (${file.size} bytes)`);
+                            
+                            const uploader = new ChunkedUploader({
+                                onProgress: (progress) => {
+                                    console.log(`[file-explorer] ${file.name}: ${progress.progress.toFixed(1)}% (${progress.chunkIndex}/${progress.totalChunks} chunks)`);
+                                    this.fileExplorerUpload.innerHTML = `
+                                        <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        <span class="hidden sm:inline">${progress.progress.toFixed(0)}%</span>
+                                    `;
+                                },
+                                onError: (error) => {
+                                    console.error(`[file-explorer] Chunked upload error for ${file.name}:`, error);
+                                }
+                            });
+
+                            await uploader.upload(file, this.sessionId);
+                            console.log(`[file-explorer] Successfully uploaded large file: ${file.name}`);
+                            uploadedCount++;
+                        } catch (error) {
+                            console.error(`[file-explorer] Failed to upload large file ${file.name}:`, error);
+                            errors.push(`${file.name}: ${error.message}`);
+                        }
+                    }
+                }
+            }
 
             // Refresh file list
             await this.loadDirectory(this.currentPath);
 
-            // Show success message
-            this.showToast(`${files.length} file(s) uploaded successfully`, 'success');
+            // Show appropriate message
+            if (uploadedCount === files.length) {
+                this.showToast(`${uploadedCount} file(s) uploaded successfully`, 'success');
+            } else if (uploadedCount > 0) {
+                this.showToast(`${uploadedCount}/${files.length} file(s) uploaded. Errors: ${errors.join(', ')}`, 'warning');
+            } else {
+                throw new Error(errors.join(', ') || 'All uploads failed');
+            }
 
         } catch (error) {
             console.error('[file-explorer] Upload error:', error);
@@ -1140,6 +1206,7 @@ class FileExplorer {
         toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg animate-fade-in ${
             type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
             type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
+            type === 'warning' ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
             'bg-blue-50 text-blue-800 border border-blue-200'
         }`;
         
@@ -1148,6 +1215,7 @@ class FileExplorer {
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     ${type === 'success' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />' :
                       type === 'error' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />' :
+                      type === 'warning' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />' :
                       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />'}
                 </svg>
                 <span class="text-caption-m-bold">${message}</span>
