@@ -65,6 +65,11 @@ class FileExplorer {
         this.filePreviewPdf = document.getElementById('file-preview-pdf');
         this.filePreviewPdfFrame = document.getElementById('file-preview-pdf-frame');
         this.filePreviewPdfDownload = document.getElementById('file-preview-pdf-download');
+        this.filePreviewPdfDownloadBtn = document.getElementById('file-preview-pdf-download-btn');
+        this.filePreviewTextOpenBtn = document.getElementById('file-preview-text-open-btn');
+        this.filePreviewTextDownloadBtn = document.getElementById('file-preview-text-download-btn');
+        this.filePreviewBinaryOpenBtn = document.getElementById('file-preview-binary-open-btn');
+        this.filePreviewBinaryDownloadBtn = document.getElementById('file-preview-binary-download-btn');
 
         // State
         this.currentPath = '/';
@@ -76,6 +81,8 @@ class FileExplorer {
         this.activeFilter = 'all';
         this.activeSort = 'name';
         this.searchTerm = '';
+        this.currentPreviewFilePath = null;
+        this.currentPreviewFileName = null;
 
         // File icons mapping
         this.fileIcons = {
@@ -481,13 +488,21 @@ class FileExplorer {
                         </div>
                         <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-slate-500 text-right tabular-nums">
                             <span>${size}</span>
-                            <button type="button" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-orange-700 hover:text-orange-800 hover:bg-orange-50 rounded transition open-file-btn ${isDirectory ? 'hidden' : ''}" title="${isMac ? 'Open in Finder' : 'Open in Explorer'}">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17H7a2 2 0 01-2-2V7a2 2 0 012-2h6" />
-                                </svg>
-                                <span class="hidden xl:inline">Open</span>
-                            </button>
+                            <div class="flex items-center gap-1">
+                                <button type="button" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-orange-700 hover:text-orange-800 hover:bg-orange-50 rounded transition open-file-btn ${isDirectory ? 'hidden' : ''}" title="Open file (view in browser)">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17H7a2 2 0 01-2-2V7a2 2 0 012-2h6" />
+                                    </svg>
+                                    <span class="hidden xl:inline">Open</span>
+                                </button>
+                                <button type="button" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-cyan-700 hover:text-cyan-800 hover:bg-cyan-50 rounded transition download-file-btn ${isDirectory ? 'hidden' : ''}" title="Download file">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span class="hidden xl:inline">Download</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -506,6 +521,14 @@ class FileExplorer {
                     openButton.addEventListener('click', (e) => {
                         e.stopPropagation();
                         this.openFile(item.path, item.name);
+                    });
+                }
+
+                const downloadButton = itemElement.querySelector('.download-file-btn');
+                if (downloadButton) {
+                    downloadButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.downloadFile(item.path, item.name);
                     });
                 }
             } else {
@@ -623,8 +646,43 @@ class FileExplorer {
             });
     }
 
+    // Download file (always forces download as attachment)
+    downloadFile(filePath, fileName) {
+        if (!this.sessionId) return;
+        const url = `/file-chat/explorer/download?path=${encodeURIComponent(filePath)}`;
+        fetch(url, {
+            headers: {
+                'X-Session-ID': this.sessionId
+            }
+        })
+            .then(resp => {
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+                }
+                return resp.blob();
+            })
+            .then(blob => {
+                const objectUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objectUrl;
+                a.download = fileName || 'download';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+            })
+            .catch(err => {
+                console.error('Failed to download file:', err);
+                alert('Failed to download file: ' + err.message);
+            });
+    }
+
     // Preview file
     async previewFile(filePath, fileName, fileSize) {
+        // Store current file info for download buttons
+        this.currentPreviewFilePath = filePath;
+        this.currentPreviewFileName = fileName;
+
         // Show preview panel
         this.filePreviewPanel.classList.remove('hidden');
 
@@ -656,6 +714,11 @@ class FileExplorer {
                     };
                     if (this.filePreviewPdfDownload) {
                         this.filePreviewPdfDownload.href = objectUrl;
+                        // Update click handler to use download method
+                        this.filePreviewPdfDownload.onclick = (e) => {
+                            e.preventDefault();
+                            this.downloadFile(filePath, fileName);
+                        };
                     }
                     this.filePreviewPdfFrame.src = objectUrl;
                 } else {
@@ -863,6 +926,47 @@ class FileExplorer {
         if (this.filePreviewClose) {
             this.filePreviewClose.addEventListener('click', () => {
                 this.filePreviewPanel.classList.add('hidden');
+            });
+        }
+
+        // Preview panel download buttons
+        if (this.filePreviewPdfDownloadBtn) {
+            this.filePreviewPdfDownloadBtn.addEventListener('click', () => {
+                if (this.currentPreviewFilePath && this.currentPreviewFileName) {
+                    this.downloadFile(this.currentPreviewFilePath, this.currentPreviewFileName);
+                }
+            });
+        }
+
+        if (this.filePreviewTextOpenBtn) {
+            this.filePreviewTextOpenBtn.addEventListener('click', () => {
+                if (this.currentPreviewFilePath && this.currentPreviewFileName) {
+                    this.openFile(this.currentPreviewFilePath, this.currentPreviewFileName);
+                }
+            });
+        }
+
+        if (this.filePreviewTextDownloadBtn) {
+            this.filePreviewTextDownloadBtn.addEventListener('click', () => {
+                if (this.currentPreviewFilePath && this.currentPreviewFileName) {
+                    this.downloadFile(this.currentPreviewFilePath, this.currentPreviewFileName);
+                }
+            });
+        }
+
+        if (this.filePreviewBinaryOpenBtn) {
+            this.filePreviewBinaryOpenBtn.addEventListener('click', () => {
+                if (this.currentPreviewFilePath && this.currentPreviewFileName) {
+                    this.openFile(this.currentPreviewFilePath, this.currentPreviewFileName);
+                }
+            });
+        }
+
+        if (this.filePreviewBinaryDownloadBtn) {
+            this.filePreviewBinaryDownloadBtn.addEventListener('click', () => {
+                if (this.currentPreviewFilePath && this.currentPreviewFileName) {
+                    this.downloadFile(this.currentPreviewFilePath, this.currentPreviewFileName);
+                }
             });
         }
 
