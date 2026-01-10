@@ -48,12 +48,12 @@ public class FileExplorerResource {
     
     // Whitelist of file extensions to preview as text
     private static final java.util.Set<String> PREVIEWABLE_EXTENSIONS = java.util.Set.of(
-        "txt", "md", "json", "xml", "yaml", "yml", "properties", "ini", "cfg", "conf",
-        "java", "js", "ts", "py", "cpp", "c", "h", "hpp", "cs", "go", "rs", "php", "rb",
-        "html", "htm", "css", "scss", "less", "jsx", "tsx", "vue",
-        "sql", "sh", "bash", "zsh", "ps1", "bat", "cmd",
+        "txt", "md", "markdown", "json", "xml", "yaml", "yml", "properties", "ini", "cfg", "conf",
+        "java", "js", "ts", "py", "cpp", "c", "h", "hpp", "cs", "go", "rs", "php", "rb", "swift", "kt", "scala",
+        "html", "htm", "css", "scss", "less", "sass", "jsx", "tsx", "vue", "svelte",
+        "sql", "sh", "bash", "zsh", "ps1", "bat", "cmd", "dockerfile",
         "csv", "tsv", "log", "out", "err",
-        "gradle", "pom", "toml", "tex"
+        "gradle", "pom", "toml", "tex", "gitignore", "env", "editorconfig", "makefile"
     );
 
     private String resolveUserId(String headerUserId, String cookieUserId) {

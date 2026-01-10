@@ -140,6 +140,22 @@
                     </div>
                     <iframe id="file-preview-pdf-frame" class="w-full h-80 border border-border rounded-lg" title="PDF preview"></iframe>
                 </div>
+                <div id="file-preview-html" class="hidden space-y-2">
+                    <div class="flex justify-between items-center text-caption-s text-muted-foreground">
+                        <span>HTML preview</span>
+                        <a id="file-preview-html-download" class="inline-flex items-center gap-1 px-2 py-1 rounded border border-border bg-card hover:bg-muted text-foreground" target="_blank" rel="noopener">Open in new tab</a>
+                    </div>
+                    <iframe id="file-preview-html-frame" class="w-full h-80 border border-border rounded-lg bg-white" title="HTML preview" sandbox="allow-scripts allow-same-origin"></iframe>
+                </div>
+                <div id="file-preview-image" class="hidden space-y-2">
+                    <div class="flex justify-between items-center text-caption-s text-muted-foreground">
+                        <span>Image preview</span>
+                        <a id="file-preview-image-download" class="inline-flex items-center gap-1 px-2 py-1 rounded border border-border bg-card hover:bg-muted text-foreground" target="_blank" rel="noopener">Open in new tab</a>
+                    </div>
+                    <div class="flex items-center justify-center bg-slate-100 rounded-lg p-4">
+                        <img id="file-preview-image-img" class="max-w-full max-h-80 object-contain" alt="Image preview" />
+                    </div>
+                </div>
                 <div id="file-preview-binary" class="hidden text-center py-8">
                     <svg class="w-12 h-12 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

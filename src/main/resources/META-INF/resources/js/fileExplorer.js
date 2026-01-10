@@ -65,6 +65,12 @@ class FileExplorer {
         this.filePreviewPdf = document.getElementById('file-preview-pdf');
         this.filePreviewPdfFrame = document.getElementById('file-preview-pdf-frame');
         this.filePreviewPdfDownload = document.getElementById('file-preview-pdf-download');
+        this.filePreviewHtml = document.getElementById('file-preview-html');
+        this.filePreviewHtmlFrame = document.getElementById('file-preview-html-frame');
+        this.filePreviewHtmlDownload = document.getElementById('file-preview-html-download');
+        this.filePreviewImage = document.getElementById('file-preview-image');
+        this.filePreviewImageImg = document.getElementById('file-preview-image-img');
+        this.filePreviewImageDownload = document.getElementById('file-preview-image-download');
 
         // State
         this.currentPath = '/';
@@ -146,6 +152,12 @@ class FileExplorer {
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
         if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+    }
+
+    // Check if file is an image
+    isImageFile(fileName) {
+        const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp', '.ico'];
+        return imageExtensions.some(ext => fileName.endsWith(ext));
     }
 
     // Format date
@@ -628,16 +640,89 @@ class FileExplorer {
         // Show preview panel
         this.filePreviewPanel.classList.remove('hidden');
 
-        // Show loading
+        // Show loading and hide all preview types
         this.filePreviewLoading.classList.remove('hidden');
         this.filePreviewText.classList.add('hidden');
         this.filePreviewBinary.classList.add('hidden');
         this.filePreviewError.classList.add('hidden');
         if (this.filePreviewPdf) this.filePreviewPdf.classList.add('hidden');
         if (this.filePreviewPdfFrame) this.filePreviewPdfFrame.src = '';
+        if (this.filePreviewHtml) this.filePreviewHtml.classList.add('hidden');
+        if (this.filePreviewHtmlFrame) this.filePreviewHtmlFrame.src = '';
+        if (this.filePreviewImage) this.filePreviewImage.classList.add('hidden');
+        if (this.filePreviewImageImg) this.filePreviewImageImg.src = '';
 
         try {
-            if (fileName && fileName.toLowerCase().endsWith('.pdf')) {
+            const lowerFileName = fileName ? fileName.toLowerCase() : '';
+            
+            // Handle images
+            if (lowerFileName && this.isImageFile(lowerFileName)) {
+                const fileUrl = `/file-chat/explorer/open?path=${encodeURIComponent(filePath)}`;
+                const resp = await fetch(fileUrl, {
+                    headers: {
+                        'X-Session-ID': this.sessionId
+                    }
+                });
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+                }
+                const blob = await resp.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                if (this.filePreviewImage && this.filePreviewImageImg) {
+                    this.filePreviewImage.classList.remove('hidden');
+                    this.filePreviewImageImg.onload = () => {
+                        this.filePreviewLoading.classList.add('hidden');
+                    };
+                    this.filePreviewImageImg.onerror = () => {
+                        this.filePreviewLoading.classList.add('hidden');
+                        throw new Error('Failed to load image');
+                    };
+                    if (this.filePreviewImageDownload) {
+                        this.filePreviewImageDownload.href = objectUrl;
+                        this.filePreviewImageDownload.download = fileName;
+                    }
+                    this.filePreviewImageImg.src = objectUrl;
+                } else {
+                    window.open(objectUrl, '_blank', 'noopener');
+                    this.filePreviewLoading.classList.add('hidden');
+                }
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+                return;
+            }
+            
+            // Handle HTML files
+            if (lowerFileName && (lowerFileName.endsWith('.html') || lowerFileName.endsWith('.htm'))) {
+                const fileUrl = `/file-chat/explorer/open?path=${encodeURIComponent(filePath)}`;
+                const resp = await fetch(fileUrl, {
+                    headers: {
+                        'X-Session-ID': this.sessionId
+                    }
+                });
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+                }
+                const blob = await resp.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                if (this.filePreviewHtml && this.filePreviewHtmlFrame) {
+                    this.filePreviewHtml.classList.remove('hidden');
+                    this.filePreviewHtmlFrame.onload = () => {
+                        this.filePreviewLoading.classList.add('hidden');
+                    };
+                    if (this.filePreviewHtmlDownload) {
+                        this.filePreviewHtmlDownload.href = objectUrl;
+                        this.filePreviewHtmlDownload.download = fileName;
+                    }
+                    this.filePreviewHtmlFrame.src = objectUrl;
+                } else {
+                    window.open(objectUrl, '_blank', 'noopener');
+                    this.filePreviewLoading.classList.add('hidden');
+                }
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+                return;
+            }
+            
+            // Handle PDFs
+            if (lowerFileName && lowerFileName.endsWith('.pdf')) {
                 const fileUrl = `/file-chat/explorer/open?path=${encodeURIComponent(filePath)}`;
                 const resp = await fetch(fileUrl, {
                     headers: {
