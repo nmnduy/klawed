@@ -58,6 +58,12 @@ public class PodmanSandboxService {
     @ConfigProperty(name = "klawed.path", defaultValue = "/usr/local/bin/klawed")
     String klawedPath;
     
+    @ConfigProperty(name = "klawed.communication.mode", defaultValue = "sqlite-queue")
+    String communicationMode;
+    
+    @ConfigProperty(name = "klawed.unix-socket.filename", defaultValue = "klawed.sock")
+    String unixSocketFilename;
+    
     /**
      * Check if Podman sandbox mode is enabled
      */
@@ -70,7 +76,7 @@ public class PodmanSandboxService {
      * 
      * @param sessionId The session ID (used for container naming)
      * @param workspaceDir The workspace directory to mount into the container
-     * @param sqliteDbPath The SQLite database path for the klawed queue
+     * @param sqliteDbPath The SQLite database path for the klawed queue (only used in SQLite mode)
      * @return The container ID
      * @throws IOException If container creation fails
      */
@@ -253,7 +259,15 @@ public class PodmanSandboxService {
         // We also touch the log file to ensure klawed can open it
         command.add("/bin/sh");
         command.add("-c");
-        command.add("mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed --sqlite-queue " + sqliteDbPath);
+        
+        String shellCommand;
+        if ("unix-socket".equals(communicationMode)) {
+            String socketPath = "/workspace/" + unixSocketFilename;
+            shellCommand = "mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed -u " + socketPath;
+        } else {
+            shellCommand = "mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed --sqlite-queue " + sqliteDbPath;
+        }
+        command.add(shellCommand);
         
         return command;
     }

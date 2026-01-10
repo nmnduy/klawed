@@ -263,14 +263,15 @@ public class KlawedShutdownService {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    if (line.contains("klawed") && line.contains("--sqlite-queue")) {
+                    if (line.contains("klawed") && (line.contains("--sqlite-queue") || line.contains(" -u ") || line.contains(" --uds "))) {
                         // Parse PID from ps output
                         String[] parts = line.trim().split("\\s+");
                         if (parts.length > 1) {
                             try {
                                 long pid = Long.parseLong(parts[1]);
                                 pids.add(pid);
-                                LOGGER.fine("Found klawed sqlite-queue process: PID=" + pid);
+                                String mode = line.contains("--sqlite-queue") ? "sqlite-queue" : "unix-socket";
+                                LOGGER.fine("Found klawed " + mode + " process: PID=" + pid);
                             } catch (NumberFormatException e) {
                                 // Skip invalid PID
                             }

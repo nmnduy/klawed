@@ -47,6 +47,18 @@ public class KlawedAgentManager {
     @ConfigProperty(name = "klawed.path")
     Optional<String> klawedPath;
     
+    @ConfigProperty(name = "klawed.communication.mode", defaultValue = "sqlite-queue")
+    String communicationMode;
+    
+    @ConfigProperty(name = "klawed.unix-socket.filename", defaultValue = "klawed.sock")
+    String unixSocketFilename;
+    
+    @ConfigProperty(name = "klawed.unix-socket.timeout-ms", defaultValue = "30000")
+    int unixSocketTimeoutMs;
+    
+    @ConfigProperty(name = "klawed.unix-socket.max-message-size", defaultValue = "67108864")
+    int unixSocketMaxMessageSize;
+    
     @Inject
     FileChatService fileChatService;
     
@@ -202,8 +214,16 @@ public class KlawedAgentManager {
         
         LOGGER.info("[SESSION:" + sessionId + "] Using klawed binary: " + klawedBinary);
         
-        // Build the process with environment configuration - use SQLite queue mode
-        ProcessBuilder processBuilder = new ProcessBuilder(klawedBinary, "--sqlite-queue", sqliteDbPath);
+        // Build the process with environment configuration based on communication mode
+        ProcessBuilder processBuilder;
+        if ("unix-socket".equals(communicationMode)) {
+            Path socketPath = sessionDir.resolve(unixSocketFilename);
+            processBuilder = new ProcessBuilder(klawedBinary, "-u", socketPath.toString());
+            LOGGER.info("[SESSION:" + sessionId + "] Starting klawed in Unix socket mode: " + socketPath);
+        } else {
+            processBuilder = new ProcessBuilder(klawedBinary, "--sqlite-queue", sqliteDbPath);
+            LOGGER.info("[SESSION:" + sessionId + "] Starting klawed in SQLite queue mode: " + sqliteDbPath);
+        }
         LOGGER.info("[SESSION:" + sessionId + "] Klawed command: " + String.join(" ", processBuilder.command()));
         
         // Set working directory to session directory
@@ -293,7 +313,11 @@ public class KlawedAgentManager {
 
         Process process = processBuilder.start();
         long pid = process.pid();
-        LOGGER.info("[SESSION:" + sessionId + "] Klawed agent started with PID: " + pid + " with SQLite database: " + sqliteDbPath);
+        
+        String dbInfo = "unix-socket".equals(communicationMode) ? 
+            "Unix socket: " + sessionDir.resolve(unixSocketFilename) : 
+            "SQLite database: " + sqliteDbPath;
+        LOGGER.info("[SESSION:" + sessionId + "] Klawed agent started with PID: " + pid + " with " + dbInfo);
         
         // Write PID file to session directory for management
         writePidFile(sessionDir, pid, sqliteDbPath);
@@ -422,6 +446,7 @@ public class KlawedAgentManager {
         private final Path sessionDir;
         private final String containerId;  // null if running directly (not in container)
         private SQLiteQueueClient sqliteQueueClient;
+        private UnixSocketClient unixSocketClient;
         private volatile boolean asyncPollingActive = false;
         private volatile boolean shouldPollContinuously = false;
         
@@ -437,8 +462,9 @@ public class KlawedAgentManager {
             this.containerId = containerId;
             
             String modeInfo = containerId != null ? "sandbox mode (container: " + containerId + ")" : "direct mode";
+            String commInfo = "unix-socket".equals(communicationMode) ? "Unix socket mode" : "SQLite queue mode";
             LOGGER.info("[SESSION:" + sessionId + "] Agent instance created in " + modeInfo + 
-                       " with SQLite database: " + sqliteDbPath + ", sessionDir: " + sessionDir);
+                       " with " + commInfo + ", sessionDir: " + sessionDir);
         }
         
         public String getSessionId() {
@@ -495,9 +521,47 @@ public class KlawedAgentManager {
         }
         
         /**
-         * Connect to the agent's SQLite queue
+         * Connect to the agent based on communication mode
          */
         public void connect() throws IOException {
+            if ("unix-socket".equals(communicationMode)) {
+                connectUnixSocket();
+            } else {
+                connectSqliteQueue();
+            }
+        }
+        
+        /**
+         * Connect to the agent's Unix socket
+         */
+        private void connectUnixSocket() throws IOException {
+            Path socketPath = sessionDir.resolve(unixSocketFilename);
+            LOGGER.info("[SESSION:" + sessionId + "] Connecting to klawed Unix socket: " + socketPath);
+            
+            if (unixSocketClient != null) {
+                LOGGER.warning("[SESSION:" + sessionId + "] Already connected to Unix socket");
+                return;
+            }
+            
+            // Create UnixSocketClient with sessionId and fileChatService
+            UnixSocketClient.Config config = new UnixSocketClient.Config(socketPath.toString())
+                .withSessionId(sessionId)
+                .withFileChatService(fileChatService)
+                .withTimeoutMs(unixSocketTimeoutMs)
+                .withMaxMessageSize(unixSocketMaxMessageSize);
+            
+            unixSocketClient = new UnixSocketClient(config);
+            unixSocketClient.connect();
+            
+            LOGGER.info("[SESSION:" + sessionId + "] Successfully connected to Unix socket");
+            
+            // Unix socket doesn't need async polling - responses come directly
+        }
+        
+        /**
+         * Connect to the agent's SQLite queue
+         */
+        private void connectSqliteQueue() throws IOException {
             LOGGER.info("[SESSION:" + sessionId + "] Connecting to klawed SQLite queue: " + sqliteDbPath);
             
             if (sqliteQueueClient != null) {
@@ -523,6 +587,35 @@ public class KlawedAgentManager {
          * Send message to the agent and get response
          */
         public String sendMessage(String message) throws IOException, InterruptedException {
+            if ("unix-socket".equals(communicationMode)) {
+                return sendMessageUnixSocket(message);
+            } else {
+                return sendMessageSqliteQueue(message);
+            }
+        }
+        
+        private String sendMessageUnixSocket(String message) throws IOException, InterruptedException {
+            LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via Unix socket");
+            LOGGER.info("[SESSION:" + sessionId + "] Message: " + 
+                       message.substring(0, Math.min(100, message.length())) + 
+                       (message.length() > 100 ? "..." : ""));
+            
+            if (unixSocketClient == null) {
+                connect();
+            }
+            
+            if (!unixSocketClient.isConnected()) {
+                throw new IOException("UnixSocketClient not connected to Unix socket");
+            }
+            
+            String response = unixSocketClient.sendMessage(message);
+            LOGGER.info("[SESSION:" + sessionId + "] Received response of length: " + 
+                       (response != null ? response.length() : 0));
+            
+            return response;
+        }
+        
+        private String sendMessageSqliteQueue(String message) throws IOException, InterruptedException {
             LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via SQLite queue");
             LOGGER.info("[SESSION:" + sessionId + "] Message: " + 
                        message.substring(0, Math.min(100, message.length())) + 
@@ -548,6 +641,32 @@ public class KlawedAgentManager {
          * Returns immediately, responses delivered via polling service
          */
         public void sendMessageAsync(String message) throws IOException {
+            if ("unix-socket".equals(communicationMode)) {
+                sendMessageAsyncUnixSocket(message);
+            } else {
+                sendMessageAsyncSqliteQueue(message);
+            }
+        }
+        
+        private void sendMessageAsyncUnixSocket(String message) throws IOException {
+            LOGGER.info("[SESSION:" + sessionId + "] Sending message asynchronously to klawed via Unix socket");
+            LOGGER.info("[SESSION:" + sessionId + "] Message: " + 
+                       message.substring(0, Math.min(100, message.length())) + 
+                       (message.length() > 100 ? "..." : ""));
+            
+            if (unixSocketClient == null) {
+                connect();
+            }
+            
+            if (!unixSocketClient.isConnected()) {
+                throw new IOException("UnixSocketClient not connected to Unix socket");
+            }
+            
+            unixSocketClient.sendMessageAsync(message);
+            LOGGER.info("[SESSION:" + sessionId + "] Message sent asynchronously via Unix socket");
+        }
+        
+        private void sendMessageAsyncSqliteQueue(String message) throws IOException {
             LOGGER.info("[SESSION:" + sessionId + "] Sending message asynchronously to klawed via SQLite queue");
             LOGGER.info("[SESSION:" + sessionId + "] Message: " + 
                        message.substring(0, Math.min(100, message.length())) + 
@@ -675,7 +794,7 @@ public class KlawedAgentManager {
             shouldPollContinuously = false;
             asyncPollingActive = false;
             
-            // Shutdown SQLite queue client first
+            // Shutdown clients first
             if (sqliteQueueClient != null) {
                 try {
                     sqliteQueueClient.shutdown();
@@ -683,6 +802,15 @@ public class KlawedAgentManager {
                     LOGGER.warning("[SESSION:" + sessionId + "] Error shutting down SQLiteQueueClient: " + e.getMessage());
                 }
                 sqliteQueueClient = null;
+            }
+            
+            if (unixSocketClient != null) {
+                try {
+                    unixSocketClient.disconnect();
+                } catch (Exception e) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Error disconnecting UnixSocketClient: " + e.getMessage());
+                }
+                unixSocketClient = null;
             }
             
             if (containerId != null) {
