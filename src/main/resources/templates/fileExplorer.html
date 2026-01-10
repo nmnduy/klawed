@@ -75,7 +75,7 @@
         <div class="rounded-xl border border-border bg-card shadow-sm">
             <div class="hidden sm:grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_112px] items-center gap-3 px-3 py-2 text-caption-s text-muted-foreground uppercase tracking-wide bg-muted/50 border-b border-border">
                 <span class="text-left">Name</span>
-                <span class="hidden lg:inline text-right">Size / Open</span>
+                <span class="hidden lg:inline text-right">Size / Actions</span>
             </div>
             <div id="file-explorer-loading" class="flex items-center justify-center py-12">
                 <div class="text-center">
@@ -130,13 +130,23 @@
                         <span class="text-caption-m text-muted-foreground">Loading preview...</span>
                     </div>
                 </div>
-                <div id="file-preview-text" class="hidden">
-                    <pre class="text-caption-m font-mono whitespace-pre-wrap break-words text-foreground"></pre>
+                <div id="file-preview-text" class="hidden space-y-2">
+                    <div class="flex justify-between items-center text-caption-s text-muted-foreground">
+                        <span>Text preview</span>
+                        <div class="flex gap-2">
+                            <button id="file-preview-text-open-btn" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-orange-700 hover:text-orange-800 hover:bg-orange-50 rounded transition">Open</button>
+                            <button id="file-preview-text-download-btn" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-cyan-700 hover:text-cyan-800 hover:bg-cyan-50 rounded transition">Download</button>
+                        </div>
+                    </div>
+                    <pre class="text-caption-m font-mono whitespace-pre-wrap break-words text-foreground bg-white p-3 rounded border border-border"></pre>
                 </div>
                 <div id="file-preview-pdf" class="hidden space-y-2">
                     <div class="flex justify-between items-center text-caption-s text-muted-foreground">
                         <span>PDF preview</span>
-                        <a id="file-preview-pdf-download" class="inline-flex items-center gap-1 px-2 py-1 rounded border border-border bg-card hover:bg-muted text-foreground" target="_blank" rel="noopener">Open in new tab</a>
+                        <div class="flex gap-2">
+                            <a id="file-preview-pdf-download" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-orange-700 hover:text-orange-800 hover:bg-orange-50 rounded transition" target="_blank" rel="noopener">Open</a>
+                            <button id="file-preview-pdf-download-btn" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-cyan-700 hover:text-cyan-800 hover:bg-cyan-50 rounded transition">Download</button>
+                        </div>
                     </div>
                     <iframe id="file-preview-pdf-frame" class="w-full h-80 border border-border rounded-lg" title="PDF preview"></iframe>
                 </div>
@@ -156,12 +166,16 @@
                         <img id="file-preview-image-img" class="max-w-full max-h-80 object-contain" alt="Image preview" />
                     </div>
                 </div>
-                <div id="file-preview-binary" class="hidden text-center py-8">
+                <div id="file-preview-binary" class="hidden text-center py-8 space-y-3">
                     <svg class="w-12 h-12 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <p class="text-caption-m text-muted-foreground">Binary file</p>
                     <p id="file-preview-binary-size" class="text-caption-s text-muted-foreground mt-1"></p>
+                    <div class="flex justify-center gap-2 pt-2">
+                        <button id="file-preview-binary-open-btn" class="inline-flex items-center gap-1 px-3 py-1.5 text-caption-s text-orange-700 hover:text-orange-800 hover:bg-orange-50 rounded transition">Open</button>
+                        <button id="file-preview-binary-download-btn" class="inline-flex items-center gap-1 px-3 py-1.5 text-caption-s text-cyan-700 hover:text-cyan-800 hover:bg-cyan-50 rounded transition">Download</button>
+                    </div>
                 </div>
                 <div id="file-preview-error" class="hidden text-center py-8">
                     <svg class="w-12 h-12 text-red-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

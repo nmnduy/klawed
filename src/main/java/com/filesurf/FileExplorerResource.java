@@ -542,6 +542,89 @@ public class FileExplorerResource {
         if (lowerName.endsWith(".html") || lowerName.endsWith(".htm")) return "text/html";
         return "application/octet-stream";
     }
+
+    /**
+     * Download file (always forces download as attachment)
+     */
+    @GET
+    @Path("/download")
+    public Response downloadFile(
+            @HeaderParam("X-Session-ID") String sessionId,
+            @HeaderParam("X-User-ID") String headerUserId,
+            @CookieParam("filesurf_userId") String cookieUserId,
+            @QueryParam("path") String filePath) {
+
+        LOGGER.info("Downloading file for session: " + sessionId + ", path: " + filePath);
+
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("No session ID provided")
+                    .build();
+        }
+
+        String userId = resolveUserId(headerUserId, cookieUserId);
+        if (userId == null || userId.trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("No user ID provided")
+                    .build();
+        }
+
+        if (filePath == null || filePath.trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("No file path provided")
+                    .build();
+        }
+
+        try {
+            java.nio.file.Path sessionDir = sessionManager.getSessionDirectory(sessionId, userId);
+            FileFilter fileFilter = createFileFilter(sessionDir);
+
+            String sanitizedPath = sanitizePath(filePath);
+            java.nio.file.Path targetFile = sessionDir.resolve(sanitizedPath).normalize();
+
+            if (!targetFile.startsWith(sessionDir)) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity("Invalid file path")
+                        .build();
+            }
+
+            if (shouldIgnore(targetFile, sessionDir, fileFilter)) {
+                return Response.status(Response.Status.NOT_FOUND)
+                        .entity("File not found")
+                        .build();
+            }
+
+            if (!Files.exists(targetFile)) {
+                return Response.status(Response.Status.NOT_FOUND)
+                        .entity("File not found")
+                        .build();
+            }
+
+            if (!Files.isRegularFile(targetFile)) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity("Path is not a file")
+                        .build();
+            }
+
+            String fileName = targetFile.getFileName().toString();
+            String contentType = detectContentType(targetFile, fileName);
+
+            Response.ResponseBuilder builder = Response.ok(targetFile.toFile());
+            if (contentType != null) {
+                builder.type(contentType);
+            }
+
+            // Always force download as attachment
+            builder.header("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+
+            return builder.build();
+        } catch (IOException e) {
+            LOGGER.severe("Failed to download file: " + e.getMessage());
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("Failed to download file: " + e.getMessage())
+                    .build();
+        }
+    }
     
     /**
      * Get file metadata
