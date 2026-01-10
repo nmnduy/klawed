@@ -51,6 +51,44 @@ tail -f logs/application.log
 - Klawed agent logs: `logs/klawed-agents.log` (rotates at 50MB)
 - Console output also available in dev mode
 
+### Klawed Communication Modes
+FileSurf v2 supports two communication modes for klawed agents:
+
+#### 1. SQLite Queue Mode (Default)
+- Uses SQLite database for message passing
+- More reliable for long-running sessions
+- Better for debugging (messages persist in database)
+- Enabled by default or with `KLAWED_COMMUNICATION_MODE=sqlite-queue`
+
+#### 2. Unix Socket Mode (Higher Performance)
+- Uses Unix domain sockets for direct communication
+- Lower latency and overhead
+- Better for high-performance scenarios
+- Enabled with `KLAWED_COMMUNICATION_MODE=unix-socket`
+
+#### Configuration
+```properties
+# Communication mode for klawed agents
+# Options: "sqlite-queue" (default) or "unix-socket"
+klawed.communication.mode=${KLAWED_COMMUNICATION_MODE:sqlite-queue}
+
+# Unix socket configuration (only used when klawed.communication.mode=unix-socket)
+klawed.unix-socket.filename=klawed.sock
+klawed.unix-socket.timeout-ms=30000
+klawed.unix-socket.max-message-size=67108864  # 64 MB
+```
+
+#### Switching Modes
+```bash
+# Use Unix socket mode
+export KLAWED_COMMUNICATION_MODE=unix-socket
+mvn quarkus:dev
+
+# Use SQLite queue mode (default)
+export KLAWED_COMMUNICATION_MODE=sqlite-queue
+mvn quarkus:dev
+```
+
 ## Project Structure
 ```
 src/main/java/com/filesurf/     # Java source code
