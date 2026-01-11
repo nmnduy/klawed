@@ -221,20 +221,18 @@ export function init(rootEl) {
             messageDiv.className = 'flex ' + (isUser ? 'justify-end' : 'justify-start') + ' animate-fade-in';
 
             const bubble = document.createElement('div');
-            bubble.className = 'inline-block max-w-[85%] sm:max-w-2xl px-5 sm:px-6 py-4 rounded-2xl border-2 ' + (isUser ? 
-                'bg-gradient-to-br from-orange-50 to-orange-100/80 dark:from-orange-950/40 dark:to-orange-900/30 border-orange-200 dark:border-orange-800/60 shadow-sm shadow-orange-200/50 dark:shadow-orange-900/20' : 
-                'bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-800/40 dark:to-slate-900/60 border-slate-200 dark:border-slate-700 shadow-sm shadow-slate-200/50 dark:shadow-slate-900/30');
+            bubble.className = 'inline-block max-w-[78%] sm:max-w-2xl px-4 sm:px-5 py-3.5 rounded-2xl border shadow-sm transition-colors ' + (isUser ?
+                'bg-orange-50 dark:bg-orange-950/30 border-orange-100 dark:border-orange-800/60 text-orange-950 dark:text-orange-50 shadow-orange-200/40 dark:shadow-none' :
+                'bg-layout-surface dark:bg-dark-surface border-layout-border dark:border-dark-border text-layout-content-high dark:text-dark-content-high shadow-slate-200/40 dark:shadow-slate-900/20');
 
             const textDiv = document.createElement('div');
-            textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed ' + (isUser ? 
-                'text-slate-900 dark:text-slate-100' : 
-                'text-slate-800 dark:text-slate-200');
+            textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed text-current';
             textDiv.textContent = String(content);
 
             const timestamp = document.createElement('div');
-            timestamp.className = 'text-caption-s mt-2 ' + (isUser ? 
-                'text-orange-600/70 dark:text-orange-400/60' : 
-                'text-slate-500 dark:text-slate-400');
+            timestamp.className = 'text-caption-s mt-2 ' + (isUser ?
+                'text-orange-700/80 dark:text-orange-300/80' :
+                'text-layout-content-low dark:text-dark-content-low');
             timestamp.textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
             bubble.appendChild(textDiv);
@@ -315,15 +313,14 @@ export function init(rootEl) {
         wrapper.setAttribute('data-typing-indicator', '');
 
         const bubble = document.createElement('div');
-        bubble.className = 'inline-flex items-center px-5 py-3 rounded-2xl border-2 shadow-sm bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-800/40 dark:to-slate-900/60 border-slate-200 dark:border-slate-700';
+        bubble.className = 'inline-flex items-center px-4 py-2.5 rounded-2xl border shadow-sm bg-layout-surface dark:bg-dark-surface border-layout-border dark:border-dark-border text-layout-content-medium dark:text-dark-content-medium';
 
         const dots = document.createElement('div');
-        dots.className = 'flex gap-1.5 px-1';
+        dots.className = 'flex gap-1.5 px-0.5';
         for (let i = 0; i < 3; i++) {
             const dot = document.createElement('div');
-            dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400 dark:bg-slate-500';
-            // Add animation delay for each dot
-            dot.style.animation = `bounce 1.4s infinite ${i * 0.16}s`;
+            dot.className = 'w-1.5 h-1.5 rounded-full bg-current opacity-70';
+            dot.style.animation = `chat-typing 1.15s ease-in-out infinite ${i * 0.12}s`;
             dots.appendChild(dot);
         }
 
