@@ -129,7 +129,6 @@ public class SQLiteQueueClient {
     private static final String CREATE_TABLE_SQL = 
         "CREATE TABLE IF NOT EXISTS messages (" +
         "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-        "session_id TEXT," +  // Added for shared database support
         "sender TEXT NOT NULL," +
         "receiver TEXT NOT NULL," +
         "message TEXT NOT NULL," +
@@ -139,19 +138,16 @@ public class SQLiteQueueClient {
         ");";
     
     private static final String CREATE_INDEX_SENDER_SQL = 
-        "CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender, sent, session_id);";
+        "CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender, sent);";
     
     private static final String CREATE_INDEX_RECEIVER_SQL = 
-        "CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver, sent, session_id);";
-    
-    private static final String CREATE_INDEX_SESSION_SQL = 
-        "CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);";
+        "CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver, sent);";
     
     private static final String INSERT_MESSAGE_SQL = 
-        "INSERT INTO messages (session_id, sender, receiver, message, sent) VALUES (?, ?, ?, ?, 0);";
+        "INSERT INTO messages (sender, receiver, message, sent) VALUES (?, ?, ?, 0);";
     
     private static final String SELECT_MESSAGES_SQL = 
-        "SELECT id, message FROM messages WHERE receiver = ? AND session_id = ? AND sent = 0 ORDER BY created_at ASC LIMIT ?;";
+        "SELECT id, message FROM messages WHERE receiver = ? AND sent = 0 ORDER BY created_at ASC LIMIT ?;";
     
     private static final String ACK_MESSAGE_SQL = 
         "UPDATE messages SET sent = 1, updated_at = strftime('%s', 'now') WHERE id = ?;";
@@ -163,7 +159,7 @@ public class SQLiteQueueClient {
         "SELECT COUNT(*) FROM messages;";
     
     private static final String COUNT_UNREAD_SQL = 
-        "SELECT COUNT(*) FROM messages WHERE sender = ? AND session_id = ? AND sent = 0;";
+        "SELECT COUNT(*) FROM messages WHERE sender = ? AND sent = 0;";
     
     public SQLiteQueueClient(String dbPath) {
         this(new Config(dbPath));
@@ -221,7 +217,6 @@ public class SQLiteQueueClient {
             // Create indexes
             stmt.execute(CREATE_INDEX_SENDER_SQL);
             stmt.execute(CREATE_INDEX_RECEIVER_SQL);
-            stmt.execute(CREATE_INDEX_SESSION_SQL);
             
             LOGGER.info("SQLite queue schema initialized");
         }
@@ -263,10 +258,9 @@ public class SQLiteQueueClient {
         
         // Insert message into database
         try (PreparedStatement pstmt = connection.prepareStatement(INSERT_MESSAGE_SQL)) {
-            pstmt.setString(1, sessionId);  // session_id
-            pstmt.setString(2, config.getSenderName());
-            pstmt.setString(3, receiver);
-            pstmt.setString(4, jsonMessage);
+            pstmt.setString(1, config.getSenderName());
+            pstmt.setString(2, receiver);
+            pstmt.setString(3, jsonMessage);
             pstmt.executeUpdate();
             
             messagesSent.incrementAndGet();
@@ -301,8 +295,7 @@ public class SQLiteQueueClient {
         while (System.currentTimeMillis() - startTime < timeoutMs) {
             try (PreparedStatement pstmt = connection.prepareStatement(SELECT_MESSAGES_SQL)) {
                 pstmt.setString(1, config.getSenderName());
-                pstmt.setString(2, sessionId);
-                pstmt.setInt(3, 10); // Limit to 10 messages at a time
+                pstmt.setInt(2, 10); // Limit to 10 messages at a time
                 
                 try (ResultSet rs = pstmt.executeQuery()) {
                     while (rs.next()) {
@@ -656,7 +649,6 @@ public class SQLiteQueueClient {
             // Count unread messages for this sender and session
             try (PreparedStatement pstmt = connection.prepareStatement(COUNT_UNREAD_SQL)) {
                 pstmt.setString(1, config.getSenderName());
-                pstmt.setString(2, sessionId);
                 try (ResultSet rs = pstmt.executeQuery()) {
                     if (rs.next()) {
                         unreadCount = rs.getInt(1);
