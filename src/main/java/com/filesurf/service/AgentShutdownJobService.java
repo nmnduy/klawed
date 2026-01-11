@@ -205,41 +205,12 @@ public class AgentShutdownJobService {
     
     /**
      * Clean up klawed artifacts from the user's workspace.
-     * This includes:
-     * - .klawed/ directory (logs, config)
-     * - klawed_messages_{sessionId}.db and related WAL files
+     * 
+     * Note: .klawed/ directory and SQLite queue files are NOT deleted.
+     * These artifacts are preserved to maintain agent state and logs across sessions.
      */
     private void cleanupKlawedArtifacts(String sessionId, Path workspace) {
-        LOGGER.info("[SESSION:" + sessionId + "] Cleaning up klawed artifacts from workspace: " + workspace);
-        
-        // Delete .klawed/ directory
-        Path klawedDir = workspace.resolve(".klawed");
-        if (Files.exists(klawedDir)) {
-            try {
-                deleteDirectory(klawedDir);
-                LOGGER.info("[SESSION:" + sessionId + "] Deleted .klawed/ directory");
-            } catch (IOException e) {
-                LOGGER.warning("[SESSION:" + sessionId + "] Failed to delete .klawed/ directory: " + e.getMessage());
-            }
-        }
-        
-        // Delete SQLite queue files (klawed_messages_{sessionId}.db, .db-shm, .db-wal)
-        String dbFileName = "klawed_messages_" + sessionId + ".db";
-        String[] sqliteExtensions = {"", "-shm", "-wal"};
-        
-        for (String ext : sqliteExtensions) {
-            Path dbFile = workspace.resolve(dbFileName + ext);
-            if (Files.exists(dbFile)) {
-                try {
-                    Files.delete(dbFile);
-                    LOGGER.info("[SESSION:" + sessionId + "] Deleted " + dbFile.getFileName());
-                } catch (IOException e) {
-                    LOGGER.warning("[SESSION:" + sessionId + "] Failed to delete " + dbFile.getFileName() + ": " + e.getMessage());
-                }
-            }
-        }
-        
-        LOGGER.info("[SESSION:" + sessionId + "] Klawed artifact cleanup completed");
+        LOGGER.info("[SESSION:" + sessionId + "] Klawed artifact cleanup - preserving all files for session continuity");
     }
     
     /**
