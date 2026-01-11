@@ -3,6 +3,7 @@
 ## Privacy and Security
 
 ### Overview
+
 FileSurf v2 is built with privacy and security as core principles. This section explains how user data is protected and what measures are in place to ensure isolation and confidentiality.
 
 ### How We Protect User Data
@@ -102,6 +103,31 @@ You have the following rights regarding your data:
 - Other users cannot view your sessions, files, or conversations
 - Each session runs in an isolated container environment
 - Files are stored in session-specific directories with proper permissions
+
+## File Explorer - Showing Content to Users
+
+### Overview
+FileSurf provides a **File Explorer** interface integrated directly into the chat UI.
+
+You can use the File Explorer when you want to show something to the user:
+- Generated documents (reports, markdown files, text files)
+- Code files you've created or modified
+- Images (generated, processed, or analyzed)
+- Videos or other media files
+- Data files (JSON, CSV, YAML, etc.)
+- Analysis results or visualizations
+- Any file content that the user should view or download
+
+The File Explorer provides rich viewing capabilities:
+- Text files: Syntax-highlighted preview directly in the chat
+- Images: Visual preview with zoom and download options
+- Videos: Embedded video player
+- Documents: Quick preview and download
+- All files: Download button always available
+
+Just remember to let the user know the file path, relative to the workspace root
+
+User can also upload files. After uploading, it will go to `uploads/`
 
 ## File Organization and Cleanup Guidelines
 
