@@ -103,10 +103,17 @@ public class KlawedAgentManager {
         String containerDbPath;
         
         if (sqliteQueueDbPath.isPresent() && !sqliteQueueDbPath.get().isEmpty()) {
-            // Use configured shared database path
-            sqliteDbPath = sqliteQueueDbPath.get();
+            // Use configured database path
+            String configuredPath = sqliteQueueDbPath.get();
+            // Resolve the path relative to the session directory (user workspace)
+            Path resolvedPath = Path.of(configuredPath);
+            if (!resolvedPath.isAbsolute()) {
+                // If path is relative, resolve it relative to the session directory (user workspace)
+                resolvedPath = sessionDir.resolve(resolvedPath);
+            }
+            sqliteDbPath = resolvedPath.toString();
             containerDbPath = sqliteDbPath; // For container mode, use same path (should be mounted)
-            LOGGER.info("[SESSION:" + sessionId + "] Using shared SQLite database: " + sqliteDbPath);
+            LOGGER.info("[SESSION:" + sessionId + "] Using SQLite database in workspace: " + sqliteDbPath);
         } else {
             // Fallback to per-session database (backward compatibility)
             String dbFileName = "klawed_messages_" + sessionId + ".db";
