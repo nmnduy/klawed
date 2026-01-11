@@ -37,6 +37,7 @@ export function init(rootEl) {
         // Chat-specific upload components (scoped to avoid conflicts with file explorer)
         chatUploadButton: rootEl.querySelector('[data-chat-upload-button]'),
         chatFileInput: rootEl.querySelector('[data-chat-file-input]'),
+        voiceButton: rootEl.querySelector('[data-voice-button]'),
         darkModeToggle: document.querySelector('[data-dark-mode-toggle]')
     };
 
@@ -144,6 +145,7 @@ export function init(rootEl) {
         if (elements.messageInput) elements.messageInput.disabled = disabled;
         if (elements.sendButton) elements.sendButton.disabled = disabled;
         if (elements.chatUploadButton) elements.chatUploadButton.disabled = disabled;
+        if (elements.voiceButton) elements.voiceButton.disabled = disabled;
     }
 
     function updateStatus(connected, message) {
@@ -1116,9 +1118,123 @@ export function init(rootEl) {
         currentStreamContent = '';
     }
 
+    // --- Voice input (Web Speech API) ---
+    let recognition = null;
+    let isListening = false;
+    let stopListenTimeout = null;
+
+    function supportsSpeech() {
+        return typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+    }
+
+    function getRecognition() {
+        if (recognition) return recognition;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return null;
+        recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = true;
+        recognition.continuous = false;
+        recognition.maxAlternatives = 1;
+        recognition.onstart = () => {
+            isListening = true;
+            updateVoiceUI();
+            addSystemMessage('🎙️ Listening... speak your message', 'info');
+        };
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            addSystemMessage('✗ Voice error: ' + event.error, 'error');
+            stopListening();
+        };
+        recognition.onend = () => {
+            if (isListening) {
+                // If it ended unexpectedly, stop
+                stopListening();
+            }
+        };
+        recognition.onresult = (event) => {
+            if (!elements.messageInput) return;
+            let transcript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                transcript += event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    // Commit final result
+                    elements.messageInput.value = transcript.trim();
+                    elements.messageInput.dispatchEvent(new Event('input'));
+                    stopListening(true);
+                    // auto-send if we already have content
+                    if (elements.messageInput.value.trim()) {
+                        elements.messageForm.dispatchEvent(new Event('submit'));
+                    }
+                } else {
+                    // Show interim text in the input
+                    elements.messageInput.value = transcript;
+                    elements.messageInput.dispatchEvent(new Event('input'));
+                }
+            }
+        };
+        return recognition;
+    }
+
+    function updateVoiceUI() {
+        if (!elements.voiceButton) return;
+        elements.voiceButton.dataset.state = isListening ? 'listening' : 'idle';
+        elements.voiceButton.classList.toggle('ring-2', isListening);
+        elements.voiceButton.classList.toggle('ring-orange-500', isListening);
+        elements.voiceButton.classList.toggle('animate-pulse', isListening);
+        elements.voiceButton.title = isListening ? 'Click to stop listening' : 'Dictate with voice';
+        elements.voiceButton.setAttribute('aria-pressed', isListening ? 'true' : 'false');
+    }
+
+    function stopListening(silent = false) {
+        if (!recognition) return;
+        try { recognition.stop(); } catch (e) { /* ignore */ }
+        isListening = false;
+        updateVoiceUI();
+        if (!silent) {
+            addSystemMessage('🎙️ Stopped listening', 'info');
+        }
+        if (stopListenTimeout) {
+            clearTimeout(stopListenTimeout);
+            stopListenTimeout = null;
+        }
+    }
+
+    function startListening() {
+        const rec = getRecognition();
+        if (!rec) {
+            addSystemMessage('✗ Voice input not supported in this browser', 'error');
+            return;
+        }
+        try {
+            rec.start();
+            // safety stop after 30s
+            stopListenTimeout = setTimeout(() => stopListening(), 30000);
+        } catch (err) {
+            console.error('Failed to start recognition', err);
+            addSystemMessage('✗ Could not start voice input', 'error');
+        }
+    }
+
+    if (elements.voiceButton) {
+        if (!supportsSpeech()) {
+            elements.voiceButton.disabled = true;
+            elements.voiceButton.title = 'Voice input not supported in this browser';
+        } else {
+            elements.voiceButton.addEventListener('click', () => {
+                if (isListening) {
+                    stopListening();
+                } else {
+                    startListening();
+                }
+            });
+        }
+    }
+
     if (elements.messageForm && elements.messageInput) {
         elements.messageForm.addEventListener('submit', (e) => {
             e.preventDefault();
+            if (isListening) stopListening(true);
             sendMessage(elements.messageInput.value);
         });
 

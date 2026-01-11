@@ -25,6 +25,22 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                 </button>
+
+                <!-- Voice Button -->
+                <button 
+                    type="button"
+                    id="chat-voice-button"
+                    data-voice-button
+                    class="inline-flex items-center justify-center rounded-lg border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-400 dark:hover:border-slate-500 hover:scale-[1.02] active:scale-[0.98] h-8 w-8 disabled:pointer-events-none disabled:opacity-50 disabled:hover:scale-100 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 dark:focus-visible:ring-orange-400 focus-visible:ring-offset-2 shadow-sm hover:shadow-md active:shadow-sm"
+                    disabled
+                    aria-label="Dictate with voice"
+                    title="Dictate with voice"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 1a3 3 0 00-3 3v7a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 10v1a7 7 0 11-14 0v-1m7 8v4m-4 0h8" />
+                    </svg>
+                </button>
                 
                 <!-- Send Button -->
                 <button 
@@ -51,7 +67,7 @@
         />
     </form>
     <div class="text-center mt-2">
-        <p class="text-caption-s text-slate-500 dark:text-slate-400 hidden sm:block">Press Enter to send • Shift+Enter for new line • Click upload button or switch to Files tab</p>
-        <p class="text-caption-s text-slate-500 dark:text-slate-400 sm:hidden">Press Enter to send • Shift+Enter for new line • Click upload button</p>
+        <p class="text-caption-s text-slate-500 dark:text-slate-400 hidden sm:block">Press Enter to send • Shift+Enter for new line • Click upload or mic • Switch to Files tab to browse</p>
+        <p class="text-caption-s text-slate-500 dark:text-slate-400 sm:hidden">Press Enter to send • Shift+Enter for new line • Use upload or mic buttons</p>
     </div>
 </div>
