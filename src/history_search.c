@@ -634,7 +634,6 @@ int history_search_process_key(HistorySearchState *state, int ch) {
             break;
 
         case 21:  // Ctrl+U - delete to beginning of line
-        case 21 + 64:  // Ctrl+U (alternative)
             history_search_clear_pattern(state);
             break;
 
