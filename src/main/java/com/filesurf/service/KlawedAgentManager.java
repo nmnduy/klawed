@@ -47,7 +47,7 @@ public class KlawedAgentManager {
     @ConfigProperty(name = "klawed.path")
     Optional<String> klawedPath;
     
-    @ConfigProperty(name = "klawed.communication.mode", defaultValue = "sqlite-queue")
+    @ConfigProperty(name = "klawed.communication.mode", defaultValue = "unix-socket")
     String communicationMode;
     
     @ConfigProperty(name = "klawed.unix-socket.filename", defaultValue = "klawed.sock")

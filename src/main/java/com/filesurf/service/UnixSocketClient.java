@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.inject.Inject;
 
 import java.io.IOException;
-import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -103,16 +102,44 @@ public class UnixSocketClient {
         }
         
         UnixDomainSocketAddress address = UnixDomainSocketAddress.of(Path.of(config.getSocketPath()));
-        channel = SocketChannel.open(StandardProtocolFamily.UNIX);
-        channel.configureBlocking(true);
-        channel.connect(address);
         
-        connected.set(true);
+        // Use simpler connection method like TestSimpleUDS
+        // Retry connection to handle race condition with klawed socket creation
+        int maxAttempts = 30; // 30 attempts * 100ms = 3 seconds total
+        int attempt = 0;
         
-        // Initialize executor service for async operations
-        executorService = Executors.newSingleThreadExecutor();
-        
-        LOGGER.info("[SESSION:" + sessionId + "] Successfully connected to Unix socket");
+        while (attempt < maxAttempts) {
+            try {
+                // Use TestSimpleUDS method for simplicity
+                channel = SocketChannel.open(address);
+                channel.configureBlocking(true);
+                
+                connected.set(true);
+                
+                // Initialize executor service for async operations
+                executorService = Executors.newSingleThreadExecutor();
+                
+                LOGGER.info("[SESSION:" + sessionId + "] Successfully connected to Unix socket (attempt " + (attempt + 1) + ")");
+                return;
+                
+            } catch (IOException e) {
+                attempt++;
+                if (attempt >= maxAttempts) {
+                    LOGGER.severe("[SESSION:" + sessionId + "] Failed to connect to Unix socket after " + maxAttempts + " attempts: " + e.getMessage());
+                    throw e;
+                }
+                
+                // Wait before retrying (klawed might still be starting up)
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted while waiting to connect", ie);
+                }
+                
+                LOGGER.fine("[SESSION:" + sessionId + "] Connection attempt " + attempt + " failed, retrying...");
+            }
+        }
     }
     
     /**
@@ -127,54 +154,18 @@ public class UnixSocketClient {
         // Send TEXT message
         sendTextMessage(message);
         
-        // Collect responses - klawed may send multiple TEXT messages
-        StringBuilder result = new StringBuilder();
-        long deadline = System.currentTimeMillis() + config.getTimeoutMs();
+        // Read single response (like TestSimpleUDS does)
+        KlawedResponse response = receiveResponse();
         
-        while (System.currentTimeMillis() < deadline) {
-            try {
-                KlawedResponse response = receiveResponse();
-                
-                if (response.isError()) {
-                    throw new IOException("Klawed returned error: " + response.getContent());
-                }
-                
-                if (response.isText()) {
-                    if (result.length() > 0) {
-                        result.append("\n");
-                    }
-                    result.append(response.getContent());
-                    
-                    // Check if there might be more responses
-                    // We'll wait a short time to see if more data arrives
-                    if (!channel.isOpen() || !channel.isConnected()) {
-                        break;
-                    }
-                    
-                    // Try to read more with a short timeout
-                    channel.configureBlocking(false);
-                    try {
-                        // Check if there's more data immediately available
-                        if (channel.read(ByteBuffer.allocate(1)) == 0) {
-                            // No more data immediately available
-                            break;
-                        }
-                    } finally {
-                        channel.configureBlocking(true);
-                    }
-                }
-                
-            } catch (IOException e) {
-                // If we have some result, return it
-                if (result.length() > 0) {
-                    LOGGER.info("[SESSION:" + sessionId + "] Received partial response, returning what we have");
-                    break;
-                }
-                throw e;
-            }
+        if (response.isError()) {
+            throw new IOException("Klawed returned error: " + response.getContent());
         }
         
-        String responseText = result.toString();
+        if (!response.isText()) {
+            throw new IOException("Expected TEXT response but got: " + response.getMessageType());
+        }
+        
+        String responseText = response.getContent();
         LOGGER.info("[SESSION:" + sessionId + "] Received response from klawed via Unix socket");
         LOGGER.info("[SESSION:" + sessionId + "] Response: " + 
                    responseText.substring(0, Math.min(100, responseText.length())) + 
