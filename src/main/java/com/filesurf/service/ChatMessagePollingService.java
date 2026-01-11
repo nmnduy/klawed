@@ -80,10 +80,10 @@ public class ChatMessagePollingService {
     }
 
     /**
-     * Async polling loop for unsent messages every second
+     * Async polling loop for unsent messages every 300ms
      * Uses SQLite-friendly transaction handling
      */
-    @Scheduled(every = "1s")
+    @Scheduled(every = "0.3s")
     @ActivateRequestContext
     public void pollAndSendUnsentMessages() {
         if (!pollingActive.get()) {

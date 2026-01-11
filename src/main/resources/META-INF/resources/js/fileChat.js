@@ -539,6 +539,10 @@ export function init(rootEl) {
                             <span><strong>Write & Run Code</strong> — Create scripts, apps, and automate tasks</span>
                         </li>
                         <li class="flex items-start gap-2 sm:gap-3">
+                            <span class="text-orange-500 mt-1">🎙️</span>
+                            <span><strong>Voice Input</strong> — Speak naturally instead of typing with voice dictation</span>
+                        </li>
+                        <li class="flex items-start gap-2 sm:gap-3">
                             <span class="text-orange-500 mt-1">🎬</span>
                             <span><strong>YouTube Transcripts</strong> — Fetch and analyze video transcripts instantly</span>
                         </li>
@@ -618,7 +622,20 @@ export function init(rootEl) {
             return () => { cleanup(); tip.remove(); };
         });
 
-        // Step 2: Upload button
+        // Step 2: Voice input button
+        steps.push(() => {
+            const cleanup = highlightElement(elements.voiceButton);
+            const tip = createTooltip(`
+                <strong>🎙️ Voice input mode</strong><br/>
+                <p class="mt-1">Click the microphone to dictate your messages instead of typing. Perfect for hands-free operation or when you want to speak naturally.</p>
+                <p class="mt-2 text-slate-500 text-xs">Note: Requires browser speech recognition support (Chrome, Edge, Safari)</p>
+            `);
+            positionTooltip(tip, elements.voiceButton, 'top');
+            tip.addEventListener('click', () => overlay.dispatchEvent(new Event('click')));
+            return () => { cleanup(); tip.remove(); };
+        });
+
+        // Step 3: Upload button
         steps.push(() => {
             const cleanup = highlightElement(actions.uploadButton);
             const tip = createTooltip(`
@@ -630,7 +647,7 @@ export function init(rootEl) {
             return () => { cleanup(); tip.remove(); };
         });
 
-        // Step 3: Files tab / File Explorer
+        // Step 4: Files tab / File Explorer
         steps.push(() => {
             const isDesktop = window.innerWidth >= 1024;
             
@@ -659,7 +676,7 @@ export function init(rootEl) {
             }
         });
 
-        // Step 4: Status indicator
+        // Step 5: Status indicator
         steps.push(() => {
             const cleanup = highlightElement(actions.statusText);
             const tip = createTooltip(`
