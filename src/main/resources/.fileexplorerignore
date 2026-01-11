@@ -30,6 +30,9 @@ klawed.pid
 klawed-*.db
 klawed-*.db-shm
 klawed-*.db-wal
+klawed_messages.db
+klawed_messages.db-shm
+klawed_messages.db-wal
 
 # Application metadata
 KLAWED.md

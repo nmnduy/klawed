@@ -18,6 +18,10 @@ public class SQLiteQueueConstants {
     public static final String DEFAULT_SENDER_NAME = "client";
     public static final String DEFAULT_RECEIVER_NAME = "klawed";
     
+    // Shared database configuration
+    public static final String SHARED_DB_FILENAME = "klawed_messages.db";
+    public static final String SHARED_DB_PATH_PROPERTY = "klawed.sqlite-queue.db-path";
+    
     // Configuration defaults
     public static final int DEFAULT_POLL_INTERVAL_MS = 100;
     public static final int DEFAULT_POLL_TIMEOUT_MS = 600000; // 10 minutes for long-running klawed tasks

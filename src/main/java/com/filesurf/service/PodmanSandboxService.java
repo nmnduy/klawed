@@ -7,6 +7,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -103,7 +104,7 @@ public class PodmanSandboxService {
         }
         
         // Build podman run command with security options
-        List<String> command = buildPodmanRunCommand(containerName, workspaceDir, sqliteDbPath);
+        List<String> command = buildPodmanRunCommand(containerName, workspaceDir, sqliteDbPath, sessionId);
         
         LOGGER.info("[SESSION:" + sessionId + "] Podman command: " + obfuscateCommand(command));
         
@@ -184,7 +185,7 @@ public class PodmanSandboxService {
     /**
      * Build the podman run command with all security options and environment variables.
      */
-    private List<String> buildPodmanRunCommand(String containerName, Path workspaceDir, String sqliteDbPath) {
+    private List<String> buildPodmanRunCommand(String containerName, Path workspaceDir, String sqliteDbPath, String sessionId) {
         List<String> command = new ArrayList<>();
         
         command.add("podman");
@@ -239,6 +240,30 @@ public class PodmanSandboxService {
             volumeMount += ":Z";
         }
         command.add(volumeMount);
+        
+        // If using shared SQLite database outside workspace, mount its parent directory
+        if (sqliteDbPath != null && !sqliteDbPath.isEmpty()) {
+            Path dbPath = Path.of(sqliteDbPath);
+            if (!dbPath.isAbsolute()) {
+                // Convert relative path to absolute relative to current directory
+                dbPath = Path.of("").toAbsolutePath().resolve(dbPath);
+            }
+            
+            // Check if database is outside workspace directory
+            if (!dbPath.normalize().startsWith(workspaceDir.toAbsolutePath().normalize())) {
+                // Mount the parent directory of the database
+                Path dbParentDir = dbPath.getParent();
+                if (dbParentDir != null && Files.exists(dbParentDir)) {
+                    String dbVolumeMount = dbParentDir.toAbsolutePath() + ":" + dbParentDir.toAbsolutePath();
+                    if (System.getProperty("os.name").toLowerCase().contains("linux")) {
+                        dbVolumeMount += ":Z";
+                    }
+                    command.add("-v");
+                    command.add(dbVolumeMount);
+                    LOGGER.info("[SESSION:" + sessionId + "] Mounted shared database directory: " + dbParentDir);
+                }
+            }
+        }
         
         // Note: klawed binary is baked into the container image (v1.2+)
         // Note: libmemvid_ffi.so is baked into the container image (v1.1+)

@@ -59,6 +59,9 @@ public class KlawedAgentManager {
     @ConfigProperty(name = "klawed.unix-socket.max-message-size", defaultValue = "67108864")
     int unixSocketMaxMessageSize;
     
+    @ConfigProperty(name = "klawed.sqlite-queue.db-path")
+    Optional<String> sqliteQueueDbPath;
+    
     @Inject
     FileChatService fileChatService;
     
@@ -95,14 +98,23 @@ public class KlawedAgentManager {
         }
         LOGGER.info("[SESSION:" + sessionId + "] Session directory verified: " + sessionDir);
         
-        // Create SQLite database path for this session
-        String dbFileName = "klawed_messages_" + sessionId + ".db";
-        Path dbPath = sessionDir.resolve(dbFileName);
-        // Host path for SQLite queue client to connect to
-        String sqliteDbPath = dbPath.toString();
-        // Container path (if sandbox mode) - workspace is mounted at /workspace
-        String containerDbPath = "/workspace/" + dbFileName;
-        LOGGER.info("[SESSION:" + sessionId + "] SQLite database will be: " + sqliteDbPath);
+        // Use shared SQLite database path for all sessions
+        String sqliteDbPath;
+        String containerDbPath;
+        
+        if (sqliteQueueDbPath.isPresent() && !sqliteQueueDbPath.get().isEmpty()) {
+            // Use configured shared database path
+            sqliteDbPath = sqliteQueueDbPath.get();
+            containerDbPath = sqliteDbPath; // For container mode, use same path (should be mounted)
+            LOGGER.info("[SESSION:" + sessionId + "] Using shared SQLite database: " + sqliteDbPath);
+        } else {
+            // Fallback to per-session database (backward compatibility)
+            String dbFileName = "klawed_messages_" + sessionId + ".db";
+            Path dbPath = sessionDir.resolve(dbFileName);
+            sqliteDbPath = dbPath.toString();
+            containerDbPath = "/workspace/" + dbFileName;
+            LOGGER.info("[SESSION:" + sessionId + "] Using per-session SQLite database: " + sqliteDbPath);
+        }
         
         KlawedAgentInstance instance;
         
@@ -902,6 +914,12 @@ public class KlawedAgentManager {
     private void cleanupKlawedDbFiles(String sessionId, Path sessionDir) {
         if (sessionDir == null) {
             LOGGER.warning("[SESSION:" + sessionId + "] Cannot cleanup klawed DB files: sessionDir is null");
+            return;
+        }
+        
+        // Check if we're using a shared database - if so, don't delete it
+        if (sqliteQueueDbPath.isPresent() && !sqliteQueueDbPath.get().isEmpty()) {
+            LOGGER.info("[SESSION:" + sessionId + "] Using shared database, skipping cleanup of per-session files");
             return;
         }
         
