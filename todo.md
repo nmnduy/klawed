@@ -2,12 +2,13 @@
 
 - [ ] lots of left over klawed db files in the workspace. maybe klawed files dont get cleaned up?
     - [ ] log when file is deleleted
-- [ ] unset KLAWED_TOOL_DEBUG
 - [ ] fix svg icons for open file and download file. use three dots to open file options like show open and download
 - [ ] put some stuff in the starting workspace for everyone
     - [ ] stock analysis
-    - [ ] youtube transcriber
-    - [ ] reminders
+    - [ ] youtube video transcriber
+    - [ ] document analysis
+        - [ ] show charts
+
 - [x] we can preview more common files: html
 
 ---
