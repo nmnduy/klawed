@@ -251,8 +251,11 @@ public class KlawedAgentManager {
         LOGGER.info("[SESSION:" + sessionId + "] Klawed command: " + String.join(" ", processBuilder.command()));
 
         // Before launch, double-check there isn't already a klawed process for this workspace
-        if (isExistingKlawedProcessRunning(sessionDir)) {
-            throw new IOException("Klawed already running for workspace: " + sessionDir);
+        Long unmanagedPid = findUnmanagedKlawedProcess(sessionDir);
+        if (unmanagedPid != null) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Found unmanaged klawed process before launch, pid=" + unmanagedPid + ", killing it...");
+            killUnmanagedProcess(unmanagedPid, sessionId);
+            deletePidFile(sessionId, sessionDir);
         }
         
         // Set working directory to session directory
@@ -996,7 +999,7 @@ public class KlawedAgentManager {
 
     /**
      * Prevent duplicate klawed per user workspace by checking pid file + ps aux | grep.
-     * Throws IOException if a running klawed is detected.
+     * If an unmanaged klawed is found, kills it instead of throwing an error.
      */
     private void ensureNoRunningAgentForWorkspace(String sessionId, Path sessionDir) throws IOException {
         Path pidFile = sessionDir.resolve("klawed.pid");
@@ -1004,16 +1007,20 @@ public class KlawedAgentManager {
         // 1) If we already track an agent in memory for this session, respect it
         KlawedAgentInstance existing = agents.get(sessionId);
         if (existing != null && existing.isRunning()) {
-            throw new IOException("Klawed already running for session " + sessionId + " in memory");
+            LOGGER.info("[SESSION:" + sessionId + "] Managed agent already running, returning");
+            return;
         }
 
-        // 2) If pid file exists, check if that PID is alive
+        // 2) If pid file exists, check if that PID is alive and kill it if unmanaged
         if (Files.exists(pidFile)) {
             try {
                 String content = Files.readString(pidFile);
                 long pid = parsePid(content);
                 if (pid > 0 && isProcessAlive(pid)) {
-                    throw new IOException("Klawed already running (pid file) for workspace: " + sessionDir + " pid=" + pid);
+                    LOGGER.warning("[SESSION:" + sessionId + "] Found unmanaged klawed process (pid file) for workspace: " + sessionDir + " pid=" + pid + ", killing it...");
+                    killUnmanagedProcess(pid, sessionId);
+                    // Clean up the pid file after killing
+                    deletePidFile(sessionId, sessionDir);
                 }
             } catch (Exception e) {
                 LOGGER.warning("[SESSION:" + sessionId + "] Failed to parse pid file; continuing to ps check: " + e.getMessage());
@@ -1021,8 +1028,76 @@ public class KlawedAgentManager {
         }
 
         // 3) Belt-and-suspenders: run ps aux | grep <user-workspace> to see if a klawed is alive
-        if (isExistingKlawedProcessRunning(sessionDir)) {
-            throw new IOException("Klawed already running (ps scan) for workspace: " + sessionDir);
+        Long unmanagedPid = findUnmanagedKlawedProcess(sessionDir);
+        if (unmanagedPid != null) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Found unmanaged klawed process (ps scan) for workspace: " + sessionDir + " pid=" + unmanagedPid + ", killing it...");
+            killUnmanagedProcess(unmanagedPid, sessionId);
+            // Clean up the pid file after killing
+            deletePidFile(sessionId, sessionDir);
+        }
+    }
+    
+    /**
+     * Kill an unmanaged klawed process
+     */
+    private void killUnmanagedProcess(long pid, String sessionId) {
+        LOGGER.info("[SESSION:" + sessionId + "] Attempting to kill unmanaged process with PID: " + pid);
+        
+        try {
+            // First try graceful termination
+            ProcessHandle processHandle = ProcessHandle.of(pid).orElse(null);
+            if (processHandle != null && processHandle.isAlive()) {
+                LOGGER.info("[SESSION:" + sessionId + "] Process " + pid + " is alive, attempting to destroy...");
+                
+                // Try to get process info
+                try {
+                    ProcessHandle.Info info = processHandle.info();
+                    LOGGER.info("[SESSION:" + sessionId + "] Process info - command: " + info.command().orElse("unknown"));
+                } catch (Exception e) {
+                    LOGGER.fine("[SESSION:" + sessionId + "] Could not get process info: " + e.getMessage());
+                }
+                
+                // Destroy the process
+                processHandle.destroy();
+                
+                // Wait for termination (2 seconds timeout)
+                try {
+                    boolean terminated = processHandle.onExit().thenApply(ph -> {
+                        LOGGER.info("[SESSION:" + sessionId + "] Process " + pid + " terminated gracefully");
+                        return true;
+                    }).get(2, java.util.concurrent.TimeUnit.SECONDS);
+                    
+                    if (!terminated) {
+                        // Force kill if graceful termination failed
+                        LOGGER.warning("[SESSION:" + sessionId + "] Process " + pid + " did not terminate, forcing kill...");
+                        processHandle.destroyForcibly();
+                        processHandle.onExit().get(2, java.util.concurrent.TimeUnit.SECONDS);
+                        LOGGER.info("[SESSION:" + sessionId + "] Process " + pid + " force terminated");
+                    }
+                } catch (Exception e) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Error waiting for process termination: " + e.getMessage());
+                    // Try force kill anyway
+                    processHandle.destroyForcibly();
+                }
+            } else {
+                LOGGER.info("[SESSION:" + sessionId + "] Process " + pid + " is not running");
+            }
+        } catch (Exception e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Error killing process " + pid + ": " + e.getMessage());
+            
+            // Fallback to system kill command
+            try {
+                LOGGER.info("[SESSION:" + sessionId + "] Trying system kill command for PID " + pid);
+                Process killProcess = new ProcessBuilder("kill", "-9", String.valueOf(pid)).start();
+                int exitCode = killProcess.waitFor();
+                if (exitCode == 0) {
+                    LOGGER.info("[SESSION:" + sessionId + "] System kill command succeeded for PID " + pid);
+                } else {
+                    LOGGER.warning("[SESSION:" + sessionId + "] System kill command failed for PID " + pid + " with exit code: " + exitCode);
+                }
+            } catch (Exception killEx) {
+                LOGGER.severe("[SESSION:" + sessionId + "] System kill command also failed for PID " + pid + ": " + killEx.getMessage());
+            }
         }
     }
 
@@ -1048,8 +1123,9 @@ public class KlawedAgentManager {
 
     /**
      * Check via ps aux | grep to see if any klawed process is using this workspace
+     * Returns the PID if found, null otherwise
      */
-    private boolean isExistingKlawedProcessRunning(Path sessionDir) {
+    private Long findUnmanagedKlawedProcess(Path sessionDir) {
         try {
             Process process = new ProcessBuilder("ps", "aux").start();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
@@ -1057,14 +1133,23 @@ public class KlawedAgentManager {
                 while ((line = reader.readLine()) != null) {
                     // Look for klawed and the workspace path
                     if (line.contains("klawed") && line.contains(sessionDir.toString())) {
-                        return true;
+                        // Parse the PID from the ps output (second column)
+                        String[] parts = line.trim().split("\\s+");
+                        if (parts.length >= 2) {
+                            try {
+                                long pid = Long.parseLong(parts[1]);
+                                return pid;
+                            } catch (NumberFormatException e) {
+                                LOGGER.warning("Failed to parse PID from ps output: " + line);
+                            }
+                        }
                     }
                 }
             }
         } catch (IOException e) {
             LOGGER.warning("ps aux scan failed: " + e.getMessage());
         }
-        return false;
+        return null;
     }
     
     /**

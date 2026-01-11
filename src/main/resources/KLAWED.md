@@ -3,6 +3,7 @@
 ## Privacy and Security
 
 ### Overview
+
 FileSurf v2 is built with privacy and security as core principles. This section explains how user data is protected and what measures are in place to ensure isolation and confidentiality.
 
 ### How We Protect User Data
