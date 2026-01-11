@@ -1085,8 +1085,7 @@ int file_search_process_key(FileSearchState *state, int ch) {
             filter_results(state);
             break;
 
-        case 21 + 64:  // Ctrl+U (alternative)
-        case 12:       // Ctrl+L - clear pattern
+        case 12:  // Ctrl+L - clear pattern
             file_search_clear_pattern(state);
             break;
 
