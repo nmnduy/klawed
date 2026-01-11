@@ -1,5 +1,6 @@
 package com.filesurf;
 
+import com.filesurf.service.KlawedAgentManager;
 import com.filesurf.service.SessionManager;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -36,6 +37,9 @@ public class ChunkedUploadResource {
     
     @Inject
     SessionManager sessionManager;
+
+    @Inject
+    KlawedAgentManager agentManager;
 
     // Track upload sessions: uploadId -> UploadSession
     private static final Map<String, UploadSession> uploadSessions = new ConcurrentHashMap<>();
@@ -312,6 +316,9 @@ public class ChunkedUploadResource {
             // Cleanup session
             uploadSessions.remove(session.uploadId);
 
+            // Notify klawed agent about the uploaded file
+            notifyKlawedAboutUpload(session.sessionId, safeFileName);
+
             return Response.ok()
                 .entity("{\"uploadedSize\": " + session.uploadedSize + ", " +
                        "\"totalSize\": " + session.totalSize + ", " +
@@ -346,5 +353,38 @@ public class ChunkedUploadResource {
             }
             return false;
         });
+    }
+
+    /**
+     * Notify klawed agent about uploaded file
+     */
+    private void notifyKlawedAboutUpload(String sessionId, String fileName) {
+        if (fileName == null || fileName.isEmpty()) {
+            return;
+        }
+
+        try {
+            // Get the agent instance for this session
+            KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(sessionId);
+            
+            if (agent == null) {
+                LOGGER.info("[SESSION:" + sessionId + "] No klawed agent found to notify about file upload");
+                return;
+            }
+
+            // Create a notification message
+            String notificationMessage = "User has uploaded a file: " + fileName;
+
+            LOGGER.info("[SESSION:" + sessionId + "] Notifying klawed about uploaded file: " + fileName);
+            
+            // Send the notification asynchronously to avoid blocking the upload response
+            agent.sendMessageAsync(notificationMessage);
+            
+            LOGGER.info("[SESSION:" + sessionId + "] File upload notification sent to klawed");
+            
+        } catch (Exception e) {
+            // Log but don't fail the upload if notification fails
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to notify klawed about file upload: " + e.getMessage());
+        }
     }
 }
