@@ -22,6 +22,7 @@
 #include <sys/select.h>
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <time.h>
 
 #include <bsd/string.h>
 #include <cjson/cJSON.h>
@@ -30,6 +31,14 @@
 static ssize_t read_exact(int fd, void *buf, size_t count, int timeout_sec) {
     size_t total = 0;
     char *ptr = (char *)buf;
+    
+    LOG_DEBUG("UDS: read_exact: fd=%d, count=%zu, timeout=%d", fd, count, timeout_sec);
+
+    // Track elapsed time for timeout
+    time_t start_time = 0;
+    if (timeout_sec > 0) {
+        start_time = time(NULL);
+    }
 
     while (total < count) {
         // Use select for timeout if specified
@@ -38,39 +47,62 @@ static ssize_t read_exact(int fd, void *buf, size_t count, int timeout_sec) {
             FD_ZERO(&readfds);
             FD_SET(fd, &readfds);
 
+            // Calculate remaining timeout
+            time_t now = time(NULL);
+            time_t elapsed = now - start_time;
+            if (elapsed >= timeout_sec) {
+                LOG_DEBUG("UDS: read_exact: total timeout after %ld seconds", elapsed);
+                errno = ETIMEDOUT;
+                return -1;
+            }
+            
+            int remaining_timeout = timeout_sec - (int)elapsed;
             struct timeval tv;
-            tv.tv_sec = timeout_sec;
+            tv.tv_sec = remaining_timeout;
             tv.tv_usec = 0;
 
+            LOG_DEBUG("UDS: read_exact: calling select (remaining timeout %ds)", remaining_timeout);
             int sel = select(fd + 1, &readfds, NULL, NULL, &tv);
             if (sel < 0) {
+                LOG_DEBUG("UDS: read_exact: select failed: %s", strerror(errno));
                 if (errno == EINTR) continue;
                 return -1;
             }
             if (sel == 0) {
                 // Timeout
+                LOG_DEBUG("UDS: read_exact: select timeout after %ds", remaining_timeout);
                 errno = ETIMEDOUT;
                 return -1;
             }
+            LOG_DEBUG("UDS: read_exact: select returned %d (data available)", sel);
         }
 
-        ssize_t n = read(fd, ptr + total, count - total);
+        size_t remaining = count - total;
+        LOG_DEBUG("UDS: read_exact: calling read for %zu bytes (have %zu/%zu)", remaining, total, count);
+        ssize_t n = read(fd, ptr + total, remaining);
+        LOG_DEBUG("UDS: read_exact: read returned %zd bytes", n);
+        
         if (n < 0) {
+            LOG_DEBUG("UDS: read_exact: read failed: %s", strerror(errno));
             if (errno == EINTR) continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // Would block, retry with select
+                LOG_DEBUG("UDS: read_exact: would block, retrying");
                 continue;
             }
             return -1;
         }
         if (n == 0) {
             // Connection closed
+            LOG_DEBUG("UDS: read_exact: connection closed (EOF)");
             errno = ECONNRESET;
             return -1;
         }
         total += (size_t)n;
+        LOG_DEBUG("UDS: read_exact: progress: %zu/%zu bytes", total, count);
     }
 
+    LOG_DEBUG("UDS: read_exact: completed successfully, read %zu bytes", total);
     return (ssize_t)total;
 }
 
@@ -78,6 +110,14 @@ static ssize_t read_exact(int fd, void *buf, size_t count, int timeout_sec) {
 static ssize_t write_exact(int fd, const void *buf, size_t count, int timeout_sec) {
     size_t total = 0;
     const char *ptr = (const char *)buf;
+    
+    LOG_DEBUG("UDS: write_exact: fd=%d, count=%zu, timeout=%d", fd, count, timeout_sec);
+
+    // Track elapsed time for timeout
+    time_t start_time = 0;
+    if (timeout_sec > 0) {
+        start_time = time(NULL);
+    }
 
     while (total < count) {
         // Use select for timeout if specified
@@ -86,37 +126,61 @@ static ssize_t write_exact(int fd, const void *buf, size_t count, int timeout_se
             FD_ZERO(&writefds);
             FD_SET(fd, &writefds);
 
+            // Calculate remaining timeout
+            time_t now = time(NULL);
+            time_t elapsed = now - start_time;
+            if (elapsed >= timeout_sec) {
+                LOG_DEBUG("UDS: write_exact: total timeout after %ld seconds", elapsed);
+                errno = ETIMEDOUT;
+                return -1;
+            }
+            
+            int remaining_timeout = timeout_sec - (int)elapsed;
             struct timeval tv;
-            tv.tv_sec = timeout_sec;
+            tv.tv_sec = remaining_timeout;
             tv.tv_usec = 0;
 
+            LOG_DEBUG("UDS: write_exact: calling select for write (remaining timeout %ds)", remaining_timeout);
             int sel = select(fd + 1, NULL, &writefds, NULL, &tv);
             if (sel < 0) {
+                LOG_DEBUG("UDS: write_exact: select failed: %s", strerror(errno));
                 if (errno == EINTR) continue;
                 return -1;
             }
             if (sel == 0) {
+                LOG_DEBUG("UDS: write_exact: select timeout after %ds", remaining_timeout);
                 errno = ETIMEDOUT;
                 return -1;
             }
+            LOG_DEBUG("UDS: write_exact: select returned %d (ready for write)", sel);
         }
 
-        ssize_t n = write(fd, ptr + total, count - total);
+        size_t remaining = count - total;
+        LOG_DEBUG("UDS: write_exact: calling write for %zu bytes (have %zu/%zu)", remaining, total, count);
+        ssize_t n = write(fd, ptr + total, remaining);
+        LOG_DEBUG("UDS: write_exact: write returned %zd bytes", n);
+        
         if (n < 0) {
+            LOG_DEBUG("UDS: write_exact: write failed: %s", strerror(errno));
             if (errno == EINTR) continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                LOG_DEBUG("UDS: write_exact: would block, retrying");
                 continue;
             }
             return -1;
         }
         total += (size_t)n;
+        LOG_DEBUG("UDS: write_exact: progress: %zu/%zu bytes", total, count);
     }
 
+    LOG_DEBUG("UDS: write_exact: completed successfully, wrote %zu bytes", total);
     return (ssize_t)total;
 }
 
 // Helper: send a framed message (4-byte length header + payload)
 static int send_framed_message(int fd, const char *message, size_t message_len, int timeout_sec) {
+    LOG_DEBUG("UDS: send_framed_message: fd=%d, message_len=%zu, timeout=%d", fd, message_len, timeout_sec);
+    
     if (message_len > UDS_MAX_MESSAGE_SIZE) {
         LOG_ERROR("UDS: Message too large: %zu bytes (max: %d)", message_len, UDS_MAX_MESSAGE_SIZE);
         return UDS_ERROR_MESSAGE_TOO_LARGE;
@@ -124,37 +188,50 @@ static int send_framed_message(int fd, const char *message, size_t message_len, 
 
     // Send 4-byte length header (network byte order)
     uint32_t len_network = htonl((uint32_t)message_len);
+    LOG_DEBUG("UDS: send_framed_message: sending length header: %u bytes (network: 0x%08x)", 
+              (uint32_t)message_len, len_network);
+    
     if (write_exact(fd, &len_network, sizeof(len_network), timeout_sec) != sizeof(len_network)) {
         LOG_ERROR("UDS: Failed to send length header: %s", strerror(errno));
         return UDS_ERROR_SEND_FAILED;
     }
 
+    LOG_DEBUG("UDS: send_framed_message: sending payload of %zu bytes", message_len);
     // Send payload
     if (write_exact(fd, message, message_len, timeout_sec) != (ssize_t)message_len) {
         LOG_ERROR("UDS: Failed to send payload: %s", strerror(errno));
         return UDS_ERROR_PARTIAL_SEND;
     }
 
+    LOG_DEBUG("UDS: send_framed_message: message sent successfully");
     return UDS_ERROR_NONE;
 }
 
 // Helper: receive a framed message (4-byte length header + payload)
 static int receive_framed_message(int fd, char *buffer, size_t buffer_size, int timeout_sec) {
+    LOG_DEBUG("UDS: receive_framed_message: fd=%d, buffer_size=%zu, timeout=%d", fd, buffer_size, timeout_sec);
+    
     // Read 4-byte length header
     uint32_t len_network;
+    LOG_DEBUG("UDS: receive_framed_message: reading length header (4 bytes)");
     ssize_t n = read_exact(fd, &len_network, sizeof(len_network), timeout_sec);
     if (n < 0) {
         if (errno == ETIMEDOUT) {
+            LOG_DEBUG("UDS: receive_framed_message: timeout reading length header");
             return UDS_ERROR_RECEIVE_TIMEOUT;
         }
         if (errno == ECONNRESET) {
+            LOG_DEBUG("UDS: receive_framed_message: connection closed while reading length header");
             return UDS_ERROR_CONNECTION_CLOSED;
         }
         LOG_ERROR("UDS: Failed to read length header: %s", strerror(errno));
         return UDS_ERROR_RECEIVE_FAILED;
     }
+    
+    LOG_DEBUG("UDS: receive_framed_message: read length header: 0x%08x", len_network);
 
     uint32_t payload_len = ntohl(len_network);
+    LOG_DEBUG("UDS: receive_framed_message: payload length: %u bytes", payload_len);
 
     if (payload_len > UDS_MAX_MESSAGE_SIZE) {
         LOG_ERROR("UDS: Received message too large: %u bytes", payload_len);
@@ -167,13 +244,16 @@ static int receive_framed_message(int fd, char *buffer, size_t buffer_size, int 
         return UDS_ERROR_NOMEM;
     }
 
+    LOG_DEBUG("UDS: receive_framed_message: reading payload of %u bytes", payload_len);
     // Read payload
     n = read_exact(fd, buffer, payload_len, timeout_sec);
     if (n < 0) {
         if (errno == ETIMEDOUT) {
+            LOG_DEBUG("UDS: receive_framed_message: timeout reading payload");
             return UDS_ERROR_RECEIVE_TIMEOUT;
         }
         if (errno == ECONNRESET) {
+            LOG_DEBUG("UDS: receive_framed_message: connection closed while reading payload");
             return UDS_ERROR_CONNECTION_CLOSED;
         }
         LOG_ERROR("UDS: Failed to read payload: %s", strerror(errno));
@@ -181,6 +261,8 @@ static int receive_framed_message(int fd, char *buffer, size_t buffer_size, int 
     }
 
     buffer[payload_len] = '\0';
+    LOG_DEBUG("UDS: receive_framed_message: received %u byte payload, first 100 chars: %.100s%s", 
+              payload_len, buffer, payload_len > 100 ? "..." : "");
     return (int)payload_len;
 }
 
@@ -244,6 +326,7 @@ UDSContext* uds_socket_init(const char *socket_path) {
     unlink(socket_path);
 
     // Create socket
+    LOG_DEBUG("UDS: Creating socket (AF_UNIX, SOCK_STREAM)");
     ctx->server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (ctx->server_fd < 0) {
         LOG_ERROR("UDS: Failed to create socket: %s", strerror(errno));
@@ -251,12 +334,14 @@ UDSContext* uds_socket_init(const char *socket_path) {
         free(ctx);
         return NULL;
     }
+    LOG_DEBUG("UDS: Socket created successfully, fd=%d", ctx->server_fd);
 
     // Bind to socket path
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
 
+    LOG_DEBUG("UDS: Binding to socket path: %s", socket_path);
     if (strlcpy(addr.sun_path, socket_path, sizeof(addr.sun_path)) >= sizeof(addr.sun_path)) {
         LOG_ERROR("UDS: Socket path too long: %s", socket_path);
         close(ctx->server_fd);
@@ -265,6 +350,7 @@ UDSContext* uds_socket_init(const char *socket_path) {
         return NULL;
     }
 
+    LOG_DEBUG("UDS: Calling bind() with path: %s", addr.sun_path);
     if (bind(ctx->server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         LOG_ERROR("UDS: Failed to bind to %s: %s", socket_path, strerror(errno));
         close(ctx->server_fd);
@@ -272,8 +358,10 @@ UDSContext* uds_socket_init(const char *socket_path) {
         free(ctx);
         return NULL;
     }
+    LOG_DEBUG("UDS: Bind successful");
 
     // Listen for connections (backlog of 1 - single client)
+    LOG_DEBUG("UDS: Calling listen() with backlog=%d", UDS_DEFAULT_BACKLOG);
     if (listen(ctx->server_fd, UDS_DEFAULT_BACKLOG) < 0) {
         LOG_ERROR("UDS: Failed to listen: %s", strerror(errno));
         close(ctx->server_fd);
@@ -282,6 +370,7 @@ UDSContext* uds_socket_init(const char *socket_path) {
         free(ctx);
         return NULL;
     }
+    LOG_DEBUG("UDS: Listen successful, server ready to accept connections");
 
     ctx->enabled = true;
     LOG_INFO("UDS: Server listening on %s", socket_path);
@@ -354,7 +443,8 @@ int uds_socket_accept(UDSContext *ctx, int timeout_sec) {
     // Accept connection
     struct sockaddr_un client_addr;
     socklen_t client_len = sizeof(client_addr);
-
+    
+    LOG_DEBUG("UDS: Calling accept() on server fd %d", ctx->server_fd);
     ctx->client_fd = accept(ctx->server_fd, (struct sockaddr *)&client_addr, &client_len);
     if (ctx->client_fd < 0) {
         LOG_ERROR("UDS: Failed to accept connection: %s", strerror(errno));
@@ -363,6 +453,13 @@ int uds_socket_accept(UDSContext *ctx, int timeout_sec) {
 
     ctx->client_connected = true;
     LOG_INFO("UDS: Client connected (fd: %d)", ctx->client_fd);
+    
+    // Log client address if available
+    if (client_addr.sun_family == AF_UNIX && client_addr.sun_path[0] != '\0') {
+        LOG_DEBUG("UDS: Client connected from: %s", client_addr.sun_path);
+    } else {
+        LOG_DEBUG("UDS: Client connected (abstract socket or unnamed)"); 
+    }
 
     return UDS_ERROR_NONE;
 }
