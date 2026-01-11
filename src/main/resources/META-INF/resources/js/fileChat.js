@@ -177,7 +177,7 @@ export function init(rootEl) {
             const threeDotLoader = '<span class="three-dot-loader"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>';
             
             // If the message is about processing, show it with three dots
-            if (statusMessage.includes('processing') || statusMessage.includes('working') || statusMessage.includes('Klawed is')) {
+            if (statusMessage && /(processing|working|Klawed is|AI is thinking)/i.test(statusMessage)) {
                 elements.statusText.innerHTML = 'AI is thinking' + threeDotLoader;
             } else {
                 elements.statusText.textContent = statusMessage;
@@ -914,11 +914,14 @@ export function init(rootEl) {
                     case 'STATUS':
                         if (content && content.startsWith('SESSION_ID:')) {
                             updateStatus(true, 'Connected');
-                        } else if (content && (content.includes('Klawed is') || content.includes('working') || content.includes('processing') || content.includes('Tool'))) {
+                            removeTypingIndicator();
+                        } else if (content && (/(Klawed is|working|processing|Tool|thinking)/i.test(content))) {
                             // Show "AI is thinking" with three dots for processing messages
+                            addTypingIndicator();
                             showKlawedStatus('AI is thinking');
                         } else {
                             updateStatus(true, 'Connected');
+                            removeTypingIndicator();
                         }
                         break;
                     case 'TEXT':
@@ -926,6 +929,7 @@ export function init(rootEl) {
                             handleStreamComplete(content);
                         }
                         removeTypingIndicator();
+                        showKlawedStatus('Connected');
                         // Reset API call time when we get a text response
                         lastApiCallTime = null;
                         // Update status to show we're connected (not thinking)
@@ -942,6 +946,7 @@ export function init(rootEl) {
                         }
                         addSystemMessage('✗ ' + (content || 'Error occurred'), 'error');
                         removeTypingIndicator();
+                        showKlawedStatus('Connected');
                         // Reset API call time when we get an error
                         lastApiCallTime = null;
                         // Update status to show we're connected (not thinking)
@@ -950,6 +955,8 @@ export function init(rootEl) {
                     case 'API_CALL':
                         // Show typing indicator when AI is processing
                         addTypingIndicator();
+                        // Also set status so the header shows activity even before details render
+                        showKlawedStatus('AI is thinking');
                         
                         if (content && typeof content === 'object') {
                             let apiCallMessage = 'AI is thinking';
@@ -1022,8 +1029,10 @@ export function init(rootEl) {
                                     // Not JSON, use default message
                                 }
                             }
+                            addTypingIndicator();
                             showKlawedStatus(toolMessage);
                         } else {
+                            addTypingIndicator();
                             showKlawedStatus('AI is thinking');
                         }
                         break;
