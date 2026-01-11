@@ -500,20 +500,27 @@ class FileExplorer {
                         </div>
                         <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-slate-500 text-right tabular-nums">
                             <span>${size}</span>
-                            <div class="flex items-center gap-1">
-                                <button type="button" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-orange-700 hover:text-orange-800 hover:bg-orange-50 rounded transition open-file-btn ${isDirectory ? 'hidden' : ''}" title="Open file (view in browser)">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16" />
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17H7a2 2 0 01-2-2V7a2 2 0 012-2h6" />
+                            <div class="relative">
+                                <button type="button" class="inline-flex items-center justify-center w-8 h-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded transition file-options-btn ${isDirectory ? 'hidden' : ''}" title="File options">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                                     </svg>
-                                    <span class="hidden xl:inline">Open</span>
                                 </button>
-                                <button type="button" class="inline-flex items-center gap-1 px-2 py-1 text-caption-s text-cyan-700 hover:text-cyan-800 hover:bg-cyan-50 rounded transition download-file-btn ${isDirectory ? 'hidden' : ''}" title="Download file">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    <span class="hidden xl:inline">Download</span>
-                                </button>
+                                <div class="file-options-dropdown hidden absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-10 py-1">
+                                    <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-slate-700 hover:bg-slate-50 flex items-center gap-2 open-file-option">
+                                        <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17H7a2 2 0 01-2-2V7a2 2 0 012-2h6" />
+                                        </svg>
+                                        <span>Open file</span>
+                                    </button>
+                                    <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-slate-700 hover:bg-slate-50 flex items-center gap-2 download-file-option">
+                                        <svg class="w-4 h-4 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span>Download file</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -528,20 +535,50 @@ class FileExplorer {
                     }
                 });
 
-                const openButton = itemElement.querySelector('.open-file-btn');
-                if (openButton) {
-                    openButton.addEventListener('click', (e) => {
+                // Three-dots menu functionality
+                const optionsButton = itemElement.querySelector('.file-options-btn');
+                if (optionsButton) {
+                    optionsButton.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        this.openFile(item.path, item.name);
+                        
+                        // Close any other open dropdowns
+                        document.querySelectorAll('.file-options-dropdown').forEach(dropdown => {
+                            dropdown.classList.add('hidden');
+                        });
+                        
+                        // Toggle this dropdown
+                        const dropdown = itemElement.querySelector('.file-options-dropdown');
+                        if (dropdown) {
+                            dropdown.classList.toggle('hidden');
+                        }
                     });
-                }
-
-                const downloadButton = itemElement.querySelector('.download-file-btn');
-                if (downloadButton) {
-                    downloadButton.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.downloadFile(item.path, item.name);
-                    });
+                    
+                    // Add click handlers for dropdown options
+                    const openOption = itemElement.querySelector('.open-file-option');
+                    if (openOption) {
+                        openOption.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            this.openFile(item.path, item.name);
+                            // Close dropdown after selection
+                            const dropdown = itemElement.querySelector('.file-options-dropdown');
+                            if (dropdown) {
+                                dropdown.classList.add('hidden');
+                            }
+                        });
+                    }
+                    
+                    const downloadOption = itemElement.querySelector('.download-file-option');
+                    if (downloadOption) {
+                        downloadOption.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            this.downloadFile(item.path, item.name);
+                            // Close dropdown after selection
+                            const dropdown = itemElement.querySelector('.file-options-dropdown');
+                            if (dropdown) {
+                                dropdown.classList.add('hidden');
+                            }
+                        });
+                    }
                 }
             } else {
                 // Update existing element's data attributes (in case they changed)
@@ -1068,6 +1105,15 @@ class FileExplorer {
                 defaultSort.classList.add('bg-orange-50', 'text-orange-700', 'border', 'border-orange-200');
             }
         }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.file-options-btn') && !e.target.closest('.file-options-dropdown')) {
+                document.querySelectorAll('.file-options-dropdown').forEach(dropdown => {
+                    dropdown.classList.add('hidden');
+                });
+            }
+        });
     }
 
     // Handle file upload

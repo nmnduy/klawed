@@ -1,0 +1,68 @@
+/**
+ * Dynamic File Explorer Styles
+ * 
+ * Styles for file explorer dropdown menus and interactions.
+ * These classes are used in fileExplorer.js for the three-dots menu.
+ * 
+ * Note: These classes must be referenced in class-reference.html to ensure
+ * they're included in the build.
+ */
+
+@layer components {
+  /* File options dropdown menu */
+  .file-options-dropdown {
+    @apply shadow-lg border border-slate-200;
+  }
+  
+  .file-options-dropdown button {
+    @apply transition-colors duration-150;
+  }
+  
+  .file-options-dropdown button:hover {
+    @apply bg-slate-50;
+  }
+  
+  .file-options-dropdown button:active {
+    @apply bg-slate-100;
+  }
+  
+  /* Three-dots button */
+  .file-options-btn {
+    @apply transition-all duration-200;
+  }
+  
+  .file-options-btn:hover {
+    @apply bg-slate-100 text-slate-700;
+  }
+  
+  .file-options-btn:focus {
+    @apply outline-none ring-2 ring-slate-300 ring-offset-1;
+  }
+  
+  /* Dropdown animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .file-options-dropdown:not(.hidden) {
+    animation: fadeIn 0.15s ease-out;
+  }
+  
+  /* Mobile responsiveness */
+  @media (max-width: 1023px) {
+    .file-options-btn {
+      @apply w-7 h-7;
+    }
+    
+    .file-options-dropdown {
+      @apply w-40;
+    }
+  }
+}
