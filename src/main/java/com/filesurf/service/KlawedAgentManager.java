@@ -97,6 +97,10 @@ public class KlawedAgentManager {
             throw new IOException("Session directory is not writable: " + sessionDir);
         }
         LOGGER.info("[SESSION:" + sessionId + "] Session directory verified: " + sessionDir);
+
+        // Guardrail: if a klawed.pid already exists and the process is running, do NOT spawn a duplicate
+        // This is per-user workspace level (sessionDir is the user workspace)
+        ensureNoRunningAgentForWorkspace(sessionId, sessionDir);
         
         // Use shared SQLite database path for all sessions
         String sqliteDbPath;
@@ -244,6 +248,11 @@ public class KlawedAgentManager {
             LOGGER.info("[SESSION:" + sessionId + "] Starting klawed in SQLite queue mode: " + sqliteDbPath);
         }
         LOGGER.info("[SESSION:" + sessionId + "] Klawed command: " + String.join(" ", processBuilder.command()));
+
+        // Before launch, double-check there isn't already a klawed process for this workspace
+        if (isExistingKlawedProcessRunning(sessionDir)) {
+            throw new IOException("Klawed already running for workspace: " + sessionDir);
+        }
         
         // Set working directory to session directory
         processBuilder.directory(sessionDir.toFile());
@@ -340,6 +349,8 @@ public class KlawedAgentManager {
         
         // Write PID file to session directory for management
         writePidFile(sessionDir, pid, sqliteDbPath);
+
+        // Record in-memory too (agents map already has it) so we don't allow duplicates concurrently
         
         // Give klawed a grace period to initialize (klawed creates DB lazily on first message)
         // We just need to make sure the process starts successfully
@@ -958,6 +969,79 @@ public class KlawedAgentManager {
         
         Files.writeString(pidFile, pidContent, java.nio.charset.StandardCharsets.UTF_8);
         LOGGER.info("Wrote PID file: " + pidFile + " for PID: " + pid);
+    }
+
+    /**
+     * Prevent duplicate klawed per user workspace by checking pid file + ps aux | grep.
+     * Throws IOException if a running klawed is detected.
+     */
+    private void ensureNoRunningAgentForWorkspace(String sessionId, Path sessionDir) throws IOException {
+        Path pidFile = sessionDir.resolve("klawed.pid");
+
+        // 1) If we already track an agent in memory for this session, respect it
+        KlawedAgentInstance existing = agents.get(sessionId);
+        if (existing != null && existing.isRunning()) {
+            throw new IOException("Klawed already running for session " + sessionId + " in memory");
+        }
+
+        // 2) If pid file exists, check if that PID is alive
+        if (Files.exists(pidFile)) {
+            try {
+                String content = Files.readString(pidFile);
+                long pid = parsePid(content);
+                if (pid > 0 && isProcessAlive(pid)) {
+                    throw new IOException("Klawed already running (pid file) for workspace: " + sessionDir + " pid=" + pid);
+                }
+            } catch (Exception e) {
+                LOGGER.warning("[SESSION:" + sessionId + "] Failed to parse pid file; continuing to ps check: " + e.getMessage());
+            }
+        }
+
+        // 3) Belt-and-suspenders: run ps aux | grep <user-workspace> to see if a klawed is alive
+        if (isExistingKlawedProcessRunning(sessionDir)) {
+            throw new IOException("Klawed already running (ps scan) for workspace: " + sessionDir);
+        }
+    }
+
+    private long parsePid(String content) {
+        for (String line : content.split("\n")) {
+            if (line.startsWith("pid=")) {
+                try {
+                    return Long.parseLong(line.substring("pid=".length()).trim());
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return -1;
+    }
+
+    private boolean isProcessAlive(long pid) {
+        try {
+            return ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Check via ps aux | grep to see if any klawed process is using this workspace
+     */
+    private boolean isExistingKlawedProcessRunning(Path sessionDir) {
+        try {
+            Process process = new ProcessBuilder("ps", "aux").start();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    // Look for klawed and the workspace path
+                    if (line.contains("klawed") && line.contains(sessionDir.toString())) {
+                        return true;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.warning("ps aux scan failed: " + e.getMessage());
+        }
+        return false;
     }
     
     /**
