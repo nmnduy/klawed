@@ -3,12 +3,19 @@
 - [x] lots of left over klawed db files in the workspace. maybe klawed files dont get cleaned up?
 - [x] fix svg icons for open file and download file. use three dots to open file options like show open and download
 
-- [ ] waiter isn't very good
-- [ ] web browsing
+---
+
+- [ ] three dots aren't very good
+- [ ] what if klawed die
+- [ ] show KLAWED what tools it already has
+
+---
+
 - [ ] put some stuff in the starting workspace for everyone
     - [ ] stock analysis
     - [ ] youtube video transcriber
-
+- [ ] progress bar for file upload
+- [ ] web browsing
 - [x] we can preview more common files: html
 
 ---
