@@ -132,8 +132,9 @@ public class FileChatHttpResource {
         } catch (Exception e) {
             LOGGER.severe("[SESSION:" + sessionId + "] Failed to initialize session: " + e.getMessage());
             e.printStackTrace();
+            // Do not expose internal details to the client
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("{\"error\": \"Failed to initialize session: " + e.getMessage() + "\"}")
+                    .entity("{\"error\": \"Failed to initialize session\"}")
                     .build();
         }
     }

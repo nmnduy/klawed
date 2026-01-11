@@ -200,8 +200,9 @@ public class FileChatWebSocket {
             LOGGER.severe("[SESSION:" + sessionId + "] Failed to initialize session: " + e.getMessage());
             e.printStackTrace();
             try {
+                // Do not forward internal details to the client
                 return objectMapper.writeValueAsString(KlawedSocketMessage.createError(
-                    "Failed to initialize session: " + e.getMessage()
+                    "Failed to initialize session"
                 ));
             } catch (Exception jsonEx) {
                 LOGGER.severe("Failed to serialize error message: " + jsonEx.getMessage());
