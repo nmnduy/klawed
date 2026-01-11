@@ -112,31 +112,31 @@ public class PodmanSandboxService {
         processBuilder.redirectErrorStream(true);
         
         Process process = processBuilder.start();
-        
-        // Read container ID from stdout
-        String containerId;
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            containerId = reader.readLine();
-        }
-        
+
+        String output;
+        int exitCode;
         try {
-            int exitCode = process.waitFor();
-            if (exitCode != 0) {
-                // Read any remaining output for error message
-                String errorOutput = new String(process.getInputStream().readAllBytes());
-                throw new IOException("Failed to start container, exit code: " + exitCode + 
-                                     ", output: " + errorOutput);
-            }
+            output = readProcessOutput(process);
+            exitCode = process.waitFor();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while starting container", e);
         }
-        
-        if (containerId == null || containerId.isBlank()) {
-            throw new IOException("Failed to get container ID after starting container");
+
+        if (exitCode != 0) {
+            throw new IOException("Failed to start container, exit code: " + exitCode + ", output: " + output);
         }
-        
-        containerId = containerId.trim();
+
+        // First line should be the container ID
+        String containerId = Optional.ofNullable(output)
+            .map(String::strip)
+            .map(s -> s.contains("\n") ? s.substring(0, s.indexOf('\n')).strip() : s)
+            .orElse("");
+
+        if (containerId.isBlank()) {
+            throw new IOException("Failed to get container ID after starting container (output was empty)");
+        }
+
         sessionContainers.put(sessionId, containerId);
         
         LOGGER.info("[SESSION:" + sessionId + "] Started container: " + containerId + " (name: " + containerName + ")");
@@ -290,7 +290,26 @@ public class PodmanSandboxService {
             String socketPath = "/workspace/" + unixSocketFilename;
             shellCommand = "mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed -u " + socketPath;
         } else {
-            shellCommand = "mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed --sqlite-queue " + sqliteDbPath;
+            // In podman, the working directory is /workspace, so ensure the db path is relative to /workspace
+            // Convert host path to container path if database is inside workspace
+            String normalizedDbPath = sqliteDbPath;
+            if (normalizedDbPath != null) {
+                Path dbPath = Path.of(normalizedDbPath);
+                if (dbPath.isAbsolute()) {
+                    // Check if database is inside workspace directory
+                    Path workspaceAbs = workspaceDir.toAbsolutePath().normalize();
+                    Path dbAbs = dbPath.normalize();
+                    if (dbAbs.startsWith(workspaceAbs)) {
+                        // Convert host path to container path: /workspace + relative path from workspace
+                        Path relativePath = workspaceAbs.relativize(dbAbs);
+                        normalizedDbPath = "/workspace/" + relativePath.toString();
+                    }
+                }
+            }
+            if (normalizedDbPath == null || normalizedDbPath.isEmpty()) {
+                throw new IllegalArgumentException("SQLite database path cannot be null or empty in SQLite queue mode");
+            }
+            shellCommand = "cd /workspace && mkdir -p ./.klawed/logs && touch ./.klawed/logs/klawed.log && exec /usr/local/bin/klawed --sqlite-queue " + normalizedDbPath;
         }
         command.add(shellCommand);
         
