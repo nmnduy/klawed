@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -282,22 +283,29 @@ public class KlawedAgentManager {
         // Forward LD_LIBRARY_PATH for shared libraries (e.g., libmemvid_ffi.so)
         copyEnvIfPresent(processBuilder, "LD_LIBRARY_PATH");
         
+        // Detect Bedrock mode early to avoid misleading OpenAI defaults in logs
+        boolean useBedrock = "1".equals(System.getenv("KLAWED_USE_BEDROCK")) || "true".equalsIgnoreCase(System.getenv("KLAWED_USE_BEDROCK"));
+
         // API configuration - prioritize OPENAI_* environment variables for simplicity
-        // This aligns with the user's request to use only OpenAI-compatible environment variables
+        // If Bedrock is enabled, do NOT fall back to DeepSeek defaults just for logging
         // Configuration properties are now openai.api.base and openai.api.model
         String apiBaseUrl = System.getenv("OPENAI_API_BASE");
-        if (apiBaseUrl == null || apiBaseUrl.isBlank()) {
+        if ((apiBaseUrl == null || apiBaseUrl.isBlank()) && !useBedrock) {
             apiBaseUrl = apiBase.orElse("https://api.deepseek.com");
         }
         
         String modelName = System.getenv("OPENAI_MODEL");
-        if (modelName == null || modelName.isBlank()) {
+        if ((modelName == null || modelName.isBlank()) && !useBedrock) {
             modelName = apiModel.orElse("deepseek-chat");
         }
 
         // Push resolved base/model into child env so aliases (incl. Bedrock/Anthropic) flow through
-        processBuilder.environment().put("OPENAI_API_BASE", apiBaseUrl);
-        processBuilder.environment().put("OPENAI_MODEL", modelName);
+        if (apiBaseUrl != null) {
+            processBuilder.environment().put("OPENAI_API_BASE", apiBaseUrl);
+        }
+        if (modelName != null) {
+            processBuilder.environment().put("OPENAI_MODEL", modelName);
+        }
         
         // Get API key from system environment - prefer OPENAI_API_KEY, allow OPENROUTER_API_KEY and ANTHROPIC_API_KEY fallback
         String apiKey = System.getenv("OPENAI_API_KEY");
@@ -326,7 +334,22 @@ public class KlawedAgentManager {
         // Ensure klawed can find shared libraries (e.g., libmemvid_ffi.so)
         copyEnvIfPresent(processBuilder, "LD_LIBRARY_PATH");
         
-        LOGGER.info("[SESSION:" + sessionId + "] API configuration - Base: " + apiBaseUrl + ", Model: " + modelName);
+        // Summarize final runtime configuration without misleading defaults
+        Map<String, String> summary = new LinkedHashMap<>();
+        summary.put("mode", useBedrock ? "bedrock" : "openai-compatible");
+        summary.put("openai_api_base", apiBaseUrl == null ? "<unset>" : apiBaseUrl);
+        summary.put("openai_model", modelName == null ? "<unset>" : modelName);
+        summary.put("anthropic_model", System.getenv("ANTHROPIC_MODEL") == null ? "<unset>" : System.getenv("ANTHROPIC_MODEL"));
+        summary.put("anthropic_version", System.getenv("ANTHROPIC_VERSION") == null ? "<unset>" : System.getenv("ANTHROPIC_VERSION"));
+        summary.put("aws_region", System.getenv("AWS_REGION") == null ? "<unset>" : System.getenv("AWS_REGION"));
+        summary.put("aws_profile", System.getenv("AWS_PROFILE") == null ? "<unset>" : System.getenv("AWS_PROFILE"));
+        summary.put("aws_access_key_id", System.getenv("AWS_ACCESS_KEY_ID") == null ? "<unset>" : "<set>");
+        summary.put("aws_session_token", System.getenv("AWS_SESSION_TOKEN") == null ? "<unset>" : "<set>");
+        summary.put("openai_api_key", apiKey == null || apiKey.isBlank() ? "<unset>" : "<set>");
+        summary.put("openai_auth_header", System.getenv("OPENAI_AUTH_HEADER") == null ? "<unset>" : "<set>");
+        summary.put("openai_extra_headers", System.getenv("OPENAI_EXTRA_HEADERS") == null ? "<unset>" : "<set>");
+
+        LOGGER.info("[SESSION:" + sessionId + "] Klawed runtime config: " + summary);
 
         // Create logs directory if it doesn't exist
         File logsDir = new File("logs");
