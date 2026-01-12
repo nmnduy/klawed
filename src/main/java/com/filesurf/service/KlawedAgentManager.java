@@ -80,11 +80,38 @@ public class KlawedAgentManager {
         LOGGER.info("[SESSION:" + sessionId + "] Starting dedicated klawed agent" + 
                    (sandboxMode ? " (sandbox mode)" : " (direct mode)"));
         
-        // Check if agent already exists for this session
+        // Check if agent already exists for this session in our tracking map
         KlawedAgentInstance existingAgent = agents.get(sessionId);
         if (existingAgent != null) {
-            LOGGER.info("[SESSION:" + sessionId + "] Agent already exists, returning existing instance");
+            LOGGER.info("[SESSION:" + sessionId + "] Agent already exists in tracking map, returning existing instance");
             return existingAgent;
+        }
+        
+        // In sandbox mode, also check if a container is already running for this session
+        // This handles the case where user reconnects and the container wasn't stopped yet
+        // (e.g., during the grace period after disconnect)
+        if (sandboxMode) {
+            String existingContainer = podmanSandboxService.getRunningContainerForSession(sessionId);
+            if (existingContainer != null) {
+                LOGGER.info("[SESSION:" + sessionId + "] Found existing running container: " + existingContainer + ", reusing it");
+                
+                // Determine the SQLite database path (same logic as below)
+                String sqliteDbPath = determineSqliteDbPath(sessionId, sessionDir);
+                
+                // Create a new agent instance that wraps the existing container
+                KlawedAgentInstance instance = new KlawedAgentInstance(sessionId, null, sqliteDbPath, sessionDir, existingContainer);
+                agents.put(sessionId, instance);
+                
+                // Connect to the existing agent
+                try {
+                    instance.connect();
+                    LOGGER.info("[SESSION:" + sessionId + "] Reconnected to existing container and connected to agent");
+                } catch (IOException e) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Failed to connect to existing container (but continuing): " + e.getMessage());
+                }
+                
+                return instance;
+            }
         }
         
         // Verify session directory exists and is writable
@@ -104,29 +131,8 @@ public class KlawedAgentManager {
         ensureNoRunningAgentForWorkspace(sessionId, sessionDir);
         
         // Use shared SQLite database path for all sessions
-        String sqliteDbPath;
-        String containerDbPath;
-        
-        if (sqliteQueueDbPath.isPresent() && !sqliteQueueDbPath.get().isEmpty()) {
-            // Use configured database path
-            String configuredPath = sqliteQueueDbPath.get();
-            // Resolve the path relative to the session directory (user workspace)
-            Path resolvedPath = Path.of(configuredPath);
-            if (!resolvedPath.isAbsolute()) {
-                // If path is relative, resolve it relative to the session directory (user workspace)
-                resolvedPath = sessionDir.resolve(resolvedPath);
-            }
-            sqliteDbPath = resolvedPath.toString();
-            containerDbPath = sqliteDbPath; // For container mode, use same path (should be mounted)
-            LOGGER.info("[SESSION:" + sessionId + "] Using SQLite database in workspace: " + sqliteDbPath);
-        } else {
-            // Fallback to per-session database (backward compatibility)
-            String dbFileName = "klawed_messages_" + sessionId + ".db";
-            Path dbPath = sessionDir.resolve(dbFileName);
-            sqliteDbPath = dbPath.toString();
-            containerDbPath = "/workspace/" + dbFileName;
-            LOGGER.info("[SESSION:" + sessionId + "] Using per-session SQLite database: " + sqliteDbPath);
-        }
+        String sqliteDbPath = determineSqliteDbPath(sessionId, sessionDir);
+        String containerDbPath = determineContainerDbPath(sessionId, sessionDir, sqliteDbPath);
         
         KlawedAgentInstance instance;
         
@@ -150,6 +156,44 @@ public class KlawedAgentManager {
         }
         
         return instance;
+    }
+    
+    /**
+     * Determine the SQLite database path for a session.
+     */
+    private String determineSqliteDbPath(String sessionId, Path sessionDir) {
+        if (sqliteQueueDbPath.isPresent() && !sqliteQueueDbPath.get().isEmpty()) {
+            // Use configured database path
+            String configuredPath = sqliteQueueDbPath.get();
+            // Resolve the path relative to the session directory (user workspace)
+            Path resolvedPath = Path.of(configuredPath);
+            if (!resolvedPath.isAbsolute()) {
+                // If path is relative, resolve it relative to the session directory (user workspace)
+                resolvedPath = sessionDir.resolve(resolvedPath);
+            }
+            String sqliteDbPath = resolvedPath.toString();
+            LOGGER.info("[SESSION:" + sessionId + "] Using SQLite database in workspace: " + sqliteDbPath);
+            return sqliteDbPath;
+        } else {
+            // Fallback to per-session database (backward compatibility)
+            String dbFileName = "klawed_messages_" + sessionId + ".db";
+            Path dbPath = sessionDir.resolve(dbFileName);
+            String sqliteDbPath = dbPath.toString();
+            LOGGER.info("[SESSION:" + sessionId + "] Using per-session SQLite database: " + sqliteDbPath);
+            return sqliteDbPath;
+        }
+    }
+    
+    /**
+     * Determine the container database path for a session.
+     */
+    private String determineContainerDbPath(String sessionId, Path sessionDir, String sqliteDbPath) {
+        if (sqliteQueueDbPath.isPresent() && !sqliteQueueDbPath.get().isEmpty()) {
+            return sqliteDbPath; // For container mode, use same path (should be mounted)
+        } else {
+            String dbFileName = "klawed_messages_" + sessionId + ".db";
+            return "/workspace/" + dbFileName;
+        }
     }
     
     /**

@@ -548,6 +548,27 @@ public class PodmanSandboxService {
     }
     
     /**
+     * Get the container name for a session if it exists and is running.
+     * This is used during reconnection to detect if a container is already running
+     * for the session (even if it's not tracked in our in-memory map).
+     * 
+     * @param sessionId The session ID
+     * @return The container name (klawed-{sessionId}) if running, null otherwise
+     */
+    public String getRunningContainerForSession(String sessionId) {
+        String containerName = "klawed-" + sessionId;
+        if (isContainerRunning(containerName)) {
+            // Update tracking map if not already tracked
+            if (!sessionContainers.containsKey(sessionId)) {
+                sessionContainers.put(sessionId, containerName);
+                LOGGER.info("[SESSION:" + sessionId + "] Re-tracking existing container: " + containerName);
+            }
+            return containerName;
+        }
+        return null;
+    }
+    
+    /**
      * Get all active session IDs with running containers.
      * 
      * @return List of session IDs

@@ -92,6 +92,9 @@ public class AgentShutdownJobService {
     
     @Inject
     SessionManager sessionManager;
+    
+    @Inject
+    PodmanSandboxService podmanSandboxService;
 
     @PostConstruct
     void init() {
@@ -174,13 +177,35 @@ public class AgentShutdownJobService {
                     // Get the workspace path before stopping the agent
                     Path workspace = sessionManager.getWorkspaceForSession(job.sessionId);
                     
-                    // Check if agent still exists for this session
+                    // Check if agent still exists for this session in the tracking map
                     KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(job.sessionId);
                     if (agent != null) {
                         LOGGER.info("[SESSION:" + job.sessionId + "] Stopping klawed agent after grace period");
                         agentManager.stopAgentForSession(job.sessionId);
                     } else {
-                        LOGGER.info("[SESSION:" + job.sessionId + "] Agent already stopped");
+                        LOGGER.info("[SESSION:" + job.sessionId + "] Agent not in tracking map");
+                        
+                        // In sandbox mode, also check if a container is running for this session
+                        // This handles the case where the agent was removed from tracking but the container
+                        // is still running (e.g., after a reconnect that didn't complete properly)
+                        if (podmanSandboxService.isEnabled()) {
+                            if (podmanSandboxService.isContainerRunningBySession(job.sessionId)) {
+                                LOGGER.info("[SESSION:" + job.sessionId + "] Found orphaned container, stopping it");
+                                try {
+                                    podmanSandboxService.stopContainerBySession(job.sessionId);
+                                } catch (IOException e) {
+                                    LOGGER.warning("[SESSION:" + job.sessionId + "] Failed to stop orphaned container: " + e.getMessage());
+                                    // Try force kill
+                                    try {
+                                        podmanSandboxService.killContainerBySession(job.sessionId);
+                                    } catch (IOException killEx) {
+                                        LOGGER.severe("[SESSION:" + job.sessionId + "] Failed to kill orphaned container: " + killEx.getMessage());
+                                    }
+                                }
+                            } else {
+                                LOGGER.info("[SESSION:" + job.sessionId + "] No container running for session");
+                            }
+                        }
                     }
                     
                     // Clean up klawed artifacts from workspace
