@@ -451,7 +451,7 @@ TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 # Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue test-uds-socket test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue test-uds-socket test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -1903,6 +1903,7 @@ help:
 	@echo "Docker:"
 	@echo "  make docker-sandbox - Build Docker sandbox image for isolated execution"
 	@echo "  make docker-push - Push Docker image to filesurf-0 podman registry"
+	@echo "  make docker-rotate - Rotate images on filesurf-0 (keep only last 3)"
 	@echo ""
 	@echo "Dependencies:"
 	@echo "  - gcc or clang (or compatible C compiler)"
@@ -2497,4 +2498,37 @@ docker-push: docker-sandbox
 	@echo ""
 	@echo "The image is now available on filesurf-0 and can be used with:"
 	@echo "  podman run -it --rm klawed-sandbox:$(VERSION)"
+	@echo ""
+
+# Rotate klawed images on filesurf-0 registry (keep only last 3)
+# Lists all klawed-sandbox images, sorts by creation date, and removes all but the 3 most recent
+.PHONY: docker-rotate
+docker-rotate:
+	@echo ""
+	@echo "Rotating klawed images on filesurf-0 (keeping last 3)..."
+	@echo ""
+	@if ! ssh filesurf-0 'command -v podman >/dev/null 2>&1'; then \
+		echo "❌ Error: podman not found on filesurf-0"; \
+		echo "Install podman on the remote host: https://podman.io/getting-started/installation"; \
+		exit 1; \
+	fi
+	@echo "Fetching klawed-sandbox images from filesurf-0..."
+	@ssh filesurf-0 'podman images --format "{{.ID}} {{.Repository}}:{{.Tag}} {{.CreatedAt}}" | grep "klawed-sandbox" | sort -k3 -r' | \
+		tail -n +4 | awk '{print $$1}' > /tmp/klawed_images_to_remove.txt || true
+	@if [ -s /tmp/klawed_images_to_remove.txt ]; then \
+		echo "Removing old images..."; \
+		while read -r image_id; do \
+			echo "  Removing image: $$image_id"; \
+			ssh filesurf-0 "podman rmi $$image_id" || echo "    (already removed or in use)"; \
+		done < /tmp/klawed_images_to_remove.txt; \
+		rm -f /tmp/klawed_images_to_remove.txt; \
+		echo ""; \
+		echo "✓ Old images removed"; \
+	else \
+		echo "No old images to remove (less than 4 images found)"; \
+		rm -f /tmp/klawed_images_to_remove.txt; \
+	fi
+	@echo ""
+	@echo "Remaining klawed-sandbox images on filesurf-0:"
+	@ssh filesurf-0 'podman images | grep "klawed-sandbox" || echo "  (none)"'
 	@echo ""
