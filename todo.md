@@ -5,6 +5,7 @@
 
 ---
 
+- [ ] progress bar for file upload
 - [ ] three dots aren't very good
 - [ ] what if klawed die
 - [ ] show KLAWED what cli tools it already has
@@ -18,7 +19,6 @@
 - [ ] put some stuff in the starting workspace for everyone
     - [ ] stock analysis
     - [ ] youtube video transcriber
-- [ ] progress bar for file upload
 - [x] we can preview more common files: html
 
 ---
