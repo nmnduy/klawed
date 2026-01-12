@@ -469,6 +469,33 @@ public class SQLiteQueueClient {
                                         LOGGER.warning("Failed to save API_CALL message to main database: " + dbEx.getMessage());
                                     }
                                 }
+                            } else if (ChatConstants.MESSAGE_TYPE_END_AI_TURN.equals(messageType)) {
+                                // Handle end of AI turn - signal that AI is done processing
+                                LOGGER.info("Received END_AI_TURN message - AI turn completed");
+                                
+                                // Clear pending tool requests
+                                pendingToolRequests.clear();
+                                
+                                // Forward to WebSocket via message to main database
+                                if (config.getFileChatService() != null && config.getSessionId() != null) {
+                                    try {
+                                        // Create a JSON message for END_AI_TURN
+                                        ObjectNode endTurnJson = objectMapper.createObjectNode();
+                                        endTurnJson.put("messageType", ChatConstants.MESSAGE_TYPE_END_AI_TURN);
+                                        String endTurnJsonStr = objectMapper.writeValueAsString(endTurnJson);
+                                        
+                                        config.getFileChatService().createChatMessage(
+                                            config.getSessionId(),
+                                            ChatConstants.AGENT,  // sender
+                                            ChatConstants.CLIENT, // receiver  
+                                            endTurnJsonStr,
+                                            ChatConstants.DB_MESSAGE_TYPE_STATUS  // Use status type for internal messages
+                                        );
+                                        LOGGER.info("Forwarded END_AI_TURN message to main database for WebSocket delivery");
+                                    } catch (Exception dbEx) {
+                                        LOGGER.warning("Failed to save END_AI_TURN message to main database: " + dbEx.getMessage());
+                                    }
+                                }
                             } else {
                                 LOGGER.warning("Unknown message type: " + messageType);
                                 messages.add("[UNKNOWN MESSAGE TYPE: " + messageType + "]");

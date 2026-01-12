@@ -113,9 +113,31 @@ public class ChatMessagePollingService {
                                 KlawedSocketMessage.createError(message.getContent())
                             );
                         } else if ("status".equals(message.getMessageType())) {
-                            jsonMessage = objectMapper.writeValueAsString(
-                                KlawedSocketMessage.createStatus(message.getContent())
-                            );
+                            // Check if it's an END_AI_TURN message (stored as status type with JSON content)
+                            String content = message.getContent();
+                            if (content != null && content.contains("END_AI_TURN")) {
+                                try {
+                                    Map<String, Object> endTurnData = objectMapper.readValue(content, Map.class);
+                                    if (ChatConstants.MESSAGE_TYPE_END_AI_TURN.equals(endTurnData.get("messageType"))) {
+                                        jsonMessage = objectMapper.writeValueAsString(
+                                            KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_END_AI_TURN, null)
+                                        );
+                                    } else {
+                                        jsonMessage = objectMapper.writeValueAsString(
+                                            KlawedSocketMessage.createStatus(content)
+                                        );
+                                    }
+                                } catch (Exception e) {
+                                    // Not JSON, treat as regular status
+                                    jsonMessage = objectMapper.writeValueAsString(
+                                        KlawedSocketMessage.createStatus(content)
+                                    );
+                                }
+                            } else {
+                                jsonMessage = objectMapper.writeValueAsString(
+                                    KlawedSocketMessage.createStatus(content)
+                                );
+                            }
                         } else if (ChatConstants.DB_MESSAGE_TYPE_API_CALL.equals(message.getMessageType())) {
                             // Parse the API call JSON and create an API_CALL message
                             try {
@@ -230,9 +252,31 @@ public class ChatMessagePollingService {
                                 KlawedSocketMessage.createError(message.getContent())
                             );
                         } else if ("status".equals(message.getMessageType())) {
-                            jsonMessage = objectMapper.writeValueAsString(
-                                KlawedSocketMessage.createStatus(message.getContent())
-                            );
+                            // Check if it's an END_AI_TURN message (stored as status type with JSON content)
+                            String content = message.getContent();
+                            if (content != null && content.contains("END_AI_TURN")) {
+                                try {
+                                    Map<String, Object> endTurnData = objectMapper.readValue(content, Map.class);
+                                    if (ChatConstants.MESSAGE_TYPE_END_AI_TURN.equals(endTurnData.get("messageType"))) {
+                                        jsonMessage = objectMapper.writeValueAsString(
+                                            KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_END_AI_TURN, null)
+                                        );
+                                    } else {
+                                        jsonMessage = objectMapper.writeValueAsString(
+                                            KlawedSocketMessage.createStatus(content)
+                                        );
+                                    }
+                                } catch (Exception e) {
+                                    // Not JSON, treat as regular status
+                                    jsonMessage = objectMapper.writeValueAsString(
+                                        KlawedSocketMessage.createStatus(content)
+                                    );
+                                }
+                            } else {
+                                jsonMessage = objectMapper.writeValueAsString(
+                                    KlawedSocketMessage.createStatus(content)
+                                );
+                            }
                         } else if (ChatConstants.DB_MESSAGE_TYPE_API_CALL.equals(message.getMessageType())) {
                             // Parse the API call JSON and create an API_CALL message
                             try {

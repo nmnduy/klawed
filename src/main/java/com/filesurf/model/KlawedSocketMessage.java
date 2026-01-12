@@ -131,6 +131,13 @@ public class KlawedSocketMessage {
     }
     
     /**
+     * Create an END_AI_TURN message to signal that the AI has completed its turn
+     */
+    public static KlawedSocketMessage createEndAiTurn() {
+        return create(ChatConstants.MESSAGE_TYPE_END_AI_TURN, null);
+    }
+    
+    /**
      * Extract text content from the message based on message type
      */
     public String extractTextContent() {
@@ -192,6 +199,11 @@ public class KlawedSocketMessage {
         // Handle SQLiteQueueConstants.MESSAGE_TYPE_API_CALL
         if (SQLiteQueueConstants.MESSAGE_TYPE_API_CALL.equals(messageType)) {
             return "[API CALL IN PROGRESS]";
+        }
+        
+        // Handle END_AI_TURN message
+        if (ChatConstants.MESSAGE_TYPE_END_AI_TURN.equals(messageType)) {
+            return "[END AI TURN]";
         }
         
         // For STATUS responses, return status message

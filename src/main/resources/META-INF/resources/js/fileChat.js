@@ -1433,6 +1433,16 @@ export function init(rootEl) {
                             showKlawedStatus('AI is thinking');
                         }
                         break;
+                    case 'END_AI_TURN':
+                        // AI turn completed - remove typing indicator
+                        debug('Received END_AI_TURN - AI turn completed');
+                        removeTypingIndicator();
+                        showKlawedStatus('Connected');
+                        // Reset API call time
+                        lastApiCallTime = null;
+                        // Update status to show we're connected (not thinking)
+                        updateStatus(true, 'Connected');
+                        break;
                     default:
                         if (typeof content === 'string') {
                             handleStreamComplete(content);
