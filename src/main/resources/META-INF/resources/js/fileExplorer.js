@@ -94,6 +94,7 @@ class FileExplorer {
         this.searchDebounceTimer = null;
         this.isSearchingWorkspace = false; // True when showing workspace search results
         this.searchAbortController = null; // For cancelling in-flight search requests
+        this.lastSearchResults = null; // Store last search results for persistence
 
         // File icons mapping
         this.fileIcons = {
@@ -858,8 +859,14 @@ class FileExplorer {
             filtered = searchResults.items;
             this.isSearchingWorkspace = true;
             this.searchHasMore = searchResults.hasMore;
+            // Store for later use (e.g., after closing preview)
+            this.lastSearchResults = searchResults;
+        } else if (this.isSearchingWorkspace && this.lastSearchResults) {
+            // We're in search mode and have stored results - use them
+            filtered = this.lastSearchResults.items;
+            this.searchHasMore = this.lastSearchResults.hasMore;
         } else if (this.isSearchingWorkspace) {
-            // We're in search mode but no results provided - show empty
+            // We're in search mode but no results available - show empty
             filtered = [];
         } else {
             // Use current directory items
@@ -936,6 +943,7 @@ class FileExplorer {
         // If search is empty, return to current directory view immediately
         if (!this.searchTerm.trim()) {
             this.isSearchingWorkspace = false;
+            this.lastSearchResults = null; // Clear stored search results
             this.applyFiltersAndSort();
             // Restore breadcrumbs visibility
             if (this.fileExplorerBreadcrumbs) {
@@ -977,6 +985,7 @@ class FileExplorer {
         // Clear search state
         this.searchTerm = '';
         this.isSearchingWorkspace = false;
+        this.lastSearchResults = null; // Clear stored search results
         if (this.fileExplorerSearch) {
             this.fileExplorerSearch.value = '';
         }
@@ -1372,6 +1381,10 @@ class FileExplorer {
     startAutoRefresh() {
         this.stopAutoRefresh(); // Clear any existing interval
         this.autoRefreshInterval = setInterval(() => {
+            // Skip auto-refresh when in search mode to preserve search results
+            if (this.isSearchingWorkspace) {
+                return;
+            }
             // Use silent mode for background refreshes to avoid showing spinner
             this.loadDirectory(this.currentPath, true);
         }, 30000); // Refresh every 30 seconds
