@@ -11,9 +11,7 @@
 #   docker run -it --rm -e OPENAI_API_KEY=$OPENAI_API_KEY \
 #     -v /path/to/workspace:/workspace:Z klawed-sandbox:latest
 #
-# Note: Container handles workspace permissions automatically via gosu
-# Do NOT use --user flag; the container starts as root and drops to agent user
-# Security: Use --cap-drop=ALL but NOT --security-opt=no-new-privileges (needed for gosu)
+# Note: Container runs as root
 #
 # See docs/docker-sandbox-deployment.md for full deployment guide
 
@@ -102,9 +100,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     zip \
     \
-    # gosu for dropping privileges in entrypoint
-    gosu \
-    \
     # Runtime libraries for klawed (NOT -dev packages)
     libcjson1 \
     libcurl4 \
@@ -114,11 +109,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libncursesw6 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
-
-# Create non-root user for running the agent
-# Use explicit UID/GID 1000 to match typical host user for volume permissions
-RUN groupadd -g 1000 agent && \
-    useradd -m -u 1000 -g 1000 -s /bin/bash agent
 
 # Copy klawed binary from builder
 COPY --from=builder /build/build/klawed /usr/local/bin/klawed
@@ -135,9 +125,7 @@ RUN chmod +x /usr/local/bin/klawed && \
     ldconfig
 
 # Create workspace directory structure
-# Note: This gets overlaid by volume mount, entrypoint fixes permissions
-RUN mkdir -p /workspace/.klawed/logs /workspace/.klawed/mcp && \
-    chown -R agent:agent /workspace
+RUN mkdir -p /workspace/.klawed/logs /workspace/.klawed/mcp
 
 # Set up default working directory
 WORKDIR /workspace
@@ -147,13 +135,12 @@ ENV LD_LIBRARY_PATH=/usr/local/lib \
     HOME=/workspace \
     TERM=xterm-256color
 
-# Configure git for the agent user (as root, will be used after gosu)
+# Configure git
 RUN git config --system init.defaultBranch main \
     && git config --system user.email "agent@sandbox.local" \
     && git config --system user.name "Klawed Agent"
 
-# Stay as root - entrypoint will drop to agent user via gosu
-# This allows fixing volume permissions before running as non-root
+# Run as root
 
 # Default entrypoint - accepts all arguments
 # The entrypoint script ensures directories exist in the mounted volume
