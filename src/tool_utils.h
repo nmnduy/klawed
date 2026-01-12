@@ -27,5 +27,11 @@ void trim_trailing_whitespace(char *str);
 // from remaining in memory after deallocation
 void secure_free(void *ptr, size_t size);
 
+// Check if a tool is disabled via KLAWED_DISABLE_TOOLS environment variable.
+// The env var should be a comma-separated list of tool names to disable.
+// Example: KLAWED_DISABLE_TOOLS="UploadImage,Subagent"
+// Returns 1 if the tool is disabled, 0 otherwise.
+int is_tool_disabled(const char *tool_name);
+
 #endif // TOOL_UTILS_H
 

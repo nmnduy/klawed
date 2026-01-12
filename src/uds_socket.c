@@ -31,7 +31,7 @@
 static ssize_t read_exact(int fd, void *buf, size_t count, int timeout_sec) {
     size_t total = 0;
     char *ptr = (char *)buf;
-    
+
     LOG_DEBUG("UDS: read_exact: fd=%d, count=%zu, timeout=%d", fd, count, timeout_sec);
 
     // Track elapsed time for timeout
@@ -55,7 +55,7 @@ static ssize_t read_exact(int fd, void *buf, size_t count, int timeout_sec) {
                 errno = ETIMEDOUT;
                 return -1;
             }
-            
+
             int remaining_timeout = timeout_sec - (int)elapsed;
             struct timeval tv;
             tv.tv_sec = remaining_timeout;
@@ -81,7 +81,7 @@ static ssize_t read_exact(int fd, void *buf, size_t count, int timeout_sec) {
         LOG_DEBUG("UDS: read_exact: calling read for %zu bytes (have %zu/%zu)", remaining, total, count);
         ssize_t n = read(fd, ptr + total, remaining);
         LOG_DEBUG("UDS: read_exact: read returned %zd bytes", n);
-        
+
         if (n < 0) {
             LOG_DEBUG("UDS: read_exact: read failed: %s", strerror(errno));
             if (errno == EINTR) continue;
@@ -110,7 +110,7 @@ static ssize_t read_exact(int fd, void *buf, size_t count, int timeout_sec) {
 static ssize_t write_exact(int fd, const void *buf, size_t count, int timeout_sec) {
     size_t total = 0;
     const char *ptr = (const char *)buf;
-    
+
     LOG_DEBUG("UDS: write_exact: fd=%d, count=%zu, timeout=%d", fd, count, timeout_sec);
 
     // Track elapsed time for timeout
@@ -134,7 +134,7 @@ static ssize_t write_exact(int fd, const void *buf, size_t count, int timeout_se
                 errno = ETIMEDOUT;
                 return -1;
             }
-            
+
             int remaining_timeout = timeout_sec - (int)elapsed;
             struct timeval tv;
             tv.tv_sec = remaining_timeout;
@@ -159,7 +159,7 @@ static ssize_t write_exact(int fd, const void *buf, size_t count, int timeout_se
         LOG_DEBUG("UDS: write_exact: calling write for %zu bytes (have %zu/%zu)", remaining, total, count);
         ssize_t n = write(fd, ptr + total, remaining);
         LOG_DEBUG("UDS: write_exact: write returned %zd bytes", n);
-        
+
         if (n < 0) {
             LOG_DEBUG("UDS: write_exact: write failed: %s", strerror(errno));
             if (errno == EINTR) continue;
@@ -180,7 +180,7 @@ static ssize_t write_exact(int fd, const void *buf, size_t count, int timeout_se
 // Helper: send a framed message (4-byte length header + payload)
 static int send_framed_message(int fd, const char *message, size_t message_len, int timeout_sec) {
     LOG_DEBUG("UDS: send_framed_message: fd=%d, message_len=%zu, timeout=%d", fd, message_len, timeout_sec);
-    
+
     if (message_len > UDS_MAX_MESSAGE_SIZE) {
         LOG_ERROR("UDS: Message too large: %zu bytes (max: %d)", message_len, UDS_MAX_MESSAGE_SIZE);
         return UDS_ERROR_MESSAGE_TOO_LARGE;
@@ -188,9 +188,9 @@ static int send_framed_message(int fd, const char *message, size_t message_len, 
 
     // Send 4-byte length header (network byte order)
     uint32_t len_network = htonl((uint32_t)message_len);
-    LOG_DEBUG("UDS: send_framed_message: sending length header: %u bytes (network: 0x%08x)", 
+    LOG_DEBUG("UDS: send_framed_message: sending length header: %u bytes (network: 0x%08x)",
               (uint32_t)message_len, len_network);
-    
+
     if (write_exact(fd, &len_network, sizeof(len_network), timeout_sec) != sizeof(len_network)) {
         LOG_ERROR("UDS: Failed to send length header: %s", strerror(errno));
         return UDS_ERROR_SEND_FAILED;
@@ -210,7 +210,7 @@ static int send_framed_message(int fd, const char *message, size_t message_len, 
 // Helper: receive a framed message (4-byte length header + payload)
 static int receive_framed_message(int fd, char *buffer, size_t buffer_size, int timeout_sec) {
     LOG_DEBUG("UDS: receive_framed_message: fd=%d, buffer_size=%zu, timeout=%d", fd, buffer_size, timeout_sec);
-    
+
     // Read 4-byte length header
     uint32_t len_network;
     LOG_DEBUG("UDS: receive_framed_message: reading length header (4 bytes)");
@@ -227,7 +227,7 @@ static int receive_framed_message(int fd, char *buffer, size_t buffer_size, int 
         LOG_ERROR("UDS: Failed to read length header: %s", strerror(errno));
         return UDS_ERROR_RECEIVE_FAILED;
     }
-    
+
     LOG_DEBUG("UDS: receive_framed_message: read length header: 0x%08x", len_network);
 
     uint32_t payload_len = ntohl(len_network);
@@ -261,7 +261,7 @@ static int receive_framed_message(int fd, char *buffer, size_t buffer_size, int 
     }
 
     buffer[payload_len] = '\0';
-    LOG_DEBUG("UDS: receive_framed_message: received %u byte payload, first 100 chars: %.100s%s", 
+    LOG_DEBUG("UDS: receive_framed_message: received %u byte payload, first 100 chars: %.100s%s",
               payload_len, buffer, payload_len > 100 ? "..." : "");
     return (int)payload_len;
 }
@@ -443,7 +443,7 @@ int uds_socket_accept(UDSContext *ctx, int timeout_sec) {
     // Accept connection
     struct sockaddr_un client_addr;
     socklen_t client_len = sizeof(client_addr);
-    
+
     LOG_DEBUG("UDS: Calling accept() on server fd %d", ctx->server_fd);
     ctx->client_fd = accept(ctx->server_fd, (struct sockaddr *)&client_addr, &client_len);
     if (ctx->client_fd < 0) {
@@ -453,12 +453,12 @@ int uds_socket_accept(UDSContext *ctx, int timeout_sec) {
 
     ctx->client_connected = true;
     LOG_INFO("UDS: Client connected (fd: %d)", ctx->client_fd);
-    
+
     // Log client address if available
     if (client_addr.sun_family == AF_UNIX && client_addr.sun_path[0] != '\0') {
         LOG_DEBUG("UDS: Client connected from: %s", client_addr.sun_path);
     } else {
-        LOG_DEBUG("UDS: Client connected (abstract socket or unnamed)"); 
+        LOG_DEBUG("UDS: Client connected (abstract socket or unnamed)");
     }
 
     return UDS_ERROR_NONE;

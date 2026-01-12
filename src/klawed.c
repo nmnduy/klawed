@@ -4561,6 +4561,15 @@ cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *stat
                 break;
             }
 
+            // Check if the tool is disabled via KLAWED_DISABLE_TOOLS
+            if (is_tool_disabled(tool_name)) {
+                LOG_INFO("Tool '%s' execution blocked - disabled via KLAWED_DISABLE_TOOLS", tool_name);
+                cJSON *error = cJSON_CreateObject();
+                cJSON_AddStringToObject(error, "error", "This tool has been disabled via KLAWED_DISABLE_TOOLS environment variable");
+                result = error;
+                break;
+            }
+
             LOG_DEBUG("execute_tool: Found built-in tool '%s' at index %d", tool_name, i);
             result = tools[i].handler(input, state);
             break;
@@ -5110,27 +5119,31 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON_AddItemToObject(grep_tool, "function", grep_func);
     cJSON_AddItemToArray(tool_array, grep_tool);
 
-    // UploadImage tool
-    cJSON *upload_image_tool = cJSON_CreateObject();
-    cJSON_AddStringToObject(upload_image_tool, "type", "function");
-    cJSON *upload_image_func = cJSON_CreateObject();
-    cJSON_AddStringToObject(upload_image_func, "name", "UploadImage");
-    cJSON_AddStringToObject(upload_image_func, "description",
-        "Uploads an image file to be included in the conversation context using OpenAI-compatible format. Supports common image formats (PNG, JPEG, GIF, WebP).");
-    cJSON *upload_image_params = cJSON_CreateObject();
-    cJSON_AddStringToObject(upload_image_params, "type", "object");
-    cJSON *upload_image_props = cJSON_CreateObject();
-    cJSON *image_path_prop = cJSON_CreateObject();
-    cJSON_AddStringToObject(image_path_prop, "type", "string");
-    cJSON_AddStringToObject(image_path_prop, "description", "Path to the image file to upload");
-    cJSON_AddItemToObject(upload_image_props, "file_path", image_path_prop);
-    cJSON_AddItemToObject(upload_image_params, "properties", upload_image_props);
-    cJSON *upload_image_req = cJSON_CreateArray();
-    cJSON_AddItemToArray(upload_image_req, cJSON_CreateString("file_path"));
-    cJSON_AddItemToObject(upload_image_params, "required", upload_image_req);
-    cJSON_AddItemToObject(upload_image_func, "parameters", upload_image_params);
-    cJSON_AddItemToObject(upload_image_tool, "function", upload_image_func);
-    cJSON_AddItemToArray(tool_array, upload_image_tool);
+    // UploadImage tool (conditionally added based on KLAWED_DISABLE_TOOLS)
+    if (!is_tool_disabled("UploadImage")) {
+        cJSON *upload_image_tool = cJSON_CreateObject();
+        cJSON_AddStringToObject(upload_image_tool, "type", "function");
+        cJSON *upload_image_func = cJSON_CreateObject();
+        cJSON_AddStringToObject(upload_image_func, "name", "UploadImage");
+        cJSON_AddStringToObject(upload_image_func, "description",
+            "Uploads an image file to be included in the conversation context using OpenAI-compatible format. Supports common image formats (PNG, JPEG, GIF, WebP).");
+        cJSON *upload_image_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(upload_image_params, "type", "object");
+        cJSON *upload_image_props = cJSON_CreateObject();
+        cJSON *image_path_prop = cJSON_CreateObject();
+        cJSON_AddStringToObject(image_path_prop, "type", "string");
+        cJSON_AddStringToObject(image_path_prop, "description", "Path to the image file to upload");
+        cJSON_AddItemToObject(upload_image_props, "file_path", image_path_prop);
+        cJSON_AddItemToObject(upload_image_params, "properties", upload_image_props);
+        cJSON *upload_image_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(upload_image_req, cJSON_CreateString("file_path"));
+        cJSON_AddItemToObject(upload_image_params, "required", upload_image_req);
+        cJSON_AddItemToObject(upload_image_func, "parameters", upload_image_params);
+        cJSON_AddItemToObject(upload_image_tool, "function", upload_image_func);
+        cJSON_AddItemToArray(tool_array, upload_image_tool);
+    } else {
+        LOG_INFO("Tool 'UploadImage' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     // TodoWrite tool
     cJSON *todo_tool = cJSON_CreateObject();

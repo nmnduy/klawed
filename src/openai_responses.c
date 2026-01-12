@@ -14,6 +14,7 @@
 #include "klawed_internal.h"
 #include "mcp.h"
 #include "arena.h"
+#include "tool_utils.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1005,23 +1006,27 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
                 "*.min.js, etc). Returns 'match_count' and 'warning' if truncated.",
                 grep_params);
 
-    // UploadImage tool
-    cJSON *upload_image_params = cJSON_CreateObject();
-    cJSON_AddStringToObject(upload_image_params, "type", "object");
-    cJSON *upload_image_props = cJSON_CreateObject();
-    cJSON *image_path_prop = cJSON_CreateObject();
-    cJSON_AddStringToObject(image_path_prop, "type", "string");
-    cJSON_AddStringToObject(image_path_prop, "description", "Path to the image file to upload");
-    cJSON_AddItemToObject(upload_image_props, "file_path", image_path_prop);
-    cJSON_AddItemToObject(upload_image_params, "properties", upload_image_props);
-    cJSON *upload_image_req = cJSON_CreateArray();
-    cJSON_AddItemToArray(upload_image_req, cJSON_CreateString("file_path"));
-    cJSON_AddItemToObject(upload_image_params, "required", upload_image_req);
+    // UploadImage tool (conditionally added based on KLAWED_DISABLE_TOOLS)
+    if (!is_tool_disabled("UploadImage")) {
+        cJSON *upload_image_params = cJSON_CreateObject();
+        cJSON_AddStringToObject(upload_image_params, "type", "object");
+        cJSON *upload_image_props = cJSON_CreateObject();
+        cJSON *image_path_prop = cJSON_CreateObject();
+        cJSON_AddStringToObject(image_path_prop, "type", "string");
+        cJSON_AddStringToObject(image_path_prop, "description", "Path to the image file to upload");
+        cJSON_AddItemToObject(upload_image_props, "file_path", image_path_prop);
+        cJSON_AddItemToObject(upload_image_params, "properties", upload_image_props);
+        cJSON *upload_image_req = cJSON_CreateArray();
+        cJSON_AddItemToArray(upload_image_req, cJSON_CreateString("file_path"));
+        cJSON_AddItemToObject(upload_image_params, "required", upload_image_req);
 
-    cJSON *upload_image_tool;
-    CREATE_TOOL(upload_image_tool, "UploadImage",
-                "Uploads an image file to be included in the conversation context using OpenAI-compatible format. Supports common image formats (PNG, JPEG, GIF, WebP).",
-                upload_image_params);
+        cJSON *upload_image_tool;
+        CREATE_TOOL(upload_image_tool, "UploadImage",
+                    "Uploads an image file to be included in the conversation context using OpenAI-compatible format. Supports common image formats (PNG, JPEG, GIF, WebP).",
+                    upload_image_params);
+    } else {
+        LOG_INFO("Tool 'UploadImage' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     // TodoWrite tool
     cJSON *todo_params = cJSON_CreateObject();

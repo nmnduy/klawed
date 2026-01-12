@@ -157,3 +157,38 @@ void secure_free(void *ptr, size_t size) {
     free(ptr);
 }
 
+int is_tool_disabled(const char *tool_name) {
+    if (!tool_name) return 0;
+
+    const char *disabled_tools = getenv("KLAWED_DISABLE_TOOLS");
+    if (!disabled_tools || disabled_tools[0] == '\0') return 0;
+
+    // Make a copy so we can tokenize
+    char *copy = strdup(disabled_tools);
+    if (!copy) return 0;
+
+    int disabled = 0;
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, ",", &saveptr);
+
+    while (token) {
+        // Trim leading whitespace
+        while (*token == ' ' || *token == '\t') token++;
+
+        // Trim trailing whitespace
+        size_t len = strlen(token);
+        while (len > 0 && (token[len-1] == ' ' || token[len-1] == '\t')) {
+            token[--len] = '\0';
+        }
+
+        if (strcasecmp(token, tool_name) == 0) {
+            disabled = 1;
+            break;
+        }
+
+        token = strtok_r(NULL, ",", &saveptr);
+    }
+
+    free(copy);
+    return disabled;
+}
