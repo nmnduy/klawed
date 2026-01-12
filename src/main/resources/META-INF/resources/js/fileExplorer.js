@@ -747,6 +747,10 @@ class FileExplorer {
         if (this.filePreviewHtmlFrame) this.filePreviewHtmlFrame.src = '';
         if (this.filePreviewImage) this.filePreviewImage.classList.add('hidden');
         if (this.filePreviewImageImg) this.filePreviewImageImg.src = '';
+        
+        // Hide any previous warning banner
+        const warningBanner = document.getElementById('file-preview-warning');
+        if (warningBanner) warningBanner.classList.add('hidden');
 
         try {
             const lowerFileName = fileName ? fileName.toLowerCase() : '';
@@ -859,25 +863,58 @@ class FileExplorer {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`)
             }
 
-            const content = await response.text();
+            const responseText = await response.text();
 
-            // Check if it's a binary file message or not previewable
-            if (content.startsWith('Binary file') || content.includes('File too large') || content.includes('File type not supported for preview')) {
+            // Check if it's a binary file message or not previewable (plain text responses)
+            if (responseText.startsWith('Binary file') || responseText.includes('File type not supported for preview')) {
                 this.filePreviewBinarySize.textContent = fileSize ? this.formatFileSize(fileSize) : '';
                 this.filePreviewBinary.classList.remove('hidden');
             } else {
+                // Try to parse as JSON (new tiered response format)
+                let content = responseText;
+                let tier = 'small';
+                let warning = null;
+                
+                try {
+                    const jsonResponse = JSON.parse(responseText);
+                    if (jsonResponse.tier) {
+                        tier = jsonResponse.tier;
+                        warning = jsonResponse.warning;
+                        content = jsonResponse.content;
+                        
+                        // Handle "too_large" tier
+                        if (tier === 'too_large') {
+                            this.filePreviewBinarySize.textContent = jsonResponse.fileSizeFormatted || '';
+                            // Update the binary preview text to show the warning
+                            const binaryText = this.filePreviewBinary.querySelector('p.text-caption-m');
+                            if (binaryText) {
+                                binaryText.textContent = warning || 'File too large for preview';
+                            }
+                            this.filePreviewBinary.classList.remove('hidden');
+                            this.filePreviewLoading.classList.add('hidden');
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    // Not JSON, use raw text (backward compatibility)
+                    content = responseText;
+                }
+                
                 let pre = this.filePreviewText.querySelector('pre');
                 
                 // Create pre element if it doesn't exist
                 if (!pre) {
                     console.warn('pre element not found in filePreviewText, creating it');
                     pre = document.createElement('pre');
-                    pre.className = 'text-caption-m font-mono whitespace-pre-wrap break-words text-slate-700';
+                    pre.className = 'text-caption-m font-mono whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300';
                     this.filePreviewText.appendChild(pre);
                 }
+                
+                // Show warning banner if present
+                this.showPreviewWarning(warning, tier);
                 
                 // Handle LaTeX files specially - auto-compile and show PDF
                 if (fileName && fileName.toLowerCase().endsWith('.tex')) {
@@ -904,7 +941,12 @@ class FileExplorer {
                     this.compileLatexAndPreview(filePath, fileName, content);
                 } else {
                     pre.textContent = content;
-                    pre.className = 'text-caption-m font-mono whitespace-pre-wrap break-words text-slate-700';
+                    // For large files, use simpler styling (no syntax highlighting consideration)
+                    if (tier === 'large') {
+                        pre.className = 'text-caption-m font-mono whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded border border-border';
+                    } else {
+                        pre.className = 'text-caption-m font-mono whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300';
+                    }
                     this.filePreviewText.classList.remove('hidden');
                 }
             }
@@ -917,6 +959,45 @@ class FileExplorer {
             this.filePreviewLoading.classList.add('hidden');
             this.filePreviewError.classList.remove('hidden');
         }
+    }
+
+    // Show warning banner for preview
+    showPreviewWarning(warning, tier) {
+        // Get or create warning banner element
+        let warningBanner = document.getElementById('file-preview-warning');
+        
+        if (!warning) {
+            // Hide warning if no warning message
+            if (warningBanner) {
+                warningBanner.classList.add('hidden');
+            }
+            return;
+        }
+        
+        // Create warning banner if it doesn't exist
+        if (!warningBanner) {
+            warningBanner = document.createElement('div');
+            warningBanner.id = 'file-preview-warning';
+            warningBanner.className = 'mb-3 px-4 py-2 rounded-lg flex items-center gap-2 text-caption-m';
+            // Insert at the beginning of preview content
+            this.filePreviewContent.insertBefore(warningBanner, this.filePreviewContent.firstChild);
+        }
+        
+        // Set appropriate styling based on tier
+        if (tier === 'large') {
+            warningBanner.className = 'mb-3 px-4 py-2 rounded-lg flex items-center gap-2 text-caption-m bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800';
+        } else {
+            warningBanner.className = 'mb-3 px-4 py-2 rounded-lg flex items-center gap-2 text-caption-m bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800';
+        }
+        
+        warningBanner.innerHTML = `
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>${warning}</span>
+        `;
+        
+        warningBanner.classList.remove('hidden');
     }
 
     // Toggle file explorer

@@ -39,8 +39,11 @@ public class FileExplorerResource {
     @Inject
     com.filesurf.service.MetricsService metricsService;
     
-    // Maximum size for text file preview (in bytes)
-    private static final long MAX_PREVIEW_SIZE = 100 * 1024; // 100KB
+    // Tiered file size limits for preview (in bytes)
+    private static final long TIER_SMALL = 500 * 1024;        // 500KB - full preview, no warning
+    private static final long TIER_MEDIUM = 2 * 1024 * 1024;  // 2MB - full preview with warning
+    private static final long TIER_LARGE = 10 * 1024 * 1024;  // 10MB - full preview, disable syntax highlighting warning
+    private static final long MAX_PREVIEW_SIZE = 10 * 1024 * 1024; // 10MB max
     
     // Date formatter for file timestamps
     private static final DateTimeFormatter DATE_FORMATTER = 
@@ -286,17 +289,20 @@ public class FileExplorerResource {
             
             // Check file size
             long fileSize = Files.size(targetFile);
-            if (fileSize > MAX_PREVIEW_SIZE) {
-                return Response.ok("File too large for preview (" + formatFileSize(fileSize) + ").\n" +
-                                  "Only showing first " + formatFileSize(MAX_PREVIEW_SIZE) + ".")
-                        .build();
-            }
             
             // Check if file extension is in whitelist
             String fileName = targetFile.getFileName().toString();
             if (!isPreviewableExtension(fileName)) {
                 return Response.ok("File type not supported for preview: " + fileName + " (size: " + formatFileSize(fileSize) + ")")
                         .build();
+            }
+            
+            // Handle files that are too large
+            if (fileSize > MAX_PREVIEW_SIZE) {
+                return Response.ok(
+                    createPreviewResponse(null, fileSize, "too_large", 
+                        "File too large for preview (" + formatFileSize(fileSize) + "). Maximum is " + formatFileSize(MAX_PREVIEW_SIZE) + ".")
+                ).type(MediaType.APPLICATION_JSON).build();
             }
             
             // Read file content as bytes first
@@ -311,15 +317,23 @@ public class FileExplorerResource {
             // Convert to string if it's text
             String content = new String(fileBytes, java.nio.charset.StandardCharsets.UTF_8);
             
-            // Limit preview to first 1000 characters
-            int previewLength = Math.min(content.length(), 1000);
-            String preview = content.substring(0, previewLength);
+            // Determine tier and warning
+            String tier;
+            String warning = null;
             
-            if (content.length() > previewLength) {
-                preview += "\n\n... (truncated, " + formatFileSize(fileSize) + " total)";
+            if (fileSize <= TIER_SMALL) {
+                tier = "small";
+            } else if (fileSize <= TIER_MEDIUM) {
+                tier = "medium";
+                warning = "This is a medium-sized file (" + formatFileSize(fileSize) + "). Rendering may be slow.";
+            } else {
+                tier = "large";
+                warning = "This is a large file (" + formatFileSize(fileSize) + "). Syntax highlighting has been disabled for performance.";
             }
             
-            return Response.ok(preview).build();
+            return Response.ok(createPreviewResponse(content, fileSize, tier, warning))
+                    .type(MediaType.APPLICATION_JSON)
+                    .build();
             
         } catch (IOException e) {
             LOGGER.severe("Failed to preview file: " + e.getMessage());
@@ -764,6 +778,54 @@ public class FileExplorerResource {
         if (fileTime == null) return "Unknown";
         Instant instant = fileTime.toInstant();
         return DATE_FORMATTER.format(instant);
+    }
+    
+    /**
+     * Create a JSON response for file preview with tier information
+     */
+    private String createPreviewResponse(String content, long fileSize, String tier, String warning) {
+        StringBuilder json = new StringBuilder();
+        json.append("{");
+        json.append("\"tier\":\"").append(tier).append("\",");
+        json.append("\"fileSize\":").append(fileSize).append(",");
+        json.append("\"fileSizeFormatted\":\"").append(formatFileSize(fileSize)).append("\"");
+        
+        if (warning != null) {
+            json.append(",\"warning\":\"").append(escapeJsonString(warning)).append("\"");
+        }
+        
+        if (content != null) {
+            json.append(",\"content\":\"").append(escapeJsonString(content)).append("\"");
+        }
+        
+        json.append("}");
+        return json.toString();
+    }
+    
+    /**
+     * Escape special characters for JSON string
+     */
+    private String escapeJsonString(String str) {
+        if (str == null) return null;
+        StringBuilder sb = new StringBuilder();
+        for (char c : str.toCharArray()) {
+            switch (c) {
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\b': sb.append("\\b"); break;
+                case '\f': sb.append("\\f"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (c < ' ') {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        return sb.toString();
     }
     
     /**
