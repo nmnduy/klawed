@@ -576,6 +576,49 @@ public class PodmanSandboxService {
     }
     
     /**
+     * Count running klawed containers directly from podman ps.
+     * This is the authoritative count for leak detection - it shows what's actually
+     * running regardless of internal tracking state.
+     * 
+     * @return Number of running klawed-* containers, or -1 if podman query fails
+     */
+    public int countRunningContainersFromPodman() {
+        if (!podmanEnabled) {
+            return 0;
+        }
+        
+        try {
+            // Query podman for running klawed containers only (not stopped/exited)
+            ProcessBuilder pb = new ProcessBuilder(
+                "podman", "ps", "--filter", "name=klawed-", "--filter", "status=running", "--format", "{{.Names}}"
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            String output = readProcessOutput(process);
+            int exitCode = process.waitFor();
+            
+            if (exitCode != 0) {
+                LOGGER.warning("Failed to count running containers: " + output);
+                return -1;
+            }
+            
+            // Count non-empty lines
+            if (output.trim().isEmpty()) {
+                return 0;
+            }
+            
+            return (int) output.lines()
+                .map(String::trim)
+                .filter(line -> !line.isEmpty())
+                .count();
+        } catch (IOException | InterruptedException e) {
+            LOGGER.warning("Error counting running containers: " + e.getMessage());
+            return -1;
+        }
+    }
+    
+    /**
      * Stop all containers managed by this service.
      */
     public void stopAllContainers() {

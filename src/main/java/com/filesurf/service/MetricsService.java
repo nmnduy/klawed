@@ -24,6 +24,9 @@ public class MetricsService {
 
     @Inject
     MeterRegistry meterRegistry;
+    
+    @Inject
+    PodmanSandboxService podmanSandboxService;
 
     // Counters for various events
     private Counter chatSessionsStarted;
@@ -113,6 +116,9 @@ public class MetricsService {
         // Initialize disk space monitoring
         initializeDiskSpaceMetrics();
         
+        // Initialize Podman container metrics
+        initializePodmanMetrics();
+        
         LOGGER.info("Application metrics initialized successfully");
     }
     
@@ -160,6 +166,44 @@ public class MetricsService {
                 .register(meterRegistry);
         
         LOGGER.info("Disk space metrics initialized - monitoring data and logs directories");
+    }
+    
+    /**
+     * Initialize Podman container metrics.
+     * Tracks the number of active klawed containers running in Podman.
+     */
+    private void initializePodmanMetrics() {
+        // Active klawed Podman containers gauge
+        // This queries podman directly to get accurate count of running klawed-* containers
+        Gauge.builder("filesurf_klawed_containers_active", this, MetricsService::getActiveKlawedContainerCount)
+                .description("Number of active klawed Podman containers")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+        
+        LOGGER.info("Podman container metrics initialized");
+    }
+    
+    /**
+     * Get the count of active klawed Podman containers.
+     * Uses `podman ps` directly to get accurate count - this is the only reliable way
+     * to detect container leaks since internal tracking can get out of sync.
+     * Returns 0 if Podman is not enabled or not available.
+     * 
+     * @return Number of running klawed containers
+     */
+    private double getActiveKlawedContainerCount() {
+        if (podmanSandboxService == null || !podmanSandboxService.isEnabled()) {
+            return 0;
+        }
+        
+        try {
+            // Query podman ps directly - this is the authoritative source for leak detection
+            int count = podmanSandboxService.countRunningContainersFromPodman();
+            return count >= 0 ? count : 0;
+        } catch (Exception e) {
+            LOGGER.warning("Failed to get active klawed container count: " + e.getMessage());
+            return 0;
+        }
     }
     
     // Session tracking methods
