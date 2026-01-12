@@ -33,6 +33,7 @@ Environment="KLAWED_USE_BEDROCK=1"
 Environment="ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 Environment="AWS_REGION=us-west-2"
 Environment="KLAWED_SANDBOX_IMAGE=klawed-sandbox:1.0.0"
+Environment="KLAWED_DISABLE_TOOLS=UploadImage"
 
 # Security hardening
 NoNewPrivileges=true
