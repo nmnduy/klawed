@@ -732,8 +732,9 @@ class FileExplorer {
         this.currentPreviewFilePath = filePath;
         this.currentPreviewFileName = fileName;
 
-        // Show preview panel
+        // Show preview modal and disable body scroll
         this.filePreviewPanel.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
 
         // Show loading and hide all preview types
         this.filePreviewLoading.classList.remove('hidden');
@@ -951,6 +952,12 @@ class FileExplorer {
         }
     }
 
+    // Close preview modal
+    closePreviewModal() {
+        this.filePreviewPanel.classList.add('hidden');
+        document.body.style.overflow = ''; // Re-enable body scroll
+    }
+
     // Initialize event listeners
     initEventListeners() {
         // Note: file-explorer-toggle button has been removed since we now have Files tab
@@ -1047,9 +1054,25 @@ class FileExplorer {
 
         if (this.filePreviewClose) {
             this.filePreviewClose.addEventListener('click', () => {
-                this.filePreviewPanel.classList.add('hidden');
+                this.closePreviewModal();
             });
         }
+
+        // Close modal on backdrop click
+        if (this.filePreviewPanel) {
+            this.filePreviewPanel.addEventListener('click', (e) => {
+                if (e.target === this.filePreviewPanel) {
+                    this.closePreviewModal();
+                }
+            });
+        }
+
+        // Close modal on ESC key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !this.filePreviewPanel.classList.contains('hidden')) {
+                this.closePreviewModal();
+            }
+        });
 
         // Preview panel download buttons
         if (this.filePreviewPdfDownloadBtn) {

@@ -130,6 +130,34 @@ public class ChatMessagePollingService {
                                     KlawedSocketMessage.createStatus("AI is thinking")
                                 );
                             }
+                        } else if (ChatConstants.DB_MESSAGE_TYPE_TOOL.equals(message.getMessageType())) {
+                            // Parse the TOOL JSON and create a TOOL message
+                            try {
+                                Map<String, Object> toolData = objectMapper.readValue(message.getContent(), Map.class);
+                                jsonMessage = objectMapper.writeValueAsString(
+                                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_TOOL, toolData)
+                                );
+                            } catch (Exception e) {
+                                LOGGER.warning("Failed to parse TOOL message: " + e.getMessage());
+                                // Fall back to status message
+                                jsonMessage = objectMapper.writeValueAsString(
+                                    KlawedSocketMessage.createStatus("AI is working")
+                                );
+                            }
+                        } else if (ChatConstants.DB_MESSAGE_TYPE_TOOL_RESULT.equals(message.getMessageType())) {
+                            // Parse the TOOL_RESULT JSON and create a TOOL_RESULT message
+                            try {
+                                Map<String, Object> toolResultData = objectMapper.readValue(message.getContent(), Map.class);
+                                jsonMessage = objectMapper.writeValueAsString(
+                                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_TOOL_RESULT, toolResultData)
+                                );
+                            } catch (Exception e) {
+                                LOGGER.warning("Failed to parse TOOL_RESULT message: " + e.getMessage());
+                                // Fall back to status message
+                                jsonMessage = objectMapper.writeValueAsString(
+                                    KlawedSocketMessage.createStatus("AI is working")
+                                );
+                            }
                         } else {
                             // Default to text message
                             jsonMessage = objectMapper.writeValueAsString(
@@ -217,6 +245,34 @@ public class ChatMessagePollingService {
                                 // Fall back to status message
                                 jsonMessage = objectMapper.writeValueAsString(
                                     KlawedSocketMessage.createStatus("AI is thinking")
+                                );
+                            }
+                        } else if (ChatConstants.DB_MESSAGE_TYPE_TOOL.equals(message.getMessageType())) {
+                            // Parse the TOOL JSON and create a TOOL message
+                            try {
+                                Map<String, Object> toolData = objectMapper.readValue(message.getContent(), Map.class);
+                                jsonMessage = objectMapper.writeValueAsString(
+                                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_TOOL, toolData)
+                                );
+                            } catch (Exception e) {
+                                LOGGER.warning("Failed to parse TOOL message: " + e.getMessage());
+                                // Fall back to status message
+                                jsonMessage = objectMapper.writeValueAsString(
+                                    KlawedSocketMessage.createStatus("AI is working")
+                                );
+                            }
+                        } else if (ChatConstants.DB_MESSAGE_TYPE_TOOL_RESULT.equals(message.getMessageType())) {
+                            // Parse the TOOL_RESULT JSON and create a TOOL_RESULT message
+                            try {
+                                Map<String, Object> toolResultData = objectMapper.readValue(message.getContent(), Map.class);
+                                jsonMessage = objectMapper.writeValueAsString(
+                                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_TOOL_RESULT, toolResultData)
+                                );
+                            } catch (Exception e) {
+                                LOGGER.warning("Failed to parse TOOL_RESULT message: " + e.getMessage());
+                                // Fall back to status message
+                                jsonMessage = objectMapper.writeValueAsString(
+                                    KlawedSocketMessage.createStatus("AI is working")
                                 );
                             }
                         } else {

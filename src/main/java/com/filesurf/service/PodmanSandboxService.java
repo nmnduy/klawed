@@ -388,7 +388,7 @@ public class PodmanSandboxService {
             if (normalizedDbPath == null || normalizedDbPath.isEmpty()) {
                 throw new IllegalArgumentException("SQLite database path cannot be null or empty in SQLite queue mode");
             }
-            shellCommand = "cd /workspace && mkdir -p ./.klawed/logs && touch ./.klawed/logs/klawed.log && exec /usr/local/bin/klawed --sqlite-queue " + normalizedDbPath;
+            shellCommand = "mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed --sqlite-queue " + normalizedDbPath;
         }
         command.add(shellCommand);
         

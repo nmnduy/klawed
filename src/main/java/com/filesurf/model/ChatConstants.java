@@ -23,6 +23,8 @@ public class ChatConstants {
     public static final String DB_MESSAGE_TYPE_ERROR = "error";
     public static final String DB_MESSAGE_TYPE_STATUS = "status";
     public static final String DB_MESSAGE_TYPE_API_CALL = "api_call";
+    public static final String DB_MESSAGE_TYPE_TOOL = "tool";
+    public static final String DB_MESSAGE_TYPE_TOOL_RESULT = "tool_result";
     
     private ChatConstants() {
         // Utility class, prevent instantiation

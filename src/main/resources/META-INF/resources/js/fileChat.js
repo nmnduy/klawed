@@ -128,6 +128,11 @@ export function init(rootEl) {
     let hasSeededPlaceholders = false;
     let lastApiCallTime = null;
     
+    // Tool activity tracking
+    let toolActivityEl = null;
+    let pendingTools = new Map(); // Map<toolId, {toolName, startTime, element}>
+    let completedTools = []; // Array of {toolName, toolId, isError, duration}
+    
     // Reconnection logic with exponential backoff
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 10;
@@ -343,6 +348,339 @@ export function init(rootEl) {
         if (typingIndicatorEl && typingIndicatorEl.parentElement) {
             typingIndicatorEl.remove();
         }
+    }
+
+    // ----------------------
+    // Tool Activity Display
+    // ----------------------
+    
+    /**
+     * Get a friendly display name and icon for a tool
+     */
+    function getToolDisplayInfo(toolName) {
+        const toolMap = {
+            'Read': { icon: '📄', label: 'Reading file', verb: 'Read' },
+            'Write': { icon: '✏️', label: 'Writing file', verb: 'Wrote' },
+            'Edit': { icon: '🔧', label: 'Editing file', verb: 'Edited' },
+            'MultiEdit': { icon: '🔧', label: 'Editing file', verb: 'Edited' },
+            'Grep': { icon: '🔍', label: 'Searching', verb: 'Searched' },
+            'Glob': { icon: '📁', label: 'Finding files', verb: 'Found files' },
+            'Bash': { icon: '💻', label: 'Running command', verb: 'Ran command' },
+            'Subagent': { icon: '🤖', label: 'Running subagent', verb: 'Subagent completed' },
+            'TodoWrite': { icon: '📝', label: 'Updating tasks', verb: 'Updated tasks' },
+            'MemoryStore': { icon: '💾', label: 'Storing memory', verb: 'Stored memory' },
+            'MemoryRecall': { icon: '🧠', label: 'Recalling memory', verb: 'Recalled memory' },
+            'MemorySearch': { icon: '🔎', label: 'Searching memory', verb: 'Searched memory' },
+            'UploadImage': { icon: '🖼️', label: 'Processing image', verb: 'Processed image' },
+            'Sleep': { icon: '⏳', label: 'Waiting', verb: 'Waited' },
+            'CheckSubagentProgress': { icon: '📊', label: 'Checking progress', verb: 'Checked progress' },
+            'InterruptSubagent': { icon: '🛑', label: 'Stopping subagent', verb: 'Stopped subagent' }
+        };
+        return toolMap[toolName] || { icon: '🔧', label: toolName, verb: toolName };
+    }
+
+    /**
+     * Extract a summary from tool input for display
+     */
+    function getToolInputSummary(toolName, toolInput) {
+        if (!toolInput) return null;
+        
+        try {
+            const input = typeof toolInput === 'string' ? JSON.parse(toolInput) : toolInput;
+            
+            switch (toolName) {
+                case 'Read':
+                    if (input.file_path) {
+                        const fileName = input.file_path.split('/').pop();
+                        const lines = input.start_line && input.end_line 
+                            ? ` (lines ${input.start_line}-${input.end_line})` 
+                            : '';
+                        return fileName + lines;
+                    }
+                    break;
+                case 'Write':
+                case 'Edit':
+                case 'MultiEdit':
+                    if (input.file_path) {
+                        return input.file_path.split('/').pop();
+                    }
+                    break;
+                case 'Grep':
+                    if (input.pattern) {
+                        const path = input.path ? ` in ${input.path}` : '';
+                        return `"${input.pattern}"${path}`;
+                    }
+                    break;
+                case 'Glob':
+                    if (input.pattern) {
+                        return input.pattern;
+                    }
+                    break;
+                case 'Bash':
+                    if (input.command) {
+                        // Truncate long commands
+                        const cmd = input.command.length > 50 
+                            ? input.command.substring(0, 47) + '...' 
+                            : input.command;
+                        return cmd;
+                    }
+                    break;
+                case 'Subagent':
+                    if (input.prompt) {
+                        const prompt = input.prompt.length > 60
+                            ? input.prompt.substring(0, 57) + '...'
+                            : input.prompt;
+                        return prompt;
+                    }
+                    break;
+            }
+        } catch (e) {
+            // Ignore parse errors
+        }
+        return null;
+    }
+
+    /**
+     * Extract a summary from tool result for display
+     */
+    function getToolResultSummary(toolName, result, isError) {
+        if (isError) {
+            return 'Error';
+        }
+        
+        if (!result) return 'Done';
+        
+        try {
+            const output = typeof result === 'string' ? result : JSON.stringify(result);
+            
+            // For Grep, try to extract match count
+            if (toolName === 'Grep' && output.includes('match_count')) {
+                const match = output.match(/"match_count"\s*:\s*(\d+)/);
+                if (match) {
+                    return `${match[1]} matches`;
+                }
+            }
+            
+            // For Glob, try to extract file count
+            if (toolName === 'Glob' && output.includes('"count"')) {
+                const match = output.match(/"count"\s*:\s*(\d+)/);
+                if (match) {
+                    return `${match[1]} files`;
+                }
+            }
+            
+            // For Read, show line count
+            if (toolName === 'Read' && output.includes('total_lines')) {
+                const match = output.match(/"total_lines"\s*:\s*(\d+)/);
+                if (match) {
+                    return `${match[1]} lines`;
+                }
+            }
+            
+            return 'Done';
+        } catch (e) {
+            return 'Done';
+        }
+    }
+
+    /**
+     * Create or get the tool activity container
+     */
+    function ensureToolActivityContainer() {
+        if (toolActivityEl) return toolActivityEl;
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex justify-start animate-fade-in';
+        wrapper.setAttribute('data-tool-activity', '');
+        
+        const container = document.createElement('div');
+        container.className = 'inline-block max-w-[85%] sm:max-w-2xl rounded-2xl border shadow-sm transition-all duration-300 ' +
+            'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 overflow-hidden';
+        
+        // Header (always visible, clickable to expand/collapse)
+        const header = document.createElement('div');
+        header.className = 'flex items-center gap-2 px-4 py-2.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors';
+        header.innerHTML = `
+            <span class="text-slate-500 dark:text-slate-400">🔧</span>
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300" data-tool-summary>Working...</span>
+            <span class="ml-auto text-xs text-slate-400 dark:text-slate-500" data-tool-count></span>
+            <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform" data-tool-chevron fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+        `;
+        header.setAttribute('data-tool-header', '');
+        
+        // Details (collapsible)
+        const details = document.createElement('div');
+        details.className = 'border-t border-slate-200 dark:border-slate-700 max-h-0 overflow-hidden transition-all duration-300';
+        details.setAttribute('data-tool-details', '');
+        
+        const detailsList = document.createElement('div');
+        detailsList.className = 'px-4 py-2 space-y-1.5';
+        detailsList.setAttribute('data-tool-list', '');
+        
+        details.appendChild(detailsList);
+        container.appendChild(header);
+        container.appendChild(details);
+        wrapper.appendChild(container);
+        
+        // Toggle expand/collapse on header click
+        let isExpanded = false;
+        header.addEventListener('click', () => {
+            isExpanded = !isExpanded;
+            const chevron = header.querySelector('[data-tool-chevron]');
+            if (isExpanded) {
+                details.style.maxHeight = details.scrollHeight + 'px';
+                chevron.style.transform = 'rotate(180deg)';
+            } else {
+                details.style.maxHeight = '0px';
+                chevron.style.transform = 'rotate(0deg)';
+            }
+        });
+        
+        toolActivityEl = wrapper;
+        return toolActivityEl;
+    }
+
+    /**
+     * Add or update tool activity in the UI
+     */
+    function addToolActivity(toolName, toolId, toolInput) {
+        hideEmptyState();
+        removeTypingIndicator();
+        
+        const container = ensureToolActivityContainer();
+        const toolList = container.querySelector('[data-tool-list]');
+        const toolSummary = container.querySelector('[data-tool-summary]');
+        const toolCount = container.querySelector('[data-tool-count]');
+        const toolDetails = container.querySelector('[data-tool-details]');
+        
+        // Get display info
+        const displayInfo = getToolDisplayInfo(toolName);
+        const inputSummary = getToolInputSummary(toolName, toolInput);
+        
+        // Create tool item element
+        const toolItem = document.createElement('div');
+        toolItem.className = 'flex items-center gap-2 text-sm animate-fade-in';
+        toolItem.setAttribute('data-tool-id', toolId);
+        
+        // Spinner for in-progress
+        const spinner = `<svg class="w-3.5 h-3.5 animate-spin text-orange-500" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>`;
+        
+        toolItem.innerHTML = `
+            <span class="flex-shrink-0" data-tool-status>${spinner}</span>
+            <span class="text-slate-600 dark:text-slate-400">${displayInfo.icon}</span>
+            <span class="text-slate-700 dark:text-slate-300">${displayInfo.label}</span>
+            ${inputSummary ? `<span class="text-slate-500 dark:text-slate-400 truncate max-w-[200px]" title="${inputSummary}">${inputSummary}</span>` : ''}
+            <span class="ml-auto text-xs text-slate-400 dark:text-slate-500" data-tool-result></span>
+        `;
+        
+        toolList.appendChild(toolItem);
+        
+        // Track pending tool
+        pendingTools.set(toolId, {
+            toolName,
+            startTime: Date.now(),
+            element: toolItem
+        });
+        
+        // Update summary
+        const pendingCount = pendingTools.size;
+        const completedCount = completedTools.length;
+        toolSummary.textContent = pendingCount > 0 
+            ? `${displayInfo.label}...`
+            : 'Completed';
+        toolCount.textContent = completedCount > 0 
+            ? `${completedCount} done` 
+            : '';
+        
+        // Ensure container is in DOM
+        if (!container.parentElement) {
+            messageParent.appendChild(container);
+        }
+        
+        // Auto-expand details if this is the first tool
+        if (pendingTools.size === 1 && completedTools.length === 0) {
+            toolDetails.style.maxHeight = toolDetails.scrollHeight + 100 + 'px';
+            container.querySelector('[data-tool-chevron]').style.transform = 'rotate(180deg)';
+        }
+        
+        scrollToBottom();
+    }
+
+    /**
+     * Mark a tool as complete
+     */
+    function completeToolActivity(toolName, toolId, isError, result) {
+        const pending = pendingTools.get(toolId);
+        if (!pending) {
+            debug('completeToolActivity: Tool not found in pending:', toolId);
+            return;
+        }
+        
+        const duration = Date.now() - pending.startTime;
+        const displayInfo = getToolDisplayInfo(toolName);
+        const resultSummary = getToolResultSummary(toolName, result, isError);
+        
+        // Update the element
+        const element = pending.element;
+        if (element) {
+            const statusEl = element.querySelector('[data-tool-status]');
+            const resultEl = element.querySelector('[data-tool-result]');
+            
+            if (isError) {
+                statusEl.innerHTML = `<span class="text-red-500">✗</span>`;
+                element.classList.add('text-red-600', 'dark:text-red-400');
+            } else {
+                statusEl.innerHTML = `<span class="text-emerald-500">✓</span>`;
+            }
+            
+            resultEl.textContent = resultSummary + (duration > 1000 ? ` (${(duration/1000).toFixed(1)}s)` : '');
+        }
+        
+        // Move from pending to completed
+        pendingTools.delete(toolId);
+        completedTools.push({ toolName, toolId, isError, duration });
+        
+        // Update summary
+        const container = ensureToolActivityContainer();
+        const toolSummary = container.querySelector('[data-tool-summary]');
+        const toolCount = container.querySelector('[data-tool-count]');
+        
+        if (pendingTools.size > 0) {
+            // Still have pending tools, show the current one
+            const [, nextPending] = pendingTools.entries().next().value;
+            const nextInfo = getToolDisplayInfo(nextPending.toolName);
+            toolSummary.textContent = `${nextInfo.label}...`;
+        } else {
+            // All done
+            toolSummary.textContent = `Completed ${completedTools.length} action${completedTools.length > 1 ? 's' : ''}`;
+        }
+        toolCount.textContent = completedTools.length > 0 
+            ? `${completedTools.length} done` 
+            : '';
+        
+        scrollToBottom();
+    }
+
+    /**
+     * Clear tool activity (call when AI response is complete)
+     */
+    function clearToolActivity() {
+        pendingTools.clear();
+        completedTools = [];
+        if (toolActivityEl && toolActivityEl.parentElement) {
+            // Keep it visible but mark as complete
+            const toolSummary = toolActivityEl.querySelector('[data-tool-summary]');
+            if (toolSummary && pendingTools.size === 0) {
+                // Already shows completed state
+            }
+        }
+        // Reset for next interaction
+        toolActivityEl = null;
     }
 
     function shouldSeedPlaceholderMessages() {
@@ -946,6 +1284,7 @@ export function init(rootEl) {
                             handleStreamComplete(content);
                         }
                         removeTypingIndicator();
+                        clearToolActivity(); // Clear tool activity tracking for next interaction
                         showKlawedStatus('Connected');
                         // Reset API call time when we get a text response
                         lastApiCallTime = null;
@@ -963,6 +1302,7 @@ export function init(rootEl) {
                         }
                         addSystemMessage('✗ ' + (content || 'Error occurred'), 'error');
                         removeTypingIndicator();
+                        clearToolActivity(); // Clear tool activity tracking
                         showKlawedStatus('Connected');
                         // Reset API call time when we get an error
                         lastApiCallTime = null;
@@ -1028,28 +1368,68 @@ export function init(rootEl) {
                         break;
                     case 'TOOL':
                     case 'TOOL_RESULT':
-                        // Filter out tool-related messages - don't show them to the user
-                        debug('Filtered out ' + messageType + ' message:', content);
-                        // Show a status update for tool usage
+                        // Display tool activity in a collapsible card
+                        debug('Processing ' + messageType + ' message:', content);
+                        
                         if (messageType === 'TOOL') {
-                            let toolMessage = 'AI is thinking';
-                            if (content && typeof content === 'object' && content.toolName) {
-                                toolMessage = 'AI is thinking (using ' + content.toolName + ' tool)';
-                            } else if (typeof content === 'string' && content.includes('toolName')) {
-                                // Try to parse tool name from string content
+                            // Extract tool info
+                            let toolName = null;
+                            let toolId = null;
+                            let toolInput = null;
+                            
+                            if (content && typeof content === 'object') {
+                                toolName = content.toolName;
+                                toolId = content.toolId;
+                                // Backend sends 'toolParameters', also check 'toolInput' and 'input'
+                                toolInput = content.toolParameters || content.toolInput || content.input;
+                            } else if (typeof content === 'string') {
                                 try {
                                     const toolData = JSON.parse(content);
-                                    if (toolData.toolName) {
-                                        toolMessage = 'AI is thinking (using ' + toolData.toolName + ' tool)';
-                                    }
+                                    toolName = toolData.toolName;
+                                    toolId = toolData.toolId;
+                                    toolInput = toolData.toolParameters || toolData.toolInput || toolData.input;
                                 } catch (e) {
-                                    // Not JSON, use default message
+                                    // Not JSON
                                 }
                             }
-                            addTypingIndicator();
-                            showKlawedStatus(toolMessage);
+                            }
+                            
+                            if (toolName && toolId) {
+                                addToolActivity(toolName, toolId, toolInput);
+                                showKlawedStatus('Using ' + toolName);
+                            } else {
+                                // Fallback to old behavior
+                                addTypingIndicator();
+                                showKlawedStatus('AI is thinking');
+                            }
                         } else {
-                            addTypingIndicator();
+                            // TOOL_RESULT
+                            let toolName = null;
+                            let toolId = null;
+                            let isError = false;
+                            let result = null;
+                            
+                            if (content && typeof content === 'object') {
+                                toolName = content.toolName;
+                                toolId = content.toolId;
+                                isError = content.isError || false;
+                                // Backend sends 'toolOutput', also check 'result' and 'output'
+                                result = content.toolOutput || content.result || content.output;
+                            } else if (typeof content === 'string') {
+                                try {
+                                    const toolData = JSON.parse(content);
+                                    toolName = toolData.toolName;
+                                    toolId = toolData.toolId;
+                                    isError = toolData.isError || false;
+                                    result = toolData.toolOutput || toolData.result || toolData.output;
+                                } catch (e) {
+                                    // Not JSON
+                                }
+                            }
+                            
+                            if (toolName && toolId) {
+                                completeToolActivity(toolName, toolId, isError, result);
+                            }
                             showKlawedStatus('AI is thinking');
                         }
                         break;
