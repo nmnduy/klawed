@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
  * Each container is named klawed-{sessionId} for easy tracking and management.
  * 
  * Container features:
- * - Runs as root to avoid permission issues with shared volume mounts
+ * - Uses --userns=keep-id to map container UID to host UID (avoids permission issues)
  * - tmpfs for /tmp
  * - Resource limits (memory, CPU, PIDs)
  * - Network access for agent to call APIs and download packages
@@ -233,8 +233,8 @@ public class PodmanSandboxService {
         command.add("--name");
         command.add(containerName);
         
-        // Run as root to avoid permission issues with shared volume mounts
-        command.add("--user=root");
+        // Use keep-id to map container UID to host UID (avoids permission issues with shared volumes)
+        command.add("--userns=keep-id");
         
         // Network access (bridge allows outbound connections for API calls)
         command.add("--network=bridge");
