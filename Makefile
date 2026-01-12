@@ -2466,5 +2466,5 @@ docker-sandbox:
 	@echo "  docker run -it --rm -e OPENAI_API_KEY=\$$OPENAI_API_KEY klawed-sandbox:$(VERSION) \"your prompt\""
 	@echo "  docker run -it --rm -e OPENAI_API_KEY=\$$OPENAI_API_KEY -v \$$(pwd):/workspace klawed-sandbox:$(VERSION) \"analyze this code\""
 	@echo ""
-	@echo "See docs/docker-sandbox.md for more information"
+	@echo "See docs/docker-sandbox-deployment.md for deployment guide"
 	@echo ""

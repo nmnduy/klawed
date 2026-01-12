@@ -7,9 +7,13 @@
 # Transfer to production:
 #   docker save klawed-sandbox:latest | ssh filesurf-0 'docker load'
 #
-# Run:
+# Run (IMPORTANT: workspace must be owned by UID 1000):
+#   chown -R 1000:1000 /path/to/workspace
 #   docker run -it --rm -e OPENAI_API_KEY=$OPENAI_API_KEY \
-#     -v /path/to/workspace:/workspace klawed-sandbox:latest
+#     -v /path/to/workspace:/workspace:Z klawed-sandbox:latest
+#
+# See docs/docker-sandbox-deployment.md for full deployment guide
+
 
 # =============================================================================
 # Stage 1: Build Stage - Full build environment
