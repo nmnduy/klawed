@@ -94,6 +94,7 @@ src/main/java/com/filesurf/     # Java source code
 src/main/resources/templates/   # Qute HTML templates
 src/main/resources/css/         # CSS styles
 data/                          # SQLite database directory
+data/demos/                    # Demo MP4 videos directory
 logs/                          # Application logs
 ```
 
@@ -101,6 +102,7 @@ logs/                          # Application logs
 - `GET /file-chat` - Main chat interface
 - WebSocket: `/file-chat/ws/{sessionId}`
 - REST API: Various endpoints under `/file-chat/http/`
+- **Demo Videos**: `GET /demo/{name}` - Stream demo MP4 videos
 - **Monitoring**: `GET /metrics` - Prometheus metrics endpoint (standard format)
 
 ## REST API Endpoints
@@ -135,6 +137,10 @@ logs/                          # Application logs
 - `POST /file-chat/http/message/{sessionId}` - Send message
 - `GET /file-chat/http/messages/{sessionId}` - Get messages
 - `GET /file-chat/http/poll/{sessionId}` - Poll for messages
+
+### Demo Videos
+- `GET /demo/list` - List available demo videos (JSON)
+- `GET /demo/{name}` - Stream demo video (supports HTTP Range requests for seeking)
 
 ## Database
 - SQLite database: `data/filesurf.db`
