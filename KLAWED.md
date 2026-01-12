@@ -305,6 +305,8 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 
 ## Deployment
 
+**DO NOT COMMIT EXTRA MARKDOWN FILES UNLESS SPECIFICALLY ASKED TO DO SO**
+
 ### Quick Deploy (Recommended)
 Build assets locally and sync to server:
 ```bash
