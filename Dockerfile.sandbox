@@ -117,11 +117,18 @@ COPY --from=builder /build/vendor/memvid-ffi/target/release/libmemvid_ffi.so /us
 # Set up library paths and verify
 RUN chmod +x /usr/local/bin/klawed && ldconfig
 
-# Create workspace directory
-RUN mkdir -p /workspace && chown agent:agent /workspace
+# Create workspace directory with proper structure
+RUN mkdir -p /workspace/.klawed/logs && \
+    touch /workspace/.klawed/logs/klawed.log && \
+    chown -R agent:agent /workspace
 
 # Set up default working directory
 WORKDIR /workspace
+
+# Set environment variables for runtime
+ENV LD_LIBRARY_PATH=/usr/local/lib \
+    HOME=/workspace \
+    TERM=xterm-256color
 
 # Switch to non-root user
 USER agent
@@ -131,5 +138,9 @@ RUN git config --global init.defaultBranch main \
     && git config --global user.email "agent@sandbox.local" \
     && git config --global user.name "Klawed Agent"
 
-# Default entrypoint
+# Default entrypoint - accepts all arguments
+# Usage examples:
+#   docker run image-name --sqlite-queue /path/to/queue.db
+#   docker run image-name -u /path/to/socket
+#   docker run image-name "your prompt here"
 ENTRYPOINT ["/usr/local/bin/klawed"]
