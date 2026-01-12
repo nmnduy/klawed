@@ -231,12 +231,6 @@ public class PodmanSandboxService {
         // Auto-remove container on exit
         command.add("--rm");
         
-        // Override the image's ENTRYPOINT so we can run our shell command directly
-        // The Dockerfile has ENTRYPOINT ["/usr/local/bin/klawed"] but we need to run
-        // /bin/sh -c "... && exec klawed ..." to set up log directories first
-        // Note: We use --entrypoint="" (empty string) to clear the default ENTRYPOINT
-        command.add("--entrypoint=");
-        
         // Mount workspace directory
         // Use :Z suffix on Linux for SELinux relabeling, skip on macOS
         command.add("-v");
@@ -284,16 +278,12 @@ public class PodmanSandboxService {
         // Image name
         command.add(podmanImage);
         
-        // Use shell to create log directory and file before starting klawed
-        // This prevents "Failed to open log file: ./.klawed/logs/klawed.log" warning
-        // We also touch the log file to ensure klawed can open it
-        command.add("/bin/sh");
-        command.add("-c");
-        
-        String shellCommand;
+        // Add klawed arguments (ENTRYPOINT is already set in Dockerfile to /usr/local/bin/klawed)
+        // Just pass the appropriate arguments based on communication mode
         if ("unix-socket".equals(communicationMode)) {
             String socketPath = "/workspace/" + unixSocketFilename;
-            shellCommand = "mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed -u " + socketPath;
+            command.add("-u");
+            command.add(socketPath);
         } else {
             // In podman, the working directory is /workspace, so ensure the db path is relative to /workspace
             // Convert host path to container path if database is inside workspace
@@ -314,9 +304,9 @@ public class PodmanSandboxService {
             if (normalizedDbPath == null || normalizedDbPath.isEmpty()) {
                 throw new IllegalArgumentException("SQLite database path cannot be null or empty in SQLite queue mode");
             }
-            shellCommand = "mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed --sqlite-queue " + normalizedDbPath;
+            command.add("--sqlite-queue");
+            command.add(normalizedDbPath);
         }
-        command.add(shellCommand);
         
         return command;
     }
