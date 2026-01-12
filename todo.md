@@ -6,10 +6,11 @@
 ---
 
 - [ ] progress bar for file upload
-- [ ] three dots aren't very good
+- [x] three dots aren't very good
 - [ ] what if klawed die
 - [ ] show KLAWED what cli tools it already has
 - [ ] use typst for pdf
+- [ ] file search doesn't work
 
 ---
 
