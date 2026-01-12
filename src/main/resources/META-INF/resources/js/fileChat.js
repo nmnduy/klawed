@@ -1269,21 +1269,20 @@ export function init(rootEl) {
                     case 'STATUS':
                         if (content && content.startsWith('SESSION_ID:')) {
                             updateStatus(true, 'Connected');
-                            removeTypingIndicator();
                         } else if (content && (/(Klawed is|working|processing|Tool|thinking)/i.test(content))) {
                             // Show "AI is thinking" with three dots for processing messages
                             addTypingIndicator();
                             showKlawedStatus('AI is thinking');
                         } else {
                             updateStatus(true, 'Connected');
-                            removeTypingIndicator();
+                            // Don't remove typing indicator here - wait for END_AI_TURN
                         }
                         break;
                     case 'TEXT':
                         if (content) {
                             handleStreamComplete(content);
                         }
-                        removeTypingIndicator();
+                        // Don't remove typing indicator here - wait for END_AI_TURN
                         clearToolActivity(); // Clear tool activity tracking for next interaction
                         showKlawedStatus('Connected');
                         // Reset API call time when we get a text response
@@ -1301,7 +1300,7 @@ export function init(rootEl) {
                             return;
                         }
                         addSystemMessage('✗ ' + (content || 'Error occurred'), 'error');
-                        removeTypingIndicator();
+                        // Don't remove typing indicator here - wait for END_AI_TURN
                         clearToolActivity(); // Clear tool activity tracking
                         showKlawedStatus('Connected');
                         // Reset API call time when we get an error
@@ -1445,7 +1444,7 @@ export function init(rootEl) {
                     default:
                         if (typeof content === 'string') {
                             handleStreamComplete(content);
-                            removeTypingIndicator();
+                            // Don't remove typing indicator here - wait for END_AI_TURN
                         }
                 }
             } catch (error) {
@@ -1466,15 +1465,11 @@ export function init(rootEl) {
                         console.error('Error in handleStreamComplete:', streamError);
                         addMessage(doneContent, false);
                     }
-                    removeTypingIndicator();
-                    // Reset API call time when we get a done response
-                    lastApiCallTime = null;
+                    // Don't remove typing indicator here - wait for END_AI_TURN
                 } else if (event.data.startsWith('ERROR:')) {
                     const errorMessage = event.data.substring(6);
                     addSystemMessage('✗ ' + errorMessage, 'error');
-                    removeTypingIndicator();
-                    // Reset API call time when we get an error
-                    lastApiCallTime = null;
+                    // Don't remove typing indicator here - wait for END_AI_TURN
                 } else {
                     // Check if it's a tool-related message in legacy format
                     if (event.data.includes('[TOOL') || event.data.includes('[TOOL RESULT') || 
@@ -1483,7 +1478,7 @@ export function init(rootEl) {
                         showKlawedStatus('AI is thinking');
                     } else {
                         addMessage(event.data, false);
-                        removeTypingIndicator();
+                        // Don't remove typing indicator here - wait for END_AI_TURN
                     }
                 }
             }
