@@ -112,7 +112,7 @@ logs/                          # Application logs (dev only)
 - WebSocket: `/file-chat/ws/{sessionId}`
 - REST API: Various endpoints under `/file-chat/http/`
 - **Demo Videos**: `GET /demo/{name}` - Stream demo MP4 videos
-- **Monitoring**: `GET /metrics` - Prometheus metrics endpoint (standard format)
+- **Monitoring**: `GET /metrics` - Prometheus metrics endpoint (Tailscale-only access on port 9090)
 
 ## REST API Endpoints
 ### Authentication
@@ -310,24 +310,20 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 ### Quick Deploy (Recommended)
 Build assets locally and sync to server:
 ```bash
-# JVM mode (faster build, higher memory usage)
-./deployment/deploy-rsync.sh
-
-# Native mode (slower build, lower memory usage)
+# Native mode (production standard - lower memory usage)
 ./deployment/deploy-rsync-native.sh
 ```
 
-These scripts will:
+This script will:
 1. Build CSS assets locally (`npm run build`)
-2. Build the application (Maven)
+2. Build the native application (Maven + GraalVM)
 3. Rsync only the required files to `filesurf-0:/root/filesurf_v2`
 4. Deploy and restart the service on the remote server
 
 **Requirements:**
 - SSH access to filesurf-0
-- Node.js and Maven installed locally
-- GraalVM (for native builds only)
-- Same CPU architecture as target server
+- Node.js, Maven, and GraalVM installed locally
+- Same CPU architecture as target server (x86_64)
 
 ### Manual Deployment
 See detailed instructions in `deployment/README.md`
