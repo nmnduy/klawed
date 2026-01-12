@@ -17,6 +17,7 @@ public class ChatConstants {
     public static final String MESSAGE_TYPE_TOOL = "TOOL";
     public static final String MESSAGE_TYPE_TOOL_RESULT = "TOOL_RESULT";
     public static final String MESSAGE_TYPE_API_CALL = "API_CALL";
+    public static final String MESSAGE_TYPE_END_AI_TURN = "END_AI_TURN";
     
     // Database message types
     public static final String DB_MESSAGE_TYPE_TEXT = "text";
