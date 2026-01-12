@@ -7,10 +7,13 @@
 # Transfer to production:
 #   docker save klawed-sandbox:latest | ssh filesurf-0 'docker load'
 #
-# Run (IMPORTANT: workspace must be owned by UID 1000):
-#   chown -R 1000:1000 /path/to/workspace
+# Run:
 #   docker run -it --rm -e OPENAI_API_KEY=$OPENAI_API_KEY \
 #     -v /path/to/workspace:/workspace:Z klawed-sandbox:latest
+#
+# Note: Container handles workspace permissions automatically via gosu
+# Do NOT use --user flag; the container starts as root and drops to agent user
+# Security: Use --cap-drop=ALL but NOT --security-opt=no-new-privileges (needed for gosu)
 #
 # See docs/docker-sandbox-deployment.md for full deployment guide
 
@@ -99,6 +102,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     zip \
     \
+    # gosu for dropping privileges in entrypoint
+    gosu \
+    \
     # Runtime libraries for klawed (NOT -dev packages)
     libcjson1 \
     libcurl4 \
@@ -110,7 +116,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean
 
 # Create non-root user for running the agent
-RUN useradd -m -u 1000 -s /bin/bash agent
+# Use explicit UID/GID 1000 to match typical host user for volume permissions
+RUN groupadd -g 1000 agent && \
+    useradd -m -u 1000 -g 1000 -s /bin/bash agent
 
 # Copy klawed binary from builder
 COPY --from=builder /build/build/klawed /usr/local/bin/klawed
@@ -121,13 +129,14 @@ COPY --from=builder /build/vendor/memvid-ffi/target/release/libmemvid_ffi.so /us
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# Set up library paths and verify
+# Set up library paths and permissions
 RUN chmod +x /usr/local/bin/klawed && \
     chmod +x /usr/local/bin/docker-entrypoint.sh && \
     ldconfig
 
-# Create workspace directory (will be overlaid by volume mount at runtime)
-RUN mkdir -p /workspace && \
+# Create workspace directory structure
+# Note: This gets overlaid by volume mount, entrypoint fixes permissions
+RUN mkdir -p /workspace/.klawed/logs /workspace/.klawed/mcp && \
     chown -R agent:agent /workspace
 
 # Set up default working directory
@@ -138,13 +147,13 @@ ENV LD_LIBRARY_PATH=/usr/local/lib \
     HOME=/workspace \
     TERM=xterm-256color
 
-# Switch to non-root user
-USER agent
+# Configure git for the agent user (as root, will be used after gosu)
+RUN git config --system init.defaultBranch main \
+    && git config --system user.email "agent@sandbox.local" \
+    && git config --system user.name "Klawed Agent"
 
-# Configure git for the agent user
-RUN git config --global init.defaultBranch main \
-    && git config --global user.email "agent@sandbox.local" \
-    && git config --global user.name "Klawed Agent"
+# Stay as root - entrypoint will drop to agent user via gosu
+# This allows fixing volume permissions before running as non-root
 
 # Default entrypoint - accepts all arguments
 # The entrypoint script ensures directories exist in the mounted volume
