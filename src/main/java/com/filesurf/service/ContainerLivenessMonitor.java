@@ -1,9 +1,6 @@
 package com.filesurf.service;
 
-import com.filesurf.model.KlawedSocketMessage;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.scheduler.Scheduled;
-import io.quarkus.websockets.next.WebSocketConnection;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -11,9 +8,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -37,18 +32,12 @@ import java.util.logging.Logger;
 public class ContainerLivenessMonitor {
 
     private static final Logger LOGGER = Logger.getLogger(ContainerLivenessMonitor.class.getName());
-    private static final String AGENT_STATUS_MESSAGE_TYPE = "AGENT_STATUS";
-    
-    private final ObjectMapper objectMapper = new ObjectMapper();
     
     // Track restart attempts per session: sessionId -> RestartInfo
     private final ConcurrentHashMap<String, RestartInfo> restartTracking = new ConcurrentHashMap<>();
     
     @Inject
     KlawedAgentManager agentManager;
-    
-    @Inject
-    ChatMessagePollingService chatMessagePollingService;
     
     @Inject
     PodmanSandboxService podmanSandboxService;
@@ -258,84 +247,39 @@ public class ContainerLivenessMonitor {
     // ========== Client Notification Methods ==========
     
     private void notifyClientContainerDied(String sessionId, int currentAttempts, int maxAttempts) {
-        sendAgentStatusMessage(sessionId, Map.of(
-            "status", "CONTAINER_DIED",
-            "message", "The AI agent container has stopped unexpectedly",
-            "restartAttempts", currentAttempts,
-            "maxRestartAttempts", maxAttempts
-        ));
+        // Backend-only logging for now - not forwarding to frontend
+        LOGGER.info("[SESSION:" + sessionId + "] AGENT_STATUS: CONTAINER_DIED (attempts: " + 
+                   currentAttempts + "/" + maxAttempts + ")");
     }
     
     private void notifyClientRestartDisabled(String sessionId) {
-        sendAgentStatusMessage(sessionId, Map.of(
-            "status", "RESTART_DISABLED",
-            "message", "Auto-restart is disabled. Please refresh the page to reconnect."
-        ));
+        // Backend-only logging for now - not forwarding to frontend
+        LOGGER.info("[SESSION:" + sessionId + "] AGENT_STATUS: RESTART_DISABLED");
     }
     
     private void notifyClientMaxRestartsExceeded(String sessionId, int maxAttempts) {
-        sendAgentStatusMessage(sessionId, Map.of(
-            "status", "MAX_RESTARTS_EXCEEDED",
-            "message", "Maximum restart attempts (" + maxAttempts + ") exceeded. Please refresh the page.",
-            "maxRestartAttempts", maxAttempts
-        ));
+        // Backend-only logging for now - not forwarding to frontend
+        LOGGER.warning("[SESSION:" + sessionId + "] AGENT_STATUS: MAX_RESTARTS_EXCEEDED (max: " + maxAttempts + ")");
     }
     
     private void notifyClientCooldownActive(String sessionId, long remainingSeconds) {
-        sendAgentStatusMessage(sessionId, Map.of(
-            "status", "COOLDOWN_ACTIVE",
-            "message", "Restart cooldown active. Waiting " + remainingSeconds + " seconds before retry.",
-            "remainingCooldownSeconds", remainingSeconds
-        ));
+        // Backend-only logging for now - not forwarding to frontend
+        LOGGER.info("[SESSION:" + sessionId + "] AGENT_STATUS: COOLDOWN_ACTIVE (" + remainingSeconds + "s remaining)");
     }
     
     private void notifyClientRestartAttempt(String sessionId, int attempt, int maxAttempts) {
-        sendAgentStatusMessage(sessionId, Map.of(
-            "status", "RESTART_ATTEMPT",
-            "message", "Attempting to restart AI agent (attempt " + attempt + "/" + maxAttempts + ")",
-            "attempt", attempt,
-            "maxAttempts", maxAttempts
-        ));
+        // Backend-only logging for now - not forwarding to frontend
+        LOGGER.info("[SESSION:" + sessionId + "] AGENT_STATUS: RESTART_ATTEMPT (" + attempt + "/" + maxAttempts + ")");
     }
     
     private void notifyClientRestartReady(String sessionId) {
-        sendAgentStatusMessage(sessionId, Map.of(
-            "status", "RESTART_READY",
-            "message", "Agent stopped. Send a message to reconnect."
-        ));
+        // Backend-only logging for now - not forwarding to frontend
+        LOGGER.info("[SESSION:" + sessionId + "] AGENT_STATUS: RESTART_READY");
     }
     
     private void notifyClientRestartFailed(String sessionId, String errorMessage) {
-        sendAgentStatusMessage(sessionId, Map.of(
-            "status", "RESTART_FAILED",
-            "message", "Failed to restart agent: " + errorMessage,
-            "error", errorMessage
-        ));
-    }
-    
-    /**
-     * Send an AGENT_STATUS message to the client via WebSocket.
-     */
-    private void sendAgentStatusMessage(String sessionId, Map<String, Object> statusData) {
-        WebSocketConnection connection = chatMessagePollingService.getConnection(sessionId);
-        
-        if (connection == null || connection.isClosed()) {
-            LOGGER.fine("[SESSION:" + sessionId + "] No active WebSocket connection, cannot send status");
-            return;
-        }
-        
-        try {
-            // Create the message with AGENT_STATUS type
-            KlawedSocketMessage message = KlawedSocketMessage.create(AGENT_STATUS_MESSAGE_TYPE, statusData);
-            String jsonMessage = objectMapper.writeValueAsString(message);
-            
-            connection.sendText(jsonMessage).subscribe().with(
-                success -> LOGGER.info("[SESSION:" + sessionId + "] Sent AGENT_STATUS: " + statusData.get("status")),
-                failure -> LOGGER.warning("[SESSION:" + sessionId + "] Failed to send AGENT_STATUS: " + failure.getMessage())
-            );
-        } catch (Exception e) {
-            LOGGER.warning("[SESSION:" + sessionId + "] Error sending AGENT_STATUS message: " + e.getMessage());
-        }
+        // Backend-only logging for now - not forwarding to frontend
+        LOGGER.severe("[SESSION:" + sessionId + "] AGENT_STATUS: RESTART_FAILED - " + errorMessage);
     }
     
     /**
