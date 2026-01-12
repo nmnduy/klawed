@@ -20,10 +20,9 @@ All AI agents run in **isolated, sandboxed containers**. This ensures that proce
 - Containers are automatically removed after session ends
 
 **Sandbox Security Features**:
-- `--cap-drop=ALL` - Drops all Linux capabilities
 - `--tmpfs /tmp` - Temporary files exist only during session
 - Resource limits: `--memory`, `--cpus`, `--pids-limit`
-- Entrypoint uses `gosu` to drop privileges from root to 'agent' user
+- Runs as root to avoid permission issues with shared volume mounts
 
 #### 2. Enterprise-Grade LLM Security (AWS Bedrock)
 FileSurf uses **Amazon Bedrock** for AI-powered features. AWS Bedrock provides enterprise-grade data protection guarantees:

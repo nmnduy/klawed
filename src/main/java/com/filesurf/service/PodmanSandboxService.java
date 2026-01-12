@@ -26,16 +26,12 @@ import java.util.stream.Collectors;
  * This provides security isolation for running AI agents in production environments.
  * Each container is named klawed-{sessionId} for easy tracking and management.
  * 
- * Container security features:
- * - cap-drop=ALL: Drops all Linux capabilities
- * - tmpfs for /tmp with noexec
+ * Container features:
+ * - Runs as root to avoid permission issues with shared volume mounts
+ * - tmpfs for /tmp
  * - Resource limits (memory, CPU, PIDs)
  * - Network access for agent to call APIs and download packages
  * - Workspace directory mounted for file read/write operations
- * - Entrypoint uses gosu to drop privileges from root to 'agent' user
- * 
- * Note: We do NOT use --security-opt=no-new-privileges because the entrypoint
- * uses gosu to switch from root to the 'agent' user for proper permission handling.
  */
 @ApplicationScoped
 public class PodmanSandboxService {
@@ -237,18 +233,15 @@ public class PodmanSandboxService {
         command.add("--name");
         command.add(containerName);
         
-        // Security options
-        command.add("--cap-drop=ALL");
-        // Note: NOT using --read-only because agent needs to create/edit files in workspace
-        // Note: NOT using --security-opt=no-new-privileges because entrypoint uses gosu to drop privileges
-        // Note: NOT using --user because entrypoint handles permission setup and drops to 'agent' user
+        // Run as root to avoid permission issues with shared volume mounts
+        command.add("--user=root");
         
         // Network access (bridge allows outbound connections for API calls)
         command.add("--network=bridge");
         
-        // Tmpfs for /tmp with restrictions
+        // Tmpfs for /tmp
         command.add("--tmpfs");
-        command.add("/tmp:rw,noexec,nosuid,size=1g");
+        command.add("/tmp:rw,size=1g");
         
         // Resource limits
         command.add("--memory=" + memoryLimit);
@@ -258,14 +251,9 @@ public class PodmanSandboxService {
         // Auto-remove container on exit
         command.add("--rm");
         
-        // Mount workspace directory
-        // Use :Z suffix on Linux for SELinux relabeling, skip on macOS
+        // Mount workspace directory (no SELinux relabeling needed when running as root)
         command.add("-v");
-        String volumeMount = workspaceDir.toAbsolutePath() + ":/workspace";
-        if (System.getProperty("os.name").toLowerCase().contains("linux")) {
-            volumeMount += ":Z";
-        }
-        command.add(volumeMount);
+        command.add(workspaceDir.toAbsolutePath() + ":/workspace");
         
         // If using shared SQLite database outside workspace, mount its parent directory
         if (sqliteDbPath != null && !sqliteDbPath.isEmpty()) {
@@ -280,12 +268,8 @@ public class PodmanSandboxService {
                 // Mount the parent directory of the database
                 Path dbParentDir = dbPath.getParent();
                 if (dbParentDir != null && Files.exists(dbParentDir)) {
-                    String dbVolumeMount = dbParentDir.toAbsolutePath() + ":" + dbParentDir.toAbsolutePath();
-                    if (System.getProperty("os.name").toLowerCase().contains("linux")) {
-                        dbVolumeMount += ":Z";
-                    }
                     command.add("-v");
-                    command.add(dbVolumeMount);
+                    command.add(dbParentDir.toAbsolutePath() + ":" + dbParentDir.toAbsolutePath());
                     LOGGER.info("[SESSION:" + sessionId + "] Mounted shared database directory: " + dbParentDir);
                 }
             }
