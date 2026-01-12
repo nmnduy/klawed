@@ -360,22 +360,30 @@ public class SQLiteQueueClient {
                                     String toolName = json.get("toolName").asText();
                                     String toolId = json.get("toolId").asText();
                                     LOGGER.info("Received TOOL request: " + toolName + " (id: " + toolId + ")");
-                                    // Don't add tool request to messages list - keep internal only
-                                    LOGGER.fine("Tool request kept internal: " + toolName);
                                     
                                     // Track pending tool request
                                     pendingToolRequests.add(toolId);
                                     LOGGER.fine("Added pending tool request: " + toolId + " (" + toolName + ")");
                                     
-                                    // Don't send tool-specific status updates - frontend shows tool status
-                                    LOGGER.fine("Tool execution started: " + toolName);
-                                    
-                                    // Don't save tool requests to main database - keep them in queue only
-                                    LOGGER.fine("Tool request logged in queue only (not saved to main database): " + toolName);
+                                    // Save TOOL message to main database for WebSocket forwarding
+                                    if (config.getFileChatService() != null) {
+                                        try {
+                                            // Create a JSON string with tool details
+                                            String toolJson = objectMapper.writeValueAsString(json);
+                                            config.getFileChatService().createChatMessage(
+                                                config.getSessionId(),
+                                                ChatConstants.AGENT,  // sender
+                                                ChatConstants.CLIENT, // receiver  
+                                                toolJson,
+                                                ChatConstants.DB_MESSAGE_TYPE_TOOL
+                                            );
+                                            LOGGER.fine("Saved TOOL message to main database for: " + toolName);
+                                        } catch (Exception dbEx) {
+                                            LOGGER.warning("Failed to save TOOL message to main database: " + dbEx.getMessage());
+                                        }
+                                    }
                                 } else {
                                     LOGGER.warning("TOOL message missing required fields: " + jsonMessage);
-                                    // Don't add tool request to messages list - keep internal only
-                                    LOGGER.fine("Invalid tool request kept internal");
                                 }
                             } else if (ChatConstants.MESSAGE_TYPE_TOOL_RESULT.equals(messageType)) {
                                 // Handle tool result
@@ -385,24 +393,31 @@ public class SQLiteQueueClient {
                                     boolean isError = json.get("isError").asBoolean();
                                     LOGGER.info("Received TOOL_RESULT: " + toolName + 
                                               " (id: " + toolId + ", error: " + isError + ")");
-                                    // Don't add tool result to messages list - keep internal only
-                                    LOGGER.fine("Tool result kept internal: " + toolName);
                                     
                                     // Remove from pending tool requests
                                     if (pendingToolRequests.remove(toolId)) {
                                         LOGGER.fine("Removed completed tool request: " + toolId + " (" + toolName + ")");
-                                        // Don't send tool-specific status updates - frontend shows tool status
-                                        LOGGER.fine("Tool execution " + (isError ? "failed" : "completed") + ": " + toolName);
-                                    } else {
-                                        LOGGER.fine("Tool result for untracked request: " + toolId + " (" + toolName + ")");
                                     }
                                     
-                                    // Don't save tool results to main database - keep them in queue only
-                                    LOGGER.fine("Tool result logged in queue only (not saved to main database): " + toolName);
+                                    // Save TOOL_RESULT message to main database for WebSocket forwarding
+                                    if (config.getFileChatService() != null) {
+                                        try {
+                                            // Create a JSON string with tool result details
+                                            String toolResultJson = objectMapper.writeValueAsString(json);
+                                            config.getFileChatService().createChatMessage(
+                                                config.getSessionId(),
+                                                ChatConstants.AGENT,  // sender
+                                                ChatConstants.CLIENT, // receiver  
+                                                toolResultJson,
+                                                ChatConstants.DB_MESSAGE_TYPE_TOOL_RESULT
+                                            );
+                                            LOGGER.fine("Saved TOOL_RESULT message to main database for: " + toolName);
+                                        } catch (Exception dbEx) {
+                                            LOGGER.warning("Failed to save TOOL_RESULT message to main database: " + dbEx.getMessage());
+                                        }
+                                    }
                                 } else {
                                     LOGGER.warning("TOOL_RESULT message missing required fields: " + jsonMessage);
-                                    // Don't add tool result to messages list - keep internal only
-                                    LOGGER.fine("Invalid tool result kept internal");
                                 }
                             } else if (ChatConstants.MESSAGE_TYPE_API_CALL.equals(messageType)) {
                                 // Handle API call in progress

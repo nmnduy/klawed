@@ -290,7 +290,26 @@ public class PodmanSandboxService {
             String socketPath = "/workspace/" + unixSocketFilename;
             shellCommand = "mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed -u " + socketPath;
         } else {
-            shellCommand = "mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed --sqlite-queue " + sqliteDbPath;
+            // In podman, the working directory is /workspace, so ensure the db path is relative to /workspace
+            // Convert host path to container path if database is inside workspace
+            String normalizedDbPath = sqliteDbPath;
+            if (normalizedDbPath != null) {
+                Path dbPath = Path.of(normalizedDbPath);
+                if (dbPath.isAbsolute()) {
+                    // Check if database is inside workspace directory
+                    Path workspaceAbs = workspaceDir.toAbsolutePath().normalize();
+                    Path dbAbs = dbPath.normalize();
+                    if (dbAbs.startsWith(workspaceAbs)) {
+                        // Convert host path to container path: /workspace + relative path from workspace
+                        Path relativePath = workspaceAbs.relativize(dbAbs);
+                        normalizedDbPath = "/workspace/" + relativePath.toString();
+                    }
+                }
+            }
+            if (normalizedDbPath == null || normalizedDbPath.isEmpty()) {
+                throw new IllegalArgumentException("SQLite database path cannot be null or empty in SQLite queue mode");
+            }
+            shellCommand = "mkdir -p /workspace/.klawed/logs && touch /workspace/.klawed/logs/klawed.log && exec /usr/local/bin/klawed --sqlite-queue " + normalizedDbPath;
         }
         command.add(shellCommand);
         
