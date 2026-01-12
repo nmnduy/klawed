@@ -462,6 +462,189 @@ class FileExplorer {
             return;
         }
 
+        // For large result sets, limit what we render for performance
+        const MAX_RENDER_ITEMS = 200;
+        const isLimited = items.length > MAX_RENDER_ITEMS;
+        const itemsToRender = isLimited ? items.slice(0, MAX_RENDER_ITEMS) : items;
+
+        // Use requestAnimationFrame to batch DOM updates
+        if (this._renderRAF) {
+            cancelAnimationFrame(this._renderRAF);
+        }
+        
+        this._renderRAF = requestAnimationFrame(() => {
+            // For search results or large changes, just rebuild the DOM
+            // This is faster than trying to diff when most items change
+            const shouldRebuild = this.isSearchingWorkspace || 
+                Math.abs(this.fileExplorerTree.children.length - itemsToRender.length) > 20;
+            
+            if (shouldRebuild) {
+                this._renderFileTreeFast(itemsToRender, isLimited, items.length);
+            } else {
+                this._renderFileTreeIncremental(itemsToRender);
+            }
+            
+            this.showFileTree();
+        });
+    }
+    
+    /**
+     * Fast render - rebuilds DOM completely. Better for search results.
+     */
+    _renderFileTreeFast(items, isLimited, totalCount) {
+        // Build HTML string in one go (much faster than individual DOM operations)
+        const html = items.map(item => this._buildFileItemHTML(item)).join('');
+        
+        // Single DOM update
+        this.fileExplorerTree.innerHTML = html;
+        
+        // Add "show more" indicator if limited
+        if (isLimited) {
+            const moreDiv = document.createElement('div');
+            moreDiv.className = 'px-3 py-2 text-center text-caption-s text-muted-foreground bg-muted/30';
+            moreDiv.textContent = `Showing ${items.length} of ${totalCount} results. Refine your search to see more.`;
+            this.fileExplorerTree.appendChild(moreDiv);
+        }
+        
+        // Attach event listeners using delegation (much faster than per-element)
+        this._attachFileTreeEventDelegation();
+    }
+    
+    /**
+     * Build HTML for a single file item (used by fast render)
+     */
+    _buildFileItemHTML(item) {
+        const isDirectory = item.type === 'directory';
+        const icon = this.fileIcons[item.icon] || this.fileIcons.file;
+        const size = isDirectory ? '' : this.formatFileSize(item.size);
+        const date = this.formatDate(item.modified);
+        const showDirectory = this.isSearchingWorkspace && item.directory && item.directory !== '/';
+        const directoryDisplay = showDirectory ? `<span class="text-muted-foreground text-caption-s truncate" title="${item.directory}">${item.directory}</span>` : '';
+        
+        // Escape HTML in item properties to prevent XSS
+        const escapedName = this._escapeHtml(item.name);
+        const escapedPath = this._escapeHtml(item.path);
+        
+        return `
+            <div class="file-item group px-3 py-2 hover:bg-orange-50/60 dark:hover:bg-orange-950/20 transition cursor-pointer" 
+                 data-path="${escapedPath}" data-type="${item.type}" data-name="${escapedName}">
+                <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_112px] items-center gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="flex-shrink-0">${icon}</div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="truncate text-body-s ${isDirectory ? 'text-foreground font-semibold' : 'text-foreground/80'}" title="${escapedName}">${escapedName}</span>
+                                ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-100 dark:border-amber-800">Folder</span>' : ''}
+                            </div>
+                            ${directoryDisplay}
+                            <div class="flex items-center gap-3 text-caption-s text-muted-foreground truncate lg:hidden">
+                                <span class="tabular-nums">${size || ''}</span>
+                                <span class="whitespace-nowrap">${date}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-muted-foreground text-right tabular-nums">
+                        <span>${size}</span>
+                        <div class="relative">
+                            <button type="button" class="inline-flex items-center justify-center w-8 h-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition file-options-btn ${isDirectory ? 'hidden' : ''}" title="File options">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                </svg>
+                            </button>
+                            <div class="file-options-dropdown hidden absolute right-0 top-full mt-1 w-48 bg-card rounded-lg shadow-lg border border-border z-10 py-1">
+                                <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-foreground hover:bg-muted flex items-center gap-2 open-file-option">
+                                    <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17H7a2 2 0 01-2-2V7a2 2 0 012-2h6" />
+                                    </svg>
+                                    <span>Open file</span>
+                                </button>
+                                <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-foreground hover:bg-muted flex items-center gap-2 download-file-option">
+                                    <svg class="w-4 h-4 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span>Download file</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Escape HTML special characters
+     */
+    _escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#39;');
+    }
+    
+    /**
+     * Attach event delegation for file tree (more efficient than per-element listeners)
+     */
+    _attachFileTreeEventDelegation() {
+        // Remove old delegation listener if exists
+        if (this._fileTreeClickHandler) {
+            this.fileExplorerTree.removeEventListener('click', this._fileTreeClickHandler);
+        }
+        
+        this._fileTreeClickHandler = (e) => {
+            const fileItem = e.target.closest('.file-item');
+            if (!fileItem) return;
+            
+            const path = fileItem.dataset.path;
+            const type = fileItem.dataset.type;
+            const name = fileItem.dataset.name;
+            
+            // Handle options button click
+            if (e.target.closest('.file-options-btn')) {
+                e.stopPropagation();
+                // Close other dropdowns
+                document.querySelectorAll('.file-options-dropdown').forEach(d => d.classList.add('hidden'));
+                const dropdown = fileItem.querySelector('.file-options-dropdown');
+                if (dropdown) dropdown.classList.toggle('hidden');
+                return;
+            }
+            
+            // Handle open option
+            if (e.target.closest('.open-file-option')) {
+                e.stopPropagation();
+                this.openFile(path, name);
+                fileItem.querySelector('.file-options-dropdown')?.classList.add('hidden');
+                return;
+            }
+            
+            // Handle download option
+            if (e.target.closest('.download-file-option')) {
+                e.stopPropagation();
+                this.downloadFile(path, name);
+                fileItem.querySelector('.file-options-dropdown')?.classList.add('hidden');
+                return;
+            }
+            
+            // Handle file/folder click
+            if (type === 'directory') {
+                this.clearSearchAndNavigate(path);
+            } else {
+                // Get size from the rendered content or default to 0
+                const sizeEl = fileItem.querySelector('.tabular-nums');
+                this.previewFile(path, name, 0);
+            }
+        };
+        
+        this.fileExplorerTree.addEventListener('click', this._fileTreeClickHandler);
+    }
+    
+    /**
+     * Incremental render - updates existing DOM. Better for small changes.
+     */
+    _renderFileTreeIncremental(items) {
         // Get existing items to minimize DOM changes
         const existingElements = Array.from(this.fileExplorerTree.children);
         const existingPaths = new Set(existingElements.map(el => el.dataset.path));
@@ -612,8 +795,6 @@ class FileExplorer {
                 }
             }
         });
-
-        this.showFileTree();
     }
 
     /**
@@ -769,7 +950,7 @@ class FileExplorer {
             return;
         }
         
-        // Debounce the actual search (150ms)
+        // Debounce the actual search (200ms for smoother typing)
         this.searchDebounceTimer = setTimeout(async () => {
             // Fetch workspace files if not cached (lazy load)
             if (this.allWorkspaceFiles === null) {
@@ -788,7 +969,7 @@ class FileExplorer {
                     <span class="text-muted-foreground">Search results in workspace</span>
                 `;
             }
-        }, 150);
+        }, 200);
     }
     
     /**
