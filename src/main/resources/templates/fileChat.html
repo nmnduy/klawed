@@ -39,8 +39,10 @@
             background: transparent;
         }
     </style>
+    <script src="{inject:jsHelper.path('uploadProgress')}" defer></script>
+    <script src="{inject:jsHelper.path('standardUpload')}" defer></script>
     <script src="{inject:jsHelper.path('chunkedUpload')}" defer></script>
-    <script src="{inject:jsHelper.path('fileExplorer')}" defer></script>
+    <script type="module" src="{inject:jsHelper.path('fileExplorer')}"></script>
     <script type="module" src="{inject:jsHelper.path('fileChat')}"></script>
 </head>
 <body class="bg-background min-h-screen overflow-hidden">

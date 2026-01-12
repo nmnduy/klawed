@@ -133,6 +133,11 @@ export function init(rootEl) {
     let pendingTools = new Map(); // Map<toolId, {toolName, startTime, element}>
     let completedTools = []; // Array of {toolName, toolId, isError, duration}
     
+    // Auto-scroll behavior tracking
+    let hasReceivedFirstAiResponse = false;
+    let isUserScrolledUp = false;
+    let scrollToBottomButton = null;
+    
     // Reconnection logic with exponential backoff
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 10;
@@ -206,10 +211,76 @@ export function init(rootEl) {
         }
     }
 
-    function scrollToBottom() {
-        if (scrollContainer && typeof scrollContainer.scrollTo === 'function') {
+    function scrollToBottom(force = false) {
+        if (!scrollContainer || typeof scrollContainer.scrollTo !== 'function') return;
+        
+        // Only auto-scroll if:
+        // 1. Force is true (manual scroll or first response), OR
+        // 2. We haven't received first AI response yet (welcome flow), OR
+        // 3. User hasn't scrolled up
+        if (force || !hasReceivedFirstAiResponse || !isUserScrolledUp) {
             scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
         }
+    }
+    
+    function isScrolledToBottom() {
+        if (!scrollContainer) return true;
+        const threshold = 100; // pixels from bottom
+        const scrollTop = scrollContainer.scrollTop;
+        const scrollHeight = scrollContainer.scrollHeight;
+        const clientHeight = scrollContainer.clientHeight;
+        return (scrollHeight - scrollTop - clientHeight) < threshold;
+    }
+    
+    function updateScrollState() {
+        if (!scrollContainer) return;
+        isUserScrolledUp = !isScrolledToBottom();
+        updateScrollToBottomButton();
+    }
+    
+    function createScrollToBottomButton() {
+        if (scrollToBottomButton) return scrollToBottomButton;
+        
+        const button = document.createElement('button');
+        button.className = 'fixed bottom-24 right-6 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center opacity-0 pointer-events-none hover:scale-110 active:scale-95';
+        button.setAttribute('aria-label', 'Scroll to bottom');
+        button.innerHTML = `
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+            </svg>
+        `;
+        
+        button.addEventListener('click', () => {
+            if (scrollContainer) {
+                scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
+                // Reset scroll state immediately
+                isUserScrolledUp = false;
+                updateScrollToBottomButton();
+            }
+        });
+        
+        scrollToBottomButton = button;
+        document.body.appendChild(button);
+        return button;
+    }
+    
+    function updateScrollToBottomButton() {
+        const button = createScrollToBottomButton();
+        
+        if (isUserScrolledUp) {
+            // Show button with animation
+            button.style.opacity = '1';
+            button.style.pointerEvents = 'auto';
+        } else {
+            // Hide button with animation
+            button.style.opacity = '0';
+            button.style.pointerEvents = 'none';
+        }
+    }
+    
+    // Set up scroll listener
+    if (scrollContainer) {
+        scrollContainer.addEventListener('scroll', updateScrollState);
     }
 
     function addMessage(content, isUser = false, messageId = null) {
@@ -250,7 +321,15 @@ export function init(rootEl) {
             }
 
             messageParent.appendChild(messageDiv);
-            scrollToBottom();
+            
+            // Handle auto-scroll for first AI response
+            if (!isUser && !hasReceivedFirstAiResponse) {
+                hasReceivedFirstAiResponse = true;
+                scrollToBottom(true); // Force scroll for first AI response
+            } else {
+                scrollToBottom(); // Regular scroll behavior
+            }
+            
             return messageDiv;
         } catch (error) {
             console.error('Error in addMessage:', error);
@@ -287,6 +366,12 @@ export function init(rootEl) {
             updateMessage(currentStreamMessageId, content ?? '');
             currentStreamMessageId = null;
             currentStreamContent = '';
+            
+            // Mark first AI response as received
+            if (!hasReceivedFirstAiResponse) {
+                hasReceivedFirstAiResponse = true;
+                scrollToBottom(true); // Force scroll for first complete response
+            }
         } else {
             addMessage(content ?? '', false);
         }
@@ -1515,6 +1600,9 @@ export function init(rootEl) {
             return;
         }
 
+        // Reset first AI response flag for new conversation turn
+        hasReceivedFirstAiResponse = false;
+
         addMessage(message, true);
         addTypingIndicator();
         ws.send(message);
@@ -1691,35 +1779,28 @@ export function init(rootEl) {
             const fileNames = files.map(f => f.name).join(', ');
             addSystemMessage('📤 Uploading ' + files.length + ' file(s): ' + fileNames + '...', 'info');
 
-            const formData = new FormData();
-            files.forEach(file => formData.append('files', file));
-
             try {
-                const response = await fetch('/file-chat/upload', {
-                    method: 'POST',
-                    headers: {
-                        'X-Session-ID': sessionId
-                    },
-                    body: formData
+                // Use StandardUploader for progress tracking
+                const result = await StandardUploader.upload(files, sessionId, '/', {
+                    useProgressUI: true
                 });
 
-                if (response.ok) {
-                    const result = await response.json();
-                    addSystemMessage('✓ Successfully uploaded ' + result.count + ' file(s)', 'success');
+                addSystemMessage('✓ Successfully uploaded ' + result.count + ' file(s)', 'success');
 
-                    if (isConnected && result.files && result.files.length > 0) {
-                        const uploadMessage = "I've uploaded the following files: " + result.files.join(', ') + '. Please analyze them.';
-                        sendMessage(uploadMessage);
-                    }
-                } else if (isAuthRequired(response)) {
-                    await handleAuthError(response);
-                    return;
-                } else {
-                    const errorText = await response.text();
-                    addSystemMessage('✗ Upload failed: ' + errorText, 'error');
+                if (isConnected && result.files && result.files.length > 0) {
+                    const uploadMessage = "I've uploaded the following files: " + result.files.join(', ') + '. Please analyze them.';
+                    sendMessage(uploadMessage);
                 }
             } catch (error) {
                 console.error('Upload error:', error);
+                
+                // Check if it's an auth error
+                if (error.message && error.message.includes('401')) {
+                    // Redirect to login
+                    window.location.href = '/auth/login?redirect=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                
                 addSystemMessage('✗ Upload error: ' + error.message, 'error');
             }
 

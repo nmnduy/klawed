@@ -12,6 +12,8 @@ class ChunkedUploader {
         this.onComplete = options.onComplete || (() => {});
         this.onError = options.onError || ((error) => console.error(error));
         this.baseUrl = options.baseUrl || '/file-chat/upload/chunked';
+        this.useProgressUI = options.useProgressUI !== false; // Enable by default
+        this.uploadId = null; // Will be set during upload
     }
 
     /**
@@ -43,8 +45,14 @@ class ChunkedUploader {
 
             const { uploadId, chunkSize, totalChunks } = await initResponse.json();
             this.chunkSize = chunkSize;
+            this.uploadId = uploadId;
 
             console.log(`Starting chunked upload: ${file.name} (${totalChunks} chunks)`);
+
+            // Show progress UI if enabled
+            if (this.useProgressUI && typeof window !== 'undefined' && window.uploadProgress) {
+                window.uploadProgress.showProgress(uploadId, file.name, file.size);
+            }
 
             // Upload chunks
             for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
@@ -56,14 +64,22 @@ class ChunkedUploader {
 
                 // Update progress
                 const progress = ((chunkIndex + 1) / totalChunks) * 100;
-                this.onProgress({
+                const progressData = {
                     fileName: file.name,
                     uploadedSize: end,
                     totalSize: file.size,
                     progress: progress,
                     chunkIndex: chunkIndex + 1,
                     totalChunks: totalChunks
-                });
+                };
+
+                // Call onProgress callback
+                this.onProgress(progressData);
+
+                // Update progress UI if enabled
+                if (this.useProgressUI && typeof window !== 'undefined' && window.uploadProgress) {
+                    window.uploadProgress.updateProgress(uploadId, progress, end);
+                }
             }
 
             // Upload complete
@@ -74,11 +90,23 @@ class ChunkedUploader {
             };
 
             this.onComplete(result);
+            
+            // Mark upload as complete in progress UI
+            if (this.useProgressUI && typeof window !== 'undefined' && window.uploadProgress) {
+                window.uploadProgress.completeUpload(uploadId, true);
+            }
+
             console.log(`Upload complete: ${file.name}`);
             return result;
 
         } catch (error) {
             this.onError(error);
+            
+            // Mark upload as failed in progress UI
+            if (this.useProgressUI && typeof window !== 'undefined' && window.uploadProgress && this.uploadId) {
+                window.uploadProgress.completeUpload(this.uploadId, false);
+            }
+            
             throw error;
         }
     }

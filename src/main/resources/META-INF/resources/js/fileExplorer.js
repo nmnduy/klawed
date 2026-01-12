@@ -1,5 +1,8 @@
 // File Explorer Module
 
+// Import fuzzy search engine
+import fuzzySearch from './fuzzySearch.js';
+
 // Authentication helper functions (inline to avoid module issues)
 function isAuthRequired(response) {
     return response.status === 401 || response.status === 403;
@@ -603,20 +606,27 @@ class FileExplorer {
     applyFiltersAndSort() {
         let filtered = [...this.rawItems];
 
-        // Filter by type
+        // Filter by type first
         if (this.activeFilter === 'folders') {
             filtered = filtered.filter(i => i.type === 'directory');
         } else if (this.activeFilter === 'files') {
             filtered = filtered.filter(i => i.type !== 'directory');
         }
 
-        // Search by name (case-insensitive)
+        // Apply fuzzy search if search term is provided
         if (this.searchTerm && this.searchTerm.trim() !== '') {
-            const term = this.searchTerm.toLowerCase();
-            filtered = filtered.filter(i => (i.name || '').toLowerCase().includes(term));
+            // Index the filtered items for fuzzy search
+            fuzzySearch.setItems(filtered);
+            
+            // Perform fuzzy search
+            filtered = fuzzySearch.search(this.searchTerm);
+            
+            // Optional: Log search statistics for debugging
+            // const stats = fuzzySearch.getSearchStats(this.searchTerm);
+            // console.log('[file-explorer] Fuzzy search stats:', stats);
         }
 
-        // Sort
+        // Sort results
         const field = this.activeSort;
         filtered.sort((a, b) => {
             if (field === 'size') {
@@ -1242,7 +1252,7 @@ class FileExplorer {
         const originalText = this.fileExplorerUpload.innerHTML;
         
         try {
-            // Show loading state
+            // Show loading state on button (minimal, since progress bar shows details)
             this.fileExplorerUpload.innerHTML = `
                 <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1254,29 +1264,15 @@ class FileExplorer {
             let uploadedCount = 0;
             const errors = [];
 
-            // Upload standard files using regular upload
+            // Upload standard files using StandardUploader (with progress)
             if (standardFiles.length > 0) {
                 try {
                     console.log(`[file-explorer] Uploading ${standardFiles.length} standard file(s)`);
-                    const formData = new FormData();
-                    standardFiles.forEach(file => formData.append('files', file));
-                    formData.append('path', this.currentPath);
-
-                    const response = await fetch('/file-chat/upload', {
-                        method: 'POST',
-                        headers: {
-                            'X-Session-ID': this.sessionId
-                        },
-                        body: formData
+                    
+                    const result = await StandardUploader.upload(standardFiles, this.sessionId, this.currentPath, {
+                        useProgressUI: true
                     });
 
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('[file-explorer] Standard upload failed:', response.status, errorText);
-                        throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
-                    }
-
-                    const result = await response.json();
                     console.log('[file-explorer] Standard upload successful:', result);
                     uploadedCount += result.count || standardFiles.length;
                 } catch (error) {
@@ -1285,7 +1281,7 @@ class FileExplorer {
                 }
             }
 
-            // Upload large files using chunked upload
+            // Upload large files using chunked upload (with progress)
             if (largeFiles.length > 0) {
                 if (typeof ChunkedUploader === 'undefined') {
                     const errorMsg = 'ChunkedUploader not available. Cannot upload large files.';
@@ -1297,15 +1293,7 @@ class FileExplorer {
                             console.log(`[file-explorer] Uploading large file via chunked upload: ${file.name} (${file.size} bytes)`);
                             
                             const uploader = new ChunkedUploader({
-                                onProgress: (progress) => {
-                                    console.log(`[file-explorer] ${file.name}: ${progress.progress.toFixed(1)}% (${progress.chunkIndex}/${progress.totalChunks} chunks)`);
-                                    this.fileExplorerUpload.innerHTML = `
-                                        <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                        </svg>
-                                        <span class="hidden sm:inline">${progress.progress.toFixed(0)}%</span>
-                                    `;
-                                },
+                                useProgressUI: true, // Use the progress UI
                                 onError: (error) => {
                                     console.error(`[file-explorer] Chunked upload error for ${file.name}:`, error);
                                 }
