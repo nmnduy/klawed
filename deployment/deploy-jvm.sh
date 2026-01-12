@@ -16,6 +16,7 @@ echo "Step 1: Creating required directories..."
 mkdir -p "$DATA_DIR/data"
 mkdir -p "$DATA_DIR/persistent"
 mkdir -p "$DATA_DIR/sessions"
+mkdir -p "$DATA_DIR/demos"
 mkdir -p "$LOG_DIR"
 
 echo "Step 2: Setting permissions..."

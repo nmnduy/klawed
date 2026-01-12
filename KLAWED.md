@@ -93,9 +93,18 @@ mvn quarkus:dev
 src/main/java/com/filesurf/     # Java source code
 src/main/resources/templates/   # Qute HTML templates
 src/main/resources/css/         # CSS styles
-data/                          # SQLite database directory
-data/demos/                    # Demo MP4 videos directory
-logs/                          # Application logs
+data/                          # Local development data (not synced to production)
+data/demos/                    # Demo MP4 videos (dev only)
+logs/                          # Application logs (dev only)
+```
+
+### Production Paths (/var/lib/filesurf/)
+```
+/var/lib/filesurf/data/        # SQLite database
+/var/lib/filesurf/persistent/  # Persistent user data
+/var/lib/filesurf/sessions/    # User session files
+/var/lib/filesurf/demos/       # Demo MP4 videos
+/var/log/filesurf/             # Application logs
 ```
 
 ## Key Endpoints
