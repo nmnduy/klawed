@@ -46,7 +46,7 @@ public class PodmanSandboxService {
     @ConfigProperty(name = "sandbox.podman.enabled", defaultValue = "false")
     boolean podmanEnabled;
     
-    @ConfigProperty(name = "sandbox.podman.image", defaultValue = "klawed-sandbox:latest")
+    @ConfigProperty(name = "sandbox.podman.image", defaultValue = "klawed-sandbox:1.0.0")
     String podmanImage;
     
     @ConfigProperty(name = "sandbox.podman.memory", defaultValue = "2g")
@@ -69,6 +69,37 @@ public class PodmanSandboxService {
     
     @ConfigProperty(name = "sandbox.podman.env-file", defaultValue = "/etc/filesurf/klawed.env")
     String envFilePath;
+    
+    /**
+     * Validate configuration on startup
+     */
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        if (podmanEnabled) {
+            // Validate that 'latest' tag is never used
+            if (podmanImage.endsWith(":latest")) {
+                throw new IllegalStateException(
+                    "Podman sandbox image must not use ':latest' tag. " +
+                    "Please specify a version tag in sandbox.podman.image configuration. " +
+                    "Current value: " + podmanImage
+                );
+            }
+            
+            LOGGER.info("Podman sandbox enabled with image: " + podmanImage);
+            
+            // Check if Podman is available
+            if (!isPodmanAvailable()) {
+                LOGGER.warning("Podman is enabled but podman command is not available on the system");
+            } else {
+                try {
+                    String version = getPodmanVersion();
+                    LOGGER.info("Podman version: " + version);
+                } catch (IOException e) {
+                    LOGGER.warning("Failed to get Podman version: " + e.getMessage());
+                }
+            }
+        }
+    }
     
     /**
      * Check if Podman sandbox mode is enabled

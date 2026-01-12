@@ -21,17 +21,27 @@ The klawed sandbox image provides an isolated environment for running AI agents 
 ### Build and Deploy in One Command
 
 ```bash
-# Build on fandalf, transfer to production, update :latest tag
+# Build on fandalf, transfer to production, DO NOT update :latest tag
 ./deployment/klawed/build-klawed-sandbox.sh --tag v0.11.4
-./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.11.4 --update-latest
+./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.11.4
+
+# Then deploy FileSurf with this version
+./deployment/deploy-jvm.sh --image-version 0.11.4
 ```
+
+**Important:** We no longer use `:latest` tag in production. Always specify a version tag for reproducibility.
 
 ### Or Use the Convenience Workflow
 
 ```bash
-# Build and deploy together
-./deployment/klawed/deploy-klawed-sandbox.sh --build --tag v0.11.4 --update-latest
+# Build and deploy together (without updating :latest)
+./deployment/klawed/deploy-klawed-sandbox.sh --build --tag v0.11.4
+
+# Then deploy FileSurf with this version
+./deployment/deploy-jvm.sh --image-version 0.11.4
 ```
+
+**Note:** The `--update-latest` option is deprecated. Always use specific version tags in production.
 
 ## Pipeline Components
 
@@ -111,15 +121,19 @@ Build and deploy a new version:
 # 1. Build with a version tag
 ./deployment/klawed/build-klawed-sandbox.sh --tag v0.11.4
 
-# 2. Deploy and update latest
-./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.11.4 --update-latest
+# 2. Deploy to production
+./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.11.4
+
+# 3. Update FileSurf to use this version
+./deployment/deploy-jvm.sh --image-version 0.11.4
 ```
 
 ### Force Rebuild (No Cache)
 
 ```bash
 ./deployment/klawed/build-klawed-sandbox.sh --tag v0.11.4 --no-cache
-./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.11.4 --update-latest
+./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.11.4
+./deployment/deploy-jvm.sh --image-version 0.11.4
 ```
 
 ### Quick Deploy Only

@@ -21,8 +21,8 @@ Complete guide for building, deploying, and debugging FileSurf v2 in production.
 # 1. Build the application
 ./deployment/build-jvm.sh
 
-# 2. Deploy to production
-./deployment/deploy-jvm.sh
+# 2. Deploy to production (specify klawed sandbox image version)
+./deployment/deploy-jvm.sh --image-version 1.0.0
 
 # 3. Start the service
 sudo systemctl enable filesurf-v2
@@ -147,12 +147,17 @@ sudo chmod 755 /var/log/filesurf
 
 #### 3. Deploy the Service
 ```bash
-# For JVM build
-./deployment/deploy-jvm.sh
+# For JVM build (with klawed sandbox image version)
+./deployment/deploy-jvm.sh --image-version 1.0.0
+
+# Or specify full image name
+./deployment/deploy-jvm.sh --image klawed-sandbox:1.0.0
 
 # For Native build
 ./deployment/deploy.sh
 ```
+
+**Important:** Always specify a klawed sandbox image version. Using `:latest` is not allowed for reproducibility.
 
 #### 4. Start the Service
 ```bash
@@ -329,6 +334,42 @@ cookie.secure=true
 ### Environment Variables
 
 The systemd service can be customized with environment variables:
+
+#### Klawed Sandbox Image Version
+The deployment script sets the klawed sandbox Docker image version during deployment.
+
+**Command line options:**
+```bash
+# Specify version tag
+./deployment/deploy-jvm.sh --image-version 1.2.3
+
+# Or specify full image name
+./deployment/deploy-jvm.sh --image klawed-sandbox:1.2.3
+```
+
+The script will:
+1. Validate that `:latest` is not used (for reproducibility)
+2. Update the systemd service file with the specified version
+3. Reload and restart the service
+
+**Manual configuration:**
+Edit `/etc/systemd/system/filesurf-v2.service`:
+```ini
+[Service]
+Environment="KLAWED_SANDBOX_IMAGE=klawed-sandbox:1.2.3"
+```
+
+After editing:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart filesurf-v2
+```
+
+**Why not use `:latest`?**
+- Ensures reproducible deployments
+- Prevents unexpected behavior from container image updates
+- Makes it clear which version is running
+- Aligns with production best practices
 
 #### JVM Memory Settings (JVM Build)
 Edit `/etc/systemd/system/filesurf-v2.service`:
