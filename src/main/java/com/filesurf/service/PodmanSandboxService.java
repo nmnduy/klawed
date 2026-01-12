@@ -333,10 +333,6 @@ public class PodmanSandboxService {
         command.add("-e");
         command.add("LD_LIBRARY_PATH=/usr/local/lib");
         
-        // Always enable verbose tool output for debugging
-        command.add("-e");
-        command.add("KLAWED_TOOL_VERBOSE=1");
-        
         // Set TERM to dumb to prevent ncurses "Error opening terminal: unknown" errors
         // klawed uses ncurses but in --sqlite-queue mode it shouldn't need a real terminal
         command.add("-e");

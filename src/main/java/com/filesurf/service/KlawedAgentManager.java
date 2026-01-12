@@ -331,8 +331,7 @@ public class KlawedAgentManager {
         copyEnvIfPresent(processBuilder, "OPENAI_EXTRA_HEADERS");
         
         // Enable verbose tool output for debugging
-        processBuilder.environment().put("KLAWED_TOOL_VERBOSE", "1");
-        LOGGER.info("[SESSION:" + sessionId + "] Set KLAWED_TOOL_VERBOSE=1");
+
         
         // Ensure klawed can find shared libraries (e.g., libmemvid_ffi.so)
         copyEnvIfPresent(processBuilder, "LD_LIBRARY_PATH");
