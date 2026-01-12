@@ -70,85 +70,11 @@ public class PodmanSandboxService {
     @ConfigProperty(name = "sandbox.podman.env-file", defaultValue = "/etc/filesurf/klawed.env")
     String envFilePath;
     
-    // Cache for loaded environment variables from the env file
-    private Map<String, String> envCache = null;
-    private long envFileLastModified = 0;
-    
     /**
      * Check if Podman sandbox mode is enabled
      */
     public boolean isEnabled() {
         return podmanEnabled;
-    }
-    
-    /**
-     * Load environment variables from the configured .env file.
-     * This method caches the loaded variables and reloads if the file has been modified.
-     * 
-     * @return Map of environment variable name to value
-     */
-    private Map<String, String> loadEnvFile() {
-        Path envFile = Path.of(envFilePath);
-        
-        // Check if file exists
-        if (!Files.exists(envFile)) {
-            LOGGER.warning("Environment file not found: " + envFilePath + 
-                         ". Klawed containers will run without environment variables from file.");
-            return new HashMap<>();
-        }
-        
-        try {
-            long lastModified = Files.getLastModifiedTime(envFile).toMillis();
-            
-            // Return cached version if file hasn't changed
-            if (envCache != null && lastModified == envFileLastModified) {
-                return envCache;
-            }
-            
-            LOGGER.info("Loading environment variables from: " + envFilePath);
-            Map<String, String> env = new HashMap<>();
-            
-            List<String> lines = Files.readAllLines(envFile, StandardCharsets.UTF_8);
-            for (int i = 0; i < lines.size(); i++) {
-                String line = lines.get(i).trim();
-                
-                // Skip empty lines and comments
-                if (line.isEmpty() || line.startsWith("#")) {
-                    continue;
-                }
-                
-                // Parse KEY=VALUE format
-                int equalsIndex = line.indexOf('=');
-                if (equalsIndex > 0) {
-                    String key = line.substring(0, equalsIndex).trim();
-                    String value = line.substring(equalsIndex + 1).trim();
-                    
-                    // Remove surrounding quotes if present
-                    if ((value.startsWith("\"") && value.endsWith("\"")) ||
-                        (value.startsWith("'") && value.endsWith("'"))) {
-                        value = value.substring(1, value.length() - 1);
-                    }
-                    
-                    // Only add non-empty keys and values
-                    if (!key.isEmpty() && !value.isEmpty()) {
-                        env.put(key, value);
-                    }
-                } else {
-                    LOGGER.warning("Ignoring malformed line in " + envFilePath + " (line " + (i + 1) + "): " + line);
-                }
-            }
-            
-            LOGGER.info("Loaded " + env.size() + " environment variables from " + envFilePath);
-            
-            // Cache the result
-            envCache = env;
-            envFileLastModified = lastModified;
-            
-            return env;
-        } catch (IOException e) {
-            LOGGER.severe("Failed to read environment file " + envFilePath + ": " + e.getMessage());
-            return new HashMap<>();
-        }
     }
     
     /**
@@ -308,8 +234,8 @@ public class PodmanSandboxService {
         // Override the image's ENTRYPOINT so we can run our shell command directly
         // The Dockerfile has ENTRYPOINT ["/usr/local/bin/klawed"] but we need to run
         // /bin/sh -c "... && exec klawed ..." to set up log directories first
-        command.add("--entrypoint");
-        command.add("");
+        // Note: We use --entrypoint="" (empty string) to clear the default ENTRYPOINT
+        command.add("--entrypoint=");
         
         // Mount workspace directory
         // Use :Z suffix on Linux for SELinux relabeling, skip on macOS
@@ -397,43 +323,21 @@ public class PodmanSandboxService {
     
     /**
      * Add environment variables to the podman command.
-     * Reads variables from the configured .env file instead of inheriting from System.getenv().
+     * Uses --env-file to load variables from the configured .env file.
      * This prevents leftover environment variables in the JVM process from affecting klawed.
      */
     private void addEnvironmentVariables(List<String> command) {
-        // Load environment variables from file
-        Map<String, String> env = loadEnvFile();
-        
-        // OpenAI/LLM API configuration
-        addEnvFromMap(command, env, "OPENAI_API_KEY");
-        addEnvFromMap(command, env, "OPENAI_API_BASE");
-        addEnvFromMap(command, env, "OPENAI_MODEL");
-        
-        // Proxy settings
-        addEnvFromMap(command, env, "HTTPS_PROXY");
-        addEnvFromMap(command, env, "HTTP_PROXY");
-        addEnvFromMap(command, env, "https_proxy");
-        addEnvFromMap(command, env, "http_proxy");
-        addEnvFromMap(command, env, "NO_PROXY");
-        addEnvFromMap(command, env, "no_proxy");
-        
-        // AWS/Bedrock environment variables
-        addEnvFromMap(command, env, "AWS_REGION");
-        addEnvFromMap(command, env, "AWS_PROFILE");
-        addEnvFromMap(command, env, "AWS_ACCESS_KEY_ID");
-        addEnvFromMap(command, env, "AWS_SECRET_ACCESS_KEY");
-        addEnvFromMap(command, env, "AWS_SESSION_TOKEN");
-        addEnvFromMap(command, env, "AWS_DEFAULT_REGION");
-        
-        // Anthropic/Bedrock specific
-        addEnvFromMap(command, env, "KLAWED_USE_BEDROCK");
-        addEnvFromMap(command, env, "ANTHROPIC_MODEL");
-        addEnvFromMap(command, env, "ANTHROPIC_VERSION");
-        addEnvFromMap(command, env, "ANTHROPIC_API_KEY");
-        
-        // Extra headers for custom API endpoints
-        addEnvFromMap(command, env, "OPENAI_AUTH_HEADER");
-        addEnvFromMap(command, env, "OPENAI_EXTRA_HEADERS");
+        // Use --env-file to load variables from the configured .env file
+        // This is more efficient than individual -e flags and matches how users expect .env files to work
+        Path envFile = Path.of(envFilePath);
+        if (Files.exists(envFile)) {
+            command.add("--env-file");
+            command.add(envFilePath);
+            LOGGER.fine("Using env file: " + envFilePath);
+        } else {
+            LOGGER.warning("Environment file not found: " + envFilePath + 
+                         ". Klawed containers will run without environment variables from file.");
+        }
         
         // LD_LIBRARY_PATH for shared libraries (libmemvid_ffi.so)
         command.add("-e");
@@ -451,17 +355,6 @@ public class PodmanSandboxService {
         // Set HOME so klawed can create .klawed directory for logs
         command.add("-e");
         command.add("HOME=/workspace");
-    }
-    
-    /**
-     * Add environment variable to command if it exists in the provided map.
-     */
-    private void addEnvFromMap(List<String> command, Map<String, String> env, String envName) {
-        String value = env.get(envName);
-        if (value != null && !value.isBlank()) {
-            command.add("-e");
-            command.add(envName + "=" + value);
-        }
     }
     
     /**
