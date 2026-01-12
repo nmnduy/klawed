@@ -451,7 +451,7 @@ TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 # Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue test-uds-socket test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue test-uds-socket test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -1900,6 +1900,9 @@ help:
 	@echo "Code Formatting:"
 	@echo "  make fmt-whitespace - Remove trailing whitespaces from all source files"
 	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-sandbox - Build Docker sandbox image for isolated execution"
+	@echo ""
 	@echo "Dependencies:"
 	@echo "  - gcc or clang (or compatible C compiler)"
 	@echo "  - libcurl"
@@ -2435,4 +2438,33 @@ check-memvid:
 	fi
 	@echo ""
 	@echo "Current MEMVID setting: $(MEMVID)"
+	@echo ""
+
+#
+# Docker Sandbox Integration
+#
+
+# Build the Docker sandbox image with version tag
+.PHONY: docker-sandbox
+docker-sandbox:
+	@echo ""
+	@echo "Building Docker sandbox image..."
+	@echo "Version: $(VERSION)"
+	@echo ""
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "❌ Error: docker not found"; \
+		echo "Install Docker from: https://docs.docker.com/get-docker/"; \
+		exit 1; \
+	fi
+	@docker build -f Dockerfile.sandbox -t klawed-sandbox:$(VERSION) -t klawed-sandbox:latest .
+	@echo ""
+	@echo "✓ Docker sandbox image built successfully"
+	@echo "  Image: klawed-sandbox:$(VERSION)"
+	@echo "  Image: klawed-sandbox:latest"
+	@echo ""
+	@echo "Usage examples:"
+	@echo "  docker run -it --rm -e OPENAI_API_KEY=\$$OPENAI_API_KEY klawed-sandbox:$(VERSION) \"your prompt\""
+	@echo "  docker run -it --rm -e OPENAI_API_KEY=\$$OPENAI_API_KEY -v \$$(pwd):/workspace klawed-sandbox:$(VERSION) \"analyze this code\""
+	@echo ""
+	@echo "See docs/docker-sandbox.md for more information"
 	@echo ""
