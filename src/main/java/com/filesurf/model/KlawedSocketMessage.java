@@ -72,6 +72,19 @@ public class KlawedSocketMessage {
         return create(ChatConstants.MESSAGE_TYPE_STATUS, status);
     }
     
+    /**
+     * Create an AGENT_STATUS message for agent health monitoring.
+     * 
+     * @param content Human-readable message describing the status
+     * @param status One of: "checking", "recovering", "recovered", "failed"
+     * @return A KlawedSocketMessage with messageType "AGENT_STATUS"
+     */
+    public static KlawedSocketMessage createAgentStatus(String content, String status) {
+        Map<String, Object> agentStatusContent = new HashMap<>();
+        agentStatusContent.put("message", content);
+        agentStatusContent.put("status", status);
+        return create(ChatConstants.MESSAGE_TYPE_AGENT_STATUS, agentStatusContent);
+    }
 
     
     /**

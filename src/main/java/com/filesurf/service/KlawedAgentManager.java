@@ -488,6 +488,84 @@ public class KlawedAgentManager {
     }
     
     /**
+     * Restart the klawed agent for a session.
+     * This stops the current agent (if running in a container) and starts a new one.
+     * 
+     * @param sessionId The session ID to restart the agent for
+     * @return The new KlawedAgentInstance
+     * @throws IOException If the agent doesn't exist, isn't running in a container, or restart fails
+     */
+    public KlawedAgentInstance restartAgentForSession(String sessionId) throws IOException {
+        LOGGER.info("[SESSION:" + sessionId + "] Restart requested for klawed agent");
+        
+        // Get the existing agent instance
+        KlawedAgentInstance existingAgent = agents.get(sessionId);
+        if (existingAgent == null) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Cannot restart: no agent instance found for session");
+            throw new IOException("No agent instance found for session: " + sessionId);
+        }
+        
+        // Verify the agent is running in a container
+        if (!existingAgent.isRunningInContainer()) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Cannot restart: agent is not running in a container");
+            throw new IOException("Agent is not running in a container for session: " + sessionId + 
+                                  ". Restart is only supported for containerized agents.");
+        }
+        
+        // Get the session directory before stopping (we need it to start the new agent)
+        Path sessionDir = existingAgent.sessionDir;
+        String containerId = existingAgent.getContainerId();
+        
+        LOGGER.info("[SESSION:" + sessionId + "] Stopping existing container: " + containerId);
+        
+        // Remove from tracking map first to prevent concurrent access issues
+        KlawedAgentInstance removedAgent = agents.remove(sessionId);
+        
+        // Stop the container gracefully
+        try {
+            if (removedAgent != null) {
+                removedAgent.stop();
+                LOGGER.info("[SESSION:" + sessionId + "] Existing agent stopped successfully");
+            }
+        } catch (Exception e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Error stopping existing agent: " + e.getMessage());
+            // Continue with restart even if stop had issues - the container might already be dead
+        }
+        
+        // Small delay to ensure container is fully stopped and resources are released
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for container to stop", e);
+        }
+        
+        // Start a new agent for the same session
+        LOGGER.info("[SESSION:" + sessionId + "] Starting new klawed agent for session directory: " + sessionDir);
+        
+        KlawedAgentInstance newAgent = null;
+        try {
+            newAgent = startAgentForSession(sessionId, sessionDir);
+            LOGGER.info("[SESSION:" + sessionId + "] New agent started successfully" + 
+                       (newAgent.isRunningInContainer() ? " (container: " + newAgent.getContainerId() + ")" : ""));
+            return newAgent;
+        } catch (IOException e) {
+            LOGGER.severe("[SESSION:" + sessionId + "] Failed to start new agent: " + e.getMessage());
+            // Cleanup: ensure the session is not left in an inconsistent state
+            if (newAgent != null) {
+                try {
+                    agents.remove(sessionId);
+                    newAgent.stop();
+                } catch (Exception cleanupEx) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Error during cleanup after failed restart: " + 
+                                  cleanupEx.getMessage());
+                }
+            }
+            throw new IOException("Failed to restart agent for session " + sessionId + ": " + e.getMessage(), e);
+        }
+    }
+    
+    /**
      * Stop all agents (for application shutdown)
      */
     public void stopAllAgents() {

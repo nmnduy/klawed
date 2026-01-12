@@ -195,6 +195,189 @@ export function init(rootEl) {
         }
     }
 
+    // ----------------------
+    // Agent Status Notification
+    // ----------------------
+    let agentStatusBannerEl = null;
+    let agentStatusDismissTimeout = null;
+
+    /**
+     * Get status display configuration based on agent status
+     */
+    function getAgentStatusConfig(status) {
+        const configs = {
+            'CONTAINER_DIED': {
+                type: 'error',
+                icon: '💀',
+                bgClass: 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800',
+                textClass: 'text-red-700 dark:text-red-300',
+                autoDismiss: false,
+                disableInput: false
+            },
+            'RESTART_DISABLED': {
+                type: 'warning',
+                icon: '⚠️',
+                bgClass: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800',
+                textClass: 'text-amber-700 dark:text-amber-300',
+                autoDismiss: false,
+                disableInput: false
+            },
+            'MAX_RESTARTS_EXCEEDED': {
+                type: 'error',
+                icon: '🚫',
+                bgClass: 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800',
+                textClass: 'text-red-700 dark:text-red-300',
+                autoDismiss: false,
+                disableInput: true
+            },
+            'COOLDOWN_ACTIVE': {
+                type: 'warning',
+                icon: '⏳',
+                bgClass: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800',
+                textClass: 'text-amber-700 dark:text-amber-300',
+                autoDismiss: true,
+                autoDismissMs: 10000,
+                disableInput: true
+            },
+            'RESTART_ATTEMPT': {
+                type: 'info',
+                icon: '🔄',
+                bgClass: 'bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800',
+                textClass: 'text-cyan-700 dark:text-cyan-300',
+                autoDismiss: false,
+                disableInput: true
+            },
+            'RESTART_READY': {
+                type: 'info',
+                icon: '✅',
+                bgClass: 'bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800',
+                textClass: 'text-cyan-700 dark:text-cyan-300',
+                autoDismiss: true,
+                autoDismissMs: 5000,
+                disableInput: false
+            },
+            'RESTART_FAILED': {
+                type: 'error',
+                icon: '❌',
+                bgClass: 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800',
+                textClass: 'text-red-700 dark:text-red-300',
+                autoDismiss: false,
+                disableInput: true
+            }
+        };
+        return configs[status] || {
+            type: 'info',
+            icon: 'ℹ️',
+            bgClass: 'bg-slate-50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-800',
+            textClass: 'text-slate-700 dark:text-slate-300',
+            autoDismiss: true,
+            autoDismissMs: 5000,
+            disableInput: false
+        };
+    }
+
+    /**
+     * Show agent status notification banner
+     */
+    function showAgentStatusBanner(status, message) {
+        // Clear any existing dismiss timeout
+        if (agentStatusDismissTimeout) {
+            clearTimeout(agentStatusDismissTimeout);
+            agentStatusDismissTimeout = null;
+        }
+
+        // Remove existing banner if present
+        if (agentStatusBannerEl && agentStatusBannerEl.parentElement) {
+            agentStatusBannerEl.remove();
+        }
+
+        const config = getAgentStatusConfig(status);
+
+        // Create banner element
+        const banner = document.createElement('div');
+        banner.className = `flex items-center justify-between gap-3 px-4 py-3 rounded-xl border shadow-sm mb-4 animate-fade-in ${config.bgClass}`;
+        banner.setAttribute('data-agent-status-banner', '');
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'flex items-center gap-2';
+
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'text-lg';
+        iconSpan.textContent = config.icon;
+
+        const textSpan = document.createElement('span');
+        textSpan.className = `text-sm font-medium ${config.textClass}`;
+        textSpan.textContent = message || status.replace(/_/g, ' ');
+
+        contentDiv.appendChild(iconSpan);
+        contentDiv.appendChild(textSpan);
+
+        // Add dismiss button
+        const dismissBtn = document.createElement('button');
+        dismissBtn.className = `p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors ${config.textClass}`;
+        dismissBtn.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        `;
+        dismissBtn.title = 'Dismiss';
+        dismissBtn.addEventListener('click', () => {
+            dismissAgentStatusBanner();
+        });
+
+        banner.appendChild(contentDiv);
+        banner.appendChild(dismissBtn);
+
+        // Insert at top of chat messages
+        if (messageParent.firstChild) {
+            messageParent.insertBefore(banner, messageParent.firstChild);
+        } else {
+            messageParent.appendChild(banner);
+        }
+
+        agentStatusBannerEl = banner;
+
+        // Handle input state
+        if (config.disableInput) {
+            setDisabledState(true);
+        } else if (isConnected) {
+            setDisabledState(false);
+        }
+
+        // Auto-dismiss if configured
+        if (config.autoDismiss && config.autoDismissMs) {
+            agentStatusDismissTimeout = setTimeout(() => {
+                dismissAgentStatusBanner();
+            }, config.autoDismissMs);
+        }
+
+        scrollToBottom();
+        debug('Agent status banner shown:', status, message);
+    }
+
+    /**
+     * Dismiss the agent status banner
+     */
+    function dismissAgentStatusBanner() {
+        if (agentStatusDismissTimeout) {
+            clearTimeout(agentStatusDismissTimeout);
+            agentStatusDismissTimeout = null;
+        }
+        if (agentStatusBannerEl && agentStatusBannerEl.parentElement) {
+            agentStatusBannerEl.classList.add('animate-fade-out');
+            setTimeout(() => {
+                if (agentStatusBannerEl && agentStatusBannerEl.parentElement) {
+                    agentStatusBannerEl.remove();
+                }
+                agentStatusBannerEl = null;
+            }, 200);
+        }
+        // Re-enable input if connected
+        if (isConnected) {
+            setDisabledState(false);
+        }
+    }
+
 
 
     function hideEmptyState() {
@@ -1440,6 +1623,39 @@ export function init(rootEl) {
                         lastApiCallTime = null;
                         // Update status to show we're connected (not thinking)
                         updateStatus(true, 'Connected');
+                        break;
+                    case 'AGENT_STATUS':
+                        // Handle agent status updates (container lifecycle events)
+                        debug('Received AGENT_STATUS:', content);
+                        if (content && typeof content === 'object') {
+                            const agentStatus = content.status;
+                            const agentMessage = content.message;
+                            
+                            if (agentStatus) {
+                                showAgentStatusBanner(agentStatus, agentMessage);
+                                
+                                // Also update the header status for certain states
+                                const statusConfig = getAgentStatusConfig(agentStatus);
+                                if (statusConfig.type === 'error') {
+                                    updateStatus(false, agentMessage || agentStatus.replace(/_/g, ' '));
+                                } else if (statusConfig.type === 'warning') {
+                                    showKlawedStatus(agentMessage || agentStatus.replace(/_/g, ' '));
+                                } else if (agentStatus === 'RESTART_READY') {
+                                    updateStatus(true, 'Ready');
+                                }
+                            }
+                        } else if (typeof content === 'string') {
+                            // Try to parse as JSON
+                            try {
+                                const parsed = JSON.parse(content);
+                                if (parsed.status) {
+                                    showAgentStatusBanner(parsed.status, parsed.message);
+                                }
+                            } catch (e) {
+                                // Plain string - show as info
+                                showAgentStatusBanner('INFO', content);
+                            }
+                        }
                         break;
                     default:
                         if (typeof content === 'string') {
