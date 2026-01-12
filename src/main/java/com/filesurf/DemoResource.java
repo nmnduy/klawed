@@ -1,5 +1,7 @@
 package com.filesurf;
 
+import io.quarkus.qute.Template;
+import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
@@ -43,6 +45,19 @@ public class DemoResource {
     
     @Inject
     com.filesurf.service.MetricsService metricsService;
+    
+    @Inject
+    Template demos;
+
+    /**
+     * Serve the demo videos page.
+     */
+    @GET
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance getDemosPage() {
+        LOGGER.info("Serving demo videos page");
+        return demos.instance();
+    }
 
     /**
      * List available demo videos.

@@ -139,6 +139,7 @@ logs/                          # Application logs
 - `GET /file-chat/http/poll/{sessionId}` - Poll for messages
 
 ### Demo Videos
+- `GET /demo` - Demo videos page (HTML)
 - `GET /demo/list` - List available demo videos (JSON)
 - `GET /demo/{name}` - Stream demo video (supports HTTP Range requests for seeking)
 
