@@ -86,6 +86,11 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             return true;
         }
 
+        // Skip demo videos page
+        if (normalizedPath.equals("demo") || normalizedPath.startsWith("demo/")) {
+            return true;
+        }
+
         // Skip static assets
         if (normalizedPath.startsWith("assets/") || 
             normalizedPath.startsWith("js/") || 
