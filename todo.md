@@ -3,21 +3,21 @@
 - [x] lots of left over klawed db files in the workspace. maybe klawed files dont get cleaned up?
 - [x] fix svg icons for open file and download file. use three dots to open file options like show open and download
 
----
-
 - [ ] scroll doesn't go all the way down
 - [ ] progress bar for file upload
+- [ ] use typst for pdf
+- [ ] file explorer search doesn't work
+
+---
+
 - [x] three dots aren't very good
 - [x] what if klawed die
 - [ ] show KLAWED what cli tools it already has
-- [ ] use typst for pdf
-- [ ] file search doesn't work
 
 ---
 
-- [ ] in the tour guide, discuss privacy?
-- [ ] context7
-- [ ] web browsing
+- [ ] context7: documentation search mcp
+- [ ] web browsing agent
 - [ ] secrets management
 - [ ] put some stuff in the starting workspace for everyone
     - [ ] stock analysis
