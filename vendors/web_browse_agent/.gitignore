@@ -1,0 +1,38 @@
+# Build artifacts
+web-browse-agent
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Test coverage
+*.out
+coverage.html
+coverage.txt
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# Go workspace
+go.work
+go.work.sum
+
+# Vendor directory (if not committing deps)
+# vendor/
+
+# Playwright browser downloads
+playwright-browsers/
+.playwright/
+vendors/web_browse_agent/web_browse_agent

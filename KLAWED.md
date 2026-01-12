@@ -23,12 +23,17 @@ Project instructions for Klawed when working with this codebase.
 - **API providers**: `src/openai_provider.c`, `src/anthropic_provider.c`, `src/bedrock_provider.c`, `src/aws_bedrock.c`
 - **Tools**: Built-in tools in `src/klawed.c`, common utilities in `src/tool_utils.c`
 - **Subagent**: `src/subagent_manager.c`, `docs/subagent.md` (task delegation with fresh context)
+- **Explore Subagent**: `src/explore_tools.c`, `docs/explore-subagent.md` (web research mode with Context7 + web_browse_agent)
 - **MCP**: `src/mcp.c`, `src/mcp.h`, `docs/mcp.md` (external tool servers)
 - **TODO system**: `src/todo.c`, `src/todo.h`
 - **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/normal-mode.md`
 - **Arena allocator**: `src/arena.h` (region-based memory management, single-header library)
 - **Memvid integration**: `src/memvid.c`, `src/memvid.h`, `docs/memvid.md` (persistent memory)
 - **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management)
+
+**Vendors:**
+- **web_browse_agent**: `vendors/web_browse_agent/` - Go-based web browser agent with Playwright
+- **context7**: `vendors/context7/` - Context7 MCP server (reference for API)
 
 **Data & State:**
 - **Database/Persistence**: `src/persistence.c`, `src/sqlite_queue.c`, `docs/sqlite-queue.md`
@@ -202,6 +207,10 @@ export OPENAI_API_KEY="your-api-key"
 - **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes, requires memvid)
   - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of MAX_MESSAGES (default: 60)
   - `KLAWED_COMPACT_KEEP_RECENT` - Keep this many recent messages after compaction (default: 20)
+- **Explore Mode**: `KLAWED_EXPLORE_MODE` - Enable explore subagent mode (1/true/yes)
+  - `KLAWED_EXPLORE_HEADLESS` - Run browser in headless mode (default: 1)
+  - `KLAWED_WEB_BROWSE_AGENT_PATH` - Path to web_browse_agent binary (default: vendors/web_browse_agent/web_browse_agent)
+  - `CONTEXT7_API_KEY` - API key for Context7 (optional, for higher rate limits)
 
 **Defaults:**
 - Logs: `./.klawed/logs/klawed.log` (project-local)

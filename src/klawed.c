@@ -56,6 +56,7 @@
 #endif
 
 #include "sqlite_queue.h"
+#include "explore_tools.h"
 #ifndef TEST_BUILD
 #include "openai_messages.h"
 #endif
@@ -4445,6 +4446,20 @@ typedef struct {
     cJSON* (*handler)(cJSON *params, ConversationState *state);
 } Tool;
 
+// Wrapper functions for explore tools (they use void* for state)
+static cJSON* tool_web_search_wrapper(cJSON *params, ConversationState *state) {
+    return tool_web_search(params, state);
+}
+static cJSON* tool_web_read_wrapper(cJSON *params, ConversationState *state) {
+    return tool_web_read(params, state);
+}
+static cJSON* tool_context7_search_wrapper(cJSON *params, ConversationState *state) {
+    return tool_context7_search(params, state);
+}
+static cJSON* tool_context7_docs_wrapper(cJSON *params, ConversationState *state) {
+    return tool_context7_docs(params, state);
+}
+
 static Tool tools[] = {
     {"Sleep", tool_sleep},
     {"Bash", tool_bash},
@@ -4463,6 +4478,11 @@ static Tool tools[] = {
     {"MemoryStore", tool_memory_store},
     {"MemoryRecall", tool_memory_recall},
     {"MemorySearch", tool_memory_search},
+    // Explore tools (only work when KLAWED_EXPLORE_MODE=1)
+    {"web_search", tool_web_search_wrapper},
+    {"web_read", tool_web_read_wrapper},
+    {"context7_search", tool_context7_search_wrapper},
+    {"context7_docs", tool_context7_docs_wrapper},
 #ifndef TEST_BUILD
     {"ListMcpResources", tool_list_mcp_resources},
     {"ReadMcpResource", tool_read_mcp_resource},
@@ -5464,6 +5484,37 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
 #else
     (void)state;  // Suppress unused parameter warning in test builds
 #endif
+
+    // Add Explore tools if explore mode is enabled
+    if (is_explore_mode_enabled()) {
+        LOG_INFO("Explore mode enabled - adding explore tools");
+
+        // web_search tool
+        cJSON *web_search_json = cJSON_Parse(explore_tool_web_search_schema());
+        if (web_search_json) {
+            cJSON_AddItemToArray(tool_array, web_search_json);
+        }
+
+        // web_read tool
+        cJSON *web_read_json = cJSON_Parse(explore_tool_web_read_schema());
+        if (web_read_json) {
+            cJSON_AddItemToArray(tool_array, web_read_json);
+        }
+
+        // context7_search tool
+        cJSON *c7_search_json = cJSON_Parse(explore_tool_context7_search_schema());
+        if (c7_search_json) {
+            cJSON_AddItemToArray(tool_array, c7_search_json);
+        }
+
+        // context7_docs tool
+        cJSON *c7_docs_json = cJSON_Parse(explore_tool_context7_docs_schema());
+        if (c7_docs_json) {
+            cJSON_AddItemToArray(tool_array, c7_docs_json);
+        }
+
+        LOG_INFO("Added explore tools (web_search, web_read, context7_search, context7_docs)");
+    }
 
     return tool_array;
 }
