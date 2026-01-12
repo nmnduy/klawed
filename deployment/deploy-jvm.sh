@@ -40,11 +40,21 @@ systemctl daemon-reload
 
 echo "Step 5: Enabling and restarting service..."
 systemctl enable $SERVICE_NAME
-systemctl restart $SERVICE_NAME
+
+# Stop gracefully first (wait for containers to shut down)
+if systemctl is-active --quiet $SERVICE_NAME; then
+    echo "   Stopping existing service (waiting for graceful shutdown)..."
+    systemctl stop $SERVICE_NAME
+    echo "   ✓ Service stopped"
+fi
+
+# Start the new version
+echo "   Starting new version..."
+systemctl start $SERVICE_NAME
 
 echo ""
 echo "Step 6: Checking service status..."
-sleep 2
+sleep 3
 systemctl status $SERVICE_NAME --no-pager || true
 
 echo ""

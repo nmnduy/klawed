@@ -97,6 +97,77 @@ public class PodmanSandboxService {
                     LOGGER.warning("Failed to get Podman version: " + e.getMessage());
                 }
             }
+            
+            // Scan for existing klawed containers and recover tracking state OR clean them up
+            // This handles the case where the application restarted while containers were running
+            recoverOrCleanupExistingContainers();
+        }
+    }
+    
+    /**
+     * Scan for existing klawed containers on startup.
+     * 
+     * Since we can't reliably determine which containers are still valid (the sessions
+     * might not exist anymore), we stop all existing klawed containers on startup.
+     * This ensures a clean slate and prevents stale containers from accumulating.
+     * 
+     * If a user was actively connected when the app restarted, they'll need to reconnect
+     * and a new container will be started for them.
+     */
+    private void recoverOrCleanupExistingContainers() {
+        LOGGER.info("Scanning for existing klawed containers on startup...");
+        
+        try {
+            // List all running klawed containers
+            ProcessBuilder pb = new ProcessBuilder(
+                "podman", "ps", "--filter", "name=klawed-", "--filter", "status=running", "--format", "{{.Names}}"
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            String output = readProcessOutput(process);
+            int exitCode = process.waitFor();
+            
+            if (exitCode != 0) {
+                LOGGER.warning("Failed to list existing containers on startup: " + output);
+                return;
+            }
+            
+            if (output.trim().isEmpty()) {
+                LOGGER.info("No existing klawed containers found on startup");
+                return;
+            }
+            
+            // Stop each existing container
+            int stoppedCount = 0;
+            for (String containerName : output.split("\n")) {
+                containerName = containerName.trim();
+                if (containerName.isEmpty()) {
+                    continue;
+                }
+                
+                LOGGER.info("Found existing container on startup: " + containerName + ", stopping it...");
+                try {
+                    stopContainer(containerName);
+                    stoppedCount++;
+                } catch (IOException e) {
+                    LOGGER.warning("Failed to stop existing container " + containerName + ": " + e.getMessage());
+                    // Try force kill
+                    try {
+                        killContainer(containerName);
+                        stoppedCount++;
+                    } catch (IOException killEx) {
+                        LOGGER.severe("Failed to kill existing container " + containerName + ": " + killEx.getMessage());
+                    }
+                }
+            }
+            
+            if (stoppedCount > 0) {
+                LOGGER.info("Stopped " + stoppedCount + " existing klawed container(s) on startup");
+            }
+            
+        } catch (IOException | InterruptedException e) {
+            LOGGER.warning("Error scanning for existing containers on startup: " + e.getMessage());
         }
     }
     
@@ -630,16 +701,28 @@ public class PodmanSandboxService {
     /**
      * Find and clean up orphaned klawed containers (containers not tracked by this service).
      * 
+     * Only checks RUNNING containers since we use --rm flag which auto-removes stopped containers.
+     * An orphaned container is one that:
+     * - Has the klawed- prefix
+     * - Is currently running
+     * - Is NOT tracked in our in-memory sessionContainers map
+     * 
+     * This can happen when:
+     * - The application restarts while containers are running
+     * - Race conditions during disconnect/reconnect
+     * - Bugs in tracking logic
+     * 
      * @return Number of orphaned containers cleaned up
      */
     public int cleanupOrphanedContainers() {
-        LOGGER.info("Cleaning up orphaned klawed containers");
+        LOGGER.fine("Checking for orphaned klawed containers");
         int cleanedUp = 0;
         
         try {
-            // List all containers with klawed- prefix
+            // List only RUNNING containers with klawed- prefix
+            // (stopped containers should auto-remove due to --rm flag)
             ProcessBuilder pb = new ProcessBuilder(
-                "podman", "ps", "-a", "--filter", "name=klawed-", "--format", "{{.Names}}"
+                "podman", "ps", "--filter", "name=klawed-", "--filter", "status=running", "--format", "{{.Names}}"
             );
             pb.redirectErrorStream(true);
             Process process = pb.start();
@@ -648,7 +731,12 @@ public class PodmanSandboxService {
             int exitCode = process.waitFor();
             
             if (exitCode != 0) {
-                LOGGER.warning("Failed to list containers: " + output);
+                LOGGER.warning("Failed to list running containers: " + output);
+                return 0;
+            }
+            
+            if (output.trim().isEmpty()) {
+                LOGGER.fine("No running klawed containers found");
                 return 0;
             }
             
@@ -663,7 +751,7 @@ public class PodmanSandboxService {
                 
                 // If not tracked by this service, it's orphaned
                 if (!sessionContainers.containsKey(sessionId)) {
-                    LOGGER.info("Found orphaned container: " + containerName);
+                    LOGGER.info("Found orphaned running container: " + containerName + " (not in tracking map)");
                     try {
                         stopContainer(containerName);
                         cleanedUp++;
@@ -682,7 +770,9 @@ public class PodmanSandboxService {
             LOGGER.warning("Error during orphaned container cleanup: " + e.getMessage());
         }
         
-        LOGGER.info("Cleaned up " + cleanedUp + " orphaned containers");
+        if (cleanedUp > 0) {
+            LOGGER.info("Cleaned up " + cleanedUp + " orphaned container(s)");
+        }
         return cleanedUp;
     }
     

@@ -26,6 +26,12 @@ ExecStart=/usr/bin/java \
 Restart=always
 RestartSec=10
 
+# Graceful shutdown configuration
+# Send SIGTERM first, wait up to 60 seconds for graceful shutdown
+# This allows @PreDestroy hooks to run and stop all Podman containers
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
 # Environment variables
 Environment="KLAWED_SANDBOX_IMAGE=klawed-sandbox:0.12.10"
 Environment="KLAWED_AUTO_COMPACT=1"

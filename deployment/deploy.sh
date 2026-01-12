@@ -38,16 +38,34 @@ echo "Step 4: Installing systemd service..."
 cp "$DEPLOY_DIR/deployment/filesurf-v2.service" /etc/systemd/system/
 systemctl daemon-reload
 
-echo "Step 5: Service installation complete!"
+echo "Step 5: Enabling and restarting service..."
+systemctl enable $SERVICE_NAME
+
+# Stop gracefully first (wait for containers to shut down)
+if systemctl is-active --quiet $SERVICE_NAME; then
+    echo "   Stopping existing service (waiting for graceful shutdown)..."
+    systemctl stop $SERVICE_NAME
+    echo "   ✓ Service stopped"
+fi
+
+# Start the new version
+echo "   Starting new version..."
+systemctl start $SERVICE_NAME
+
 echo ""
-echo "To start the service:"
-echo "  sudo systemctl enable $SERVICE_NAME"
-echo "  sudo systemctl start $SERVICE_NAME"
+echo "Step 6: Checking service status..."
+sleep 3
+systemctl status $SERVICE_NAME --no-pager || true
+
 echo ""
-echo "To check status:"
-echo "  sudo systemctl status $SERVICE_NAME"
+echo "================================"
+echo "Deployment Complete!"
+echo "================================"
+echo ""
+echo "Service: $SERVICE_NAME"
+echo "Status: $(systemctl is-active $SERVICE_NAME)"
+echo "Application URL: http://localhost:9090"
 echo ""
 echo "To view logs:"
 echo "  sudo journalctl -u $SERVICE_NAME -f"
 echo ""
-echo "Application will be available on port 9090"
