@@ -1,8 +1,5 @@
 // File Explorer Module
 
-// Import fuzzy search engine
-import fuzzySearch from './fuzzySearch.js';
-
 // Authentication helper functions (inline to avoid module issues)
 function isAuthRequired(response) {
     return response.status === 401 || response.status === 403;
@@ -94,11 +91,9 @@ class FileExplorer {
         this.currentPreviewFileName = null;
         
         // Workspace search state (for searching all files)
-        this.allWorkspaceFiles = null; // Cached list of all files in workspace
-        this.allWorkspaceFilesTruncated = false;
-        this.workspaceFilesLoading = false;
         this.searchDebounceTimer = null;
         this.isSearchingWorkspace = false; // True when showing workspace search results
+        this.searchAbortController = null; // For cancelling in-flight search requests
 
         // File icons mapping
         this.fileIcons = {
@@ -798,35 +793,27 @@ class FileExplorer {
     }
 
     /**
-     * Fetch all files in the workspace (for search).
-     * Results are cached until invalidateWorkspaceCache() is called.
+     * Search files on the server.
+     * This performs server-side search and returns matching files.
      */
-    async fetchAllWorkspaceFiles() {
-        // Return cached data if available
-        if (this.allWorkspaceFiles !== null) {
-            return this.allWorkspaceFiles;
+    async searchFilesOnServer(query) {
+        // Cancel any in-flight request
+        if (this.searchAbortController) {
+            this.searchAbortController.abort();
         }
         
-        // Prevent concurrent fetches
-        if (this.workspaceFilesLoading) {
-            // Wait for existing fetch to complete
-            while (this.workspaceFilesLoading) {
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
-            return this.allWorkspaceFiles;
-        }
-        
-        this.workspaceFilesLoading = true;
+        this.searchAbortController = new AbortController();
         
         try {
-            const response = await fetch('/file-chat/explorer/list-all', {
+            const response = await fetch(`/file-chat/explorer/search?q=${encodeURIComponent(query)}&limit=100`, {
                 headers: {
                     'X-Session-ID': this.sessionId
-                }
+                },
+                signal: this.searchAbortController.signal
             });
             
             if (await handleAuthError(response)) {
-                return [];
+                return { items: [], hasMore: false };
             }
             
             if (!response.ok) {
@@ -835,59 +822,66 @@ class FileExplorer {
             
             const data = await response.json();
             if (data.success) {
-                this.allWorkspaceFiles = data.items || [];
-                this.allWorkspaceFilesTruncated = data.truncated || false;
-                console.log(`[file-explorer] Cached ${this.allWorkspaceFiles.length} workspace files${this.allWorkspaceFilesTruncated ? ' (truncated)' : ''}`);
-                return this.allWorkspaceFiles;
+                return { 
+                    items: data.items || [], 
+                    hasMore: data.hasMore || false 
+                };
             }
             
-            return [];
+            return { items: [], hasMore: false };
         } catch (error) {
-            console.error('[file-explorer] Failed to fetch workspace files:', error);
-            return [];
-        } finally {
-            this.workspaceFilesLoading = false;
+            if (error.name === 'AbortError') {
+                // Request was cancelled, ignore
+                return null;
+            }
+            console.error('[file-explorer] Failed to search files:', error);
+            return { items: [], hasMore: false };
         }
     }
     
     /**
      * Invalidate the workspace files cache.
      * Call this after file uploads, deletes, or other changes.
+     * (Now a no-op since we use server-side search)
      */
     invalidateWorkspaceCache() {
-        this.allWorkspaceFiles = null;
-        this.allWorkspaceFilesTruncated = false;
+        // No-op: server-side search doesn't need client-side cache invalidation
     }
 
-    applyFiltersAndSort() {
-        // If searching, use workspace files; otherwise use current directory
+    applyFiltersAndSort(searchResults = null) {
+        // If we have search results from server, use those
+        // Otherwise use current directory items
         let filtered;
         
-        if (this.searchTerm && this.searchTerm.trim() !== '' && this.isSearchingWorkspace) {
-            // Use cached workspace files for search
-            filtered = this.allWorkspaceFiles ? [...this.allWorkspaceFiles] : [];
+        if (searchResults !== null) {
+            // Server-side search results (already filtered)
+            filtered = searchResults.items;
+            this.isSearchingWorkspace = true;
+            this.searchHasMore = searchResults.hasMore;
+        } else if (this.isSearchingWorkspace) {
+            // We're in search mode but no results provided - show empty
+            filtered = [];
         } else {
             // Use current directory items
             filtered = [...this.rawItems];
-            this.isSearchingWorkspace = false;
+            this.searchHasMore = false;
         }
 
-        // Filter by type first (only for non-workspace search, as workspace only has files)
+        // Filter by type (only for non-workspace search, as workspace only has files)
         if (!this.isSearchingWorkspace) {
             if (this.activeFilter === 'folders') {
                 filtered = filtered.filter(i => i.type === 'directory');
             } else if (this.activeFilter === 'files') {
                 filtered = filtered.filter(i => i.type !== 'directory');
             }
-        }
-
-        // Apply fuzzy search if search term is provided
-        if (this.searchTerm && this.searchTerm.trim() !== '') {
-            // Index the filtered items for fuzzy search
-            fuzzySearch.setItems(filtered);
             
-            // Perform fuzzy search
-            filtered = fuzzySearch.search(this.searchTerm);
+            // Apply local search filter for current directory
+            if (this.searchTerm && this.searchTerm.trim() !== '') {
+                const searchLower = this.searchTerm.toLowerCase();
+                filtered = filtered.filter(item => 
+                    item.name.toLowerCase().includes(searchLower)
+                );
+            }
         }
 
         // Sort results
@@ -912,8 +906,8 @@ class FileExplorer {
         let statsText = `• ${filtered.length} item${filtered.length !== 1 ? 's' : ''}`;
         if (this.isSearchingWorkspace) {
             statsText += ' (workspace)';
-            if (this.allWorkspaceFilesTruncated) {
-                statsText += ' [limited]';
+            if (this.searchHasMore) {
+                statsText += ' [more available]';
             }
         }
         this.fileExplorerStats.textContent = statsText;
@@ -924,7 +918,7 @@ class FileExplorer {
     }
     
     /**
-     * Handle search input with debouncing and workspace search.
+     * Handle search input with debouncing and server-side search.
      */
     async handleSearchInput(searchTerm) {
         this.searchTerm = searchTerm || '';
@@ -950,18 +944,21 @@ class FileExplorer {
             return;
         }
         
-        // Debounce the actual search (200ms for smoother typing)
+        // Debounce the actual search (250ms for smoother typing)
         this.searchDebounceTimer = setTimeout(async () => {
-            // Fetch workspace files if not cached (lazy load)
-            if (this.allWorkspaceFiles === null) {
-                // Show loading indicator in stats
-                this.fileExplorerStats.textContent = '• Loading workspace...';
-                await this.fetchAllWorkspaceFiles();
+            // Show loading indicator in stats
+            this.fileExplorerStats.textContent = '• Searching...';
+            
+            // Perform server-side search
+            const results = await this.searchFilesOnServer(this.searchTerm);
+            
+            // If null, the request was cancelled (new search started)
+            if (results === null) {
+                return;
             }
             
-            // Now perform workspace-wide search
-            this.isSearchingWorkspace = true;
-            this.applyFiltersAndSort();
+            // Render results
+            this.applyFiltersAndSort(results);
             
             // Update breadcrumbs to show search context
             if (this.fileExplorerBreadcrumbs) {
@@ -969,7 +966,7 @@ class FileExplorer {
                     <span class="text-muted-foreground">Search results in workspace</span>
                 `;
             }
-        }, 200);
+        }, 250);
     }
     
     /**

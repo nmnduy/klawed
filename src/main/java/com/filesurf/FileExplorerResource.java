@@ -1,6 +1,7 @@
 package com.filesurf;
 
 import com.filesurf.service.FileFilter;
+import com.filesurf.service.FileSearchService;
 import com.filesurf.service.SessionManager;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -38,6 +39,9 @@ public class FileExplorerResource {
     
     @Inject
     com.filesurf.service.MetricsService metricsService;
+    
+    @Inject
+    FileSearchService fileSearchService;
     
     // Tiered file size limits for preview (in bytes)
     private static final long TIER_SMALL = 500 * 1024;        // 500KB - full preview, no warning
@@ -368,6 +372,99 @@ public class FileExplorerResource {
             metricsService.incrementErrors("recursive_listing");
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity("{\"error\": \"Failed to list all files: " + e.getMessage() + "\"}")
+                    .build();
+        }
+    }
+    
+    // Maximum results to return from search
+    private static final int MAX_SEARCH_RESULTS = 100;
+    
+    /**
+     * Search files in the session workspace by filename pattern.
+     * Performs case-insensitive substring matching on filenames.
+     * Uses fast native tools (fd, rg) when available, falls back to find or Java.
+     * Returns up to MAX_SEARCH_RESULTS matching files.
+     */
+    @GET
+    @Path("/search")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response searchFiles(
+            @HeaderParam("X-Session-ID") String sessionId,
+            @HeaderParam("X-User-ID") String headerUserId,
+            @CookieParam("filesurf_userId") String cookieUserId,
+            @QueryParam("q") String query,
+            @QueryParam("limit") @DefaultValue("50") int limit) {
+
+        LOGGER.fine("Searching files for session: " + sessionId + ", query: " + query + 
+                   " (using " + fileSearchService.getActiveTool().getName() + ")");
+
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"error\": \"No session ID provided\"}")
+                    .build();
+        }
+
+        String userId = resolveUserId(headerUserId, cookieUserId);
+        if (userId == null || userId.trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"error\": \"No user ID provided\"}")
+                    .build();
+        }
+
+        // Require at least 1 character to search
+        if (query == null || query.trim().isEmpty()) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("items", List.of());
+            response.put("count", 0);
+            return Response.ok(response).build();
+        }
+
+        // Clamp limit
+        int effectiveLimit = Math.min(Math.max(limit, 1), MAX_SEARCH_RESULTS);
+        
+        try {
+            java.nio.file.Path sessionDir = sessionManager.getSessionDirectory(sessionId, userId);
+            
+            if (!Files.exists(sessionDir) || !Files.isDirectory(sessionDir)) {
+                return Response.status(Response.Status.NOT_FOUND)
+                        .entity("{\"error\": \"Session directory not found\"}")
+                        .build();
+            }
+            
+            // Create file filter for ignore patterns
+            FileFilter fileFilter = createFileFilter(sessionDir);
+            
+            // Use FileSearchService to perform the search
+            FileSearchService.SearchResult searchResult = 
+                fileSearchService.search(sessionDir, query, effectiveLimit, fileFilter);
+            
+            // Track metrics
+            metricsService.incrementFileOperations();
+            metricsService.trackUserActivity(userId);
+            
+            // Sort by path
+            List<Map<String, Object>> results = searchResult.getItems();
+            results.sort((a, b) -> {
+                String aPath = (String) a.get("path");
+                String bPath = (String) b.get("path");
+                return aPath.compareToIgnoreCase(bPath);
+            });
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("items", results);
+            response.put("count", results.size());
+            response.put("hasMore", searchResult.hasMore());
+            response.put("searchTool", fileSearchService.getActiveTool().getName());
+            
+            return Response.ok(response).build();
+            
+        } catch (Exception e) {
+            LOGGER.severe("Failed to search files: " + e.getMessage());
+            metricsService.incrementErrors("file_search");
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("{\"error\": \"Failed to search files: " + e.getMessage() + "\"}")
                     .build();
         }
     }
