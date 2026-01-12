@@ -2471,7 +2471,7 @@ docker-sandbox:
 	@echo ""
 
 # Push the Docker sandbox image to filesurf-0 host podman registry
-# Uses SSH to load the image directly into the remote podman/docker
+# Uses SSH to load the image directly into the remote podman registry
 .PHONY: docker-push
 docker-push: docker-sandbox
 	@echo ""
@@ -2483,12 +2483,18 @@ docker-push: docker-sandbox
 		echo "Install Docker from: https://docs.docker.com/get-docker/"; \
 		exit 1; \
 	fi
-	@echo "Saving image klawed-sandbox:$(VERSION)..."
-	@docker save klawed-sandbox:$(VERSION) | ssh filesurf-0 'docker load'
+	@echo "Checking for podman on filesurf-0..."
+	@if ! ssh filesurf-0 'command -v podman >/dev/null 2>&1'; then \
+		echo "❌ Error: podman not found on filesurf-0"; \
+		echo "Install podman on the remote host: https://podman.io/getting-started/installation"; \
+		exit 1; \
+	fi
+	@echo "Saving image klawed-sandbox:$(VERSION) and loading to podman..."
+	@docker save klawed-sandbox:$(VERSION) | ssh filesurf-0 'podman load'
 	@echo ""
-	@echo "✓ Docker sandbox image pushed successfully to filesurf-0"
+	@echo "✓ Docker sandbox image pushed successfully to filesurf-0 podman registry"
 	@echo "  Image: klawed-sandbox:$(VERSION)"
 	@echo ""
 	@echo "The image is now available on filesurf-0 and can be used with:"
-	@echo "  docker run -it --rm klawed-sandbox:$(VERSION)"
+	@echo "  podman run -it --rm klawed-sandbox:$(VERSION)"
 	@echo ""
