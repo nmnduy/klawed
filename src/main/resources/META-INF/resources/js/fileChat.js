@@ -1392,7 +1392,6 @@ export function init(rootEl) {
                                     // Not JSON
                                 }
                             }
-                            }
                             
                             if (toolName && toolId) {
                                 addToolActivity(toolName, toolId, toolInput);
