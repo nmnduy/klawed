@@ -8,6 +8,7 @@
 - [ ] three dots aren't very good
 - [ ] what if klawed die
 - [ ] show KLAWED what tools it already has
+- [ ] use typst for pdf
 
 ---
 
