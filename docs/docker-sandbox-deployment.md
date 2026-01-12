@@ -172,26 +172,49 @@ chmod -R u+rwX /path/to/workspace
 
 ### Build Command
 
+Using the Makefile (recommended):
 ```bash
-docker build -f Dockerfile.sandbox -t klawed-sandbox:0.12.6 .
+make docker-sandbox
+```
+
+This will build the image with the current version tag from the `VERSION` file.
+
+Or manually:
+```bash
+docker build -f Dockerfile.sandbox -t klawed-sandbox:0.12.9 .
 ```
 
 ### Transfer to Production
 
+**Option 1: Using Make (recommended)**
+
 ```bash
-# Save image to tar
-docker save klawed-sandbox:0.12.6 | gzip > klawed-sandbox-0.12.6.tar.gz
-
-# Transfer to remote host
-scp klawed-sandbox-0.12.6.tar.gz user@remote-host:/tmp/
-
-# Load on remote host
-ssh user@remote-host 'gunzip -c /tmp/klawed-sandbox-0.12.6.tar.gz | docker load'
+# Build and push directly to filesurf-0 host
+make docker-push
 ```
 
-Or directly over SSH:
+This will:
+1. Build the image with the current version
+2. Save and transfer it to the `filesurf-0` host via SSH
+3. Load it into the remote docker/podman
+
+**Option 2: Manual transfer with compression**
+
 ```bash
-docker save klawed-sandbox:0.12.6 | ssh user@remote-host 'docker load'
+# Save image to tar
+docker save klawed-sandbox:0.12.9 | gzip > klawed-sandbox-0.12.9.tar.gz
+
+# Transfer to remote host
+scp klawed-sandbox-0.12.9.tar.gz user@remote-host:/tmp/
+
+# Load on remote host
+ssh user@remote-host 'gunzip -c /tmp/klawed-sandbox-0.12.9.tar.gz | docker load'
+```
+
+**Option 3: Direct transfer over SSH**
+
+```bash
+docker save klawed-sandbox:0.12.9 | ssh user@remote-host 'docker load'
 ```
 
 ## Integration with FileSurf
