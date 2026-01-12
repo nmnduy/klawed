@@ -5,10 +5,12 @@ The Explore subagent is a specialized klawed mode optimized for web research and
 ## Overview
 
 When `KLAWED_EXPLORE_MODE=1` is set, klawed operates in Explore mode with:
-- **Web Search**: DuckDuckGo search via web_browse_agent
-- **Web Browsing**: Playwright-based page reading and navigation
-- **Documentation Lookup**: Context7 integration for library documentation
+- **Web Search**: DuckDuckGo search via web_browse_agent (requires building the Go binary)
+- **Web Browsing**: Playwright-based page reading and navigation (requires building the Go binary)
+- **Documentation Lookup**: Context7 integration for library documentation (no binary needed)
 - **Local File Access**: Standard Glob, Grep, Read tools
+
+**Note:** The `web_search` and `web_read` tools require the `web_browse_agent` Go binary to be built. If the binary is not found, only the Context7 tools (`context7_search`, `context7_docs`) and standard file tools will be available.
 
 ## Environment Variables
 
@@ -21,13 +23,17 @@ When `KLAWED_EXPLORE_MODE=1` is set, klawed operates in Explore mode with:
 
 ## Tools Available in Explore Mode
 
-### Web Research Tools
+### Web Research Tools (require web_browse_agent binary)
 - `web_search` - Search the web using DuckDuckGo, returns structured results
 - `web_read` - Navigate to URL and extract page content with citation
 
-### Documentation Tools (Context7 API)
+These tools are only registered if the `web_browse_agent` binary is found at runtime.
+
+### Documentation Tools (Context7 API - no binary needed)
 - `context7_search` - Search for library documentation
 - `context7_docs` - Fetch documentation for a specific library
+
+These tools use the Context7 HTTP API directly and are always available in explore mode.
 
 ### Standard Tools (always available)
 - `Glob` - Find files by pattern

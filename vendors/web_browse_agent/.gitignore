@@ -1,5 +1,6 @@
 # Build artifacts
-web-browse-agent
+/web_browse_agent
+
 *.exe
 *.exe~
 *.dll
@@ -35,4 +36,3 @@ go.work.sum
 # Playwright browser downloads
 playwright-browsers/
 .playwright/
-vendors/web_browse_agent/web_browse_agent

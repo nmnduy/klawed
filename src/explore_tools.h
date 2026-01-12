@@ -10,6 +10,9 @@
 // Check if explore mode is enabled (KLAWED_EXPLORE_MODE=1)
 int is_explore_mode_enabled(void);
 
+// Check if web_browse_agent binary is available
+int is_web_agent_available(void);
+
 // Tool implementations
 cJSON* tool_web_search(cJSON *params, void *state);
 cJSON* tool_web_read(cJSON *params, void *state);

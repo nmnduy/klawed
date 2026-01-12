@@ -5489,18 +5489,26 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     if (is_explore_mode_enabled()) {
         LOG_INFO("Explore mode enabled - adding explore tools");
 
-        // web_search tool
-        cJSON *web_search_json = cJSON_Parse(explore_tool_web_search_schema());
-        if (web_search_json) {
-            cJSON_AddItemToArray(tool_array, web_search_json);
+        // web_search and web_read require web_browse_agent binary
+        int web_agent_available = is_web_agent_available();
+        if (web_agent_available) {
+            // web_search tool
+            cJSON *web_search_json = cJSON_Parse(explore_tool_web_search_schema());
+            if (web_search_json) {
+                cJSON_AddItemToArray(tool_array, web_search_json);
+            }
+
+            // web_read tool
+            cJSON *web_read_json = cJSON_Parse(explore_tool_web_read_schema());
+            if (web_read_json) {
+                cJSON_AddItemToArray(tool_array, web_read_json);
+            }
+            LOG_INFO("Added web tools (web_search, web_read)");
+        } else {
+            LOG_WARN("web_browse_agent binary not found - web_search and web_read tools disabled");
         }
 
-        // web_read tool
-        cJSON *web_read_json = cJSON_Parse(explore_tool_web_read_schema());
-        if (web_read_json) {
-            cJSON_AddItemToArray(tool_array, web_read_json);
-        }
-
+        // Context7 tools use HTTP API, no binary needed
         // context7_search tool
         cJSON *c7_search_json = cJSON_Parse(explore_tool_context7_search_schema());
         if (c7_search_json) {
@@ -5513,7 +5521,7 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
             cJSON_AddItemToArray(tool_array, c7_docs_json);
         }
 
-        LOG_INFO("Added explore tools (web_search, web_read, context7_search, context7_docs)");
+        LOG_INFO("Added context7 tools (context7_search, context7_docs)");
     }
 
     return tool_array;

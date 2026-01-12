@@ -47,6 +47,12 @@ int is_explore_mode_enabled(void) {
                            strcasecmp(explore_mode, "yes") == 0);
 }
 
+// Check if web_browse_agent binary is available
+int is_web_agent_available(void) {
+    const char *agent_path = get_web_agent_path();
+    return access(agent_path, X_OK) == 0;
+}
+
 // Check if headless mode is enabled (default: true)
 static int is_headless_mode(void) {
     const char *headless = getenv("KLAWED_EXPLORE_HEADLESS");
@@ -249,6 +255,13 @@ cJSON* tool_web_search(cJSON *params, void *state) {
         return error;
     }
 
+    if (!is_web_agent_available()) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error",
+            "web_browse_agent binary not found. Build it with: cd vendors/web_browse_agent && make");
+        return error;
+    }
+
     cJSON *query_json = cJSON_GetObjectItem(params, "query");
     if (!query_json || !cJSON_IsString(query_json)) {
         cJSON *error = cJSON_CreateObject();
@@ -331,6 +344,13 @@ cJSON* tool_web_read(cJSON *params, void *state) {
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error",
             "web_read is only available in Explore mode. Set KLAWED_EXPLORE_MODE=1");
+        return error;
+    }
+
+    if (!is_web_agent_available()) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error",
+            "web_browse_agent binary not found. Build it with: cd vendors/web_browse_agent && make");
         return error;
     }
 
