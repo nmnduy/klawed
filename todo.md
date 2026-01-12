@@ -3,16 +3,16 @@
 - [x] lots of left over klawed db files in the workspace. maybe klawed files dont get cleaned up?
 - [x] fix svg icons for open file and download file. use three dots to open file options like show open and download
 
-- [ ] scroll doesn't go all the way down
-- [ ] progress bar for file upload
-- [ ] use typst for pdf
-- [ ] file explorer search doesn't work
+- [ ] auto-scroll should not scroll all the way down. should stop at the first response from AI, then let user scroll. also add scroll to bottom floatting button
+- [ ] show progress bar for file upload if the file is gonna be large.
+- [ ] file explorer search doesn't work. use fuzzy search with optimization. use libraries if neeced. this can be very fast if we use specialized algo and and build specific data structure
 
 ---
 
+- [ ] use typst for pdf
+- [ ] show KLAWED what cli tools it already has
 - [x] three dots aren't very good
 - [x] what if klawed die
-- [ ] show KLAWED what cli tools it already has
 
 ---
 
