@@ -17,6 +17,14 @@ echo "Remote host: $REMOTE_HOST"
 echo "Remote path: $REMOTE_PATH"
 echo ""
 
+# Step 0: Tag current commit as production
+echo "Step 0: Tagging current commit as 'production'..."
+cd "$LOCAL_PATH"
+git tag -f production HEAD
+git push -f origin production 2>/dev/null || echo "   (Could not push tag to origin)"
+echo "   ✓ Tagged $(git rev-parse --short HEAD) as 'production'"
+echo ""
+
 # Step 1: Build assets locally
 echo "Step 1: Building CSS assets locally..."
 cd "$LOCAL_PATH"
