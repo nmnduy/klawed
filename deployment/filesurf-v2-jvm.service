@@ -27,7 +27,7 @@ Restart=always
 RestartSec=10
 
 # Environment variables
-Environment="KLAWED_SANDBOX_IMAGE=klawed-sandbox:0.12.5"
+Environment="KLAWED_SANDBOX_IMAGE=klawed-sandbox:0.12.6"
 Environment="KLAWED_AUTO_COMPACT=1"
 Environment="KLAWED_USE_BEDROCK=1"
 Environment="ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0"
