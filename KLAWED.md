@@ -295,7 +295,6 @@ Build assets locally and sync to server:
 # JVM mode (faster build, higher memory usage)
 ./deployment/deploy-rsync.sh
 
-# Note: this doesn't work because of sqlite bindings required. Need a workaround.
 # Native mode (slower build, lower memory usage)
 ./deployment/deploy-rsync-native.sh
 ```

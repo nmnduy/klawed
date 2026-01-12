@@ -11,6 +11,8 @@ echo ""
 REMOTE_HOST="filesurf-0"
 REMOTE_PATH="/root/filesurf_v2"
 LOCAL_PATH="$(cd "$(dirname "$0")/.." && pwd)"
+LOCAL_TEST_PORT="${LOCAL_TEST_PORT:-8085}"
+LOCAL_TEST_DURATION="${LOCAL_TEST_DURATION:-10}"
 
 echo "Local path:  $LOCAL_PATH"
 echo "Remote host: $REMOTE_HOST"
@@ -52,8 +54,67 @@ echo "   ✓ All artifacts present"
 ls -lh "$LOCAL_PATH/target/filesurf-1.0.0-SNAPSHOT-runner"
 echo ""
 
-# Step 4: Sync to remote server
-echo "Step 4: Syncing to $REMOTE_HOST..."
+# Step 4: Run locally to verify native executable works
+echo "Step 4: Running native executable locally to verify..."
+echo "   Starting on port $LOCAL_TEST_PORT for $LOCAL_TEST_DURATION seconds..."
+echo ""
+
+# Create temporary data directory for local test
+LOCAL_TEST_DIR=$(mktemp -d)
+mkdir -p "$LOCAL_TEST_DIR/data"
+
+# Start the native executable in background
+cd "$LOCAL_PATH"
+"$LOCAL_PATH/target/filesurf-1.0.0-SNAPSHOT-runner" \
+    -Dquarkus.http.port="$LOCAL_TEST_PORT" \
+    -Dquarkus.datasource.jdbc.url="jdbc:sqlite:$LOCAL_TEST_DIR/data/test.db?journal_mode=WAL" \
+    &
+LOCAL_PID=$!
+
+# Give it time to start
+sleep 3
+
+# Check if process is still running
+if ! kill -0 "$LOCAL_PID" 2>/dev/null; then
+    echo "   ✗ ERROR: Native executable failed to start!"
+    echo "   Check the output above for errors."
+    rm -rf "$LOCAL_TEST_DIR"
+    exit 1
+fi
+
+# Try to hit the health endpoint
+echo "   Testing health endpoint..."
+HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$LOCAL_TEST_PORT/q/health/ready" 2>/dev/null || echo "000")
+
+if [ "$HEALTH_RESPONSE" = "200" ]; then
+    echo "   ✓ Health check passed (HTTP $HEALTH_RESPONSE)"
+else
+    echo "   ⚠ Health check returned HTTP $HEALTH_RESPONSE (may still be starting)"
+fi
+
+# Let it run for a bit more to verify stability
+echo "   Running for $LOCAL_TEST_DURATION seconds to verify stability..."
+sleep "$LOCAL_TEST_DURATION"
+
+# Check if still running
+if kill -0 "$LOCAL_PID" 2>/dev/null; then
+    echo "   ✓ Native executable ran successfully for $LOCAL_TEST_DURATION seconds"
+    echo "   Stopping local test instance..."
+    kill "$LOCAL_PID" 2>/dev/null || true
+    wait "$LOCAL_PID" 2>/dev/null || true
+else
+    echo "   ✗ ERROR: Native executable crashed during test run!"
+    rm -rf "$LOCAL_TEST_DIR"
+    exit 1
+fi
+
+# Cleanup
+rm -rf "$LOCAL_TEST_DIR"
+echo "   ✓ Local verification complete"
+echo ""
+
+# Step 5: Sync to remote server
+echo "Step 5: Syncing to $REMOTE_HOST..."
 echo ""
 
 # Create target directory on remote
@@ -89,8 +150,8 @@ echo ""
 echo "   ✓ Sync complete"
 echo ""
 
-# Step 5: Deploy on remote server
-echo "Step 5: Deploying on remote server..."
+# Step 6: Deploy on remote server
+echo "Step 6: Deploying on remote server..."
 echo ""
 ssh "$REMOTE_HOST" "cd $REMOTE_PATH && ./deployment/deploy.sh"
 
