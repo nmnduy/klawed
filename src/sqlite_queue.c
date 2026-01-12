@@ -663,6 +663,17 @@ static int sqlite_queue_send_text_response(SQLiteQueueContext *ctx, const char *
     return sqlite_queue_send_json(ctx, receiver, "TEXT", p);
 }
 
+// Helper function to send END_AI_TURN event
+static int sqlite_queue_send_end_ai_turn(SQLiteQueueContext *ctx, const char *receiver) {
+    if (!ctx || !receiver) {
+        LOG_ERROR("SQLite Queue: Invalid parameters for send_end_ai_turn");
+        return -1;
+    }
+
+    LOG_INFO("SQLite Queue: Sending END_AI_TURN event");
+    return sqlite_queue_send_json(ctx, receiver, "END_AI_TURN", NULL);
+}
+
 // Helper function to send a tool execution request
 static int sqlite_queue_send_tool_request(SQLiteQueueContext *ctx, const char *receiver,
                                          const char *tool_name, const char *tool_id,
@@ -898,8 +909,8 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
 
     LOG_INFO("SQLite Queue: Interactive processing completed successfully");
 
-    // No completion message - client detects completion when no pending TOOL messages
-    // without corresponding TOOL_RESULT messages
+    // Send END_AI_TURN event to indicate klawed is waiting for further instruction
+    sqlite_queue_send_end_ai_turn(ctx, response_receiver);
 
     return 0;
 }

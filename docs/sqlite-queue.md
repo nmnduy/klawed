@@ -53,17 +53,20 @@ All messages in the `message` field are JSON objects with a `messageType` field.
 | `TOOL` | Tool execution request | Klawed → Client |
 | `TOOL_RESULT` | Tool execution result | Klawed → Client |
 | `API_CALL` | API call in progress (waiting for AI response) | Klawed → Client |
+| `END_AI_TURN` | AI turn completed, waiting for further instruction | Klawed → Client |
 | `ERROR` | Error message | Klawed → Client |
 
 ### Completion Detection
 
-With the removal of `COMPLETED` messages, clients must detect when processing is complete by tracking pending `TOOL` messages. A turn is considered complete when:
+Clients can detect when klawed has completed processing a request by watching for the `END_AI_TURN` message. This message is sent after:
 
-1. All `TOOL` messages have corresponding `TOOL_RESULT` messages
-2. No new `TOOL` messages are being sent
-3. The final `TEXT` response has been received
+1. All `TOOL` messages have been executed and their corresponding `TOOL_RESULT` messages have been sent
+2. The final `TEXT` response has been sent (if any)
+3. Klawed is ready to receive the next user message
 
-Clients should maintain a map of `toolId` values from `TOOL` messages and mark them as completed when the corresponding `TOOL_RESULT` message is received.
+**Recommended approach:** Listen for the `END_AI_TURN` message to know when klawed is ready for the next instruction.
+
+**Alternative approach (for advanced use cases):** Track pending `TOOL` messages by maintaining a map of `toolId` values from `TOOL` messages and mark them as completed when the corresponding `TOOL_RESULT` message is received. A turn is considered complete when all tool calls have results and no new tool messages are being sent.
 
 ## Communication Flow
 
@@ -255,6 +258,27 @@ API call in progress (sent before making an API call to indicate waiting time):
 - `estimatedDurationMs`: Estimated duration of the API call in milliseconds (optional)
 - `model`: AI model being used (optional)
 - `provider`: API provider (e.g., "openai", "anthropic", "bedrock") (optional)
+
+#### END_AI_TURN Message
+
+Indicates that the AI has completed its turn and is now waiting for further instruction from the client:
+
+```json
+{
+  "messageType": "END_AI_TURN"
+}
+```
+
+This message is sent after:
+- All tool calls have been executed and their results processed
+- The final text response has been sent
+- The AI is ready to receive the next user message
+
+Clients can use this event to:
+- Update UI state to show that klawed is ready for input
+- Hide loading/processing indicators
+- Enable input controls
+- Trigger any post-processing logic
 
 ## Client Code Examples
 
@@ -484,6 +508,12 @@ class KlawedSQLiteClient:
                     tool_name = message.get("toolName")
                     tool_id = message.get("toolId")
                     print(f"Tool requested: {tool_name} (id: {tool_id})")
+                elif msg_type == "API_CALL":
+                    print(f"Waiting for AI response...")
+                elif msg_type == "END_AI_TURN":
+                    print(f"AI turn completed")
+                    self.acknowledge(msg_id)
+                    return True
                 elif msg_type == "ERROR":
                     print(f"Error: {content}")
                     self.acknowledge(msg_id)
@@ -590,6 +620,14 @@ class KlawedSQLiteClient:
                 if tool_params:
                     print(f"  Parameters: {list(tool_params.keys())}")
                 
+            elif msg_type == "API_CALL":
+                model = message.get("model", "unknown")
+                print(f"[API_CALL] Waiting for AI response (model: {model})")
+                
+            elif msg_type == "END_AI_TURN":
+                print(f"[END_AI_TURN] AI turn completed, ready for next instruction")
+                completed = True
+                
             elif msg_type == "ERROR":
                 print(f"[ERROR] {message.get('content', '')}")
                 completed = True
@@ -658,10 +696,15 @@ if __name__ == "__main__":
    VALUES ('client', 'klawed', '{"messageType":"TEXT","content":"What is 2+2?"}', 0);
    ```
 
-2. **Klawed processes and sends response:**
+2. **Klawed processes and sends responses:**
    ```sql
+   -- Text response
    INSERT INTO messages (sender, receiver, message, sent)
    VALUES ('klawed', 'client', '{"messageType":"TEXT","content":"2+2 equals 4."}', 0);
+   
+   -- End of turn
+   INSERT INTO messages (sender, receiver, message, sent)
+   VALUES ('klawed', 'client', '{"messageType":"END_AI_TURN"}', 0);
    ```
 
 3. **Client polls and receives:**
@@ -706,11 +749,10 @@ if __name__ == "__main__":
 }
 ```
 
-3. Completion:
+3. End of turn:
 ```json
 {
-  "messageType": "COMPLETED",
-  "content": "Interactive processing completed successfully"
+  "messageType": "END_AI_TURN"
 }
 ```
 
