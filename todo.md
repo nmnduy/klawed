@@ -12,6 +12,7 @@
 
 ---
 
+- [ ] secrets management
 - [ ] put some stuff in the starting workspace for everyone
     - [ ] stock analysis
     - [ ] youtube video transcriber
