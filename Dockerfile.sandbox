@@ -114,12 +114,16 @@ COPY --from=builder /build/build/klawed /usr/local/bin/klawed
 # Copy memvid shared library from builder
 COPY --from=builder /build/vendor/memvid-ffi/target/release/libmemvid_ffi.so /usr/local/lib/libmemvid_ffi.so
 
-# Set up library paths and verify
-RUN chmod +x /usr/local/bin/klawed && ldconfig
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# Create workspace directory with proper structure
-RUN mkdir -p /workspace/.klawed/logs && \
-    touch /workspace/.klawed/logs/klawed.log && \
+# Set up library paths and verify
+RUN chmod +x /usr/local/bin/klawed && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh && \
+    ldconfig
+
+# Create workspace directory (will be overlaid by volume mount at runtime)
+RUN mkdir -p /workspace && \
     chown -R agent:agent /workspace
 
 # Set up default working directory
@@ -139,8 +143,9 @@ RUN git config --global init.defaultBranch main \
     && git config --global user.name "Klawed Agent"
 
 # Default entrypoint - accepts all arguments
+# The entrypoint script ensures directories exist in the mounted volume
 # Usage examples:
 #   docker run image-name --sqlite-queue /path/to/queue.db
 #   docker run image-name -u /path/to/socket
 #   docker run image-name "your prompt here"
-ENTRYPOINT ["/usr/local/bin/klawed"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

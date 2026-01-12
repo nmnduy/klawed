@@ -54,6 +54,7 @@ static int mkdir_p(const char *path) {
         if (*p == '/') {
             *p = 0;
             if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
+                fprintf(stderr, "Failed to create directory '%s': %s\n", tmp, strerror(errno));
                 return -1;
             }
             *p = '/';
@@ -61,6 +62,7 @@ static int mkdir_p(const char *path) {
     }
 
     if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
+        fprintf(stderr, "Failed to create directory '%s': %s\n", tmp, strerror(errno));
         return -1;
     }
 
@@ -245,7 +247,7 @@ int log_init_with_path(const char *log_path) {
     g_log_file = fopen(log_path, "a");
     if (!g_log_file) {
         pthread_mutex_unlock(&g_log_mutex);
-        fprintf(stderr, "Failed to open log file: %s\n", log_path);
+        fprintf(stderr, "Failed to open log file: %s: %s\n", log_path, strerror(errno));
         return -1;
     }
 
