@@ -364,11 +364,6 @@ public class PodmanSandboxService {
         command.add("-e");
         command.add("LD_LIBRARY_PATH=/usr/local/lib");
         
-        // Set TERM to dumb to prevent ncurses "Error opening terminal: unknown" errors
-        // klawed uses ncurses but in --sqlite-queue mode it shouldn't need a real terminal
-        command.add("-e");
-        command.add("TERM=dumb");
-        
         // Set HOME so klawed can create .klawed directory for logs
         command.add("-e");
         command.add("HOME=/workspace");
