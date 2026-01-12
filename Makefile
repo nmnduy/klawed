@@ -1902,7 +1902,7 @@ help:
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker-sandbox - Build Docker sandbox image for isolated execution"
-	@echo "  make docker-push - Push Docker image to filesurf-0 podman registry"
+	@echo "  make docker-push - Load Docker image into local podman and push to filesurf-0 podman registry"
 	@echo "  make docker-rotate - Rotate images on filesurf-0 (keep only last 3)"
 	@echo ""
 	@echo "Dependencies:"
@@ -2471,8 +2471,8 @@ docker-sandbox:
 	@echo "See docs/docker-sandbox-deployment.md for deployment guide"
 	@echo ""
 
-# Push the Docker sandbox image to filesurf-0 host podman registry
-# Uses SSH to load the image directly into the remote podman registry
+# Push the Docker sandbox image to filesurf-0 host podman registry and local podman
+# First loads into local podman (if available), then uses SSH to load into remote podman registry
 .PHONY: docker-push
 docker-push: docker-sandbox
 	@echo ""
@@ -2490,7 +2490,15 @@ docker-push: docker-sandbox
 		echo "Install podman on the remote host: https://podman.io/getting-started/installation"; \
 		exit 1; \
 	fi
-	@echo "Saving image klawed-sandbox:$(VERSION) and loading to podman..."
+	@echo "Loading image into local podman..."
+	@if command -v podman >/dev/null 2>&1; then \
+		docker save klawed-sandbox:$(VERSION) | podman load; \
+		echo "✓ Image loaded into local podman"; \
+	else \
+		echo "⚠ Warning: podman not found locally, skipping local load"; \
+	fi
+	@echo ""
+	@echo "Saving image klawed-sandbox:$(VERSION) and loading to filesurf-0 podman..."
 	@docker save klawed-sandbox:$(VERSION) | ssh filesurf-0 'podman load'
 	@echo ""
 	@echo "✓ Docker sandbox image pushed successfully to filesurf-0 podman registry"

@@ -215,6 +215,8 @@ export OPENAI_API_KEY="your-api-key"
 
 If you're going to test the built binary, make sure it is run with 'timeout'. This is to avoid deadlock because the program runs in a loop waiting for user input.
 
-**Git commit conventions:**
+You are encouraged to commit at the end of your completed coding task if changes were made.
+
+Git commit conventions:
 - When AI commits changes, use all lowercase for the main commit message (subject line)
 - Keep commit bodies concise - don't write overly long commit messages
