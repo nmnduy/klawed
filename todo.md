@@ -5,6 +5,7 @@
 
 ---
 
+- [ ] scroll doesn't go all the way down
 - [ ] progress bar for file upload
 - [x] three dots aren't very good
 - [x] what if klawed die
