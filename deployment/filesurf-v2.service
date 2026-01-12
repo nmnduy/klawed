@@ -11,6 +11,12 @@ ExecStart=/root/filesurf_v2/target/filesurf-1.0.0-SNAPSHOT-runner -Dquarkus.prof
 Restart=always
 RestartSec=10
 
+# Graceful shutdown configuration
+# Send SIGTERM first, wait up to 60 seconds for graceful shutdown
+# This allows @PreDestroy hooks to run and stop all Podman containers
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
 # Environment variables
 Environment="JAVA_OPTS=-Xmx256m -Xms128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m"
 Environment="KLAWED_AUTO_COMPACT=1"

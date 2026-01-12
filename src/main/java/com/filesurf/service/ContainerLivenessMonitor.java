@@ -283,6 +283,41 @@ public class ContainerLivenessMonitor {
     }
     
     /**
+     * Periodic cleanup of orphaned containers.
+     * 
+     * Runs every 5 minutes to find and stop containers that are:
+     * - Running with klawed-* prefix
+     * - Not tracked in the in-memory sessionContainers map
+     * 
+     * This handles cases where containers become orphaned due to:
+     * - Application restart/crash losing in-memory tracking state
+     * - Race conditions during disconnect/reconnect
+     * - Bugs in tracking logic
+     */
+    @Scheduled(every = "5m")
+    void cleanupOrphanedContainers() {
+        if (!livenessEnabled) {
+            return;
+        }
+        
+        // Only perform cleanup when sandbox mode is enabled
+        if (!podmanSandboxService.isEnabled()) {
+            return;
+        }
+        
+        LOGGER.fine("Running periodic orphaned container cleanup...");
+        
+        try {
+            int cleaned = podmanSandboxService.cleanupOrphanedContainers();
+            if (cleaned > 0) {
+                LOGGER.info("Periodic cleanup: stopped " + cleaned + " orphaned klawed container(s)");
+            }
+        } catch (Exception e) {
+            LOGGER.warning("Error during periodic orphaned container cleanup: " + e.getMessage());
+        }
+    }
+    
+    /**
      * Shutdown and cleanup.
      */
     @PreDestroy
