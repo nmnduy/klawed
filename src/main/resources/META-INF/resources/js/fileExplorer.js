@@ -92,6 +92,13 @@ class FileExplorer {
         this.searchTerm = '';
         this.currentPreviewFilePath = null;
         this.currentPreviewFileName = null;
+        
+        // Workspace search state (for searching all files)
+        this.allWorkspaceFiles = null; // Cached list of all files in workspace
+        this.allWorkspaceFilesTruncated = false;
+        this.workspaceFilesLoading = false;
+        this.searchDebounceTimer = null;
+        this.isSearchingWorkspace = false; // True when showing workspace search results
 
         // File icons mapping
         this.fileIcons = {
@@ -473,6 +480,10 @@ class FileExplorer {
             const icon = this.fileIcons[item.icon] || this.fileIcons.file;
             const size = isDirectory ? '' : `${this.formatFileSize(item.size)}`;
             const date = this.formatDate(item.modified);
+            
+            // For workspace search, show the directory path
+            const showDirectory = this.isSearchingWorkspace && item.directory && item.directory !== '/';
+            const directoryDisplay = showDirectory ? `<span class="text-muted-foreground text-caption-s truncate" title="${item.directory}">${item.directory}</span>` : '';
 
             // Check if this item already exists in the DOM
             let itemElement = existingElements.find(el => el.dataset.path === item.path);
@@ -490,11 +501,12 @@ class FileExplorer {
                     <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_112px] items-center gap-3">
                         <div class="flex items-center gap-3 min-w-0">
                             <div class="flex-shrink-0">${icon}</div>
-                            <div class="min-w-0">
+                            <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2 min-w-0">
                                     <span class="truncate text-body-s ${isDirectory ? 'text-slate-900 font-semibold' : 'text-slate-700'}" title="${item.name}">${item.name}</span>
                                     ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">Folder</span>' : ''}
                                 </div>
+                                ${directoryDisplay}
                                 <div class="flex items-center gap-3 text-caption-s text-slate-500 truncate lg:hidden">
                                     <span class="tabular-nums">${size || ''}</span>
                                     <span class="whitespace-nowrap">${date}</span>
@@ -532,7 +544,8 @@ class FileExplorer {
                 // Add event listeners for new elements
                 itemElement.addEventListener('click', () => {
                     if (isDirectory) {
-                        this.loadDirectory(item.path);
+                        // Clear search when navigating to directory
+                        this.clearSearchAndNavigate(item.path);
                     } else {
                         this.previewFile(item.path, item.name, item.size);
                     }
@@ -603,14 +616,88 @@ class FileExplorer {
         this.showFileTree();
     }
 
-    applyFiltersAndSort() {
-        let filtered = [...this.rawItems];
+    /**
+     * Fetch all files in the workspace (for search).
+     * Results are cached until invalidateWorkspaceCache() is called.
+     */
+    async fetchAllWorkspaceFiles() {
+        // Return cached data if available
+        if (this.allWorkspaceFiles !== null) {
+            return this.allWorkspaceFiles;
+        }
+        
+        // Prevent concurrent fetches
+        if (this.workspaceFilesLoading) {
+            // Wait for existing fetch to complete
+            while (this.workspaceFilesLoading) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            return this.allWorkspaceFiles;
+        }
+        
+        this.workspaceFilesLoading = true;
+        
+        try {
+            const response = await fetch('/file-chat/explorer/list-all', {
+                headers: {
+                    'X-Session-ID': this.sessionId
+                }
+            });
+            
+            if (await handleAuthError(response)) {
+                return [];
+            }
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            if (data.success) {
+                this.allWorkspaceFiles = data.items || [];
+                this.allWorkspaceFilesTruncated = data.truncated || false;
+                console.log(`[file-explorer] Cached ${this.allWorkspaceFiles.length} workspace files${this.allWorkspaceFilesTruncated ? ' (truncated)' : ''}`);
+                return this.allWorkspaceFiles;
+            }
+            
+            return [];
+        } catch (error) {
+            console.error('[file-explorer] Failed to fetch workspace files:', error);
+            return [];
+        } finally {
+            this.workspaceFilesLoading = false;
+        }
+    }
+    
+    /**
+     * Invalidate the workspace files cache.
+     * Call this after file uploads, deletes, or other changes.
+     */
+    invalidateWorkspaceCache() {
+        this.allWorkspaceFiles = null;
+        this.allWorkspaceFilesTruncated = false;
+    }
 
-        // Filter by type first
-        if (this.activeFilter === 'folders') {
-            filtered = filtered.filter(i => i.type === 'directory');
-        } else if (this.activeFilter === 'files') {
-            filtered = filtered.filter(i => i.type !== 'directory');
+    applyFiltersAndSort() {
+        // If searching, use workspace files; otherwise use current directory
+        let filtered;
+        
+        if (this.searchTerm && this.searchTerm.trim() !== '' && this.isSearchingWorkspace) {
+            // Use cached workspace files for search
+            filtered = this.allWorkspaceFiles ? [...this.allWorkspaceFiles] : [];
+        } else {
+            // Use current directory items
+            filtered = [...this.rawItems];
+            this.isSearchingWorkspace = false;
+        }
+
+        // Filter by type first (only for non-workspace search, as workspace only has files)
+        if (!this.isSearchingWorkspace) {
+            if (this.activeFilter === 'folders') {
+                filtered = filtered.filter(i => i.type === 'directory');
+            } else if (this.activeFilter === 'files') {
+                filtered = filtered.filter(i => i.type !== 'directory');
+            }
         }
 
         // Apply fuzzy search if search term is provided
@@ -620,10 +707,6 @@ class FileExplorer {
             
             // Perform fuzzy search
             filtered = fuzzySearch.search(this.searchTerm);
-            
-            // Optional: Log search statistics for debugging
-            // const stats = fuzzySearch.getSearchStats(this.searchTerm);
-            // console.log('[file-explorer] Fuzzy search stats:', stats);
         }
 
         // Sort results
@@ -635,15 +718,96 @@ class FileExplorer {
             if (field === 'modified') {
                 return new Date(b.modified).getTime() - new Date(a.modified).getTime();
             }
-            // default: name
+            // default: name (for workspace search, sort by path for better grouping)
+            if (this.isSearchingWorkspace) {
+                return (a.path || '').localeCompare(b.path || '', undefined, { sensitivity: 'base' });
+            }
             return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
         });
 
         this.renderFileTree(filtered);
-        this.fileExplorerStats.textContent = `• ${filtered.length} item${filtered.length !== 1 ? 's' : ''}`;
+        
+        // Update stats with search context
+        let statsText = `• ${filtered.length} item${filtered.length !== 1 ? 's' : ''}`;
+        if (this.isSearchingWorkspace) {
+            statsText += ' (workspace)';
+            if (this.allWorkspaceFilesTruncated) {
+                statsText += ' [limited]';
+            }
+        }
+        this.fileExplorerStats.textContent = statsText;
+        
         if (!filtered.length && this.fileExplorerEmptyMessage) {
             this.fileExplorerEmptyMessage.textContent = this.searchTerm ? 'No results match your search' : 'No files found';
         }
+    }
+    
+    /**
+     * Handle search input with debouncing and workspace search.
+     */
+    async handleSearchInput(searchTerm) {
+        this.searchTerm = searchTerm || '';
+        
+        // Clear any pending debounce
+        if (this.searchDebounceTimer) {
+            clearTimeout(this.searchDebounceTimer);
+        }
+        
+        // Update clear button visibility
+        if (this.fileExplorerSearchClear) {
+            this.fileExplorerSearchClear.classList.toggle('hidden', !this.searchTerm);
+        }
+        
+        // If search is empty, return to current directory view immediately
+        if (!this.searchTerm.trim()) {
+            this.isSearchingWorkspace = false;
+            this.applyFiltersAndSort();
+            // Restore breadcrumbs visibility
+            if (this.fileExplorerBreadcrumbs) {
+                this.fileExplorerBreadcrumbs.classList.remove('hidden');
+            }
+            return;
+        }
+        
+        // Debounce the actual search (150ms)
+        this.searchDebounceTimer = setTimeout(async () => {
+            // Fetch workspace files if not cached (lazy load)
+            if (this.allWorkspaceFiles === null) {
+                // Show loading indicator in stats
+                this.fileExplorerStats.textContent = '• Loading workspace...';
+                await this.fetchAllWorkspaceFiles();
+            }
+            
+            // Now perform workspace-wide search
+            this.isSearchingWorkspace = true;
+            this.applyFiltersAndSort();
+            
+            // Update breadcrumbs to show search context
+            if (this.fileExplorerBreadcrumbs) {
+                this.fileExplorerBreadcrumbs.innerHTML = `
+                    <span class="text-muted-foreground">Search results in workspace</span>
+                `;
+            }
+        }, 150);
+    }
+    
+    /**
+     * Clear search and navigate to a directory.
+     * Used when clicking on a folder from search results.
+     */
+    clearSearchAndNavigate(path) {
+        // Clear search state
+        this.searchTerm = '';
+        this.isSearchingWorkspace = false;
+        if (this.fileExplorerSearch) {
+            this.fileExplorerSearch.value = '';
+        }
+        if (this.fileExplorerSearchClear) {
+            this.fileExplorerSearchClear.classList.add('hidden');
+        }
+        
+        // Navigate to the directory
+        this.loadDirectory(path);
     }
 
     // Load directory
@@ -1073,25 +1237,19 @@ class FileExplorer {
             });
         }
 
-        // Search
+        // Search (workspace-wide with debouncing)
         if (this.fileExplorerSearch) {
             this.fileExplorerSearch.addEventListener('input', (e) => {
-                this.searchTerm = e.target.value || '';
-                if (this.fileExplorerSearchClear) {
-                    this.fileExplorerSearchClear.classList.toggle('hidden', !this.searchTerm);
-                }
-                this.applyFiltersAndSort();
+                this.handleSearchInput(e.target.value);
             });
         }
 
         if (this.fileExplorerSearchClear) {
             this.fileExplorerSearchClear.addEventListener('click', () => {
-                this.searchTerm = '';
                 if (this.fileExplorerSearch) {
                     this.fileExplorerSearch.value = '';
                 }
-                this.fileExplorerSearchClear.classList.add('hidden');
-                this.applyFiltersAndSort();
+                this.handleSearchInput('');
             });
         }
 
@@ -1312,6 +1470,9 @@ class FileExplorer {
 
             // Refresh file list
             await this.loadDirectory(this.currentPath);
+            
+            // Invalidate workspace cache since files changed
+            this.invalidateWorkspaceCache();
 
             // Show appropriate message
             if (uploadedCount === files.length) {

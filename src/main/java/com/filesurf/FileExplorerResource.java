@@ -217,6 +217,161 @@ public class FileExplorerResource {
         }
     }
     
+    // Maximum files to return in recursive listing (for search)
+    private static final int MAX_SEARCH_FILES = 10000;
+    
+    /**
+     * List all files recursively in the session workspace.
+     * Used for workspace-wide search functionality.
+     * Limited to MAX_SEARCH_FILES to prevent performance issues.
+     */
+    @GET
+    @Path("/list-all")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response listAllFiles(
+            @HeaderParam("X-Session-ID") String sessionId,
+            @HeaderParam("X-User-ID") String headerUserId,
+            @CookieParam("filesurf_userId") String cookieUserId) {
+
+        LOGGER.info("Listing all files for session: " + sessionId);
+
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"error\": \"No session ID provided\"}")
+                    .build();
+        }
+
+        String userId = resolveUserId(headerUserId, cookieUserId);
+        if (userId == null || userId.trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"error\": \"No user ID provided\"}")
+                    .build();
+        }
+
+        try {
+            // Get session directory
+            java.nio.file.Path sessionDir = sessionManager.getSessionDirectory(sessionId, userId);
+            
+            if (!Files.exists(sessionDir) || !Files.isDirectory(sessionDir)) {
+                return Response.status(Response.Status.NOT_FOUND)
+                        .entity("{\"error\": \"Session directory not found\"}")
+                        .build();
+            }
+            
+            // Create file filter for ignore patterns
+            FileFilter fileFilter = createFileFilter(sessionDir);
+            LOGGER.fine("Created file filter with " + fileFilter.getPatternCount() + " patterns for session: " + sessionId);
+
+            // List all files recursively (with limit)
+            List<Map<String, Object>> items = new ArrayList<>();
+            java.util.concurrent.atomic.AtomicInteger totalFiles = new java.util.concurrent.atomic.AtomicInteger(0);
+            java.util.concurrent.atomic.AtomicInteger ignoredFiles = new java.util.concurrent.atomic.AtomicInteger(0);
+            java.util.concurrent.atomic.AtomicBoolean limitReached = new java.util.concurrent.atomic.AtomicBoolean(false);
+            
+            Files.walkFileTree(sessionDir, new java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+                @Override
+                public java.nio.file.FileVisitResult preVisitDirectory(java.nio.file.Path dir, BasicFileAttributes attrs) {
+                    // Stop if limit reached
+                    if (items.size() >= MAX_SEARCH_FILES) {
+                        limitReached.set(true);
+                        return java.nio.file.FileVisitResult.TERMINATE;
+                    }
+                    // Skip ignored directories
+                    if (!dir.equals(sessionDir) && shouldIgnore(dir, sessionDir, fileFilter)) {
+                        ignoredFiles.incrementAndGet();
+                        return java.nio.file.FileVisitResult.SKIP_SUBTREE;
+                    }
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+                
+                @Override
+                public java.nio.file.FileVisitResult visitFile(java.nio.file.Path file, BasicFileAttributes attrs) {
+                    // Stop if limit reached
+                    if (items.size() >= MAX_SEARCH_FILES) {
+                        limitReached.set(true);
+                        return java.nio.file.FileVisitResult.TERMINATE;
+                    }
+                    
+                    totalFiles.incrementAndGet();
+                    
+                    if (shouldIgnore(file, sessionDir, fileFilter)) {
+                        ignoredFiles.incrementAndGet();
+                        return java.nio.file.FileVisitResult.CONTINUE;
+                    }
+                    
+                    try {
+                        Map<String, Object> item = new HashMap<>();
+                        String name = file.getFileName().toString();
+                        String relativePath = sessionDir.relativize(file).toString();
+                        
+                        item.put("name", name);
+                        item.put("path", relativePath);
+                        item.put("type", "file");
+                        item.put("size", attrs.size());
+                        item.put("modified", formatFileTime(attrs.lastModifiedTime()));
+                        item.put("created", formatFileTime(attrs.creationTime()));
+                        item.put("icon", getFileIcon(name, false));
+                        
+                        // Get file extension
+                        int dotIndex = name.lastIndexOf('.');
+                        if (dotIndex > 0) {
+                            item.put("extension", name.substring(dotIndex + 1).toLowerCase());
+                        }
+                        
+                        // Include parent directory for display purposes
+                        java.nio.file.Path parent = sessionDir.relativize(file.getParent());
+                        String parentStr = parent.toString();
+                        item.put("directory", parentStr.isEmpty() ? "/" : "/" + parentStr);
+                        
+                        items.add(item);
+                    } catch (Exception e) {
+                        LOGGER.warning("Failed to read file attributes for: " + file + " - " + e.getMessage());
+                    }
+                    
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+                
+                @Override
+                public java.nio.file.FileVisitResult visitFileFailed(java.nio.file.Path file, IOException exc) {
+                    LOGGER.warning("Failed to visit file: " + file + " - " + exc.getMessage());
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+            });
+            
+            LOGGER.fine("Recursive file listing complete. Total files: " + totalFiles.get() + ", Ignored: " + ignoredFiles.get() + ", Showing: " + items.size() + ", Truncated: " + limitReached.get());
+            
+            // Track metrics for file operation
+            metricsService.incrementFileOperations();
+            metricsService.trackUserActivity(userId);
+            
+            // Sort by path for consistent ordering
+            items.sort((a, b) -> {
+                String aPath = (String) a.get("path");
+                String bPath = (String) b.get("path");
+                return aPath.compareToIgnoreCase(bPath);
+            });
+            
+            // Build response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("items", items);
+            response.put("count", items.size());
+            response.put("truncated", limitReached.get());
+            if (limitReached.get()) {
+                response.put("maxFiles", MAX_SEARCH_FILES);
+            }
+            
+            return Response.ok(response).build();
+            
+        } catch (IOException e) {
+            LOGGER.severe("Failed to list all files: " + e.getMessage());
+            metricsService.incrementErrors("recursive_listing");
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("{\"error\": \"Failed to list all files: " + e.getMessage() + "\"}")
+                    .build();
+        }
+    }
+    
     /**
      * Preview file contents (for text files only)
      */
