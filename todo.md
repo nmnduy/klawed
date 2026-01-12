@@ -14,6 +14,7 @@
 
 ---
 
+- [ ] in the tour guide, discuss privacy?
 - [ ] context7
 - [ ] web browsing
 - [ ] secrets management
