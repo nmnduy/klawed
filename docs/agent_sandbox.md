@@ -219,10 +219,8 @@ bwrap --unshare-user --unshare-pid --unshare-ipc --unshare-uts \
    ```sh
    podman run --rm \
      --name agent-task-123 \
-     --security-opt=no-new-privileges \
      --cap-drop=ALL \
      --network=bridge \
-     --read-only \
      --tmpfs /tmp:rw,noexec,nosuid,size=1g \
      -v /srv/agent-workspaces/task-123:/workspace:Z \
      -w /workspace \
@@ -235,13 +233,14 @@ bwrap --unshare-user --unshare-pid --unshare-ipc --unshare-uts \
    **Flag breakdown**:
    - `--rm`: Auto-remove container when it exits
    - `--name`: Unique name for this agent task (for tracking/killing)
-   - `--security-opt=no-new-privileges`: Prevent privilege escalation
    - `--cap-drop=ALL`: Drop all capabilities
    - `--network=bridge`: Allow network access (use `--network=none` to disable)
-   - `--read-only`: Root filesystem is read-only (workspace is writable via volume)
    - `--tmpfs /tmp`: Writable /tmp that disappears after container exits
    - `-v .../task-123:/workspace:Z`: Bind mount workspace (`:Z` relabels for SELinux)
    - `--memory`, `--cpus`, `--pids-limit`: Resource limits
+   
+   **Note**: Do NOT use `--security-opt=no-new-privileges` if your entrypoint uses `gosu` or `su-exec` to drop privileges.
+   Do NOT use `--user` if the entrypoint handles permission setup internally.
 
 5) **Managing the container from your app**:
    
@@ -253,10 +252,8 @@ bwrap --unshare-user --unshare-pid --unshare-ipc --unshare-uts \
    subprocess.Popen([
        "podman", "run", "--rm", 
        f"--name={container_name}",
-       "--security-opt=no-new-privileges",
        "--cap-drop=ALL",
        "--network=bridge",
-       "--read-only",
        "--tmpfs", "/tmp:rw,noexec,nosuid,size=1g",
        "-v", f"/srv/agent-workspaces/{task_id}:/workspace:Z",
        "-w", "/workspace",

@@ -27,12 +27,15 @@ import java.util.stream.Collectors;
  * Each container is named klawed-{sessionId} for easy tracking and management.
  * 
  * Container security features:
- * - no-new-privileges: Prevents privilege escalation
  * - cap-drop=ALL: Drops all Linux capabilities
  * - tmpfs for /tmp with noexec
  * - Resource limits (memory, CPU, PIDs)
  * - Network access for agent to call APIs and download packages
  * - Workspace directory mounted for file read/write operations
+ * - Entrypoint uses gosu to drop privileges from root to 'agent' user
+ * 
+ * Note: We do NOT use --security-opt=no-new-privileges because the entrypoint
+ * uses gosu to switch from root to the 'agent' user for proper permission handling.
  */
 @ApplicationScoped
 public class PodmanSandboxService {
@@ -235,17 +238,10 @@ public class PodmanSandboxService {
         command.add(containerName);
         
         // Security options
-        command.add("--security-opt=no-new-privileges");
         command.add("--cap-drop=ALL");
         // Note: NOT using --read-only because agent needs to create/edit files in workspace
-        
-        // Run container as current host user (not the 'agent' user from Dockerfile)
-        // This is critical for SQLite queue communication between host Java process and container klawed
-        // Without this, the host and container write with different UIDs, causing WAL file permission issues
-        // that manifest as the agent reprocessing the same message infinitely (sent flag not persisting)
-        command.add("--user");
-        command.add(System.getProperty("user.name") != null ? 
-            String.valueOf(getUid()) + ":" + String.valueOf(getGid()) : "0:0");
+        // Note: NOT using --security-opt=no-new-privileges because entrypoint uses gosu to drop privileges
+        // Note: NOT using --user because entrypoint handles permission setup and drops to 'agent' user
         
         // Network access (bridge allows outbound connections for API calls)
         command.add("--network=bridge");
@@ -791,40 +787,6 @@ public class PodmanSandboxService {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while getting podman version", e);
-        }
-    }
-    
-    /**
-     * Get the current process UID (Unix only).
-     * Falls back to 0 (root) if unable to determine.
-     */
-    private int getUid() {
-        try {
-            ProcessBuilder pb = new ProcessBuilder("id", "-u");
-            Process process = pb.start();
-            String output = readProcessOutput(process);
-            process.waitFor();
-            return Integer.parseInt(output.trim());
-        } catch (Exception e) {
-            LOGGER.warning("Failed to get UID, defaulting to 0: " + e.getMessage());
-            return 0;
-        }
-    }
-    
-    /**
-     * Get the current process GID (Unix only).
-     * Falls back to 0 (root) if unable to determine.
-     */
-    private int getGid() {
-        try {
-            ProcessBuilder pb = new ProcessBuilder("id", "-g");
-            Process process = pb.start();
-            String output = readProcessOutput(process);
-            process.waitFor();
-            return Integer.parseInt(output.trim());
-        } catch (Exception e) {
-            LOGGER.warning("Failed to get GID, defaulting to 0: " + e.getMessage());
-            return 0;
         }
     }
     
