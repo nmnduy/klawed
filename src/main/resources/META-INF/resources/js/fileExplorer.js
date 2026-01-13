@@ -1777,7 +1777,7 @@ class FileExplorer {
     showToast(message, type = 'info') {
         // Create toast element
         const toast = document.createElement('div');
-        toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg animate-fade-in ${
+        toast.className = `fixed top-4 right-4 z-[9999] px-4 py-3 rounded-lg shadow-lg animate-fade-in max-w-md ${
             type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
             type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
             type === 'warning' ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
@@ -1785,20 +1785,25 @@ class FileExplorer {
         }`;
         
         toast.innerHTML = `
-            <div class="flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="flex items-start gap-2">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     ${type === 'success' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />' :
                       type === 'error' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />' :
                       type === 'warning' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />' :
                       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />'}
                 </svg>
-                <span class="text-caption-m-bold">${message}</span>
+                <span class="text-caption-m-bold break-words">${message}</span>
             </div>
         `;
         
         document.body.appendChild(toast);
         
-        // Remove toast after 3 seconds
+        // Calculate duration based on message length (minimum 3s, add 1s per 50 chars, max 15s)
+        const baseTimeout = 3000;
+        const extraTime = Math.min(Math.floor(message.length / 50) * 1000, 12000);
+        const totalTimeout = baseTimeout + extraTime;
+        
+        // Remove toast after calculated duration
         setTimeout(() => {
             toast.classList.add('animate-fade-out');
             setTimeout(() => {
@@ -1806,7 +1811,7 @@ class FileExplorer {
                     toast.parentNode.removeChild(toast);
                 }
             }, 300);
-        }, 3000);
+        }, totalTimeout);
     }
 }
 

@@ -51,20 +51,18 @@ public class ChunkedUploadResource {
         // Presentations
         "ppt", "pptx", "odp",
         // Databases
-        "db", "sqlite", "sqlite3", "db3", "s3db", "sl3"
+        "db", "sqlite", "sqlite3", "db3", "s3db", "sl3",
+        // Subtitles
+        "srt", "vtt", "ass", "ssa", "sub", "sbv", "smi", "sami"
         // Add more as needed, but NEVER: exe, sh, bat, cmd, msi, app, dmg, deb, rpm
     );
     
     // Human-readable list of allowed file types for error messages
     private static final String ALLOWED_TYPES_MESSAGE = 
-        "Allowed file types: " +
-        "Documents (pdf, doc, docx, txt, md, rtf, odt), " +
-        "Spreadsheets (csv, xlsx, xls, ods), " +
-        "Images (png, jpg, jpeg, gif, webp, svg), " +
-        "Archives (zip, tar, gz, 7z), " +
-        "Code/Text (json, xml, yaml, yml, tex, log, html, css, js), " +
-        "Presentations (ppt, pptx, odp), " +
-        "Databases (db, sqlite, sqlite3, db3, s3db, sl3)";
+        "File type not allowed. Accepted: documents (pdf, doc, docx, txt, md, rtf), " +
+        "spreadsheets (csv, xlsx, xls), images (png, jpg, gif, svg), " +
+        "archives (zip, tar, gz, 7z), code/text (json, xml, yaml, tex, html, css, js), " +
+        "presentations (ppt, pptx), databases (db, sqlite), subtitles (srt, vtt, ass, sub)";
     
     @Inject
     SessionManager sessionManager;
@@ -194,7 +192,7 @@ public class ChunkedUploadResource {
             // Validate file type (SECURITY: block executables and malware)
             if (!isAllowedFileType(request.fileName)) {
                 return Response.status(Response.Status.BAD_REQUEST)
-                    .entity("{\"error\": \"File type not allowed. " + ALLOWED_TYPES_MESSAGE + "\"}")
+                    .entity("{\"error\": \"" + ALLOWED_TYPES_MESSAGE + "\"}")
                     .build();
             }
 

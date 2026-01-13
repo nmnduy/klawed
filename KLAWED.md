@@ -143,7 +143,7 @@ logs/                          # Application logs (dev only)
 - ✅ **Whitelist approach**: Only approved file types are allowed
 - ❌ **Blocked**: Executables (exe, sh, bat, cmd, msi, app, dmg, deb, rpm, dll, so)
 - ❌ **Blocked**: Scripts (vbs, ps1, py, rb, pl), Java archives (jar), installers
-- ✅ **Allowed**: Documents (pdf, doc, docx, txt, md), Images (png, jpg, gif), Spreadsheets (csv, xlsx), Archives (zip, tar, gz), Code/Text (json, xml, yaml, tex, log, html, css, js)
+- ✅ **Allowed**: Documents (pdf, doc, docx, txt, md), Images (png, jpg, gif), Spreadsheets (csv, xlsx), Archives (zip, tar, gz), Code/Text (json, xml, yaml, tex, log, html, css, js), Subtitles (srt, vtt, ass, sub)
 - See `docs/FILE_TYPE_VALIDATION.md` for complete details
 
 ### File Explorer
