@@ -1908,9 +1908,9 @@ help:
 	@echo "Code Formatting:"
 	@echo "  make fmt-whitespace - Remove trailing whitespaces from all source files"
 	@echo ""
-	@echo "Docker:"
-	@echo "  make docker-sandbox - Build Docker sandbox image for isolated execution"
-	@echo "  make docker-push - Load Docker image into local podman and push to filesurf-0 podman registry"
+	@echo "Podman:"
+	@echo "  make docker-sandbox - Build Podman sandbox image for isolated execution"
+	@echo "  make docker-push - Push Podman image to filesurf-0 podman registry"
 	@echo "  make docker-rotate - Rotate images on filesurf-0 (keep only last 3)"
 	@echo ""
 	@echo "Dependencies:"
@@ -2454,42 +2454,41 @@ check-memvid:
 # Docker Sandbox Integration
 #
 
-# Build the Docker sandbox image with version tag
+# Build the Podman sandbox image with version tag
 .PHONY: docker-sandbox
 docker-sandbox:
 	@echo ""
-	@echo "Building Docker sandbox image..."
+	@echo "Building Podman sandbox image..."
 	@echo "Version: $(VERSION)"
 	@echo ""
-	@if ! command -v docker >/dev/null 2>&1; then \
-		echo "❌ Error: docker not found"; \
-		echo "Install Docker from: https://docs.docker.com/get-docker/"; \
+	@if ! command -v podman >/dev/null 2>&1; then \
+		echo "❌ Error: podman not found"; \
+		echo "Install Podman from: https://podman.io/getting-started/installation"; \
 		exit 1; \
 	fi
-	@docker build -f Dockerfile.sandbox -t klawed-sandbox:$(VERSION) -t klawed-sandbox:latest .
+	@podman build -f Dockerfile.sandbox -t klawed-sandbox:$(VERSION) -t klawed-sandbox:latest .
 	@echo ""
-	@echo "✓ Docker sandbox image built successfully"
+	@echo "✓ Podman sandbox image built successfully"
 	@echo "  Image: klawed-sandbox:$(VERSION)"
 	@echo "  Image: klawed-sandbox:latest"
 	@echo ""
 	@echo "Usage examples:"
-	@echo "  docker run -it --rm -e OPENAI_API_KEY=\$$OPENAI_API_KEY klawed-sandbox:$(VERSION) \"your prompt\""
-	@echo "  docker run -it --rm -e OPENAI_API_KEY=\$$OPENAI_API_KEY -v \$$(pwd):/workspace klawed-sandbox:$(VERSION) \"analyze this code\""
+	@echo "  podman run -it --rm -e OPENAI_API_KEY=\$$OPENAI_API_KEY klawed-sandbox:$(VERSION) \"your prompt\""
+	@echo "  podman run -it --rm -e OPENAI_API_KEY=\$$OPENAI_API_KEY -v \$$(pwd):/workspace klawed-sandbox:$(VERSION) \"analyze this code\""
 	@echo ""
 	@echo "See docs/docker-sandbox-deployment.md for deployment guide"
 	@echo ""
 
-# Push the Docker sandbox image to filesurf-0 host podman registry and local podman
-# First loads into local podman (if available), then uses SSH to load into remote podman registry
+# Push the Podman sandbox image to filesurf-0 host podman registry
 .PHONY: docker-push
 docker-push: docker-sandbox
 	@echo ""
-	@echo "Pushing Docker sandbox image to filesurf-0..."
+	@echo "Pushing Podman sandbox image to filesurf-0..."
 	@echo "Version: $(VERSION)"
 	@echo ""
-	@if ! command -v docker >/dev/null 2>&1; then \
-		echo "❌ Error: docker not found"; \
-		echo "Install Docker from: https://docs.docker.com/get-docker/"; \
+	@if ! command -v podman >/dev/null 2>&1; then \
+		echo "❌ Error: podman not found"; \
+		echo "Install Podman from: https://podman.io/getting-started/installation"; \
 		exit 1; \
 	fi
 	@echo "Checking for podman on filesurf-0..."
@@ -2498,18 +2497,11 @@ docker-push: docker-sandbox
 		echo "Install podman on the remote host: https://podman.io/getting-started/installation"; \
 		exit 1; \
 	fi
-	@echo "Loading image into local podman..."
-	@if command -v podman >/dev/null 2>&1; then \
-		docker save klawed-sandbox:$(VERSION) | podman load; \
-		echo "✓ Image loaded into local podman"; \
-	else \
-		echo "⚠ Warning: podman not found locally, skipping local load"; \
-	fi
 	@echo ""
 	@echo "Saving image klawed-sandbox:$(VERSION) and loading to filesurf-0 podman..."
-	@docker save klawed-sandbox:$(VERSION) | ssh filesurf-0 'podman load'
+	@podman save klawed-sandbox:$(VERSION) | ssh filesurf-0 'podman load'
 	@echo ""
-	@echo "✓ Docker sandbox image pushed successfully to filesurf-0 podman registry"
+	@echo "✓ Podman sandbox image pushed successfully to filesurf-0 podman registry"
 	@echo "  Image: klawed-sandbox:$(VERSION)"
 	@echo ""
 	@echo "The image is now available on filesurf-0 and can be used with:"

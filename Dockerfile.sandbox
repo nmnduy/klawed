@@ -2,13 +2,13 @@
 # Multi-stage build to keep the final image compact (~250MB)
 #
 # Build on fandalf (same x86_64 arch as production):
-#   docker build -f Dockerfile.sandbox -t klawed-sandbox:latest .
+#   podman build -f Dockerfile.sandbox -t klawed-sandbox:latest .
 #
 # Transfer to production:
-#   docker save klawed-sandbox:latest | ssh filesurf-0 'docker load'
+#   podman save klawed-sandbox:latest | ssh filesurf-0 'podman load'
 #
 # Run:
-#   docker run -it --rm -e OPENAI_API_KEY=$OPENAI_API_KEY \
+#   podman run -it --rm -e OPENAI_API_KEY=$OPENAI_API_KEY \
 #     -v /path/to/workspace:/workspace:Z klawed-sandbox:latest
 #
 # Note: Container runs as root
