@@ -1051,7 +1051,11 @@ class FileExplorer {
             console.log('[file-explorer] Loading', this.rawItems.length, 'items');
             this.applyFiltersAndSort();
         } else {
-            console.error('[file-explorer] Failed to fetch directory or no success flag');
+            console.error('[file-explorer] Failed to fetch directory or no success flag, data:', data);
+            // Always hide the loading spinner and show an error
+            if (!silent) {
+                this.showError('Failed to load directory. Please try refreshing.');
+            }
         }
     }
 
