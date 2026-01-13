@@ -16,7 +16,7 @@ CSS_OUTPUT := src/main/resources/META-INF/resources/dist/main.css
 DIST_DIR := src/main/resources/META-INF/resources/dist
 TARGET_DIR := target
 
-.PHONY: help build-dist dev css css-dev clean install-deps install-search-tools check-search-tools
+.PHONY: help build-dist dev css css-dev clean install-deps install-search-tools check-search-tools check-colors
 
 # Default target
 help:
@@ -25,6 +25,7 @@ help:
 	@echo "  dev                 - Start Quarkus development server (mvn quarkus:dev)"
 	@echo "  css                 - Build Tailwind CSS output (production with cache busting)"
 	@echo "  css-dev             - Build Tailwind CSS output (development, no cache busting)"
+	@echo "  check-colors        - Check templates for hardcoded color values (warning only)"
 	@echo "  install-deps        - Install npm dependencies"
 	@echo "  install-search-tools - Install fd and ripgrep for fast file search"
 	@echo "  check-search-tools  - Check if fast search tools are installed"
@@ -68,6 +69,12 @@ clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf $(DIST_DIR)/*
 	@echo "Clean complete!"
+
+# Check templates for hardcoded colors
+check-colors:
+	@echo "Checking templates for hardcoded color values..."
+	@bash scripts/check-hardcoded-colors.sh || true
+	@echo ""
 
 # Check if fast search tools are installed
 check-search-tools:
