@@ -14,15 +14,51 @@
 #include <string.h>
 
 /**
+ * Helper function to insert a message at a specific position in the conversation.
+ * Shifts all messages from insert_pos onwards to make room.
+ * Must be called with state locked.
+ *
+ * @param state - Conversation state
+ * @param insert_pos - Position to insert at (0-indexed)
+ * @param msg - Message to insert (contents are moved, not copied)
+ * @return 0 on success, -1 on failure
+ */
+static int insert_message_at(ConversationState *state, int insert_pos, InternalMessage *msg) {
+    if (state->count >= MAX_MESSAGES) {
+        LOG_ERROR("insert_message_at: Cannot insert - maximum message count reached");
+        return -1;
+    }
+
+    if (insert_pos < 0 || insert_pos > state->count) {
+        LOG_ERROR("insert_message_at: Invalid position %d (count=%d)", insert_pos, state->count);
+        return -1;
+    }
+
+    // Shift messages from insert_pos to end
+    for (int i = state->count; i > insert_pos; i--) {
+        state->messages[i] = state->messages[i - 1];
+    }
+
+    // Insert the new message
+    state->messages[insert_pos] = *msg;
+    state->count++;
+
+    LOG_DEBUG("insert_message_at: Inserted message at position %d, new count=%d", insert_pos, state->count);
+    return 0;
+}
+
+/**
  * Ensure all tool calls have matching tool results.
- * If any are missing, inject synthetic "interrupted" results.
+ * If any are missing, inject synthetic "interrupted" results immediately
+ * after the assistant message that made the tool call.
  * Must be called with state locked.
  */
 void ensure_tool_results(ConversationState *state) {
-    // Build set of tool_call IDs and corresponding result IDs
+    // Build set of tool_call IDs, their source message index, and whether they have results
     typedef struct {
         char *id;
         char *tool_name;
+        int source_msg_idx;  // Index of assistant message that made this call
         int has_result;
     } ToolCallInfo;
 
@@ -55,6 +91,7 @@ void ensure_tool_results(ConversationState *state) {
 
                     tool_calls[tool_call_count].id = c->tool_id;
                     tool_calls[tool_call_count].tool_name = c->tool_name;
+                    tool_calls[tool_call_count].source_msg_idx = i;
                     tool_calls[tool_call_count].has_result = 0;
                     LOG_DEBUG("ensure_tool_results: Found tool call in msg[%d]: id=%s, tool=%s",
                               i, c->tool_id ? c->tool_id : "NULL",
@@ -89,14 +126,15 @@ void ensure_tool_results(ConversationState *state) {
         }
     }
 
-    // Find missing results and inject synthetic ones
+    // Find missing results and count per assistant message
     int missing_count = 0;
     for (int i = 0; i < tool_call_count; i++) {
         if (!tool_calls[i].has_result) {
             missing_count++;
-            LOG_DEBUG("ensure_tool_results: Missing result for tool_call[%d]: id=%s, tool=%s",
+            LOG_DEBUG("ensure_tool_results: Missing result for tool_call[%d]: id=%s, tool=%s, from msg[%d]",
                       i, tool_calls[i].id ? tool_calls[i].id : "NULL",
-                      tool_calls[i].tool_name ? tool_calls[i].tool_name : "NULL");
+                      tool_calls[i].tool_name ? tool_calls[i].tool_name : "NULL",
+                      tool_calls[i].source_msg_idx);
         }
     }
 
@@ -106,48 +144,133 @@ void ensure_tool_results(ConversationState *state) {
     if (missing_count > 0) {
         LOG_WARN("Found %d tool call(s) without matching results - injecting synthetic results", missing_count);
 
-        // Check if we have space for a new message
-        if (state->count >= MAX_MESSAGES) {
-            LOG_ERROR("Cannot inject tool results - maximum message count reached");
-            free(tool_calls);
-            return;
-        }
+        // Group missing tool calls by their source assistant message index
+        // We need to insert synthetic results after each assistant message that has missing results
+        // Process from highest index to lowest to avoid shifting issues
 
-        // Create synthetic tool results
-        InternalContent *synthetic_results = calloc((size_t)missing_count, sizeof(InternalContent));
-        if (!synthetic_results) {
-            LOG_ERROR("Failed to allocate memory for synthetic tool results");
-            free(tool_calls);
-            return;
-        }
+        // Find unique assistant message indices with missing results
+        int *assistant_indices = NULL;
+        int assistant_count = 0;
+        int assistant_capacity = 0;
 
-        int result_idx = 0;
         for (int i = 0; i < tool_call_count; i++) {
             if (!tool_calls[i].has_result) {
-                synthetic_results[result_idx].type = INTERNAL_TOOL_RESPONSE;
-                synthetic_results[result_idx].tool_id = strdup(tool_calls[i].id);
-                synthetic_results[result_idx].tool_name = strdup(tool_calls[i].tool_name ? tool_calls[i].tool_name : "unknown");
-                synthetic_results[result_idx].is_error = 1;
-
-                // Create error output JSON
-                cJSON *error_output = cJSON_CreateObject();
-                cJSON_AddStringToObject(error_output, "error", "Tool execution was interrupted");
-                synthetic_results[result_idx].tool_output = error_output;
-
-                LOG_INFO("Injected synthetic result for tool_call_id=%s, tool=%s",
-                         tool_calls[i].id,
-                         tool_calls[i].tool_name ? tool_calls[i].tool_name : "unknown");
-                result_idx++;
+                int idx = tool_calls[i].source_msg_idx;
+                // Check if we already have this index
+                int found = 0;
+                for (int j = 0; j < assistant_count; j++) {
+                    if (assistant_indices[j] == idx) {
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found) {
+                    if (assistant_count >= assistant_capacity) {
+                        assistant_capacity = assistant_capacity == 0 ? 4 : assistant_capacity * 2;
+                        int *new_indices = reallocarray(assistant_indices, (size_t)assistant_capacity, sizeof(int));
+                        if (!new_indices) {
+                            LOG_ERROR("Failed to allocate memory for assistant indices");
+                            free(assistant_indices);
+                            free(tool_calls);
+                            return;
+                        }
+                        assistant_indices = new_indices;
+                    }
+                    assistant_indices[assistant_count++] = idx;
+                }
             }
         }
 
-        // Add as a new user message
-        InternalMessage *msg = &state->messages[state->count++];
-        msg->role = MSG_USER;
-        msg->contents = synthetic_results;
-        msg->content_count = missing_count;
-        LOG_INFO("ensure_tool_results: Added synthetic results as msg[%d] with %d tool results",
-                 state->count - 1, missing_count);
+        // Sort assistant indices in descending order (process from end to avoid index shifts)
+        for (int i = 0; i < assistant_count - 1; i++) {
+            for (int j = i + 1; j < assistant_count; j++) {
+                if (assistant_indices[j] > assistant_indices[i]) {
+                    int tmp = assistant_indices[i];
+                    assistant_indices[i] = assistant_indices[j];
+                    assistant_indices[j] = tmp;
+                }
+            }
+        }
+
+        // For each assistant message with missing results, insert synthetic results after it
+        for (int a = 0; a < assistant_count; a++) {
+            int asst_idx = assistant_indices[a];
+
+            // Count missing results for this assistant message
+            int missing_for_this = 0;
+            for (int i = 0; i < tool_call_count; i++) {
+                if (!tool_calls[i].has_result && tool_calls[i].source_msg_idx == asst_idx) {
+                    missing_for_this++;
+                }
+            }
+
+            if (missing_for_this == 0) continue;
+
+            // Check if we have space
+            if (state->count >= MAX_MESSAGES) {
+                LOG_ERROR("Cannot inject tool results - maximum message count reached");
+                free(assistant_indices);
+                free(tool_calls);
+                return;
+            }
+
+            // Create synthetic tool results for this assistant message
+            InternalContent *synthetic_results = calloc((size_t)missing_for_this, sizeof(InternalContent));
+            if (!synthetic_results) {
+                LOG_ERROR("Failed to allocate memory for synthetic tool results");
+                free(assistant_indices);
+                free(tool_calls);
+                return;
+            }
+
+            int result_idx = 0;
+            for (int i = 0; i < tool_call_count; i++) {
+                if (!tool_calls[i].has_result && tool_calls[i].source_msg_idx == asst_idx) {
+                    synthetic_results[result_idx].type = INTERNAL_TOOL_RESPONSE;
+                    synthetic_results[result_idx].tool_id = strdup(tool_calls[i].id);
+                    synthetic_results[result_idx].tool_name = strdup(tool_calls[i].tool_name ? tool_calls[i].tool_name : "unknown");
+                    synthetic_results[result_idx].is_error = 1;
+
+                    // Create error output JSON
+                    cJSON *error_output = cJSON_CreateObject();
+                    cJSON_AddStringToObject(error_output, "error", "Tool execution was interrupted");
+                    synthetic_results[result_idx].tool_output = error_output;
+
+                    LOG_INFO("Injected synthetic result for tool_call_id=%s, tool=%s",
+                             tool_calls[i].id,
+                             tool_calls[i].tool_name ? tool_calls[i].tool_name : "unknown");
+                    result_idx++;
+                }
+            }
+
+            // Create the message to insert
+            InternalMessage new_msg = {0};
+            new_msg.role = MSG_USER;
+            new_msg.contents = synthetic_results;
+            new_msg.content_count = missing_for_this;
+
+            // Insert immediately after the assistant message
+            int insert_pos = asst_idx + 1;
+            if (insert_message_at(state, insert_pos, &new_msg) != 0) {
+                // Free contents on failure
+                for (int i = 0; i < missing_for_this; i++) {
+                    free(synthetic_results[i].tool_id);
+                    free(synthetic_results[i].tool_name);
+                    if (synthetic_results[i].tool_output) {
+                        cJSON_Delete(synthetic_results[i].tool_output);
+                    }
+                }
+                free(synthetic_results);
+                free(assistant_indices);
+                free(tool_calls);
+                return;
+            }
+
+            LOG_INFO("ensure_tool_results: Inserted synthetic results at msg[%d] with %d tool results",
+                     insert_pos, missing_for_this);
+        }
+
+        free(assistant_indices);
     } else {
         LOG_DEBUG("ensure_tool_results: All tool calls have matching results - no action needed");
     }

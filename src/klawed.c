@@ -7031,12 +7031,70 @@ int add_tool_results(ConversationState *state, InternalContent *results, int cou
                   result->is_error);
     }
 
-    InternalMessage *msg = &state->messages[state->count++];
-    msg->role = MSG_USER;
-    msg->contents = results;
-    msg->content_count = count;
+    // Find the assistant message that contains the tool calls we're responding to.
+    // Search backwards from the end to find the most recent assistant message
+    // with matching tool_call IDs.
+    int insert_pos = state->count;  // Default: append at end
+    int found_assistant_idx = -1;
 
-    LOG_INFO("add_tool_results: Successfully added %d tool results as msg[%d]", count, state->count - 1);
+    // First, find any tool_id from our results to match against
+    const char *first_tool_id = NULL;
+    for (int i = 0; i < count; i++) {
+        if (results[i].tool_id) {
+            first_tool_id = results[i].tool_id;
+            break;
+        }
+    }
+
+    if (first_tool_id) {
+        // Search backwards for assistant message with this tool call
+        for (int i = state->count - 1; i >= 0; i--) {
+            InternalMessage *msg = &state->messages[i];
+            if (msg->role == MSG_ASSISTANT) {
+                for (int j = 0; j < msg->content_count; j++) {
+                    InternalContent *c = &msg->contents[j];
+                    if (c->type == INTERNAL_TOOL_CALL && c->tool_id &&
+                        strcmp(c->tool_id, first_tool_id) == 0) {
+                        found_assistant_idx = i;
+                        insert_pos = i + 1;  // Insert right after this assistant message
+                        LOG_DEBUG("add_tool_results: Found matching assistant message at index %d for tool_id=%s",
+                                  i, first_tool_id);
+                        break;
+                    }
+                }
+                if (found_assistant_idx >= 0) break;
+            }
+        }
+    }
+
+    if (found_assistant_idx < 0) {
+        LOG_WARN("add_tool_results: Could not find matching assistant message, appending at end");
+    }
+
+    // If insert position is at the end, just append
+    if (insert_pos == state->count) {
+        InternalMessage *msg = &state->messages[state->count++];
+        msg->role = MSG_USER;
+        msg->contents = results;
+        msg->content_count = count;
+        LOG_INFO("add_tool_results: Successfully added %d tool results as msg[%d]", count, state->count - 1);
+    } else {
+        // Need to insert at a specific position - shift messages
+        // Shift all messages from insert_pos onwards
+        for (int i = state->count; i > insert_pos; i--) {
+            state->messages[i] = state->messages[i - 1];
+        }
+
+        // Insert the new message
+        InternalMessage *msg = &state->messages[insert_pos];
+        msg->role = MSG_USER;
+        msg->contents = results;
+        msg->content_count = count;
+        state->count++;
+
+        LOG_INFO("add_tool_results: Inserted %d tool results at msg[%d] (after assistant msg[%d])",
+                 count, insert_pos, found_assistant_idx);
+    }
 
     conversation_state_unlock(state);
     return 0;

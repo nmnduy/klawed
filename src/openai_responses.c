@@ -9,6 +9,7 @@
 
 #include "openai_responses.h"
 #include "openai_provider.h"
+#include "openai_messages.h"  // For ensure_tool_results
 #include "logger.h"
 #include "http_client.h"
 #include "klawed_internal.h"
@@ -61,6 +62,9 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
     if (conversation_state_lock(state) != 0) {
         return NULL;
     }
+
+    // Ensure all tool calls have matching results before building request
+    ensure_tool_results(state);
 
     LOG_DEBUG("Building OpenAI Responses API request (messages: %d, caching: %s)",
               state->count, enable_caching ? "enabled" : "disabled");
