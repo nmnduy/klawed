@@ -42,7 +42,7 @@
             </div>
             
             <!-- Form -->
-            <form action="/auth/login" method="POST" id="login-form" class="space-y-6">
+            <form action="/auth/login" method="POST" id="login-form" data-role="login-form" class="space-y-6">
                 {#if redirect}
                 <input type="hidden" name="redirect" value="{redirect}" />
                 {#else}
@@ -79,7 +79,73 @@
                     </span>
                 </button>
             </form>
-            
+
+            <!-- Waitlist toggle -->
+            <!-- Waitlist -->
+            <div class="mt-6 space-y-4">
+                <div class="flex items-start justify-between gap-3" data-role="waitlist-panel">
+                    <div>
+                        <p class="text-body-m text-foreground">No invite? Join the waitlist.</p>
+                        <p class="text-caption-m text-muted-foreground">We’ll notify you when access opens.</p>
+                    </div>
+                    <button type="button" class="text-primary text-body-s-bold" data-role="waitlist-toggle">Join</button>
+                </div>
+                <form class="space-y-4 hidden" data-role="waitlist-form" novalidate>
+                    <div class="space-y-2">
+                        <label class="block text-body-s-bold text-foreground" for="waitlist-email">Email (required)</label>
+                        <input
+                            id="waitlist-email"
+                            type="email"
+                            name="waitlist-email"
+                            placeholder="you@example.com"
+                            required
+                            class="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all duration-200"
+                            data-role="waitlist-email"
+                        />
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-body-s-bold text-foreground" for="waitlist-name">Name (optional)</label>
+                        <input
+                            id="waitlist-name"
+                            type="text"
+                            name="waitlist-name"
+                            placeholder="Your name"
+                            class="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all duration-200"
+                            data-role="waitlist-name"
+                        />
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-body-s-bold text-foreground" for="waitlist-usecase">How would you use FileSurf? (optional)</label>
+                        <textarea
+                            id="waitlist-usecase"
+                            name="waitlist-usecase"
+                            rows="3"
+                            placeholder="Tell us briefly about your use case"
+                            class="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all duration-200"
+                            data-role="waitlist-usecase"
+                        ></textarea>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="hidden p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 text-body-s" data-role="waitlist-error"></div>
+                        <div class="hidden p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-green-700 text-body-s" data-role="waitlist-success"></div>
+                        <button
+                            type="submit"
+                            class="w-full py-3 px-4 bg-[linear-gradient(135deg,_color-mix(in_srgb,_hsl(var(--primary))_90%,_hsl(var(--accent))_10%),_color-mix(in_srgb,_hsl(var(--primary))_70%,_hsl(var(--accent))_30%))] hover:bg-[linear-gradient(135deg,_color-mix(in_srgb,_hsl(var(--primary))_95%,_hsl(var(--accent))_5%),_color-mix(in_srgb,_hsl(var(--primary))_75%,_hsl(var(--accent))_25%))] text-white font-semibold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-background shadow-[0_4px_14px_0_color-mix(in_srgb,_hsl(var(--primary))_40%,_transparent)] hover:shadow-[0_6px_20px_0_color-mix(in_srgb,_hsl(var(--primary))_50%,_transparent)] hover:translate-y-[-1px] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-role="waitlist-submit"
+                        >
+                            <span data-role="btn-text">Join waitlist</span>
+                            <span data-role="btn-spinner" class="hidden">
+                                <svg class="inline-block animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Submitting...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
             <!-- Error Message -->
             <div id="error-message" class="hidden mt-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 text-body-s text-center"></div>
             
@@ -109,6 +175,7 @@
         </div>
     </div>
     
+    <script type="module" src="{inject:jsHelper.path('loginWaitlist')}"></script>
     <script>
         const form = document.getElementById('login-form');
         const submitBtn = document.getElementById('submit-btn');

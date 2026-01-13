@@ -9,6 +9,13 @@
 
 ---
 
+
+- [ ] 
+- [ ] pricing
+- [ ] work on distribution
+
+---
+
 - [ ] highlight related new files after a work session
 - [ ] show KLAWED what cli tools it already has
 - [ ] chrome extension that communicate with local file system
