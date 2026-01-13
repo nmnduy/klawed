@@ -883,8 +883,13 @@ public class KlawedAgentManager {
                     
                     while (shouldPollContinuously && asyncPollingActive) {
                         // Check if client is still connected before polling
-                        if (sqliteQueueClient == null || !sqliteQueueClient.isConnected()) {
-                            LOGGER.fine("[SESSION:" + sessionId + "] SQLiteQueueClient no longer connected, exiting poll loop");
+                        if (sqliteQueueClient == null) {
+                            LOGGER.info("[SESSION:" + sessionId + "] SQLiteQueueClient is null, exiting poll loop");
+                            break;
+                        }
+                        
+                        if (!sqliteQueueClient.isConnected()) {
+                            LOGGER.info("[SESSION:" + sessionId + "] SQLiteQueueClient no longer connected, exiting poll loop");
                             break;
                         }
                         
@@ -901,26 +906,58 @@ public class KlawedAgentManager {
                             Thread.sleep(100);
                         } catch (IOException e) {
                             // Check if client is still connected - if not, stop polling
-                            if (sqliteQueueClient == null || !sqliteQueueClient.isConnected()) {
-                                LOGGER.fine("[SESSION:" + sessionId + "] SQLiteQueueClient disconnected, stopping async polling");
+                            if (sqliteQueueClient == null) {
+                                LOGGER.info("[SESSION:" + sessionId + "] SQLiteQueueClient became null during error, stopping async polling");
                                 break;
                             }
-                            LOGGER.warning("[SESSION:" + sessionId + "] Error in async polling: " + e.getMessage());
-                            // Continue polling despite errors
+                            if (!sqliteQueueClient.isConnected()) {
+                                LOGGER.info("[SESSION:" + sessionId + "] SQLiteQueueClient disconnected during error, stopping async polling");
+                                break;
+                            }
+                            LOGGER.warning("[SESSION:" + sessionId + "] Error in async polling (continuing): " + e.getMessage());
+                            // Continue polling despite errors - transient errors shouldn't kill the loop
+                            try {
+                                Thread.sleep(1000); // Back off a bit on error
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                LOGGER.info("[SESSION:" + sessionId + "] Async polling interrupted during error backoff");
+                                break;
+                            }
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             LOGGER.info("[SESSION:" + sessionId + "] Async polling interrupted");
                             break;
+                        } catch (Exception e) {
+                            // Catch any unexpected exceptions to prevent thread death
+                            LOGGER.severe("[SESSION:" + sessionId + "] Unexpected error in async polling loop: " + 
+                                        (e != null ? e.getClass().getName() + ": " + e.getMessage() : "null exception"));
+                            if (e != null) {
+                                e.printStackTrace();
+                            }
+                            // Back off and continue - don't let transient errors kill the polling loop
+                            try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                LOGGER.info("[SESSION:" + sessionId + "] Async polling interrupted during exception backoff");
+                                break;
+                            }
                         }
                     }
                     
-                    LOGGER.info("[SESSION:" + sessionId + "] Continuous async polling stopped");
+                    LOGGER.info("[SESSION:" + sessionId + "] Continuous async polling stopped (shouldPollContinuously=" + 
+                               shouldPollContinuously + ", asyncPollingActive=" + asyncPollingActive + ")");
                     
                 } catch (Exception e) {
-                    LOGGER.severe("[SESSION:" + sessionId + "] Error in async polling thread: " + e.getMessage());
+                    LOGGER.severe("[SESSION:" + sessionId + "] Fatal error in async polling thread: " + 
+                                (e != null ? e.getClass().getName() + ": " + e.getMessage() : "null exception"));
+                    if (e != null) {
+                        e.printStackTrace();
+                    }
                 } finally {
                     asyncPollingActive = false;
                     shouldPollContinuously = false;
+                    LOGGER.info("[SESSION:" + sessionId + "] Async polling thread terminated");
                 }
             });
         }
@@ -967,11 +1004,31 @@ public class KlawedAgentManager {
             String modeInfo = containerId != null ? "sandbox mode (container: " + containerId + ")" : "direct mode";
             LOGGER.info("[SESSION:" + sessionId + "] Stopping klawed agent instance (" + modeInfo + ")");
             
-            // Stop continuous async polling
+            // FIRST: Signal polling loop to stop (but don't null out the clients yet)
             shouldPollContinuously = false;
             asyncPollingActive = false;
             
-            // Shutdown clients first
+            // SECOND: Wait a bit for polling loop to finish gracefully
+            int maxWaitMs = 2000; // Wait up to 2 seconds
+            int waitedMs = 0;
+            while (asyncPollingActive && waitedMs < maxWaitMs) {
+                try {
+                    Thread.sleep(100);
+                    waitedMs += 100;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    LOGGER.warning("[SESSION:" + sessionId + "] Interrupted while waiting for polling loop to stop");
+                    break;
+                }
+            }
+            
+            if (asyncPollingActive) {
+                LOGGER.warning("[SESSION:" + sessionId + "] Polling loop did not stop gracefully after " + waitedMs + "ms, proceeding with shutdown");
+            } else {
+                LOGGER.info("[SESSION:" + sessionId + "] Polling loop stopped gracefully after " + waitedMs + "ms");
+            }
+            
+            // THIRD: Now shutdown clients (polling loop is stopped)
             if (sqliteQueueClient != null) {
                 try {
                     sqliteQueueClient.shutdown();
