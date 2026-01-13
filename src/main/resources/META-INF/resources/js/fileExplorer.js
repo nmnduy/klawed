@@ -384,6 +384,7 @@ class FileExplorer {
             const url = `/file-chat/explorer/list?path=${encodeURIComponent(path)}`;
             console.log('[file-explorer] Fetching directory:', url);
             const response = await fetch(url, {
+                credentials: 'include',  // Ensure cookies are always sent
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
@@ -458,6 +459,13 @@ class FileExplorer {
             return;
         }
 
+        // Safety check - if fileExplorerTree doesn't exist, show error
+        if (!this.fileExplorerTree) {
+            console.error('[file-explorer] fileExplorerTree element not found!');
+            this.showError('File explorer not initialized properly');
+            return;
+        }
+
         // For large result sets, limit what we render for performance
         const MAX_RENDER_ITEMS = 200;
         const isLimited = items.length > MAX_RENDER_ITEMS;
@@ -469,18 +477,23 @@ class FileExplorer {
         }
         
         this._renderRAF = requestAnimationFrame(() => {
-            // For search results or large changes, just rebuild the DOM
-            // This is faster than trying to diff when most items change
-            const shouldRebuild = this.isSearchingWorkspace || 
-                Math.abs(this.fileExplorerTree.children.length - itemsToRender.length) > 20;
-            
-            if (shouldRebuild) {
-                this._renderFileTreeFast(itemsToRender, isLimited, items.length);
-            } else {
-                this._renderFileTreeIncremental(itemsToRender);
+            try {
+                // For search results or large changes, just rebuild the DOM
+                // This is faster than trying to diff when most items change
+                const shouldRebuild = this.isSearchingWorkspace || 
+                    Math.abs(this.fileExplorerTree.children.length - itemsToRender.length) > 20;
+                
+                if (shouldRebuild) {
+                    this._renderFileTreeFast(itemsToRender, isLimited, items.length);
+                } else {
+                    this._renderFileTreeIncremental(itemsToRender);
+                }
+            } catch (error) {
+                console.error('[file-explorer] Error rendering file tree:', error);
+            } finally {
+                // ALWAYS show the file tree (hide spinner) even if rendering fails
+                this.showFileTree();
             }
-            
-            this.showFileTree();
         });
     }
     
@@ -1044,17 +1057,25 @@ class FileExplorer {
             this.showLoading();
         }
 
-        const data = await this.fetchDirectory(path);
-        console.log('[file-explorer] fetchDirectory returned:', data);
-        if (data && data.success) {
-            this.rawItems = data.items || [];
-            console.log('[file-explorer] Loading', this.rawItems.length, 'items');
-            this.applyFiltersAndSort();
-        } else {
-            console.error('[file-explorer] Failed to fetch directory or no success flag, data:', data);
-            // Always hide the loading spinner and show an error
+        try {
+            const data = await this.fetchDirectory(path);
+            console.log('[file-explorer] fetchDirectory returned:', data);
+            if (data && data.success) {
+                this.rawItems = data.items || [];
+                console.log('[file-explorer] Loading', this.rawItems.length, 'items');
+                this.applyFiltersAndSort();
+            } else {
+                console.error('[file-explorer] Failed to fetch directory or no success flag, data:', data);
+                // Always hide the loading spinner and show an error
+                if (!silent) {
+                    this.showError('Failed to load directory. Please try refreshing.');
+                }
+            }
+        } catch (error) {
+            console.error('[file-explorer] Exception in loadDirectory:', error);
+            // Always hide spinner on exception
             if (!silent) {
-                this.showError('Failed to load directory. Please try refreshing.');
+                this.showError('Failed to load directory: ' + error.message);
             }
         }
     }
