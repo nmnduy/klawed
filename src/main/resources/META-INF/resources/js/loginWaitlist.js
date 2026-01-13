@@ -1,8 +1,6 @@
 const SELECTORS = {
-  loginForm: '[data-role="login-form"]',
   waitlistForm: '[data-role="waitlist-form"]',
   waitlistToggle: '[data-role="waitlist-toggle"]',
-  waitlistPanel: '[data-role="waitlist-panel"]',
   waitlistSuccess: '[data-role="waitlist-success"]',
   waitlistError: '[data-role="waitlist-error"]',
   waitlistSubmit: '[data-role="waitlist-submit"]',
@@ -72,7 +70,7 @@ async function handleWaitlistSubmit(event) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify({ email, name: name || null, useCase: useCase || null }),
     });
@@ -85,9 +83,6 @@ async function handleWaitlistSubmit(event) {
     }
 
     showMessage(successEl, 'You are on the waitlist. We will reach out soon.');
-    if (form.closest('dialog')) {
-      // no-op
-    }
     form.reset();
   } catch (err) {
     showMessage(errorEl, 'Something went wrong. Please try again.');
@@ -98,22 +93,13 @@ async function handleWaitlistSubmit(event) {
 
 export function init(rootEl = document) {
   const waitlistForm = rootEl.querySelector(SELECTORS.waitlistForm);
-  const toggleBtn = rootEl.querySelector(SELECTORS.waitlistToggle);
-  const waitlistPanel = rootEl.querySelector(SELECTORS.waitlistPanel);
-
-  if (toggleBtn && waitlistPanel) {
-    toggleBtn.addEventListener('click', () => {
-      waitlistPanel.classList.toggle('hidden');
-      if (!waitlistPanel.classList.contains('hidden')) {
-        const emailInput = waitlistPanel.querySelector(SELECTORS.waitlistEmail);
-        emailInput?.focus();
-      }
-    });
-  }
 
   if (waitlistForm) {
     waitlistForm.addEventListener('submit', handleWaitlistSubmit);
   }
 }
+
+// Auto-init for the login page
+init();
 
 export default { init };

@@ -1,8 +1,12 @@
 package com.filesurf;
 
 import com.filesurf.service.WaitlistService;
+import io.quarkus.qute.Location;
+import io.quarkus.qute.Template;
+import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -15,10 +19,20 @@ public class WaitlistResource {
     @Inject
     WaitlistService waitlistService;
 
+    @Inject
+    @Location("waitlist.html")
+    Template waitlist;
+
     public static class WaitlistRequest {
         public String email;
         public String name;
         public String useCase;
+    }
+
+    @GET
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance getWaitlistPage() {
+        return waitlist.instance();
     }
 
     @POST

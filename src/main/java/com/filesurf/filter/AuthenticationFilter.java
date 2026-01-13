@@ -86,6 +86,11 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             return true;
         }
 
+        // Skip waitlist page
+        if (normalizedPath.equals("waitlist") || normalizedPath.startsWith("waitlist/")) {
+            return true;
+        }
+
         // Skip demo videos page
         if (normalizedPath.equals("demo") || normalizedPath.startsWith("demo/")) {
             return true;
