@@ -1,33 +1,30 @@
 <div class="relative sticky top-0 z-20 px-4 sm:px-6 py-4 shadow-sm border-b-2 border-slate-200/60 dark:border-slate-700/60 backdrop-blur-xl bg-gradient-to-r from-white/95 to-slate-50/95 dark:from-slate-800/95 dark:to-slate-900/95" data-chat-header>
     <div class="max-w-screen-2xl mx-auto">
-        <div class="flex items-center justify-between gap-4">
-            <div class="min-w-0 flex items-center gap-4">
-                <div>
-                    <h1 class="flex items-center gap-3 mb-1">
-                        <span class="text-h2-headline-l font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">FileSurf</span>
-                        <span class="inline-flex items-center justify-center rounded-full text-caption-m-bold px-2.5 py-[2px] bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/30 border border-orange-400">AI</span>
-                    </h1>
-                    <div class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 flex-wrap">
-                        <span class="inline-flex items-center gap-2">
-                            <svg class="w-4 h-4 text-orange-500 dark:text-orange-400 drop-shadow-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                            </svg>
-                            AI-powered computer, in the ☁️
-                        </span>
-                        <span class="text-caption-s">
-                            <a href="/privacy" class="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors underline" target="_blank">
-                                Privacy Policy
-                            </a>
-                        </span>
-                        <div class="inline-flex items-center gap-2" role="status" aria-live="polite">
-                            <div class="relative flex items-center justify-center">
-                                <div id="status-pulse" data-status-pulse class="status-pulse status-pulse--working"></div>
-                                <div id="status-indicator" data-status-indicator class="status-indicator status-indicator--working"></div>
-                            </div>
-                            <span id="status-text" data-status-text class="status-text status-text--working">Connecting…</span>
-                        </div>
-                    </div>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0 flex flex-col gap-1">
+                <div class="flex items-center gap-3">
+                    <span class="text-h2-headline-l font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">FileSurf</span>
+                    <span class="inline-flex items-center justify-center rounded-full text-caption-m-bold px-2.5 py-[2px] bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/30 border border-orange-400">AI</span>
                 </div>
+                <div class="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                    <svg class="w-4 h-4 text-orange-500 dark:text-orange-400 drop-shadow-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    <span class="text-caption-m">AI-powered computer, in the ☁️</span>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 sm:justify-end text-sm text-muted-foreground">
+                <div class="inline-flex items-center gap-2" role="status" aria-live="polite">
+                    <div class="relative flex items-center justify-center">
+                        <div id="status-pulse" data-status-pulse class="status-pulse status-pulse--working"></div>
+                        <div id="status-indicator" data-status-indicator class="status-indicator status-indicator--working"></div>
+                    </div>
+                    <span id="status-text" data-status-text class="status-text status-text--working whitespace-nowrap">Connecting…</span>
+                </div>
+                <a href="/privacy" target="_blank" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0">
+                    <span class="text-caption-m">Privacy Policy</span>
+                </a>
             </div>
         </div>
     </div>
