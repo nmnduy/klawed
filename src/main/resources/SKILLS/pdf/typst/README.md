@@ -2,6 +2,8 @@
 
 This skill provides quick-start tips and snippets for generating PDFs with Typst.
 
+> Reliability note: Always compile/test the Typst file locally before sending the PDF to the user. Only ship artifacts that actually render without errors.
+
 ## What is Typst?
 Typst is a modern markup-based typesetting system (similar to LaTeX but faster and simpler) used to create PDFs. Learn more: https://typst.app/
 
