@@ -22,6 +22,7 @@
 #include <glob.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <cjson/cJSON.h>
 
 // ============================================================================
@@ -398,6 +399,146 @@ static int cmd_vim(ConversationState *state, const char *args) {
     return 0;
 }
 
+// Helper function to get current timestamp
+static const char* get_current_timestamp(void) {
+    static char timestamp[64];
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", tm_info);
+    return timestamp;
+}
+
+static int cmd_dump(ConversationState *state, const char *args) {
+    if (!state) {
+        if (!tui_mode_enabled) {
+            print_error("No conversation state available");
+        }
+        return -1;
+    }
+    
+    // Trim leading whitespace from args
+    while (*args == ' ' || *args == '\t') args++;
+    
+    char file_path[PATH_MAX];
+    int use_default_name = 0;
+    
+    if (strlen(args) == 0) {
+        // No file path provided, use default name based on session ID
+        if (!state->session_id || strlen(state->session_id) == 0) {
+            if (!tui_mode_enabled) {
+                print_error("No session ID available for default filename");
+                fprintf(stderr, "Please specify a file path: /dump <file-path>\n");
+            }
+            return -1;
+        }
+        
+        // Create default filename: conversation-<session_id>.md
+        snprintf(file_path, sizeof(file_path), "conversation-%s.md", state->session_id);
+        use_default_name = 1;
+    } else {
+        // Use provided file path
+        strlcpy(file_path, args, sizeof(file_path));
+    }
+    
+    // Open the file for writing
+    FILE *fp = fopen(file_path, "w");
+    if (!fp) {
+        char err_msg[PATH_MAX + 64];
+        snprintf(err_msg, sizeof(err_msg),
+                 "Failed to open file for writing: %s", file_path);
+        print_error(err_msg);
+        return -1;
+    }
+    
+    // Write header
+    fprintf(fp, "# Conversation Dump\n\n");
+    fprintf(fp, "**Session ID:** %s\n", state->session_id ? state->session_id : "unknown");
+    fprintf(fp, "**Timestamp:** %s\n\n", get_current_timestamp());
+    
+    // Dump all messages in the conversation
+    int message_count = 0;
+    for (int i = 0; i < state->count; i++) {
+        InternalMessage *msg = &state->messages[i];
+        if (!msg) continue;
+        
+        // Write message header based on role
+        const char *role_str = "UNKNOWN";
+        switch (msg->role) {
+            case MSG_USER: role_str = "USER"; break;
+            case MSG_ASSISTANT: role_str = "ASSISTANT"; break;
+            case MSG_SYSTEM: role_str = "SYSTEM"; break;
+            default: break; // Keep as UNKNOWN
+        }
+        
+        fprintf(fp, "## Message %d - %s\n\n", ++message_count, role_str);
+        
+        // Write all content blocks
+        if (msg->contents && msg->content_count > 0) {
+            for (int j = 0; j < msg->content_count; j++) {
+                InternalContent *content = &msg->contents[j];
+                if (!content) continue;
+                
+                switch (content->type) {
+                    case INTERNAL_TEXT:
+                        fprintf(fp, "%s\n\n", content->text ? content->text : "(empty text)");
+                        break;
+                        
+                    case INTERNAL_TOOL_CALL:
+                        fprintf(fp, "**[TOOL CALL: %s", content->tool_name ? content->tool_name : "unknown");
+                        if (content->tool_id) {
+                            fprintf(fp, " (id: %s)", content->tool_id);
+                        }
+                        fprintf(fp, "]**\n\n");
+                        break;
+                        
+                    case INTERNAL_TOOL_RESPONSE:
+                        fprintf(fp, "**[TOOL RESULT");
+                        if (content->tool_id) {
+                            fprintf(fp, " for %s", content->tool_id);
+                        }
+                        fprintf(fp, "]**\n\n");
+                        // Tool results might have text content
+                        if (content->text) {
+                            fprintf(fp, "%s\n\n", content->text);
+                        }
+                        break;
+                        
+                    case INTERNAL_IMAGE:
+                        fprintf(fp, "**[IMAGE: %s]**\n\n", content->image_path ? content->image_path : "unknown image");
+                        break;
+                        
+                    default:
+                        fprintf(fp, "**[UNKNOWN CONTENT TYPE: %d]**\n\n", content->type);
+                        break;
+                }
+            }
+        } else {
+            fprintf(fp, "*No content in this message.*\n\n");
+        }
+        
+        fprintf(fp, "---\n\n");
+    }
+    
+    if (message_count == 0) {
+        fprintf(fp, "*No messages in conversation.*\n\n");
+    }
+    
+    fclose(fp);
+    
+    // Show success message
+    char success_msg[PATH_MAX + 64];
+    if (use_default_name) {
+        snprintf(success_msg, sizeof(success_msg),
+                 "Conversation dumped to default file: %s", file_path);
+    } else {
+        snprintf(success_msg, sizeof(success_msg),
+                 "Conversation dumped to: %s", file_path);
+    }
+    print_status(success_msg);
+    
+    return 0;
+}
+
 // ============================================================================
 // Command Definitions
 // ============================================================================
@@ -474,6 +615,15 @@ static Command vim_cmd = {
     .needs_terminal = 1
 };
 
+static Command dump_cmd = {
+    .name = "dump",
+    .usage = "/dump [file-path]",
+    .description = "Dump conversation to file (default: conversation-<session_id>.md)",
+    .handler = cmd_dump,
+    .completer = commands_tab_completer,
+    .needs_terminal = 0
+};
+
 // ============================================================================
 // API Implementation
 // ============================================================================
@@ -488,6 +638,7 @@ void commands_init(void) {
     commands_register(&voice_cmd);
     commands_register(&themes_cmd);
     commands_register(&vim_cmd);
+    commands_register(&dump_cmd);
 }
 
 void commands_set_tui_mode(int enabled) {

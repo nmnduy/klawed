@@ -29,6 +29,7 @@ static const HelpLine help_content[] = {
     {NULL, "/themes", "Browse and preview color themes"},
     {NULL, "/voice", "Record voice input and transcribe"},
     {NULL, "/vim", "Open vim in current directory"},
+    {NULL, "/dump [file-path]", "Dump conversation to file"},
 
     // Mode switching section
     {" MODE SWITCHING", NULL, NULL},
