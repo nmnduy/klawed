@@ -293,6 +293,12 @@ public class SQLiteQueueClient {
         List<String> messages = new ArrayList<>();
         
         while (System.currentTimeMillis() - startTime < timeoutMs) {
+            // Re-check connection at start of each poll iteration (connection can be shutdown by another thread)
+            if (!connected.get() || connection == null) {
+                LOGGER.fine("SQLiteQueueClient disconnected during polling loop, returning collected messages");
+                return messages;
+            }
+            
             try (PreparedStatement pstmt = connection.prepareStatement(SELECT_MESSAGES_SQL)) {
                 pstmt.setString(1, config.getSenderName());
                 pstmt.setInt(2, 10); // Limit to 10 messages at a time
@@ -639,7 +645,13 @@ public class SQLiteQueueClient {
      * Acknowledge a message as read
      */
     private void acknowledgeMessage(long messageId) throws SQLException {
-        try (PreparedStatement pstmt = connection.prepareStatement(ACK_MESSAGE_SQL)) {
+        // Guard against race condition where connection is closed by another thread
+        Connection conn = this.connection;
+        if (conn == null) {
+            LOGGER.fine("Cannot acknowledge message " + messageId + " - connection is null");
+            return;
+        }
+        try (PreparedStatement pstmt = conn.prepareStatement(ACK_MESSAGE_SQL)) {
             pstmt.setLong(1, messageId);
             pstmt.executeUpdate();
         }
