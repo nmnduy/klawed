@@ -64,22 +64,33 @@ if ! command -v native-image &> /dev/null; then
     exit 1
 fi
 
-# Step 1: Build assets locally
-echo "Step 1: Building CSS assets locally..."
+# Step 1: Check native readiness
+echo "Step 1: Checking native image readiness..."
+cd "$LOCAL_PATH"
+if ! ./scripts/check-native-readiness.sh; then
+    echo "   ✗ Native readiness check failed!"
+    echo "   Please fix the issues before deploying."
+    exit 1
+fi
+echo "   ✓ Native readiness check passed"
+echo ""
+
+# Step 2: Build assets locally
+echo "Step 2: Building CSS assets locally..."
 cd "$LOCAL_PATH"
 npm run build
 echo "   ✓ CSS build complete"
 echo ""
 
-# Step 2: Build native application
-echo "Step 2: Building native application..."
+# Step 3: Build native application
+echo "Step 3: Building native application..."
 echo "This will take several minutes..."
 mvn clean package -Pnative -DskipTests -Dquarkus.profile=prod
 echo "   ✓ Native build complete"
 echo ""
 
-# Step 3: Verify build artifacts
-echo "Step 3: Verifying build artifacts..."
+# Step 4: Verify build artifacts
+echo "Step 4: Verifying build artifacts..."
 if [ ! -f "$LOCAL_PATH/target/filesurf-1.0.0-SNAPSHOT-runner" ]; then
     echo "   ✗ ERROR: Native executable not found!"
     exit 1
@@ -92,8 +103,8 @@ echo "   ✓ All artifacts present"
 ls -lh "$LOCAL_PATH/target/filesurf-1.0.0-SNAPSHOT-runner"
 echo ""
 
-# Step 4: Run locally to verify native executable works
-echo "Step 4: Running native executable locally to verify..."
+# Step 5: Run locally to verify native executable works
+echo "Step 5: Running native executable locally to verify..."
 echo "   Starting on port $LOCAL_TEST_PORT for $LOCAL_TEST_DURATION seconds..."
 echo ""
 
@@ -151,8 +162,8 @@ rm -rf "$LOCAL_TEST_DIR"
 echo "   ✓ Local verification complete"
 echo ""
 
-# Step 5: Sync to remote server
-echo "Step 5: Syncing to $REMOTE_HOST..."
+# Step 6: Sync to remote server
+echo "Step 6: Syncing to $REMOTE_HOST..."
 echo ""
 
 # Create target directory on remote
@@ -188,8 +199,8 @@ echo ""
 echo "   ✓ Sync complete"
 echo ""
 
-# Step 6: Deploy on remote server
-echo "Step 6: Deploying on remote server..."
+# Step 7: Deploy on remote server
+echo "Step 7: Deploying on remote server..."
 echo ""
 ssh "$REMOTE_HOST" "cd $REMOTE_PATH && ./deployment/deploy.sh"
 

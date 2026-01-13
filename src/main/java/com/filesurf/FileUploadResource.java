@@ -2,6 +2,7 @@ package com.filesurf;
 
 import com.filesurf.service.KlawedAgentManager;
 import com.filesurf.service.SessionManager;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
@@ -91,15 +92,21 @@ public class FileUploadResource {
         return allowed;
     }
     
+    @RegisterForReflection
     public static class UploadForm {
         @FormParam("files")
         public List<FileUpload> files;
     }
     
+    @RegisterForReflection
     public static class UploadResponse {
         public int count;
         public List<String> files;
         public String message;
+        
+        // Default constructor required for Jackson deserialization
+        public UploadResponse() {
+        }
         
         public UploadResponse(int count, List<String> files, String message) {
             this.count = count;

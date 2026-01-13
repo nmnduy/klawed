@@ -2,6 +2,7 @@ package com.filesurf;
 
 import com.filesurf.service.KlawedAgentManager;
 import com.filesurf.service.SessionManager;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
@@ -147,12 +148,14 @@ public class ChunkedUploadResource {
         }
     }
 
+    @RegisterForReflection
     public static class InitUploadRequest {
         public String sessionId;
         public String fileName;
         public long totalSize;
     }
 
+    @RegisterForReflection
     public static class ChunkUploadForm {
         @FormParam("uploadId")
         public String uploadId;

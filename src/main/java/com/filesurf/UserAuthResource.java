@@ -4,6 +4,7 @@ import com.filesurf.model.UserRecord;
 import com.filesurf.service.UserService;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
@@ -266,6 +267,7 @@ public class UserAuthResource {
     /**
      * DTO for JSON login requests
      */
+    @RegisterForReflection
     public static class LoginRequest {
         public String email;
     }

@@ -4,6 +4,7 @@ import com.filesurf.service.WaitlistService;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -23,6 +24,7 @@ public class WaitlistResource {
     @Location("waitlist.html")
     Template waitlist;
 
+    @RegisterForReflection
     public static class WaitlistRequest {
         public String email;
         public String name;
