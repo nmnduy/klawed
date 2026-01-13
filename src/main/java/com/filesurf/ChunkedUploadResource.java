@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -34,12 +35,62 @@ public class ChunkedUploadResource {
     private static final Logger LOGGER = Logger.getLogger(ChunkedUploadResource.class.getName());
     private static final long MAX_FILE_SIZE = 1024L * 1024 * 1024; // 1 GB
     private static final long CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB chunks
+
+    // Whitelist of allowed file extensions
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
+        // Documents
+        "pdf", "doc", "docx", "txt", "md", "rtf", "odt",
+        // Spreadsheets
+        "csv", "xlsx", "xls", "ods",
+        // Images
+        "png", "jpg", "jpeg", "gif", "webp", "svg",
+        // Archives (be cautious with these)
+        "zip", "tar", "gz", "7z",
+        // Code/Text
+        "json", "xml", "yaml", "yml", "tex", "log", "html", "css", "js",
+        // Presentations
+        "ppt", "pptx", "odp",
+        // Databases
+        "db", "sqlite", "sqlite3", "db3", "s3db", "sl3"
+        // Add more as needed, but NEVER: exe, sh, bat, cmd, msi, app, dmg, deb, rpm
+    );
+    
+    // Human-readable list of allowed file types for error messages
+    private static final String ALLOWED_TYPES_MESSAGE = 
+        "Allowed file types: " +
+        "Documents (pdf, doc, docx, txt, md, rtf, odt), " +
+        "Spreadsheets (csv, xlsx, xls, ods), " +
+        "Images (png, jpg, jpeg, gif, webp, svg), " +
+        "Archives (zip, tar, gz, 7z), " +
+        "Code/Text (json, xml, yaml, yml, tex, log, html, css, js), " +
+        "Presentations (ppt, pptx, odp), " +
+        "Databases (db, sqlite, sqlite3, db3, s3db, sl3)";
     
     @Inject
     SessionManager sessionManager;
 
     @Inject
     KlawedAgentManager agentManager;
+
+    /**
+     * Check if file extension is allowed.
+     * Validates against whitelist to prevent malware/executable uploads.
+     */
+    private boolean isAllowedFileType(String filename) {
+        if (filename == null || !filename.contains(".")) {
+            LOGGER.warning("File upload rejected: no extension in filename: " + filename);
+            return false;
+        }
+        
+        String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
+        boolean allowed = ALLOWED_EXTENSIONS.contains(extension);
+        
+        if (!allowed) {
+            LOGGER.warning("File upload rejected: disallowed extension '" + extension + "' in file: " + filename);
+        }
+        
+        return allowed;
+    }
 
     // Track upload sessions: uploadId -> UploadSession
     private static final Map<String, UploadSession> uploadSessions = new ConcurrentHashMap<>();
@@ -137,6 +188,13 @@ public class ChunkedUploadResource {
             if (request.fileName == null || request.fileName.isBlank()) {
                 return Response.status(Response.Status.BAD_REQUEST)
                     .entity("{\"error\": \"fileName is required\"}")
+                    .build();
+            }
+
+            // Validate file type (SECURITY: block executables and malware)
+            if (!isAllowedFileType(request.fileName)) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"error\": \"File type not allowed. " + ALLOWED_TYPES_MESSAGE + "\"}")
                     .build();
             }
 

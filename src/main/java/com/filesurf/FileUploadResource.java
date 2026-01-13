@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Logger;
 
 @jakarta.ws.rs.Path("/file-chat/upload")
@@ -25,6 +26,36 @@ public class FileUploadResource {
 
     private static final Logger LOGGER = Logger.getLogger(FileUploadResource.class.getName());
     private static final long MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+
+    // Whitelist of allowed file extensions
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
+        // Documents
+        "pdf", "doc", "docx", "txt", "md", "rtf", "odt",
+        // Spreadsheets
+        "csv", "xlsx", "xls", "ods",
+        // Images
+        "png", "jpg", "jpeg", "gif", "webp", "svg",
+        // Archives (be cautious with these)
+        "zip", "tar", "gz", "7z",
+        // Code/Text
+        "json", "xml", "yaml", "yml", "tex", "log", "html", "css", "js",
+        // Presentations
+        "ppt", "pptx", "odp",
+        // Databases
+        "db", "sqlite", "sqlite3", "db3", "s3db", "sl3"
+        // Add more as needed, but NEVER: exe, sh, bat, cmd, msi, app, dmg, deb, rpm
+    );
+    
+    // Human-readable list of allowed file types for error messages
+    private static final String ALLOWED_TYPES_MESSAGE = 
+        "Allowed file types: " +
+        "Documents (pdf, doc, docx, txt, md, rtf, odt), " +
+        "Spreadsheets (csv, xlsx, xls, ods), " +
+        "Images (png, jpg, jpeg, gif, webp, svg), " +
+        "Archives (zip, tar, gz, 7z), " +
+        "Code/Text (json, xml, yaml, yml, tex, log, html, css, js), " +
+        "Presentations (ppt, pptx, odp), " +
+        "Databases (db, sqlite, sqlite3, db3, s3db, sl3)";
 
     @Inject
     SessionManager sessionManager;
@@ -40,6 +71,26 @@ public class FileUploadResource {
             return cookieUserId;
         }
         return null;
+    }
+
+    /**
+     * Check if file extension is allowed.
+     * Validates against whitelist to prevent malware/executable uploads.
+     */
+    private boolean isAllowedFileType(String filename) {
+        if (filename == null || !filename.contains(".")) {
+            LOGGER.warning("File upload rejected: no extension in filename: " + filename);
+            return false;
+        }
+        
+        String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
+        boolean allowed = ALLOWED_EXTENSIONS.contains(extension);
+        
+        if (!allowed) {
+            LOGGER.warning("File upload rejected: disallowed extension '" + extension + "' in file: " + filename);
+        }
+        
+        return allowed;
     }
     
     public static class UploadForm {
@@ -104,9 +155,15 @@ public class FileUploadResource {
 
         for (FileUpload fileUpload : form.files) {
             try {
+                // Validate file type (SECURITY: block executables and malware)
+                if (!isAllowedFileType(fileUpload.fileName())) {
+                    errors.add(fileUpload.fileName() + " has disallowed file type. " + ALLOWED_TYPES_MESSAGE);
+                    continue;
+                }
+                
                 // Validate file size
                 if (fileUpload.size() > MAX_FILE_SIZE) {
-                    errors.add(fileUpload.fileName() + " exceeds maximum size of 10 MB");
+                    errors.add(fileUpload.fileName() + " exceeds maximum size of 100 MB");
                     continue;
                 }
 
