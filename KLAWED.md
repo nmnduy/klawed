@@ -122,6 +122,14 @@ logs/                          # Application logs
 - `GET /file-chat/upload/chunked/status/{uploadId}` - Get chunked upload status
 - `DELETE /file-chat/upload/chunked/{uploadId}` - Cancel chunked upload
 
+#### File Type Validation (Security)
+**All upload endpoints enforce strict file type validation:**
+- ✅ **Whitelist approach**: Only approved file types are allowed
+- ❌ **Blocked**: Executables (exe, sh, bat, cmd, msi, app, dmg, deb, rpm, dll, so)
+- ❌ **Blocked**: Scripts (vbs, ps1, py, rb, pl), Java archives (jar), installers
+- ✅ **Allowed**: Documents (pdf, doc, docx, txt, md), Images (png, jpg, gif), Spreadsheets (csv, xlsx), Archives (zip, tar, gz), Code/Text (json, xml, yaml, tex, log, html, css, js)
+- See `docs/FILE_TYPE_VALIDATION.md` for complete details
+
 ### File Explorer
 
 - `GET /file-chat/explorer/list` - List files in session
@@ -284,7 +292,7 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 - **Invite-only authentication**: Only pre-invited email addresses can access the app. No self-registration.
 - **Session isolation**: Each user session is isolated based on their userId
 - **Exposed endpoints**: Protected endpoints require valid authentication cookie
-- **File uploads**: Users can upload any files to their session directories
+- **File type validation**: Strict whitelist prevents malware uploads (exe, sh, bat, cmd, etc. are blocked)
 - **Monitoring**: `/metrics` endpoint is restricted to Tailscale network (100.x.x.x) only
 
 ## Deployment

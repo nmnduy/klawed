@@ -62,6 +62,17 @@ public class LatexCompilerService {
             return null;
         }
 
+        // Check for dangerous shell escape commands
+        try {
+            if (containsDangerousCommands(texFile)) {
+                LOGGER.warning("LaTeX file contains dangerous commands, refusing to compile: " + texFile);
+                return null;
+            }
+        } catch (IOException e) {
+            LOGGER.warning("Failed to scan LaTeX file for dangerous commands: " + e.getMessage());
+            return null;
+        }
+
         // Pre-compilation syntax check
         if (!validateLatexSyntax(texFile, validEngine)) {
             LOGGER.warning("LaTeX syntax validation failed for: " + texFile);
@@ -80,6 +91,7 @@ public class LatexCompilerService {
                 validEngine,
                 "-interaction=nonstopmode",
                 "-halt-on-error",
+                "-no-shell-escape",  // CRITICAL: Prevents command execution
                 "-output-directory=" + workingDir.toString(),
                 texFile.toString()
             );
@@ -251,6 +263,32 @@ public class LatexCompilerService {
         }
         
         return engines.toArray(new String[0]);
+    }
+    
+    /**
+     * Check if LaTeX file contains dangerous shell escape commands.
+     * This is defense in depth - -no-shell-escape flag is the primary protection.
+     */
+    private boolean containsDangerousCommands(Path texFile) throws IOException {
+        String content = Files.readString(texFile);
+        
+        // Check for shell escape commands (even though -no-shell-escape blocks them)
+        String[] dangerousPatterns = {
+            "\\write18",
+            "\\immediate\\write18",
+            "\\input{|",
+            "\\openin15=|",
+            "\\include{|",
+            "\\ShellEscape"
+        };
+        
+        for (String pattern : dangerousPatterns) {
+            if (content.contains(pattern)) {
+                LOGGER.severe("Dangerous LaTeX command detected in " + texFile + ": " + pattern);
+                return true;
+            }
+        }
+        return false;
     }
     
     /**

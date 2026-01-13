@@ -94,12 +94,11 @@ public class UserAuthResource {
                     true     // httpOnly: true for security
             );
 
-            // If redirect param is provided, redirect there
+            // If redirect param is provided, redirect there (sanitized)
             if (redirect != null && !redirect.isEmpty()) {
-                LOGGER.info("Redirecting to: " + redirect);
-                // Ensure redirect is a relative path starting with /
-                String redirectPath = redirect.startsWith("/") ? redirect : "/" + redirect;
-                return Response.seeOther(URI.create(redirectPath))
+                String sanitizedRedirect = sanitizeRedirect(redirect);
+                LOGGER.info("Redirecting to: " + sanitizedRedirect);
+                return Response.seeOther(URI.create(sanitizedRedirect))
                         .cookie(userCookie)
                         .build();
             }
@@ -178,9 +177,10 @@ public class UserAuthResource {
                 true
         );
 
-        // If redirect param is provided, redirect there
+        // If redirect param is provided, redirect there (sanitized)
         if (redirect != null && !redirect.isEmpty()) {
-            return Response.seeOther(URI.create(redirect))
+            String sanitizedRedirect = sanitizeRedirect(redirect);
+            return Response.seeOther(URI.create(sanitizedRedirect))
                     .cookie(expiredCookie)
                     .build();
         }
@@ -204,15 +204,53 @@ public class UserAuthResource {
         if (userId != null && !userId.isBlank()) {
             UserRecord user = userService.getUserByUserId(userId);
             if (user != null) {
-                // Already authenticated, redirect to main app
-                String redirectUrl = (redirect != null && !redirect.isEmpty()) ? redirect : "/file-chat";
+                // Already authenticated, redirect to main app (sanitized)
+                String redirectUrl = sanitizeRedirect((redirect != null && !redirect.isEmpty()) ? redirect : "/file-chat");
                 return login.data("authenticated", true).data("redirectUrl", redirectUrl);
             }
         }
 
-        // Return login page template with default redirect if none provided
-        String redirectPath = (redirect != null && !redirect.isEmpty()) ? redirect : "/file-chat";
+        // Return login page template with sanitized redirect
+        String redirectPath = sanitizeRedirect((redirect != null && !redirect.isEmpty()) ? redirect : "/file-chat");
         return login.data("authenticated", false).data("redirect", redirectPath);
+    }
+
+    /**
+     * Sanitize redirect URL to prevent XSS and open redirect attacks.
+     * Only allows relative paths starting with /.
+     * Blocks javascript:, data:, and other dangerous URL schemes.
+     */
+    private String sanitizeRedirect(String redirect) {
+        if (redirect == null || redirect.isEmpty()) {
+            return "/file-chat";
+        }
+        
+        // Block dangerous URL schemes
+        String lower = redirect.toLowerCase().trim();
+        if (lower.startsWith("javascript:") || 
+            lower.startsWith("data:") || 
+            lower.startsWith("vbscript:") ||
+            lower.startsWith("file:") ||
+            lower.startsWith("about:")) {
+            LOGGER.warning("Blocked dangerous redirect URL scheme: " + redirect);
+            return "/file-chat";
+        }
+        
+        // Block protocol-relative URLs
+        if (lower.startsWith("//")) {
+            LOGGER.warning("Blocked protocol-relative redirect: " + redirect);
+            return "/file-chat";
+        }
+        
+        // Only allow relative paths starting with /
+        if (!redirect.startsWith("/")) {
+            return "/" + redirect;
+        }
+        
+        // Additional safety: ensure no double slashes (except at start)
+        String sanitized = redirect.replaceAll("//+", "/");
+        
+        return sanitized;
     }
 
     private String extractUserIdFromCookies(HttpHeaders headers) {
