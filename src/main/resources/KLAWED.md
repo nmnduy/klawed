@@ -102,6 +102,11 @@ You have the following rights regarding your data:
 - Each session runs in an isolated container environment
 - Files are stored in session-specific directories with proper permissions
 
+## SKILLS Organization Guidance
+- Organize `src/main/resources/SKILLS` by **goal/outcome**, not by tool name.
+- Example: place Typst (PDF generation) under a `pdf/` goal folder, not a `typst/` tool folder.
+- When adding new SKILLS, group them by the user goal they serve (e.g., pdf, data-viz, audio), then document the tools inside.
+
 ## File Explorer - Showing Content to Users
 
 ### Overview
