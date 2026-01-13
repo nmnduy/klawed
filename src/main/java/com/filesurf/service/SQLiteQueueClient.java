@@ -342,7 +342,7 @@ public class SQLiteQueueClient {
                                                 content,
                                                 dbMessageType
                                             );
-                                            LOGGER.info("Saved message from klawed to main database: " + 
+                                            LOGGER.fine("Saved message from klawed to main database: " + 
                                                        content.substring(0, Math.min(100, content.length())) + 
                                                        (content.length() > 100 ? "..." : ""));
                                         } catch (Exception dbEx) {
@@ -391,7 +391,7 @@ public class SQLiteQueueClient {
                                     String toolName = json.get("toolName").asText();
                                     String toolId = json.get("toolId").asText();
                                     boolean isError = json.get("isError").asBoolean();
-                                    LOGGER.info("Received TOOL_RESULT: " + toolName + 
+                                    LOGGER.fine("Received TOOL_RESULT: " + toolName + 
                                               " (id: " + toolId + ", error: " + isError + ")");
                                     
                                     // Remove from pending tool requests
@@ -421,7 +421,7 @@ public class SQLiteQueueClient {
                                 }
                             } else if (ChatConstants.MESSAGE_TYPE_API_CALL.equals(messageType)) {
                                 // Handle API call in progress
-                                LOGGER.info("Received API_CALL message - AI is processing");
+                                LOGGER.fine("Received API_CALL message - AI is processing");
                                 // Don't add API_CALL to messages list - it will be sent via WebSocket from main database
                                 LOGGER.fine("API_CALL message kept for WebSocket forwarding only");
                                 
@@ -471,7 +471,7 @@ public class SQLiteQueueClient {
                                 }
                             } else if (ChatConstants.MESSAGE_TYPE_END_AI_TURN.equals(messageType)) {
                                 // Handle end of AI turn - signal that AI is done processing
-                                LOGGER.info("Received END_AI_TURN message - AI turn completed");
+                                LOGGER.fine("Received END_AI_TURN message - AI turn completed");
                                 
                                 // Clear pending tool requests
                                 pendingToolRequests.clear();
@@ -516,7 +516,7 @@ public class SQLiteQueueClient {
                 
                 // If we got messages, return them
                 if (!messages.isEmpty()) {
-                    LOGGER.info("Received " + messages.size() + " message(s)");
+                    LOGGER.fine("Received " + messages.size() + " message(s)");
                     return messages;
                 }
                 

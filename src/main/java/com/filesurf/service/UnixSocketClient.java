@@ -146,8 +146,8 @@ public class UnixSocketClient {
      * Send message to the agent and get response
      */
     public String sendMessage(String message) throws IOException, InterruptedException {
-        LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via Unix socket");
-        LOGGER.info("[SESSION:" + sessionId + "] Message: " + 
+        LOGGER.fine("[SESSION:" + sessionId + "] Sending message to klawed via Unix socket");
+        LOGGER.fine("[SESSION:" + sessionId + "] Message: " + 
                    message.substring(0, Math.min(100, message.length())) + 
                    (message.length() > 100 ? "..." : ""));
         
@@ -166,8 +166,8 @@ public class UnixSocketClient {
         }
         
         String responseText = response.getContent();
-        LOGGER.info("[SESSION:" + sessionId + "] Received response from klawed via Unix socket");
-        LOGGER.info("[SESSION:" + sessionId + "] Response: " + 
+        LOGGER.fine("[SESSION:" + sessionId + "] Received response from klawed via Unix socket");
+        LOGGER.fine("[SESSION:" + sessionId + "] Response: " + 
                    responseText.substring(0, Math.min(100, responseText.length())) + 
                    (responseText.length() > 100 ? "..." : ""));
         
@@ -178,7 +178,7 @@ public class UnixSocketClient {
      * Send message asynchronously
      */
     public void sendMessageAsync(String message) {
-        LOGGER.info("[SESSION:" + sessionId + "] Sending message asynchronously to klawed via Unix socket");
+        LOGGER.fine("[SESSION:" + sessionId + "] Sending message asynchronously to klawed via Unix socket");
         
         executorService.submit(() -> {
             try {
