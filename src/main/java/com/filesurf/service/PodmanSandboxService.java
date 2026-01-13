@@ -2,21 +2,17 @@ package com.filesurf.service;
 
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -25,6 +21,9 @@ import java.util.stream.Collectors;
  * 
  * This provides security isolation for running AI agents in production environments.
  * Each container is named klawed-{sessionId} for easy tracking and management.
+ * 
+ * Container state is persisted in a separate SQLite database (via ContainerTrackingService)
+ * to survive application restarts and avoid in-memory state sync issues.
  * 
  * Container features:
  * - Uses --userns=keep-id to map container UID to host UID (avoids permission issues)
@@ -38,8 +37,8 @@ public class PodmanSandboxService {
 
     private static final Logger LOGGER = Logger.getLogger(PodmanSandboxService.class.getName());
     
-    // Track active containers by session ID
-    private final ConcurrentHashMap<String, String> sessionContainers = new ConcurrentHashMap<>();
+    @Inject
+    ContainerTrackingService containerTrackingService;
     
     // Configuration properties
     @ConfigProperty(name = "sandbox.podman.enabled", defaultValue = "false")
@@ -105,17 +104,70 @@ public class PodmanSandboxService {
     }
     
     /**
-     * Scan for existing klawed containers on startup.
+     * Scan for existing klawed containers on startup and recover or clean them up.
      * 
-     * Since we can't reliably determine which containers are still valid (the sessions
-     * might not exist anymore), we stop all existing klawed containers on startup.
-     * This ensures a clean slate and prevents stale containers from accumulating.
+     * Uses the container tracking database to determine which containers should still be running.
+     * For each container tracked as 'running' in the database:
+     * - If the container is healthy: keep it (database already tracks it)
+     * - If the container is not healthy: update database status to 'died'
      * 
-     * If a user was actively connected when the app restarted, they'll need to reconnect
-     * and a new container will be started for them.
+     * Also detects orphaned containers (running but not in database) and stops them.
      */
     private void recoverOrCleanupExistingContainers() {
         LOGGER.info("Scanning for existing klawed containers on startup...");
+        
+        // First, verify containers from the database are still healthy
+        int recoveredCount = 0;
+        int markedDeadCount = 0;
+        
+        List<ContainerTrackingService.ContainerRecord> dbRunningContainers = 
+            containerTrackingService.getRunningContainers();
+        
+        for (ContainerTrackingService.ContainerRecord record : dbRunningContainers) {
+            String containerName = record.containerName;
+            String sessionId = record.sessionId;
+            
+            if (isContainerRunning(containerName)) {
+                // Container is healthy - database already has correct state
+                recoveredCount++;
+                LOGGER.info("[SESSION:" + sessionId + "] Recovered healthy container: " + containerName);
+            } else {
+                // Container died while app was down - update database
+                containerTrackingService.recordContainerStop(sessionId, "died");
+                markedDeadCount++;
+                LOGGER.info("[SESSION:" + sessionId + "] Container no longer running, marked as died: " + containerName);
+            }
+        }
+        
+        if (recoveredCount > 0) {
+            LOGGER.info("Recovered " + recoveredCount + " healthy container(s) from previous session");
+        }
+        if (markedDeadCount > 0) {
+            LOGGER.info("Marked " + markedDeadCount + " dead container(s) in database");
+        }
+        
+        // Now check for orphaned containers (running but not in database)
+        int orphanedCount = cleanupOrphanedContainersOnStartup();
+        if (orphanedCount > 0) {
+            LOGGER.info("Stopped " + orphanedCount + " orphaned container(s) on startup");
+        }
+        
+        if (recoveredCount == 0 && markedDeadCount == 0 && orphanedCount == 0) {
+            LOGGER.info("No existing klawed containers found on startup");
+        }
+    }
+    
+    /**
+     * Clean up orphaned containers on startup.
+     * These are containers that are running but not tracked in the database.
+     * 
+     * @return Number of orphaned containers stopped
+     */
+    private int cleanupOrphanedContainersOnStartup() {
+        int stoppedCount = 0;
+        
+        // Get session IDs that are tracked as running in the database
+        List<String> trackedSessionIds = containerTrackingService.getRunningSessionIds();
         
         try {
             // List all running klawed containers
@@ -130,45 +182,44 @@ public class PodmanSandboxService {
             
             if (exitCode != 0) {
                 LOGGER.warning("Failed to list existing containers on startup: " + output);
-                return;
+                return 0;
             }
             
             if (output.trim().isEmpty()) {
-                LOGGER.info("No existing klawed containers found on startup");
-                return;
+                return 0;
             }
             
-            // Stop each existing container
-            int stoppedCount = 0;
             for (String containerName : output.split("\n")) {
                 containerName = containerName.trim();
                 if (containerName.isEmpty()) {
                     continue;
                 }
                 
-                LOGGER.info("Found existing container on startup: " + containerName + ", stopping it...");
-                try {
-                    stopContainer(containerName);
-                    stoppedCount++;
-                } catch (IOException e) {
-                    LOGGER.warning("Failed to stop existing container " + containerName + ": " + e.getMessage());
-                    // Try force kill
+                // Extract session ID from container name
+                String sessionId = containerName.replace("klawed-", "");
+                
+                // If not tracked in database, it's orphaned
+                if (!trackedSessionIds.contains(sessionId)) {
+                    LOGGER.info("Found orphaned container on startup: " + containerName + ", stopping it...");
                     try {
-                        killContainer(containerName);
+                        stopContainer(containerName);
                         stoppedCount++;
-                    } catch (IOException killEx) {
-                        LOGGER.severe("Failed to kill existing container " + containerName + ": " + killEx.getMessage());
+                    } catch (IOException e) {
+                        LOGGER.warning("Failed to stop orphaned container " + containerName + ": " + e.getMessage());
+                        try {
+                            killContainer(containerName);
+                            stoppedCount++;
+                        } catch (IOException killEx) {
+                            LOGGER.severe("Failed to kill orphaned container " + containerName + ": " + killEx.getMessage());
+                        }
                     }
                 }
             }
-            
-            if (stoppedCount > 0) {
-                LOGGER.info("Stopped " + stoppedCount + " existing klawed container(s) on startup");
-            }
-            
         } catch (IOException | InterruptedException e) {
-            LOGGER.warning("Error scanning for existing containers on startup: " + e.getMessage());
+            LOGGER.warning("Error scanning for orphaned containers on startup: " + e.getMessage());
         }
+        
+        return stoppedCount;
     }
     
     /**
@@ -243,7 +294,8 @@ public class PodmanSandboxService {
             throw new IOException("Failed to get container ID after starting container (output was empty)");
         }
 
-        sessionContainers.put(sessionId, containerId);
+        // Track in persistent database (source of truth)
+        containerTrackingService.recordContainerStart(sessionId, containerId, containerName, podmanImage);
         
         LOGGER.info("[SESSION:" + sessionId + "] Started container: " + containerId + " (name: " + containerName + ")");
         
@@ -431,7 +483,7 @@ public class PodmanSandboxService {
         
         if (!isContainerRunning(containerId)) {
             LOGGER.info("Container not running: " + containerId);
-            removeFromTracking(containerId);
+            removeFromTracking(containerId, "stopped");
             return;
         }
         
@@ -454,7 +506,7 @@ public class PodmanSandboxService {
             throw new IOException("Interrupted while stopping container", e);
         }
         
-        removeFromTracking(containerId);
+        removeFromTracking(containerId, "stopped");
     }
     
     /**
@@ -485,7 +537,7 @@ public class PodmanSandboxService {
             throw new IOException("Interrupted while killing container", e);
         }
         
-        removeFromTracking(containerId);
+        removeFromTracking(containerId, "killed");
     }
     
     /**
@@ -567,7 +619,7 @@ public class PodmanSandboxService {
     public void stopContainerBySession(String sessionId) throws IOException {
         String containerName = "klawed-" + sessionId;
         stopContainer(containerName);
-        sessionContainers.remove(sessionId);
+        // Note: stopContainer() calls removeFromTracking() which updates the database
     }
     
     /**
@@ -579,7 +631,7 @@ public class PodmanSandboxService {
     public void killContainerBySession(String sessionId) throws IOException {
         String containerName = "klawed-" + sessionId;
         killContainer(containerName);
-        sessionContainers.remove(sessionId);
+        // Note: killContainer() calls removeFromTracking() which updates the database
     }
     
     /**
@@ -596,7 +648,7 @@ public class PodmanSandboxService {
     /**
      * Get the container name for a session if it exists and is running.
      * This is used during reconnection to detect if a container is already running
-     * for the session (even if it's not tracked in our in-memory map).
+     * for the session.
      * 
      * @param sessionId The session ID
      * @return The container name (klawed-{sessionId}) if running, null otherwise
@@ -604,10 +656,11 @@ public class PodmanSandboxService {
     public String getRunningContainerForSession(String sessionId) {
         String containerName = "klawed-" + sessionId;
         if (isContainerRunning(containerName)) {
-            // Update tracking map if not already tracked
-            if (!sessionContainers.containsKey(sessionId)) {
-                sessionContainers.put(sessionId, containerName);
-                LOGGER.info("[SESSION:" + sessionId + "] Re-tracking existing container: " + containerName);
+            // Ensure database is in sync - if container is running but not tracked, add it
+            if (!containerTrackingService.hasRunningContainer(sessionId)) {
+                // This shouldn't normally happen, but recover gracefully
+                containerTrackingService.recordContainerStart(sessionId, containerName, containerName, podmanImage);
+                LOGGER.info("[SESSION:" + sessionId + "] Re-tracking existing container in database: " + containerName);
             }
             return containerName;
         }
@@ -616,13 +669,13 @@ public class PodmanSandboxService {
     
     /**
      * Get all active session IDs with running containers.
+     * Queries the database and verifies each container is actually running.
      * 
      * @return List of session IDs
      */
     public List<String> getActiveSessions() {
-        return sessionContainers.entrySet().stream()
-            .filter(entry -> isContainerRunning(entry.getValue()))
-            .map(Map.Entry::getKey)
+        return containerTrackingService.getRunningSessionIds().stream()
+            .filter(sessionId -> isContainerRunning("klawed-" + sessionId))
             .collect(Collectors.toList());
     }
     
@@ -671,41 +724,44 @@ public class PodmanSandboxService {
     
     /**
      * Stop all containers managed by this service.
+     * Queries the database for all running containers and stops them.
      */
     public void stopAllContainers() {
         LOGGER.info("Stopping all managed containers");
         
-        for (Map.Entry<String, String> entry : sessionContainers.entrySet()) {
-            String sessionId = entry.getKey();
-            String containerId = entry.getValue();
+        List<ContainerTrackingService.ContainerRecord> runningContainers = 
+            containerTrackingService.getRunningContainers();
+        
+        for (ContainerTrackingService.ContainerRecord record : runningContainers) {
+            String sessionId = record.sessionId;
+            String containerName = record.containerName;
             
             try {
-                LOGGER.info("[SESSION:" + sessionId + "] Stopping container: " + containerId);
-                stopContainer(containerId);
+                LOGGER.info("[SESSION:" + sessionId + "] Stopping container: " + containerName);
+                stopContainer(containerName);
             } catch (IOException e) {
                 LOGGER.warning("[SESSION:" + sessionId + "] Failed to stop container: " + e.getMessage());
                 
                 // Try force kill
                 try {
-                    killContainer(containerId);
+                    killContainer(containerName);
                 } catch (IOException killEx) {
                     LOGGER.severe("[SESSION:" + sessionId + "] Failed to kill container: " + killEx.getMessage());
                 }
             }
         }
         
-        sessionContainers.clear();
         LOGGER.info("All containers stopped");
     }
     
     /**
-     * Find and clean up orphaned klawed containers (containers not tracked by this service).
+     * Find and clean up orphaned klawed containers (containers not tracked in the database).
      * 
      * Only checks RUNNING containers since we use --rm flag which auto-removes stopped containers.
      * An orphaned container is one that:
      * - Has the klawed- prefix
      * - Is currently running
-     * - Is NOT tracked in our in-memory sessionContainers map
+     * - Is NOT tracked in the database
      * 
      * This can happen when:
      * - The application restarts while containers are running
@@ -717,6 +773,9 @@ public class PodmanSandboxService {
     public int cleanupOrphanedContainers() {
         LOGGER.fine("Checking for orphaned klawed containers");
         int cleanedUp = 0;
+        
+        // Get session IDs that are tracked as running in the database
+        List<String> trackedSessionIds = containerTrackingService.getRunningSessionIds();
         
         try {
             // List only RUNNING containers with klawed- prefix
@@ -749,9 +808,9 @@ public class PodmanSandboxService {
                 // Extract session ID from container name
                 String sessionId = containerName.replace("klawed-", "");
                 
-                // If not tracked by this service, it's orphaned
-                if (!sessionContainers.containsKey(sessionId)) {
-                    LOGGER.info("Found orphaned running container: " + containerName + " (not in tracking map)");
+                // If not tracked in database, it's orphaned
+                if (!trackedSessionIds.contains(sessionId)) {
+                    LOGGER.info("Found orphaned running container: " + containerName + " (not in database)");
                     try {
                         stopContainer(containerName);
                         cleanedUp++;
@@ -844,14 +903,15 @@ public class PodmanSandboxService {
     }
     
     /**
-     * Remove container ID from tracking by container ID or name.
+     * Remove container from tracking by container ID or name.
+     * Updates the persistent database (source of truth).
+     * 
+     * @param containerId The container ID or name
+     * @param status The stop status ('stopped' or 'killed')
      */
-    private void removeFromTracking(String containerId) {
-        // Remove by container ID or by name
-        sessionContainers.entrySet().removeIf(entry -> 
-            entry.getValue().equals(containerId) || 
-            ("klawed-" + entry.getKey()).equals(containerId)
-        );
+    private void removeFromTracking(String containerId, String status) {
+        // Update database status (source of truth)
+        containerTrackingService.recordContainerStopByContainerId(containerId, status);
     }
     
     /**
