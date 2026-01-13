@@ -81,7 +81,7 @@ else
 
     # Tag current commit as production
     git tag -f production HEAD
-    git push -f origin production production-rollback-n1 production-rollback-n2 production-rollback-n3 2>/dev/null || echo "   (Could not push tags to origin)"
+    git push -f origin production production-rollback-n1 production-rollback-n2 production-rollback-n3 2>/dev/null || echo '   (Could not push tags to origin)'
     echo "   ✓ Tagged $(git rev-parse --short HEAD) as 'production' (rollbacks rotated)"
     echo ""
 fi
