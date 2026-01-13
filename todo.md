@@ -10,7 +10,10 @@
 ---
 
 - [ ] one more demo
-- [ ] how to out reach
+    - [ ] 
+
+---
+
 - [ ] pricing
 - [ ] work on distribution
 
