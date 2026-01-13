@@ -815,27 +815,25 @@ static char* get_tool_details(const char *tool_name, cJSON *arguments) {
 
         if (cJSON_IsString(file_path)) {
             const char *path = file_path->valuestring;
-            // Extract just the filename from the path
-            const char *filename = strrchr(path, '/');
-            filename = filename ? filename + 1 : path;
+            // Show the full path (could be relative or absolute) instead of just filename
+            // This provides better context about which file is being read
 
             if (cJSON_IsNumber(start_line) && cJSON_IsNumber(end_line)) {
-                snprintf(details, sizeof(details), "%s:%d-%d", filename,
+                snprintf(details, sizeof(details), "%s:%d-%d", path,
                         start_line->valueint, end_line->valueint);
             } else if (cJSON_IsNumber(start_line)) {
-                snprintf(details, sizeof(details), "%s:%d", filename, start_line->valueint);
+                snprintf(details, sizeof(details), "%s:%d", path, start_line->valueint);
             } else {
-                strlcpy(details, filename, sizeof(details));
+                strlcpy(details, path, sizeof(details));
             }
         }
     } else if (strcmp(tool_name, "Write") == 0) {
         cJSON *file_path = cJSON_GetObjectItem(arguments, "file_path");
         if (cJSON_IsString(file_path)) {
             const char *path = file_path->valuestring;
-            // Extract just the filename from the path
-            const char *filename = strrchr(path, '/');
-            filename = filename ? filename + 1 : path;
-            strlcpy(details, filename, sizeof(details));
+            // Show the full path (could be relative or absolute) instead of just filename
+            // This provides better context about which file is being written
+            strlcpy(details, path, sizeof(details));
         }
     } else if (strcmp(tool_name, "Edit") == 0) {
         cJSON *file_path = cJSON_GetObjectItem(arguments, "file_path");
@@ -843,12 +841,11 @@ static char* get_tool_details(const char *tool_name, cJSON *arguments) {
 
         if (cJSON_IsString(file_path)) {
             const char *path = file_path->valuestring;
-            // Extract just the filename from the path
-            const char *filename = strrchr(path, '/');
-            filename = filename ? filename + 1 : path;
+            // Show the full path (could be relative or absolute) instead of just filename
+            // This provides better context about which file is being edited
 
             const char *op_type = cJSON_IsTrue(use_regex) ? "(regex)" : "(string)";
-            snprintf(details, sizeof(details), "%s %s", filename, op_type);
+            snprintf(details, sizeof(details), "%s %s", path, op_type);
         }
     } else if (strcmp(tool_name, "Glob") == 0) {
         cJSON *pattern = cJSON_GetObjectItem(arguments, "pattern");
@@ -888,10 +885,9 @@ static char* get_tool_details(const char *tool_name, cJSON *arguments) {
         cJSON *file_path = cJSON_GetObjectItem(arguments, "file_path");
         if (cJSON_IsString(file_path)) {
             const char *path = file_path->valuestring;
-            // Extract just the filename from the path
-            const char *filename = strrchr(path, '/');
-            filename = filename ? filename + 1 : path;
-            strlcpy(details, filename, sizeof(details));
+            // Show the full path (could be relative or absolute) instead of just filename
+            // This provides better context about which image is being uploaded
+            strlcpy(details, path, sizeof(details));
         }
     } else if (strcmp(tool_name, "CheckSubagentProgress") == 0) {
         cJSON *pid = cJSON_GetObjectItem(arguments, "pid");
@@ -2087,7 +2083,6 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         // Try argv[0] as fallback
         const char *fallback = "./build/klawed";
         strlcpy(exe_path, fallback, sizeof(exe_path));
-        len = (ssize_t)strlen(exe_path);
 #endif
     } else {
         exe_path[len] = '\0';

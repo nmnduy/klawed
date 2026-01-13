@@ -383,6 +383,7 @@ SUBAGENT_MANAGER_SRC = src/subagent_manager.c
 SUBAGENT_MANAGER_OBJ = $(BUILD_DIR)/subagent_manager.o
 EXPLORE_TOOLS_SRC = src/explore_tools.c
 EXPLORE_TOOLS_OBJ = $(BUILD_DIR)/explore_tools.o
+EXPLORE_TOOLS_ALL_OBJ = $(BUILD_DIR)/explore_tools_all.o
 BASE64_SRC = src/base64.c
 HTTP_CLIENT_SRC = src/http_client.c
 HTTP_CLIENT_OBJ = $(BUILD_DIR)/http_client.o
@@ -1010,6 +1011,7 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/session_all.o $(SESSION_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/sqlite_queue_all.o $(SQLITE_QUEUE_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/subagent_manager_all.o $(SUBAGENT_MANAGER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/explore_tools_all.o $(EXPLORE_TOOLS_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_socket_all.o $(ZMQ_SOCKET_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_client_all.o $(ZMQ_CLIENT_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_message_queue_all.o $(ZMQ_MESSAGE_QUEUE_SRC); \
@@ -1034,7 +1036,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/message_queue_all.o $(BUILD_DIR)/ai_worker_all.o $(BUILD_DIR)/voice_input_all.o $(BUILD_DIR)/mcp_all.o \
 		$(BUILD_DIR)/window_manager_all.o $(BUILD_DIR)/tool_utils_all.o $(BUILD_DIR)/history_file_all.o $(BUILD_DIR)/base64_all.o \
 		$(BUILD_DIR)/anthropic_provider_all.o $(BUILD_DIR)/array_resize_all.o $(BUILD_DIR)/http_client_all.o \
-		$(BUILD_DIR)/session_all.o $(BUILD_DIR)/sqlite_queue_all.o $(BUILD_DIR)/subagent_manager_all.o \
+		$(BUILD_DIR)/session_all.o $(BUILD_DIR)/sqlite_queue_all.o $(BUILD_DIR)/subagent_manager_all.o $(BUILD_DIR)/explore_tools_all.o \
 		$(BUILD_DIR)/zmq_socket_all.o $(BUILD_DIR)/zmq_client_all.o $(BUILD_DIR)/zmq_message_queue_all.o \
 		$(BUILD_DIR)/zmq_daemon_all.o $(BUILD_DIR)/zmq_thread_pool_all.o $(BUILD_DIR)/retry_logic_all.o \
 		$(BUILD_DIR)/file_search_all.o $(BUILD_DIR)/history_search_all.o $(BUILD_DIR)/theme_explorer_all.o $(BUILD_DIR)/help_modal_all.o $(BUILD_DIR)/openai_responses_all.o $(BUILD_DIR)/dump_utils_all.o $(BUILD_DIR)/process_utils_all.o $(BUILD_DIR)/memvid_all.o $(BUILD_DIR)/compaction_all.o $(BUILD_DIR)/uds_socket_all.o \
@@ -2194,7 +2196,7 @@ $(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET): $(TEST_TOKEN_USAGE_SESSION_TOTALS_SRC
 SQLITE_QUEUE_TEST_OBJ = $(BUILD_DIR)/sqlite_queue_test.o
 # Common objects needed by tests that compile claude.c
 
-TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ)
+TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(EXPLORE_TOOLS_OBJ)
 
 test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET)
 	@echo ""
