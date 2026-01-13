@@ -11,6 +11,9 @@
 
 - [ ] highlight related new files after a work session
 - [ ] show KLAWED what cli tools it already has
+- [ ] chrome extension that communicate with local file system
+- [ ] ui test scenarios
+- [ ] test auto compaction
 - [x] use typst for pdf
 - [x] three dots aren't very good
 - [x] what if klawed die
