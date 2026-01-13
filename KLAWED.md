@@ -253,12 +253,15 @@ CREATE TABLE users (
 
 ## Building for Production
 ```bash
-# Build CSS, JS, and Quarkus JAR (production mode with cache busting)
+# Build CSS, JS, and Quarkus JAR (JVM mode - production standard)
 make build-dist
 
 # Or manually:
 npm run build          # Build Tailwind CSS + hash JS files (production)
 mvn clean package -DskipTests
+
+# Note: We use JVM mode for production builds (not native)
+# Native builds have known issues and are not recommended at this time
 ```
 
 ## Building for Development
@@ -324,20 +327,21 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 ### Quick Deploy (Recommended)
 Build assets locally and sync to server:
 ```bash
-# Native mode (production standard - lower memory usage)
-./deployment/deploy-rsync-native.sh
+# JVM mode (production standard)
+./deployment/deploy-rsync.sh
 ```
 
 This script will:
 1. Build CSS assets locally (`npm run build`)
-2. Build the native application (Maven + GraalVM)
+2. Build the JVM application (Maven package)
 3. Rsync only the required files to `filesurf-0:/root/filesurf_v2`
 4. Deploy and restart the service on the remote server
 
 **Requirements:**
 - SSH access to filesurf-0
-- Node.js, Maven, and GraalVM installed locally
-- Same CPU architecture as target server (x86_64)
+- Node.js and Maven installed locally
+
+**Note:** We use JVM builds for production. Native builds are currently disabled due to known issues.
 
 ### Manual Deployment
 See detailed instructions in `deployment/README.md`
