@@ -34,6 +34,7 @@ public class MetricsService {
     private Counter fileOperations;
     private Counter errors;
     private Counter apiCalls;
+    private Counter containerStartFailures;
     
     // Gauges for current state
     private AtomicInteger activeChatSessions;
@@ -78,6 +79,11 @@ public class MetricsService {
                 
         apiCalls = Counter.builder("filesurf_api_calls")
                 .description("Total number of API calls made")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+                
+        containerStartFailures = Counter.builder("filesurf_container_start_failures")
+                .description("Total number of container start failures")
                 .tag("application", "filesurf")
                 .register(meterRegistry);
         
@@ -257,6 +263,12 @@ public class MetricsService {
     public void incrementApiCalls() {
         apiCalls.increment();
         LOGGER.fine("API call made");
+    }
+    
+    // Container start failure tracking
+    public void incrementContainerStartFailures() {
+        containerStartFailures.increment();
+        LOGGER.warning("Container start failure recorded");
     }
     
     // Timer methods

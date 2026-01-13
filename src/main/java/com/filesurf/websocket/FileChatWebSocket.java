@@ -199,6 +199,20 @@ public class FileChatWebSocket {
         } catch (Exception e) {
             LOGGER.severe("[SESSION:" + sessionId + "] Failed to initialize session: " + e.getMessage());
             e.printStackTrace();
+            
+            // Track error metrics
+            metricsService.incrementErrors("session_initialization");
+            
+            // Track container-specific failures
+            if (e.getMessage() != null && 
+                (e.getMessage().contains("container") || 
+                 e.getMessage().contains("Container") ||
+                 e.getMessage().contains("podman") ||
+                 e.getMessage().contains("Podman"))) {
+                metricsService.incrementContainerStartFailures();
+                LOGGER.severe("[SESSION:" + sessionId + "] Container start failure detected");
+            }
+            
             try {
                 // Do not forward internal details to the client
                 return objectMapper.writeValueAsString(KlawedSocketMessage.createError(
