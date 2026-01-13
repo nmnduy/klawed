@@ -80,8 +80,9 @@ public class ChatMessagePollingService {
     }
 
     /**
-     * Async polling loop for unsent messages every 300ms
-     * Uses SQLite-friendly transaction handling
+     * Async polling loop for unsent messages every 300ms.
+     * Only polls for messages belonging to sessions with active WebSocket connections.
+     * Messages for disconnected sessions are ignored - users who drop off don't need those messages.
      */
     @Scheduled(every = "0.3s")
     @ActivateRequestContext
@@ -91,129 +92,136 @@ public class ChatMessagePollingService {
             return;
         }
         
-        LOGGER.fine("Polling for unsent messages...");
+        // Clean up stale connections first
+        activeConnections.entrySet().removeIf(entry -> {
+            if (entry.getValue().isClosed()) {
+                LOGGER.fine("[SESSION:" + entry.getKey() + "] Stale connection removed from polling map");
+                return true;
+            }
+            return false;
+        });
         
-        try {
-            // Get unsent messages
-            List<ChatMessageRecord> unsentMessages = fileChatService.findUnsentMessages();
+        // Only poll if there are active connections
+        if (activeConnections.isEmpty()) {
+            LOGGER.fine("No active connections, skipping poll");
+            return;
+        }
         
-            LOGGER.fine("Found " + unsentMessages.size() + " unsent messages");
+        LOGGER.fine("Polling for unsent messages for " + activeConnections.size() + " active session(s)...");
+        
+        // Poll for unsent messages only for sessions with active connections
+        for (Map.Entry<String, WebSocketConnection> entry : activeConnections.entrySet()) {
+            String sessionId = entry.getKey();
+            WebSocketConnection connection = entry.getValue();
             
-            for (ChatMessageRecord message : unsentMessages) {
-                try {
-                    String sessionId = message.getSessionStringId();
-                    
-                    // Check if there's an active WebSocket connection for this session
-                    WebSocketConnection connection = activeConnections.get(sessionId);
-                    if (connection != null && !connection.isClosed()) {
+            // Double-check connection is still open
+            if (connection.isClosed()) {
+                continue;
+            }
+            
+            try {
+                List<ChatMessageRecord> unsentMessages = fileChatService.findUnsentMessagesForSession(sessionId);
+                
+                if (!unsentMessages.isEmpty()) {
+                    LOGGER.fine("[SESSION:" + sessionId + "] Found " + unsentMessages.size() + " unsent messages");
+                }
+                
+                for (ChatMessageRecord message : unsentMessages) {
+                    try {
                         // Create appropriate message based on message type
-                        String jsonMessage;
-                        if (ChatConstants.DB_MESSAGE_TYPE_ERROR.equals(message.getMessageType())) {
-                            jsonMessage = objectMapper.writeValueAsString(
-                                KlawedSocketMessage.createError(message.getContent())
-                            );
-                        } else if ("status".equals(message.getMessageType())) {
-                            // Check if it's an END_AI_TURN message (stored as status type with JSON content)
-                            String content = message.getContent();
-                            if (content != null && content.contains("END_AI_TURN")) {
-                                try {
-                                    Map<String, Object> endTurnData = objectMapper.readValue(content, Map.class);
-                                    if (ChatConstants.MESSAGE_TYPE_END_AI_TURN.equals(endTurnData.get("messageType"))) {
-                                        jsonMessage = objectMapper.writeValueAsString(
-                                            KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_END_AI_TURN, null)
-                                        );
-                                    } else {
-                                        jsonMessage = objectMapper.writeValueAsString(
-                                            KlawedSocketMessage.createStatus(content)
-                                        );
-                                    }
-                                } catch (Exception e) {
-                                    // Not JSON, treat as regular status
-                                    jsonMessage = objectMapper.writeValueAsString(
-                                        KlawedSocketMessage.createStatus(content)
-                                    );
-                                }
-                            } else {
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.createStatus(content)
-                                );
-                            }
-                        } else if (ChatConstants.DB_MESSAGE_TYPE_API_CALL.equals(message.getMessageType())) {
-                            // Parse the API call JSON and create an API_CALL message
-                            try {
-                                Map<String, Object> apiCallData = objectMapper.readValue(message.getContent(), Map.class);
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_API_CALL, apiCallData)
-                                );
-                            } catch (Exception e) {
-                                LOGGER.warning("Failed to parse API_CALL message: " + e.getMessage());
-                                // Fall back to status message
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.createStatus("AI is thinking")
-                                );
-                            }
-                        } else if (ChatConstants.DB_MESSAGE_TYPE_TOOL.equals(message.getMessageType())) {
-                            // Parse the TOOL JSON and create a TOOL message
-                            try {
-                                Map<String, Object> toolData = objectMapper.readValue(message.getContent(), Map.class);
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_TOOL, toolData)
-                                );
-                            } catch (Exception e) {
-                                LOGGER.warning("Failed to parse TOOL message: " + e.getMessage());
-                                // Fall back to status message
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.createStatus("AI is working")
-                                );
-                            }
-                        } else if (ChatConstants.DB_MESSAGE_TYPE_TOOL_RESULT.equals(message.getMessageType())) {
-                            // Parse the TOOL_RESULT JSON and create a TOOL_RESULT message
-                            try {
-                                Map<String, Object> toolResultData = objectMapper.readValue(message.getContent(), Map.class);
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_TOOL_RESULT, toolResultData)
-                                );
-                            } catch (Exception e) {
-                                LOGGER.warning("Failed to parse TOOL_RESULT message: " + e.getMessage());
-                                // Fall back to status message
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.createStatus("AI is working")
-                                );
-                            }
-                        } else {
-                            // Default to text message
-                            jsonMessage = objectMapper.writeValueAsString(
-                                KlawedSocketMessage.createText(message.getContent())
-                            );
-                        }
+                        String jsonMessage = createJsonMessage(message);
                         
                         // Send the message asynchronously
                         connection.sendText(jsonMessage).subscribe().with(
                             success -> {
-                                LOGGER.info("[SESSION:" + sessionId + "] Resent unsent message ID: " + message.getId());
-                                // Mark as sent
+                                LOGGER.info("[SESSION:" + sessionId + "] Sent message ID: " + message.getId());
                                 markMessageAsSent(message.getId());
                             },
                             failure -> {
-                                LOGGER.warning("[SESSION:" + sessionId + "] Failed to resend message ID: " + message.getId() + 
+                                LOGGER.warning("[SESSION:" + sessionId + "] Failed to send message ID: " + message.getId() + 
                                              ", error: " + failure.getMessage());
                             }
                         );
-                    } else {
-                        LOGGER.fine("[SESSION:" + sessionId + "] No active WebSocket connection for unsent message ID: " + message.getId());
-                        // Remove stale connection from map
-                        if (connection != null && connection.isClosed()) {
-                            activeConnections.remove(sessionId);
-                            LOGGER.fine("[SESSION:" + sessionId + "] Stale connection removed from polling map");
-                        }
+                        
+                    } catch (Exception e) {
+                        LOGGER.severe("[SESSION:" + sessionId + "] Error processing message ID: " + message.getId() + ", error: " + e.getMessage());
                     }
-                    
+                }
+            } catch (Exception e) {
+                LOGGER.severe("[SESSION:" + sessionId + "] Error polling for messages: " + e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Create JSON message string based on message type
+     */
+    private String createJsonMessage(ChatMessageRecord message) throws Exception {
+        String messageType = message.getMessageType();
+        String content = message.getContent();
+        
+        if (ChatConstants.DB_MESSAGE_TYPE_ERROR.equals(messageType)) {
+            return objectMapper.writeValueAsString(
+                KlawedSocketMessage.createError(content)
+            );
+        } else if ("status".equals(messageType)) {
+            // Check if it's an END_AI_TURN message (stored as status type with JSON content)
+            if (content != null && content.contains("END_AI_TURN")) {
+                try {
+                    Map<String, Object> endTurnData = objectMapper.readValue(content, Map.class);
+                    if (ChatConstants.MESSAGE_TYPE_END_AI_TURN.equals(endTurnData.get("messageType"))) {
+                        return objectMapper.writeValueAsString(
+                            KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_END_AI_TURN, null)
+                        );
+                    }
                 } catch (Exception e) {
-                    LOGGER.severe("Error processing unsent message ID: " + message.getId() + ", error: " + e.getMessage());
+                    // Not JSON, treat as regular status
                 }
             }
-        } catch (Exception e) {
-            LOGGER.severe("Error in polling loop: " + e.getMessage());
+            return objectMapper.writeValueAsString(
+                KlawedSocketMessage.createStatus(content)
+            );
+        } else if (ChatConstants.DB_MESSAGE_TYPE_API_CALL.equals(messageType)) {
+            try {
+                Map<String, Object> apiCallData = objectMapper.readValue(content, Map.class);
+                return objectMapper.writeValueAsString(
+                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_API_CALL, apiCallData)
+                );
+            } catch (Exception e) {
+                LOGGER.warning("Failed to parse API_CALL message: " + e.getMessage());
+                return objectMapper.writeValueAsString(
+                    KlawedSocketMessage.createStatus("AI is thinking")
+                );
+            }
+        } else if (ChatConstants.DB_MESSAGE_TYPE_TOOL.equals(messageType)) {
+            try {
+                Map<String, Object> toolData = objectMapper.readValue(content, Map.class);
+                return objectMapper.writeValueAsString(
+                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_TOOL, toolData)
+                );
+            } catch (Exception e) {
+                LOGGER.warning("Failed to parse TOOL message: " + e.getMessage());
+                return objectMapper.writeValueAsString(
+                    KlawedSocketMessage.createStatus("AI is working")
+                );
+            }
+        } else if (ChatConstants.DB_MESSAGE_TYPE_TOOL_RESULT.equals(messageType)) {
+            try {
+                Map<String, Object> toolResultData = objectMapper.readValue(content, Map.class);
+                return objectMapper.writeValueAsString(
+                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_TOOL_RESULT, toolResultData)
+                );
+            } catch (Exception e) {
+                LOGGER.warning("Failed to parse TOOL_RESULT message: " + e.getMessage());
+                return objectMapper.writeValueAsString(
+                    KlawedSocketMessage.createStatus("AI is working")
+                );
+            }
+        } else {
+            // Default to text message
+            return objectMapper.writeValueAsString(
+                KlawedSocketMessage.createText(content)
+            );
         }
     }
 
@@ -228,7 +236,8 @@ public class ChatMessagePollingService {
     }
 
     /**
-     * Poll for unsent messages for a specific session
+     * Poll for unsent messages for a specific session.
+     * Called when a WebSocket connection is established to catch up on any missed messages.
      */
     @ActivateRequestContext
     public void pollAndSendUnsentMessagesForSession(String sessionId) {
@@ -238,117 +247,35 @@ public class ChatMessagePollingService {
             // Get unsent messages for this session
             List<ChatMessageRecord> unsentMessages = fileChatService.findUnsentMessagesForSession(sessionId);
             
-            LOGGER.fine("[SESSION:" + sessionId + "] Found " + unsentMessages.size() + " unsent messages");
+            if (!unsentMessages.isEmpty()) {
+                LOGGER.fine("[SESSION:" + sessionId + "] Found " + unsentMessages.size() + " unsent messages");
+            }
+            
+            WebSocketConnection connection = activeConnections.get(sessionId);
+            if (connection == null || connection.isClosed()) {
+                LOGGER.fine("[SESSION:" + sessionId + "] No active WebSocket connection, skipping poll");
+                return;
+            }
             
             for (ChatMessageRecord message : unsentMessages) {
                 try {
-                    // Check if there's an active WebSocket connection for this session
-                    WebSocketConnection connection = activeConnections.get(sessionId);
-                    if (connection != null && !connection.isClosed()) {
-                        // Create appropriate message based on message type
-                        String jsonMessage;
-                        if (ChatConstants.DB_MESSAGE_TYPE_ERROR.equals(message.getMessageType())) {
-                            jsonMessage = objectMapper.writeValueAsString(
-                                KlawedSocketMessage.createError(message.getContent())
-                            );
-                        } else if ("status".equals(message.getMessageType())) {
-                            // Check if it's an END_AI_TURN message (stored as status type with JSON content)
-                            String content = message.getContent();
-                            if (content != null && content.contains("END_AI_TURN")) {
-                                try {
-                                    Map<String, Object> endTurnData = objectMapper.readValue(content, Map.class);
-                                    if (ChatConstants.MESSAGE_TYPE_END_AI_TURN.equals(endTurnData.get("messageType"))) {
-                                        jsonMessage = objectMapper.writeValueAsString(
-                                            KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_END_AI_TURN, null)
-                                        );
-                                    } else {
-                                        jsonMessage = objectMapper.writeValueAsString(
-                                            KlawedSocketMessage.createStatus(content)
-                                        );
-                                    }
-                                } catch (Exception e) {
-                                    // Not JSON, treat as regular status
-                                    jsonMessage = objectMapper.writeValueAsString(
-                                        KlawedSocketMessage.createStatus(content)
-                                    );
-                                }
-                            } else {
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.createStatus(content)
-                                );
-                            }
-                        } else if (ChatConstants.DB_MESSAGE_TYPE_API_CALL.equals(message.getMessageType())) {
-                            // Parse the API call JSON and create an API_CALL message
-                            try {
-                                Map<String, Object> apiCallData = objectMapper.readValue(message.getContent(), Map.class);
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_API_CALL, apiCallData)
-                                );
-                            } catch (Exception e) {
-                                LOGGER.warning("Failed to parse API_CALL message: " + e.getMessage());
-                                // Fall back to status message
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.createStatus("AI is thinking")
-                                );
-                            }
-                        } else if (ChatConstants.DB_MESSAGE_TYPE_TOOL.equals(message.getMessageType())) {
-                            // Parse the TOOL JSON and create a TOOL message
-                            try {
-                                Map<String, Object> toolData = objectMapper.readValue(message.getContent(), Map.class);
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_TOOL, toolData)
-                                );
-                            } catch (Exception e) {
-                                LOGGER.warning("Failed to parse TOOL message: " + e.getMessage());
-                                // Fall back to status message
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.createStatus("AI is working")
-                                );
-                            }
-                        } else if (ChatConstants.DB_MESSAGE_TYPE_TOOL_RESULT.equals(message.getMessageType())) {
-                            // Parse the TOOL_RESULT JSON and create a TOOL_RESULT message
-                            try {
-                                Map<String, Object> toolResultData = objectMapper.readValue(message.getContent(), Map.class);
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_TOOL_RESULT, toolResultData)
-                                );
-                            } catch (Exception e) {
-                                LOGGER.warning("Failed to parse TOOL_RESULT message: " + e.getMessage());
-                                // Fall back to status message
-                                jsonMessage = objectMapper.writeValueAsString(
-                                    KlawedSocketMessage.createStatus("AI is working")
-                                );
-                            }
-                        } else {
-                            // Default to text message
-                            jsonMessage = objectMapper.writeValueAsString(
-                                KlawedSocketMessage.createText(message.getContent())
-                            );
+                    // Create appropriate message based on message type
+                    String jsonMessage = createJsonMessage(message);
+                    
+                    // Send the message asynchronously
+                    connection.sendText(jsonMessage).subscribe().with(
+                        success -> {
+                            LOGGER.info("[SESSION:" + sessionId + "] Sent message ID: " + message.getId());
+                            markMessageAsSent(message.getId());
+                        },
+                        failure -> {
+                            LOGGER.warning("[SESSION:" + sessionId + "] Failed to send message ID: " + message.getId() + 
+                                         ", error: " + failure.getMessage());
                         }
-                        
-                        // Send the message asynchronously
-                        connection.sendText(jsonMessage).subscribe().with(
-                            success -> {
-                                LOGGER.info("[SESSION:" + sessionId + "] Resent unsent message ID: " + message.getId());
-                                // Mark as sent
-                                markMessageAsSent(message.getId());
-                            },
-                            failure -> {
-                                LOGGER.warning("[SESSION:" + sessionId + "] Failed to resend message ID: " + message.getId() + 
-                                             ", error: " + failure.getMessage());
-                            }
-                        );
-                    } else {
-                        LOGGER.fine("[SESSION:" + sessionId + "] No active WebSocket connection for unsent message ID: " + message.getId());
-                        // Remove stale connection from map
-                        if (connection != null && connection.isClosed()) {
-                            activeConnections.remove(sessionId);
-                            LOGGER.fine("[SESSION:" + sessionId + "] Stale connection removed from polling map");
-                        }
-                    }
+                    );
                     
                 } catch (Exception e) {
-                    LOGGER.severe("[SESSION:" + sessionId + "] Error processing unsent message ID: " + message.getId() + 
+                    LOGGER.severe("[SESSION:" + sessionId + "] Error processing message ID: " + message.getId() + 
                                 ", error: " + e.getMessage());
                 }
             }
