@@ -19,12 +19,42 @@ echo "Remote host: $REMOTE_HOST"
 echo "Remote path: $REMOTE_PATH"
 echo ""
 
-# Step 0: Tag current commit as production
-echo "Step 0: Tagging current commit as 'production'..."
+# Step 0: Rotate rollback tags and tag current commit as production
+echo "Step 0: Updating production/rollback tags..."
 cd "$LOCAL_PATH"
+
+# Find previous production commit (if it exists)
+PREV_PROD_COMMIT=""
+if git show-ref --tags --quiet --verify refs/tags/production; then
+    PREV_PROD_COMMIT=$(git rev-parse production)
+    echo "   Previous production commit: $PREV_PROD_COMMIT"
+else
+    echo "   No existing 'production' tag found (first run?)"
+fi
+
+# Rotate rollback tags (n2 -> n3, n1 -> n2)
+if git show-ref --tags --quiet --verify refs/tags/production-rollback-n3; then
+    git tag -d production-rollback-n3 >/dev/null
+fi
+if git show-ref --tags --quiet --verify refs/tags/production-rollback-n2; then
+    git tag -f production-rollback-n3 "$(git rev-parse production-rollback-n2)" >/dev/null
+    echo "   → Moved production-rollback-n2 to production-rollback-n3"
+fi
+if git show-ref --tags --quiet --verify refs/tags/production-rollback-n1; then
+    git tag -f production-rollback-n2 "$(git rev-parse production-rollback-n1)" >/dev/null
+    echo "   → Moved production-rollback-n1 to production-rollback-n2"
+fi
+
+# Tag previous production as newest rollback (n1)
+if [ -n "$PREV_PROD_COMMIT" ]; then
+    git tag -f production-rollback-n1 "$PREV_PROD_COMMIT" >/dev/null
+    echo "   → Tagged previous production as production-rollback-n1"
+fi
+
+# Tag current commit as production
 git tag -f production HEAD
-git push -f origin production 2>/dev/null || echo "   (Could not push tag to origin)"
-echo "   ✓ Tagged $(git rev-parse --short HEAD) as 'production'"
+git push -f origin production production-rollback-n1 production-rollback-n2 production-rollback-n3 2>/dev/null || echo "   (Could not push tags to origin)"
+echo "   ✓ Tagged $(git rev-parse --short HEAD) as 'production' (rollbacks rotated)"
 echo ""
 
 # Check if GraalVM is installed
