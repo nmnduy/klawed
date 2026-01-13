@@ -561,6 +561,13 @@ class FileExplorer {
                                     </svg>
                                     <span>Download file</span>
                                 </button>
+                                <div class="border-t border-border my-1"></div>
+                                <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 delete-file-option">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    <span>Delete file</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -620,6 +627,14 @@ class FileExplorer {
             if (e.target.closest('.download-file-option')) {
                 e.stopPropagation();
                 this.downloadFile(path, name);
+                fileItem.querySelector('.file-options-dropdown')?.classList.add('hidden');
+                return;
+            }
+            
+            // Handle delete option
+            if (e.target.closest('.delete-file-option')) {
+                e.stopPropagation();
+                this.confirmDeleteFile(path, name);
                 fileItem.querySelector('.file-options-dropdown')?.classList.add('hidden');
                 return;
             }
@@ -714,6 +729,13 @@ class FileExplorer {
                                         </svg>
                                         <span>Download file</span>
                                     </button>
+                                    <div class="border-t border-slate-200 my-1"></div>
+                                    <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-red-600 hover:bg-red-50 flex items-center gap-2 delete-file-option">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        <span>Delete file</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -767,6 +789,19 @@ class FileExplorer {
                         downloadOption.addEventListener('click', (e) => {
                             e.stopPropagation();
                             this.downloadFile(item.path, item.name);
+                            // Close dropdown after selection
+                            const dropdown = itemElement.querySelector('.file-options-dropdown');
+                            if (dropdown) {
+                                dropdown.classList.add('hidden');
+                            }
+                        });
+                    }
+                    
+                    const deleteOption = itemElement.querySelector('.delete-file-option');
+                    if (deleteOption) {
+                        deleteOption.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            this.confirmDeleteFile(item.path, item.name);
                             // Close dropdown after selection
                             const dropdown = itemElement.querySelector('.file-options-dropdown');
                             if (dropdown) {
@@ -1085,6 +1120,55 @@ class FileExplorer {
                 console.error('Failed to download file:', err);
                 alert('Failed to download file: ' + err.message);
             });
+    }
+
+    // Show confirmation dialog and delete file
+    confirmDeleteFile(filePath, fileName) {
+        if (!this.sessionId) return;
+        
+        // Show confirmation dialog
+        const confirmed = window.confirm(`Are you sure you want to delete "${fileName}"?\n\nThis action cannot be undone.`);
+        
+        if (confirmed) {
+            this.deleteFile(filePath, fileName);
+        }
+    }
+
+    // Delete file from the server
+    async deleteFile(filePath, fileName) {
+        if (!this.sessionId) return;
+        
+        try {
+            const url = `/file-chat/explorer/delete?path=${encodeURIComponent(filePath)}`;
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: {
+                    'X-Session-ID': this.sessionId
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast(`File "${fileName}" deleted successfully`, 'success');
+                
+                // Refresh the current directory to show the file is gone
+                await this.loadDirectory(this.currentPath);
+                
+                // Invalidate workspace cache since files changed
+                this.invalidateWorkspaceCache();
+            } else {
+                throw new Error(result.error || 'Failed to delete file');
+            }
+        } catch (error) {
+            console.error('Failed to delete file:', error);
+            this.showToast(`Failed to delete file: ${error.message}`, 'error');
+        }
     }
 
     // Preview file

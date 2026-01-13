@@ -140,6 +140,7 @@ logs/                          # Application logs (dev only)
 - `GET /file-chat/explorer/open` - Open/download file
 - `GET /file-chat/explorer/preview` - Preview text file
 - `POST /file-chat/explorer/compile-latex` - Compile LaTeX
+- `DELETE /file-chat/explorer/delete` - Delete a file from session
 - `POST /file-chat/http/session/{sessionId}` - Create/update session
 - `DELETE /file-chat/http/session/{sessionId}` - Delete session
 - `POST /file-chat/http/session/{sessionId}/conclude` - Conclude session

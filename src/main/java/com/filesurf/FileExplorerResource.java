@@ -893,6 +893,106 @@ public class FileExplorerResource {
     }
     
     /**
+     * Delete a file from the session directory
+     */
+    @DELETE
+    @Path("/delete")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response deleteFile(
+            @HeaderParam("X-Session-ID") String sessionId,
+            @HeaderParam("X-User-ID") String headerUserId,
+            @CookieParam("filesurf_userId") String cookieUserId,
+            @QueryParam("path") String filePath) {
+
+        LOGGER.info("Deleting file for session: " + sessionId + ", path: " + filePath);
+
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"success\": false, \"error\": \"No session ID provided\"}")
+                    .build();
+        }
+
+        String userId = resolveUserId(headerUserId, cookieUserId);
+        if (userId == null || userId.trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"success\": false, \"error\": \"No user ID provided\"}")
+                    .build();
+        }
+
+        if (filePath == null || filePath.trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"success\": false, \"error\": \"No file path provided\"}")
+                    .build();
+        }
+
+        try {
+            java.nio.file.Path sessionDir = sessionManager.getSessionDirectory(sessionId, userId);
+            FileFilter fileFilter = createFileFilter(sessionDir);
+
+            String sanitizedPath = sanitizePath(filePath);
+            java.nio.file.Path targetFile = sessionDir.resolve(sanitizedPath).normalize();
+
+            // Ensure the file is within the session directory
+            if (!targetFile.startsWith(sessionDir)) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity("{\"success\": false, \"error\": \"Invalid file path\"}")
+                        .build();
+            }
+
+            // Don't allow deleting the session root directory itself
+            if (targetFile.equals(sessionDir)) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity("{\"success\": false, \"error\": \"Cannot delete session root directory\"}")
+                        .build();
+            }
+
+            if (shouldIgnore(targetFile, sessionDir, fileFilter)) {
+                return Response.status(Response.Status.NOT_FOUND)
+                        .entity("{\"success\": false, \"error\": \"File not found\"}")
+                        .build();
+            }
+
+            if (!Files.exists(targetFile)) {
+                return Response.status(Response.Status.NOT_FOUND)
+                        .entity("{\"success\": false, \"error\": \"File not found\"}")
+                        .build();
+            }
+
+            // Only allow deleting regular files (not directories)
+            if (!Files.isRegularFile(targetFile)) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity("{\"success\": false, \"error\": \"Only files can be deleted, not directories\"}")
+                        .build();
+            }
+
+            String fileName = targetFile.getFileName().toString();
+            
+            // Delete the file
+            Files.delete(targetFile);
+            
+            LOGGER.info("Successfully deleted file: " + targetFile + " for session: " + sessionId);
+            
+            // Track metrics
+            metricsService.incrementFileOperations();
+            metricsService.trackUserActivity(userId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "File '" + fileName + "' deleted successfully");
+            response.put("deletedPath", sanitizedPath);
+            
+            return Response.ok(response).build();
+            
+        } catch (IOException e) {
+            LOGGER.severe("Failed to delete file: " + e.getMessage());
+            metricsService.incrementErrors("file_delete");
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("{\"success\": false, \"error\": \"Failed to delete file: " + e.getMessage() + "\"}")
+                    .build();
+        }
+    }
+    
+    /**
      * Get file metadata
      */
     @GET
