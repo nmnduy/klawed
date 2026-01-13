@@ -9,8 +9,9 @@
 
 ---
 
-- [ ] use typst for pdf
+- [ ] highlight related new files after a work session
 - [ ] show KLAWED what cli tools it already has
+- [x] use typst for pdf
 - [x] three dots aren't very good
 - [x] what if klawed die
 
