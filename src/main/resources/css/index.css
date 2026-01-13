@@ -489,6 +489,14 @@
   }
 }
 
+/* Mobile & tablet: panels should fill available width when active */
+#chat-panel,
+#file-panel {
+  flex: 1 1 100%;
+  min-width: 0;
+  width: 100%;
+}
+
 /* Desktop dual-panel optimization */
 @media (min-width: 1024px) {
   /* On desktop, both panels are visible side-by-side */
