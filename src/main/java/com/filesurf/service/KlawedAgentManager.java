@@ -626,6 +626,7 @@ public class KlawedAgentManager {
         private UnixSocketClient unixSocketClient;
         private volatile boolean asyncPollingActive = false;
         private volatile boolean shouldPollContinuously = false;
+        private volatile long lastActivityTime = System.currentTimeMillis();
         
         public KlawedAgentInstance(String sessionId, Process process, String sqliteDbPath, Path sessionDir) {
             this(sessionId, process, sqliteDbPath, sessionDir, null);
@@ -671,6 +672,20 @@ public class KlawedAgentManager {
                 // Running directly - check process status
                 return process != null && process.isAlive();
             }
+        }
+        
+        /**
+         * Get the last activity time (when agent last received a message)
+         */
+        public long getLastActivityTime() {
+            return lastActivityTime;
+        }
+        
+        /**
+         * Update the last activity time (called when agent receives a message)
+         */
+        public void updateActivityTime() {
+            this.lastActivityTime = System.currentTimeMillis();
         }
         
         /**

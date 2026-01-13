@@ -173,6 +173,10 @@ public class FileChatWebSocket {
             // Connect to the agent
             agent.connect();
             LOGGER.info("[SESSION:" + sessionId + "] Connected to klawed agent");
+            
+            // Update agent activity time (for both new and reused agents)
+            agent.updateActivityTime();
+            LOGGER.info("[SESSION:" + sessionId + "] Agent activity time updated");
 
             try {
                 String statusMessage = "SESSION_ID:" + sessionId + "|Connected";
@@ -331,6 +335,9 @@ public class FileChatWebSocket {
             
             LOGGER.info("[SESSION:" + sessionId + "] Agent created and connected, sending message to klawed");
             
+            // Update agent activity time
+            agent.updateActivityTime();
+            
             // Send message to the dedicated agent asynchronously
             // Responses will be delivered via ChatMessagePollingService
             agent.sendMessageAsync(message);
@@ -385,13 +392,12 @@ public class FileChatWebSocket {
             LOGGER.info("[SESSION:" + sessionId + "] Closing connection with userId=" + userId);
         }
 
-        // Schedule agent shutdown with grace period instead of immediate stop
-        // This allows user to reconnect and reuse the agent if it's just a temporary disconnect
-        // Schedule agent shutdown with grace period (30 seconds)
-        // This allows user to reconnect if it's just a temporary disconnect
-        // When the shutdown job executes, it will also clean up klawed artifacts
-        agentShutdownJobService.enqueueShutdown(sessionId);
-        LOGGER.info("[SESSION:" + sessionId + "] Klawed agent shutdown scheduled (grace period: 30 seconds)");
+        // DON'T schedule agent shutdown on WebSocket close - user might reconnect immediately
+        // The agent will be cleaned up by:
+        // 1. Explicit /conclude command
+        // 2. Session expiration (handled separately)
+        // 3. Periodic cleanup of idle agents
+        LOGGER.info("[SESSION:" + sessionId + "] WebSocket closed, but keeping agent alive for potential reconnection");
 
         // Persist session folders back to per-user storage
         try {
@@ -403,25 +409,16 @@ public class FileChatWebSocket {
             e.printStackTrace();
         }
 
-        // Release session tracking (workspace stays, klawed artifacts cleaned by shutdown job)
-        sessionManager.releaseSessionTracking(sessionId);
-        LOGGER.info("[SESSION:" + sessionId + "] Session tracking released");
-
-        // Remove session from session store
-        SessionResource.removeSession(sessionId);
-        LOGGER.info("[SESSION:" + sessionId + "] Session removed from session store");
-
-        // Deactivate chat session in database
-        fileChatService.deactivateChatSession(sessionId);
-        LOGGER.info("[SESSION:" + sessionId + "] Chat session deactivated in database");
-
-        // Unregister connection from polling service
+        // DON'T release session tracking, remove from store, or deactivate on temporary WebSocket close
+        // These should only happen on explicit session conclusion (/conclude command)
+        // This allows the user to reconnect and resume their session seamlessly
+        
+        // DO unregister from polling service to stop sending messages to closed WebSocket
         chatMessagePollingService.unregisterConnection(sessionId);
         
-        // Track metrics for WebSocket connection closure
+        // DO update metrics for WebSocket connection closure (but not session metrics - session is still active)
         metricsService.decrementWebSocketConnections();
-        metricsService.decrementChatSessions();
-        LOGGER.info("[SESSION:" + sessionId + "] Metrics updated for closed connection");
+        LOGGER.info("[SESSION:" + sessionId + "] WebSocket closed, session remains active for reconnection");
     }
     
 

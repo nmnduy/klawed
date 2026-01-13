@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -254,6 +255,41 @@ public class AgentShutdownJobService {
                         LOGGER.warning("Failed to delete: " + path + " - " + e.getMessage());
                     }
                 });
+        }
+    }
+    
+    /**
+     * Cleanup idle agents (runs every 5 minutes).
+     * Stops agents that have been idle for more than 10 minutes.
+     * This handles sessions where the user never reconnected after WebSocket close.
+     */
+    @Scheduled(every = "5m")
+    void cleanupIdleAgents() {
+        try {
+            List<String> activeSessions = agentManager.getActiveSessions();
+            if (activeSessions.isEmpty()) {
+                return;
+            }
+            
+            long now = System.currentTimeMillis();
+            long idleThresholdMs = 10 * 60 * 1000; // 10 minutes
+            
+            for (String sessionId : activeSessions) {
+                try {
+                    KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(sessionId);
+                    if (agent == null) continue;
+                    
+                    long idleTimeMs = now - agent.getLastActivityTime();
+                    if (idleTimeMs > idleThresholdMs) {
+                        LOGGER.info("[SESSION:" + sessionId + "] Agent idle for " + (idleTimeMs / 1000) + " seconds, scheduling shutdown");
+                        enqueueShutdown(sessionId, Instant.now()); // Immediate shutdown for idle agents
+                    }
+                } catch (Exception e) {
+                    LOGGER.warning("[SESSION:" + sessionId + "] Error checking idle status: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warning("Error during idle agent cleanup: " + e.getMessage());
         }
     }
     
