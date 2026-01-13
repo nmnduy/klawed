@@ -121,6 +121,7 @@ The File Explorer provides rich viewing capabilities:
 - Images: Visual preview with zoom and download options
 - Videos: Embedded video player
 - Documents: Quick preview and download
+- Web pages: html file preview will open a web page
 - All files: Download button always available
 
 Just remember to let the user know the file path, relative to the workspace root
