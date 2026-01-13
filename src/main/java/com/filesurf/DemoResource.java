@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
  * - Supports HTTP Range requests for efficient video streaming
  * - All access is logged for audit purposes
  */
-@Path("/demo")
+@jakarta.ws.rs.Path("/demo")
 public class DemoResource {
 
     private static final Logger LOGGER = Logger.getLogger(DemoResource.class.getName());
@@ -121,7 +121,7 @@ public class DemoResource {
      * Returns a JSON array of available demo video names (without extension).
      */
     @GET
-    @Path("/list")
+    @jakarta.ws.rs.Path("/list")
     @Produces(MediaType.APPLICATION_JSON)
     public Response listDemos() {
         LOGGER.info("Listing demo videos");
@@ -185,7 +185,7 @@ public class DemoResource {
      * @param rangeHeader Optional Range header for partial content requests
      */
     @GET
-    @Path("/{name}")
+    @jakarta.ws.rs.Path("/{name}")
     @Produces(MP4_CONTENT_TYPE)
     public Response streamDemo(
             @PathParam("name") String name,
@@ -360,7 +360,7 @@ public class DemoResource {
      * Serve thumbnail image for a demo video if available.
      */
     @GET
-    @Path("/thumbnail/{name}")
+    @jakarta.ws.rs.Path("/thumbnail/{name}")
     public Response getThumbnail(@PathParam("name") String name) {
         // Validate filename
         if (name == null || name.isEmpty() || !SAFE_FILENAME_PATTERN.matcher(name).matches()) {
