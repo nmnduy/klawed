@@ -10,7 +10,10 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.logging.Logger;
@@ -36,9 +39,18 @@ public class DemoResource {
     
     // Content type for MP4 videos
     private static final String MP4_CONTENT_TYPE = "video/mp4";
+    private static final String JPEG_CONTENT_TYPE = "image/jpeg";
+    private static final String PNG_CONTENT_TYPE = "image/png";
+    private static final String WEBP_CONTENT_TYPE = "image/webp";
+    private static final String OCTET_STREAM = "application/octet-stream";
     
     // Maximum file size to serve (1 GB)
     private static final long MAX_FILE_SIZE = 1L * 1024 * 1024 * 1024;
+
+    // Maximum thumbnail size to serve (5 MB)
+    private static final long MAX_THUMBNAIL_SIZE = 5L * 1024 * 1024;
+
+    private static final List<String> THUMBNAIL_EXTENSIONS = List.of(".jpg", ".jpeg", ".png", ".webp");
 
     @ConfigProperty(name = "demo.videos.directory", defaultValue = "data/demos")
     String demosDirectory;
@@ -48,6 +60,51 @@ public class DemoResource {
     
     @Inject
     Template demos;
+
+    private Optional<Path> findThumbnailPath(String name) {
+        if (name == null || name.isEmpty()) {
+            return Optional.empty();
+        }
+        if (!SAFE_FILENAME_PATTERN.matcher(name).matches()) {
+            return Optional.empty();
+        }
+
+        Path demoDir = Paths.get(demosDirectory).toAbsolutePath().normalize();
+
+        for (String ext : THUMBNAIL_EXTENSIONS) {
+            Path thumbPath = demoDir.resolve(name + ext).normalize();
+
+            // Security: Ensure resolved path stays within demo directory
+            if (!thumbPath.startsWith(demoDir)) {
+                continue;
+            }
+
+            try {
+                if (Files.exists(thumbPath) && Files.isRegularFile(thumbPath) && Files.size(thumbPath) <= MAX_THUMBNAIL_SIZE) {
+                    return Optional.of(thumbPath);
+                }
+            } catch (IOException e) {
+                LOGGER.warning("Failed to read thumbnail file: " + thumbPath + " - " + e.getMessage());
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private String buildThumbnailUrl(String name) {
+        return "/demo/thumbnail/" + URLEncoder.encode(name, StandardCharsets.UTF_8);
+    }
+
+    private String getThumbnailContentType(Path thumbPath) {
+        String lower = thumbPath.getFileName().toString().toLowerCase();
+        if (lower.endsWith(".png")) {
+            return PNG_CONTENT_TYPE;
+        }
+        if (lower.endsWith(".webp")) {
+            return WEBP_CONTENT_TYPE;
+        }
+        return JPEG_CONTENT_TYPE;
+    }
 
     /**
      * Serve the demo videos page.
@@ -70,7 +127,7 @@ public class DemoResource {
         LOGGER.info("Listing demo videos");
         
         try {
-            java.nio.file.Path demoDir = Paths.get(demosDirectory);
+            Path demoDir = Paths.get(demosDirectory);
             
             if (!Files.exists(demoDir) || !Files.isDirectory(demoDir)) {
                 LOGGER.warning("Demo directory does not exist: " + demosDirectory);
@@ -95,6 +152,7 @@ public class DemoResource {
                         demo.put("filename", filename);
                         demo.put("size", Files.size(path));
                         demo.put("sizeFormatted", formatFileSize(Files.size(path)));
+                        findThumbnailPath(name).ifPresent(tp -> demo.put("thumbnail", buildThumbnailUrl(name)));
                         demos.add(demo);
                     } catch (IOException e) {
                         LOGGER.warning("Failed to read demo file attributes: " + path + " - " + e.getMessage());
@@ -296,6 +354,48 @@ public class DemoResource {
                 .header("Content-Disposition", "inline; filename=\"" + name + ".mp4\"")
                 .header("Cache-Control", "public, max-age=86400")
                 .build();
+    }
+
+    /**
+     * Serve thumbnail image for a demo video if available.
+     */
+    @GET
+    @Path("/thumbnail/{name}")
+    public Response getThumbnail(@PathParam("name") String name) {
+        // Validate filename
+        if (name == null || name.isEmpty() || !SAFE_FILENAME_PATTERN.matcher(name).matches()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("Invalid demo name")
+                    .type(MediaType.TEXT_PLAIN)
+                    .build();
+        }
+
+        Optional<Path> thumbPathOpt = findThumbnailPath(name);
+        if (thumbPathOpt.isEmpty()) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity("Thumbnail not found")
+                    .type(MediaType.TEXT_PLAIN)
+                    .build();
+        }
+
+        Path thumbPath = thumbPathOpt.get();
+        try {
+            long fileSize = Files.size(thumbPath);
+            String contentType = getThumbnailContentType(thumbPath);
+
+            return Response.ok(thumbPath.toFile())
+                    .type(contentType != null ? contentType : OCTET_STREAM)
+                    .header("Content-Length", fileSize)
+                    .header("Cache-Control", "public, max-age=86400")
+                    .header("Content-Disposition", "inline; filename=\"" + thumbPath.getFileName() + "\"")
+                    .build();
+        } catch (IOException e) {
+            LOGGER.warning("Failed to serve thumbnail for " + name + ": " + e.getMessage());
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("Failed to serve thumbnail")
+                    .type(MediaType.TEXT_PLAIN)
+                    .build();
+        }
     }
 
     /**
