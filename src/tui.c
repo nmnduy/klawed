@@ -509,8 +509,15 @@ static void init_ncurses_colors(void) {
                 rgb_to_ncurses(g_theme.search_rgb.g),
                 rgb_to_ncurses(g_theme.search_rgb.b));
 
-            // Input background color (very subtle blue tint, transparent)
-            init_color(23, 40, 50, 80);  // ~5-8% with subtle blue tint
+            // Input background color (theme background with subtle user color tint)
+            // Blend 5% of user color into background for subtle highlight
+            int bg_r = (g_theme.background_rgb.r * 95 + g_theme.user_rgb.r * 5) / 100;
+            int bg_g = (g_theme.background_rgb.g * 95 + g_theme.user_rgb.g * 5) / 100;
+            int bg_b = (g_theme.background_rgb.b * 95 + g_theme.user_rgb.b * 5) / 100;
+            init_color(23,
+                rgb_to_ncurses(bg_r),
+                rgb_to_ncurses(bg_g),
+                rgb_to_ncurses(bg_b));
 
             // Input border color (use user/green color)
             init_color(24,
@@ -1362,7 +1369,15 @@ static void input_redraw(TUIState *tui, const char *prompt) {
                                               content_width, effective_prefix_len);
 
     // Request window resize (this will be a no-op if size hasn't changed)
-    resize_input_window(tui, needed_lines);
+    // For BORDER style, we need extra height for top and bottom borders
+    // For BACKGROUND style, we add one line of top padding and one line of bottom padding
+    int window_height_needed = needed_lines;
+    if (tui->input_box_style == INPUT_STYLE_BORDER) {
+        window_height_needed += 2;  // +2 for top and bottom borders
+    } else if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
+        window_height_needed += 2;  // +2 for top and bottom padding
+    }
+    resize_input_window(tui, window_height_needed);
     input = tui->input_buffer;
     win = input->win;
     if (!win) {
@@ -1397,7 +1412,13 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     }
 
     // Adjust vertical scroll to keep cursor visible
-    int max_visible_lines = input->win_height;
+    // For BORDER style, we need to account for top and bottom borders
+    // For BACKGROUND style, we account for top and bottom padding
+    int content_start_row = (tui->input_box_style == INPUT_STYLE_BORDER) ? 1 :
+                            (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 1 : 0;
+    int border_height_offset = (tui->input_box_style == INPUT_STYLE_BORDER) ? 2 :
+                               (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 2 : 0;
+    int max_visible_lines = input->win_height - border_height_offset;
     if (cursor_line < input->line_scroll_offset) {
         input->line_scroll_offset = cursor_line;
     } else if (cursor_line >= input->line_scroll_offset + max_visible_lines) {
@@ -1427,6 +1448,11 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         }
     } else {
         // Style 2: Full border with no background
+        // Reset to default background (removes any previously set background color)
+        if (has_colors()) {
+            wbkgd(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
+
         // Draw box border around the input area
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
@@ -1442,22 +1468,23 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         }
-        mvwprintw(win, 0, content_start_col, "%s", mode_prefix);
+        mvwprintw(win, content_start_row, content_start_col, "%s", mode_prefix);
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         }
     }
 
     // Render visible lines with scrolling support
-    if (has_colors()) {
+    // Only use INPUT_BG color for BACKGROUND style (it includes a background color)
+    if (has_colors() && tui->input_box_style == INPUT_STYLE_BACKGROUND) {
         wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BG));
     }
 
     int current_line = 0;
-    int screen_y = 0;
+    int screen_y = content_start_row;
     int screen_x = content_start_col + effective_prefix_len;
 
-    for (int i = 0; i < input->length && screen_y < input->win_height; i++) {
+    for (int i = 0; i < input->length && screen_y < (input->win_height - (tui->input_box_style == INPUT_STYLE_BORDER ? 1 : 0)); i++) {
         // Skip lines before scroll offset
         if (current_line < input->line_scroll_offset) {
             if (input->buffer[i] == '\n') {
@@ -1492,7 +1519,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         }
     }
 
-    if (has_colors()) {
+    if (has_colors() && tui->input_box_style == INPUT_STYLE_BACKGROUND) {
         wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BG));
     }
 
@@ -1512,11 +1539,12 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         }
     }
 
-    int cursor_screen_y = temp_line - input->line_scroll_offset;
+    int cursor_screen_y = temp_line - input->line_scroll_offset + content_start_row;
     int cursor_screen_x = content_start_col + temp_col;
 
     // Bounds check for cursor position
-    if (cursor_screen_y >= 0 && cursor_screen_y < input->win_height &&
+    if (cursor_screen_y >= content_start_row &&
+        cursor_screen_y < (input->win_height - (tui->input_box_style == INPUT_STYLE_BORDER ? 1 : 0)) &&
         cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
         wmove(win, cursor_screen_y, cursor_screen_x);
     }
@@ -1533,7 +1561,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     if (tui->mode == TUI_MODE_INSERT || tui->mode == TUI_MODE_COMMAND ||
         tui->mode == TUI_MODE_SEARCH) {
         int total_lines = needed_lines;
-        int visible_lines = input->win_height;
+        int visible_lines = max_visible_lines;  // Use calculated visible lines (accounts for borders)
         int indicator_col = input->win_width - 1;
 
         // Show only when there is more content than fits on screen
@@ -1564,14 +1592,14 @@ static void input_redraw(TUIState *tui, const char *prompt) {
                 wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT));
             }
 
-            // Draw track
+            // Draw track (offset by content_start_row for border style)
             for (int row = 0; row < track_height; row++) {
-                mvwaddch(win, row, indicator_col, ACS_VLINE);
+                mvwaddch(win, row + content_start_row, indicator_col, ACS_VLINE);
             }
 
-            // Draw thumb
+            // Draw thumb (offset by content_start_row for border style)
             for (int row = thumb_top; row < thumb_top + thumb_height; row++) {
-                mvwaddch(win, row, indicator_col, ACS_CKBOARD);
+                mvwaddch(win, row + content_start_row, indicator_col, ACS_CKBOARD);
             }
 
             if (has_colors()) {
@@ -1579,7 +1607,8 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             }
 
             // Restore cursor position after drawing indicators
-            if (cursor_screen_y >= 0 && cursor_screen_y < input->win_height &&
+            if (cursor_screen_y >= content_start_row &&
+                cursor_screen_y < (input->win_height - (tui->input_box_style == INPUT_STYLE_BORDER ? 1 : 0)) &&
                 cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
                 wmove(win, cursor_screen_y, cursor_screen_x);
             }
