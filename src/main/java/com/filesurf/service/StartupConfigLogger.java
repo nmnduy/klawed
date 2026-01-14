@@ -47,8 +47,8 @@ public class StartupConfigLogger {
     @ConfigProperty(name = "sandbox.podman.env-file")
     String podmanEnvFile;
 
-    @ConfigProperty(name = "klawed.sqlite-queue.db-path")
-    String sqliteQueueDbPath;
+    @ConfigProperty(name = "klawed.sqlite-queue.db-dir")
+    String sqliteQueueDbDir;
 
     @ConfigProperty(name = "cookie.secure")
     boolean cookieSecure;
@@ -88,7 +88,7 @@ public class StartupConfigLogger {
         LOGGER.info("  Podman Sandbox: " + (podmanEnabled ? "enabled" : "disabled"));
         LOGGER.info("  Podman Image: " + podmanImage);
         LOGGER.info("  Podman Env File: " + podmanEnvFile);
-        LOGGER.info("  SQLite Queue DB Path: " + sqliteQueueDbPath);
+        LOGGER.info("  SQLite Queue Messages Dir: " + sqliteQueueDbDir);
         LOGGER.info("");
         
         LOGGER.info("Container Management:");

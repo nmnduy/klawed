@@ -60,8 +60,8 @@ public class KlawedSandboxService {
     @ConfigProperty(name = "sandbox.podman.env-file", defaultValue = "/etc/filesurf/klawed.env")
     String envFilePath;
     
-    @ConfigProperty(name = "klawed.sqlite-queue.db-path")
-    String sqliteQueueDbPath;
+    @ConfigProperty(name = "klawed.sqlite-queue.db-dir", defaultValue = "./data/klawed-messages")
+    String sqliteQueueDbDir;
     
     // Persistent storage root path (matches SessionManager)
     @ConfigProperty(name = "filesurf.persist.root", defaultValue = "./data/persistent")
@@ -107,6 +107,17 @@ public class KlawedSandboxService {
                     LOGGER.warning("Failed to get Podman version: " + e.getMessage());
                 }
             }
+        }
+        
+        // Initialize klawed messages directory
+        try {
+            Path messagesDir = Path.of(sqliteQueueDbDir);
+            if (!Files.exists(messagesDir)) {
+                Files.createDirectories(messagesDir);
+                LOGGER.info("Created klawed messages directory: " + messagesDir);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize klawed messages directory", e);
         }
         
         // Initialize sessions database
@@ -473,9 +484,9 @@ public class KlawedSandboxService {
             LOGGER.warning("[SESSION:" + sessionId + "] Failed to create .klawed/logs directory: " + e.getMessage());
         }
         
-        // Determine SQLite database path (inside workspace)
+        // Determine SQLite database path (in separate temp directory, not workspace)
         String dbFileName = "klawed_messages_" + sessionId + ".db";
-        Path sqliteDbPath = workspaceDir.resolve(dbFileName);
+        Path sqliteDbPath = Path.of(sqliteQueueDbDir).resolve(dbFileName);
         
         // Build podman run command
         List<String> command = buildPodmanRunCommand(containerName, workspaceDir, sqliteDbPath.toString(), sessionId);
@@ -549,6 +560,13 @@ public class KlawedSandboxService {
         command.add("-v");
         command.add(workspaceDir.toAbsolutePath() + ":/workspace");
         
+        // Mount klawed messages directory to /tmp/klawed-messages in container
+        // This keeps the DB files separate and they'll be auto-cleaned when container stops
+        Path dbPath = Path.of(sqliteDbPath);
+        Path dbDir = dbPath.getParent();
+        command.add("-v");
+        command.add(dbDir.toAbsolutePath() + ":/tmp/klawed-messages:rw");
+        
         // Working directory inside container
         command.add("-w");
         command.add("/workspace");
@@ -560,9 +578,9 @@ public class KlawedSandboxService {
         command.add(podmanImage);
         
         // Klawed arguments (SQLite queue mode only)
-        // Convert host path to container path
-        Path dbPath = Path.of(sqliteDbPath);
-        String containerDbPath = "/workspace/" + workspaceDir.toAbsolutePath().relativize(dbPath.toAbsolutePath());
+        // DB file is mounted in /tmp/klawed-messages/ inside container
+        String dbFileName = dbPath.getFileName().toString();
+        String containerDbPath = "/tmp/klawed-messages/" + dbFileName;
         
         command.add("--sqlite-queue");
         command.add(containerDbPath);

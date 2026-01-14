@@ -36,9 +36,9 @@ public class SQLiteQueuePollingService {
     @ConfigProperty(name = "klawed.sqlite-queue.receiver-name", defaultValue = "klawed")
     String receiverName;
     
-    // Persistent storage root path (matches SessionManager)
-    @ConfigProperty(name = "filesurf.persist.root", defaultValue = "./data/persistent")
-    String persistRoot;
+    // Klawed messages directory (where DB files are stored)
+    @ConfigProperty(name = "klawed.sqlite-queue.db-dir", defaultValue = "./data/klawed-messages")
+    String sqliteQueueDbDir;
     
     // Track active sessions that need polling
     // Map: sessionId -> userId
@@ -87,12 +87,9 @@ public class SQLiteQueuePollingService {
      * Poll a specific session's SQLite queue for klawed responses
      */
     private void pollSessionQueue(String sessionId, String userId) {
-        // Construct workspace directory path
-        Path workspaceDir = Path.of(persistRoot).resolve(userId);
-        
-        // Determine SQLite database path
+        // Determine SQLite database path (in separate messages directory)
         String dbFileName = "klawed_messages_" + sessionId + ".db";
-        Path sqliteDbPath = workspaceDir.resolve(dbFileName);
+        Path sqliteDbPath = Path.of(sqliteQueueDbDir).resolve(dbFileName);
         
         // Check if database exists
         if (!Files.exists(sqliteDbPath)) {
