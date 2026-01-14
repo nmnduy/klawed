@@ -63,6 +63,10 @@ public class KlawedSandboxService {
     @ConfigProperty(name = "klawed.sqlite-queue.db-path")
     String sqliteQueueDbPath;
     
+    // Persistent storage root path (matches SessionManager)
+    @ConfigProperty(name = "filesurf.persist.root", defaultValue = "./data/persistent")
+    String persistRoot;
+    
     // Sessions database path
     @ConfigProperty(name = "klawed.sessions.db.path", defaultValue = "data/sessions.db")
     String sessionsDbPath;
@@ -407,8 +411,8 @@ public class KlawedSandboxService {
         String containerName = "klawed-" + sessionId;
         
         // Construct workspace directory path
-        // This should match SessionManager's logic
-        Path workspaceDir = Path.of("/var/lib/filesurf/sessions/" + userId + "/" + sessionId + "/workspace");
+        // This matches SessionManager's logic: persistRoot/{userId}/
+        Path workspaceDir = Path.of(persistRoot).resolve(userId);
         
         // Ensure workspace directory exists
         if (!Files.exists(workspaceDir)) {

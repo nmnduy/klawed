@@ -41,6 +41,10 @@ public class ChatMessagePollingService {
     @ConfigProperty(name = "klawed.sqlite-queue.receiver-name", defaultValue = "klawed")
     String receiverName;
     
+    // Persistent storage root path (matches SessionManager)
+    @ConfigProperty(name = "filesurf.persist.root", defaultValue = "./data/persistent")
+    String persistRoot;
+    
     // Store active WebSocket connections by session ID
     private final Map<String, WebSocketConnection> activeConnections = new ConcurrentHashMap<>();
     
@@ -89,8 +93,8 @@ public class ChatMessagePollingService {
     public void sendMessageToKlawed(String sessionId, String userId, String message) throws IOException {
         LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via SQLite queue");
         
-        // Construct workspace directory path (matches KlawedSandboxService logic)
-        Path workspaceDir = Path.of("/var/lib/filesurf/sessions/" + userId + "/" + sessionId + "/workspace");
+        // Construct workspace directory path (matches SessionManager logic: persistRoot/{userId}/)
+        Path workspaceDir = Path.of(persistRoot).resolve(userId);
         
         // Determine SQLite database path (inside workspace)
         String dbFileName = "klawed_messages_" + sessionId + ".db";
