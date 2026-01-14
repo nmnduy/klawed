@@ -2799,6 +2799,43 @@ int tui_poll_input(TUIState *tui) {
     return ch;
 }
 
+// List of available vim-style commands for tab completion
+static const char* vim_commands[] = {
+    "q",
+    "quit",
+    "w",
+    "write",
+    "wq",
+    "noh",
+    "nohlsearch",
+    NULL  // Sentinel
+};
+
+// Helper: Find matching commands for tab completion
+// Returns: number of matches found, fills matches array (up to max_matches)
+static int find_command_matches(const char *prefix, const char **matches, int max_matches) {
+    if (!prefix || !matches || max_matches <= 0) {
+        return 0;
+    }
+
+    int prefix_len = (int)strlen(prefix);
+    int match_count = 0;
+
+    // If prefix is empty (just ":"), don't return all commands
+    if (prefix_len == 0) {
+        return 0;
+    }
+
+    // Find all commands that start with the prefix
+    for (int i = 0; vim_commands[i] != NULL && match_count < max_matches; i++) {
+        if (strncmp(vim_commands[i], prefix, (size_t)prefix_len) == 0) {
+            matches[match_count++] = vim_commands[i];
+        }
+    }
+
+    return match_count;
+}
+
 // Handle command mode input
 // Returns: 0 to continue, 1 if command executed, -1 on error/quit
 static int handle_command_mode_input(TUIState *tui, int ch, const char *prompt) {
@@ -2838,6 +2875,80 @@ static int handle_command_mode_input(TUIState *tui, int ch, const char *prompt) 
         tui->command_buffer[1] = '\0';
         tui->command_buffer_len = 1;
         input_redraw(tui, prompt);
+        return 0;
+    } else if (ch == '\t') {  // Tab - command completion
+        // Get the current command (without ':' prefix)
+        const char *cmd = tui->command_buffer + 1;
+
+        // Find matching commands
+        const char *matches[32];
+        int match_count = find_command_matches(cmd, matches, 32);
+
+        if (match_count == 0) {
+            // No matches, beep
+            beep();
+        } else if (match_count == 1) {
+            // Single match - complete it
+            const char *completion = matches[0];
+            size_t completion_len = strlen(completion);
+
+            // Check if we have space in the buffer
+            if (completion_len + 2 <= (size_t)tui->command_buffer_capacity) {  // +2 for ':' and '\0'
+                tui->command_buffer[0] = ':';
+                strlcpy(tui->command_buffer + 1, completion, (size_t)(tui->command_buffer_capacity - 1));
+                tui->command_buffer_len = (int)completion_len + 1;
+                input_redraw(tui, prompt);
+            }
+        } else {
+            // Multiple matches - find common prefix
+            size_t common_len = strlen(matches[0]);
+            for (int i = 1; i < match_count; i++) {
+                size_t j = 0;
+                while (j < common_len && matches[0][j] == matches[i][j]) {
+                    j++;
+                }
+                common_len = j;
+            }
+
+            // If common prefix is longer than current input, complete to common prefix
+            size_t current_len = strlen(cmd);
+            if (common_len > current_len) {
+                // Complete to common prefix
+                if (common_len + 2 <= (size_t)tui->command_buffer_capacity) {  // +2 for ':' and '\0'
+                    tui->command_buffer[0] = ':';
+                    memcpy(tui->command_buffer + 1, matches[0], common_len);
+                    tui->command_buffer[common_len + 1] = '\0';
+                    tui->command_buffer_len = (int)common_len + 1;
+                    input_redraw(tui, prompt);
+                }
+            } else {
+                // Show available options in status line
+                char status_msg[512];
+                size_t pos = 0;
+
+                // Build message with all matches
+                const char *prefix = "Available: ";
+                strlcpy(status_msg, prefix, sizeof(status_msg));
+                pos = strlen(status_msg);
+
+                for (int i = 0; i < match_count && pos < sizeof(status_msg) - 10; i++) {
+                    if (i > 0) {
+                        if (pos + 2 < sizeof(status_msg)) {
+                            strlcat(status_msg, ", ", sizeof(status_msg));
+                            pos = strlen(status_msg);
+                        }
+                    }
+                    size_t match_len = strlen(matches[i]);
+                    if (pos + match_len < sizeof(status_msg) - 1) {
+                        strlcat(status_msg, matches[i], sizeof(status_msg));
+                        pos = strlen(status_msg);
+                    }
+                }
+
+                tui_update_status(tui, status_msg);
+                beep();
+            }
+        }
         return 0;
     } else if (ch == 13 || ch == 10) {  // Enter - execute command
         // Parse and execute command
