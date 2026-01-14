@@ -57,6 +57,9 @@ typedef enum {
 #define NCURSES_PAIR_TODO_PENDING 9
 #define NCURSES_PAIR_TOOL 10
 #define NCURSES_PAIR_SEARCH 11
+#define NCURSES_PAIR_ASSISTANT_BG 12  // Assistant text with subtle background
+#define NCURSES_PAIR_TOOL_BG 13       // Tool output with subtle background
+#define NCURSES_PAIR_USER_BORDER 14   // User input border color
 
 // Conversation message entry
 typedef struct {
