@@ -2,7 +2,6 @@
 #include "compaction.h"
 #include "tool_utils.h"
 #include "logger.h"
-#include "model_context_limits.h"
 #include "persistence.h"
 #include <string.h>
 #include <stdio.h>
@@ -17,6 +16,16 @@
 #define DEFAULT_COMPACT_THRESHOLD 60    // 60% of token limit
 #define DEFAULT_KEEP_RECENT 20          // Keep last 20 messages
 #define DEFAULT_TOKEN_LIMIT 125000      // Default model token limit (125k)
+
+/**
+ * Estimate token count for text
+ * Simple heuristic: ~4 characters per token for English text
+ */
+static inline size_t estimate_tokens(const char *text) {
+    if (!text) return 0;
+    size_t char_count = strlen(text);
+    return (char_count + 3) / 4; // Round up
+}
 
 void compaction_init_config(CompactionConfig *config, int enabled, const char *model_name) {
     if (!config) return;
@@ -39,25 +48,16 @@ void compaction_init_config(CompactionConfig *config, int enabled, const char *m
         config->keep_recent = DEFAULT_KEEP_RECENT;
     }
 
-    // Get model token limit from environment or model database
+    // Get model token limit from environment or use default
     const char *token_limit_str = getenv("KLAWED_COMPACT_TOKEN_LIMIT");
     if (token_limit_str && atoi(token_limit_str) > 0) {
         config->model_token_limit = atoi(token_limit_str);
         LOG_DEBUG("Using token limit from KLAWED_COMPACT_TOKEN_LIMIT: %d", config->model_token_limit);
-    } else if (model_name && model_name[0] != '\0') {
-        // Try to get from model database
-        int limit = model_get_context_limit(model_name);
-        if (limit > 0) {
-            config->model_token_limit = limit;
-            LOG_DEBUG("Using token limit from model database for %s: %d", model_name, limit);
-        } else {
-            config->model_token_limit = DEFAULT_TOKEN_LIMIT;
-            LOG_DEBUG("Model %s not found, using default token limit: %d", model_name, DEFAULT_TOKEN_LIMIT);
-        }
     } else {
         config->model_token_limit = DEFAULT_TOKEN_LIMIT;
-        LOG_DEBUG("No model specified, using default token limit: %d", DEFAULT_TOKEN_LIMIT);
+        LOG_DEBUG("Using default token limit: %d", DEFAULT_TOKEN_LIMIT);
     }
+    (void)model_name; // Unused parameter
 
     config->last_compacted_index = -1; // No compaction yet
     config->current_tokens = 0;        // Will be updated during conversation
@@ -87,7 +87,7 @@ size_t compaction_estimate_message_tokens(const InternalMessage *msg) {
         switch (content->type) {
             case INTERNAL_TEXT:
                 if (content->text) {
-                    total += model_estimate_tokens(content->text);
+                    total += estimate_tokens(content->text);
                 }
                 break;
 
@@ -95,12 +95,12 @@ size_t compaction_estimate_message_tokens(const InternalMessage *msg) {
                 // Tool call includes: tool name + parameters JSON
                 total += 5; // tool call overhead
                 if (content->tool_name) {
-                    total += model_estimate_tokens(content->tool_name);
+                    total += estimate_tokens(content->tool_name);
                 }
                 if (content->tool_params) {
                     char *params_str = cJSON_PrintUnformatted(content->tool_params);
                     if (params_str) {
-                        total += model_estimate_tokens(params_str);
+                        total += estimate_tokens(params_str);
                         free(params_str);
                     }
                 }
@@ -110,12 +110,12 @@ size_t compaction_estimate_message_tokens(const InternalMessage *msg) {
                 // Tool response includes: tool_id + result content
                 total += 5; // tool response overhead
                 if (content->tool_id) {
-                    total += model_estimate_tokens(content->tool_id);
+                    total += estimate_tokens(content->tool_id);
                 }
                 if (content->tool_output) {
                     char *output_str = cJSON_PrintUnformatted(content->tool_output);
                     if (output_str) {
-                        total += model_estimate_tokens(output_str);
+                        total += estimate_tokens(output_str);
                         free(output_str);
                     }
                 }

@@ -29,8 +29,7 @@ Project instructions for Klawed when working with this codebase.
 - **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/keyboard-shortcuts.md`
 - **Arena allocator**: `src/arena.h` (region-based memory management, single-header library)
 - **Memvid integration**: `src/memvid.c`, `src/memvid.h`, `docs/memvid.md` (persistent memory)
-- **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management)
-- **Model context limits**: `src/model_context_limits.c`, `src/model_context_limits.h`, `docs/model-context-limits.md` (context window registry)
+- **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management with API token tracking)
 
 **Vendors:**
 - **web_browse_agent**: `vendors/web_browse_agent/` - Go-based web browser agent with Playwright
@@ -43,7 +42,6 @@ Project instructions for Klawed when working with this codebase.
 - **History**: `src/history_file.c`, `src/history_file.h`
 - **Migration system**: `src/migrations.c`, `src/migrations.h`
 - **Retry logic**: `src/retry_logic.c`, `src/retry_logic.h`
-- **Model context limits**: `src/model_context_limits.c`, `docs/model-context-limits.md` (model database and token estimation)
 
 **User Interfaces:**
 - **Color themes**: `src/colorscheme.h`, `src/builtin_themes.c`, `docs/COLOR_THEMES.md`

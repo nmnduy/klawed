@@ -58,7 +58,6 @@
 #include "sqlite_queue.h"
 #include "explore_tools.h"
 #include "retry_logic.h"
-#include "model_context_limits.h"
 #ifndef TEST_BUILD
 #include "openai_messages.h"
 #endif
@@ -5953,7 +5952,8 @@ static int handle_context_overflow_recovery(ConversationState *state, const char
         char *output_str = cJSON_PrintUnformatted(content->tool_output);
         if (output_str) {
             original_size = strlen(output_str);
-            estimated_tokens = model_estimate_tokens(output_str);
+            // Estimate tokens: ~4 chars per token
+            estimated_tokens = (original_size + 3) / 4;
             free(output_str);
         }
     }
