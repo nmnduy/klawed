@@ -1,6 +1,7 @@
 package com.filesurf.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -32,6 +33,10 @@ public class SessionManager {
 
     private static final Logger LOGGER = Logger.getLogger(SessionManager.class.getName());
 
+    // Inject persistent root path from configuration
+    @ConfigProperty(name = "filesurf.persist.root", defaultValue = "./data/persistent")
+    String persistRootConfig;
+
     // Map session ID to session directory path
     private final ConcurrentHashMap<String, Path> sessionDirectories = new ConcurrentHashMap<>();
 
@@ -41,7 +46,7 @@ public class SessionManager {
     // Map user ID to set of session IDs (allowing multiple sessions per user)
     private final ConcurrentHashMap<String, Set<String>> userToSessions = new ConcurrentHashMap<>();
 
-    // Persistent root (configurable via property)
+    // Cached persistent root path
     private Path persistRoot;
 
     // Date formatter for backup folders
@@ -744,9 +749,9 @@ public class SessionManager {
         if (persistRoot != null && Files.exists(persistRoot)) {
             return persistRoot;
         }
-        String configured = System.getProperty("filesurf.persist.root",
-                System.getenv().getOrDefault("PERSIST_ROOT", "./data/persistent"));
-        persistRoot = Path.of(configured).toAbsolutePath().normalize();
+        // Use the injected config property instead of System.getProperty
+        persistRoot = Path.of(persistRootConfig).toAbsolutePath().normalize();
+        LOGGER.info("Resolved persistent root: " + persistRoot);
         return persistRoot;
     }
 
