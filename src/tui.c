@@ -509,8 +509,8 @@ static void init_ncurses_colors(void) {
                 rgb_to_ncurses(g_theme.search_rgb.g),
                 rgb_to_ncurses(g_theme.search_rgb.b));
 
-            // Input background color (very subtle dark gray, more transparent)
-            init_color(23, 60, 60, 60);  // ~6% gray for more transparent background
+            // Input background color (very subtle blue tint, transparent)
+            init_color(23, 40, 50, 80);  // ~5-8% with subtle blue tint
 
             // Input border color (use user/green color)
             init_color(24,
