@@ -328,10 +328,21 @@ public class KlawedSandboxService {
             List<SessionRecord> activeSessions = getActiveSessions();
             LOGGER.fine("Managing containers for " + activeSessions.size() + " active session(s)");
             
+            // Get idle sessions to exclude them from auto-start
+            List<String> idleSessionIds = getIdleSessions();
+            Set<String> idleSet = new HashSet<>(idleSessionIds);
+            
             // Step 2: For each active session, ensure container exists and is healthy
+            // BUT skip idle sessions (they should stay stopped)
             for (SessionRecord session : activeSessions) {
                 String sessionId = session.sessionId;
                 String containerName = "klawed-" + sessionId;
+                
+                // Skip starting containers for idle sessions
+                if (idleSet.contains(sessionId)) {
+                    LOGGER.fine("[SESSION:" + sessionId + "] Skipping auto-start (session is idle)");
+                    continue;
+                }
                 
                 if (!isContainerRunning(containerName)) {
                     LOGGER.info("[SESSION:" + sessionId + "] Container not running, starting it...");
@@ -360,8 +371,7 @@ public class KlawedSandboxService {
             List<String> inactiveSessionIds = getInactiveSessions();
             Set<String> inactiveSet = new HashSet<>(inactiveSessionIds);
             
-            List<String> idleSessionIds = getIdleSessions();
-            Set<String> idleSet = new HashSet<>(idleSessionIds);
+            // Note: idleSet already populated in Step 2
             
             for (String containerName : runningContainers) {
                 // Extract session ID from container name
