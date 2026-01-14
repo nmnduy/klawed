@@ -8,10 +8,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.io.File;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
+
 
 /**
  * Service for tracking application metrics and usage statistics.
@@ -27,6 +29,9 @@ public class MetricsService {
     
     @Inject
     PodmanSandboxService podmanSandboxService;
+    
+    @Inject
+    KlawedAgentManager klawedAgentManager;
 
     // Counters for various events
     private Counter chatSessionsStarted;
@@ -37,7 +42,6 @@ public class MetricsService {
     private Counter containerStartFailures;
     
     // Gauges for current state
-    private AtomicInteger activeChatSessions;
     private AtomicInteger activeWebSocketConnections;
     
     // Timers for performance metrics
@@ -88,9 +92,9 @@ public class MetricsService {
                 .register(meterRegistry);
         
         // Initialize gauges
-        activeChatSessions = new AtomicInteger(0);
-        Gauge.builder("filesurf_active_chat_sessions", activeChatSessions, AtomicInteger::get)
-                .description("Number of currently active chat sessions")
+        // Active chat sessions - queries actual state from agent manager (more accurate than counter)
+        Gauge.builder("filesurf_active_chat_sessions", this, MetricsService::getActiveChatSessionsCount)
+                .description("Number of currently active chat sessions (with running agents)")
                 .tag("application", "filesurf")
                 .register(meterRegistry);
                 
@@ -212,20 +216,37 @@ public class MetricsService {
         }
     }
     
+    /**
+     * Get the count of active chat sessions (sessions with running agents).
+     * This queries the agent manager directly for the most accurate count.
+     * Returns 0 if agent manager is not available.
+     * 
+     * @return Number of active chat sessions
+     */
+    private double getActiveChatSessionsCount() {
+        if (klawedAgentManager == null) {
+            return 0;
+        }
+        
+        try {
+            // Get count of sessions with active agents
+            List<String> activeSessions = klawedAgentManager.getActiveSessions();
+            return activeSessions != null ? activeSessions.size() : 0;
+        } catch (Exception e) {
+            LOGGER.warning("Failed to get active chat sessions count: " + e.getMessage());
+            return 0;
+        }
+    }
+    
     // Session tracking methods
     public void incrementChatSessions() {
         chatSessionsStarted.increment();
-        activeChatSessions.incrementAndGet();
-        LOGGER.fine("Chat session started. Total sessions: " + activeChatSessions.get());
+        LOGGER.fine("Chat session started counter incremented");
     }
     
-    public void decrementChatSessions() {
-        int current = activeChatSessions.decrementAndGet();
-        if (current < 0) {
-            activeChatSessions.set(0);
-        }
-        LOGGER.fine("Chat session ended. Active sessions: " + activeChatSessions.get());
-    }
+    // NOTE: No decrementChatSessions() - active sessions are now dynamically queried from agent manager
+    // The filesurf_active_chat_sessions gauge queries getActiveChatSessionsCount() which returns
+    // the actual count of sessions with running agents
     
     // WebSocket connection tracking
     public void incrementWebSocketConnections() {
@@ -311,7 +332,8 @@ public class MetricsService {
     
     // Get current metrics
     public int getActiveChatSessions() {
-        return activeChatSessions.get();
+        // Return actual count from agent manager (dynamic query)
+        return (int) getActiveChatSessionsCount();
     }
     
     public int getActiveWebSocketConnections() {
