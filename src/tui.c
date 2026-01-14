@@ -152,7 +152,53 @@ static void render_status_window(TUIState *tui) {
     if (mode_col < 0) mode_col = 0;
     */
 
-    // Render scroll percentage in NORMAL mode (between status message and token usage)
+    // Prepare status message string (agent status - rightmost)
+    char status_str[256] = {0};
+    int status_str_len = 0;
+    int has_spinner = 0;
+    if (tui->status_visible && tui->status_message && tui->status_message[0] != '\0') {
+        if (tui->status_spinner_active) {
+            const spinner_variant_t *variant = status_spinner_variant();
+            int frame_count = variant->count;
+            const char **frames = variant->frames;
+            if (!frames || frame_count <= 0) {
+                frames = SPINNER_FRAMES;
+                frame_count = SPINNER_FRAME_COUNT;
+            }
+            const char *frame = frames[tui->status_spinner_frame % frame_count];
+            snprintf(status_str, sizeof(status_str), "%s %s ", frame, tui->status_message);
+            has_spinner = 1;
+        } else {
+            snprintf(status_str, sizeof(status_str), "%s ", tui->status_message);
+        }
+        status_str_len = (int)strlen(status_str);
+    }
+
+    // Prepare plan mode indicator (if enabled) - always visible regardless of mode
+    char plan_str[16] = {0};
+    int plan_str_len = 0;
+    int plan_mode = 0;
+
+    // Read plan mode from conversation state with proper locking
+    if (tui->conversation_state) {
+        if (conversation_state_lock(tui->conversation_state) == 0) {
+            plan_mode = tui->conversation_state->plan_mode;
+            conversation_state_unlock(tui->conversation_state);
+            LOG_DEBUG("[TUI] render_status_window: plan_mode=%d, width=%d", plan_mode, width);
+        } else {
+            LOG_WARN("[TUI] Failed to lock conversation state for plan_mode read");
+        }
+    } else {
+        LOG_WARN("[TUI] No conversation state for plan_mode read");
+    }
+
+    if (plan_mode) {
+        snprintf(plan_str, sizeof(plan_str), " ● Plan ");
+        plan_str_len = (int)strlen(plan_str);
+        LOG_DEBUG("[TUI] Plan mode indicator: '%s' (len=%d)", plan_str, plan_str_len);
+    }
+
+    // Prepare scroll percentage in NORMAL mode
     char scroll_str[32] = {0};
     int scroll_str_len = 0;
     if (tui->mode == TUI_MODE_NORMAL) {
@@ -182,7 +228,7 @@ static void render_status_window(TUIState *tui) {
         scroll_str_len = (int)strlen(scroll_str);
     }
 
-    // Render token usage on the right side (only in NORMAL mode)
+    // Prepare token usage (only in NORMAL mode)
     char token_str[128] = {0};
     int token_str_len = 0;
     if (tui->mode == TUI_MODE_NORMAL) {
@@ -223,45 +269,22 @@ static void render_status_window(TUIState *tui) {
         }
     }
 
-    // Calculate how much space we have for the status message
-    int max_status_len = width - scroll_str_len - token_str_len - 1;
+    // Layout (from right to left):
+    // [status_message] <- rightmost
+    // [plan_mode] [scroll%] [token] [status_message] <- in NORMAL mode
+    // [plan_mode] [status_message] <- in INSERT/COMMAND mode
 
-    // Render status message on the left (if visible)
-    if (tui->status_visible && tui->status_message && tui->status_message[0] != '\0') {
+    // Render status message on the right (rightmost position)
+    if (status_str_len > 0 && status_str_len < width) {
+        int status_col = width - status_str_len;
+        if (status_col < 0) status_col = 0;
+
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
-
-        if (tui->status_spinner_active) {
-            const spinner_variant_t *variant = status_spinner_variant();
-            int frame_count = variant->count;
-            const char **frames = variant->frames;
-            if (!frames || frame_count <= 0) {
-                frames = SPINNER_FRAMES;
-                frame_count = SPINNER_FRAME_COUNT;
-            }
-            const char *frame = frames[tui->status_spinner_frame % frame_count];
-            if (width > 0) {
-                mvwaddnstr(tui->wm.status_win, 0, col, frame, width - col);
-                col += 1;
-            }
-            if (col < width) {
-                mvwaddch(tui->wm.status_win, 0, col, ' ');
-                col += 1;
-            }
-        }
-
-        // Render status message (leave space for token counter)
-        int msg_len = (int)strlen(tui->status_message);
-        if (msg_len > max_status_len - col) {
-            msg_len = max_status_len - col;
-        }
-        if (msg_len > 0 && col < width) {
-            mvwaddnstr(tui->wm.status_win, 0, col, tui->status_message, msg_len);
-        }
-
+        mvwaddnstr(tui->wm.status_win, 0, status_col, status_str, status_str_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
@@ -269,33 +292,23 @@ static void render_status_window(TUIState *tui) {
         }
     }
 
-    // Render plan mode indicator (if enabled) - always visible regardless of mode
-    char plan_str[16] = {0};
-    int plan_str_len = 0;
-    int plan_mode = 0;
+    // Render token usage (in NORMAL mode, to the left of status)
+    if (token_str_len > 0 && token_str_len < width) {
+        int token_col = width - status_str_len - token_str_len;
+        if (token_col < 0) token_col = 0;
 
-    // Read plan mode from conversation state with proper locking
-    if (tui->conversation_state) {
-        if (conversation_state_lock(tui->conversation_state) == 0) {
-            plan_mode = tui->conversation_state->plan_mode;
-            conversation_state_unlock(tui->conversation_state);
-            LOG_DEBUG("[TUI] render_status_window: plan_mode=%d, width=%d", plan_mode, width);
-        } else {
-            LOG_WARN("[TUI] Failed to lock conversation state for plan_mode read");
+        if (has_colors()) {
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
         }
-    } else {
-        LOG_WARN("[TUI] No conversation state for plan_mode read");
+        mvwaddnstr(tui->wm.status_win, 0, token_col, token_str, token_str_len);
+        if (has_colors()) {
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+        }
     }
 
-    if (plan_mode) {
-        snprintf(plan_str, sizeof(plan_str), " ● Plan ");
-        plan_str_len = (int)strlen(plan_str);
-        LOG_DEBUG("[TUI] Plan mode indicator: '%s' (len=%d)", plan_str, plan_str_len);
-    }
-
-    // Render scroll percentage (right-aligned, before plan mode and token usage)
+    // Render scroll percentage (in NORMAL mode, to the left of token)
     if (scroll_str_len > 0 && scroll_str_len < width) {
-        int scroll_col = width - scroll_str_len - plan_str_len - token_str_len;
+        int scroll_col = width - status_str_len - token_str_len - scroll_str_len;
         if (scroll_col < 0) scroll_col = 0;
 
         if (has_colors()) {
@@ -307,21 +320,20 @@ static void render_status_window(TUIState *tui) {
         }
     }
 
-    // Render plan mode indicator (visible in all modes)
-    // Position depends on whether we're showing token usage (NORMAL mode only)
+    // Render plan mode indicator (to the left of scroll/token or status, depending on mode)
     if (plan_str_len > 0 && plan_str_len < width) {
         int plan_col;
         if (tui->mode == TUI_MODE_NORMAL) {
-            // In NORMAL mode: place before token usage
-            plan_col = width - plan_str_len - token_str_len;
+            // In NORMAL mode: place to the left of scroll percentage
+            plan_col = width - status_str_len - token_str_len - scroll_str_len - plan_str_len;
         } else {
-            // In INSERT/COMMAND mode: place at right edge (no tokens shown)
-            plan_col = width - plan_str_len;
+            // In INSERT/COMMAND mode: place to the left of status message
+            plan_col = width - status_str_len - plan_str_len;
         }
         if (plan_col < 0) plan_col = 0;
 
-        LOG_DEBUG("[TUI] Rendering plan mode at col=%d, width=%d, plan_str_len=%d, token_str_len=%d, mode=%d",
-                  plan_col, width, plan_str_len, token_str_len, tui->mode);
+        LOG_DEBUG("[TUI] Rendering plan mode at col=%d, width=%d, plan_str_len=%d, mode=%d",
+                  plan_col, width, plan_str_len, tui->mode);
 
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
@@ -339,19 +351,8 @@ static void render_status_window(TUIState *tui) {
                   plan_str_len, width, (plan_str_len > 0 && plan_str_len < width));
     }
 
-    // Render token usage on the right
-    if (token_str_len > 0 && token_str_len < width) {
-        int token_col = width - token_str_len;
-        if (token_col < 0) token_col = 0;
-
-        if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
-        }
-        mvwaddnstr(tui->wm.status_win, 0, token_col, token_str, token_str_len);
-        if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
-        }
-    }
+    (void)col;  // Suppress unused variable warning
+    (void)has_spinner;  // Suppress unused variable warning
 
     // MODE INDICATOR RENDERING - Commented out (hiding input box in normal mode instead)
     /*
