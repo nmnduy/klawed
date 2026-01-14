@@ -68,6 +68,9 @@ public class FileChatWebSocket {
     ChatMessagePollingService chatMessagePollingService;
 
     @Inject
+    com.filesurf.service.SQLiteQueuePollingService sqliteQueuePollingService;
+
+    @Inject
     FileChatService fileChatService;
 
     @Inject
@@ -145,8 +148,11 @@ public class FileChatWebSocket {
         klawedSandboxService.registerSession(sessionId, userId);
         LOGGER.info("[SESSION:" + sessionId + "] Session registered with KlawedSandboxService");
 
-        // Register connection with polling service
+        // Register connection with polling service (for sending messages to WebSocket)
         chatMessagePollingService.registerConnection(sessionId, connection);
+        
+        // Register session with SQLite queue polling service (for receiving messages from klawed)
+        sqliteQueuePollingService.registerSession(sessionId, userId);
 
         // Check for and resend any unsent messages from previous connection
         chatMessagePollingService.pollAndSendUnsentMessagesForSession(sessionId);
@@ -353,8 +359,9 @@ public class FileChatWebSocket {
         // These should only happen on explicit session conclusion (/conclude command)
         // This allows the user to reconnect and resume their session seamlessly
         
-        // DO unregister from polling service to stop sending messages to closed WebSocket
+        // DO unregister from polling services to stop sending/receiving messages for this closed connection
         chatMessagePollingService.unregisterConnection(sessionId);
+        sqliteQueuePollingService.unregisterSession(sessionId);
         
         // DO update metrics for WebSocket connection closure (but not session metrics - session is still active)
         metricsService.decrementWebSocketConnections();
