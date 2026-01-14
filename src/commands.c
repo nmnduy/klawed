@@ -415,13 +415,13 @@ static int cmd_dump(ConversationState *state, const char *args) {
         }
         return -1;
     }
-    
+
     // Trim leading whitespace from args
     while (*args == ' ' || *args == '\t') args++;
-    
+
     char file_path[PATH_MAX];
     int use_default_name = 0;
-    
+
     if (strlen(args) == 0) {
         // No file path provided, use default name based on session ID
         if (!state->session_id || strlen(state->session_id) == 0) {
@@ -431,7 +431,7 @@ static int cmd_dump(ConversationState *state, const char *args) {
             }
             return -1;
         }
-        
+
         // Create default filename: conversation-<session_id>.md
         snprintf(file_path, sizeof(file_path), "conversation-%s.md", state->session_id);
         use_default_name = 1;
@@ -439,7 +439,7 @@ static int cmd_dump(ConversationState *state, const char *args) {
         // Use provided file path
         strlcpy(file_path, args, sizeof(file_path));
     }
-    
+
     // Open the file for writing
     FILE *fp = fopen(file_path, "w");
     if (!fp) {
@@ -449,18 +449,18 @@ static int cmd_dump(ConversationState *state, const char *args) {
         print_error(err_msg);
         return -1;
     }
-    
+
     // Write header
     fprintf(fp, "# Conversation Dump\n\n");
     fprintf(fp, "**Session ID:** %s\n", state->session_id ? state->session_id : "unknown");
     fprintf(fp, "**Timestamp:** %s\n\n", get_current_timestamp());
-    
+
     // Dump all messages in the conversation
     int message_count = 0;
     for (int i = 0; i < state->count; i++) {
         InternalMessage *msg = &state->messages[i];
         if (!msg) continue;
-        
+
         // Write message header based on role
         const char *role_str = "UNKNOWN";
         switch (msg->role) {
@@ -469,20 +469,20 @@ static int cmd_dump(ConversationState *state, const char *args) {
             case MSG_SYSTEM: role_str = "SYSTEM"; break;
             default: break; // Keep as UNKNOWN
         }
-        
+
         fprintf(fp, "## Message %d - %s\n\n", ++message_count, role_str);
-        
+
         // Write all content blocks
         if (msg->contents && msg->content_count > 0) {
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *content = &msg->contents[j];
                 if (!content) continue;
-                
+
                 switch (content->type) {
                     case INTERNAL_TEXT:
                         fprintf(fp, "%s\n\n", content->text ? content->text : "(empty text)");
                         break;
-                        
+
                     case INTERNAL_TOOL_CALL:
                         fprintf(fp, "**[TOOL CALL: %s", content->tool_name ? content->tool_name : "unknown");
                         if (content->tool_id) {
@@ -490,7 +490,7 @@ static int cmd_dump(ConversationState *state, const char *args) {
                         }
                         fprintf(fp, "]**\n\n");
                         break;
-                        
+
                     case INTERNAL_TOOL_RESPONSE:
                         fprintf(fp, "**[TOOL RESULT");
                         if (content->tool_id) {
@@ -502,11 +502,11 @@ static int cmd_dump(ConversationState *state, const char *args) {
                             fprintf(fp, "%s\n\n", content->text);
                         }
                         break;
-                        
+
                     case INTERNAL_IMAGE:
                         fprintf(fp, "**[IMAGE: %s]**\n\n", content->image_path ? content->image_path : "unknown image");
                         break;
-                        
+
                     default:
                         fprintf(fp, "**[UNKNOWN CONTENT TYPE: %d]**\n\n", content->type);
                         break;
@@ -515,16 +515,16 @@ static int cmd_dump(ConversationState *state, const char *args) {
         } else {
             fprintf(fp, "*No content in this message.*\n\n");
         }
-        
+
         fprintf(fp, "---\n\n");
     }
-    
+
     if (message_count == 0) {
         fprintf(fp, "*No messages in conversation.*\n\n");
     }
-    
+
     fclose(fp);
-    
+
     // Show success message
     char success_msg[PATH_MAX + 64];
     if (use_default_name) {
@@ -535,7 +535,7 @@ static int cmd_dump(ConversationState *state, const char *args) {
                  "Conversation dumped to: %s", file_path);
     }
     print_status(success_msg);
-    
+
     return 0;
 }
 

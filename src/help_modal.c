@@ -70,6 +70,7 @@ static const HelpLine help_content[] = {
     {NULL, "G", "Go to bottom of conversation"},
     {NULL, "( / )", "Jump between text blocks"},
     {NULL, "n / N", "Next/previous search match"},
+    {NULL, "b", "Toggle input box style"},
 
     // Command mode section
     {" COMMAND MODE (:)", NULL, NULL},
