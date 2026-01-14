@@ -52,7 +52,7 @@ public class ChatMessagePollingService {
      */
     public void registerConnection(String sessionId, WebSocketConnection connection) {
         activeConnections.put(sessionId, connection);
-        LOGGER.fine("[SESSION:" + sessionId + "] Connection registered for polling");
+        LOGGER.info("[SESSION:" + sessionId + "] Connection registered for polling (total active: " + activeConnections.size() + ")");
     }
     
     /**
@@ -60,7 +60,7 @@ public class ChatMessagePollingService {
      */
     public void unregisterConnection(String sessionId) {
         activeConnections.remove(sessionId);
-        LOGGER.fine("[SESSION:" + sessionId + "] Connection unregistered from polling");
+        LOGGER.info("[SESSION:" + sessionId + "] Connection unregistered from polling (total active: " + activeConnections.size() + ")");
     }
     
     /**
@@ -151,7 +151,7 @@ public class ChatMessagePollingService {
         // Clean up stale connections first
         activeConnections.entrySet().removeIf(entry -> {
             if (entry.getValue().isClosed()) {
-                LOGGER.fine("[SESSION:" + entry.getKey() + "] Stale connection removed from polling map");
+                LOGGER.info("[SESSION:" + entry.getKey() + "] Stale connection removed from polling map");
                 return true;
             }
             return false;
@@ -159,11 +159,10 @@ public class ChatMessagePollingService {
         
         // Only poll if there are active connections
         if (activeConnections.isEmpty()) {
-            LOGGER.fine("No active connections, skipping poll");
-            return;
+            return; // Silent - don't log when there are no connections
         }
         
-        LOGGER.fine("Polling for unsent messages for " + activeConnections.size() + " active session(s)...");
+        // Don't log every poll - only log when we find messages (below)
         
         // Poll for unsent messages only for sessions with active connections
         for (Map.Entry<String, WebSocketConnection> entry : activeConnections.entrySet()) {
