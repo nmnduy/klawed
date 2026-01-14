@@ -9,8 +9,7 @@
 
 ---
 
-- [ ] one more demo
-    - [ ] 
+- [ ] one narrated demo
 - [ ] randomnized tips
 
 ---
@@ -20,6 +19,7 @@
 
 ---
 
+- [ ] bug: having multiple windows for the same user means all windows will return the same response. we manage by workspace and not sessions
 - [ ] highlight related new files after a work session
 - [ ] show KLAWED what cli tools it already has
 - [ ] chrome extension that communicate with local file system
