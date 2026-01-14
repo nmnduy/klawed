@@ -483,6 +483,8 @@ public class PodmanSandboxService {
         
         if (!isContainerRunning(containerId)) {
             LOGGER.info("Container not running: " + containerId);
+            // Still try to remove it in case it exists in stopped state
+            removeContainerFromPodman(containerId);
             removeFromTracking(containerId, "stopped");
             return;
         }
@@ -505,6 +507,9 @@ public class PodmanSandboxService {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while stopping container", e);
         }
+        
+        // Remove the container after stopping it to avoid "name already in use" errors
+        removeContainerFromPodman(containerId);
         
         removeFromTracking(containerId, "stopped");
     }
@@ -537,7 +542,38 @@ public class PodmanSandboxService {
             throw new IOException("Interrupted while killing container", e);
         }
         
+        // Remove the container after killing it to avoid "name already in use" errors
+        removeContainerFromPodman(containerId);
+        
         removeFromTracking(containerId, "killed");
+    }
+    
+    /**
+     * Remove a container from Podman.
+     * This should be called after stopping/killing a container to prevent
+     * "container name already in use" errors on subsequent starts.
+     * 
+     * @param containerId The container ID or name
+     */
+    private void removeContainerFromPodman(String containerId) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("podman", "rm", "-f", containerId);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            String output = readProcessOutput(process);
+            int exitCode = process.waitFor();
+            
+            if (exitCode != 0) {
+                // Container might not exist, which is fine
+                LOGGER.fine("Container remove returned exit code " + exitCode + ": " + output);
+            } else {
+                LOGGER.info("Container removed from Podman: " + containerId);
+            }
+        } catch (IOException | InterruptedException e) {
+            // Log but don't throw - removal is best-effort cleanup
+            LOGGER.warning("Failed to remove container " + containerId + ": " + e.getMessage());
+        }
     }
     
     /**
