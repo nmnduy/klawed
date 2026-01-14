@@ -242,7 +242,7 @@ export function init(rootEl) {
         if (scrollToBottomButton) return scrollToBottomButton;
         
         const button = document.createElement('button');
-        button.className = 'fixed bottom-24 right-6 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center opacity-0 pointer-events-none hover:scale-110 active:scale-95';
+        button.className = 'absolute bottom-24 right-6 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center opacity-0 pointer-events-none hover:scale-110 active:scale-95';
         button.setAttribute('aria-label', 'Scroll to bottom');
         button.innerHTML = `
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -260,7 +260,13 @@ export function init(rootEl) {
         });
         
         scrollToBottomButton = button;
-        document.body.appendChild(button);
+        // Append to chat panel instead of body so it's contained within the chat area
+        const chatPanel = document.getElementById('chat-panel');
+        if (chatPanel) {
+            chatPanel.appendChild(button);
+        } else {
+            document.body.appendChild(button); // Fallback
+        }
         return button;
     }
     
