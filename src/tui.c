@@ -1362,7 +1362,12 @@ static void input_redraw(TUIState *tui, const char *prompt) {
                                               content_width, effective_prefix_len);
 
     // Request window resize (this will be a no-op if size hasn't changed)
-    resize_input_window(tui, needed_lines);
+    // For BORDER style, we need extra height for top and bottom borders
+    int window_height_needed = needed_lines;
+    if (tui->input_box_style == INPUT_STYLE_BORDER) {
+        window_height_needed += 2;  // +2 for top and bottom borders
+    }
+    resize_input_window(tui, window_height_needed);
     input = tui->input_buffer;
     win = input->win;
     if (!win) {
