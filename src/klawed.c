@@ -8034,10 +8034,28 @@ static int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char 
         return 1;  // Signal to exit
     }
 
+    // Check for clear command
+    if (strcmp(cmd_copy, "clear") == 0) {
+        // Get the conversation state from the TUI
+        ConversationState *state = tui->conversation_state;
+        if (state) {
+            // Clear the conversation state
+            clear_conversation(state);
+            // Clear the TUI conversation display
+            tui_clear_conversation(tui, VERSION, state->model, state->working_dir);
+            ui_append_line(tui, queue, "[Status]", "Conversation cleared", COLOR_PAIR_STATUS);
+        } else {
+            ui_show_error(tui, queue, "Failed to clear conversation: no state available");
+        }
+        free(cmd_copy);
+        return 0;
+    }
+
     // Check for help command
     if (strcmp(cmd_copy, "help") == 0) {
         ui_append_line(tui, queue, "[Help]", "Vim-style commands:", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :q, :quit, :wq - Exit klawed", COLOR_PAIR_STATUS);
+        ui_append_line(tui, queue, "[Help]", "  :clear - Clear conversation history", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :!<cmd> - Execute shell command (e.g., :!ls)", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :re !<cmd> - Execute command and insert output into input box", COLOR_PAIR_STATUS);
         ui_append_line(tui, queue, "[Help]", "  :vim - Open vim editor (shortcut for :!vim)", COLOR_PAIR_STATUS);
