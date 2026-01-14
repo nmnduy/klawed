@@ -508,19 +508,6 @@ static void init_ncurses_colors(void) {
                 rgb_to_ncurses(g_theme.search_rgb.g),
                 rgb_to_ncurses(g_theme.search_rgb.b));
 
-            // Subtle background colors (5% opacity - very subtle darkened shade)
-            // Assistant background: dark tint of assistant color (5% brightness)
-            init_color(23,
-                rgb_to_ncurses(g_theme.assistant_rgb.r / 20),
-                rgb_to_ncurses(g_theme.assistant_rgb.g / 20),
-                rgb_to_ncurses(g_theme.assistant_rgb.b / 20));
-            
-            // Tool background: dark tint of tool color (5% brightness)
-            init_color(24,
-                rgb_to_ncurses(g_theme.tool_rgb.r / 20),
-                rgb_to_ncurses(g_theme.tool_rgb.g / 20),
-                rgb_to_ncurses(g_theme.tool_rgb.b / 20));
-
             // Initialize color pairs with custom colors
             init_pair(NCURSES_PAIR_FOREGROUND, 16, -1);  // -1 = default background
             init_pair(NCURSES_PAIR_USER, 17, -1);
@@ -536,10 +523,6 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, 19, -1);  // Yellow (same as STATUS)
             init_pair(NCURSES_PAIR_TODO_PENDING, 18, -1);      // Cyan (same as ASSISTANT)
             init_pair(NCURSES_PAIR_SEARCH, 22, -1);            // Search highlight (color5 from theme)
-            // Background color pairs for blocks
-            init_pair(NCURSES_PAIR_ASSISTANT_BG, 16, 23);      // Foreground on subtle assistant background
-            init_pair(NCURSES_PAIR_TOOL_BG, 16, 24);           // Foreground on subtle tool background
-            init_pair(NCURSES_PAIR_USER_BORDER, 17, -1);       // User color for left border
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -550,20 +533,6 @@ static void init_ncurses_colors(void) {
             int status_idx = rgb_to_256_index(g_theme.status_rgb);
             int error_idx = rgb_to_256_index(g_theme.error_rgb);
             int search_idx = rgb_to_256_index(g_theme.search_rgb);
-            
-            // Calculate subtle background colors (5% tint - very subtle)
-            RGB assistant_bg = {
-                g_theme.assistant_rgb.r / 20,
-                g_theme.assistant_rgb.g / 20,
-                g_theme.assistant_rgb.b / 20
-            };
-            RGB tool_bg = {
-                g_theme.tool_rgb.r / 20,
-                g_theme.tool_rgb.g / 20,
-                g_theme.tool_rgb.b / 20
-            };
-            int assistant_bg_idx = rgb_to_256_index(assistant_bg);
-            int tool_bg_idx = rgb_to_256_index(tool_bg);
 
             init_pair(NCURSES_PAIR_FOREGROUND, (short)fg_idx, (short)-1);
             init_pair(NCURSES_PAIR_USER, (short)user_idx, (short)-1);
@@ -578,10 +547,6 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, (short)status_idx, (short)-1);
             init_pair(NCURSES_PAIR_TODO_PENDING, (short)assistant_idx, (short)-1);
             init_pair(NCURSES_PAIR_SEARCH, (short)search_idx, (short)-1);  // Search highlight (color5 from theme)
-            // Background color pairs for blocks
-            init_pair(NCURSES_PAIR_ASSISTANT_BG, (short)fg_idx, (short)assistant_bg_idx);
-            init_pair(NCURSES_PAIR_TOOL_BG, (short)fg_idx, (short)tool_bg_idx);
-            init_pair(NCURSES_PAIR_USER_BORDER, (short)user_idx, (short)-1);
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -601,10 +566,6 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, -1);
             init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
             init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
-            // Background color pairs (use darker variants for subtle backgrounds)
-            init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, COLOR_BLUE);
-            init_pair(NCURSES_PAIR_TOOL_BG, COLOR_WHITE, COLOR_BLACK);
-            init_pair(NCURSES_PAIR_USER_BORDER, COLOR_GREEN, -1);
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -623,10 +584,6 @@ static void init_ncurses_colors(void) {
         init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, -1);
         init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
         init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
-        // Background color pairs
-        init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, COLOR_BLUE);
-        init_pair(NCURSES_PAIR_TOOL_BG, COLOR_WHITE, COLOR_BLACK);
-        init_pair(NCURSES_PAIR_USER_BORDER, COLOR_GREEN, -1);
     }
 }
 
@@ -796,9 +753,6 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
 
     // Map color pair
     int mapped_pair = NCURSES_PAIR_FOREGROUND;
-    int use_background = 0;  // Flag to use background color
-    int is_tool = 0;         // Flag for tool messages (need indentation)
-    
     switch (color_pair) {
         case COLOR_PAIR_DEFAULT:
         case COLOR_PAIR_FOREGROUND:
@@ -809,12 +763,9 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
             break;
         case COLOR_PAIR_ASSISTANT:
             mapped_pair = NCURSES_PAIR_ASSISTANT;
-            use_background = 1;  // Assistant messages get background
             break;
         case COLOR_PAIR_TOOL:
             mapped_pair = NCURSES_PAIR_TOOL;
-            use_background = 1;  // Tool blocks get background
-            is_tool = 1;         // Tool messages get indentation
             break;
         case COLOR_PAIR_STATUS:
             mapped_pair = NCURSES_PAIR_STATUS;
@@ -846,23 +797,6 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
     int start_line = window_manager_get_content_lines(&tui->wm);
     wmove(tui->wm.conv_pad, start_line, 0);
 
-    // Determine which background pair to use for text
-    int text_bg_pair = NCURSES_PAIR_FOREGROUND;
-    if (use_background) {
-        if (color_pair == COLOR_PAIR_ASSISTANT) {
-            text_bg_pair = NCURSES_PAIR_ASSISTANT_BG;
-        } else if (color_pair == COLOR_PAIR_TOOL) {
-            text_bg_pair = NCURSES_PAIR_TOOL_BG;
-        }
-    }
-
-    // Write indentation first if it's a tool message
-    if (is_tool && has_colors()) {
-        wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_TOOL));
-        waddstr(tui->wm.conv_pad, "  │ ");
-        wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_TOOL));
-    }
-
     // Write prefix if present
     if (prefix && prefix[0] != '\0') {
         if (has_colors()) {
@@ -875,76 +809,18 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
         }
     }
 
-    // Write text with background if specified
+    // Write text
     if (text && text[0] != '\0') {
-        // For text, use background color if enabled, otherwise use foreground
-        int text_pair = (prefix && prefix[0] != '\0') ? 
-            (use_background ? text_bg_pair : NCURSES_PAIR_FOREGROUND) : 
-            (use_background ? text_bg_pair : mapped_pair);
-        
+        int text_pair = (prefix && prefix[0] != '\0') ? NCURSES_PAIR_FOREGROUND : mapped_pair;
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
         }
 
-        // Handle multi-line text with indentation for tool messages
-        if (is_tool && strchr(text, '\n')) {
-            // Split text by newlines and indent each line
-            char *text_copy = strdup(text);
-            if (text_copy) {
-                char *line = text_copy;
-                char *next_line = NULL;
-                int first_line = 1;
-                
-                while (line) {
-                    // Find next newline
-                    next_line = strchr(line, '\n');
-                    if (next_line) {
-                        *next_line = '\0';
-                        next_line++;
-                    }
-                    
-                    // Render the line
-                    if (!first_line) {
-                        // Add newline from previous line
-                        waddch(tui->wm.conv_pad, '\n');
-                        // Add indentation for continuation lines
-                        if (has_colors()) {
-                            wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_TOOL));
-                        }
-                        waddstr(tui->wm.conv_pad, "  │ ");
-                        if (has_colors()) {
-                            wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_TOOL));
-                            wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
-                        }
-                    }
-                    
-                    // Check if we have an active search pattern to highlight
-                    if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
-                        render_text_with_search_highlight(tui->wm.conv_pad, line, text_pair, tui->last_search_pattern);
-                    } else {
-                        waddstr(tui->wm.conv_pad, line);
-                    }
-                    
-                    first_line = 0;
-                    line = next_line;
-                }
-                
-                free(text_copy);
-            } else {
-                // Fallback if strdup fails
-                if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
-                    render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern);
-                } else {
-                    waddstr(tui->wm.conv_pad, text);
-                }
-            }
+        // Check if we have an active search pattern to highlight
+        if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
+            render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern);
         } else {
-            // Non-tool message or single-line tool message
-            if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
-                render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern);
-            } else {
-                waddstr(tui->wm.conv_pad, text);
-            }
+            waddstr(tui->wm.conv_pad, text);
         }
 
         if (has_colors()) {
@@ -1465,20 +1341,17 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     // Clear the window
     werase(win);
 
-    // Draw left border for user input (thin green line)
+    // Draw box with accent color if colors are available (commented out - no border)
+    /*
     if (has_colors()) {
-        wattron(win, COLOR_PAIR(NCURSES_PAIR_USER_BORDER));
+        wattron(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+        box(win, 0, 0);
+        wattroff(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+    } else {
+        box(win, 0, 0);
     }
-    for (int row = 0; row < input->win_height; row++) {
-        mvwaddch(win, row, 0, ACS_VLINE);
-    }
-    if (has_colors()) {
-        wattroff(win, COLOR_PAIR(NCURSES_PAIR_USER_BORDER));
-    }
+    */
 
-    // Adjust starting column for content (after left border)
-    int content_start_col = 2;  // Leave space after left border
-    
     // Draw prompt on first visible line (if we're not scrolled past it)
     // In command mode, show command buffer instead of normal prompt
     if (input->line_scroll_offset == 0) {
@@ -1488,7 +1361,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
         if (tui->mode == TUI_MODE_COMMAND && tui->command_buffer) {
             // Show command buffer
-            mvwprintw(win, 0, content_start_col, "%s", tui->command_buffer);
+            mvwprintw(win, 0, 0, "%s", tui->command_buffer);
         } else if (tui->mode == TUI_MODE_SEARCH && tui->search_buffer) {
             // Show search buffer with appropriate prefix
             char search_prompt[260];
@@ -1497,10 +1370,10 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             } else {
                 snprintf(search_prompt, sizeof(search_prompt), "?%s", tui->search_buffer);
             }
-            mvwprintw(win, 0, content_start_col, "%s", search_prompt);
+            mvwprintw(win, 0, 0, "%s", search_prompt);
         } else {
             // Show normal prompt
-            mvwprintw(win, 0, content_start_col, "%s", prompt);
+            mvwprintw(win, 0, 0, "%s", prompt);
         }
 
         if (has_colors()) {
@@ -1515,19 +1388,19 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
     int current_line = 0;
     int screen_y = 0;
-    int screen_x = (current_line == 0) ? (prompt_len + content_start_col) : content_start_col;
+    int screen_x = (current_line == 0) ? prompt_len : 0;
 
     for (int i = 0; i < input->length && screen_y < input->win_height; i++) {
         // Skip lines before scroll offset
         if (current_line < input->line_scroll_offset) {
             if (input->buffer[i] == '\n') {
                 current_line++;
-                screen_x = content_start_col;
+                screen_x = 0;
             } else {
                 screen_x++;
                 if (screen_x >= input->win_width) {
                     current_line++;
-                    screen_x = content_start_col;
+                    screen_x = 0;
                 }
             }
             continue;
@@ -1538,7 +1411,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         if (c == '\n') {
             screen_y++;
             current_line++;
-            screen_x = content_start_col;  // Reset to content start (after left border)
+            screen_x = 0;  // Reset to left edge (no border)
         } else {
             // Cast to unsigned char then to chtype to avoid sign-conversion warnings
             mvwaddch(win, screen_y, screen_x, (chtype)(unsigned char)c);
@@ -1549,7 +1422,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             if (screen_x >= line_width) {
                 screen_y++;
                 current_line++;
-                screen_x = content_start_col;
+                screen_x = 0;
             }
         }
     }
@@ -1558,9 +1431,9 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
     }
 
-    // Position cursor (adjusted for scroll and left border)
+    // Position cursor (adjusted for scroll)
     int cursor_screen_y = cursor_line - input->line_scroll_offset;
-    int cursor_screen_x = cursor_col + content_start_col;  // Adjust for left border
+    int cursor_screen_x = cursor_col;  // No border offset
 
     // Recalculate cursor_col relative to its line
     int temp_line = 0;
@@ -1571,14 +1444,14 @@ static void input_redraw(TUIState *tui, const char *prompt) {
             temp_col = 0;
         } else {
             temp_col++;
-            int line_width = input->win_width - content_start_col;  // Account for left border
+            int line_width = input->win_width;
             if (temp_col >= line_width) {
                 temp_line++;
                 temp_col = 0;
             }
         }
     }
-    cursor_screen_x = temp_col + content_start_col;  // Adjust for left border
+    cursor_screen_x = temp_col;
 
     // Bounds check for cursor position
     if (cursor_screen_y >= 0 && cursor_screen_y < input->win_height &&
