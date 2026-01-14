@@ -73,8 +73,11 @@ public class KlawedSandboxService {
     
     private String jdbcUrl;
     
-    // Inactivity timeout: 1.5 minutes = 90 seconds
+    // Inactivity timeout: 1.5 minutes = 90 seconds (for disconnected sessions)
     private static final long INACTIVITY_TIMEOUT_SECONDS = 90;
+    
+    // Idle timeout: 30 minutes = 1800 seconds (for active but idle sessions)
+    private static final long IDLE_TIMEOUT_SECONDS = 1800;
     
     /**
      * Initialize on startup
@@ -269,6 +272,31 @@ public class KlawedSandboxService {
     }
     
     /**
+     * Get all active sessions that have been idle (no activity) for too long
+     */
+    private List<String> getIdleSessions() throws SQLException {
+        List<String> sessionIds = new ArrayList<>();
+        long cutoffTime = Instant.now().getEpochSecond() - IDLE_TIMEOUT_SECONDS;
+        
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "SELECT session_id FROM sessions " +
+                 "WHERE disconnected_at IS NULL AND last_active_at < ?"
+             )) {
+            
+            pstmt.setLong(1, cutoffTime);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    sessionIds.add(rs.getString("session_id"));
+                }
+            }
+        }
+        
+        return sessionIds;
+    }
+    
+    /**
      * Check if a session exists in the database
      */
     private boolean sessionExists(String sessionId) throws SQLException {
@@ -332,11 +360,14 @@ public class KlawedSandboxService {
             List<String> inactiveSessionIds = getInactiveSessions();
             Set<String> inactiveSet = new HashSet<>(inactiveSessionIds);
             
+            List<String> idleSessionIds = getIdleSessions();
+            Set<String> idleSet = new HashSet<>(idleSessionIds);
+            
             for (String containerName : runningContainers) {
                 // Extract session ID from container name
                 String sessionId = containerName.replace("klawed-", "");
                 
-                // Check if session doesn't exist OR is inactive
+                // Check if session doesn't exist OR is inactive OR is idle
                 boolean shouldStop = false;
                 String reason = "";
                 
@@ -346,6 +377,9 @@ public class KlawedSandboxService {
                 } else if (inactiveSet.contains(sessionId)) {
                     shouldStop = true;
                     reason = "session inactive for >" + INACTIVITY_TIMEOUT_SECONDS + " seconds";
+                } else if (idleSet.contains(sessionId)) {
+                    shouldStop = true;
+                    reason = "session idle (no activity) for >" + IDLE_TIMEOUT_SECONDS + " seconds";
                 } else if (!activeSessionIds.contains(sessionId)) {
                     shouldStop = true;
                     reason = "session is disconnected";
