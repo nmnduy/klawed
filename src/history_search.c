@@ -35,7 +35,7 @@ static int match_score(const char *haystack, const char *needle) {
 
     size_t nlen = strnlen(needle, FUZZY_MAX_PATTERN);
     size_t hlen = strnlen(haystack, 4096);
-    
+
     if (nlen == 0 || hlen == 0 || nlen > hlen) {
         return 0;
     }
@@ -57,7 +57,7 @@ static int match_score(const char *haystack, const char *needle) {
     }
 
     char *match_pos = strstr(haystack_lower, needle_lower);
-    
+
     if (!match_pos) {
         free(haystack_lower);
         free(needle_lower);
@@ -66,7 +66,7 @@ static int match_score(const char *haystack, const char *needle) {
 
     // Calculate match offset BEFORE freeing
     size_t match_offset = (size_t)(match_pos - haystack_lower);
-    
+
     free(haystack_lower);
     free(needle_lower);
 
@@ -83,7 +83,7 @@ static int match_score(const char *haystack, const char *needle) {
     }
     // Match after word boundary: high score
     else if (match_offset > 0 &&
-             (haystack[match_offset - 1] == ' ' || 
+             (haystack[match_offset - 1] == ' ' ||
               haystack[match_offset - 1] == '_' ||
               haystack[match_offset - 1] == '-' ||
               haystack[match_offset - 1] == '/')) {
