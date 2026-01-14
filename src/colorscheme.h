@@ -43,6 +43,7 @@ typedef struct {
 // Theme structure to hold parsed Kitty colors
 typedef struct {
     RGB foreground_rgb;  // Main text color for majority of content
+    RGB background_rgb;  // Background color
     RGB assistant_rgb;   // RGB values for ANSI codes
     RGB user_rgb;
     RGB status_rgb;
@@ -273,6 +274,7 @@ static int load_kitty_theme(const char *filepath, Theme *theme) {
 
     // Track which required colors we found
     int found_foreground = 0;
+    int found_background = 0;
     int found_color1 = 0;  // red (errors)
     int found_color2 = 0;  // green (user)
     int found_color3 = 0;  // yellow (status)
@@ -309,6 +311,12 @@ static int load_kitty_theme(const char *filepath, Theme *theme) {
                 parsed_count++;
                 found_foreground = 1;
                 LOG_DEBUG("[THEME]   -> Set foreground_rgb and assistant_rgb = RGB(%d,%d,%d)", rgb.r, rgb.g, rgb.b);
+            }
+            else if (strcmp(key, "background") == 0) {
+                theme->background_rgb = rgb;
+                parsed_count++;
+                found_background = 1;
+                LOG_DEBUG("[THEME]   -> Set background_rgb = RGB(%d,%d,%d)", rgb.r, rgb.g, rgb.b);
             }
             else if (strcmp(key, "color2") == 0) {
                 theme->user_rgb = rgb;
@@ -383,6 +391,9 @@ static int load_kitty_theme(const char *filepath, Theme *theme) {
     // Print warnings for missing critical colors
     if (!found_foreground) {
         fprintf(stderr, "\033[33mWarning: Theme missing 'foreground' color\033[0m\n");
+    }
+    if (!found_background) {
+        fprintf(stderr, "\033[33mWarning: Theme missing 'background' color (used for input box background)\033[0m\n");
     }
     if (!found_color2) {
         fprintf(stderr, "\033[33mWarning: Theme missing 'color2' (green, used for user text)\033[0m\n");
