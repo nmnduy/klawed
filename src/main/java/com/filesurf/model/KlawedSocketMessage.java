@@ -155,18 +155,12 @@ public class KlawedSocketMessage {
      */
     public String extractTextContent() {
         if (content == null) {
-            System.out.println("KlawedSocketMessage.extractTextContent: content is null");
             return null;
         }
-        
-        System.out.println("KlawedSocketMessage.extractTextContent: messageType=" + messageType + ", content type=" + content.getClass().getName());
         
         // For ZMQ TEXT responses, content is directly the text string
         if (ChatConstants.MESSAGE_TYPE_TEXT.equals(messageType) && content instanceof String) {
             String text = (String) content;
-            System.out.println("KlawedSocketMessage.extractTextContent: TEXT content found, length=" + text.length());
-            System.out.println("KlawedSocketMessage.extractTextContent: TEXT content preview: " + 
-                             (text.length() > 100 ? text.substring(0, 100) + "..." : text));
             return text;
         }
         
@@ -175,9 +169,6 @@ public class KlawedSocketMessage {
         // Handle SQLiteQueueConstants.MESSAGE_TYPE_TEXT
         if (SQLiteQueueConstants.MESSAGE_TYPE_TEXT.equals(messageType) && content instanceof String) {
             String text = (String) content;
-            System.out.println("KlawedSocketMessage.extractTextContent: SQLite TEXT content found, length=" + text.length());
-            System.out.println("KlawedSocketMessage.extractTextContent: SQLite TEXT content preview: " + 
-                             (text.length() > 100 ? text.substring(0, 100) + "..." : text));
             return text;
         }
         
