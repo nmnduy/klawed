@@ -5894,13 +5894,6 @@ static void send_api_call_message(ConversationState *state, const char *model, c
  * - Let the AI retry with a smarter approach
  *
  * Returns: 1 if recovery was attempted, 0 if not applicable
- *
- * TODO: This function needs to be implemented to work with InternalMessage structure.
- * For now, it's a stub that logs and returns 0 (no recovery).
- * Full implementation requires:
- * 1. Finding the last user message with tool_result content blocks
- * 2. Replacing the tool_result content with error message
- * 3. Preserving the tool_use_id for proper tool call tracking
  */
 static int handle_context_overflow_recovery(ConversationState *state, const char *error_msg) {
     if (!state || !error_msg) {
