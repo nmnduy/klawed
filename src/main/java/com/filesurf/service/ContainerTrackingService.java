@@ -86,6 +86,12 @@ public class ContainerTrackingService {
             // Initialize schema
             initializeSchema();
             
+            // Clean up any stale 'starting' statuses from previous app crash
+            int staleStarting = cleanupStaleStartingContainers();
+            if (staleStarting > 0) {
+                LOGGER.info("Cleaned up " + staleStarting + " stale 'starting' container records from previous crash");
+            }
+            
             // Run cleanup of old records
             int cleaned = cleanupOldRecords();
             if (cleaned > 0) {
@@ -96,6 +102,30 @@ public class ContainerTrackingService {
         } catch (IOException | SQLException e) {
             LOGGER.severe("Failed to initialize ContainerTrackingService: " + e.getMessage());
             throw new RuntimeException("Failed to initialize container tracking database", e);
+        }
+    }
+    
+    /**
+     * Clean up any containers stuck in 'starting' status from a previous app crash.
+     * On startup, any container marked as 'starting' is stale since we're starting fresh.
+     * 
+     * @return Number of records cleaned up
+     */
+    private int cleanupStaleStartingContainers() {
+        String sql = """
+            UPDATE container_tracking 
+            SET stopped_at = ?, status = 'failed'
+            WHERE status = 'starting'
+            """;
+        
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setTimestamp(1, Timestamp.from(Instant.now()));
+            return pstmt.executeUpdate();
+        } catch (SQLException e) {
+            LOGGER.warning("Failed to cleanup stale starting containers: " + e.getMessage());
+            return 0;
         }
     }
 
@@ -139,6 +169,120 @@ public class ContainerTrackingService {
         return DriverManager.getConnection(jdbcUrl);
     }
 
+    /**
+     * Result of trying to claim a container start.
+     */
+    public enum ClaimResult {
+        /** Successfully claimed - caller should proceed with starting container */
+        CLAIMED,
+        /** Another container is already running for this session */
+        ALREADY_RUNNING,
+        /** Another thread is currently starting a container for this session */
+        ALREADY_STARTING
+    }
+    
+    /**
+     * Try to claim the right to start a container for a session.
+     * Uses the database as a distributed lock to prevent race conditions.
+     * 
+     * This method atomically checks if a container is already running/starting
+     * and if not, marks the session as 'starting' to prevent other threads
+     * from starting a duplicate container.
+     * 
+     * @param sessionId The session ID
+     * @param containerName The container name (klawed-{sessionId})
+     * @param imageVersion The image version to use
+     * @return ClaimResult indicating whether the caller should proceed
+     */
+    public ClaimResult tryClaimContainerStart(String sessionId, String containerName, String imageVersion) {
+        // First check if there's already a running or starting container
+        String checkSql = """
+            SELECT status FROM container_tracking 
+            WHERE session_id = ? AND status IN ('running', 'starting')
+            """;
+        
+        String insertSql = """
+            INSERT INTO container_tracking (session_id, container_id, container_name, image_version, created_at, status)
+            VALUES (?, 'pending', ?, ?, ?, 'starting')
+            ON CONFLICT(session_id) DO UPDATE SET
+                container_id = 'pending',
+                container_name = excluded.container_name,
+                image_version = excluded.image_version,
+                created_at = excluded.created_at,
+                stopped_at = NULL,
+                status = 'starting'
+            WHERE container_tracking.status NOT IN ('running', 'starting')
+            """;
+        
+        try (Connection conn = getConnection()) {
+            // Check current status
+            try (PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
+                checkStmt.setString(1, sessionId);
+                try (ResultSet rs = checkStmt.executeQuery()) {
+                    if (rs.next()) {
+                        String status = rs.getString("status");
+                        if ("running".equals(status)) {
+                            LOGGER.info("[SESSION:" + sessionId + "] Container already running in database");
+                            return ClaimResult.ALREADY_RUNNING;
+                        } else if ("starting".equals(status)) {
+                            LOGGER.info("[SESSION:" + sessionId + "] Container already starting in database");
+                            return ClaimResult.ALREADY_STARTING;
+                        }
+                    }
+                }
+            }
+            
+            // Try to claim the start
+            try (PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
+                insertStmt.setString(1, sessionId);
+                insertStmt.setString(2, containerName);
+                insertStmt.setString(3, imageVersion);
+                insertStmt.setTimestamp(4, Timestamp.from(Instant.now()));
+                
+                int updated = insertStmt.executeUpdate();
+                if (updated > 0) {
+                    LOGGER.info("[SESSION:" + sessionId + "] Claimed container start in database");
+                    return ClaimResult.CLAIMED;
+                } else {
+                    // The WHERE clause prevented update - another thread must have claimed it
+                    LOGGER.info("[SESSION:" + sessionId + "] Failed to claim container start - another thread won");
+                    return ClaimResult.ALREADY_STARTING;
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to claim container start: " + e.getMessage());
+            // On error, allow the attempt but log warning
+            return ClaimResult.CLAIMED;
+        }
+    }
+    
+    /**
+     * Mark a 'starting' container as failed (cleanup after failed start).
+     * 
+     * @param sessionId The session ID
+     */
+    public void markContainerStartFailed(String sessionId) {
+        String sql = """
+            UPDATE container_tracking 
+            SET stopped_at = ?, status = 'failed'
+            WHERE session_id = ? AND status = 'starting'
+            """;
+        
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setTimestamp(1, Timestamp.from(Instant.now()));
+            pstmt.setString(2, sessionId);
+            
+            int updated = pstmt.executeUpdate();
+            if (updated > 0) {
+                LOGGER.info("[SESSION:" + sessionId + "] Marked container start as failed");
+            }
+        } catch (SQLException e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to mark container start as failed: " + e.getMessage());
+        }
+    }
+    
     /**
      * Record a new container start.
      * 

@@ -20,7 +20,7 @@ import java.util.stream.Stream;
 /**
  * Manages delayed shutdown of klawed agents to allow for reconnections.
  * When a user disconnects, the agent is scheduled for shutdown after a grace period
- * (default 30 seconds). If the user reconnects before the grace period expires,
+ * (default 90 seconds / 1.5 minutes). If the user reconnects before the grace period expires,
  * the shutdown job is cancelled and the agent is reused.
  * 
  * After stopping the agent/container, this service also cleans up klawed artifacts
@@ -133,12 +133,12 @@ public class AgentShutdownJobService {
     }
 
     /**
-     * Enqueue an agent shutdown job with default grace period (30 seconds).
+     * Enqueue an agent shutdown job with default grace period (90 seconds / 1.5 minutes).
      * This allows brief network blips without losing the agent, while still
      * cleaning up promptly when the user has actually disconnected.
      */
     public void enqueueShutdown(String sessionId) {
-        enqueueShutdown(sessionId, Instant.now().plusSeconds(30)); // 30 seconds default
+        enqueueShutdown(sessionId, Instant.now().plusSeconds(90)); // 90 seconds (1.5 minutes) default
     }
 
     /**

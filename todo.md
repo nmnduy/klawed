@@ -11,6 +11,7 @@
 
 - [ ] one more demo
     - [ ] 
+- [ ] randomnized tips
 
 ---
 

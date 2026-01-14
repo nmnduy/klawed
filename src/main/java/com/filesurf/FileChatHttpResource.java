@@ -387,11 +387,11 @@ public class FileChatHttpResource {
         }
 
         try {
-            // Schedule agent shutdown with grace period (30 seconds)
+            // Schedule agent shutdown with grace period (90 seconds / 1.5 minutes)
             // This allows user to reconnect and reuse the agent if it's just a temporary disconnect
             // When the shutdown job executes, it will also clean up klawed artifacts
             agentShutdownJobService.enqueueShutdown(sessionId);
-            LOGGER.info("[SESSION:" + sessionId + "] Klawed agent shutdown scheduled (grace period: 30 seconds)");
+            LOGGER.info("[SESSION:" + sessionId + "] Klawed agent shutdown scheduled (grace period: 90 seconds)");
 
             // Persist session folders back to per-user storage
             if (userId != null && !userId.isBlank()) {

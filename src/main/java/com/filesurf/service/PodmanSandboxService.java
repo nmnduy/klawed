@@ -243,14 +243,72 @@ public class PodmanSandboxService {
         
         String containerName = "klawed-" + sessionId;
         
-        // Check if container already exists
-        if (isContainerRunning(containerName)) {
-            LOGGER.warning("[SESSION:" + sessionId + "] Container already running: " + containerName);
-            return containerName;
+        // Step 1: Try to claim the right to start this container using database as lock
+        // This prevents race conditions where multiple threads try to start the same container
+        ContainerTrackingService.ClaimResult claimResult = 
+            containerTrackingService.tryClaimContainerStart(sessionId, containerName, podmanImage);
+        
+        switch (claimResult) {
+            case ALREADY_RUNNING:
+                // Database says container is running - verify with podman
+                if (isContainerRunning(containerName)) {
+                    // Container is healthy - reuse it! Don't restart.
+                    // The klawed agent inside is listening on the SQLite queue,
+                    // so any new messages we write will be processed automatically.
+                    LOGGER.info("[SESSION:" + sessionId + "] Container already running and healthy, reusing: " + containerName);
+                    return containerName;
+                } else {
+                    // Database is stale - container died but wasn't cleaned up
+                    LOGGER.warning("[SESSION:" + sessionId + "] Database says running but container is gone, cleaning up stale state");
+                    containerTrackingService.recordContainerStop(sessionId, "died");
+                    // Remove any leftover stopped container with this name (cleanup)
+                    removeContainerFromPodman(containerName);
+                    // Try to claim again
+                    claimResult = containerTrackingService.tryClaimContainerStart(sessionId, containerName, podmanImage);
+                    if (claimResult != ContainerTrackingService.ClaimResult.CLAIMED) {
+                        throw new IOException("Failed to claim container start after cleanup: " + claimResult);
+                    }
+                }
+                break;
+                
+            case ALREADY_STARTING:
+                // Another thread is starting a container - wait briefly and check if it succeeded
+                LOGGER.info("[SESSION:" + sessionId + "] Another thread is starting container, waiting...");
+                try {
+                    Thread.sleep(2000); // Wait 2 seconds
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted while waiting for container start", e);
+                }
+                // Check if container is now running
+                if (isContainerRunning(containerName)) {
+                    LOGGER.info("[SESSION:" + sessionId + "] Container started by another thread: " + containerName);
+                    return containerName;
+                }
+                // Container still not running - the other thread may have failed
+                // Let them handle cleanup, don't try to start another
+                throw new IOException("Container start claimed by another thread but not yet running");
+                
+            case CLAIMED:
+                // We claimed the start - proceed with starting a new container
+                LOGGER.info("[SESSION:" + sessionId + "] Successfully claimed container start");
+                // Check one more time if container is actually running (edge case: container started
+                // between DB check and claim). If running, just reuse it.
+                if (isContainerRunning(containerName)) {
+                    LOGGER.info("[SESSION:" + sessionId + "] Container found running after claim, reusing: " + containerName);
+                    // Update DB to reflect running state
+                    containerTrackingService.recordContainerStart(sessionId, containerName, containerName, podmanImage);
+                    return containerName;
+                }
+                break;
         }
         
-        // Pre-create the .klawed/logs directory on the HOST before starting container
-        // This ensures the directory exists with correct host permissions before any container operations
+        // Step 2: Remove any stopped/dead container with the same name before starting new one
+        // This handles the case where a container exited but --rm didn't clean it up
+        // Note: We only reach here if we CLAIMED and container is NOT running
+        removeContainerFromPodman(containerName);
+        
+        // Step 3: Pre-create the .klawed/logs directory on the HOST before starting container
         Path klawedLogsDir = workspaceDir.resolve(".klawed").resolve("logs");
         try {
             java.nio.file.Files.createDirectories(klawedLogsDir);
@@ -260,7 +318,7 @@ public class PodmanSandboxService {
             // Continue anyway - the container shell command will try again
         }
         
-        // Build podman run command with security options
+        // Step 4: Build and run the container
         List<String> command = buildPodmanRunCommand(containerName, workspaceDir, sqliteDbPath, sessionId);
         
         LOGGER.info("[SESSION:" + sessionId + "] Podman command: " + obfuscateCommand(command));
@@ -277,10 +335,14 @@ public class PodmanSandboxService {
             exitCode = process.waitFor();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            // Mark the start as failed in database
+            containerTrackingService.markContainerStartFailed(sessionId);
             throw new IOException("Interrupted while starting container", e);
         }
 
         if (exitCode != 0) {
+            // Mark the start as failed in database
+            containerTrackingService.markContainerStartFailed(sessionId);
             throw new IOException("Failed to start container, exit code: " + exitCode + ", output: " + output);
         }
 
@@ -291,10 +353,12 @@ public class PodmanSandboxService {
             .orElse("");
 
         if (containerId.isBlank()) {
+            // Mark the start as failed in database
+            containerTrackingService.markContainerStartFailed(sessionId);
             throw new IOException("Failed to get container ID after starting container (output was empty)");
         }
 
-        // Track in persistent database (source of truth)
+        // Step 5: Update database with actual container ID (changes status from 'starting' to 'running')
         containerTrackingService.recordContainerStart(sessionId, containerId, containerName, podmanImage);
         
         LOGGER.info("[SESSION:" + sessionId + "] Started container: " + containerId + " (name: " + containerName + ")");
