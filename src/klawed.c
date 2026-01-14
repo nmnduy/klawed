@@ -57,6 +57,8 @@
 
 #include "sqlite_queue.h"
 #include "explore_tools.h"
+#include "retry_logic.h"
+#include "model_context_limits.h"
 #ifndef TEST_BUILD
 #include "openai_messages.h"
 #endif
@@ -5882,6 +5884,122 @@ static void send_api_call_message(ConversationState *state, const char *model, c
 }
 
 /**
+ * Handle context overflow error by replacing last tool result
+ * Only called when auto-compaction is enabled
+ *
+ * When a tool output causes context overflow:
+ * - Keep the assistant's tool call
+ * - Replace the tool result with an error message
+ * - Include the size of the failed output
+ * - Let the AI retry with a smarter approach
+ *
+ * Returns: 1 if recovery was attempted, 0 if not applicable
+ *
+ * TODO: This function needs to be implemented to work with InternalMessage structure.
+ * For now, it's a stub that logs and returns 0 (no recovery).
+ * Full implementation requires:
+ * 1. Finding the last user message with tool_result content blocks
+ * 2. Replacing the tool_result content with error message
+ * 3. Preserving the tool_use_id for proper tool call tracking
+ */
+static int handle_context_overflow_recovery(ConversationState *state, const char *error_msg) {
+    if (!state || !error_msg) {
+        return 0;
+    }
+
+    // Only recover if auto-compaction is enabled
+    // Otherwise we might be hitting true model limit
+    if (!state->compaction_config) {
+        LOG_DEBUG("Context overflow detected but auto-compaction disabled - not recovering");
+        return 0;
+    }
+
+    // Check if this is a context length error
+    if (!is_context_length_error(error_msg, "invalid_request_error")) {
+        return 0;
+    }
+
+    LOG_INFO("Context overflow error detected with auto-compaction enabled");
+
+    // Find the last USER message with INTERNAL_TOOL_RESPONSE content
+    // Search backwards from the end
+    int found_msg_idx = -1;
+    int found_content_idx = -1;
+
+    for (int i = state->count - 1; i >= 0; i--) {
+        InternalMessage *msg = &state->messages[i];
+        if (msg->role == MSG_USER) {
+            // Check if this message contains tool responses
+            for (int j = 0; j < msg->content_count; j++) {
+                InternalContent *content = &msg->contents[j];
+                if (content->type == INTERNAL_TOOL_RESPONSE) {
+                    found_msg_idx = i;
+                    found_content_idx = j;
+                    break;
+                }
+            }
+            if (found_msg_idx >= 0) {
+                break;  // Found the most recent tool response
+            }
+        }
+    }
+
+    if (found_msg_idx < 0 || found_content_idx < 0) {
+        LOG_WARN("Context overflow recovery: No tool result found to replace");
+        return 0;
+    }
+
+    InternalMessage *msg = &state->messages[found_msg_idx];
+    InternalContent *content = &msg->contents[found_content_idx];
+
+    // Calculate the size of the original tool output
+    size_t original_size = 0;
+    size_t estimated_tokens = 0;
+
+    if (content->tool_output) {
+        char *output_str = cJSON_PrintUnformatted(content->tool_output);
+        if (output_str) {
+            original_size = strlen(output_str);
+            estimated_tokens = model_estimate_tokens(output_str);
+            free(output_str);
+        }
+    }
+
+    LOG_INFO("Context overflow recovery: Replacing tool result (tool=%s, id=%s, size=%zu bytes, ~%zu tokens)",
+             content->tool_name ? content->tool_name : "unknown",
+             content->tool_id ? content->tool_id : "unknown",
+             original_size, estimated_tokens);
+
+    // Create error message JSON
+    cJSON *error_output = cJSON_CreateObject();
+    if (!error_output) {
+        LOG_ERROR("Context overflow recovery: Failed to create error JSON");
+        return 0;
+    }
+
+    // Build error message with size information
+    char error_text[512];
+    snprintf(error_text, sizeof(error_text),
+            "Error: Context limit exceeded. Tool output was %zu bytes "
+            "(approximately %zu tokens). Please try a different approach: "
+            "use smaller ranges, apply filters, or use a different tool "
+            "that produces less output.",
+            original_size, estimated_tokens);
+
+    cJSON_AddStringToObject(error_output, "error", error_text);
+
+    // Replace the tool output (preserve tool_id and tool_name)
+    if (content->tool_output) {
+        cJSON_Delete(content->tool_output);
+    }
+    content->tool_output = error_output;
+    content->is_error = 1;  // Mark as error
+
+    LOG_INFO("Context overflow recovery: Successfully replaced tool result with error message");
+    return 1;  // Recovery performed
+}
+
+/**
  * Call API with retry logic (generic wrapper around provider->call_api)
  * Handles exponential backoff for retryable errors
  * Returns: ApiResponse or NULL on error
@@ -6015,6 +6133,11 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
                     result.duration_ms,
                     tool_count
                 );
+
+                // Update token count in compaction config after successful API call
+                if (state->compaction_config) {
+                    compaction_update_token_count(state, state->compaction_config);
+                }
             }
 
             // Cleanup and return
@@ -6063,6 +6186,17 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         // Check if we should retry
         if (!result.is_retryable) {
             // Non-retryable error
+
+            // Try context overflow recovery if applicable
+            if (handle_context_overflow_recovery(state, result.error_message)) {
+                LOG_INFO("Context overflow recovery applied - retrying API call");
+                free(result.raw_response);
+                free(result.request_json);
+                free(result.error_message);
+                // Don't increment attempt_num for recovery retry
+                continue;  // Retry the API call with modified conversation
+            }
+
             char error_msg[512];
             snprintf(error_msg, sizeof(error_msg),
                     "API call failed: %s (HTTP %ld)",
@@ -9746,8 +9880,10 @@ int main(int argc, char *argv[]) {
     if (auto_compact_enabled) {
         state.compaction_config = malloc(sizeof(CompactionConfig));
         if (state.compaction_config) {
-            compaction_init_config(state.compaction_config, auto_compact_enabled);
-            LOG_INFO("Compaction configuration initialized");
+            compaction_init_config(state.compaction_config, auto_compact_enabled, state.model);
+            LOG_INFO("Compaction configuration initialized (model: %s, limit: %d tokens)",
+                     state.model ? state.model : "(unknown)",
+                     state.compaction_config->model_token_limit);
         } else {
             LOG_ERROR("Failed to allocate memory for compaction config");
         }

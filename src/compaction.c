@@ -2,6 +2,8 @@
 #include "compaction.h"
 #include "tool_utils.h"
 #include "logger.h"
+#include "model_context_limits.h"
+#include "persistence.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,10 +14,11 @@
 #endif
 
 // Default configuration values
-#define DEFAULT_COMPACT_THRESHOLD 60    // 60% of MAX_MESSAGES
+#define DEFAULT_COMPACT_THRESHOLD 60    // 60% of token limit
 #define DEFAULT_KEEP_RECENT 20          // Keep last 20 messages
+#define DEFAULT_TOKEN_LIMIT 125000      // Default model token limit (125k)
 
-void compaction_init_config(CompactionConfig *config, int enabled) {
+void compaction_init_config(CompactionConfig *config, int enabled, const char *model_name) {
     if (!config) return;
 
     config->enabled = enabled;
@@ -36,7 +39,28 @@ void compaction_init_config(CompactionConfig *config, int enabled) {
         config->keep_recent = DEFAULT_KEEP_RECENT;
     }
 
+    // Get model token limit from environment or model database
+    const char *token_limit_str = getenv("KLAWED_COMPACT_TOKEN_LIMIT");
+    if (token_limit_str && atoi(token_limit_str) > 0) {
+        config->model_token_limit = atoi(token_limit_str);
+        LOG_DEBUG("Using token limit from KLAWED_COMPACT_TOKEN_LIMIT: %d", config->model_token_limit);
+    } else if (model_name && model_name[0] != '\0') {
+        // Try to get from model database
+        int limit = model_get_context_limit(model_name);
+        if (limit > 0) {
+            config->model_token_limit = limit;
+            LOG_DEBUG("Using token limit from model database for %s: %d", model_name, limit);
+        } else {
+            config->model_token_limit = DEFAULT_TOKEN_LIMIT;
+            LOG_DEBUG("Model %s not found, using default token limit: %d", model_name, DEFAULT_TOKEN_LIMIT);
+        }
+    } else {
+        config->model_token_limit = DEFAULT_TOKEN_LIMIT;
+        LOG_DEBUG("No model specified, using default token limit: %d", DEFAULT_TOKEN_LIMIT);
+    }
+
     config->last_compacted_index = -1; // No compaction yet
+    config->current_tokens = 0;        // Will be updated during conversation
 
 #ifndef HAVE_MEMVID
     if (enabled) {
@@ -44,6 +68,108 @@ void compaction_init_config(CompactionConfig *config, int enabled) {
         config->enabled = 0;
     }
 #endif
+}
+
+size_t compaction_estimate_message_tokens(const InternalMessage *msg) {
+    if (!msg || msg->content_count == 0) {
+        return 0;
+    }
+
+    size_t total = 0;
+
+    // Add tokens for role (roughly 2-3 tokens)
+    total += 3;
+
+    // Estimate tokens for each content block
+    for (int i = 0; i < msg->content_count; i++) {
+        const InternalContent *content = &msg->contents[i];
+
+        switch (content->type) {
+            case INTERNAL_TEXT:
+                if (content->text) {
+                    total += model_estimate_tokens(content->text);
+                }
+                break;
+
+            case INTERNAL_TOOL_CALL:
+                // Tool call includes: tool name + parameters JSON
+                total += 5; // tool call overhead
+                if (content->tool_name) {
+                    total += model_estimate_tokens(content->tool_name);
+                }
+                if (content->tool_params) {
+                    char *params_str = cJSON_PrintUnformatted(content->tool_params);
+                    if (params_str) {
+                        total += model_estimate_tokens(params_str);
+                        free(params_str);
+                    }
+                }
+                break;
+
+            case INTERNAL_TOOL_RESPONSE:
+                // Tool response includes: tool_id + result content
+                total += 5; // tool response overhead
+                if (content->tool_id) {
+                    total += model_estimate_tokens(content->tool_id);
+                }
+                if (content->tool_output) {
+                    char *output_str = cJSON_PrintUnformatted(content->tool_output);
+                    if (output_str) {
+                        total += model_estimate_tokens(output_str);
+                        free(output_str);
+                    }
+                }
+                break;
+
+            case INTERNAL_IMAGE:
+                // Images are tokenized based on size
+                // Rough estimate: 85 tokens per image tile (170 tokens for high-res)
+                // For simplicity, use a fixed estimate
+                total += 500; // Conservative estimate for an image
+                break;
+
+            default:
+                // Unknown content type, skip
+                break;
+        }
+    }
+
+    // Add overhead for message formatting (JSON structure, etc.)
+    total += 10;
+
+    return total;
+}
+
+size_t compaction_update_token_count(const ConversationState *state, CompactionConfig *config) {
+    if (!state || !config) {
+        return 0;
+    }
+
+    size_t total_tokens = 0;
+
+    // First try to get actual token count from API usage tracking
+    if (state->persistence_db && state->session_id) {
+        int prompt_tokens = 0;
+        if (persistence_get_last_prompt_tokens(state->persistence_db, state->session_id, &prompt_tokens) == 0
+            && prompt_tokens > 0) {
+            total_tokens = (size_t)prompt_tokens;
+            LOG_DEBUG("Updated token count from API call tracking: %zu tokens", total_tokens);
+            config->current_tokens = total_tokens;
+            return total_tokens;
+        }
+    }
+
+    // Fallback: Estimate tokens from messages if no API data available
+    for (int i = 0; i < state->count; i++) {
+        total_tokens += compaction_estimate_message_tokens(&state->messages[i]);
+    }
+
+    // Add overhead for API request structure
+    total_tokens += 100; // Request overhead, tool definitions, etc.
+
+    LOG_DEBUG("Estimated token count from messages: %zu tokens", total_tokens);
+    config->current_tokens = total_tokens;
+    return total_tokens;
 }
 
 int compaction_should_trigger(const ConversationState *state, const CompactionConfig *config) {
@@ -54,11 +180,36 @@ int compaction_should_trigger(const ConversationState *state, const CompactionCo
 #ifndef HAVE_MEMVID
     return 0; // Can't compact without memvid
 #else
-    // Calculate threshold count
-    int threshold_count = (MAX_MESSAGES * config->threshold_percent) / 100;
+    // Calculate token threshold
+    size_t threshold_tokens = (size_t)((config->model_token_limit * config->threshold_percent) / 100);
+
+    // Get current token count from actual API usage tracking
+    size_t current_tokens = config->current_tokens;
+
+    // If not cached or zero, try to get from persistence database
+    if (current_tokens == 0 && state->persistence_db && state->session_id) {
+        int prompt_tokens = 0;
+        if (persistence_get_last_prompt_tokens(state->persistence_db, state->session_id, &prompt_tokens) == 0) {
+            current_tokens = (size_t)prompt_tokens;
+            LOG_DEBUG("Using actual token count from API call: %zu tokens", current_tokens);
+        }
+    }
+
+    // If still zero (no API calls yet, or persistence unavailable), estimate
+    if (current_tokens == 0) {
+        current_tokens = 0;
+        for (int i = 0; i < state->count; i++) {
+            current_tokens += compaction_estimate_message_tokens(&state->messages[i]);
+        }
+        current_tokens += 100; // API overhead
+        LOG_DEBUG("Estimated token count from messages: %zu tokens", current_tokens);
+    }
+
+    LOG_DEBUG("Compaction check: %zu tokens / %d limit (threshold: %zu at %d%%)",
+              current_tokens, config->model_token_limit, threshold_tokens, config->threshold_percent);
 
     // Trigger if we're at or above threshold
-    return (state->count >= threshold_count);
+    return (current_tokens >= threshold_tokens);
 #endif
 }
 
@@ -207,6 +358,31 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         }
     }
 
+    // Calculate token information
+    size_t tokens_before = config->current_tokens;
+
+    // Estimate tokens being removed
+    size_t tokens_compacted = 0;
+    for (int i = compact_start; i <= compact_end; i++) {
+        tokens_compacted += compaction_estimate_message_tokens(&state->messages[i]);
+    }
+
+    // Estimate remaining tokens after compaction
+    size_t tokens_after = 0;
+    // System message
+    tokens_after += compaction_estimate_message_tokens(&state->messages[0]);
+    // Recent messages
+    for (int i = compact_end + 1; i < state->count; i++) {
+        tokens_after += compaction_estimate_message_tokens(&state->messages[i]);
+    }
+    // Notice message (estimate ~50 tokens)
+    tokens_after += 50;
+    // API overhead
+    tokens_after += 100;
+
+    double usage_percent = (double)tokens_before / config->model_token_limit * 100.0;
+    double after_percent = (double)tokens_after / config->model_token_limit * 100.0;
+
     // Build compaction notice
     char notice[2048];
 
@@ -216,11 +392,15 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         "Use MemorySearch to retrieve relevant past context if needed.\n\n"
         "Session: %s\n"
         "Messages compacted: %d-%d\n"
-        "Tools used: Read (%d), Write (%d), Edit (%d), Bash (%d)\n",
+        "Tools used: Read (%d), Write (%d), Edit (%d), Bash (%d)\n"
+        "Tokens: %zu → %zu (freed ~%zu tokens)\n"
+        "Context usage: %.1f%% → %.1f%% of %d token limit\n",
         compacted_count,
         session_id ? session_id : "(no session)",
         compact_start, compact_end,
-        read_count, write_count, edit_count, bash_count);
+        read_count, write_count, edit_count, bash_count,
+        tokens_before, tokens_after, tokens_compacted,
+        usage_percent, after_percent, config->model_token_limit);
 
     // Free the messages being compacted
     for (int i = compact_start; i <= compact_end; i++) {
@@ -264,10 +444,12 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
     // Update count: system + notice + recent messages
     state->count = 1 + 1 + recent_count;
 
-    // Update last compacted index
+    // Update last compacted index and token count
     config->last_compacted_index = compact_end;
+    config->current_tokens = tokens_after;
 
-    LOG_INFO("Compaction complete. New message count: %d", state->count);
+    LOG_INFO("Compaction complete. Messages: %d, Tokens: %zu (%.1f%% of limit)",
+             state->count, tokens_after, after_percent);
 
     return 0;
 #endif

@@ -2,22 +2,33 @@
 
 ## Overview
 
-Auto-compaction is a context management system that prevents the conversation history from exceeding the maximum message limit by automatically storing older messages in long-term memory (memvid) and replacing them with a summary notice. This allows Klawed to maintain indefinitely long conversations while keeping the active context window manageable.
+Auto-compaction is a context management system that prevents the conversation history from exceeding the model's token limit by automatically storing older messages in long-term memory (memvid) and replacing them with a summary notice. This allows Klawed to maintain indefinitely long conversations while keeping the active context window manageable.
 
 ## How It Works
 
-When enabled, auto-compaction monitors the conversation message count and triggers when a configurable threshold is reached:
+When enabled, auto-compaction monitors the conversation token usage and triggers when a configurable threshold is reached:
 
-1. **Trigger**: At 60% of MAX_MESSAGES (default), compaction is triggered
+1. **Trigger**: At 60% of model token limit (default), compaction is triggered
 2. **Store**: Older messages are stored in memvid as searchable long-term memory
-3. **Extract**: Tool usage statistics are collected (Read, Write, Edit, Bash counts)
+3. **Extract**: Tool usage statistics and token metrics are collected
 4. **Replace**: Compacted messages are replaced with a single system message containing:
    - Number of messages compacted
    - Session ID
    - Message range that was compacted
    - Tool usage summary
+   - Token usage statistics (before/after, freed)
+   - Context usage percentage
 5. **Continue**: Recent messages (default: last 20) remain in active context
 6. **Retrieve**: AI can use `MemorySearch` tool to retrieve relevant past context
+
+## Token Tracking
+
+Auto-compaction uses **accurate token counts** from the API provider's usage data, not message counts:
+
+- Primary source: Token usage from actual API calls (stored in `token_usage` table)
+- Fallback: Estimated tokens based on message content (~4 chars per token)
+- Model limits: Retrieved from model database or configurable via environment variable
+- Default model limit: 125,000 tokens (when model is unknown)
 
 ## Requirements
 
@@ -42,21 +53,28 @@ If memvid is not available, auto-compaction will be automatically disabled even 
 export KLAWED_AUTO_COMPACT=1              # Enable (1/true/yes)
 
 # Configure thresholds
-export KLAWED_COMPACT_THRESHOLD=60        # Trigger at 60% of MAX_MESSAGES (default: 60)
+export KLAWED_COMPACT_THRESHOLD=60        # Trigger at 60% of model token limit (default: 60)
 export KLAWED_COMPACT_KEEP_RECENT=20      # Keep last 20 messages (default: 20)
+export KLAWED_COMPACT_TOKEN_LIMIT=125000  # Override model token limit (default: 125000)
 ```
 
 ### Configuration Parameters
 
-- **`KLAWED_COMPACT_THRESHOLD`**: Percentage of MAX_MESSAGES at which to trigger compaction
-  - Default: 60 (triggers at 6000/10000 messages)
+- **`KLAWED_COMPACT_THRESHOLD`**: Percentage of model token limit at which to trigger compaction
+  - Default: 60 (triggers at 75,000 tokens for 125k limit)
   - Range: 1-100
   - Lower values = more aggressive compaction
+  - Example: 80% threshold on 125k model = triggers at 100,000 tokens
 
 - **`KLAWED_COMPACT_KEEP_RECENT`**: Number of recent messages to keep after compaction
   - Default: 20
   - Minimum: 1 (always keeps system message)
   - These messages remain in the active context window
+
+- **`KLAWED_COMPACT_TOKEN_LIMIT`**: Override the model's token limit
+  - Default: 125000 (125k tokens)
+  - If not set, uses model database to look up limit based on model name
+  - Use this for custom models or to enforce stricter limits
 
 ## Implementation Details
 
@@ -80,6 +98,20 @@ The system message injected after compaction contains:
 Session: {session_id}
 Messages compacted: {start}-{end}
 Tools used: Read (X), Write (Y), Edit (Z), Bash (W)
+Tokens: {before} → {after} (freed ~{compacted} tokens)
+Context usage: {before_percent}% → {after_percent}% of {limit} token limit
+```
+
+Example:
+```
+## Context Compaction Notice
+45 earlier messages have been stored in memory. Use MemorySearch to retrieve relevant past context if needed.
+
+Session: 20260114-143022-a3f8
+Messages compacted: 1-45
+Tools used: Read (12), Write (8), Edit (15), Bash (10)
+Tokens: 92450 → 28760 (freed ~63690 tokens)
+Context usage: 73.9% → 23.0% of 125000 token limit
 ```
 
 ### Timing
@@ -133,13 +165,17 @@ Returns 0 on success, -1 on error.
 ## Example Usage
 
 ```bash
-# Enable with defaults (trigger at 60%, keep 20 messages)
+# Enable with defaults (trigger at 60% of 125k tokens = 75k tokens, keep 20 messages)
 ./build/klawed --auto-compact "help me refactor this codebase"
 
-# Aggressive compaction (trigger at 40%, keep 10 messages)
+# Aggressive compaction (trigger at 40% of 125k = 50k tokens, keep 10 messages)
 KLAWED_COMPACT_THRESHOLD=40 \
 KLAWED_COMPACT_KEEP_RECENT=10 \
 ./build/klawed --auto-compact "long-running task"
+
+# Custom token limit (trigger at 60% of 200k = 120k tokens)
+KLAWED_COMPACT_TOKEN_LIMIT=200000 \
+./build/klawed --auto-compact "very long conversation"
 
 # Check if it would work (requires memvid)
 ./build/klawed --auto-compact --version

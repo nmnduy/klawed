@@ -30,6 +30,7 @@ Project instructions for Klawed when working with this codebase.
 - **Arena allocator**: `src/arena.h` (region-based memory management, single-header library)
 - **Memvid integration**: `src/memvid.c`, `src/memvid.h`, `docs/memvid.md` (persistent memory)
 - **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management)
+- **Model context limits**: `src/model_context_limits.c`, `src/model_context_limits.h`, `docs/model-context-limits.md` (context window registry)
 
 **Vendors:**
 - **web_browse_agent**: `vendors/web_browse_agent/` - Go-based web browser agent with Playwright
@@ -42,6 +43,7 @@ Project instructions for Klawed when working with this codebase.
 - **History**: `src/history_file.c`, `src/history_file.h`
 - **Migration system**: `src/migrations.c`, `src/migrations.h`
 - **Retry logic**: `src/retry_logic.c`, `src/retry_logic.h`
+- **Model context limits**: `src/model_context_limits.c`, `docs/model-context-limits.md` (model database and token estimation)
 
 **User Interfaces:**
 - **Color themes**: `src/colorscheme.h`, `src/builtin_themes.c`, `docs/COLOR_THEMES.md`
@@ -205,8 +207,9 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_UNIX_SOCKET_TIMEOUT` - Timeout for operations in seconds (default: 30)
 - **Memory**: `KLAWED_MEMORY_PATH` for custom memory file location (default: `.klawed/memory.mv2`)
 - **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes, requires memvid)
-  - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of MAX_MESSAGES (default: 60)
+  - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of model token limit (default: 60)
   - `KLAWED_COMPACT_KEEP_RECENT` - Keep this many recent messages after compaction (default: 20)
+  - `KLAWED_COMPACT_TOKEN_LIMIT` - Override model token limit (default: 125000, auto-detected from model database)
 - **Explore Mode**: `KLAWED_EXPLORE_MODE` - Enable explore subagent mode (1/true/yes)
   - `KLAWED_EXPLORE_HEADLESS` - Run browser in headless mode (default: 1)
   - `KLAWED_WEB_BROWSE_AGENT_PATH` - Path to web_browse_agent binary (default: vendors/web_browse_agent/web_browse_agent)
@@ -229,3 +232,4 @@ You are encouraged to commit at the end of your completed coding task if changes
 Git commit conventions:
 - When AI commits changes, use all lowercase for the main commit message (subject line)
 - Keep commit bodies concise - don't write overly long commit messages
+- Do not stage any markdown files. I will read them and decide whether to commit them.
