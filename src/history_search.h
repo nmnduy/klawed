@@ -2,7 +2,7 @@
  * History Search - Interactive command history search for TUI
  *
  * Provides Ctrl+R history search functionality with:
- * - Fuzzy search through command history
+ * - Substring/exact match search through command history
  * - Incremental search filtering
  * - Vim-style result navigation
  */

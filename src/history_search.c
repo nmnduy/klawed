@@ -20,73 +20,90 @@
 #define FUZZY_CASE_MISMATCH_PENALTY 1
 
 // ============================================================================
-// Fuzzy Scoring (copied from file_search.c)
+// Exact/Substring Matching for History Commands
 // ============================================================================
 
-static int fuzzy_score(const char *haystack, const char *needle) {
-    if (!needle || !needle[0]) {
-        return 1;  // Empty pattern matches everything with minimal score
+static int match_score(const char *haystack, const char *needle) {
+    if (!haystack || !needle) {
+        return 0;
     }
 
-    size_t nlen = strnlen(needle, FUZZY_MAX_PATTERN);
-    if (nlen == 0) {
+    if (!needle[0]) {
+        // Empty pattern matches everything with minimal score
         return 1;
     }
 
-    int score = 0;
-    size_t hlen = strnlen(haystack, 4096);  // Increased from PATH_MAX for commands
-    if (hlen == 0) {
+    size_t nlen = strnlen(needle, FUZZY_MAX_PATTERN);
+    size_t hlen = strnlen(haystack, 4096);
+    
+    if (nlen == 0 || hlen == 0 || nlen > hlen) {
         return 0;
     }
-    size_t hidx = 0;
-    size_t nidx = 0;
-    int consecutive = 0;
 
-    while (hidx < hlen && nidx < nlen) {
-        char hc = haystack[hidx];
-        char nc = needle[nidx];
-        int match = tolower((unsigned char)hc) == tolower((unsigned char)nc);
+    // Case-insensitive substring search
+    char *haystack_lower = calloc(hlen + 1, 1);
+    char *needle_lower = calloc(nlen + 1, 1);
+    if (!haystack_lower || !needle_lower) {
+        free(haystack_lower);
+        free(needle_lower);
+        return 0;
+    }
 
-        if (match) {
-            // Base score for a matched character
-            score += 10;
+    for (size_t i = 0; i < hlen; i++) {
+        haystack_lower[i] = (char)tolower((unsigned char)haystack[i]);
+    }
+    for (size_t i = 0; i < nlen; i++) {
+        needle_lower[i] = (char)tolower((unsigned char)needle[i]);
+    }
 
-            // Bonus for consecutive matches (prefers substrings)
-            if (consecutive) {
-                score += FUZZY_ADJACENT_BONUS;
-            }
+    char *match_pos = strstr(haystack_lower, needle_lower);
+    
+    if (!match_pos) {
+        free(haystack_lower);
+        free(needle_lower);
+        return 0;  // No match
+    }
 
-            // Bonus for matches after a separator or word boundary
-            if (hidx == 0 || haystack[hidx - 1] == ' ' || haystack[hidx - 1] == '_' ||
-                haystack[hidx - 1] == '-' || haystack[hidx - 1] == '/') {
-                score += FUZZY_SEPARATOR_BONUS;
-            }
+    // Calculate match offset BEFORE freeing
+    size_t match_offset = (size_t)(match_pos - haystack_lower);
+    
+    free(haystack_lower);
+    free(needle_lower);
 
-            // Penalty for case mismatch
-            if (hc != nc) {
-                score -= FUZZY_CASE_MISMATCH_PENALTY;
-            }
+    // Calculate score based on match position and length
+    int score = 1000;  // Base score for any match
 
-            consecutive = 1;
-            nidx++;
-        } else {
-            consecutive = 0;
+    // Exact match (same length): highest score
+    if (nlen == hlen) {
+        score += 10000;
+    }
+    // Match at start (prefix): very high score
+    else if (match_offset == 0) {
+        score += 5000;
+    }
+    // Match after word boundary: high score
+    else if (match_offset > 0 &&
+             (haystack[match_offset - 1] == ' ' || 
+              haystack[match_offset - 1] == '_' ||
+              haystack[match_offset - 1] == '-' ||
+              haystack[match_offset - 1] == '/')) {
+        score += 2000;
+    }
+
+    // Bonus for longer matches (more specific)
+    score += (int)nlen * 100;
+
+    // Penalty for longer haystacks (prefer shorter commands when pattern length is same)
+    score -= (int)hlen / 10;
+
+    // Case match bonus
+    int case_matches = 0;
+    for (size_t i = 0; i < nlen; i++) {
+        if (haystack[match_offset + i] == needle[i]) {
+            case_matches++;
         }
-
-        hidx++;
     }
-
-    if (nidx < nlen) {
-        // Not all pattern consumed -> no match
-        return 0;
-    }
-
-    // Slight preference for shorter commands when scores tie
-    score -= (int)hlen / 100;
-
-    if (score < 1) {
-        score = 1;
-    }
+    score += case_matches * 10;
 
     return score;
 }
@@ -166,7 +183,7 @@ static int filter_results(HistorySearchState *state) {
     }
 
     for (int i = start_idx; i < state->history_count; i++) {
-        int score = fuzzy_score(state->history_entries[i], pattern);
+        int score = match_score(state->history_entries[i], pattern);
         if (score > 0) {
             add_result(state, state->history_entries[i], score, i);
         }
@@ -264,9 +281,9 @@ int history_search_start(HistorySearchState *state, int screen_height, int scree
     state->history_entries = history_entries;
     state->history_count = history_count;
 
-    // Create popup window (similar to file search)
-    state->popup_height = screen_height / 3;
-    if (state->popup_height < 5) state->popup_height = 5;
+    // Create popup window (similar to file search - 60% of screen)
+    state->popup_height = (screen_height * 60) / 100;
+    if (state->popup_height < 10) state->popup_height = 10;
     if (state->popup_height > screen_height - 2) state->popup_height = screen_height - 2;
 
     state->popup_width = screen_width * 2 / 3;
