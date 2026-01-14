@@ -9,6 +9,9 @@
 
 ---
 
+- [ ] handle out of context error...
+
+- [ ] feedback button and error reporting
 - [ ] one narrated demo
 - [ ] randomnized tips
 
