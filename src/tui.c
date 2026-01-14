@@ -2906,19 +2906,19 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     char boxed_line3[256];
     snprintf(boxed_line1, sizeof(boxed_line1), "│ %s", line1);
     // Pad to align closing border (with extra space before right edge)
-    while ((int)strlen(boxed_line1) < max_width + 2) {
+    while ((int)strlen(boxed_line1) < max_width + 3) {
         strlcat(boxed_line1, " ", sizeof(boxed_line1));
     }
     strlcat(boxed_line1, "│", sizeof(boxed_line1));
 
     snprintf(boxed_line2, sizeof(boxed_line2), "│ %s", line2);
-    while ((int)strlen(boxed_line2) < max_width + 2) {
+    while ((int)strlen(boxed_line2) < max_width + 3) {
         strlcat(boxed_line2, " ", sizeof(boxed_line2));
     }
     strlcat(boxed_line2, "│", sizeof(boxed_line2));
 
     snprintf(boxed_line3, sizeof(boxed_line3), "│ %s", line3);
-    while ((int)strlen(boxed_line3) < max_width + 2) {
+    while ((int)strlen(boxed_line3) < max_width + 3) {
         strlcat(boxed_line3, " ", sizeof(boxed_line3));
     }
     strlcat(boxed_line3, "│", sizeof(boxed_line3));
