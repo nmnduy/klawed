@@ -207,7 +207,7 @@ export OPENAI_API_KEY="your-api-key"
 - **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes, requires memvid)
   - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of model token limit (default: 60)
   - `KLAWED_COMPACT_KEEP_RECENT` - Keep this many recent messages after compaction (default: 20)
-  - `KLAWED_COMPACT_TOKEN_LIMIT` - Override model token limit (default: 125000, auto-detected from model database)
+  - `KLAWED_CONTEXT_LIMIT` - Override model token limit (default: 125000)
 - **Explore Mode**: `KLAWED_EXPLORE_MODE` - Enable explore subagent mode (1/true/yes)
   - `KLAWED_EXPLORE_HEADLESS` - Run browser in headless mode (default: 1)
   - `KLAWED_WEB_BROWSE_AGENT_PATH` - Path to web_browse_agent binary (default: vendors/web_browse_agent/web_browse_agent)

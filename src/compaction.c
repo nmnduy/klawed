@@ -49,10 +49,10 @@ void compaction_init_config(CompactionConfig *config, int enabled, const char *m
     }
 
     // Get model token limit from environment or use default
-    const char *token_limit_str = getenv("KLAWED_COMPACT_TOKEN_LIMIT");
+    const char *token_limit_str = getenv("KLAWED_CONTEXT_LIMIT");
     if (token_limit_str && atoi(token_limit_str) > 0) {
         config->model_token_limit = atoi(token_limit_str);
-        LOG_DEBUG("Using token limit from KLAWED_COMPACT_TOKEN_LIMIT: %d", config->model_token_limit);
+        LOG_DEBUG("Using token limit from KLAWED_CONTEXT_LIMIT: %d", config->model_token_limit);
     } else {
         config->model_token_limit = DEFAULT_TOKEN_LIMIT;
         LOG_DEBUG("Using default token limit: %d", DEFAULT_TOKEN_LIMIT);

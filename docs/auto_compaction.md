@@ -55,7 +55,7 @@ export KLAWED_AUTO_COMPACT=1              # Enable (1/true/yes)
 # Configure thresholds
 export KLAWED_COMPACT_THRESHOLD=60        # Trigger at 60% of model token limit (default: 60)
 export KLAWED_COMPACT_KEEP_RECENT=20      # Keep last 20 messages (default: 20)
-export KLAWED_COMPACT_TOKEN_LIMIT=125000  # Override model token limit (default: 125000)
+export KLAWED_CONTEXT_LIMIT=125000  # Override model token limit (default: 125000)
 ```
 
 ### Configuration Parameters
@@ -71,7 +71,7 @@ export KLAWED_COMPACT_TOKEN_LIMIT=125000  # Override model token limit (default:
   - Minimum: 1 (always keeps system message)
   - These messages remain in the active context window
 
-- **`KLAWED_COMPACT_TOKEN_LIMIT`**: Override the model's token limit
+- **`KLAWED_CONTEXT_LIMIT`**: Override the model's token limit
   - Default: 125000 (125k tokens)
   - If not set, uses model database to look up limit based on model name
   - Use this for custom models or to enforce stricter limits
@@ -174,7 +174,7 @@ KLAWED_COMPACT_KEEP_RECENT=10 \
 ./build/klawed --auto-compact "long-running task"
 
 # Custom token limit (trigger at 60% of 200k = 120k tokens)
-KLAWED_COMPACT_TOKEN_LIMIT=200000 \
+KLAWED_CONTEXT_LIMIT=200000 \
 ./build/klawed --auto-compact "very long conversation"
 
 # Check if it would work (requires memvid)
