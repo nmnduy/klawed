@@ -1407,7 +1407,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     // Adjust vertical scroll to keep cursor visible
     // For BORDER style, we need to account for top and bottom borders
     // For BACKGROUND style, we account for top and bottom padding
-    int content_start_row = (tui->input_box_style == INPUT_STYLE_BORDER) ? 1 : 
+    int content_start_row = (tui->input_box_style == INPUT_STYLE_BORDER) ? 1 :
                             (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 1 : 0;
     int border_height_offset = (tui->input_box_style == INPUT_STYLE_BORDER) ? 2 :
                                (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 2 : 0;
@@ -1441,6 +1441,11 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         }
     } else {
         // Style 2: Full border with no background
+        // Reset to default background (removes any previously set background color)
+        if (has_colors()) {
+            wbkgd(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
+
         // Draw box border around the input area
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
