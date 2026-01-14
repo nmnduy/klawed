@@ -869,7 +869,7 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
         int text_pair;
         if (is_user_message) {
             // User message: draw background box first, then text on top
-            text_pair = NCURSES_PAIR_FOREGROUND;
+            text_pair = NCURSES_PAIR_USER_MSG_BG;  // Use same pair for text to preserve background
             
             // Get current position and pad width
             int cur_y, cur_x;
@@ -892,17 +892,11 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
                 waddch(tui->wm.conv_pad, ' ');
             }
             waddch(tui->wm.conv_pad, ' ');
-            if (has_colors()) {
-                wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG));
-            }
+            // Keep the color pair active for text rendering
+            // (don't turn off yet)
             
             // Move back to draw text on top
             wmove(tui->wm.conv_pad, cur_y, cur_x + 1);
-            
-            // Draw text with foreground color on top of background
-            if (has_colors()) {
-                wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
-            }
         } else if (prefix && prefix[0] != '\0') {
             // Other messages with prefix use foreground
             text_pair = NCURSES_PAIR_FOREGROUND;
@@ -2775,7 +2769,7 @@ void tui_handle_resize(TUIState *tui) {
             int text_pair;
             if (is_user_message) {
                 // User message: draw background box first, then text on top
-                text_pair = NCURSES_PAIR_FOREGROUND;
+                text_pair = NCURSES_PAIR_USER_MSG_BG;  // Use same pair for text to preserve background
                 
                 // Get current position
                 int msg_y, msg_x;
@@ -2795,17 +2789,13 @@ void tui_handle_resize(TUIState *tui) {
                     waddch(tui->wm.conv_pad, ' ');
                 }
                 waddch(tui->wm.conv_pad, ' ');
-                if (has_colors()) {
-                    wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG));
-                }
+                // Keep the color pair active for text rendering
+                // (don't turn off yet)
                 
                 // Move back to draw text on top
                 wmove(tui->wm.conv_pad, msg_y, msg_x + 1);
                 
-                // Draw text with foreground color on top of background
-                if (has_colors()) {
-                    wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
-                }
+                // Draw text with same color pair (foreground + background)
                 waddstr(tui->wm.conv_pad, entry->text);
                 if (has_colors()) {
                     wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
@@ -4913,12 +4903,19 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
 
             // Check for diff lines (no brackets, just colored by first character)
             TUIColorPair diff_color = COLOR_PAIR_DEFAULT;
-            if (mutable_text[0] == '+' && mutable_text[1] != '+') {
-                diff_color = COLOR_PAIR_USER;  // Green for additions
-            } else if (mutable_text[0] == '-' && mutable_text[1] != '-') {
-                diff_color = COLOR_PAIR_ERROR;  // Red for deletions
-            } else if (mutable_text[0] == '@' && mutable_text[1] == '@') {
-                diff_color = COLOR_PAIR_STATUS;  // Status color for hunk headers
+            size_t text_len = strlen(mutable_text);
+            
+            if (text_len > 0) {
+                char first = mutable_text[0];
+                char second = (text_len > 1) ? mutable_text[1] : '\0';
+                
+                if (first == '+' && second != '+') {
+                    diff_color = COLOR_PAIR_USER;  // Green for additions
+                } else if (first == '-' && second != '-') {
+                    diff_color = COLOR_PAIR_ERROR;  // Red for deletions
+                } else if (first == '@' && second == '@') {
+                    diff_color = COLOR_PAIR_STATUS;  // Status color for hunk headers
+                }
             }
 
             tui_add_conversation_line(tui, "", content, diff_color);
