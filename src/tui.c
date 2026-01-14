@@ -511,11 +511,11 @@ static void init_ncurses_colors(void) {
             // Input background color (subtle dark gray)
             init_color(23, 120, 120, 120);  // ~12% gray for subtle background
 
-            // Input border color (use status/accent color)
+            // Input border color (use user/green color)
             init_color(24,
-                rgb_to_ncurses(g_theme.status_rgb.r),
-                rgb_to_ncurses(g_theme.status_rgb.g),
-                rgb_to_ncurses(g_theme.status_rgb.b));
+                rgb_to_ncurses(g_theme.user_rgb.r),
+                rgb_to_ncurses(g_theme.user_rgb.g),
+                rgb_to_ncurses(g_theme.user_rgb.b));
 
             // Initialize color pairs with custom colors
             init_pair(NCURSES_PAIR_FOREGROUND, 16, -1);  // -1 = default background
@@ -559,7 +559,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_PENDING, (short)assistant_idx, (short)-1);
             init_pair(NCURSES_PAIR_SEARCH, (short)search_idx, (short)-1);  // Search highlight (color5 from theme)
             init_pair(NCURSES_PAIR_INPUT_BG, (short)fg_idx, (short)236);   // Foreground on dark gray (236 in 256 palette)
-            init_pair(NCURSES_PAIR_INPUT_BORDER, (short)status_idx, (short)-1);  // Border/accent color
+            init_pair(NCURSES_PAIR_INPUT_BORDER, (short)user_idx, (short)-1);  // Border color (user/green)
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -580,7 +580,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
             init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
             init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
-            init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_YELLOW, -1);  // Fallback: yellow border
+            init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, -1);  // Fallback: green border (user color)
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -600,7 +600,7 @@ static void init_ncurses_colors(void) {
         init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
         init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
         init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
-        init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_YELLOW, -1);  // Fallback: yellow border
+        init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, -1);  // Fallback: green border (user color)
     }
 }
 
