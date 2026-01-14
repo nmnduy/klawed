@@ -1457,7 +1457,8 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     }
 
     // Render visible lines with scrolling support
-    if (has_colors()) {
+    // Only use INPUT_BG color for BACKGROUND style (it includes a background color)
+    if (has_colors() && tui->input_box_style == INPUT_STYLE_BACKGROUND) {
         wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BG));
     }
 
@@ -1500,7 +1501,7 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         }
     }
 
-    if (has_colors()) {
+    if (has_colors() && tui->input_box_style == INPUT_STYLE_BACKGROUND) {
         wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BG));
     }
 
