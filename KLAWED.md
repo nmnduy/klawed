@@ -18,6 +18,10 @@ tail -f logs/application.log
 
 ## Development
 
+### Using Git
+
+You're encoureaged to create commits when finish a task, fix a bug or adding a new feature. Unless specified otherwise, do not stage markdown files for commit. I will review them and commit myself.
+
 ### Running Quarkus in Development Mode
 1. **Start Quarkus in a separate shell**:
    ```bash
@@ -51,42 +55,25 @@ tail -f logs/application.log
 - Klawed agent logs: `logs/klawed-agents.log` (rotates at 50MB)
 - Console output also available in dev mode
 
-### Klawed Communication Modes
-FileSurf v2 supports two communication modes for klawed agents:
+### Klawed Communication Mode
+FileSurf v2 uses SQLite queue mode for communication with klawed agents:
 
-#### 1. Unix Socket Mode (Default)
-- Uses Unix domain sockets for direct communication
-- Lower latency and overhead
-- Better for high-performance scenarios
-- Enabled by default or with `KLAWED_COMMUNICATION_MODE=unix-socket`
-
-#### 2. SQLite Queue Mode (Alternative)
-- Uses SQLite database for message passing
-- More reliable for long-running sessions
-- Better for debugging (messages persist in database)
-- Enabled with `KLAWED_COMMUNICATION_MODE=sqlite-queue`
+- **SQLite Queue Mode**: Uses SQLite database for message passing (production standard)
+- Provides reliable message delivery and persistence
+- Each session has its own SQLite database file for klawed communication
 
 #### Configuration
 ```properties
-# Communication mode for klawed agents
-# Options: "unix-socket" (default) or "sqlite-queue"
-klawed.communication.mode=${KLAWED_COMMUNICATION_MODE:unix-socket}
+# SQLite queue configuration
+klawed.sqlite-queue.db-path=klawed_messages.db
+klawed.sqlite-queue.sender-name=client
+klawed.sqlite-queue.receiver-name=klawed
 
-# Unix socket configuration (only used when klawed.communication.mode=unix-socket)
-klawed.unix-socket.filename=klawed.sock
-klawed.unix-socket.timeout-ms=30000
-klawed.unix-socket.max-message-size=67108864  # 64 MB
+# Session tracking database
+klawed.sessions.db.path=data/sessions.db
 ```
 
-#### Switching Modes
-```bash
-# Use Unix socket mode (default)
-mvn quarkus:dev
-
-# Use SQLite queue mode (for debugging)
-export KLAWED_COMMUNICATION_MODE=sqlite-queue
-mvn quarkus:dev
-```
+Note: Unix socket mode has been removed in favor of the more reliable SQLite queue approach.
 
 ## SKILLS Organization Guidance
 - Organize `src/main/resources/SKILLS` by **goal/outcome**, not by tool name.
