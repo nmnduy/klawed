@@ -147,7 +147,7 @@ public class SQLiteQueueClient {
         "INSERT INTO messages (sender, receiver, message, sent) VALUES (?, ?, ?, 0);";
     
     private static final String SELECT_MESSAGES_SQL = 
-        "SELECT id, message FROM messages WHERE receiver = ? AND sent = 0 ORDER BY created_at ASC LIMIT ?;";
+        "SELECT id, message FROM messages WHERE sender = ? AND receiver = ? AND sent = 0 ORDER BY created_at ASC LIMIT ?;";
     
     private static final String ACK_MESSAGE_SQL = 
         "UPDATE messages SET sent = 1, updated_at = strftime('%s', 'now') WHERE id = ?;";
@@ -301,8 +301,9 @@ public class SQLiteQueueClient {
             
             try (PreparedStatement pstmt = connection.prepareStatement(SELECT_MESSAGES_SQL)) {
                 pstmt.setString(1, config.getSenderName());
-                pstmt.setInt(2, 10); // Limit to 10 messages at a time
-                
+                pstmt.setString(2, config.getReceiverName());
+                pstmt.setInt(3, 10); // Limit to 10 messages at a time
+
                 try (ResultSet rs = pstmt.executeQuery()) {
                     while (rs.next()) {
                         long messageId = rs.getLong("id");

@@ -47,6 +47,9 @@ public class FileChatHttpResource {
     @Inject
     FileChatService fileChatService;
 
+    @Inject
+    com.filesurf.service.SQLiteQueuePollingService sqliteQueuePollingService;
+
     /**
      * Initialize or connect to a chat session via HTTP.
      * Similar to WebSocket's onOpen method.
@@ -99,6 +102,10 @@ public class FileChatHttpResource {
             // Register session with KlawedSandboxService
             klawedSandboxService.registerSession(sessionId, userId);
             LOGGER.info("[SESSION:" + sessionId + "] Session registered with KlawedSandboxService");
+            
+            // Register session with SQLite queue polling service (for receiving messages from klawed)
+            sqliteQueuePollingService.registerSession(sessionId, userId);
+            LOGGER.info("[SESSION:" + sessionId + "] Session registered with SQLiteQueuePollingService");
 
             // Initialize session directory with persistent folders
             java.nio.file.Path sessionDir = sessionManager.initializeSession(sessionId, userId);
@@ -354,6 +361,10 @@ public class FileChatHttpResource {
             // Unregister session from KlawedSandboxService
             klawedSandboxService.unregisterSession(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Session unregistered from KlawedSandboxService");
+            
+            // Unregister session from SQLite queue polling service
+            sqliteQueuePollingService.unregisterSession(sessionId);
+            LOGGER.info("[SESSION:" + sessionId + "] Session unregistered from SQLiteQueuePollingService");
 
             // Persist session folders back to per-user storage
             if (userId != null && !userId.isBlank()) {
