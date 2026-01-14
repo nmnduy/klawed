@@ -5,12 +5,21 @@ import com.filesurf.model.KlawedSocketMessage;
 import com.filesurf.model.ChatConstants;
 import com.filesurf.service.FileChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.websockets.next.WebSocketConnection;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,6 +34,12 @@ public class ChatMessagePollingService {
     
     @Inject
     FileChatService fileChatService;
+    
+    @ConfigProperty(name = "klawed.sqlite-queue.sender-name", defaultValue = "client")
+    String senderName;
+    
+    @ConfigProperty(name = "klawed.sqlite-queue.receiver-name", defaultValue = "klawed")
+    String receiverName;
     
     // Store active WebSocket connections by session ID
     private final Map<String, WebSocketConnection> activeConnections = new ConcurrentHashMap<>();
@@ -61,6 +76,54 @@ public class ChatMessagePollingService {
     public boolean hasActiveConnection(String sessionId) {
         WebSocketConnection connection = activeConnections.get(sessionId);
         return connection != null && !connection.isClosed();
+    }
+    
+    /**
+     * Send a message to klawed via SQLite queue
+     * 
+     * @param sessionId The session ID
+     * @param userId The user ID
+     * @param message The message to send
+     * @throws IOException If sending fails
+     */
+    public void sendMessageToKlawed(String sessionId, String userId, String message) throws IOException {
+        LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via SQLite queue");
+        
+        // Construct workspace directory path (matches KlawedSandboxService logic)
+        Path workspaceDir = Path.of("/var/lib/filesurf/sessions/" + userId + "/" + sessionId + "/workspace");
+        
+        // Determine SQLite database path (inside workspace)
+        String dbFileName = "klawed_messages_" + sessionId + ".db";
+        Path sqliteDbPath = workspaceDir.resolve(dbFileName);
+        
+        // Create JSON message
+        String jsonMessage;
+        try {
+            ObjectNode json = objectMapper.createObjectNode();
+            json.put("messageType", "TEXT");
+            json.put("content", message);
+            jsonMessage = objectMapper.writeValueAsString(json);
+        } catch (Exception e) {
+            throw new IOException("Failed to create JSON message", e);
+        }
+        
+        // Insert message into SQLite queue database
+        String jdbcUrl = "jdbc:sqlite:" + sqliteDbPath.toString();
+        
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "INSERT INTO messages (sender, receiver, message, sent) VALUES (?, ?, ?, 0)"
+             )) {
+            
+            pstmt.setString(1, senderName);
+            pstmt.setString(2, receiverName);
+            pstmt.setString(3, jsonMessage);
+            pstmt.executeUpdate();
+            
+            LOGGER.info("[SESSION:" + sessionId + "] Message sent to klawed (length: " + message.length() + " chars)");
+        } catch (SQLException e) {
+            throw new IOException("Failed to send message via SQLite queue: " + e.getMessage(), e);
+        }
     }
 
     /**

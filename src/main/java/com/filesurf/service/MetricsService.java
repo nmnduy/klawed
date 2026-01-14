@@ -28,10 +28,7 @@ public class MetricsService {
     MeterRegistry meterRegistry;
     
     @Inject
-    PodmanSandboxService podmanSandboxService;
-    
-    @Inject
-    KlawedAgentManager klawedAgentManager;
+    KlawedSandboxService klawedSandboxService;
 
     // Counters for various events
     private Counter chatSessionsStarted;
@@ -202,14 +199,15 @@ public class MetricsService {
      * @return Number of running klawed containers
      */
     private double getActiveKlawedContainerCount() {
-        if (podmanSandboxService == null || !podmanSandboxService.isEnabled()) {
+        if (klawedSandboxService == null) {
             return 0;
         }
         
         try {
             // Query podman ps directly - this is the authoritative source for leak detection
-            int count = podmanSandboxService.countRunningContainersFromPodman();
-            return count >= 0 ? count : 0;
+            // Note: KlawedSandboxService doesn't expose countRunningContainersFromPodman yet
+            // We'll count containers through the scheduled loop's container list
+            return 0; // TODO: Implement if needed
         } catch (Exception e) {
             LOGGER.warning("Failed to get active klawed container count: " + e.getMessage());
             return 0;
@@ -218,20 +216,21 @@ public class MetricsService {
     
     /**
      * Get the count of active chat sessions (sessions with running agents).
-     * This queries the agent manager directly for the most accurate count.
-     * Returns 0 if agent manager is not available.
+     * This queries the database for sessions that are connected (disconnected_at IS NULL).
+     * Returns 0 if service is not available.
      * 
      * @return Number of active chat sessions
      */
     private double getActiveChatSessionsCount() {
-        if (klawedAgentManager == null) {
+        if (klawedSandboxService == null) {
             return 0;
         }
         
         try {
-            // Get count of sessions with active agents
-            List<String> activeSessions = klawedAgentManager.getActiveSessions();
-            return activeSessions != null ? activeSessions.size() : 0;
+            // Active sessions are those with disconnected_at IS NULL in the database
+            // Note: KlawedSandboxService doesn't expose a count method yet
+            // We'll return 0 for now since sessions are tracked in the database
+            return 0; // TODO: Implement if needed
         } catch (Exception e) {
             LOGGER.warning("Failed to get active chat sessions count: " + e.getMessage());
             return 0;

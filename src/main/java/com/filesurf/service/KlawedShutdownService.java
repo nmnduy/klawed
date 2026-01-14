@@ -24,7 +24,7 @@ public class KlawedShutdownService {
     private static final Logger LOGGER = Logger.getLogger(KlawedShutdownService.class.getName());
     
     @Inject
-    KlawedAgentManager klawedAgentManager;
+    KlawedSandboxService klawedSandboxService;
     
     private final AtomicBoolean shutdownInProgress = new AtomicBoolean(false);
     private Thread shutdownHook;
@@ -128,22 +128,9 @@ public class KlawedShutdownService {
         LOGGER.info("Starting cleanup of all klawed processes");
         
         try {
-            // First, use KlawedAgentManager to stop all managed agents
-            if (klawedAgentManager != null) {
-                LOGGER.info("Stopping all managed klawed agents");
-                klawedAgentManager.stopAllAgents();
-            }
-            
-            // Then, find and kill any orphaned klawed processes
-            List<Long> orphanedPids = findOrphanedKlawedPids();
-            LOGGER.info("Found " + orphanedPids.size() + " orphaned klawed processes");
-            
-            for (Long pid : orphanedPids) {
-                killProcess(pid);
-            }
-            
-            // Clean up PID files
-            cleanupPidFiles();
+            // KlawedSandboxService will handle stopping containers on shutdown
+            // via its @PreDestroy method
+            LOGGER.info("Container cleanup delegated to KlawedSandboxService");
             
             LOGGER.info("Klawed process cleanup completed");
         } catch (Exception e) {

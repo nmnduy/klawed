@@ -1,0 +1,718 @@
+package com.filesurf.service;
+
+import io.quarkus.scheduler.Scheduled;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.*;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
+
+/**
+ * Service for managing Klawed containers and session tracking.
+ * 
+ * This service combines session management with container lifecycle management:
+ * - Tracks active sessions in sessions.db
+ * - Runs a scheduled loop every 10 seconds to ensure containers exist for active sessions
+ * - Stops orphaned containers that no longer have active sessions
+ * 
+ * Session lifecycle:
+ * - registerSession() - Called when WebSocket connects
+ * - unregisterSession() - Called when WebSocket disconnects (sets disconnected_at)
+ * - Containers are stopped 1.5 minutes after disconnected_at is set
+ */
+@ApplicationScoped
+public class KlawedSandboxService {
+
+    private static final Logger LOGGER = Logger.getLogger(KlawedSandboxService.class.getName());
+    
+    // Configuration properties
+    @ConfigProperty(name = "sandbox.podman.enabled", defaultValue = "false")
+    boolean podmanEnabled;
+    
+    @ConfigProperty(name = "sandbox.podman.image", defaultValue = "klawed-sandbox:1.0.0")
+    String podmanImage;
+    
+    @ConfigProperty(name = "sandbox.podman.memory", defaultValue = "2g")
+    String memoryLimit;
+    
+    @ConfigProperty(name = "sandbox.podman.cpus", defaultValue = "2")
+    String cpuLimit;
+    
+    @ConfigProperty(name = "sandbox.podman.pids-limit", defaultValue = "512")
+    int pidsLimit;
+    
+    @ConfigProperty(name = "klawed.path", defaultValue = "/usr/local/bin/klawed")
+    String klawedPath;
+    
+    @ConfigProperty(name = "sandbox.podman.env-file", defaultValue = "/etc/filesurf/klawed.env")
+    String envFilePath;
+    
+    @ConfigProperty(name = "klawed.sqlite-queue.db-path")
+    String sqliteQueueDbPath;
+    
+    // Sessions database path
+    @ConfigProperty(name = "klawed.sessions.db.path", defaultValue = "data/sessions.db")
+    String sessionsDbPath;
+    
+    private String jdbcUrl;
+    
+    // Inactivity timeout: 1.5 minutes = 90 seconds
+    private static final long INACTIVITY_TIMEOUT_SECONDS = 90;
+    
+    /**
+     * Initialize on startup
+     */
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        if (podmanEnabled) {
+            // Validate that 'latest' tag is never used
+            if (podmanImage.endsWith(":latest")) {
+                throw new IllegalStateException(
+                    "Podman sandbox image must not use ':latest' tag. " +
+                    "Please specify a version tag in sandbox.podman.image configuration. " +
+                    "Current value: " + podmanImage
+                );
+            }
+            
+            LOGGER.info("Podman sandbox enabled with image: " + podmanImage);
+            
+            // Check if Podman is available
+            if (!isPodmanAvailable()) {
+                LOGGER.warning("Podman is enabled but podman command is not available on the system");
+            } else {
+                try {
+                    String version = getPodmanVersion();
+                    LOGGER.info("Podman version: " + version);
+                } catch (IOException e) {
+                    LOGGER.warning("Failed to get Podman version: " + e.getMessage());
+                }
+            }
+        }
+        
+        // Initialize sessions database
+        try {
+            Path dbFile = Path.of(sessionsDbPath);
+            Path parentDir = dbFile.getParent();
+            if (parentDir != null && !Files.exists(parentDir)) {
+                Files.createDirectories(parentDir);
+                LOGGER.info("Created sessions database directory: " + parentDir);
+            }
+            
+            jdbcUrl = "jdbc:sqlite:" + sessionsDbPath;
+            initializeSessionsSchema();
+            LOGGER.info("Sessions database initialized: " + sessionsDbPath);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize sessions database", e);
+        }
+    }
+    
+    /**
+     * Initialize sessions database schema
+     */
+    private void initializeSessionsSchema() throws SQLException {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             Statement stmt = conn.createStatement()) {
+            
+            // Enable WAL mode for better concurrency
+            stmt.execute("PRAGMA journal_mode = WAL;");
+            stmt.execute("PRAGMA synchronous = NORMAL;");
+            stmt.execute("PRAGMA busy_timeout = 5000;");
+            
+            // Create sessions table
+            stmt.execute(
+                "CREATE TABLE IF NOT EXISTS sessions (" +
+                "session_id TEXT PRIMARY KEY, " +
+                "user_id TEXT NOT NULL, " +
+                "registered_at INTEGER NOT NULL, " +
+                "last_active_at INTEGER NOT NULL, " +
+                "disconnected_at INTEGER" +  // NULL when connected, timestamp when disconnected
+                ");"
+            );
+            
+            LOGGER.info("Sessions schema initialized");
+        }
+    }
+    
+    /**
+     * Register a session (called on WebSocket connect)
+     */
+    public void registerSession(String sessionId, String userId) {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "INSERT INTO sessions (session_id, user_id, registered_at, last_active_at, disconnected_at) " +
+                 "VALUES (?, ?, ?, ?, NULL) " +
+                 "ON CONFLICT(session_id) DO UPDATE SET " +
+                 "last_active_at = ?, disconnected_at = NULL"
+             )) {
+            
+            long now = Instant.now().getEpochSecond();
+            pstmt.setString(1, sessionId);
+            pstmt.setString(2, userId);
+            pstmt.setLong(3, now);
+            pstmt.setLong(4, now);
+            pstmt.setLong(5, now);
+            pstmt.executeUpdate();
+            
+            LOGGER.info("[SESSION:" + sessionId + "] Session registered for user: " + userId);
+        } catch (SQLException e) {
+            LOGGER.severe("[SESSION:" + sessionId + "] Failed to register session: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Unregister a session (called on WebSocket disconnect)
+     * Sets disconnected_at timestamp
+     */
+    public void unregisterSession(String sessionId) {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "UPDATE sessions SET disconnected_at = ? WHERE session_id = ?"
+             )) {
+            
+            long now = Instant.now().getEpochSecond();
+            pstmt.setLong(1, now);
+            pstmt.setString(2, sessionId);
+            pstmt.executeUpdate();
+            
+            LOGGER.info("[SESSION:" + sessionId + "] Session disconnected at: " + now);
+        } catch (SQLException e) {
+            LOGGER.severe("[SESSION:" + sessionId + "] Failed to unregister session: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Update last active time for a session
+     */
+    public void updateLastActive(String sessionId) {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "UPDATE sessions SET last_active_at = ? WHERE session_id = ?"
+             )) {
+            
+            long now = Instant.now().getEpochSecond();
+            pstmt.setLong(1, now);
+            pstmt.setString(2, sessionId);
+            pstmt.executeUpdate();
+            
+            LOGGER.fine("[SESSION:" + sessionId + "] Last active updated: " + now);
+        } catch (SQLException e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to update last active: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get all active sessions (disconnected_at IS NULL)
+     */
+    private List<SessionRecord> getActiveSessions() throws SQLException {
+        List<SessionRecord> sessions = new ArrayList<>();
+        
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "SELECT session_id, user_id, registered_at, last_active_at FROM sessions " +
+                 "WHERE disconnected_at IS NULL"
+             );
+             ResultSet rs = pstmt.executeQuery()) {
+            
+            while (rs.next()) {
+                sessions.add(new SessionRecord(
+                    rs.getString("session_id"),
+                    rs.getString("user_id"),
+                    rs.getLong("registered_at"),
+                    rs.getLong("last_active_at")
+                ));
+            }
+        }
+        
+        return sessions;
+    }
+    
+    /**
+     * Get all disconnected sessions that have exceeded the inactivity timeout
+     */
+    private List<String> getInactiveSessions() throws SQLException {
+        List<String> sessionIds = new ArrayList<>();
+        long cutoffTime = Instant.now().getEpochSecond() - INACTIVITY_TIMEOUT_SECONDS;
+        
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "SELECT session_id FROM sessions " +
+                 "WHERE disconnected_at IS NOT NULL AND disconnected_at < ?"
+             )) {
+            
+            pstmt.setLong(1, cutoffTime);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    sessionIds.add(rs.getString("session_id"));
+                }
+            }
+        }
+        
+        return sessionIds;
+    }
+    
+    /**
+     * Check if a session exists in the database
+     */
+    private boolean sessionExists(String sessionId) throws SQLException {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "SELECT 1 FROM sessions WHERE session_id = ?"
+             )) {
+            
+            pstmt.setString(1, sessionId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+    
+    /**
+     * Scheduled loop: Manage container lifecycle
+     * Runs every 10 seconds
+     */
+    @Scheduled(every = "10s")
+    @ActivateRequestContext
+    public void manageContainerLifecycle() {
+        if (!podmanEnabled) {
+            return;
+        }
+        
+        try {
+            // Step 1: Get all active sessions (disconnected_at IS NULL)
+            List<SessionRecord> activeSessions = getActiveSessions();
+            LOGGER.fine("Managing containers for " + activeSessions.size() + " active session(s)");
+            
+            // Step 2: For each active session, ensure container exists and is healthy
+            for (SessionRecord session : activeSessions) {
+                String sessionId = session.sessionId;
+                String containerName = "klawed-" + sessionId;
+                
+                if (!isContainerRunning(containerName)) {
+                    LOGGER.info("[SESSION:" + sessionId + "] Container not running, starting it...");
+                    try {
+                        // Get session directory from SessionManager (assuming it exists)
+                        // For now, we'll need to construct the path or inject SessionManager
+                        // Let's start the container with a basic setup
+                        startContainerForSession(sessionId, session.userId);
+                    } catch (IOException e) {
+                        LOGGER.severe("[SESSION:" + sessionId + "] Failed to start container: " + e.getMessage());
+                    }
+                } else {
+                    LOGGER.fine("[SESSION:" + sessionId + "] Container is running and healthy");
+                }
+            }
+            
+            // Step 3: List all klawed-* containers from podman
+            List<String> runningContainers = listRunningKlawedContainers();
+            LOGGER.fine("Found " + runningContainers.size() + " running klawed container(s)");
+            
+            // Step 4: For each container, check if it should be stopped
+            Set<String> activeSessionIds = activeSessions.stream()
+                .map(s -> s.sessionId)
+                .collect(Collectors.toSet());
+            
+            List<String> inactiveSessionIds = getInactiveSessions();
+            Set<String> inactiveSet = new HashSet<>(inactiveSessionIds);
+            
+            for (String containerName : runningContainers) {
+                // Extract session ID from container name
+                String sessionId = containerName.replace("klawed-", "");
+                
+                // Check if session doesn't exist OR is inactive
+                boolean shouldStop = false;
+                String reason = "";
+                
+                if (!sessionExists(sessionId)) {
+                    shouldStop = true;
+                    reason = "session does not exist in database";
+                } else if (inactiveSet.contains(sessionId)) {
+                    shouldStop = true;
+                    reason = "session inactive for >" + INACTIVITY_TIMEOUT_SECONDS + " seconds";
+                } else if (!activeSessionIds.contains(sessionId)) {
+                    shouldStop = true;
+                    reason = "session is disconnected";
+                }
+                
+                if (shouldStop) {
+                    LOGGER.info("[SESSION:" + sessionId + "] Stopping container: " + reason);
+                    try {
+                        stopContainer(containerName);
+                    } catch (IOException e) {
+                        LOGGER.warning("[SESSION:" + sessionId + "] Failed to stop container: " + e.getMessage());
+                    }
+                }
+            }
+            
+        } catch (Exception e) {
+            LOGGER.severe("Error in container lifecycle management: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * List all running klawed-* containers
+     */
+    private List<String> listRunningKlawedContainers() throws IOException, InterruptedException {
+        List<String> containers = new ArrayList<>();
+        
+        ProcessBuilder pb = new ProcessBuilder(
+            "podman", "ps", "--filter", "name=klawed-", "--filter", "status=running", "--format", "{{.Names}}"
+        );
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+        
+        String output = readProcessOutput(process);
+        int exitCode = process.waitFor();
+        
+        if (exitCode != 0) {
+            LOGGER.warning("Failed to list running containers: " + output);
+            return containers;
+        }
+        
+        if (output.trim().isEmpty()) {
+            return containers;
+        }
+        
+        for (String line : output.split("\n")) {
+            String containerName = line.trim();
+            if (!containerName.isEmpty()) {
+                containers.add(containerName);
+            }
+        }
+        
+        return containers;
+    }
+    
+    /**
+     * Start a container for a session
+     * This is a simplified version that uses the SQLite queue mode only
+     */
+    private void startContainerForSession(String sessionId, String userId) throws IOException {
+        LOGGER.info("[SESSION:" + sessionId + "] Starting Podman container for klawed agent");
+        
+        String containerName = "klawed-" + sessionId;
+        
+        // Construct workspace directory path
+        // This should match SessionManager's logic
+        Path workspaceDir = Path.of("/var/lib/filesurf/sessions/" + userId + "/" + sessionId + "/workspace");
+        
+        // Ensure workspace directory exists
+        if (!Files.exists(workspaceDir)) {
+            Files.createDirectories(workspaceDir);
+            LOGGER.info("[SESSION:" + sessionId + "] Created workspace directory: " + workspaceDir);
+        }
+        
+        // Pre-create the .klawed/logs directory on the HOST before starting container
+        Path klawedLogsDir = workspaceDir.resolve(".klawed").resolve("logs");
+        try {
+            Files.createDirectories(klawedLogsDir);
+            LOGGER.info("[SESSION:" + sessionId + "] Created .klawed/logs directory: " + klawedLogsDir);
+        } catch (IOException e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to create .klawed/logs directory: " + e.getMessage());
+        }
+        
+        // Determine SQLite database path (inside workspace)
+        String dbFileName = "klawed_messages_" + sessionId + ".db";
+        Path sqliteDbPath = workspaceDir.resolve(dbFileName);
+        
+        // Build podman run command
+        List<String> command = buildPodmanRunCommand(containerName, workspaceDir, sqliteDbPath.toString(), sessionId);
+        
+        LOGGER.info("[SESSION:" + sessionId + "] Podman command: " + String.join(" ", command));
+        
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        processBuilder.redirectErrorStream(true);
+        
+        Process process = processBuilder.start();
+        
+        String output;
+        int exitCode;
+        try {
+            output = readProcessOutput(process);
+            exitCode = process.waitFor();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while starting container", e);
+        }
+        
+        if (exitCode != 0) {
+            throw new IOException("Failed to start container, exit code: " + exitCode + ", output: " + output);
+        }
+        
+        // First line should be the container ID
+        String containerId = output.lines().findFirst().orElse("").trim();
+        
+        if (containerId.isBlank()) {
+            throw new IOException("Failed to get container ID after starting container");
+        }
+        
+        LOGGER.info("[SESSION:" + sessionId + "] Started container: " + containerId + " (name: " + containerName + ")");
+    }
+    
+    /**
+     * Build the podman run command
+     */
+    private List<String> buildPodmanRunCommand(String containerName, Path workspaceDir, String sqliteDbPath, String sessionId) {
+        List<String> command = new ArrayList<>();
+        
+        command.add("podman");
+        command.add("run");
+        
+        // Detached mode
+        command.add("-d");
+        
+        // Container name for easy management
+        command.add("--name");
+        command.add(containerName);
+        
+        // Use keep-id to map container UID to host UID
+        command.add("--userns=keep-id");
+        
+        // Network access
+        command.add("--network=bridge");
+        
+        // Tmpfs for /tmp
+        command.add("--tmpfs");
+        command.add("/tmp:rw,size=1g");
+        
+        // Resource limits
+        command.add("--memory=" + memoryLimit);
+        command.add("--cpus=" + cpuLimit);
+        command.add("--pids-limit=" + pidsLimit);
+        
+        // Auto-remove container on exit
+        command.add("--rm");
+        
+        // Mount workspace directory
+        command.add("-v");
+        command.add(workspaceDir.toAbsolutePath() + ":/workspace");
+        
+        // Working directory inside container
+        command.add("-w");
+        command.add("/workspace");
+        
+        // Add environment variables
+        addEnvironmentVariables(command);
+        
+        // Image name
+        command.add(podmanImage);
+        
+        // Klawed arguments (SQLite queue mode only)
+        // Convert host path to container path
+        Path dbPath = Path.of(sqliteDbPath);
+        String containerDbPath = "/workspace/" + workspaceDir.toAbsolutePath().relativize(dbPath.toAbsolutePath());
+        
+        command.add("--sqlite-queue");
+        command.add(containerDbPath);
+        
+        return command;
+    }
+    
+    /**
+     * Add environment variables to the podman command
+     */
+    private void addEnvironmentVariables(List<String> command) {
+        // Use --env-file to load variables from the configured .env file
+        Path envFile = Path.of(envFilePath);
+        if (Files.exists(envFile)) {
+            command.add("--env-file");
+            command.add(envFilePath);
+            LOGGER.fine("Using env file: " + envFilePath);
+        } else {
+            LOGGER.warning("Environment file not found: " + envFilePath);
+        }
+        
+        // LD_LIBRARY_PATH for shared libraries
+        command.add("-e");
+        command.add("LD_LIBRARY_PATH=/usr/local/lib");
+        
+        // Set HOME so klawed can create .klawed directory for logs
+        command.add("-e");
+        command.add("HOME=/workspace");
+    }
+    
+    /**
+     * Stop a container gracefully
+     */
+    public void stopContainer(String containerId) throws IOException {
+        LOGGER.info("Stopping container: " + containerId);
+        
+        if (!isContainerRunning(containerId)) {
+            LOGGER.info("Container not running: " + containerId);
+            removeContainerFromPodman(containerId);
+            return;
+        }
+        
+        try {
+            ProcessBuilder pb = new ProcessBuilder("podman", "stop", "-t", "10", containerId);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            String output = readProcessOutput(process);
+            int exitCode = process.waitFor();
+            
+            if (exitCode != 0) {
+                LOGGER.warning("Container stop returned exit code " + exitCode + ": " + output);
+            } else {
+                LOGGER.info("Container stopped: " + containerId);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while stopping container", e);
+        }
+        
+        // Remove the container after stopping it
+        removeContainerFromPodman(containerId);
+    }
+    
+    /**
+     * Remove a container from Podman
+     */
+    private void removeContainerFromPodman(String containerId) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("podman", "rm", "-f", containerId);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            String output = readProcessOutput(process);
+            int exitCode = process.waitFor();
+            
+            if (exitCode != 0) {
+                LOGGER.fine("Container remove returned exit code " + exitCode + ": " + output);
+            } else {
+                LOGGER.info("Container removed from Podman: " + containerId);
+            }
+        } catch (IOException | InterruptedException e) {
+            LOGGER.warning("Failed to remove container " + containerId + ": " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Check if a container is currently running
+     */
+    public boolean isContainerRunning(String containerId) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                "podman", "inspect", "-f", "{{.State.Running}}", containerId
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            String output = readProcessOutput(process).trim();
+            int exitCode = process.waitFor();
+            
+            if (exitCode != 0) {
+                return false;
+            }
+            
+            return "true".equalsIgnoreCase(output);
+        } catch (IOException | InterruptedException e) {
+            LOGGER.warning("Error checking container status: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Check if Podman is available on the system
+     */
+    public boolean isPodmanAvailable() {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("podman", "--version");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            int exitCode = process.waitFor();
+            return exitCode == 0;
+        } catch (IOException | InterruptedException e) {
+            return false;
+        }
+    }
+    
+    /**
+     * Get Podman version information
+     */
+    public String getPodmanVersion() throws IOException {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("podman", "--version");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            String output = readProcessOutput(process);
+            int exitCode = process.waitFor();
+            
+            if (exitCode != 0) {
+                throw new IOException("Failed to get podman version");
+            }
+            
+            return output.trim();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while getting podman version", e);
+        }
+    }
+    
+    /**
+     * Read all output from a process
+     */
+    private String readProcessOutput(Process process) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            return reader.lines().collect(Collectors.joining("\n"));
+        }
+    }
+    
+    /**
+     * Stop all containers on shutdown
+     */
+    @PreDestroy
+    public void shutdown() {
+        LOGGER.info("KlawedSandboxService shutting down");
+        
+        if (podmanEnabled) {
+            try {
+                List<String> runningContainers = listRunningKlawedContainers();
+                for (String containerName : runningContainers) {
+                    try {
+                        stopContainer(containerName);
+                    } catch (IOException e) {
+                        LOGGER.warning("Failed to stop container " + containerName + ": " + e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.severe("Error stopping containers on shutdown: " + e.getMessage());
+            }
+        }
+        
+        LOGGER.info("KlawedSandboxService shutdown complete");
+    }
+    
+    /**
+     * Session record
+     */
+    private static class SessionRecord {
+        final String sessionId;
+        final String userId;
+        final long registeredAt;
+        final long lastActiveAt;
+        
+        SessionRecord(String sessionId, String userId, long registeredAt, long lastActiveAt) {
+            this.sessionId = sessionId;
+            this.userId = userId;
+            this.registeredAt = registeredAt;
+            this.lastActiveAt = lastActiveAt;
+        }
+    }
+}

@@ -1,6 +1,5 @@
 package com.filesurf;
 
-import com.filesurf.service.KlawedAgentManager;
 import com.filesurf.service.SessionManager;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.inject.Inject;
@@ -67,9 +66,6 @@ public class ChunkedUploadResource {
     
     @Inject
     SessionManager sessionManager;
-
-    @Inject
-    KlawedAgentManager agentManager;
 
     /**
      * Check if file extension is allowed.
@@ -422,28 +418,8 @@ public class ChunkedUploadResource {
             return;
         }
 
-        try {
-            // Get the agent instance for this session
-            KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(sessionId);
-            
-            if (agent == null) {
-                LOGGER.info("[SESSION:" + sessionId + "] No klawed agent found to notify about file upload");
-                return;
-            }
-
-            // Create a notification message
-            String notificationMessage = "User has uploaded a file: " + fileName;
-
-            LOGGER.info("[SESSION:" + sessionId + "] Notifying klawed about uploaded file: " + fileName);
-            
-            // Send the notification asynchronously to avoid blocking the upload response
-            agent.sendMessageAsync(notificationMessage);
-            
-            LOGGER.info("[SESSION:" + sessionId + "] File upload notification sent to klawed");
-            
-        } catch (Exception e) {
-            // Log but don't fail the upload if notification fails
-            LOGGER.warning("[SESSION:" + sessionId + "] Failed to notify klawed about file upload: " + e.getMessage());
-        }
+        // Note: File upload notification to klawed is now handled via the chat interface
+        // Users can ask about uploaded files and klawed will see them in the workspace
+        LOGGER.info("[SESSION:" + sessionId + "] Chunked file upload completed: " + fileName);
     }
 }

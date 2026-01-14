@@ -7,11 +7,10 @@ import com.filesurf.model.ChatSessionRecord;
 import com.filesurf.model.ChatMessageRecord;
 import com.filesurf.model.ChatConstants;
 import com.filesurf.model.KlawedSocketMessage;
-import com.filesurf.service.KlawedAgentManager;
+import com.filesurf.service.KlawedSandboxService;
 import com.filesurf.service.SessionManager;
 import com.filesurf.service.ChatMessagePollingService;
 import com.filesurf.service.FileChatService;
-import com.filesurf.service.AgentShutdownJobService;
 import io.quarkus.websockets.next.OnOpen;
 import io.quarkus.websockets.next.OnTextMessage;
 import io.quarkus.websockets.next.OnClose;
@@ -60,13 +59,10 @@ public class FileChatWebSocket {
     }
 
     @Inject
-    KlawedAgentManager agentManager;
+    KlawedSandboxService klawedSandboxService;
     
     @Inject
     SessionManager sessionManager;
-    
-    @Inject
-    AgentShutdownJobService agentShutdownJobService;
 
     @Inject
     ChatMessagePollingService chatMessagePollingService;
@@ -145,9 +141,9 @@ public class FileChatWebSocket {
         ChatSessionRecord chatSession = fileChatService.createOrUpdateChatSession(sessionId, clientIdentity);
         LOGGER.info("[SESSION:" + sessionId + "] Chat session created/updated in database");
 
-        // Cancel any pending agent shutdown jobs for this session since it's reconnecting
-        agentShutdownJobService.cancelShutdownJob(sessionId);
-        LOGGER.info("[SESSION:" + sessionId + "] Agent shutdown jobs cancelled (if any)");
+        // Register session with KlawedSandboxService
+        klawedSandboxService.registerSession(sessionId, userId);
+        LOGGER.info("[SESSION:" + sessionId + "] Session registered with KlawedSandboxService");
 
         // Register connection with polling service
         chatMessagePollingService.registerConnection(sessionId, connection);
@@ -159,24 +155,6 @@ public class FileChatWebSocket {
             // Initialize session directory with persistent folders
             Path sessionDir = sessionManager.initializeSession(sessionId, userId);
             LOGGER.info("[SESSION:" + sessionId + "] Session directory initialized: " + sessionDir);
-
-            // Check if agent already exists for this session (from previous connection)
-            KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(sessionId);
-            if (agent != null) {
-                LOGGER.info("[SESSION:" + sessionId + "] Reusing existing klawed agent from previous connection");
-            } else {
-                // Start new dedicated klawed agent for this session
-                agent = agentManager.startAgentForSession(sessionId, sessionDir);
-                LOGGER.info("[SESSION:" + sessionId + "] Started new dedicated klawed agent");
-            }
-
-            // Connect to the agent
-            agent.connect();
-            LOGGER.info("[SESSION:" + sessionId + "] Connected to klawed agent");
-            
-            // Update agent activity time (for both new and reused agents)
-            agent.updateActivityTime();
-            LOGGER.info("[SESSION:" + sessionId + "] Agent activity time updated");
 
             try {
                 String statusMessage = "SESSION_ID:" + sessionId + "|Connected";
@@ -206,16 +184,6 @@ public class FileChatWebSocket {
             
             // Track error metrics
             metricsService.incrementErrors("session_initialization");
-            
-            // Track container-specific failures
-            if (e.getMessage() != null && 
-                (e.getMessage().contains("container") || 
-                 e.getMessage().contains("Container") ||
-                 e.getMessage().contains("podman") ||
-                 e.getMessage().contains("Podman"))) {
-                metricsService.incrementContainerStartFailures();
-                LOGGER.severe("[SESSION:" + sessionId + "] Container start failure detected");
-            }
             
             try {
                 // Do not forward internal details to the client
@@ -312,35 +280,10 @@ public class FileChatWebSocket {
         metricsService.trackUserActivity(userId);
 
         try {
-            // Try to get existing agent first
-            KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(sessionId);
-
-            if (agent == null) {
-                // If no agent exists, create a new one
-                Path sessionDir;
-                try {
-                    sessionDir = sessionManager.getSessionDirectory(sessionId, userId);
-                } catch (IOException e) {
-                    // If session directory doesn't exist, create it
-                    sessionDir = sessionManager.initializeSession(sessionId, userId);
-                }
-                agent = agentManager.startAgentForSession(sessionId, sessionDir);
-                LOGGER.info("[SESSION:" + sessionId + "] Created new agent instance for message processing");
-
-                // Connect the agent
-                agent.connect();
-            } else {
-                LOGGER.info("[SESSION:" + sessionId + "] Using existing agent instance for message processing");
-            }
+            LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via ChatMessagePollingService");
             
-            LOGGER.info("[SESSION:" + sessionId + "] Agent created and connected, sending message to klawed");
-            
-            // Update agent activity time
-            agent.updateActivityTime();
-            
-            // Send message to the dedicated agent asynchronously
-            // Responses will be delivered via ChatMessagePollingService
-            agent.sendMessageAsync(message);
+            // Send message to klawed via SQLite queue
+            chatMessagePollingService.sendMessageToKlawed(sessionId, userId, message);
             LOGGER.info("[SESSION:" + sessionId + "] Message sent to klawed, responses will be delivered via polling service");
             
         } catch (Exception e) {
@@ -392,12 +335,9 @@ public class FileChatWebSocket {
             LOGGER.info("[SESSION:" + sessionId + "] Closing connection with userId=" + userId);
         }
 
-        // DON'T schedule agent shutdown on WebSocket close - user might reconnect immediately
-        // The agent will be cleaned up by:
-        // 1. Explicit /conclude command
-        // 2. Session expiration (handled separately)
-        // 3. Periodic cleanup of idle agents
-        LOGGER.info("[SESSION:" + sessionId + "] WebSocket closed, but keeping agent alive for potential reconnection");
+        // Unregister session from KlawedSandboxService
+        klawedSandboxService.unregisterSession(sessionId);
+        LOGGER.info("[SESSION:" + sessionId + "] Session unregistered from KlawedSandboxService");
 
         // Persist session folders back to per-user storage
         try {
@@ -454,16 +394,8 @@ public class FileChatWebSocket {
                 return;
             }
             
-            // Get workspace path before stopping agent
+            // Get workspace path before cleanup
             Path workspace = sessionManager.getWorkspaceForSession(sessionId);
-            
-            // Stop the dedicated klawed agent if it exists
-            try {
-                agentManager.stopAgentForSession(sessionId);
-                LOGGER.info("[SESSION:" + sessionId + "] Klawed agent stopped");
-            } catch (Exception e) {
-                LOGGER.warning("[SESSION:" + sessionId + "] Failed to stop agent (may not exist): " + e.getMessage());
-            }
             
             // Clean up klawed artifacts from workspace (.klawed/, SQLite queue files)
             if (workspace != null) {

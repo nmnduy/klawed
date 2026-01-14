@@ -6,9 +6,9 @@ import com.filesurf.model.ChatConstants;
 import com.filesurf.model.ChatMessageRecord;
 import com.filesurf.model.ChatSessionRecord;
 import com.filesurf.model.KlawedSocketMessage;
-import com.filesurf.service.KlawedAgentManager;
+import com.filesurf.service.KlawedSandboxService;
 import com.filesurf.service.SessionManager;
-import com.filesurf.service.AgentShutdownJobService;
+import com.filesurf.service.ChatMessagePollingService;
 import com.filesurf.service.FileChatService;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -36,13 +36,13 @@ public class FileChatHttpResource {
     private static final String USER_COOKIE_NAME = "filesurf_userId";
 
     @Inject
-    KlawedAgentManager agentManager;
+    KlawedSandboxService klawedSandboxService;
     
     @Inject
     SessionManager sessionManager;
     
     @Inject
-    AgentShutdownJobService agentShutdownJobService;
+    ChatMessagePollingService chatMessagePollingService;
 
     @Inject
     FileChatService fileChatService;
@@ -96,27 +96,13 @@ public class FileChatHttpResource {
             ChatSessionRecord chatSession = fileChatService.createOrUpdateChatSession(sessionId, clientIdentity);
             LOGGER.info("[SESSION:" + sessionId + "] Chat session created/updated in database");
 
-            // Cancel any pending agent shutdown jobs for this session since it's reconnecting
-            agentShutdownJobService.cancelShutdownJob(sessionId);
-            LOGGER.info("[SESSION:" + sessionId + "] Agent shutdown jobs cancelled (if any)");
+            // Register session with KlawedSandboxService
+            klawedSandboxService.registerSession(sessionId, userId);
+            LOGGER.info("[SESSION:" + sessionId + "] Session registered with KlawedSandboxService");
 
             // Initialize session directory with persistent folders
             java.nio.file.Path sessionDir = sessionManager.initializeSession(sessionId, userId);
             LOGGER.info("[SESSION:" + sessionId + "] Session directory initialized: " + sessionDir);
-
-            // Check if agent already exists for this session (from previous connection)
-            KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(sessionId);
-            if (agent != null) {
-                LOGGER.info("[SESSION:" + sessionId + "] Reusing existing klawed agent from previous connection");
-            } else {
-                // Start new dedicated klawed agent for this session
-                agent = agentManager.startAgentForSession(sessionId, sessionDir);
-                LOGGER.info("[SESSION:" + sessionId + "] Started new dedicated klawed agent");
-            }
-
-            // Connect to the agent
-            agent.connect();
-            LOGGER.info("[SESSION:" + sessionId + "] Connected to klawed agent");
 
             // Save status message to database
             String statusMessage = "SESSION_ID:" + sessionId + "|Connected via HTTP";
@@ -187,32 +173,10 @@ public class FileChatHttpResource {
         }
 
         try {
-            // Try to get existing agent first
-            KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(sessionId);
-
-            if (agent == null) {
-                // If no agent exists, create a new one
-                java.nio.file.Path sessionDir;
-                try {
-                    sessionDir = sessionManager.getSessionDirectory(sessionId, userId);
-                } catch (IOException e) {
-                    // If session directory doesn't exist, create it
-                    sessionDir = sessionManager.initializeSession(sessionId, userId);
-                }
-                agent = agentManager.startAgentForSession(sessionId, sessionDir);
-                LOGGER.info("[SESSION:" + sessionId + "] Created new agent instance for message processing");
-
-                // Connect the agent
-                agent.connect();
-            } else {
-                LOGGER.info("[SESSION:" + sessionId + "] Using existing agent instance for message processing");
-            }
+            LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via ChatMessagePollingService");
             
-            LOGGER.info("[SESSION:" + sessionId + "] Agent created and connected, sending message to klawed");
-            
-            // Send message to the dedicated agent asynchronously
-            // Responses will be delivered via database polling
-            agent.sendMessageAsync(message);
+            // Send message to klawed via SQLite queue
+            chatMessagePollingService.sendMessageToKlawed(sessionId, userId, message);
             LOGGER.info("[SESSION:" + sessionId + "] Message sent to klawed, responses will be available via polling");
             
             return Response.ok()
@@ -387,11 +351,9 @@ public class FileChatHttpResource {
         }
 
         try {
-            // Schedule agent shutdown with grace period (90 seconds / 1.5 minutes)
-            // This allows user to reconnect and reuse the agent if it's just a temporary disconnect
-            // When the shutdown job executes, it will also clean up klawed artifacts
-            agentShutdownJobService.enqueueShutdown(sessionId);
-            LOGGER.info("[SESSION:" + sessionId + "] Klawed agent shutdown scheduled (grace period: 90 seconds)");
+            // Unregister session from KlawedSandboxService
+            klawedSandboxService.unregisterSession(sessionId);
+            LOGGER.info("[SESSION:" + sessionId + "] Session unregistered from KlawedSandboxService");
 
             // Persist session folders back to per-user storage
             if (userId != null && !userId.isBlank()) {
@@ -400,7 +362,7 @@ public class FileChatHttpResource {
                 LOGGER.info("[SESSION:" + sessionId + "] Session data persisted for user=" + userId);
             }
 
-            // Release session tracking (workspace stays, klawed artifacts cleaned by shutdown job)
+            // Release session tracking
             sessionManager.releaseSessionTracking(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Session tracking released");
 
@@ -455,16 +417,8 @@ public class FileChatHttpResource {
         }
 
         try {
-            // Get workspace path before stopping agent
+            // Get workspace path before cleanup
             java.nio.file.Path workspace = sessionManager.getWorkspaceForSession(sessionId);
-            
-            // Stop the dedicated klawed agent if it exists
-            try {
-                agentManager.stopAgentForSession(sessionId);
-                LOGGER.info("[SESSION:" + sessionId + "] Klawed agent stopped");
-            } catch (Exception e) {
-                LOGGER.warning("[SESSION:" + sessionId + "] Failed to stop agent (may not exist): " + e.getMessage());
-            }
             
             // Clean up klawed artifacts from workspace (.klawed/, SQLite queue files)
             if (workspace != null) {

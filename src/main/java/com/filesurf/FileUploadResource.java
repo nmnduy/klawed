@@ -1,6 +1,5 @@
 package com.filesurf;
 
-import com.filesurf.service.KlawedAgentManager;
 import com.filesurf.service.SessionManager;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.inject.Inject;
@@ -58,9 +57,6 @@ public class FileUploadResource {
 
     @Inject
     SessionManager sessionManager;
-
-    @Inject
-    KlawedAgentManager agentManager;
 
     private String resolveUserId(String headerUserId, String cookieUserId) {
         if (headerUserId != null && !headerUserId.isBlank()) {
@@ -276,35 +272,8 @@ public class FileUploadResource {
             return;
         }
 
-        try {
-            // Get the agent instance for this session
-            KlawedAgentManager.KlawedAgentInstance agent = agentManager.getAgentForSession(sessionId);
-            
-            if (agent == null) {
-                LOGGER.info("[SESSION:" + sessionId + "] No klawed agent found to notify about file upload");
-                return;
-            }
-
-            // Create a notification message
-            String fileList = String.join(", ", uploadedFiles);
-            String notificationMessage;
-            
-            if (uploadedFiles.size() == 1) {
-                notificationMessage = "User has uploaded a file: " + uploadedFiles.get(0);
-            } else {
-                notificationMessage = "User has uploaded " + uploadedFiles.size() + " files: " + fileList;
-            }
-
-            LOGGER.info("[SESSION:" + sessionId + "] Notifying klawed about uploaded files: " + fileList);
-            
-            // Send the notification asynchronously to avoid blocking the upload response
-            agent.sendMessageAsync(notificationMessage);
-            
-            LOGGER.info("[SESSION:" + sessionId + "] File upload notification sent to klawed");
-            
-        } catch (Exception e) {
-            // Log but don't fail the upload if notification fails
-            LOGGER.warning("[SESSION:" + sessionId + "] Failed to notify klawed about file upload: " + e.getMessage());
-        }
+        // Note: File upload notification to klawed is now handled via the chat interface
+        // Users can ask about uploaded files and klawed will see them in the workspace
+        LOGGER.info("[SESSION:" + sessionId + "] Files uploaded: " + String.join(", ", uploadedFiles));
     }
 }
