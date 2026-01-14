@@ -1363,9 +1363,12 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
     // Request window resize (this will be a no-op if size hasn't changed)
     // For BORDER style, we need extra height for top and bottom borders
+    // For BACKGROUND style, we add one line of padding
     int window_height_needed = needed_lines;
     if (tui->input_box_style == INPUT_STYLE_BORDER) {
         window_height_needed += 2;  // +2 for top and bottom borders
+    } else if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
+        window_height_needed += 1;  // +1 for bottom padding
     }
     resize_input_window(tui, window_height_needed);
     input = tui->input_buffer;
@@ -1403,8 +1406,10 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
     // Adjust vertical scroll to keep cursor visible
     // For BORDER style, we need to account for top and bottom borders
+    // For BACKGROUND style, we account for bottom padding
     int content_start_row = (tui->input_box_style == INPUT_STYLE_BORDER) ? 1 : 0;
-    int border_height_offset = (tui->input_box_style == INPUT_STYLE_BORDER) ? 2 : 0;
+    int border_height_offset = (tui->input_box_style == INPUT_STYLE_BORDER) ? 2 :
+                               (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 1 : 0;
     int max_visible_lines = input->win_height - border_height_offset;
     if (cursor_line < input->line_scroll_offset) {
         input->line_scroll_offset = cursor_line;
