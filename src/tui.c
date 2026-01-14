@@ -1337,9 +1337,22 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     }
 
     // Calculate available width for text content
-    // Layout: border (1) + left padding (1) + content + right padding (1)
-    int content_start_col = INPUT_CONTENT_START;
-    int content_width = input->win_width - content_start_col - INPUT_RIGHT_PADDING;
+    // Layout depends on style:
+    // - BACKGROUND: border (1) + left padding (1) + content + right padding (1)
+    // - BORDER: box border (1) + left padding (1) + content + right padding (1) + box border (1)
+    int content_start_col;
+    int right_margin;
+
+    if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
+        content_start_col = INPUT_CONTENT_START;  // border (1) + padding (1) = 2
+        right_margin = INPUT_RIGHT_PADDING;       // padding (1) = 1
+    } else {
+        // BORDER style: box border on left + padding
+        content_start_col = INPUT_LEFT_BORDER_WIDTH + INPUT_LEFT_PADDING;  // 1 + 1 = 2
+        right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;      // padding + right border = 2
+    }
+
+    int content_width = input->win_width - content_start_col - right_margin;
     if (content_width < 10) content_width = 10;
 
     // For command/search mode, calculate needed lines with mode prefix
@@ -1357,7 +1370,14 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     }
 
     // Recalculate content width after potential resize
-    content_width = input->win_width - content_start_col - INPUT_RIGHT_PADDING;
+    if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
+        content_start_col = INPUT_CONTENT_START;
+        right_margin = INPUT_RIGHT_PADDING;
+    } else {
+        content_start_col = INPUT_LEFT_BORDER_WIDTH + INPUT_LEFT_PADDING;
+        right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;
+    }
+    content_width = input->win_width - content_start_col - right_margin;
     if (content_width < 10) content_width = 10;
 
     // Calculate cursor line position
@@ -1387,20 +1407,34 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     // Clear the window
     werase(win);
 
-    // Fill background with input background color
-    if (has_colors()) {
-        wbkgd(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BG));
-    }
+    // Apply style based on input_box_style
+    if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
+        // Style 1: Background color + left border
+        // Fill background with input background color
+        if (has_colors()) {
+            wbkgd(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BG));
+        }
 
-    // Draw left border (thin vertical line)
-    if (has_colors()) {
-        wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
-    }
-    for (int row = 0; row < input->win_height; row++) {
-        mvwaddch(win, row, 0, ACS_VLINE);
-    }
-    if (has_colors()) {
-        wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+        // Draw left border (thin vertical line)
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+        }
+        for (int row = 0; row < input->win_height; row++) {
+            mvwaddch(win, row, 0, ACS_VLINE);
+        }
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+        }
+    } else {
+        // Style 2: Full border with no background
+        // Draw box border around the input area
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+        }
+        box(win, 0, 0);
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+        }
     }
 
     // Draw mode prefix on first visible line (command/search mode only)
@@ -1659,6 +1693,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
 
     // Initialize mode (start in INSERT mode for immediate input)
     tui->mode = TUI_MODE_INSERT;
+    tui->input_box_style = INPUT_STYLE_BACKGROUND;  // Default to background style
     tui->normal_mode_last_key = 0;
 
     // Initialize command mode buffer
@@ -3588,6 +3623,23 @@ static int handle_normal_mode_input(TUIState *tui, int ch, const char *prompt, v
             }
             input_redraw(tui, prompt);
             break;
+
+        case 'b':  // Toggle input box style
+            // Toggle between background and border styles
+            if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
+                tui->input_box_style = INPUT_STYLE_BORDER;
+                tui_update_status(tui, "Input box style: border");
+            } else {
+                tui->input_box_style = INPUT_STYLE_BACKGROUND;
+                tui_update_status(tui, "Input box style: background");
+            }
+            // Refresh to show the style change
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            break;
+
         default:
             /* Unhandled key in normal mode */
             break;

@@ -77,6 +77,12 @@ typedef enum {
     TUI_MODE_HISTORY_SEARCH  // History search mode (entered with Ctrl+R from insert mode)
 } TUIMode;
 
+// Input box style (visual appearance)
+typedef enum {
+    INPUT_STYLE_BACKGROUND,  // Background color + left border (default)
+    INPUT_STYLE_BORDER       // Full border with no background
+} TUIInputBoxStyle;
+
 // TUI State
 typedef struct TUIStateStruct {
     // Centralized window manager (owns ncurses windows)
@@ -108,6 +114,7 @@ typedef struct TUIStateStruct {
 
     // Modes
     TUIMode mode;            // Current input mode (NORMAL, INSERT, or COMMAND)
+    TUIInputBoxStyle input_box_style; // Current input box visual style
     int normal_mode_last_key; // Previous key in normal mode (for gg, G combos)
     char *command_buffer;    // Buffer for command mode input (starts with ':')
     int command_buffer_len;  // Length of command buffer
