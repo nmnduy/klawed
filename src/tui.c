@@ -508,6 +508,15 @@ static void init_ncurses_colors(void) {
                 rgb_to_ncurses(g_theme.search_rgb.g),
                 rgb_to_ncurses(g_theme.search_rgb.b));
 
+            // Input background color (subtle dark gray)
+            init_color(23, 120, 120, 120);  // ~12% gray for subtle background
+
+            // Input border color (use status/accent color)
+            init_color(24,
+                rgb_to_ncurses(g_theme.status_rgb.r),
+                rgb_to_ncurses(g_theme.status_rgb.g),
+                rgb_to_ncurses(g_theme.status_rgb.b));
+
             // Initialize color pairs with custom colors
             init_pair(NCURSES_PAIR_FOREGROUND, 16, -1);  // -1 = default background
             init_pair(NCURSES_PAIR_USER, 17, -1);
@@ -523,6 +532,8 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, 19, -1);  // Yellow (same as STATUS)
             init_pair(NCURSES_PAIR_TODO_PENDING, 18, -1);      // Cyan (same as ASSISTANT)
             init_pair(NCURSES_PAIR_SEARCH, 22, -1);            // Search highlight (color5 from theme)
+            init_pair(NCURSES_PAIR_INPUT_BG, 16, 23);          // Foreground on subtle background
+            init_pair(NCURSES_PAIR_INPUT_BORDER, 24, -1);      // Border/accent color
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -547,6 +558,8 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, (short)status_idx, (short)-1);
             init_pair(NCURSES_PAIR_TODO_PENDING, (short)assistant_idx, (short)-1);
             init_pair(NCURSES_PAIR_SEARCH, (short)search_idx, (short)-1);  // Search highlight (color5 from theme)
+            init_pair(NCURSES_PAIR_INPUT_BG, (short)fg_idx, (short)236);   // Foreground on dark gray (236 in 256 palette)
+            init_pair(NCURSES_PAIR_INPUT_BORDER, (short)status_idx, (short)-1);  // Border/accent color
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -566,6 +579,8 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, -1);
             init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
             init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
+            init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
+            init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_YELLOW, -1);  // Fallback: yellow border
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -584,6 +599,8 @@ static void init_ncurses_colors(void) {
         init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, -1);
         init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
         init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
+        init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
+        init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_YELLOW, -1);  // Fallback: yellow border
     }
 }
 
@@ -1274,6 +1291,13 @@ static void input_finalize_paste(TUIInputBuffer *input) {
 }
 
 // Redraw the input window
+// Layout: [border (1 col)] [padding (1 col)] [text area] [padding (1 col)]
+// The prompt parameter is kept for command/search mode compatibility
+#define INPUT_LEFT_BORDER_WIDTH 1
+#define INPUT_LEFT_PADDING 1
+#define INPUT_RIGHT_PADDING 1
+#define INPUT_CONTENT_START (INPUT_LEFT_BORDER_WIDTH + INPUT_LEFT_PADDING)
+
 static void input_redraw(TUIState *tui, const char *prompt) {
     if (!tui || !tui->input_buffer) {
         return;
@@ -1292,14 +1316,36 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         return;
     }
 
-    int prompt_len = (int)strlen(prompt);  // prompt already includes space
+    // For command/search mode, we show the prefix (:/? + buffer)
+    // For insert mode, no prompt prefix
+    int mode_prefix_len = 0;
+    const char *mode_prefix = "";
+    char search_prompt[260] = {0};
 
-    // Calculate available width for text (window width - prompt)
-    int available_width = input->win_width - prompt_len;
-    if (available_width < 10) available_width = 10;
+    if (tui->mode == TUI_MODE_COMMAND && tui->command_buffer) {
+        mode_prefix = tui->command_buffer;
+        mode_prefix_len = (int)strlen(mode_prefix);
+    } else if (tui->mode == TUI_MODE_SEARCH && tui->search_buffer) {
+        if (tui->search_direction == 1) {
+            snprintf(search_prompt, sizeof(search_prompt), "/%s", tui->search_buffer);
+        } else {
+            snprintf(search_prompt, sizeof(search_prompt), "?%s", tui->search_buffer);
+        }
+        mode_prefix = search_prompt;
+        mode_prefix_len = (int)strlen(mode_prefix);
+    }
 
-    // Calculate how many lines we need to display all content
-    int needed_lines = calculate_needed_lines(input->buffer, input->length, input->win_width, prompt_len);
+    // Calculate available width for text content
+    // Layout: border (1) + left padding (1) + content + right padding (1)
+    int content_start_col = INPUT_CONTENT_START;
+    int content_width = input->win_width - content_start_col - INPUT_RIGHT_PADDING;
+    if (content_width < 10) content_width = 10;
+
+    // For command/search mode, calculate needed lines with mode prefix
+    // For insert mode, no prefix
+    int effective_prefix_len = (tui->mode == TUI_MODE_INSERT) ? 0 : mode_prefix_len;
+    int needed_lines = calculate_needed_lines(input->buffer, input->length,
+                                              content_width, effective_prefix_len);
 
     // Request window resize (this will be a no-op if size hasn't changed)
     resize_input_window(tui, needed_lines);
@@ -1309,21 +1355,20 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         return;
     }
 
-    // Recalculate available width in case window resized
-    available_width = input->win_width - prompt_len;
-    if (available_width < 10) available_width = 10;
+    // Recalculate content width after potential resize
+    content_width = input->win_width - content_start_col - INPUT_RIGHT_PADDING;
+    if (content_width < 10) content_width = 10;
 
     // Calculate cursor line position
     int cursor_line = 0;
-    int cursor_col = prompt_len;
+    int cursor_col = effective_prefix_len;
     for (int i = 0; i < input->cursor; i++) {
         if (input->buffer[i] == '\n') {
             cursor_line++;
             cursor_col = 0;
         } else {
             cursor_col++;
-            int line_width = input->win_width;
-            if (cursor_col >= line_width) {
+            if (cursor_col >= content_width) {
                 cursor_line++;
                 cursor_col = 0;
             }
@@ -1341,41 +1386,28 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     // Clear the window
     werase(win);
 
-    // Draw box with accent color if colors are available (commented out - no border)
-    /*
+    // Fill background with input background color
     if (has_colors()) {
-        wattron(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
-        box(win, 0, 0);
-        wattroff(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
-    } else {
-        box(win, 0, 0);
+        wbkgd(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BG));
     }
-    */
 
-    // Draw prompt on first visible line (if we're not scrolled past it)
-    // In command mode, show command buffer instead of normal prompt
-    if (input->line_scroll_offset == 0) {
+    // Draw left border (thin vertical line)
+    if (has_colors()) {
+        wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+    }
+    for (int row = 0; row < input->win_height; row++) {
+        mvwaddch(win, row, 0, ACS_VLINE);
+    }
+    if (has_colors()) {
+        wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+    }
+
+    // Draw mode prefix on first visible line (command/search mode only)
+    if (mode_prefix_len > 0 && input->line_scroll_offset == 0) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         }
-
-        if (tui->mode == TUI_MODE_COMMAND && tui->command_buffer) {
-            // Show command buffer
-            mvwprintw(win, 0, 0, "%s", tui->command_buffer);
-        } else if (tui->mode == TUI_MODE_SEARCH && tui->search_buffer) {
-            // Show search buffer with appropriate prefix
-            char search_prompt[260];
-            if (tui->search_direction == 1) {
-                snprintf(search_prompt, sizeof(search_prompt), "/%s", tui->search_buffer);
-            } else {
-                snprintf(search_prompt, sizeof(search_prompt), "?%s", tui->search_buffer);
-            }
-            mvwprintw(win, 0, 0, "%s", search_prompt);
-        } else {
-            // Show normal prompt
-            mvwprintw(win, 0, 0, "%s", prompt);
-        }
-
+        mvwprintw(win, 0, content_start_col, "%s", mode_prefix);
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         }
@@ -1383,24 +1415,24 @@ static void input_redraw(TUIState *tui, const char *prompt) {
 
     // Render visible lines with scrolling support
     if (has_colors()) {
-        wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BG));
     }
 
     int current_line = 0;
     int screen_y = 0;
-    int screen_x = (current_line == 0) ? prompt_len : 0;
+    int screen_x = content_start_col + effective_prefix_len;
 
     for (int i = 0; i < input->length && screen_y < input->win_height; i++) {
         // Skip lines before scroll offset
         if (current_line < input->line_scroll_offset) {
             if (input->buffer[i] == '\n') {
                 current_line++;
-                screen_x = 0;
+                screen_x = content_start_col;
             } else {
                 screen_x++;
-                if (screen_x >= input->win_width) {
+                if (screen_x >= content_start_col + content_width) {
                     current_line++;
-                    screen_x = 0;
+                    screen_x = content_start_col;
                 }
             }
             continue;
@@ -1411,47 +1443,42 @@ static void input_redraw(TUIState *tui, const char *prompt) {
         if (c == '\n') {
             screen_y++;
             current_line++;
-            screen_x = 0;  // Reset to left edge (no border)
+            screen_x = content_start_col;
         } else {
-            // Cast to unsigned char then to chtype to avoid sign-conversion warnings
             mvwaddch(win, screen_y, screen_x, (chtype)(unsigned char)c);
             screen_x++;
 
             // Check if we need to wrap
-            int line_width = input->win_width;  // Full window width for all lines
-            if (screen_x >= line_width) {
+            if (screen_x >= content_start_col + content_width) {
                 screen_y++;
                 current_line++;
-                screen_x = 0;
+                screen_x = content_start_col;
             }
         }
     }
 
     if (has_colors()) {
-        wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BG));
     }
 
-    // Position cursor (adjusted for scroll)
-    int cursor_screen_y = cursor_line - input->line_scroll_offset;
-    int cursor_screen_x = cursor_col;  // No border offset
-
-    // Recalculate cursor_col relative to its line
+    // Recalculate cursor screen position
     int temp_line = 0;
-    int temp_col = (temp_line == 0) ? prompt_len : 0;
+    int temp_col = effective_prefix_len;
     for (int i = 0; i < input->cursor; i++) {
         if (input->buffer[i] == '\n') {
             temp_line++;
             temp_col = 0;
         } else {
             temp_col++;
-            int line_width = input->win_width;
-            if (temp_col >= line_width) {
+            if (temp_col >= content_width) {
                 temp_line++;
                 temp_col = 0;
             }
         }
     }
-    cursor_screen_x = temp_col;
+
+    int cursor_screen_y = temp_line - input->line_scroll_offset;
+    int cursor_screen_x = content_start_col + temp_col;
 
     // Bounds check for cursor position
     if (cursor_screen_y >= 0 && cursor_screen_y < input->win_height &&
@@ -1525,6 +1552,9 @@ static void input_redraw(TUIState *tui, const char *prompt) {
     }
 
     wrefresh(win);
+
+    // Suppress unused parameter warning - prompt kept for API compatibility
+    (void)prompt;
 }
 
 int tui_init(TUIState *tui, ConversationState *state) {
