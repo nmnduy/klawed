@@ -1,6 +1,7 @@
 package com.filesurf;
 
 import com.filesurf.model.UserRecord;
+import com.filesurf.service.KlawedSandboxService;
 import com.filesurf.service.UserService;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
@@ -31,6 +32,9 @@ public class SessionResource {
     
     @Inject
     UserService userService;
+    
+    @Inject
+    KlawedSandboxService klawedSandboxService;
     
     @ConfigProperty(name = "cookie.secure", defaultValue = "false")
     Optional<Boolean> cookieSecure;
@@ -69,6 +73,9 @@ public class SessionResource {
 
         // Store the session ID with user identity
         sessionStore.put(sessionId, user.getEmail());
+        
+        // Register session in sessions.db for container management
+        klawedSandboxService.registerSession(sessionId, userId);
 
         LOGGER.info("Generated new session ID: " + sessionId + " for user: " + user.getEmail() + " (userId: " + userId + ")");
 

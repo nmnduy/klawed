@@ -16,10 +16,6 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -100,33 +96,26 @@ public class ChatMessagePollingService {
         String dbFileName = "klawed_messages_" + sessionId + ".db";
         Path sqliteDbPath = workspaceDir.resolve(dbFileName);
         
-        // Create JSON message
-        String jsonMessage;
+        // Create SQLiteQueueClient with proper configuration
+        SQLiteQueueClient.Config config = new SQLiteQueueClient.Config(sqliteDbPath.toString())
+            .withSenderName(senderName)
+            .withReceiverName(receiverName)
+            .withSessionId(sessionId)
+            .withFileChatService(fileChatService);
+        
+        SQLiteQueueClient queueClient = new SQLiteQueueClient(config);
+        
         try {
-            ObjectNode json = objectMapper.createObjectNode();
-            json.put("messageType", "TEXT");
-            json.put("content", message);
-            jsonMessage = objectMapper.writeValueAsString(json);
-        } catch (Exception e) {
-            throw new IOException("Failed to create JSON message", e);
-        }
-        
-        // Insert message into SQLite queue database
-        String jdbcUrl = "jdbc:sqlite:" + sqliteDbPath.toString();
-        
-        try (Connection conn = DriverManager.getConnection(jdbcUrl);
-             PreparedStatement pstmt = conn.prepareStatement(
-                 "INSERT INTO messages (sender, receiver, message, sent) VALUES (?, ?, ?, 0)"
-             )) {
+            // Connect and initialize schema
+            queueClient.connect();
             
-            pstmt.setString(1, senderName);
-            pstmt.setString(2, receiverName);
-            pstmt.setString(3, jsonMessage);
-            pstmt.executeUpdate();
+            // Send message
+            queueClient.sendMessage(message);
             
             LOGGER.info("[SESSION:" + sessionId + "] Message sent to klawed (length: " + message.length() + " chars)");
-        } catch (SQLException e) {
-            throw new IOException("Failed to send message via SQLite queue: " + e.getMessage(), e);
+        } finally {
+            // Clean up
+            queueClient.shutdown();
         }
     }
 
