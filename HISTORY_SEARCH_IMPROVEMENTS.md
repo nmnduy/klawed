@@ -27,10 +27,10 @@
    - Case-sensitive character matches get small bonus
 
 2. **Increased popup size** (`src/history_search.c`)
-   - Changed from 33% (screen_height / 3) to 60% ((screen_height * 60) / 100)
-   - Matches file search popup size
+   - Changed height from 33% (screen_height / 3) to 80% for mobile with keyboard
+   - Changed width from 66% (2/3) to 90% for better use of screen space
    - Minimum height increased from 5 to 10 lines
-   - Better mobile experience
+   - Much better mobile/phone experience when keyboard is visible
 
 3. **Updated documentation** (`src/history_search.h`)
    - Changed "Fuzzy search" to "Substring/exact match search"

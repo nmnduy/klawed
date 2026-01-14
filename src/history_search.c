@@ -281,12 +281,12 @@ int history_search_start(HistorySearchState *state, int screen_height, int scree
     state->history_entries = history_entries;
     state->history_count = history_count;
 
-    // Create popup window (similar to file search - 60% of screen)
-    state->popup_height = (screen_height * 60) / 100;
+    // Create popup window - use 80% of screen (better for mobile with keyboard)
+    state->popup_height = (screen_height * 80) / 100;
     if (state->popup_height < 10) state->popup_height = 10;
     if (state->popup_height > screen_height - 2) state->popup_height = screen_height - 2;
 
-    state->popup_width = screen_width * 2 / 3;
+    state->popup_width = (screen_width * 90) / 100;
     if (state->popup_width < 20) state->popup_width = 20;
     if (state->popup_width > screen_width - 2) state->popup_width = screen_width - 2;
 
