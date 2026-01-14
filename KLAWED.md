@@ -26,7 +26,7 @@ Project instructions for Klawed when working with this codebase.
 - **Explore Subagent**: `src/explore_tools.c`, `docs/explore-subagent.md` (web research mode with Context7 + web_browse_agent)
 - **MCP**: `src/mcp.c`, `src/mcp.h`, `docs/mcp.md` (external tool servers)
 - **TODO system**: `src/todo.c`, `src/todo.h`
-- **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/normal-mode.md`
+- **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/keyboard-shortcuts.md`
 - **Arena allocator**: `src/arena.h` (region-based memory management, single-header library)
 - **Memvid integration**: `src/memvid.c`, `src/memvid.h`, `docs/memvid.md` (persistent memory)
 - **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management)
