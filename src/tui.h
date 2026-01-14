@@ -59,6 +59,7 @@ typedef enum {
 #define NCURSES_PAIR_SEARCH 11
 #define NCURSES_PAIR_INPUT_BG 12
 #define NCURSES_PAIR_INPUT_BORDER 13
+#define NCURSES_PAIR_USER_MSG_BG 14
 
 // Conversation message entry
 typedef struct {

@@ -542,6 +542,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_SEARCH, 22, -1);            // Search highlight (color5 from theme)
             init_pair(NCURSES_PAIR_INPUT_BG, 16, 23);          // Foreground on subtle background
             init_pair(NCURSES_PAIR_INPUT_BORDER, 24, -1);      // Border/accent color
+            init_pair(NCURSES_PAIR_USER_MSG_BG, 16, 23);       // User message background (same as input bg)
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -568,6 +569,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_SEARCH, (short)search_idx, (short)-1);  // Search highlight (color5 from theme)
             init_pair(NCURSES_PAIR_INPUT_BG, (short)fg_idx, (short)236);   // Foreground on dark gray (236 in 256 palette)
             init_pair(NCURSES_PAIR_INPUT_BORDER, (short)user_idx, (short)-1);  // Border color (user/green)
+            init_pair(NCURSES_PAIR_USER_MSG_BG, (short)fg_idx, (short)236);   // User message background (same as input bg)
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -589,6 +591,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
             init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
             init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, -1);  // Fallback: green border (user color)
+            init_pair(NCURSES_PAIR_USER_MSG_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: user message background
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -609,6 +612,7 @@ static void init_ncurses_colors(void) {
         init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
         init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
         init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, -1);  // Fallback: green border (user color)
+        init_pair(NCURSES_PAIR_USER_MSG_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: user message background
     }
 }
 
@@ -822,21 +826,58 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
     int start_line = window_manager_get_content_lines(&tui->wm);
     wmove(tui->wm.conv_pad, start_line, 0);
 
-    // Write prefix if present
+    // Check if this is a [User] or [Assistant] message to apply new styling
+    int is_user_message = (prefix && strcmp(prefix, "[User]") == 0);
+    int is_assistant_message = (prefix && strcmp(prefix, "[Assistant]") == 0);
+
+    // Write prefix with special handling for User and Assistant
     if (prefix && prefix[0] != '\0') {
-        if (has_colors()) {
-            wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-        }
-        waddstr(tui->wm.conv_pad, prefix);
-        waddch(tui->wm.conv_pad, ' ');
-        if (has_colors()) {
-            wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+        if (is_user_message) {
+            // User message: '>' with background color
+            if (has_colors()) {
+                wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG) | A_BOLD);
+            }
+            waddstr(tui->wm.conv_pad, " > ");
+            if (has_colors()) {
+                wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG) | A_BOLD);
+            }
+        } else if (is_assistant_message) {
+            // Assistant message: '>>>' without background
+            if (has_colors()) {
+                wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
+            waddstr(tui->wm.conv_pad, ">>>");
+            waddch(tui->wm.conv_pad, ' ');
+            if (has_colors()) {
+                wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
+        } else {
+            // Other messages: keep original behavior
+            if (has_colors()) {
+                wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
+            waddstr(tui->wm.conv_pad, prefix);
+            waddch(tui->wm.conv_pad, ' ');
+            if (has_colors()) {
+                wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
         }
     }
 
     // Write text
     if (text && text[0] != '\0') {
-        int text_pair = (prefix && prefix[0] != '\0') ? NCURSES_PAIR_FOREGROUND : mapped_pair;
+        int text_pair;
+        if (is_user_message) {
+            // User message text uses the background color
+            text_pair = NCURSES_PAIR_USER_MSG_BG;
+        } else if (prefix && prefix[0] != '\0') {
+            // Other messages with prefix use foreground
+            text_pair = NCURSES_PAIR_FOREGROUND;
+        } else {
+            // No prefix: use the mapped pair
+            text_pair = mapped_pair;
+        }
+
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
         }
@@ -846,6 +887,11 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
             render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern);
         } else {
             waddstr(tui->wm.conv_pad, text);
+        }
+
+        // For user messages, add closing space with background
+        if (is_user_message) {
+            waddch(tui->wm.conv_pad, ' ');
         }
 
         if (has_colors()) {
@@ -2653,23 +2699,66 @@ void tui_handle_resize(TUIState *tui) {
                         break;
                 }
 
+        // Check if this is a [User] or [Assistant] message to apply new styling
+        int is_user_message = (entry->prefix && strcmp(entry->prefix, "[User]") == 0);
+        int is_assistant_message = (entry->prefix && strcmp(entry->prefix, "[Assistant]") == 0);
+
         if (entry->prefix && entry->prefix[0] != '\0') {
-            if (has_colors()) {
-                wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-            }
-            waddstr(tui->wm.conv_pad, entry->prefix);
-            waddch(tui->wm.conv_pad, ' ');
-            if (has_colors()) {
-                wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            if (is_user_message) {
+                // User message: '>' with background color
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG) | A_BOLD);
+                }
+                waddstr(tui->wm.conv_pad, " > ");
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG) | A_BOLD);
+                }
+            } else if (is_assistant_message) {
+                // Assistant message: '>>>' without background
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+                waddstr(tui->wm.conv_pad, ">>>");
+                waddch(tui->wm.conv_pad, ' ');
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+            } else {
+                // Other messages: keep original behavior
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+                waddstr(tui->wm.conv_pad, entry->prefix);
+                waddch(tui->wm.conv_pad, ' ');
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
             }
         }
 
         if (entry->text && entry->text[0] != '\0') {
-            int text_pair = (entry->prefix && entry->prefix[0] != '\0') ? NCURSES_PAIR_FOREGROUND : mapped_pair;
+            int text_pair;
+            if (is_user_message) {
+                // User message text uses the background color
+                text_pair = NCURSES_PAIR_USER_MSG_BG;
+            } else if (entry->prefix && entry->prefix[0] != '\0') {
+                // Other messages with prefix use foreground
+                text_pair = NCURSES_PAIR_FOREGROUND;
+            } else {
+                // No prefix: use the mapped pair
+                text_pair = mapped_pair;
+            }
+
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
             }
             waddstr(tui->wm.conv_pad, entry->text);
+
+            // For user messages, add closing space with background
+            if (is_user_message) {
+                waddch(tui->wm.conv_pad, ' ');
+            }
+
             if (has_colors()) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
             }
@@ -2707,20 +2796,68 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     char line1[256];
     char line2[256];
     char line3[256];
+    char box_top[256];
+    char box_bottom[256];
     char tip_line[512];
 
-    // ASCII art cat mascot
+    // Calculate the maximum width needed for the box
+    int max_width = 0;
     snprintf(line1, sizeof(line1), "  /\\_/\\   klawed v%s", version ? version : "?");
     snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
     snprintf(line3, sizeof(line3), "  > ^ <    %s", working_dir);
 
+    int len1 = (int)strlen(line1);
+    int len2 = (int)strlen(line2);
+    int len3 = (int)strlen(line3);
+    max_width = len1 > len2 ? len1 : len2;
+    max_width = max_width > len3 ? max_width : len3;
+    max_width += 4;  // Add padding for box borders (2 spaces on each side)
+
+    // Create box top and bottom lines using UTF-8 box drawing characters
+    snprintf(box_top, sizeof(box_top), "┌");
+    for (int i = 0; i < max_width; i++) {
+        strlcat(box_top, "─", sizeof(box_top));
+    }
+    strlcat(box_top, "┐", sizeof(box_top));
+
+    snprintf(box_bottom, sizeof(box_bottom), "└");
+    for (int i = 0; i < max_width; i++) {
+        strlcat(box_bottom, "─", sizeof(box_bottom));
+    }
+    strlcat(box_bottom, "┘", sizeof(box_bottom));
+
+    // Pad content lines with box borders
+    char boxed_line1[256];
+    char boxed_line2[256];
+    char boxed_line3[256];
+    snprintf(boxed_line1, sizeof(boxed_line1), "│ %s", line1);
+    // Pad to align closing border
+    while ((int)strlen(boxed_line1) < max_width + 1) {
+        strlcat(boxed_line1, " ", sizeof(boxed_line1));
+    }
+    strlcat(boxed_line1, " │", sizeof(boxed_line1));
+
+    snprintf(boxed_line2, sizeof(boxed_line2), "│ %s", line2);
+    while ((int)strlen(boxed_line2) < max_width + 1) {
+        strlcat(boxed_line2, " ", sizeof(boxed_line2));
+    }
+    strlcat(boxed_line2, " │", sizeof(boxed_line2));
+
+    snprintf(boxed_line3, sizeof(boxed_line3), "│ %s", line3);
+    while ((int)strlen(boxed_line3) < max_width + 1) {
+        strlcat(boxed_line3, " ", sizeof(boxed_line3));
+    }
+    strlcat(boxed_line3, " │", sizeof(boxed_line3));
+
     // Add padding before mascot
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
 
-    // Add banner lines to conversation window
-    tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
-    tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
-    tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
+    // Add boxed banner lines to conversation window
+    tui_add_conversation_line(tui, NULL, box_top, COLOR_PAIR_ASSISTANT);
+    tui_add_conversation_line(tui, NULL, boxed_line1, COLOR_PAIR_ASSISTANT);
+    tui_add_conversation_line(tui, NULL, boxed_line2, COLOR_PAIR_ASSISTANT);
+    tui_add_conversation_line(tui, NULL, boxed_line3, COLOR_PAIR_ASSISTANT);
+    tui_add_conversation_line(tui, NULL, box_bottom, COLOR_PAIR_ASSISTANT);
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);  // Blank line
 
     // Tips array: randomly select one to display at startup
