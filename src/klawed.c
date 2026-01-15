@@ -221,6 +221,8 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 #include "tools/tool_filesystem.h"
 #include "tools/tool_bash.h"
 #include "tools/tool_subagent.h"
+#include "tools/tool_registry.h"
+#include "tools/tool_executor.h"
 
 // UI modules
 #include "ui/ui_output.h"
@@ -478,10 +480,10 @@ static cJSON* tool_upload_image(cJSON *params, ConversationState *state);
 static cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *state);
 static cJSON* tool_interrupt_subagent(cJSON *params, ConversationState *state);
 static cJSON* tool_multiedit(cJSON *params, ConversationState *state);
-// Memory tools (conditional on HAVE_MEMVID)
-static cJSON* tool_memory_store(cJSON *params, ConversationState *state);
-static cJSON* tool_memory_recall(cJSON *params, ConversationState *state);
-static cJSON* tool_memory_search(cJSON *params, ConversationState *state);
+// Memory tools (conditional on HAVE_MEMVID) - now external
+cJSON* tool_memory_store(cJSON *params, ConversationState *state);
+cJSON* tool_memory_recall(cJSON *params, ConversationState *state);
+cJSON* tool_memory_search(cJSON *params, ConversationState *state);
 #else
 #define STATIC static
 // Forward declarations (TEMPORARY: these are now in src/util/file_utils.h)
@@ -3334,7 +3336,7 @@ STATIC cJSON* tool_sleep(cJSON *params, ConversationState *state) {
  * tool_memory_store - Store a memory card about the user or project
  * params: { entity, slot, value, kind, relation (optional) }
  */
-static cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
+cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
     (void)state;
 
 #ifdef HAVE_MEMVID
@@ -3442,7 +3444,7 @@ static cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
  * tool_memory_recall - Recall the current value for an entity's attribute
  * params: { entity, slot }
  */
-static cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
+cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
     (void)state;
 
 #ifdef HAVE_MEMVID
@@ -3527,7 +3529,7 @@ static cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
  * tool_memory_search - Search all memories by text query
  * params: { query, top_k (optional, default 10) }
  */
-static cJSON* tool_memory_search(cJSON *params, ConversationState *state) {
+cJSON* tool_memory_search(cJSON *params, ConversationState *state) {
     (void)state;
 
 #ifdef HAVE_MEMVID
@@ -3590,7 +3592,7 @@ static cJSON* tool_memory_search(cJSON *params, ConversationState *state) {
 
 #ifndef TEST_BUILD
 // MCP ListMcpResources tool handler
-static cJSON* tool_list_mcp_resources(cJSON *params, ConversationState *state) {
+cJSON* tool_list_mcp_resources(cJSON *params, ConversationState *state) {
     LOG_DEBUG("tool_list_mcp_resources: Starting resource listing");
 
     if (!state || !state->mcp_config) {
@@ -3663,7 +3665,7 @@ static cJSON* tool_list_mcp_resources(cJSON *params, ConversationState *state) {
 }
 
 // MCP ReadMcpResource tool handler
-static cJSON* tool_read_mcp_resource(cJSON *params, ConversationState *state) {
+cJSON* tool_read_mcp_resource(cJSON *params, ConversationState *state) {
     LOG_DEBUG("tool_read_mcp_resource: Starting resource reading");
 
     if (!state || !state->mcp_config) {
@@ -3735,7 +3737,7 @@ static cJSON* tool_read_mcp_resource(cJSON *params, ConversationState *state) {
 }
 
 // MCP CallMcpTool tool handler
-static cJSON* tool_call_mcp_tool(cJSON *params, ConversationState *state) {
+cJSON* tool_call_mcp_tool(cJSON *params, ConversationState *state) {
     LOG_DEBUG("tool_call_mcp_tool: Starting MCP tool call");
 
     if (!state || !state->mcp_config) {
@@ -3916,58 +3918,22 @@ static cJSON* tool_call_mcp_tool(cJSON *params, ConversationState *state) {
 #endif
 
 // ============================================================================
-// Tool Registry
+// Tool Registry - MOVED to src/tools/tool_registry.c
 // ============================================================================
+// Tool structure, tools array, and wrapper functions have been extracted to:
+//   src/tools/tool_registry.h
+//   src/tools/tool_registry.c
 
-typedef struct {
-    const char *name;
-    cJSON* (*handler)(cJSON *params, ConversationState *state);
-} Tool;
+// ============================================================================
+// Tool Executor - MOVED to src/tools/tool_executor.c
+// ============================================================================
+// execute_tool() and is_tool_allowed() have been extracted to:
+//   src/tools/tool_executor.h
+//   src/tools/tool_executor.c
 
-// Wrapper functions for explore tools (they use void* for state)
-static cJSON* tool_web_search_wrapper(cJSON *params, ConversationState *state) {
-    return tool_web_search(params, state);
-}
-static cJSON* tool_web_read_wrapper(cJSON *params, ConversationState *state) {
-    return tool_web_read(params, state);
-}
-static cJSON* tool_context7_search_wrapper(cJSON *params, ConversationState *state) {
-    return tool_context7_search(params, state);
-}
-static cJSON* tool_context7_docs_wrapper(cJSON *params, ConversationState *state) {
-    return tool_context7_docs(params, state);
-}
-
-static Tool tools[] = {
-    {"Sleep", tool_sleep},
-    {"Bash", tool_bash},
-    {"Subagent", tool_subagent},
-    {"CheckSubagentProgress", tool_check_subagent_progress},
-    {"InterruptSubagent", tool_interrupt_subagent},
-    {"Read", tool_read},
-    {"Write", tool_write},
-    {"Edit", tool_edit},
-    {"MultiEdit", tool_multiedit},
-    {"Glob", tool_glob},
-    {"Grep", tool_grep},
-    {"TodoWrite", tool_todo_write},
-    {"UploadImage", tool_upload_image},
-    // Memory tools (always registered, but return error if HAVE_MEMVID not defined)
-    {"MemoryStore", tool_memory_store},
-    {"MemoryRecall", tool_memory_recall},
-    {"MemorySearch", tool_memory_search},
-    // Explore tools (only work when KLAWED_EXPLORE_MODE=1)
-    {"web_search", tool_web_search_wrapper},
-    {"web_read", tool_web_read_wrapper},
-    {"context7_search", tool_context7_search_wrapper},
-    {"context7_docs", tool_context7_docs_wrapper},
-#ifndef TEST_BUILD
-    {"ListMcpResources", tool_list_mcp_resources},
-    {"ReadMcpResource", tool_read_mcp_resource},
-    {"CallMcpTool", tool_call_mcp_tool},
-#endif
-};
-
+#if 0
+// DEPRECATED: This code has been moved to src/tools/tool_executor.c
+// Keeping temporarily wrapped in #if 0 for reference during refactoring
 static const int num_tools = sizeof(tools) / sizeof(Tool);
 
 // Validate that a tool name is in the provided tools list
@@ -4242,6 +4208,7 @@ cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *stat
 
 // Forward declaration for cache_control helper
 
+#endif // End of deprecated tool executor code
 
 cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON *tool_array = cJSON_CreateArray();

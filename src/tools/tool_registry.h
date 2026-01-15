@@ -2,7 +2,7 @@
 #define TOOL_REGISTRY_H
 
 #include <cjson/cJSON.h>
-#include "../conversation_state.h"
+#include "../conversation/conversation_state.h"
 
 // Tool handler function type
 typedef struct {

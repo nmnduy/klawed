@@ -1,6 +1,4 @@
-#include "tool_executor.h"
 #include "tool_registry.h"
-#include "tool_definitions.h"
 #include "../tool_utils.h"
 #include "../logger.h"
 #include "../util/timestamp_utils.h"
@@ -8,6 +6,7 @@
 #include "../util/format_utils.h"
 #include "../base64.h"
 #include "../mcp.h"
+#include "../klawed_internal.h"
 #include <string.h>
 #include <time.h>
 #include <stdlib.h>

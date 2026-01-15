@@ -393,6 +393,17 @@ void add_cache_control(cJSON *obj);
 // Get tool definitions for the API request
 cJSON* get_tool_definitions(ConversationState *state, int enable_caching);
 
+// Tool implementations (memory tools and MCP tools)
+cJSON* tool_memory_store(cJSON *params, ConversationState *state);
+cJSON* tool_memory_recall(cJSON *params, ConversationState *state);
+cJSON* tool_memory_search(cJSON *params, ConversationState *state);
+
+#ifndef TEST_BUILD
+cJSON* tool_list_mcp_resources(cJSON *params, ConversationState *state);
+cJSON* tool_read_mcp_resource(cJSON *params, ConversationState *state);
+cJSON* tool_call_mcp_tool(cJSON *params, ConversationState *state);
+#endif
+
 /**
  * Extract and accumulate token usage from API response
  * Updates the token counters in ConversationState
