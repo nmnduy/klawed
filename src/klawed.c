@@ -196,6 +196,24 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 #include "memvid.h"
 #endif
 
+// Utility modules
+#include "util/file_utils.h"
+#include "util/string_utils.h"
+#include "util/timestamp_utils.h"
+#include "util/format_utils.h"
+#include "util/env_utils.h"
+#include "util/output_utils.h"
+#include "util/diff_utils.h"
+
+// Tool modules
+#include "tools/tool_sleep.h"
+#include "tools/tool_todo.h"
+#include "tools/tool_image.h"
+#include "tools/tool_search.h"
+#include "tools/tool_filesystem.h"
+#include "tools/tool_bash.h"
+#include "tools/tool_subagent.h"
+
 #ifdef TEST_BUILD
 #define main klawed_main
 #endif
@@ -417,7 +435,9 @@ static void ui_show_error(TUIState *tui,
 // Tool Output Helpers
 // =====================================================================
 
-static _Thread_local TUIMessageQueue *g_active_tool_queue = NULL;
+// Global thread-local queue for tool output during parallel execution
+// Exported for tool modules that need to post TUI messages
+_Thread_local TUIMessageQueue *g_active_tool_queue = NULL;
 
 // Oneshot/subagent mode flag - when enabled, tool outputs are wrapped in HTML-style tags
 // for easier parsing by parent processes or scripts
@@ -681,6 +701,9 @@ static void register_subagent_manager_for_cleanup(SubagentManager *manager) {
     }
 }
 
+// TEMPORARY: tool_emit_line moved to src/util/output_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static void tool_emit_line(const char *prefix, const char *text) {
     const char *safe_prefix = prefix ? prefix : "";
     const char *safe_text = text ? text : "";
@@ -727,7 +750,11 @@ static void tool_emit_line(const char *prefix, const char *text) {
     }
     fflush(stdout);
 }
+#endif // Duplicate tool_emit_line
 
+// TEMPORARY: emit_diff_line moved to src/util/output_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static void emit_diff_line(const char *line,
                            const char *add_color,
                            const char *remove_color) {
@@ -775,13 +802,18 @@ static void emit_diff_line(const char *line,
 
     free(trimmed);
 }
+#endif // Duplicate emit_diff_line
 
+// TEMPORARY: get_current_timestamp moved to src/util/timestamp_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 // Helper function to get current timestamp in YYYY-MM-DD HH:MM:SS format
 static void get_current_timestamp(char *buffer, size_t buffer_size) {
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
     strftime(buffer, buffer_size, "%Y-%m-%d %H:%M:%S", tm_info);
 }
+#endif // Duplicate get_current_timestamp
 
 // Helper function to extract tool details from arguments
 static char* get_tool_details(const char *tool_name, cJSON *arguments) {
@@ -1033,13 +1065,16 @@ static cJSON* tool_memory_recall(cJSON *params, ConversationState *state);
 static cJSON* tool_memory_search(cJSON *params, ConversationState *state);
 #else
 #define STATIC static
-// Forward declarations
-char* read_file(const char *path);
-int write_file(const char *path, const char *content);
-char* resolve_path(const char *path, const char *working_dir);
+// Forward declarations (TEMPORARY: these are now in src/util/file_utils.h)
+// char* read_file(const char *path);
+// int write_file(const char *path, const char *content);
+// char* resolve_path(const char *path, const char *working_dir);
 #endif
 
 
+// TEMPORARY: read_file moved to src/util/file_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 char* read_file(const char *path) {
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
@@ -1062,7 +1097,11 @@ char* read_file(const char *path) {
     fclose(f);
     return content;
 }
+#endif // Duplicate read_file
 
+// TEMPORARY: mkdir_p moved to src/util/file_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 /**
  * Create directory recursively (like mkdir -p)
  * Returns 0 on success, -1 on failure
@@ -1100,7 +1139,11 @@ static int mkdir_p(const char *path) {
 
     return 0;
 }
+#endif // Duplicate mkdir_p
 
+// TEMPORARY: write_file moved to src/util/file_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 int write_file(const char *path, const char *content) {
     // Create parent directories if they don't exist
     char *path_copy = strdup(path);
@@ -1124,7 +1167,11 @@ int write_file(const char *path, const char *content) {
 
     return (written == len) ? 0 : -1;
 }
+#endif // Duplicate write_file
 
+// TEMPORARY: resolve_path moved to src/util/file_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 char* resolve_path(const char *path, const char *working_dir) {
     // Join with working_dir if relative; attempt to canonicalize if possible.
     char joined[PATH_MAX];
@@ -1144,6 +1191,7 @@ char* resolve_path(const char *path, const char *working_dir) {
     // This enables tools like Write to create missing directories (mkdir -p in write_file).
     return strdup(joined);
 }
+#endif // Duplicate resolve_path
 
 // Add a directory to the additional working directories list
 // Returns: 0 on success, -1 on error
@@ -1211,6 +1259,9 @@ out:
     return result;
 }
 
+// TEMPORARY: tool_upload_image moved to src/tools/tool_image.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static cJSON* tool_upload_image(cJSON *params, ConversationState *state) {
     const cJSON *path_json = cJSON_GetObjectItem(params, "file_path");
 
@@ -1529,11 +1580,15 @@ static cJSON* tool_upload_image(cJSON *params, ConversationState *state) {
 
     return result;
 }
+#endif // Duplicate tool_upload_image
 
 // ============================================================================
 // ANSI Escape Sequence Filtering
 // ============================================================================
 
+// TEMPORARY: strip_ansi_escapes moved to src/util/string_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 /**
  * Strip ANSI escape sequences from a string
  * This prevents terminal corruption when displaying command output in ncurses
@@ -1571,11 +1626,15 @@ static char* strip_ansi_escapes(const char *input) {
     result[j] = '\0';
     return result;
 }
+#endif // Duplicate strip_ansi_escapes
 
 // ============================================================================
 // Binary File Handling for MCP Tools
 // ============================================================================
 
+// TEMPORARY: save_binary_file moved to src/util/file_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 /**
  * Save binary data to a file
  * Returns: 0 on success, -1 on error
@@ -1617,7 +1676,11 @@ static int save_binary_file(const char *filename, const void *data, size_t size)
     LOG_DEBUG("Successfully saved binary data to '%s' (%zu bytes)", filename, size);
     return 0;
 }
+#endif // Duplicate save_binary_file
 
+// TEMPORARY: generate_timestamped_filename moved to src/util/timestamp_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 /**
  * Generate timestamped filename
  * Format: <prefix>_YYYYMMDD_HHMMSS.<extension>
@@ -1654,7 +1717,11 @@ static void generate_timestamped_filename(char *buffer, size_t buffer_size,
              tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec,
              extension);
 }
+#endif // Duplicate generate_timestamped_filename
 
+// TEMPORARY: format_file_size moved to src/util/format_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 /**
  * Format file size in human-readable format
  * Returns: Static buffer with formatted size (not thread-safe)
@@ -1674,11 +1741,15 @@ static const char* format_file_size(size_t size) {
 
     return buffer;
 }
+#endif // Duplicate format_file_size
 
 // ============================================================================
 // Diff Functionality
 // ============================================================================
 
+// TEMPORARY: show_diff moved to src/util/diff_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 // Show unified diff between original content and current file
 // Returns 0 on success, -1 on error
 static int show_diff(const char *file_path, const char *original_content) {
@@ -1755,6 +1826,7 @@ static int show_diff(const char *file_path, const char *original_content) {
 
     return 0;
 }
+#endif // Duplicate show_diff
 
 // ============================================================================
 // Tool Implementations
@@ -1762,6 +1834,9 @@ static int show_diff(const char *file_path, const char *original_content) {
 
 
 
+// TEMPORARY: tool_bash moved to src/tools/tool_bash.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     // Check for interrupt before starting
     if (state && state->interrupt_requested) {
@@ -1975,7 +2050,11 @@ STATIC cJSON* tool_bash(cJSON *params, ConversationState *state) {
     free(command_copy);
     return result;
 }
+#endif // Duplicate tool_bash
 
+// TEMPORARY: tool_subagent moved to src/tools/tool_subagent.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     // Check for interrupt before starting
     if (state && state->interrupt_requested) {
@@ -2221,7 +2300,11 @@ STATIC cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     free(log_file);
     return result;
 }
+#endif // Duplicate tool_subagent
 
+// TEMPORARY: tool_check_subagent_progress moved to src/tools/tool_subagent.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *state) {
     // Check for interrupt before starting
     if (state && state->interrupt_requested) {
@@ -2448,7 +2531,11 @@ STATIC cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *sta
     free(tail_output);
     return result;
 }
+#endif // Duplicate tool_check_subagent_progress
 
+// TEMPORARY: tool_interrupt_subagent moved to src/tools/tool_subagent.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 STATIC cJSON* tool_interrupt_subagent(cJSON *params, ConversationState *state) {
     // Check for interrupt before starting
     if (state && state->interrupt_requested) {
@@ -2568,7 +2655,11 @@ STATIC cJSON* tool_interrupt_subagent(cJSON *params, ConversationState *state) {
 
     return result;
 }
+#endif // Duplicate tool_interrupt_subagent
 
+// TEMPORARY: tool_read moved to src/tools/tool_filesystem.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 STATIC cJSON* tool_read(cJSON *params, ConversationState *state) {
     // Check for verbose tool logging
     int tool_verbose = 0;
@@ -2754,7 +2845,11 @@ STATIC cJSON* tool_read(cJSON *params, ConversationState *state) {
 
     return result;
 }
+#endif // Duplicate tool_read
 
+// TEMPORARY: tool_write moved to src/tools/tool_filesystem.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 STATIC cJSON* tool_write(cJSON *params, ConversationState *state) {
     // Check for verbose tool logging
     int tool_verbose = 0;
@@ -2882,6 +2977,7 @@ STATIC cJSON* tool_write(cJSON *params, ConversationState *state) {
 
     return result;
 }
+#endif // Duplicate tool_write
 
 // Helper function for simple string multi-replace
 
@@ -3148,6 +3244,9 @@ static void *tool_thread_func(void *arg) {
 
 
 
+// TEMPORARY: tool_edit moved to src/tools/tool_filesystem.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
     const cJSON *path_json = cJSON_GetObjectItem(params, "file_path");
     const cJSON *old_json = cJSON_GetObjectItem(params, "old_string");
@@ -3258,7 +3357,11 @@ STATIC cJSON* tool_edit(cJSON *params, ConversationState *state) {
     cJSON_AddNumberToObject(result, "replacements", replace_count);
     return result;
 }
+#endif // Duplicate tool_edit
 
+// TEMPORARY: tool_multiedit moved to src/tools/tool_filesystem.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static cJSON* tool_multiedit(cJSON *params, ConversationState *state) {
     const cJSON *path_json = cJSON_GetObjectItem(params, "file_path");
     const cJSON *edits_json = cJSON_GetObjectItem(params, "edits");
@@ -3373,7 +3476,11 @@ static cJSON* tool_multiedit(cJSON *params, ConversationState *state) {
     cJSON_AddNumberToObject(result, "failed_edits", failed_edits);
     return result;
 }
+#endif // Duplicate tool_multiedit
 
+// TEMPORARY: tool_glob moved to src/tools/tool_filesystem.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static cJSON* tool_glob(cJSON *params, ConversationState *state) {
     const cJSON *pattern_json = cJSON_GetObjectItem(params, "pattern");
     if (!pattern_json || !cJSON_IsString(pattern_json)) {
@@ -3423,14 +3530,22 @@ static cJSON* tool_glob(cJSON *params, ConversationState *state) {
 
     return result;
 }
+#endif // Duplicate tool_glob
 
 // Helper function to check if a command exists
+// TEMPORARY: command_exists moved to src/tools/tool_search.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static int command_exists(const char *cmd) {
     char test_cmd[256];
     snprintf(test_cmd, sizeof(test_cmd), "command -v %s >/dev/null 2>&1", cmd);
     return system(test_cmd) == 0;
 }
+#endif // Duplicate command_exists
 
+// TEMPORARY: tool_grep moved to src/tools/tool_search.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static cJSON* tool_grep(cJSON *params, ConversationState *state) {
     const cJSON *pattern_json = cJSON_GetObjectItem(params, "pattern");
     const cJSON *path_json = cJSON_GetObjectItem(params, "path");
@@ -3739,7 +3854,11 @@ static cJSON* tool_grep(cJSON *params, ConversationState *state) {
 
     return result;
 }
+#endif // Duplicate tool_grep
 
+// TEMPORARY: tool_todo_write moved to src/tools/tool_todo.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 STATIC cJSON* tool_todo_write(cJSON *params, ConversationState *state) {
     const cJSON *todos_json = cJSON_GetObjectItem(params, "todos");
 
@@ -3814,6 +3933,7 @@ STATIC cJSON* tool_todo_write(cJSON *params, ConversationState *state) {
 
     return result;
 }
+#endif // Duplicate tool_todo_write
 
 
 // ============================================================================
@@ -3824,6 +3944,9 @@ STATIC cJSON* tool_todo_write(cJSON *params, ConversationState *state) {
  * tool_sleep - pauses execution for specified duration
  * params: { "duration": integer (seconds) }
  */
+// TEMPORARY: tool_sleep moved to src/tools/tool_sleep.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 STATIC cJSON* tool_sleep(cJSON *params, ConversationState *state) {
     (void)state;
     cJSON *duration_json = cJSON_GetObjectItem(params, "duration");
@@ -3843,6 +3966,8 @@ STATIC cJSON* tool_sleep(cJSON *params, ConversationState *state) {
     cJSON_AddNumberToObject(result, "duration", duration);
     return result;
 }
+#endif // Duplicate tool_sleep
+
 
 // ============================================================================
 // Memory Tools Implementation (Memvid)
@@ -6285,6 +6410,9 @@ static ApiResponse* call_api(ConversationState *state) {
 // ============================================================================
 
 // Get current date in YYYY-MM-DD format
+// TEMPORARY: get_current_date moved to src/util/timestamp_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static char* get_current_date(void) {
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
@@ -6295,6 +6423,7 @@ static char* get_current_date(void) {
     strftime(date, 11, "%Y-%m-%d", tm_info);
     return date;
 }
+#endif // Duplicate get_current_date
 
 // Check if current directory is a git repository
 static int is_git_repo(const char *working_dir) {
@@ -6383,6 +6512,9 @@ static char* get_git_status(const char *working_dir) {
 }
 
 // Get OS/Platform information
+// TEMPORARY: get_os_version moved to src/util/env_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static char* get_os_version(void) {
     char *os_version = exec_git_command("uname -sr 2>/dev/null");
     if (!os_version) {
@@ -6390,7 +6522,11 @@ static char* get_os_version(void) {
     }
     return os_version;
 }
+#endif // Duplicate get_os_version
 
+// TEMPORARY: get_platform moved to src/util/env_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static const char* get_platform(void) {
 #ifdef __APPLE__
     return "darwin";
@@ -6406,6 +6542,7 @@ static const char* get_platform(void) {
     return "unknown";
 #endif
 }
+#endif // Duplicate get_platform
 
 // Read KLAWED.md from working directory if it exists
 static char* read_klawed_md(const char *working_dir) {
@@ -9115,6 +9252,9 @@ static void interactive_mode(ConversationState *state) {
 
 // Generate a unique session ID using timestamp and random data
 // Helper function to get integer value from environment variable with default
+// TEMPORARY: get_env_int_retry moved to src/util/env_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static int get_env_int_retry(const char *name, int default_value) {
     const char *value = getenv(name);
     if (!value || value[0] == '\0') {
@@ -9130,6 +9270,7 @@ static int get_env_int_retry(const char *name, int default_value) {
 
     return (int)result;
 }
+#endif // Duplicate get_env_int_retry
 
 #ifndef TEST_BUILD
 #include "dump_utils.h"
@@ -9382,6 +9523,9 @@ static int dump_conversation_from_db(const char *session_id, const char *format)
 
 // Format: sess_<timestamp>_<random>
 // Returns: Newly allocated string (caller must free)
+// TEMPORARY: generate_session_id moved to src/util/timestamp_utils.c
+// This duplicate definition will be removed in a later refactoring step
+#if 0
 static char* generate_session_id(void) {
     char *session_id = malloc(64);
     if (!session_id) {
@@ -9399,7 +9543,7 @@ static char* generate_session_id(void) {
 
     return session_id;
 }
-
+#endif // Duplicate generate_session_id
 
 
 // Main Entry Point
