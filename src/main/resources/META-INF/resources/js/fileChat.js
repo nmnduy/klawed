@@ -1750,19 +1750,17 @@ export function init(rootEl) {
     }
 
     if (elements.voiceButton) {
-        if (!supportsSpeech()) {
+        // Hide voice button completely for now (feature not ready for production)
+        // TODO: Re-enable when HTTPS is set up in production
+        elements.voiceButton.style.display = 'none';
+        
+        // Original implementation (commented out until HTTPS is ready):
+        /*
+        if (requiresHTTPS()) {
+            elements.voiceButton.style.display = 'none';
+        } else if (!supportsSpeech()) {
             elements.voiceButton.disabled = true;
             elements.voiceButton.title = 'Voice input not supported in this browser';
-        } else if (requiresHTTPS()) {
-            elements.voiceButton.disabled = false; // Keep enabled to show helpful error
-            elements.voiceButton.title = 'Voice input requires HTTPS (works on localhost)';
-            elements.voiceButton.addEventListener('click', () => {
-                if (isListening) {
-                    stopListening();
-                } else {
-                    startListening();
-                }
-            });
         } else {
             elements.voiceButton.addEventListener('click', () => {
                 if (isListening) {
@@ -1772,6 +1770,7 @@ export function init(rootEl) {
                 }
             });
         }
+        */
     }
 
     if (elements.messageForm && elements.messageInput) {
