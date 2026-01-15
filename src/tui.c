@@ -2889,68 +2889,20 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     char line1[256];
     char line2[256];
     char line3[256];
-    char box_top[256];
-    char box_bottom[256];
     char tip_line[512];
 
-    // Calculate the maximum width needed for the box
-    int max_width = 0;
+    // Create content lines without box borders
     snprintf(line1, sizeof(line1), "  /\\_/\\   klawed v%s", version ? version : "?");
     snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
     snprintf(line3, sizeof(line3), "  > ^ <    %s", working_dir);
 
-    int len1 = (int)strlen(line1);
-    int len2 = (int)strlen(line2);
-    int len3 = (int)strlen(line3);
-    max_width = len1 > len2 ? len1 : len2;
-    max_width = max_width > len3 ? max_width : len3;
-    max_width += 4;  // Add padding for box borders (2 spaces on each side)
-
-    // Create box top and bottom lines using UTF-8 box drawing characters
-    snprintf(box_top, sizeof(box_top), "┌");
-    for (int i = 0; i < max_width; i++) {
-        strlcat(box_top, "─", sizeof(box_top));
-    }
-    strlcat(box_top, "┐", sizeof(box_top));
-
-    snprintf(box_bottom, sizeof(box_bottom), "└");
-    for (int i = 0; i < max_width; i++) {
-        strlcat(box_bottom, "─", sizeof(box_bottom));
-    }
-    strlcat(box_bottom, "┘", sizeof(box_bottom));
-
-    // Pad content lines with box borders
-    char boxed_line1[256];
-    char boxed_line2[256];
-    char boxed_line3[256];
-    snprintf(boxed_line1, sizeof(boxed_line1), "│ %s", line1);
-    // Pad to align closing border (with extra space before right edge)
-    while ((int)strlen(boxed_line1) < max_width + 3) {
-        strlcat(boxed_line1, " ", sizeof(boxed_line1));
-    }
-    strlcat(boxed_line1, "│", sizeof(boxed_line1));
-
-    snprintf(boxed_line2, sizeof(boxed_line2), "│ %s", line2);
-    while ((int)strlen(boxed_line2) < max_width + 3) {
-        strlcat(boxed_line2, " ", sizeof(boxed_line2));
-    }
-    strlcat(boxed_line2, "│", sizeof(boxed_line2));
-
-    snprintf(boxed_line3, sizeof(boxed_line3), "│ %s", line3);
-    while ((int)strlen(boxed_line3) < max_width + 3) {
-        strlcat(boxed_line3, " ", sizeof(boxed_line3));
-    }
-    strlcat(boxed_line3, "│", sizeof(boxed_line3));
-
     // Add padding before mascot
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
 
-    // Add boxed banner lines to conversation window
-    tui_add_conversation_line(tui, NULL, box_top, COLOR_PAIR_ASSISTANT);
-    tui_add_conversation_line(tui, NULL, boxed_line1, COLOR_PAIR_ASSISTANT);
-    tui_add_conversation_line(tui, NULL, boxed_line2, COLOR_PAIR_ASSISTANT);
-    tui_add_conversation_line(tui, NULL, boxed_line3, COLOR_PAIR_ASSISTANT);
-    tui_add_conversation_line(tui, NULL, box_bottom, COLOR_PAIR_ASSISTANT);
+    // Add banner lines to conversation window (without box)
+    tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
+    tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
+    tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);  // Blank line
 
     // Tips array: randomly select one to display at startup
