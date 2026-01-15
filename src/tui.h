@@ -270,4 +270,23 @@ int tui_get_vim_fugitive_available(TUIState *tui);
 // This spawns a thread to check without blocking the main thread
 void tui_start_vim_fugitive_check(TUIState *tui);
 
+// Internal functions (used across TUI modules during refactoring)
+// These will eventually move to their respective specialized modules
+
+// Render a conversation entry to the pad (rendering module)
+// Returns 0 on success, -1 on error
+int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair);
+
+// Render the status window (rendering module)
+void render_status_window(TUIState *tui);
+
+// Redraw conversation from entries (rendering module)
+void redraw_conversation(TUIState *tui);
+
+// Render input window (rendering module)
+void input_redraw(TUIState *tui, const char *prompt);
+
+// Refresh conversation viewport after resize (rendering module)
+void refresh_conversation_viewport(TUIState *tui);
+
 #endif // TUI_H
