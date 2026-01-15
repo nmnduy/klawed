@@ -870,32 +870,26 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
         if (is_user_message) {
             // User message: draw background box first, then text on top
             text_pair = NCURSES_PAIR_USER_MSG_BG;  // Use same pair for text to preserve background
-            
+
             // Get current position and pad width
             int cur_y, cur_x;
             int pad_height, pad_width;
             getyx(tui->wm.conv_pad, cur_y, cur_x);
             getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
             (void)pad_height;
-            
-            // Calculate text length for background box
-            int text_len = (int)strlen(text);
-            int box_width = text_len + 2;  // Add padding spaces
-            (void)box_width;
-            
-            // Draw background box: fill with spaces using USER_MSG_BG color pair
+
+            // Draw background box: fill entire line with spaces using USER_MSG_BG color pair
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG));
             }
-            waddch(tui->wm.conv_pad, ' ');
-            for (int i = 0; i < text_len; i++) {
+            // Fill from current position to end of line
+            for (int i = cur_x; i < pad_width; i++) {
                 waddch(tui->wm.conv_pad, ' ');
             }
-            waddch(tui->wm.conv_pad, ' ');
             // Keep the color pair active for text rendering
             // (don't turn off yet)
-            
-            // Move back to draw text on top
+
+            // Move back to draw text on top (with one space padding on left)
             wmove(tui->wm.conv_pad, cur_y, cur_x + 1);
         } else if (prefix && prefix[0] != '\0') {
             // Other messages with prefix use foreground
@@ -919,12 +913,16 @@ static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *te
         if (has_colors()) {
             wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
         }
-        
-        // For user messages, move to end of the box
+
+        // For user messages, move to end of line (background was already drawn to pad_width)
         if (is_user_message) {
-            int final_y, final_x;
-            getyx(tui->wm.conv_pad, final_y, final_x);
-            wmove(tui->wm.conv_pad, final_y, final_x + 1);
+            int msg_y, msg_x;
+            int pad_height, pad_width;
+            getyx(tui->wm.conv_pad, msg_y, msg_x);
+            getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
+            (void)pad_height;
+            (void)msg_x;
+            wmove(tui->wm.conv_pad, msg_y, pad_width - 1);
         }
     }
 
@@ -2770,41 +2768,34 @@ void tui_handle_resize(TUIState *tui) {
             if (is_user_message) {
                 // User message: draw background box first, then text on top
                 text_pair = NCURSES_PAIR_USER_MSG_BG;  // Use same pair for text to preserve background
-                
-                // Get current position
+
+                // Get current position (reuse pad_height/pad_width from outer scope)
                 int msg_y, msg_x;
                 getyx(tui->wm.conv_pad, msg_y, msg_x);
-                
-                // Calculate text length for background box
-                int text_len = (int)strlen(entry->text);
-                int box_width = text_len + 2;  // Add padding spaces
-                (void)box_width;
-                
-                // Draw background box: fill with spaces using USER_MSG_BG color pair
+                getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
+
+                // Draw background box: fill entire line with spaces using USER_MSG_BG color pair
                 if (has_colors()) {
                     wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG));
                 }
-                waddch(tui->wm.conv_pad, ' ');
-                for (int j = 0; j < text_len; j++) {
+                // Fill from current position to end of line
+                for (int j = msg_x; j < pad_width; j++) {
                     waddch(tui->wm.conv_pad, ' ');
                 }
-                waddch(tui->wm.conv_pad, ' ');
                 // Keep the color pair active for text rendering
                 // (don't turn off yet)
-                
-                // Move back to draw text on top
+
+                // Move back to draw text on top (with one space padding on left)
                 wmove(tui->wm.conv_pad, msg_y, msg_x + 1);
-                
+
                 // Draw text with same color pair (foreground + background)
                 waddstr(tui->wm.conv_pad, entry->text);
                 if (has_colors()) {
                     wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
                 }
-                
-                // Move to end of the box
-                int final_y, final_x;
-                getyx(tui->wm.conv_pad, final_y, final_x);
-                wmove(tui->wm.conv_pad, final_y, final_x + 1);
+
+                // Move to end of line (pad_width is already the end)
+                wmove(tui->wm.conv_pad, msg_y, pad_width - 1);
             } else if (entry->prefix && entry->prefix[0] != '\0') {
                 // Other messages with prefix use foreground
                 text_pair = NCURSES_PAIR_FOREGROUND;
@@ -4904,11 +4895,11 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
             // Check for diff lines (no brackets, just colored by first character)
             TUIColorPair diff_color = COLOR_PAIR_DEFAULT;
             size_t text_len = strlen(mutable_text);
-            
+
             if (text_len > 0) {
                 char first = mutable_text[0];
                 char second = (text_len > 1) ? mutable_text[1] : '\0';
-                
+
                 if (first == '+' && second != '+') {
                     diff_color = COLOR_PAIR_USER;  // Green for additions
                 } else if (first == '-' && second != '-') {
