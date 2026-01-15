@@ -180,18 +180,18 @@ export function init(rootEl) {
     }
 
     function showKlawedStatus(statusMessage) {
+        // Connection status should only show connection state, not "AI is thinking"
+        // The typing indicator (3-dot bubble) handles showing AI processing state
+        
+        // Ignore messages about AI thinking - those are handled by the typing indicator
+        if (statusMessage && /(processing|working|Klawed is|AI is thinking)/i.test(statusMessage)) {
+            return; // Don't update status for processing messages
+        }
+        
         elements.statusIndicator && (elements.statusIndicator.className = 'status-indicator status-indicator--working');
         elements.statusPulse && (elements.statusPulse.className = 'status-pulse status-pulse--working');
         if (elements.statusText) {
-            // Create three-dot loader HTML
-            const threeDotLoader = '<span class="three-dot-loader"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>';
-            
-            // If the message is about processing, show it with three dots
-            if (statusMessage && /(processing|working|Klawed is|AI is thinking)/i.test(statusMessage)) {
-                elements.statusText.innerHTML = 'AI is thinking' + threeDotLoader;
-            } else {
-                elements.statusText.textContent = statusMessage;
-            }
+            elements.statusText.textContent = statusMessage;
             elements.statusText.className = 'status-text status-text--working';
         }
 
@@ -1360,9 +1360,9 @@ export function init(rootEl) {
                         if (content && content.startsWith('SESSION_ID:')) {
                             updateStatus(true, 'Connected');
                         } else if (content && (/(Klawed is|working|processing|Tool|thinking)/i.test(content))) {
-                            // Show "AI is thinking" with three dots for processing messages
+                            // Show typing indicator (3-dot bubble) for AI processing
                             addTypingIndicator();
-                            showKlawedStatus('AI is thinking');
+                            // Don't update connection status - it stays "Connected"
                         } else {
                             updateStatus(true, 'Connected');
                             // Don't remove typing indicator here - wait for END_AI_TURN
@@ -1374,11 +1374,9 @@ export function init(rootEl) {
                         }
                         // Don't remove typing indicator here - wait for END_AI_TURN
                         clearToolActivity(); // Clear tool activity tracking for next interaction
-                        showKlawedStatus('Connected');
                         // Reset API call time when we get a text response
                         lastApiCallTime = null;
-                        // Update status to show we're connected (not thinking)
-                        updateStatus(true, 'Connected');
+                        // Keep status as "Connected" - typing indicator will be removed by END_AI_TURN
                         break;
                     case 'ERROR':
                         // Check if this is an invalid session error
@@ -1392,40 +1390,17 @@ export function init(rootEl) {
                         addSystemMessage('✗ ' + (content || 'Error occurred'), 'error');
                         // Don't remove typing indicator here - wait for END_AI_TURN
                         clearToolActivity(); // Clear tool activity tracking
-                        showKlawedStatus('Connected');
                         // Reset API call time when we get an error
                         lastApiCallTime = null;
-                        // Update status to show we're connected (not thinking)
-                        updateStatus(true, 'Connected');
+                        // Keep status as "Connected" - typing indicator will be removed by END_AI_TURN
                         break;
                     case 'API_CALL':
-                        // Show typing indicator when AI is processing
+                        // Show typing indicator (3-dot bubble) when AI is processing
                         addTypingIndicator();
-                        // Also set status so the header shows activity even before details render
-                        showKlawedStatus('AI is thinking');
+                        // Connection status stays "Connected" - no need to change it
                         
+                        // Add a system message for API calls (optional info)
                         if (content && typeof content === 'object') {
-                            let apiCallMessage = 'AI is thinking';
-                            if (content.model || content.provider || content.estimatedDurationMs) {
-                                apiCallMessage = 'AI is thinking (';
-                                let hasPrevious = false;
-                                if (content.model) {
-                                    apiCallMessage += 'model: ' + content.model;
-                                    hasPrevious = true;
-                                }
-                                if (content.provider) {
-                                    if (hasPrevious) apiCallMessage += ', ';
-                                    apiCallMessage += 'provider: ' + content.provider;
-                                    hasPrevious = true;
-                                }
-                                if (content.estimatedDurationMs) {
-                                    if (hasPrevious) apiCallMessage += ', ';
-                                    apiCallMessage += 'estimated: ' + content.estimatedDurationMs + 'ms';
-                                }
-                                apiCallMessage += ')';
-                            }
-                            showKlawedStatus(apiCallMessage);
-                            
                             // Only add system message if we haven't recently added one
                             // to avoid spamming the chat with multiple "AI is processing" messages
                             const now = Date.now();
@@ -1438,7 +1413,6 @@ export function init(rootEl) {
                                 lastApiCallTime = now;
                             }
                         } else if (typeof content === 'string') {
-                            showKlawedStatus(content);
                             // Only add system message if we haven't recently added one
                             const now = Date.now();
                             if (!lastApiCallTime || (now - lastApiCallTime) > 5000) {
@@ -1446,7 +1420,6 @@ export function init(rootEl) {
                                 lastApiCallTime = now;
                             }
                         } else {
-                            showKlawedStatus('AI is thinking');
                             // Only add system message if we haven't recently added one
                             const now = Date.now();
                             if (!lastApiCallTime || (now - lastApiCallTime) > 5000) {
@@ -1484,11 +1457,12 @@ export function init(rootEl) {
                             
                             if (toolName && toolId) {
                                 addToolActivity(toolName, toolId, toolInput);
-                                showKlawedStatus('Using ' + toolName);
+                                // Don't update connection status - it stays "Connected"
+                                // The typing indicator and tool activity card show the AI is working
                             } else {
                                 // Fallback to old behavior
                                 addTypingIndicator();
-                                showKlawedStatus('AI is thinking');
+                                // Don't update connection status
                             }
                         } else {
                             // TOOL_RESULT
@@ -1518,18 +1492,16 @@ export function init(rootEl) {
                             if (toolName && toolId) {
                                 completeToolActivity(toolName, toolId, isError, result);
                             }
-                            showKlawedStatus('AI is thinking');
+                            // Don't update connection status - typing indicator will be removed by END_AI_TURN
                         }
                         break;
                     case 'END_AI_TURN':
                         // AI turn completed - remove typing indicator
                         debug('Received END_AI_TURN - AI turn completed');
                         removeTypingIndicator();
-                        showKlawedStatus('Connected');
                         // Reset API call time
                         lastApiCallTime = null;
-                        // Update status to show we're connected (not thinking)
-                        updateStatus(true, 'Connected');
+                        // Connection status stays "Connected"
                         break;
                     default:
                         if (typeof content === 'string') {
@@ -1565,7 +1537,7 @@ export function init(rootEl) {
                     if (event.data.includes('[TOOL') || event.data.includes('[TOOL RESULT') || 
                         event.data.startsWith('[TOOL') || event.data.startsWith('[TOOL RESULT')) {
                         debug('Filtered out tool-related legacy message:', event.data);
-                        showKlawedStatus('AI is thinking');
+                        // Don't update connection status - typing indicator shows AI is working
                     } else {
                         addMessage(event.data, false);
                         // Don't remove typing indicator here - wait for END_AI_TURN
