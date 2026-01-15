@@ -1,39 +1,58 @@
 /*
- * TUI Input History
+ * TUI Input History Management
  *
- * Manages input history navigation including:
- * - History array management
- * - History file integration
- * - Up/down arrow navigation (Ctrl+P/N)
- * - History search integration
+ * Handles input history navigation and persistence:
+ * - History navigation (Ctrl+P/N)
+ * - History search popup (Ctrl+R)
+ * - History append on submit
+ * - Integration with persistent history file
+ *
+ * This module contains the implementations for input history functions.
+ * All public functions are declared here and used by tui.c.
  */
 
 #ifndef TUI_HISTORY_H
 #define TUI_HISTORY_H
 
-// Forward declarations
-typedef struct TUIStateStruct TUIState;
+#include "tui.h"
 
-// Navigate to previous history entry (Ctrl+P, Up arrow)
-// Returns 0 on success, -1 on error or no more history
-int tui_history_navigate_prev(TUIState *tui);
+/*
+ * Handle Ctrl+R: Start history search popup
+ * Returns: 0 on success, -1 on failure
+ */
+int tui_history_start_search(TUIState *tui);
 
-// Navigate to next history entry (Ctrl+N, Down arrow)
-// Returns 0 on success, -1 on error or no more history
-int tui_history_navigate_next(TUIState *tui);
+/*
+ * Handle history search mode key processing
+ * Returns: 0 to continue, 1 if should exit loop
+ */
+int tui_history_process_search_key(TUIState *tui, int ch, const char *prompt);
 
-// Save current input to history and reset navigation state
-// Returns 0 on success, -1 on error
-int tui_history_save_current_input(TUIState *tui);
+/*
+ * Handle Ctrl+P: Navigate to previous history entry
+ * Returns: 0 on success
+ */
+int tui_history_navigate_prev(TUIState *tui, const char *prompt);
 
-// Reset history navigation state (call when input changes while browsing)
+/*
+ * Handle Ctrl+N: Navigate to next history entry
+ * Returns: 0 on success
+ */
+int tui_history_navigate_next(TUIState *tui, const char *prompt);
+
+/*
+ * Append input to history (both in-memory and persistent)
+ * Performs simple de-duplication (skips if same as last entry)
+ * Resets history navigation state after append
+ * 
+ * input: The input string to append (must be non-NULL)
+ */
+void tui_history_append(TUIState *tui, const char *input);
+
+/*
+ * Reset history navigation state
+ * Frees saved input and sets index to -1
+ */
 void tui_history_reset_navigation(TUIState *tui);
-
-// Load history entries from history file into memory
-// Returns 0 on success, -1 on error
-int tui_history_load_from_file(TUIState *tui);
-
-// Free in-memory history entries
-void tui_history_free_entries(TUIState *tui);
 
 #endif // TUI_HISTORY_H

@@ -17,6 +17,7 @@
 #include "tui_window.h"
 #include "tui_search.h"
 #include "tui_completion.h"
+#include "tui_history.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
 #include "history_search.h"
@@ -2102,32 +2103,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
 
     // Handle history search mode separately
     if (tui->mode == TUI_MODE_HISTORY_SEARCH) {
-        LOG_DEBUG("[TUI] Processing key %d in history search mode", ch);
-        int result = history_search_process_key(&tui->history_search, ch);
-        if (result == 1) {
-            // Selection made - insert command into input buffer
-            const char *selected = history_search_get_selected(&tui->history_search);
-            if (selected) {
-                tui_input_insert_string(tui->input_buffer, selected);
-                LOG_DEBUG("[TUI] Inserted history command: %s", selected);
-            }
-            history_search_stop(&tui->history_search);
-            tui->mode = TUI_MODE_INSERT;
-            // Refresh all windows to restore display
-            window_manager_refresh_all(&tui->wm);
-            input_redraw(tui, prompt);
-        } else if (result == -1) {
-            // Cancelled
-            history_search_stop(&tui->history_search);
-            tui->mode = TUI_MODE_INSERT;
-            // Refresh all windows to restore display
-            window_manager_refresh_all(&tui->wm);
-            input_redraw(tui, prompt);
-        } else {
-            // Continue - just render the popup
-            history_search_render(&tui->history_search);
-        }
-        return 0;
+        return tui_history_process_search_key(tui, ch, prompt);
     }
 
     if (g_enable_paste_heuristic) {
@@ -2261,20 +2237,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         return 0;
     } else if (ch == 18) {  // Ctrl+R: History search (in INSERT mode)
         // Start history search popup
-        LOG_DEBUG("[TUI] Ctrl+R pressed - starting history search (history entries: %p, count: %d)",
-                  (void *)tui->input_history, tui->input_history_count);
-        if (history_search_start(&tui->history_search,
-                                 tui->wm.screen_height,
-                                 tui->wm.screen_width,
-                                 tui->input_history,
-                                 tui->input_history_count) == 0) {
-            tui->mode = TUI_MODE_HISTORY_SEARCH;
-            history_search_render(&tui->history_search);
-            LOG_DEBUG("[TUI] History search started successfully, mode changed to TUI_MODE_HISTORY_SEARCH");
-        } else {
-            LOG_ERROR("[TUI] Failed to start history search");
-            beep();
-        }
+        tui_history_start_search(tui);
         return 0;
     } else if (ch == 1) {  // Ctrl+A: beginning of line
         input->cursor = 0;
@@ -2334,101 +2297,9 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         input->cursor = input->length;
         input_redraw(tui, prompt);
     } else if (ch == 16) {  // Ctrl+P: previous input history
-        if (tui->input_history_count > 0) {
-            if (tui->input_history_index == -1) {
-                free(tui->input_saved_before_history);
-                tui->input_saved_before_history = strdup(tui->input_buffer->buffer);
-                tui->input_history_index = tui->input_history_count;  // one past last
-            }
-            if (tui->input_history_index > 0) {
-                tui->input_history_index--;
-                const char *hist = tui->input_history[tui->input_history_index];
-                if (hist) {
-                    size_t len = strlen(hist);
-
-                    // Dynamically resize input buffer if history entry is too large
-                    if (len >= (size_t)tui->input_buffer->capacity) {
-                        size_t new_capacity = len + 1024;  // Add some extra space
-                        void *buf_ptr = (void *)tui->input_buffer->buffer;
-                        if (buffer_reserve(&buf_ptr, &tui->input_buffer->capacity, new_capacity) == 0) {
-                            tui->input_buffer->buffer = (char *)buf_ptr;
-                            LOG_DEBUG("[TUI] Expanded input buffer to %zu bytes for history entry", new_capacity);
-                        } else {
-                            // If resize fails, truncate to current capacity
-                            LOG_WARN("[TUI] Failed to expand input buffer, truncating history entry");
-                            len = (size_t)tui->input_buffer->capacity - 1;
-                        }
-                    }
-
-                    memcpy(tui->input_buffer->buffer, hist, len);
-                    tui->input_buffer->buffer[len] = '\0';
-                    tui->input_buffer->length = (int)len;
-                    tui->input_buffer->cursor = (int)len;
-                    tui->input_buffer->view_offset = 0;
-                    tui->input_buffer->line_scroll_offset = 0;
-                    input_redraw(tui, prompt);
-                }
-            }
-        }
+        tui_history_navigate_prev(tui, prompt);
     } else if (ch == 14) {  // Ctrl+N: next input history
-        if (tui->input_history_index != -1) {
-            tui->input_history_index++;
-            if (tui->input_history_index >= tui->input_history_count) {
-                // restore saved input
-                const char *saved = tui->input_saved_before_history ? tui->input_saved_before_history : "";
-                size_t len = strlen(saved);
-
-                // Dynamically resize input buffer if saved input is too large
-                if (len >= (size_t)tui->input_buffer->capacity) {
-                    size_t new_capacity = len + 1024;  // Add some extra space
-                    void *buf_ptr = (void *)tui->input_buffer->buffer;
-                    if (buffer_reserve(&buf_ptr, &tui->input_buffer->capacity, new_capacity) == 0) {
-                        tui->input_buffer->buffer = (char *)buf_ptr;
-                        LOG_DEBUG("[TUI] Expanded input buffer to %zu bytes for saved input", new_capacity);
-                    } else {
-                        // If resize fails, truncate to current capacity
-                        LOG_WARN("[TUI] Failed to expand input buffer, truncating saved input");
-                        len = (size_t)tui->input_buffer->capacity - 1;
-                    }
-                }
-
-                memcpy(tui->input_buffer->buffer, saved, len);
-                tui->input_buffer->buffer[len] = '\0';
-                tui->input_buffer->length = (int)len;
-                tui->input_buffer->cursor = (int)len;
-                tui->input_buffer->view_offset = 0;
-                tui->input_buffer->line_scroll_offset = 0;
-                tui->input_history_index = -1;
-                input_redraw(tui, prompt);
-            } else {
-                const char *hist = tui->input_history[tui->input_history_index];
-                if (hist) {
-                    size_t len = strlen(hist);
-
-                    // Dynamically resize input buffer if history entry is too large
-                    if (len >= (size_t)tui->input_buffer->capacity) {
-                        size_t new_capacity = len + 1024;  // Add some extra space
-                        void *buf_ptr = (void *)tui->input_buffer->buffer;
-                        if (buffer_reserve(&buf_ptr, &tui->input_buffer->capacity, new_capacity) == 0) {
-                            tui->input_buffer->buffer = (char *)buf_ptr;
-                            LOG_DEBUG("[TUI] Expanded input buffer to %zu bytes for history entry", new_capacity);
-                        } else {
-                            // If resize fails, truncate to current capacity
-                            LOG_WARN("[TUI] Failed to expand input buffer, truncating history entry");
-                            len = (size_t)tui->input_buffer->capacity - 1;
-                        }
-                    }
-
-                    memcpy(tui->input_buffer->buffer, hist, len);
-                    tui->input_buffer->buffer[len] = '\0';
-                    tui->input_buffer->length = (int)len;
-                    tui->input_buffer->cursor = (int)len;
-                    tui->input_buffer->view_offset = 0;
-                    tui->input_buffer->line_scroll_offset = 0;
-                    input_redraw(tui, prompt);
-                }
-            }
-        }
+        tui_history_navigate_next(tui, prompt);
     } else if (ch == KEY_PPAGE) {  // Page Up: scroll conversation up
         tui_scroll_conversation(tui, -10);
         input_redraw(tui, prompt);
@@ -2953,30 +2824,8 @@ int tui_event_loop(TUIState *tui, const char *prompt,
                 // Submit the input
                 if (ext_buffer[0] != '\0') {
                     LOG_DEBUG("[TUI] Submitting external input (%d bytes)", ext_bytes);
-                    // Save to persistent history (keep DB open)
-                    // Append to in-memory history with simple de-dup of last entry
-                    if (tui->history_file) {
-                        history_file_append(tui->history_file, ext_buffer);
-                    }
-                    if (tui->input_history_count == 0 ||
-                        strcmp(tui->input_history[tui->input_history_count - 1], ext_buffer) != 0) {
-                        // Ensure capacity
-                        if (tui->input_history_count >= tui->input_history_capacity) {
-                            int new_cap = tui->input_history_capacity > 0 ? tui->input_history_capacity * 2 : 100;
-                            char **new_arr = reallocarray(tui->input_history, (size_t)new_cap, sizeof(char*));
-                            if (new_arr) {
-                                tui->input_history = new_arr;
-                                tui->input_history_capacity = new_cap;
-                            }
-                        }
-                        if (tui->input_history_count < tui->input_history_capacity) {
-                            tui->input_history[tui->input_history_count++] = strdup(ext_buffer);
-                        }
-                    }
-                    // Reset history navigation state after submit
-                    free(tui->input_saved_before_history);
-                    tui->input_saved_before_history = NULL;
-                    tui->input_history_index = -1;
+                    // Append to history (both in-memory and persistent)
+                    tui_history_append(tui, ext_buffer);
                     // Call the callback
                     int callback_result = submit_callback(ext_buffer, user_data);
 
@@ -3027,30 +2876,8 @@ int tui_event_loop(TUIState *tui, const char *prompt,
                 const char *input = tui_get_input_buffer(tui);
                 if (input && strlen(input) > 0) {
                     LOG_DEBUG("[TUI] Submitting input (%zu bytes)", strlen(input));
-                    // Save to persistent history (keep DB open)
-                    // Append to in-memory history with simple de-dup of last entry
-                    if (tui->history_file) {
-                        history_file_append(tui->history_file, input);
-                    }
-                    if (tui->input_history_count == 0 ||
-                        strcmp(tui->input_history[tui->input_history_count - 1], input) != 0) {
-                        // Ensure capacity
-                        if (tui->input_history_count >= tui->input_history_capacity) {
-                            int new_cap = tui->input_history_capacity > 0 ? tui->input_history_capacity * 2 : 100;
-                            char **new_arr = reallocarray(tui->input_history, (size_t)new_cap, sizeof(char*));
-                            if (new_arr) {
-                                tui->input_history = new_arr;
-                                tui->input_history_capacity = new_cap;
-                            }
-                        }
-                        if (tui->input_history_count < tui->input_history_capacity) {
-                            tui->input_history[tui->input_history_count++] = strdup(input);
-                        }
-                    }
-                    // Reset history navigation state after submit
-                    free(tui->input_saved_before_history);
-                    tui->input_saved_before_history = NULL;
-                    tui->input_history_index = -1;
+                    // Append to history (both in-memory and persistent)
+                    tui_history_append(tui, input);
                     // Call the callback
                     int callback_result = submit_callback(input, user_data);
 
