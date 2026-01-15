@@ -7,17 +7,9 @@
 #include "tool_sleep.h"
 #include "tool_todo.h"
 #include "../explore_tools.h"
+#include "../klawed_internal.h"
 
-// Forward declarations for tools still in klawed.c
-extern cJSON* tool_memory_store(cJSON *params, ConversationState *state);
-extern cJSON* tool_memory_recall(cJSON *params, ConversationState *state);
-extern cJSON* tool_memory_search(cJSON *params, ConversationState *state);
-
-#ifndef TEST_BUILD
-extern cJSON* tool_list_mcp_resources(cJSON *params, ConversationState *state);
-extern cJSON* tool_read_mcp_resource(cJSON *params, ConversationState *state);
-extern cJSON* tool_call_mcp_tool(cJSON *params, ConversationState *state);
-#endif
+// Forward declarations are already in klawed_internal.h
 
 // Wrapper functions for explore tools (they use void* for state)
 static cJSON* tool_web_search_wrapper(cJSON *params, ConversationState *state) {

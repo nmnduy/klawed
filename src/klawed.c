@@ -148,10 +148,10 @@ static void ensure_tool_results(struct ConversationState *state) {
 #include "compaction.h"
 
 // Session management
-#ifndef TEST_BUILD
-#include "session.h"
 #include "session/token_usage.h"
 #include "session/session_persistence.h"
+#ifndef TEST_BUILD
+#include "session.h"
 #endif
 #include "provider.h"  // For ApiCallResult and Provider definitions
 #include "todo.h"
@@ -465,31 +465,10 @@ static void get_current_timestamp(char *buffer, size_t buffer_size) {
 // For testing, we need to export some functions
 #ifdef TEST_BUILD
 #define STATIC
-// Forward declarations for TEST_BUILD
-char* read_file(const char *path);
-int write_file(const char *path, const char *content);
-char* resolve_path(const char *path, const char *working_dir);
-cJSON* tool_read(cJSON *params, ConversationState *state);
-cJSON* tool_write(cJSON *params, ConversationState *state);
-cJSON* tool_edit(cJSON *params, ConversationState *state);
-cJSON* tool_todo_write(cJSON *params, ConversationState *state);
-cJSON* tool_bash(cJSON *params, ConversationState *state);
-cJSON* tool_subagent(cJSON *params, ConversationState *state);
-static cJSON* tool_sleep(cJSON *params, ConversationState *state);
-static cJSON* tool_upload_image(cJSON *params, ConversationState *state);
-static cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *state);
-static cJSON* tool_interrupt_subagent(cJSON *params, ConversationState *state);
-static cJSON* tool_multiedit(cJSON *params, ConversationState *state);
-// Memory tools (conditional on HAVE_MEMVID) - now external
-cJSON* tool_memory_store(cJSON *params, ConversationState *state);
-cJSON* tool_memory_recall(cJSON *params, ConversationState *state);
-cJSON* tool_memory_search(cJSON *params, ConversationState *state);
+// Tool forward declarations are now in their respective header files
+// File utils forward declarations are now in src/util/file_utils.h
 #else
 #define STATIC static
-// Forward declarations (TEMPORARY: these are now in src/util/file_utils.h)
-// char* read_file(const char *path);
-// int write_file(const char *path, const char *content);
-// char* resolve_path(const char *path, const char *working_dir);
 #endif
 
 
