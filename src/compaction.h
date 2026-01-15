@@ -27,6 +27,18 @@ typedef struct CompactionConfig {
 } CompactionConfig;
 
 /**
+ * Result of a compaction operation (for UI notification)
+ */
+typedef struct CompactionResult {
+    int success;              // 1 if compaction succeeded, 0 if failed/skipped
+    int messages_compacted;   // Number of messages stored to memory
+    size_t tokens_before;     // Token count before compaction
+    size_t tokens_after;      // Token count after compaction
+    double usage_before_pct;  // Context usage % before
+    double usage_after_pct;   // Context usage % after
+} CompactionResult;
+
+/**
  * Initialize compaction configuration from environment variables
  *
  * @param config Compaction config structure to initialize
@@ -54,9 +66,10 @@ int compaction_should_trigger(const struct ConversationState *state, const Compa
  * @param state Current conversation state (will be modified)
  * @param config Compaction configuration (will update last_compacted_index)
  * @param session_id Current session ID (for memvid storage)
+ * @param result Optional: receives compaction statistics for UI notification (can be NULL)
  * @return 0 on success, -1 on error
  */
-int compaction_perform(struct ConversationState *state, CompactionConfig *config, const char *session_id);
+int compaction_perform(struct ConversationState *state, CompactionConfig *config, const char *session_id, CompactionResult *result);
 
 /**
  * Update token count in compaction config based on current conversation state

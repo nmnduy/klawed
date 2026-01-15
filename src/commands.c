@@ -467,6 +467,7 @@ static int cmd_dump(ConversationState *state, const char *args) {
             case MSG_USER: role_str = "USER"; break;
             case MSG_ASSISTANT: role_str = "ASSISTANT"; break;
             case MSG_SYSTEM: role_str = "SYSTEM"; break;
+            case MSG_AUTO_COMPACTION: role_str = "AUTO_COMPACTION"; break;
             default: break; // Keep as UNKNOWN
         }
 

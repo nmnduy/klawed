@@ -79,7 +79,8 @@ typedef struct TUIStateStruct TUIState;
 typedef enum {
     MSG_USER,
     MSG_ASSISTANT,
-    MSG_SYSTEM
+    MSG_SYSTEM,
+    MSG_AUTO_COMPACTION  // Auto-compaction notification message
 } MessageRole;
 
 // ============================================================================
