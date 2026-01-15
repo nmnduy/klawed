@@ -300,12 +300,17 @@ static int compaction_store_message(const InternalMessage *msg, int msg_index, c
 }
 #endif /* HAVE_MEMVID */
 
-int compaction_perform(ConversationState *state, CompactionConfig *config, const char *session_id) {
+int compaction_perform(ConversationState *state, CompactionConfig *config, const char *session_id, CompactionResult *result) {
+    // Initialize result to indicate no compaction
+    if (result) {
+        memset(result, 0, sizeof(*result));
+    }
+
 #ifndef HAVE_MEMVID
     (void)state;
     (void)config;
     (void)session_id;
-    fprintf(stderr, "Warning: Compaction requested but memvid not available. Skipping.\n");
+    LOG_WARN("Compaction requested but memvid not available. Skipping.");
     return -1;
 #else
     if (!state || !config) {
@@ -402,14 +407,24 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         tokens_before, tokens_after, tokens_compacted,
         usage_percent, after_percent, config->model_token_limit);
 
+    // Populate result for caller to handle UI notification
+    if (result) {
+        result->success = 1;
+        result->messages_compacted = compacted_count;
+        result->tokens_before = tokens_before;
+        result->tokens_after = tokens_after;
+        result->usage_before_pct = usage_percent;
+        result->usage_after_pct = after_percent;
+    }
+
     // Free the messages being compacted
     for (int i = compact_start; i <= compact_end; i++) {
         free_message_contents(&state->messages[i]);
     }
 
-    // Create compaction notice message
+    // Create compaction notice message with MSG_AUTO_COMPACTION type
     InternalMessage notice_msg = {0};
-    notice_msg.role = MSG_SYSTEM;
+    notice_msg.role = MSG_AUTO_COMPACTION;
     notice_msg.contents = malloc(sizeof(InternalContent));
     if (!notice_msg.contents) {
         LOG_ERROR("Failed to allocate memory for compaction notice");

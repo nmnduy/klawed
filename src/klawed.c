@@ -5597,7 +5597,7 @@ char* build_request_json_from_state(ConversationState *state) {
 
         // Determine role
         const char *role;
-        if (state->messages[i].role == MSG_SYSTEM) {
+        if (state->messages[i].role == MSG_SYSTEM || state->messages[i].role == MSG_AUTO_COMPACTION) {
             role = "system";
         } else if (state->messages[i].role == MSG_USER) {
             role = "user";
@@ -5611,7 +5611,7 @@ char* build_request_json_from_state(ConversationState *state) {
         int is_recent_message = (i >= state->count - 3) && enable_caching;
 
         // Build content based on message type
-        if (state->messages[i].role == MSG_SYSTEM) {
+        if (state->messages[i].role == MSG_SYSTEM || state->messages[i].role == MSG_AUTO_COMPACTION) {
             // System messages: use content array with cache_control if enabled
             if (state->messages[i].content_count > 0 &&
                 state->messages[i].contents[0].type == INTERNAL_TEXT) {
@@ -6087,8 +6087,14 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         // Check and perform compaction if needed (before API call)
         if (state->compaction_config && compaction_should_trigger(state, state->compaction_config)) {
             LOG_INFO("Context compaction triggered before API call");
-            if (compaction_perform(state, state->compaction_config, state->session_id) != 0) {
+            CompactionResult compact_result = {0};
+            if (compaction_perform(state, state->compaction_config, state->session_id, &compact_result) != 0) {
                 LOG_WARN("Compaction failed, continuing with API call");
+            } else if (compact_result.success) {
+                LOG_INFO("Compaction complete: %d messages stored, context %.1f%% → %.1f%%",
+                         compact_result.messages_compacted,
+                         compact_result.usage_before_pct,
+                         compact_result.usage_after_pct);
             }
         }
 
