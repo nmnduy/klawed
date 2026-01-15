@@ -1630,6 +1630,15 @@ export function init(rootEl) {
         return typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
     }
 
+    function requiresHTTPS() {
+        // Web Speech API requires HTTPS except for localhost
+        const isLocalhost = window.location.hostname === 'localhost' || 
+                           window.location.hostname === '127.0.0.1' ||
+                           window.location.hostname === '[::1]';
+        const isHTTPS = window.location.protocol === 'https:';
+        return !isLocalhost && !isHTTPS;
+    }
+
     function getRecognition() {
         if (recognition) return recognition;
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1646,7 +1655,22 @@ export function init(rootEl) {
         };
         recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
-            addSystemMessage('✗ Voice error: ' + event.error, 'error');
+            let errorMsg = '✗ Voice error: ' + event.error;
+            
+            // Provide helpful context for common errors
+            if (event.error === 'network') {
+                if (requiresHTTPS()) {
+                    errorMsg = '✗ Voice input requires HTTPS. Please access via https:// or localhost';
+                } else {
+                    errorMsg = '✗ Network error: Cannot reach speech recognition service';
+                }
+            } else if (event.error === 'not-allowed') {
+                errorMsg = '✗ Microphone access denied. Check browser permissions.';
+            } else if (event.error === 'no-speech') {
+                errorMsg = '✗ No speech detected. Please try again.';
+            }
+            
+            addSystemMessage(errorMsg, 'error');
             stopListening();
         };
         recognition.onend = () => {
@@ -1704,6 +1728,12 @@ export function init(rootEl) {
     }
 
     function startListening() {
+        // Check HTTPS requirement
+        if (requiresHTTPS()) {
+            addSystemMessage('✗ Voice input requires HTTPS or localhost access', 'error');
+            return;
+        }
+        
         const rec = getRecognition();
         if (!rec) {
             addSystemMessage('✗ Voice input not supported in this browser', 'error');
@@ -1723,6 +1753,16 @@ export function init(rootEl) {
         if (!supportsSpeech()) {
             elements.voiceButton.disabled = true;
             elements.voiceButton.title = 'Voice input not supported in this browser';
+        } else if (requiresHTTPS()) {
+            elements.voiceButton.disabled = false; // Keep enabled to show helpful error
+            elements.voiceButton.title = 'Voice input requires HTTPS (works on localhost)';
+            elements.voiceButton.addEventListener('click', () => {
+                if (isListening) {
+                    stopListening();
+                } else {
+                    startListening();
+                }
+            });
         } else {
             elements.voiceButton.addEventListener('click', () => {
                 if (isListening) {
