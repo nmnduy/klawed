@@ -10,10 +10,8 @@
 ---
 
 - [ ]
-- [ ] voice recording doesn't work
 - [ ] handle out of context error...
 - [ ] feedback button and error reporting
-- [ ] cronjobs
 
 - [ ] backups/ folder
     - [ ] LLM can't delete files here
@@ -25,7 +23,9 @@
 
 ---
 
+- [ ] cronjobs
 - [ ] pricing
+- [ ] voice recording doesn't work
 - [ ] work on distribution
 
 ---
