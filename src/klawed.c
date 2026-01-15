@@ -150,6 +150,8 @@ static void ensure_tool_results(struct ConversationState *state) {
 // Session management
 #ifndef TEST_BUILD
 #include "session.h"
+#include "session/token_usage.h"
+#include "session/session_persistence.h"
 #endif
 #include "provider.h"  // For ApiCallResult and Provider definitions
 #include "todo.h"
@@ -198,6 +200,12 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 
 // Utility modules
 #include "util/file_utils.h"
+
+// Context modules
+#include "context/system_prompt.h"
+#include "context/environment.h"
+#include "context/klawed_md.h"
+#include "context/memory_injection.h"
 #include "util/string_utils.h"
 #include "util/timestamp_utils.h"
 #include "util/format_utils.h"
@@ -213,6 +221,14 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 #include "tools/tool_filesystem.h"
 #include "tools/tool_bash.h"
 #include "tools/tool_subagent.h"
+
+// UI modules
+#include "ui/ui_output.h"
+#include "ui/print_helpers.h"
+#include "ui/tool_output_display.h"
+
+// Note: Conversation management functions are declared in klawed_internal.h
+// We don't include conversation/*.h here to avoid redundant declarations
 
 #ifdef TEST_BUILD
 #define main klawed_main
@@ -238,198 +254,9 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
  *   - JSON missing required fields (messageType or content)
  *   - messageType is not "TEXT"
  */
-static void print_assistant(const char *text) {
-    // Use accent color for role name, foreground for main text
-    char role_color_code[32];
-    char text_color_code[32];
-    const char *role_color_start;
-    const char *text_color_start;
+// UI functions moved to src/ui/ modules
 
-    // Get accent color for role name
-    if (get_colorscheme_color(COLORSCHEME_ASSISTANT, role_color_code, sizeof(role_color_code)) == 0) {
-        role_color_start = role_color_code;
-    } else {
-        LOG_WARN("Using fallback ANSI color for ASSISTANT");
-        role_color_start = ANSI_FALLBACK_ASSISTANT;
-    }
-
-    // Get foreground color for main text
-    if (get_colorscheme_color(COLORSCHEME_FOREGROUND, text_color_code, sizeof(text_color_code)) == 0) {
-        text_color_start = text_color_code;
-    } else {
-        LOG_WARN("Using fallback ANSI color for FOREGROUND");
-        text_color_start = ANSI_FALLBACK_FOREGROUND;
-    }
-
-    printf("%s[Assistant]%s %s%s%s\n", role_color_start, ANSI_RESET, text_color_start, text, ANSI_RESET);
-    fflush(stdout);
-}
-
-static void print_tool(const char *tool_name, const char *details) {
-    // Use status color for tool indicator (reduce rainbow), foreground for details
-    char status_color_code[32];
-    char text_color_code[32];
-    const char *tool_color_start;
-    const char *text_color_start;
-
-    // Use STATUS color for the [Tool: ...] tag
-    if (get_colorscheme_color(COLORSCHEME_STATUS, status_color_code, sizeof(status_color_code)) == 0) {
-        tool_color_start = status_color_code;
-    } else {
-        LOG_WARN("Using fallback ANSI color for STATUS (tool tag)");
-        tool_color_start = ANSI_FALLBACK_STATUS;
-    }
-
-    // Get foreground color for details
-    if (get_colorscheme_color(COLORSCHEME_FOREGROUND, text_color_code, sizeof(text_color_code)) == 0) {
-        text_color_start = text_color_code;
-    } else {
-        LOG_WARN("Using fallback ANSI color for FOREGROUND");
-        text_color_start = ANSI_FALLBACK_FOREGROUND;
-    }
-
-    printf("%s[Tool: %s]%s", tool_color_start, tool_name, ANSI_RESET);
-    if (details && strlen(details) > 0) {
-        printf(" %s%s%s", text_color_start, details, ANSI_RESET);
-    }
-    printf("\n");
-    fflush(stdout);
-}
-
-static void print_error(const char *text);
-
-static void ui_append_line(TUIState *tui,
-                           TUIMessageQueue *queue,
-                           const char *prefix,
-                           const char *text,
-                           TUIColorPair color) {
-    const char *safe_text = text ? text : "";
-    const char *safe_prefix = prefix ? prefix : "";
-
-    if (queue) {
-        size_t prefix_len = safe_prefix[0] ? strlen(safe_prefix) : 0;
-        size_t text_len = strlen(safe_text);
-        size_t extra_space = (prefix_len > 0 && text_len > 0) ? 1 : 0;
-        size_t total = prefix_len + extra_space + text_len + 1;
-
-        char *formatted = malloc(total);
-        if (!formatted) {
-            LOG_ERROR("Failed to allocate memory for TUI message");
-            // Fall through to direct UI/console output
-        } else {
-            if (prefix_len > 0 && text_len > 0) {
-                snprintf(formatted, total, "%s %s", safe_prefix, safe_text);
-            } else if (prefix_len > 0) {
-                snprintf(formatted, total, "%s", safe_prefix);
-            } else {
-                snprintf(formatted, total, "%s", safe_text);
-            }
-
-            if (post_tui_message(queue, TUI_MSG_ADD_LINE, formatted) == 0) {
-                free(formatted);
-                return;
-            }
-
-            LOG_WARN("Failed to enqueue TUI message, falling back to direct render");
-            free(formatted);
-        }
-    }
-
-    if (tui) {
-        tui_add_conversation_line(tui, safe_prefix, safe_text, color);
-        return;
-    }
-
-    if (strcmp(safe_prefix, "[Assistant]") == 0) {
-        print_assistant(safe_text);
-        return;
-    }
-
-    if (strncmp(safe_prefix, "[Tool", 5) == 0) {
-        const char *colon = strchr(safe_prefix, ':');
-        const char *close = strrchr(safe_prefix, ']');
-        const char *name_start = NULL;
-        size_t name_len = 0;
-        if (colon) {
-            name_start = colon + 1;
-            if (*name_start == ' ') {
-                name_start++;
-            }
-            if (close && close > name_start) {
-                name_len = (size_t)(close - name_start);
-            }
-        }
-
-        char tool_name[128];
-        if (name_len == 0 || name_len >= sizeof(tool_name)) {
-            snprintf(tool_name, sizeof(tool_name), "tool");
-        } else {
-            memcpy(tool_name, name_start, name_len);
-            tool_name[name_len] = '\0';
-        }
-        print_tool(tool_name, safe_text);
-        return;
-    }
-
-    if (strcmp(safe_prefix, "[Error]") == 0) {
-        print_error(safe_text);
-        return;
-    }
-
-    if (safe_prefix[0]) {
-        printf("%s %s\n", safe_prefix, safe_text);
-    } else {
-        printf("%s\n", safe_text);
-    }
-    fflush(stdout);
-    return;
-}
-
-static void ui_set_status(TUIState *tui,
-                          TUIMessageQueue *queue,
-                          const char *status_text) {
-    const char *safe = status_text ? status_text : "";
-    if (queue) {
-        if (post_tui_message(queue, TUI_MSG_STATUS, safe) == 0) {
-            return;
-        }
-        LOG_WARN("Failed to enqueue status update, falling back to direct render");
-    }
-
-    if (tui) {
-        tui_update_status(tui, safe);
-        return;
-    }
-    if (safe[0] != '\0') {
-        // Use status color when not in TUI for consistency with tips
-        char status_color_buf[32];
-        const char *status_color = NULL;
-        if (get_colorscheme_color(COLORSCHEME_STATUS, status_color_buf, sizeof(status_color_buf)) == 0) {
-            status_color = status_color_buf;
-        } else {
-            LOG_WARN("Using fallback ANSI color for STATUS (ui_set_status)");
-            status_color = ANSI_FALLBACK_STATUS;
-        }
-        printf("%s[Status]%s %s\n", status_color, ANSI_RESET, safe);
-    }
-}
-
-static void ui_show_error(TUIState *tui,
-                          TUIMessageQueue *queue,
-                          const char *error_text) {
-    const char *safe = error_text ? error_text : "";
-    if (queue) {
-        if (post_tui_message(queue, TUI_MSG_ERROR, safe) == 0) {
-            return;
-        }
-        LOG_WARN("Failed to enqueue error message, falling back to direct render");
-    }
-    if (tui) {
-        tui_add_conversation_line(tui, "[Error]", safe, COLOR_PAIR_ERROR);
-        return;
-    }
-    print_error(safe);
-}
+// UI functions moved to src/ui/ modules
 
 // =====================================================================
 // Tool Output Helpers
@@ -446,210 +273,7 @@ static _Thread_local int g_oneshot_mode = 0;
 // Output format for oneshot mode: 0=human-readable (default), 1=machine-readable (HTML+JSON)
 static _Thread_local int g_oneshot_output_format = 0;
 
-// Helper function to print human-readable tool output
-static void print_human_readable_tool_output(const char *tool_name, const char *tool_details, cJSON *tool_result) {
-    if (!tool_name) return;
-
-    // Print tool header - more concise format
-    printf("→ ");
-    if (tool_details && strlen(tool_details) > 0) {
-        printf("%s: %s\n", tool_name, tool_details);
-    } else {
-        printf("%s\n", tool_name);
-    }
-    fflush(stdout);
-
-    // Print tool result based on tool type
-    if (tool_result) {
-        if (strcmp(tool_name, "Bash") == 0) {
-            cJSON *exit_code = cJSON_GetObjectItem(tool_result, "exit_code");
-            cJSON *output = cJSON_GetObjectItem(tool_result, "output");
-
-            // Only show exit code if non-zero
-            if (exit_code && cJSON_IsNumber(exit_code) && exit_code->valueint != 0) {
-                printf("  Exit code: %d\n", exit_code->valueint);
-            }
-
-            if (output && cJSON_IsString(output)) {
-                const char *output_str = output->valuestring;
-                if (output_str && strlen(output_str) > 0) {
-                    // Print output directly without extra indentation
-                    printf("%s", output_str);
-                    // Ensure newline at end if not present
-                    if (output_str[strlen(output_str)-1] != '\n') {
-                        printf("\n");
-                    }
-                }
-            }
-        } else if (strcmp(tool_name, "Read") == 0) {
-            cJSON *content = cJSON_GetObjectItem(tool_result, "content");
-
-            if (content && cJSON_IsString(content)) {
-                const char *content_str = content->valuestring;
-                if (content_str && strlen(content_str) > 0) {
-                    printf("%s", content_str);
-                    // Ensure newline at end if not present
-                    if (content_str[strlen(content_str)-1] != '\n') {
-                        printf("\n");
-                    }
-                }
-            }
-        } else if (strcmp(tool_name, "Grep") == 0) {
-            cJSON *match_count = cJSON_GetObjectItem(tool_result, "match_count");
-            cJSON *total_matches = cJSON_GetObjectItem(tool_result, "total_matches");
-            cJSON *matches = cJSON_GetObjectItem(tool_result, "matches");
-
-            if (match_count && cJSON_IsNumber(match_count) &&
-                total_matches && cJSON_IsNumber(total_matches)) {
-                int shown = match_count->valueint;
-                int total = total_matches->valueint;
-
-                if (shown < total) {
-                    printf("  Found %d/%d matches (showing first %d)\n", shown, total, shown);
-                } else {
-                    printf("  Found %d match%s\n", total, total == 1 ? "" : "es");
-                }
-            } else if (match_count && cJSON_IsNumber(match_count)) {
-                // Fallback for older format without total_matches
-                printf("  Found %d match%s\n", match_count->valueint,
-                       match_count->valueint == 1 ? "" : "es");
-            }
-
-            if (matches && cJSON_IsArray(matches)) {
-                int array_size = cJSON_GetArraySize(matches);
-                if (array_size > 0) {
-                    // Get display limit from environment or use default (increased from 10 to 20)
-                    int display_limit = 20;  // Default limit
-                    const char *display_env = getenv("KLAWED_GREP_DISPLAY_LIMIT");
-                    if (display_env) {
-                        int display_val = atoi(display_env);
-                        if (display_val > 0) {
-                            display_limit = display_val;
-                        }
-                    }
-
-                    for (int i = 0; i < array_size && i < display_limit; i++) {
-                        cJSON *match = cJSON_GetArrayItem(matches, i);
-                        if (match && cJSON_IsString(match)) {
-                            printf("  %s\n", match->valuestring);
-                        }
-                    }
-                    if (array_size > display_limit) {
-                        printf("  ... and %d more\n", array_size - display_limit);
-                    }
-                }
-            }
-        } else if (strcmp(tool_name, "Glob") == 0) {
-            cJSON *files = cJSON_GetObjectItem(tool_result, "files");
-
-            if (files && cJSON_IsArray(files)) {
-                int array_size = cJSON_GetArraySize(files);
-                printf("  Found %d file%s\n", array_size, array_size == 1 ? "" : "s");
-
-                if (array_size > 0) {
-                    // Get display limit from environment or use default
-                    int display_limit = 10;  // Default limit for Glob
-                    const char *display_env = getenv("KLAWED_GLOB_DISPLAY_LIMIT");
-                    if (display_env) {
-                        int display_val = atoi(display_env);
-                        if (display_val > 0) {
-                            display_limit = display_val;
-                        }
-                    }
-
-                    for (int i = 0; i < array_size && i < display_limit; i++) {
-                        cJSON *file = cJSON_GetArrayItem(files, i);
-                        if (file && cJSON_IsString(file)) {
-                            printf("  %s\n", file->valuestring);
-                        }
-                    }
-                    if (array_size > display_limit) {
-                        printf("  ... and %d more\n", array_size - display_limit);
-                    }
-                }
-            }
-        } else if (strcmp(tool_name, "TodoWrite") == 0) {
-            cJSON *status = cJSON_GetObjectItem(tool_result, "status");
-            cJSON *added = cJSON_GetObjectItem(tool_result, "added");
-            cJSON *total = cJSON_GetObjectItem(tool_result, "total");
-
-            if (status && cJSON_IsString(status) && strcmp(status->valuestring, "success") == 0) {
-                if (added && cJSON_IsNumber(added) && total && cJSON_IsNumber(total)) {
-                    printf("  Updated todo list: %d/%d tasks\n", added->valueint, total->valueint);
-                }
-            }
-        } else if (strcmp(tool_name, "Edit") == 0 || strcmp(tool_name, "MultiEdit") == 0) {
-            cJSON *status = cJSON_GetObjectItem(tool_result, "status");
-            cJSON *replacements = cJSON_GetObjectItem(tool_result, "replacements");
-
-            if (status && cJSON_IsString(status) && strcmp(status->valuestring, "success") == 0) {
-                if (replacements && cJSON_IsNumber(replacements)) {
-                    printf("  Made %d change%s\n", replacements->valueint,
-                           replacements->valueint == 1 ? "" : "s");
-                } else {
-                    printf("  Success\n");
-                }
-            }
-        } else if (strcmp(tool_name, "Subagent") == 0) {
-            cJSON *exit_code = cJSON_GetObjectItem(tool_result, "exit_code");
-            cJSON *output = cJSON_GetObjectItem(tool_result, "output");
-
-            if (exit_code && cJSON_IsNumber(exit_code)) {
-                printf("  Subagent completed with exit code: %d\n", exit_code->valueint);
-            }
-
-            if (output && cJSON_IsString(output)) {
-                const char *output_str = output->valuestring;
-                if (output_str && strlen(output_str) > 0) {
-                    // Show last few lines of subagent output
-                    char *output_copy = strdup(output_str);
-                    if (output_copy) {
-                        // Count lines
-                        int line_count = 0;
-                        char *p = output_copy;
-                        while (*p) {
-                            if (*p == '\n') line_count++;
-                            p++;
-                        }
-
-                        // Show last 3 lines
-                        if (line_count > 3) {
-                            printf("  ...\n");
-                            // Find the start of the last 3 lines
-                            int lines_to_skip = line_count - 3;
-                            p = output_copy;
-                            while (lines_to_skip > 0 && *p) {
-                                if (*p == '\n') lines_to_skip--;
-                                p++;
-                            }
-                            printf("%s", p);
-                        } else {
-                            printf("%s", output_str);
-                        }
-                        free(output_copy);
-                    }
-                }
-            }
-        } else {
-            // For other tools, print a simplified version
-            char *result_str = cJSON_Print(tool_result);
-            if (result_str) {
-                // Truncate if too long
-                size_t len = strlen(result_str);
-                if (len > 100) {
-                    result_str[100] = '\0';
-                    printf("  Result: %s...\n", result_str);
-                } else {
-                    printf("  Result: %s\n", result_str);
-                }
-                free(result_str);
-            }
-        }
-    }
-
-    printf("\n");
-    fflush(stdout);
-}
+// Tool output display functions moved to src/ui/tool_output_display.c
 
 // =====================================================================
 // Emergency Cleanup for Subagents
@@ -682,7 +306,7 @@ static void signal_handler_cleanup(int sig) {
 }
 
 // Register/unregister subagent manager for emergency cleanup
-static void register_subagent_manager_for_cleanup(SubagentManager *manager) {
+void register_subagent_manager_for_cleanup(SubagentManager *manager) {
     pthread_mutex_lock(&g_cleanup_mutex);
     g_subagent_manager_for_cleanup = manager;
     pthread_mutex_unlock(&g_cleanup_mutex);
@@ -816,212 +440,7 @@ static void get_current_timestamp(char *buffer, size_t buffer_size) {
 #endif // Duplicate get_current_timestamp
 
 // Helper function to extract tool details from arguments
-static char* get_tool_details(const char *tool_name, cJSON *arguments) {
-    if (!arguments || !cJSON_IsObject(arguments)) {
-        return NULL;
-    }
-
-    static char details[256]; // static buffer for thread safety
-    details[0] = '\0';
-
-    if (strcmp(tool_name, "Bash") == 0) {
-        cJSON *command = cJSON_GetObjectItem(arguments, "command");
-        if (cJSON_IsString(command)) {
-            summarize_bash_command(command->valuestring, details, sizeof(details));
-        }
-    } else if (strcmp(tool_name, "Subagent") == 0) {
-        cJSON *prompt = cJSON_GetObjectItem(arguments, "prompt");
-        if (cJSON_IsString(prompt)) {
-            // Show first 50 chars of the prompt
-            const char *prompt_str = prompt->valuestring;
-            size_t len = strlen(prompt_str);
-            if (len > 50) {
-                snprintf(details, sizeof(details), "%.47s...", prompt_str);
-            } else {
-                strlcpy(details, prompt_str, sizeof(details));
-            }
-        }
-    } else if (strcmp(tool_name, "Read") == 0) {
-        cJSON *file_path = cJSON_GetObjectItem(arguments, "file_path");
-        cJSON *start_line = cJSON_GetObjectItem(arguments, "start_line");
-        cJSON *end_line = cJSON_GetObjectItem(arguments, "end_line");
-
-        if (cJSON_IsString(file_path)) {
-            const char *path = file_path->valuestring;
-            // Show the full path (could be relative or absolute) instead of just filename
-            // This provides better context about which file is being read
-
-            if (cJSON_IsNumber(start_line) && cJSON_IsNumber(end_line)) {
-                snprintf(details, sizeof(details), "%s:%d-%d", path,
-                        start_line->valueint, end_line->valueint);
-            } else if (cJSON_IsNumber(start_line)) {
-                snprintf(details, sizeof(details), "%s:%d", path, start_line->valueint);
-            } else {
-                strlcpy(details, path, sizeof(details));
-            }
-        }
-    } else if (strcmp(tool_name, "Write") == 0) {
-        cJSON *file_path = cJSON_GetObjectItem(arguments, "file_path");
-        if (cJSON_IsString(file_path)) {
-            const char *path = file_path->valuestring;
-            // Show the full path (could be relative or absolute) instead of just filename
-            // This provides better context about which file is being written
-            strlcpy(details, path, sizeof(details));
-        }
-    } else if (strcmp(tool_name, "Edit") == 0) {
-        cJSON *file_path = cJSON_GetObjectItem(arguments, "file_path");
-        cJSON *use_regex = cJSON_GetObjectItem(arguments, "use_regex");
-
-        if (cJSON_IsString(file_path)) {
-            const char *path = file_path->valuestring;
-            // Show the full path (could be relative or absolute) instead of just filename
-            // This provides better context about which file is being edited
-
-            const char *op_type = cJSON_IsTrue(use_regex) ? "(regex)" : "(string)";
-            snprintf(details, sizeof(details), "%s %s", path, op_type);
-        }
-    } else if (strcmp(tool_name, "Glob") == 0) {
-        cJSON *pattern = cJSON_GetObjectItem(arguments, "pattern");
-        if (cJSON_IsString(pattern)) {
-            strlcpy(details, pattern->valuestring, sizeof(details));
-        }
-    } else if (strcmp(tool_name, "Grep") == 0) {
-        cJSON *pattern = cJSON_GetObjectItem(arguments, "pattern");
-        cJSON *path = cJSON_GetObjectItem(arguments, "path");
-
-        if (cJSON_IsString(pattern)) {
-            if (cJSON_IsString(path) && strlen(path->valuestring) > 0 &&
-                strcmp(path->valuestring, ".") != 0) {
-                snprintf(details, sizeof(details), "\"%s\" in %s",
-                        pattern->valuestring, path->valuestring);
-            } else {
-                snprintf(details, sizeof(details), "\"%s\"", pattern->valuestring);
-            }
-        }
-    } else if (strcmp(tool_name, "TodoWrite") == 0) {
-        cJSON *todos = cJSON_GetObjectItem(arguments, "todos");
-        if (cJSON_IsArray(todos)) {
-            int count = cJSON_GetArraySize(todos);
-            snprintf(details, sizeof(details), "%d task%s", count, count == 1 ? "" : "s");
-        }
-    } else if (strcmp(tool_name, "Sleep") == 0) {
-        cJSON *duration = cJSON_GetObjectItem(arguments, "duration");
-        if (cJSON_IsNumber(duration)) {
-            int seconds = duration->valueint;
-            if (seconds == 1) {
-                snprintf(details, sizeof(details), "for 1 second");
-            } else {
-                snprintf(details, sizeof(details), "for %d seconds", seconds);
-            }
-        }
-    } else if (strcmp(tool_name, "UploadImage") == 0) {
-        cJSON *file_path = cJSON_GetObjectItem(arguments, "file_path");
-        if (cJSON_IsString(file_path)) {
-            const char *path = file_path->valuestring;
-            // Show the full path (could be relative or absolute) instead of just filename
-            // This provides better context about which image is being uploaded
-            strlcpy(details, path, sizeof(details));
-        }
-    } else if (strcmp(tool_name, "CheckSubagentProgress") == 0) {
-        cJSON *pid = cJSON_GetObjectItem(arguments, "pid");
-        cJSON *log_file = cJSON_GetObjectItem(arguments, "log_file");
-        if (cJSON_IsNumber(pid)) {
-            snprintf(details, sizeof(details), "PID %d", pid->valueint);
-        } else if (cJSON_IsString(log_file)) {
-            const char *path = log_file->valuestring;
-            // Extract just the filename from the path
-            const char *filename = strrchr(path, '/');
-            filename = filename ? filename + 1 : path;
-            snprintf(details, sizeof(details), "log: %s", filename);
-        } else {
-            snprintf(details, sizeof(details), "checking subagent");
-        }
-    } else if (strcmp(tool_name, "InterruptSubagent") == 0) {
-        cJSON *pid = cJSON_GetObjectItem(arguments, "pid");
-        if (cJSON_IsNumber(pid)) {
-            snprintf(details, sizeof(details), "PID %d", pid->valueint);
-        } else {
-            snprintf(details, sizeof(details), "interrupt subagent");
-        }
-    } else if (strcmp(tool_name, "ListMcpResources") == 0) {
-        cJSON *server = cJSON_GetObjectItem(arguments, "server");
-        if (cJSON_IsString(server)) {
-            snprintf(details, sizeof(details), "server: %s", server->valuestring);
-        } else {
-            snprintf(details, sizeof(details), "all servers");
-        }
-    } else if (strcmp(tool_name, "ReadMcpResource") == 0) {
-        cJSON *server = cJSON_GetObjectItem(arguments, "server");
-        cJSON *uri = cJSON_GetObjectItem(arguments, "uri");
-        if (cJSON_IsString(server) && cJSON_IsString(uri)) {
-            // Show server and truncate URI if too long
-            const char *uri_str = uri->valuestring;
-            size_t uri_len = strlen(uri_str);
-            if (uri_len > 30) {
-                snprintf(details, sizeof(details), "%s: %.27s...", server->valuestring, uri_str);
-            } else {
-                snprintf(details, sizeof(details), "%s: %s", server->valuestring, uri_str);
-            }
-        } else if (cJSON_IsString(server)) {
-            snprintf(details, sizeof(details), "server: %s", server->valuestring);
-        } else if (cJSON_IsString(uri)) {
-            const char *uri_str = uri->valuestring;
-            size_t uri_len = strlen(uri_str);
-            if (uri_len > 30) {
-                snprintf(details, sizeof(details), "%.27s...", uri_str);
-            } else {
-                snprintf(details, sizeof(details), "%s", uri_str);
-            }
-        }
-    } else if (strncmp(tool_name, "mcp_", 4) == 0) {
-        // Handle MCP tools (format: mcp_<server>_<toolname>)
-        // Extract the actual tool name after the server prefix for display
-        const char *actual_tool = strchr(tool_name + 4, '_');
-        if (actual_tool) {
-            actual_tool++; // Skip the underscore
-
-            // Try to extract the most relevant argument for display
-            // Common patterns: url, text, path, element, values, etc.
-            cJSON *url = cJSON_GetObjectItem(arguments, "url");
-            cJSON *text = cJSON_GetObjectItem(arguments, "text");
-            cJSON *path = cJSON_GetObjectItem(arguments, "path");
-            cJSON *element = cJSON_GetObjectItem(arguments, "element");
-
-            if (cJSON_IsString(url)) {
-                // Tools with URL parameter (navigate, fetch, etc.)
-                snprintf(details, sizeof(details), "%s: %s", actual_tool, url->valuestring);
-            } else if (cJSON_IsString(text) && strlen(text->valuestring) > 0) {
-                // Tools with text parameter (type, search, etc.)
-                snprintf(details, sizeof(details), "%s: %.30s%s", actual_tool,
-                        text->valuestring,
-                        strlen(text->valuestring) > 30 ? "..." : "");
-            } else if (cJSON_IsString(path)) {
-                // Tools with path parameter (read, write, etc.)
-                snprintf(details, sizeof(details), "%s: %s", actual_tool, path->valuestring);
-            } else if (cJSON_IsString(element)) {
-                // Tools with element parameter (click, hover, etc.)
-                snprintf(details, sizeof(details), "%s: %s", actual_tool, element->valuestring);
-            } else {
-                // Generic display: just show the tool name
-                snprintf(details, sizeof(details), "%s", actual_tool);
-            }
-            details[sizeof(details) - 1] = '\0';
-        } else {
-            // Fallback: show the full tool name without "mcp_" prefix
-            snprintf(details, sizeof(details), "%s", tool_name + 4);
-            details[sizeof(details) - 1] = '\0';
-        }
-    }
-
-    return strlen(details) > 0 ? details : NULL;
-}
-
-static void print_error(const char *text) {
-    // Log to file only (no stderr output)
-    LOG_ERROR("%s", text);
-}
-
-
+// Tool output display functions moved to src/ui/tool_output_display.c
 
 // ============================================================================
 // Data Structures
@@ -1195,69 +614,7 @@ char* resolve_path(const char *path, const char *working_dir) {
 
 // Add a directory to the additional working directories list
 // Returns: 0 on success, -1 on error
-int add_directory(ConversationState *state, const char *path) {
-    if (!state || !path) {
-        return -1;
-    }
-
-    if (conversation_state_lock(state) != 0) {
-        return -1;
-    }
-
-    // Validate that directory exists
-    int result = -1;
-    struct stat st;
-    char *resolved_path = NULL;
-
-    // Resolve path (handle relative paths)
-    if (path[0] == '/') {
-        resolved_path = realpath(path, NULL);
-    } else {
-        char full_path[PATH_MAX];
-        snprintf(full_path, sizeof(full_path), "%s/%s", state->working_dir, path);
-        resolved_path = realpath(full_path, NULL);
-    }
-
-    if (!resolved_path) {
-        goto out;  // Path doesn't exist or can't be resolved
-    }
-
-    if (stat(resolved_path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        goto out;  // Not a directory
-    }
-
-    // Check if directory is already in the list (avoid duplicates)
-    if (strcmp(resolved_path, state->working_dir) == 0) {
-        goto out;  // Already the main working directory
-    }
-
-    for (int i = 0; i < state->additional_dirs_count; i++) {
-        if (strcmp(resolved_path, state->additional_dirs[i]) == 0) {
-            goto out;  // Already in additional directories
-        }
-    }
-
-    // Expand array if needed
-    if (state->additional_dirs_count >= state->additional_dirs_capacity) {
-        int new_capacity = state->additional_dirs_capacity == 0 ? 4 : state->additional_dirs_capacity * 2;
-        char **new_array = reallocarray(state->additional_dirs, (size_t)new_capacity, sizeof(char*));
-        if (!new_array) {
-            goto out;  // Out of memory
-        }
-        state->additional_dirs = new_array;
-        state->additional_dirs_capacity = new_capacity;
-    }
-
-    // Add directory to list
-    state->additional_dirs[state->additional_dirs_count++] = resolved_path;
-    resolved_path = NULL;
-    result = 0;
-
-out:
-    conversation_state_unlock(state);
-    free(resolved_path);
-    return result;
-}
+// add_directory - moved to src/conversation/conversation_state.c
 
 // TEMPORARY: tool_upload_image moved to src/tools/tool_image.c
 // This duplicate definition will be removed in a later refactoring step
@@ -6426,6 +5783,9 @@ static char* get_current_date(void) {
 #endif // Duplicate get_current_date
 
 // Check if current directory is a git repository
+// REMOVED: is_git_repo, exec_git_command, get_git_status
+// Now in src/context/environment.c
+#if 0
 static int is_git_repo(const char *working_dir) {
     char git_path[PATH_MAX];
     snprintf(git_path, sizeof(git_path), "%s/.git", working_dir);
@@ -6510,6 +5870,7 @@ static char* get_git_status(const char *working_dir) {
 
     return git_status;
 }
+#endif
 
 // Get OS/Platform information
 // TEMPORARY: get_os_version moved to src/util/env_utils.c
@@ -6544,6 +5905,9 @@ static const char* get_platform(void) {
 }
 #endif // Duplicate get_platform
 
+// REMOVED: read_klawed_md
+// Now in src/context/klawed_md.c
+#if 0
 // Read KLAWED.md from working directory if it exists
 static char* read_klawed_md(const char *working_dir) {
     char klawed_md_path[PATH_MAX];
@@ -6580,7 +5944,11 @@ static char* read_klawed_md(const char *working_dir) {
     content[file_size] = '\0';
     return content;
 }
+#endif
 
+// REMOVED: build_system_prompt
+// Now in src/context/system_prompt.c
+#if 0
 // Build complete system prompt with environment context
 char* build_system_prompt(ConversationState *state) {
     const char *working_dir = state->working_dir;
@@ -6691,7 +6059,11 @@ char* build_system_prompt(ConversationState *state) {
 
     return prompt;
 }
+#endif
 
+// REMOVED: Memory Context Injection functions
+// Now in src/context/memory_injection.c
+#if 0
 // ============================================================================
 // Memory Context Injection (requires HAVE_MEMVID)
 // ============================================================================
@@ -6911,547 +6283,24 @@ static int inject_memory_context(ConversationState *state) {
     return 0;
 }
 #endif /* HAVE_MEMVID */
+#endif
 
 // ============================================================================
 // Message Management
 // ============================================================================
 
-int conversation_state_init(ConversationState *state) {
-    if (!state) {
-        return -1;
-    }
+// conversation_state_init, conversation_state_destroy, conversation_state_lock,
+// conversation_state_unlock - moved to src/conversation/conversation_state.c
 
-    if (state->conv_mutex_initialized) {
-        return 0;
-    }
+// add_system_message, add_user_message - moved to src/conversation/message_builder.c
 
-    if (pthread_mutex_init(&state->conv_mutex, NULL) != 0) {
-        LOG_ERROR("Failed to initialize conversation mutex");
-        return -1;
-    }
+// add_assistant_message_openai - moved to src/conversation/message_parser.c
 
-    state->conv_mutex_initialized = 1;
-    state->interrupt_requested = 0;  // Initialize interrupt flag
-    // Socket streaming support removed - will be reimplemented with ZMQ
+// free_internal_contents, check_todo_write_executed - moved to src/conversation/content_types.c
 
-    // Initialize subagent manager
+// add_tool_results - moved to src/conversation/message_builder.c
 
-    // Initialize compaction config (NULL by default)
-    state->compaction_config = NULL;
-    state->subagent_manager = malloc(sizeof(SubagentManager));
-    if (state->subagent_manager) {
-        if (subagent_manager_init(state->subagent_manager) != 0) {
-            LOG_ERROR("Failed to initialize subagent manager");
-            free(state->subagent_manager);
-            state->subagent_manager = NULL;
-            // Continue anyway - not a critical failure
-        } else {
-            LOG_DEBUG("Subagent manager initialized successfully");
-            // Register for emergency cleanup on unexpected termination
-            register_subagent_manager_for_cleanup(state->subagent_manager);
-        }
-    } else {
-        LOG_ERROR("Failed to allocate memory for subagent manager");
-        // Continue anyway - not a critical failure
-    }
-
-    return 0;
-}
-
-void conversation_state_destroy(ConversationState *state) {
-    if (!state || !state->conv_mutex_initialized) {
-        return;
-    }
-
-    // Clean up subagent manager
-
-    // Clean up compaction config
-    if (state->compaction_config) {
-        free(state->compaction_config);
-        state->compaction_config = NULL;
-    }
-    if (state->subagent_manager) {
-        // Unregister from emergency cleanup
-        register_subagent_manager_for_cleanup(NULL);
-
-        subagent_manager_free(state->subagent_manager);
-        free(state->subagent_manager);
-        state->subagent_manager = NULL;
-    }
-
-    pthread_mutex_destroy(&state->conv_mutex);
-    state->conv_mutex_initialized = 0;
-}
-
-int conversation_state_lock(ConversationState *state) {
-    if (!state) {
-        return -1;
-    }
-
-    if (!state->conv_mutex_initialized) {
-        if (conversation_state_init(state) != 0) {
-            return -1;
-        }
-    }
-
-    if (pthread_mutex_lock(&state->conv_mutex) != 0) {
-        LOG_ERROR("Failed to lock conversation mutex");
-        return -1;
-    }
-    return 0;
-}
-
-void conversation_state_unlock(ConversationState *state) {
-    if (!state || !state->conv_mutex_initialized) {
-        return;
-    }
-    pthread_mutex_unlock(&state->conv_mutex);
-}
-
-static void add_system_message(ConversationState *state, const char *text) {
-    if (conversation_state_lock(state) != 0) {
-        return;
-    }
-
-    if (state->count >= MAX_MESSAGES) {
-        LOG_ERROR("Maximum message count reached");
-        conversation_state_unlock(state);
-        return;
-    }
-
-    InternalMessage *msg = &state->messages[state->count++];
-    msg->role = MSG_SYSTEM;
-    msg->contents = calloc(1, sizeof(InternalContent));
-    if (!msg->contents) {
-        LOG_ERROR("Failed to allocate memory for message content");
-        state->count--;
-        return;
-    }
-    msg->content_count = 1;
-    // calloc already zeros memory, but explicitly set for analyzer
-    msg->contents[0].type = INTERNAL_TEXT;
-    msg->contents[0].text = NULL;
-    msg->contents[0].tool_id = NULL;
-    msg->contents[0].tool_name = NULL;
-    msg->contents[0].tool_params = NULL;
-    msg->contents[0].tool_output = NULL;
-
-    msg->contents[0].text = strdup(text);
-    if (!msg->contents[0].text) {
-        LOG_ERROR("Failed to duplicate message text");
-        free(msg->contents);
-        msg->contents = NULL;
-        state->count--;
-        conversation_state_unlock(state);
-        return;
-    }
-
-    conversation_state_unlock(state);
-}
-
-void add_user_message(ConversationState *state, const char *text) {
-    if (conversation_state_lock(state) != 0) {
-        return;
-    }
-
-    if (state->count >= MAX_MESSAGES) {
-        LOG_ERROR("Maximum message count reached");
-        conversation_state_unlock(state);
-        return;
-    }
-
-    InternalMessage *msg = &state->messages[state->count++];
-    msg->role = MSG_USER;
-    msg->contents = calloc(1, sizeof(InternalContent));
-    if (!msg->contents) {
-        LOG_ERROR("Failed to allocate memory for message content");
-        state->count--; // Rollback count increment
-        return;
-    }
-    msg->content_count = 1;
-    // calloc already zeros memory, but explicitly set for analyzer
-    msg->contents[0].type = INTERNAL_TEXT;
-    msg->contents[0].text = NULL;
-    msg->contents[0].tool_id = NULL;
-    msg->contents[0].tool_name = NULL;
-    msg->contents[0].tool_params = NULL;
-    msg->contents[0].tool_output = NULL;
-
-    msg->contents[0].text = strdup(text);
-    if (!msg->contents[0].text) {
-        LOG_ERROR("Failed to duplicate message text");
-        free(msg->contents);
-        msg->contents = NULL;
-        state->count--; // Rollback count increment
-        conversation_state_unlock(state);
-        return;
-    }
-
-    conversation_state_unlock(state);
-}
-
-// Parse OpenAI message format and add to conversation
-void add_assistant_message_openai(ConversationState *state, cJSON *message) {
-    if (conversation_state_lock(state) != 0) {
-        return;
-    }
-
-    if (state->count >= MAX_MESSAGES) {
-        LOG_ERROR("Maximum message count reached");
-        conversation_state_unlock(state);
-        return;
-    }
-
-    InternalMessage *msg = &state->messages[state->count++];
-    msg->role = MSG_ASSISTANT;
-
-    // Count content blocks (text + tool calls)
-    int content_count = 0;
-    cJSON *content = cJSON_GetObjectItem(message, "content");
-    cJSON *tool_calls = cJSON_GetObjectItem(message, "tool_calls");
-
-    if (content && cJSON_IsString(content) && content->valuestring) {
-        content_count++;
-    }
-
-    // Count VALID tool calls (those with 'function' field)
-    int tool_calls_count = 0;
-    if (tool_calls && cJSON_IsArray(tool_calls)) {
-        int array_size = cJSON_GetArraySize(tool_calls);
-        for (int i = 0; i < array_size; i++) {
-            cJSON *tool_call = cJSON_GetArrayItem(tool_calls, i);
-            cJSON *function = cJSON_GetObjectItem(tool_call, "function");
-            cJSON *id = cJSON_GetObjectItem(tool_call, "id");
-            if (function && id && cJSON_IsString(id)) {
-                tool_calls_count++;
-            } else {
-                LOG_WARN("Skipping malformed tool_call at index %d (missing 'function' or 'id' field)", i);
-            }
-        }
-        content_count += tool_calls_count;
-    }
-
-    // Ensure we have at least some content
-    if (content_count == 0) {
-        LOG_WARN("Assistant message has no content");
-        state->count--; // Rollback count increment
-        conversation_state_unlock(state);
-        return;
-    }
-
-    msg->contents = calloc((size_t)content_count, sizeof(InternalContent));
-    if (!msg->contents) {
-        LOG_ERROR("Failed to allocate memory for message content");
-        state->count--; // Rollback count increment
-        conversation_state_unlock(state);
-        return;
-    }
-    msg->content_count = content_count;
-
-    int idx = 0;
-
-    // Add text content if present
-    if (content && cJSON_IsString(content) && content->valuestring) {
-        msg->contents[idx].type = INTERNAL_TEXT;
-        msg->contents[idx].text = strdup(content->valuestring);
-        if (!msg->contents[idx].text) {
-            LOG_ERROR("Failed to duplicate message text");
-            free(msg->contents);
-            msg->contents = NULL;
-            state->count--;
-            conversation_state_unlock(state);
-            return;
-        }
-        idx++;
-    }
-
-    // Add tool calls if present
-    if (tool_calls && cJSON_IsArray(tool_calls)) {
-        int array_size = cJSON_GetArraySize(tool_calls);
-        for (int i = 0; i < array_size; i++) {
-            cJSON *tool_call = cJSON_GetArrayItem(tool_calls, i);
-            cJSON *id = cJSON_GetObjectItem(tool_call, "id");
-            cJSON *function = cJSON_GetObjectItem(tool_call, "function");
-
-            // Skip malformed tool calls (already logged warning during counting)
-            if (!function || !id || !cJSON_IsString(id)) {
-                continue;
-            }
-
-            cJSON *name = cJSON_GetObjectItem(function, "name");
-            cJSON *arguments = cJSON_GetObjectItem(function, "arguments");
-
-            msg->contents[idx].type = INTERNAL_TOOL_CALL;
-            msg->contents[idx].tool_id = strdup(id->valuestring);
-            if (!msg->contents[idx].tool_id) {
-                LOG_ERROR("Failed to duplicate tool use ID");
-                // Cleanup previously allocated content
-                for (int j = 0; j < idx; j++) {
-                    free(msg->contents[j].text);
-                    free(msg->contents[j].tool_id);
-                    free(msg->contents[j].tool_name);
-                }
-                free(msg->contents);
-                msg->contents = NULL;
-                state->count--;
-                conversation_state_unlock(state);
-                return;
-            }
-            msg->contents[idx].tool_name = strdup(name->valuestring);
-            if (!msg->contents[idx].tool_name) {
-                LOG_ERROR("Failed to duplicate tool name");
-                free(msg->contents[idx].tool_id);
-                // Cleanup previously allocated content
-                for (int j = 0; j < idx; j++) {
-                    free(msg->contents[j].text);
-                    free(msg->contents[j].tool_id);
-                    free(msg->contents[j].tool_name);
-                }
-                free(msg->contents);
-                msg->contents = NULL;
-                state->count--;
-                conversation_state_unlock(state);
-                return;
-            }
-
-            // Parse arguments string as JSON
-            if (arguments && cJSON_IsString(arguments)) {
-                msg->contents[idx].tool_params = cJSON_Parse(arguments->valuestring);
-                if (!msg->contents[idx].tool_params) {
-                    LOG_WARN("Failed to parse tool arguments, using empty object");
-                    msg->contents[idx].tool_params = cJSON_CreateObject();
-                }
-            } else {
-                msg->contents[idx].tool_params = cJSON_CreateObject();
-            }
-            idx++;
-        }
-    }
-
-    conversation_state_unlock(state);
-}
-
-// Helper: Free an array of InternalContent and its internal allocations
-static void free_internal_contents(InternalContent *results, int count) {
-    if (!results) return;
-    for (int i = 0; i < count; i++) {
-        InternalContent *cb = &results[i];
-        free(cb->text);
-        free(cb->tool_id);
-        free(cb->tool_name);
-        if (cb->tool_params) cJSON_Delete(cb->tool_params);
-        if (cb->tool_output) cJSON_Delete(cb->tool_output);
-
-        // Handle INTERNAL_IMAGE type
-        if (cb->type == INTERNAL_IMAGE) {
-            free(cb->image_path);
-            free(cb->mime_type);
-            free(cb->base64_data);
-        }
-    }
-    free(results);
-}
-
-// Helper: Check if TodoWrite was executed in the results array
-static int check_todo_write_executed(InternalContent *results, int count) {
-    if (!results) return 0;
-    for (int i = 0; i < count; i++) {
-        if (results[i].tool_name && strcmp(results[i].tool_name, "TodoWrite") == 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-// Returns 0 on success, -1 on failure
-int add_tool_results(ConversationState *state, InternalContent *results, int count) {
-    LOG_DEBUG("add_tool_results: Adding %d tool results to conversation", count);
-
-    if (conversation_state_lock(state) != 0) {
-        LOG_ERROR("add_tool_results: Failed to acquire conversation lock");
-        free_internal_contents(results, count);
-        return -1;
-    }
-
-    if (state->count >= MAX_MESSAGES) {
-        LOG_ERROR("add_tool_results: Cannot add results - maximum message count (%d) reached", MAX_MESSAGES);
-        // Free results since they won't be added to state
-        free_internal_contents(results, count);
-        conversation_state_unlock(state);
-        return -1;
-    }
-
-    // Log each tool result being added
-    for (int i = 0; i < count; i++) {
-        InternalContent *result = &results[i];
-        LOG_DEBUG("add_tool_results: result[%d]: tool_id=%s, tool_name=%s, is_error=%d",
-                  i, result->tool_id ? result->tool_id : "NULL",
-                  result->tool_name ? result->tool_name : "NULL",
-                  result->is_error);
-    }
-
-    // Find the assistant message that contains the tool calls we're responding to.
-    // Search backwards from the end to find the most recent assistant message
-    // with matching tool_call IDs.
-    int insert_pos = state->count;  // Default: append at end
-    int found_assistant_idx = -1;
-
-    // First, find any tool_id from our results to match against
-    const char *first_tool_id = NULL;
-    for (int i = 0; i < count; i++) {
-        if (results[i].tool_id) {
-            first_tool_id = results[i].tool_id;
-            break;
-        }
-    }
-
-    if (first_tool_id) {
-        // Search backwards for assistant message with this tool call
-        for (int i = state->count - 1; i >= 0; i--) {
-            InternalMessage *msg = &state->messages[i];
-            if (msg->role == MSG_ASSISTANT) {
-                for (int j = 0; j < msg->content_count; j++) {
-                    InternalContent *c = &msg->contents[j];
-                    if (c->type == INTERNAL_TOOL_CALL && c->tool_id &&
-                        strcmp(c->tool_id, first_tool_id) == 0) {
-                        found_assistant_idx = i;
-                        insert_pos = i + 1;  // Insert right after this assistant message
-                        LOG_DEBUG("add_tool_results: Found matching assistant message at index %d for tool_id=%s",
-                                  i, first_tool_id);
-                        break;
-                    }
-                }
-                if (found_assistant_idx >= 0) break;
-            }
-        }
-    }
-
-    if (found_assistant_idx < 0) {
-        LOG_WARN("add_tool_results: Could not find matching assistant message, appending at end");
-    }
-
-    // If insert position is at the end, just append
-    if (insert_pos == state->count) {
-        InternalMessage *msg = &state->messages[state->count++];
-        msg->role = MSG_USER;
-        msg->contents = results;
-        msg->content_count = count;
-        LOG_INFO("add_tool_results: Successfully added %d tool results as msg[%d]", count, state->count - 1);
-    } else {
-        // Need to insert at a specific position - shift messages
-        // Shift all messages from insert_pos onwards
-        for (int i = state->count; i > insert_pos; i--) {
-            state->messages[i] = state->messages[i - 1];
-        }
-
-        // Insert the new message
-        InternalMessage *msg = &state->messages[insert_pos];
-        msg->role = MSG_USER;
-        msg->contents = results;
-        msg->content_count = count;
-        state->count++;
-
-        LOG_INFO("add_tool_results: Inserted %d tool results at msg[%d] (after assistant msg[%d])",
-                 count, insert_pos, found_assistant_idx);
-    }
-
-    conversation_state_unlock(state);
-    return 0;
-}
-
-// ============================================================================
-// Interactive Mode - Simple Terminal I/O
-// ============================================================================
-
-void clear_conversation(ConversationState *state) {
-    if (conversation_state_lock(state) != 0) {
-        return;
-    }
-
-    // Keep the system message (first message)
-    int system_msg_count = 0;
-
-    if (state->count > 0 && state->messages[0].role == MSG_SYSTEM) {
-        // System message remains intact
-        system_msg_count = 1;
-    }
-
-    // Free all other message content
-    for (int i = system_msg_count; i < state->count; i++) {
-        for (int j = 0; j < state->messages[i].content_count; j++) {
-            InternalContent *cb = &state->messages[i].contents[j];
-            free(cb->text);
-            cb->text = NULL;
-            free(cb->tool_id);
-            cb->tool_id = NULL;
-            free(cb->tool_name);
-            cb->tool_name = NULL;
-            if (cb->tool_params) {
-                cJSON_Delete(cb->tool_params);
-                cb->tool_params = NULL;
-            }
-            if (cb->tool_output) {
-                cJSON_Delete(cb->tool_output);
-                cb->tool_output = NULL;
-            }
-        }
-        free(state->messages[i].contents);
-        state->messages[i].contents = NULL;
-        state->messages[i].content_count = 0;
-    }
-
-    // Reset message count (keeping system message)
-    state->count = system_msg_count;
-
-    // Clear todo list
-    if (state->todo_list) {
-        todo_free(state->todo_list);
-        if (todo_init(state->todo_list) != 0) {
-            LOG_ERROR("Failed to reinitialize todo list after clear");
-            // The list is in a safe empty state (todo_free zeroed it)
-        }
-        LOG_DEBUG("Todo list cleared and reinitialized");
-    }
-
-    conversation_state_unlock(state);
-}
-
-// Free all messages and their contents (including system message). Use at program shutdown.
-void conversation_free(ConversationState *state) {
-    if (conversation_state_lock(state) != 0) {
-        return;
-    }
-
-    // Free all messages
-    for (int i = 0; i < state->count; i++) {
-        for (int j = 0; j < state->messages[i].content_count; j++) {
-            InternalContent *cb = &state->messages[i].contents[j];
-            free(cb->text);
-            cb->text = NULL;
-            free(cb->tool_id);
-            cb->tool_id = NULL;
-            free(cb->tool_name);
-            cb->tool_name = NULL;
-            if (cb->tool_params) {
-                cJSON_Delete(cb->tool_params);
-                cb->tool_params = NULL;
-            }
-            if (cb->tool_output) {
-                cJSON_Delete(cb->tool_output);
-                cb->tool_output = NULL;
-            }
-        }
-        free(state->messages[i].contents);
-        state->messages[i].contents = NULL;
-        state->messages[i].content_count = 0;
-    }
-    state->count = 0;
-
-    // Note: todo_list is freed separately in main cleanup
-    // Do not call todo_free() here to avoid double-free
-
-    conversation_state_unlock(state);
-}
+// clear_conversation, conversation_free - moved to src/conversation/conversation_state.c
 
 static void process_response(ConversationState *state,
                              ApiResponse *response,
@@ -8767,46 +7616,11 @@ static int process_single_command_response(ConversationState *state, ApiResponse
 /**
  * Print token usage statistics for the current session
  * This is called at the end of single command mode (including subagent)
+ * 
+ * MOVED TO: src/session/token_usage.c (session_print_token_usage)
  */
-static void print_token_usage(ConversationState *state) {
-    if (!state || !state->persistence_db) {
-        return;
-    }
 
-    int prompt_tokens = 0;
-    int completion_tokens = 0;
-    int cached_tokens = 0;
-
-    // Get token usage for this session
-    int result = persistence_get_session_token_usage(
-        state->persistence_db,
-        state->session_id,
-        &prompt_tokens,
-        &completion_tokens,
-        &cached_tokens
-    );
-
-    if (result == 0) {
-        // Calculate total tokens (excluding cached tokens since they're free)
-        int total_tokens = prompt_tokens + completion_tokens;
-
-        // Print token usage summary
-        fprintf(stderr, "\n=== Token Usage Summary ===\n");
-        fprintf(stderr, "Session: %s\n", state->session_id ? state->session_id : "unknown");
-        fprintf(stderr, "Prompt tokens: %d\n", prompt_tokens);
-        fprintf(stderr, "Completion tokens: %d\n", completion_tokens);
-        if (cached_tokens > 0) {
-            fprintf(stderr, "Cached tokens (free): %d\n", cached_tokens);
-            fprintf(stderr, "Total billed tokens: %d (excluding %d cached)\n",
-                    total_tokens, cached_tokens);
-        } else {
-            fprintf(stderr, "Total tokens: %d\n", total_tokens);
-        }
-        fprintf(stderr, "===========================\n");
-    } else {
-        fprintf(stderr, "\nNote: Token usage statistics unavailable\n");
-    }
-}
+// print_token_usage moved to src/ui/tool_output_display.c
 
 static int single_command_mode(ConversationState *state, const char *prompt) {
     LOG_INFO("Executing single command: %s", prompt);
@@ -8868,7 +7682,7 @@ static int single_command_mode(ConversationState *state, const char *prompt) {
 
     // Print token usage summary at the end of single command mode
     // This includes subagent executions
-    print_token_usage(state);
+    session_print_token_usage(state);
 
     return result;
 }
@@ -9275,6 +8089,8 @@ static int get_env_int_retry(const char *name, int default_value) {
 #ifndef TEST_BUILD
 #include "dump_utils.h"
 // Dump conversation from database by session ID
+// MOVED TO: src/session/session_persistence.c (session_dump_conversation)
+#if 0
 static int dump_conversation_from_db(const char *session_id, const char *format) {
     PersistenceDB *db = persistence_init(NULL);
     if (!db) {
@@ -9519,6 +8335,7 @@ static int dump_conversation_from_db(const char *session_id, const char *format)
     persistence_close(db);
     return 0;
 }
+#endif // Moved to src/session/session_persistence.c
 #endif // TEST_BUILD
 
 // Format: sess_<timestamp>_<random>
@@ -9666,7 +8483,7 @@ int main(int argc, char *argv[]) {
         }
         // argc == 2: use most recent session
 
-        return dump_conversation_from_db(session_id, format);
+        return session_dump_conversation(session_id, format);
     }
 #endif
 
