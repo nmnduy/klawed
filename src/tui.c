@@ -11,6 +11,8 @@
 #endif
 
 #include "tui.h"
+#include "tui_input.h"
+#include "tui_conversation.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
 #include "history_search.h"
@@ -111,10 +113,11 @@ static uint64_t status_spinner_interval_ns(void) {
     return (uint64_t)SPINNER_DELAY_MS * (uint64_t)1000000;
 }
 
-static void render_status_window(TUIState *tui) {
+void render_status_window(TUIState *tui) {
     if (!tui || !tui->wm.status_win) {
         return;
     }
+
 
     int height, width;
     getmaxyx(tui->wm.status_win, height, width);
@@ -623,90 +626,6 @@ static void tui_clear_resize_flag(void) {
 }
 */
 
-// Message type categories for spacing logic
-typedef enum {
-    MSG_TYPE_UNKNOWN = 0,
-    MSG_TYPE_USER,
-    MSG_TYPE_ASSISTANT,
-    MSG_TYPE_TOOL,
-    MSG_TYPE_SYSTEM,
-    MSG_TYPE_EMPTY
-} MessageType;
-
-// Helper: Classify message type from prefix
-static MessageType get_message_type(const char *prefix) {
-    if (!prefix || prefix[0] == '\0') {
-        return MSG_TYPE_EMPTY;
-    }
-
-    if (strcmp(prefix, "[User]") == 0) {
-        return MSG_TYPE_USER;
-    }
-    if (strcmp(prefix, "[Assistant]") == 0) {
-        return MSG_TYPE_ASSISTANT;
-    }
-    if (strcmp(prefix, "[System]") == 0 || strcmp(prefix, "[Error]") == 0 ||
-        strcmp(prefix, "[Transcription]") == 0) {
-        return MSG_TYPE_SYSTEM;
-    }
-    // Check for tools - must come after checking specific system prefixes
-    // Matches "[Tool: ...]" or any tool name in brackets like "[Bash]", "[Read]", etc.
-    if (prefix[0] == '[') {
-        return MSG_TYPE_TOOL;
-    }
-
-    return MSG_TYPE_UNKNOWN;
-}
-
-// Helper: Add a conversation entry to the TUI state
-static int add_conversation_entry(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
-    if (!tui) return -1;
-
-    // Ensure capacity
-    if (tui->entries_count >= tui->entries_capacity) {
-        int new_capacity = tui->entries_capacity == 0 ? INITIAL_CONV_CAPACITY : tui->entries_capacity * 2;
-        void *entries_ptr = (void *)tui->entries;
-        size_t capacity = (size_t)tui->entries_capacity;
-        if (array_ensure_capacity(&entries_ptr, &capacity, (size_t)new_capacity,
-                                  sizeof(ConversationEntry), NULL) != 0) {
-            LOG_ERROR("[TUI] Failed to allocate memory for conversation entries");
-            return -1;
-        }
-        tui->entries = (ConversationEntry *)entries_ptr;
-        tui->entries_capacity = (int)capacity;
-    }
-
-    // Allocate and copy strings
-    ConversationEntry *entry = &tui->entries[tui->entries_count];
-    entry->prefix = prefix ? strdup(prefix) : NULL;
-    entry->text = text ? strdup(text) : NULL;
-    entry->color_pair = color_pair;
-
-    if ((prefix && !entry->prefix) || (text && !entry->text)) {
-        free(entry->prefix);
-        free(entry->text);
-        LOG_ERROR("[TUI] Failed to allocate memory for conversation entry strings");
-        return -1;
-    }
-
-    tui->entries_count++;
-    return 0;
-}
-
-// Helper: Free all conversation entries
-static void free_conversation_entries(TUIState *tui) {
-    if (!tui || !tui->entries) return;
-
-    for (int i = 0; i < tui->entries_count; i++) {
-        free(tui->entries[i].prefix);
-        free(tui->entries[i].text);
-    }
-    free(tui->entries);
-    tui->entries = NULL;
-    tui->entries_count = 0;
-    tui->entries_capacity = 0;
-}
-
 // Expand pad capacity if needed
 // Pad capacity growth is centralized in WindowManager now.
 
@@ -775,7 +694,7 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
 
 // Helper: Render a single conversation entry to the pad
 // Returns 0 on success, -1 on error
-static int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
+int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
     if (!tui || !tui->wm.conv_pad) {
         return -1;
     }
@@ -978,64 +897,6 @@ skip_newline:
 }
 
 // UTF-8 helper functions (from lineedit.c)
-static int utf8_char_length(unsigned char first_byte) {
-    if ((first_byte & 0x80) == 0) return 1;  // 0xxxxxxx
-    if ((first_byte & 0xE0) == 0xC0) return 2;  // 110xxxxx
-    if ((first_byte & 0xF0) == 0xE0) return 3;  // 1110xxxx
-    if ((first_byte & 0xF8) == 0xF0) return 4;  // 11110xxx
-    return 1;  // Invalid, treat as single byte
-}
-
-// Not used in current implementation, but kept for potential future UTF-8 handling
-// static int is_utf8_continuation(unsigned char byte) {
-//     return (byte & 0xC0) == 0x80;
-// }
-
-static int is_word_boundary(char c) {
-    return !isalnum(c) && c != '_';
-}
-
-static int move_backward_word(const char *buffer, int cursor_pos) {
-    if (cursor_pos <= 0) return 0;
-    int pos = cursor_pos - 1;
-    while (pos > 0 && is_word_boundary(buffer[pos])) pos--;
-    while (pos > 0 && !is_word_boundary(buffer[pos])) pos--;
-    if (pos > 0 && is_word_boundary(buffer[pos])) pos++;
-    return pos;
-}
-
-static int move_forward_word(const char *buffer, int cursor_pos, int buffer_len) {
-    if (cursor_pos >= buffer_len) return buffer_len;
-    int pos = cursor_pos;
-    while (pos < buffer_len && !is_word_boundary(buffer[pos])) pos++;
-    while (pos < buffer_len && is_word_boundary(buffer[pos])) pos++;
-    return pos;
-}
-
-// Input buffer management
-struct TUIInputBuffer {
-    char *buffer;
-    size_t capacity;
-    int length;
-    int cursor;
-    WINDOW *win;
-    int win_width;
-    int win_height;
-    // Display state
-    int view_offset;         // Horizontal scroll offset for long lines
-    int line_scroll_offset;  // Vertical scroll offset (which line to show at top)
-    // Paste mode detection
-    int paste_mode;          // 1 when in bracketed paste, 0 otherwise
-    struct timespec last_input_time;  // Track timing for paste detection
-    int rapid_input_count;   // Count of rapid inputs (heuristic for paste)
-    // Paste content tracking
-    char *paste_content;     // Actual pasted content (kept separate from visible buffer)
-    size_t paste_capacity;   // Capacity of paste buffer
-    size_t paste_content_len; // Length of pasted content
-    int paste_start_pos;     // Position where paste started in buffer
-    int paste_placeholder_len; // Length of placeholder in buffer
-};
-
 // Calculate how many visual lines are needed for the current buffer
 // Note: This assumes first line includes the prompt
 static int calculate_needed_lines(const char *buffer, int buffer_len, int win_width, int prompt_len) {
@@ -1085,239 +946,6 @@ static int resize_input_window(TUIState *tui, int desired_lines) {
     // Ensure content lines are up to date before refresh
     window_manager_refresh_all(&tui->wm);
     return 0;
-}
-
-// Initialize input buffer
-static int input_init(TUIState *tui) {
-    if (!tui || !tui->wm.input_win) {
-        return -1;
-    }
-
-    TUIInputBuffer *input = calloc(1, sizeof(TUIInputBuffer));
-    if (!input) {
-        return -1;
-    }
-
-    input->buffer = malloc(INPUT_BUFFER_SIZE);
-    if (!input->buffer) {
-        free(input);
-        return -1;
-    }
-
-    input->capacity = INPUT_BUFFER_SIZE;
-    input->buffer[0] = '\0';
-    input->length = 0;
-    input->cursor = 0;
-    input->win = tui->wm.input_win;
-    input->view_offset = 0;
-    input->line_scroll_offset = 0;
-    input->paste_mode = 0;
-    input->rapid_input_count = 0;
-    clock_gettime(CLOCK_MONOTONIC, &input->last_input_time);
-
-    // Initialize paste tracking
-    input->paste_content = NULL;
-    input->paste_capacity = 0;
-    input->paste_content_len = 0;
-    input->paste_start_pos = 0;
-    input->paste_placeholder_len = 0;
-
-    // Get window dimensions
-    int h, w;
-    getmaxyx(tui->wm.input_win, h, w);
-    input->win_width = w;  // No borders
-    input->win_height = h;
-
-    tui->input_buffer = input;
-    return 0;
-}
-
-// Free input buffer
-static void input_free(TUIState *tui) {
-    if (!tui || !tui->input_buffer) {
-        return;
-    }
-
-    free(tui->input_buffer->buffer);
-    tui->input_buffer->buffer = NULL;
-    tui->input_buffer->capacity = 0;
-    tui->input_buffer->length = 0;
-    tui->input_buffer->cursor = 0;
-
-    free(tui->input_buffer->paste_content);
-    tui->input_buffer->paste_content = NULL;
-    tui->input_buffer->paste_capacity = 0;
-    tui->input_buffer->paste_content_len = 0;
-
-    free(tui->input_buffer);
-    tui->input_buffer = NULL;
-}
-
-// Insert character(s) at cursor position
-static int input_insert_char(TUIInputBuffer *input, const unsigned char *utf8_char, int char_bytes) {
-    if (!input) {
-        return -1;
-    }
-
-    // If in paste mode, accumulate in paste buffer
-    if (input->paste_mode && input->paste_content) {
-        // Expand paste buffer if needed
-        if (input->paste_content_len + (size_t)char_bytes >= input->paste_capacity) {
-            size_t new_capacity = input->paste_capacity * 2;
-            void *paste_ptr = (void *)input->paste_content;
-            if (buffer_reserve(&paste_ptr, &input->paste_capacity, new_capacity) != 0) {
-                LOG_ERROR("[TUI] Failed to expand paste buffer");
-                return -1;
-            }
-            input->paste_content = (char *)paste_ptr;
-        }
-
-        // Append to paste buffer
-        for (int i = 0; i < char_bytes; i++) {
-            input->paste_content[input->paste_content_len++] = (char)utf8_char[i];
-        }
-
-        // Don't insert into visible buffer during paste - we'll add placeholder at end
-        return 0;
-    }
-
-    if (input->length + char_bytes >= (int)input->capacity - 1) {
-        return -1;  // Buffer full
-    }
-
-    // Make space for the new character(s)
-    memmove(&input->buffer[input->cursor + char_bytes],
-            &input->buffer[input->cursor],
-            (size_t)(input->length - input->cursor + 1));
-
-    // Copy the character bytes
-    for (int i = 0; i < char_bytes; i++) {
-        input->buffer[input->cursor + i] = (char)utf8_char[i];
-    }
-
-    input->length += char_bytes;
-    input->cursor += char_bytes;
-    return 0;
-}
-
-// Insert string at cursor position
-static int input_insert_string(TUIInputBuffer *input, const char *str) {
-    if (!input || !str || !input->buffer) {
-        return -1;
-    }
-
-    size_t str_len = strlen(str);
-    if (str_len == 0) {
-        return 0;  // Nothing to insert
-    }
-
-    // Check if we have enough space, resize if needed
-    if ((size_t)(input->length + (int)str_len) >= input->capacity - 1) {
-        // Calculate new capacity
-        size_t new_capacity;
-        if (__builtin_add_overflow((size_t)input->length, str_len, &new_capacity) ||
-            __builtin_add_overflow(new_capacity, (size_t)1024, &new_capacity)) {
-            return -1;  // Overflow
-        }
-
-        void *buf_ptr = (void *)input->buffer;
-        if (buffer_reserve(&buf_ptr, &input->capacity, new_capacity) != 0) {
-            return -1;  // Resize failed
-        }
-        input->buffer = (char *)buf_ptr;
-    }
-
-    // Make space for the new string
-    memmove(&input->buffer[(size_t)input->cursor + str_len],
-            &input->buffer[input->cursor],
-            (size_t)(input->length - input->cursor + 1));
-
-    // Copy the string
-    memcpy(&input->buffer[input->cursor], str, str_len);
-
-    input->length += (int)str_len;
-    input->cursor += (int)str_len;
-    return 0;
-}
-
-// Delete character at cursor position (forward delete)
-static int input_delete_char(TUIInputBuffer *input) {
-    if (!input || input->cursor >= input->length) {
-        return 0;  // Nothing to delete
-    }
-
-    // Find the length of the UTF-8 character at cursor
-    int char_len = utf8_char_length((unsigned char)input->buffer[input->cursor]);
-
-    // Delete the character by moving subsequent text left
-    memmove(&input->buffer[input->cursor],
-            &input->buffer[input->cursor + char_len],
-            (size_t)(input->length - input->cursor - char_len + 1));
-
-    input->length -= char_len;
-    return char_len;
-}
-
-// Delete character before cursor (backspace)
-static int input_backspace(TUIInputBuffer *input) {
-    if (!input || input->cursor <= 0) {
-        return 0;  // Nothing to delete
-    }
-
-    memmove(&input->buffer[input->cursor - 1],
-            &input->buffer[input->cursor],
-            (size_t)(input->length - input->cursor + 1));
-    input->length--;
-    input->cursor--;
-    return 1;
-}
-
-// Delete word before cursor (Alt+Backspace)
-static int input_delete_word_backward(TUIInputBuffer *input) {
-    if (!input || input->cursor <= 0) {
-        return 0;
-    }
-
-    int word_start = input->cursor - 1;
-    while (word_start > 0 && is_word_boundary(input->buffer[word_start])) {
-        word_start--;
-    }
-    while (word_start > 0 && !is_word_boundary(input->buffer[word_start])) {
-        word_start--;
-    }
-    if (word_start > 0 && is_word_boundary(input->buffer[word_start])) {
-        word_start++;
-    }
-
-    int delete_count = input->cursor - word_start;
-    if (delete_count > 0) {
-        memmove(&input->buffer[word_start],
-                &input->buffer[input->cursor],
-                (size_t)(input->length - input->cursor + 1));
-        input->length -= delete_count;
-        input->cursor = word_start;
-    }
-
-    return delete_count;
-}
-
-// Delete word forward (Alt+d)
-static int input_delete_word_forward(TUIInputBuffer *input) {
-    if (!input || input->cursor >= input->length) {
-        return 0;
-    }
-
-    int word_end = move_forward_word(input->buffer, input->cursor, input->length);
-    int delete_count = word_end - input->cursor;
-
-    if (delete_count > 0) {
-        memmove(&input->buffer[input->cursor],
-                &input->buffer[word_end],
-                (size_t)(input->length - word_end + 1));
-        input->length -= delete_count;
-    }
-
-    return delete_count;
 }
 
 // Threshold for when to use placeholder vs direct insertion (characters)
@@ -1833,7 +1461,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->last_search_pattern = NULL;
 
     // Initialize input buffer
-    if (input_init(tui) != 0) {
+    if (tui_input_init(tui) != 0) {
         window_manager_destroy(&tui->wm);
         endwin();
         return -1;
@@ -1914,10 +1542,10 @@ void tui_cleanup(TUIState *tui) {
     if (!tui || !tui->is_initialized) return;
 
     // Free conversation entries
-    free_conversation_entries(tui);
+    tui_conversation_free_entries(tui);
 
     // Free input state
-    input_free(tui);
+    tui_input_free(tui);
 
     // Free status message
     free(tui->status_message);
@@ -2119,262 +1747,6 @@ int tui_get_vim_fugitive_available(TUIState *tui) {
     return result;
 }
 
-void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
-    if (!tui || !tui->is_initialized) return;
-
-    // Validate conversation pad exists (critical - prevent segfault)
-    if (!tui->wm.conv_pad) {
-        LOG_ERROR("[TUI] Cannot add conversation line - conv_pad is NULL");
-        return;
-    }
-
-    // IMPORTANT: Capture "at bottom" state BEFORE adding new content
-    // This is needed because after content is added, max_scroll increases
-    // and the scroll_offset (which was at bottom) will appear to be less than max_scroll
-    int was_at_bottom = 0;
-    if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
-        int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
-        int max_scroll = window_manager_get_max_scroll(&tui->wm);
-        int content_lines = window_manager_get_content_lines(&tui->wm);
-
-        if (content_lines == 0 || max_scroll <= 0) {
-            // No content or everything fits in viewport
-            was_at_bottom = 1;
-        } else if (scroll_offset >= max_scroll - 1) {
-            // Already at bottom (with 1-line tolerance for 98-100% range)
-            was_at_bottom = 1;
-        }
-        LOG_DEBUG("[TUI] Pre-add scroll state: scroll_offset=%d, max_scroll=%d, was_at_bottom=%d",
-                  scroll_offset, max_scroll, was_at_bottom);
-    }
-
-    // Check if we need to add spacing between different message types
-    // Look at the most recent non-empty entry to determine if spacing is needed
-    MessageType current_type = get_message_type(prefix);
-    MessageType previous_type = MSG_TYPE_UNKNOWN;
-
-    // Find the most recent non-empty entry
-    for (int i = tui->entries_count - 1; i >= 0; i--) {
-        MessageType entry_type = get_message_type(tui->entries[i].prefix);
-        if (entry_type != MSG_TYPE_EMPTY) {
-            previous_type = entry_type;
-            break;
-        }
-    }
-
-    // Add blank line if transitioning between different message types
-    // (but not for empty lines or unknown types, and not if previous was empty/unknown)
-    int should_add_spacing = 0;
-    if (current_type != MSG_TYPE_EMPTY && current_type != MSG_TYPE_UNKNOWN &&
-        previous_type != MSG_TYPE_EMPTY && previous_type != MSG_TYPE_UNKNOWN &&
-        current_type != previous_type) {
-        should_add_spacing = 1;
-    }
-
-    // Get pad dimensions for capacity estimation
-    int pad_height, pad_width;
-    getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
-    (void)pad_height;
-
-    // Calculate how many lines the entries will take when wrapped
-    int prefix_len = (prefix && prefix[0] != '\0') ? (int)strlen(prefix) + 1 : 0; // +1 for space
-    int text_len = (text && text[0] != '\0') ? (int)strlen(text) : 0;
-
-    // Estimate wrapped lines (conservative)
-    int estimated_lines = 1; // At least 1 line for the entry
-    if (should_add_spacing) {
-        estimated_lines += 1; // Add one for the spacing line
-    }
-
-    if (text_len > 0) {
-        // Count newlines in text (each newline is a line break)
-        int newline_count = 0;
-        for (int i = 0; i < text_len; i++) {
-            if (text[i] == '\n') {
-                newline_count++;
-            }
-        }
-
-        // Each newline in text is definitely a line break
-        // Text without newlines might wrap
-        // Be conservative: assume worst-case wrapping
-        estimated_lines += newline_count + ((prefix_len + text_len) / (pad_width / 2)) + 5;
-    }
-
-    // Ensure pad has enough capacity (centralized via WindowManager)
-    int current_lines = window_manager_get_content_lines(&tui->wm);
-    // Check for integer overflow before calculating needed capacity
-    int needed_capacity;
-    if (current_lines > INT_MAX - estimated_lines ||
-        current_lines + estimated_lines > INT_MAX - 500) {
-        LOG_ERROR("[TUI] Capacity calculation would overflow! current=%d, estimated=%d",
-                 current_lines, estimated_lines);
-        needed_capacity = INT_MAX;
-    } else {
-        needed_capacity = current_lines + estimated_lines + 500; // Increased safety buffer
-    }
-
-    if (needed_capacity > tui->wm.conv_pad_capacity) {
-        if (window_manager_ensure_pad_capacity(&tui->wm, needed_capacity) != 0) {
-            LOG_ERROR("[TUI] Failed to ensure pad capacity via WindowManager");
-        }
-    }
-
-    // Double-check pad exists before writing
-    if (!tui->wm.conv_pad) {
-        LOG_ERROR("[TUI] Cannot write to conversation - conv_pad is NULL");
-        return;
-    }
-
-    // Insert blank line for spacing if needed
-    if (should_add_spacing) {
-        if (add_conversation_entry(tui, NULL, "", COLOR_PAIR_FOREGROUND) != 0) {
-            LOG_ERROR("[TUI] Failed to add spacing entry");
-            // Continue anyway - spacing is not critical
-        } else {
-            // Render the spacing line
-            render_entry_to_pad(tui, NULL, "", COLOR_PAIR_FOREGROUND);
-        }
-    }
-
-    // Add entry to conversation history
-    if (add_conversation_entry(tui, prefix, text, color_pair) != 0) {
-        LOG_ERROR("[TUI] Failed to add conversation entry");
-        return;
-    }
-
-    // Render the actual entry
-    int start_line = window_manager_get_content_lines(&tui->wm);
-    if (render_entry_to_pad(tui, prefix, text, color_pair) != 0) {
-        LOG_ERROR("[TUI] Failed to render entry to pad");
-        return;
-    }
-
-    int cur_y = window_manager_get_content_lines(&tui->wm);
-    LOG_DEBUG("[TUI] Added line, total_lines now %d (estimated %d, actual %d)",
-              cur_y, estimated_lines, cur_y - start_line);
-
-    // Auto-scroll logic:
-    // - In INSERT mode: always auto-scroll
-    // - In NORMAL/COMMAND mode: auto-scroll only if we WERE at 98-100% scroll height
-    //   BEFORE content was added (using was_at_bottom captured earlier)
-    if (tui->mode == TUI_MODE_INSERT) {
-        window_manager_scroll_to_bottom(&tui->wm);
-    } else if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
-        // Use the was_at_bottom state captured BEFORE content was added
-        if (was_at_bottom) {
-            window_manager_scroll_to_bottom(&tui->wm);
-            LOG_DEBUG("[TUI] Auto-scroll: scrolling to bottom (was_at_bottom=1)");
-        } else {
-            LOG_DEBUG("[TUI] Auto-scroll: not scrolling (was_at_bottom=0)");
-        }
-    }
-    window_manager_refresh_conversation(&tui->wm);
-
-    if (tui->wm.status_height > 0) {
-        render_status_window(tui);
-    }
-
-    // Redraw input window to ensure it stays visible
-    if (tui->wm.input_win) {
-        touchwin(tui->wm.input_win);
-        wrefresh(tui->wm.input_win);
-    }
-}
-
-void tui_update_last_conversation_line(TUIState *tui, const char *text) {
-    if (!tui || !tui->is_initialized || !text) return;
-
-    // Validate conversation pad exists
-    if (!tui->wm.conv_pad) {
-        LOG_ERROR("[TUI] Cannot update conversation line - conv_pad is NULL");
-        return;
-    }
-
-    // IMPORTANT: Capture "at bottom" state BEFORE adding new content
-    // This is needed because after content is added, max_scroll increases
-    // and the scroll_offset (which was at bottom) will appear to be less than max_scroll
-    int was_at_bottom = 0;
-    if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
-        int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
-        int max_scroll = window_manager_get_max_scroll(&tui->wm);
-        int content_lines = window_manager_get_content_lines(&tui->wm);
-
-        if (content_lines == 0 || max_scroll <= 0) {
-            // No content or everything fits in viewport
-            was_at_bottom = 1;
-        } else if (scroll_offset >= max_scroll - 1) {
-            // Already at bottom (with 1-line tolerance for 98-100% range)
-            was_at_bottom = 1;
-        }
-        LOG_DEBUG("[TUI] Pre-update scroll state: scroll_offset=%d, max_scroll=%d, was_at_bottom=%d",
-                  scroll_offset, max_scroll, was_at_bottom);
-    }
-
-    // Update the last entry in the conversation history
-    if (tui->entries_count > 0) {
-        ConversationEntry *last_entry = &tui->entries[tui->entries_count - 1];
-
-        // Append new text to the existing text
-        size_t old_len = last_entry->text ? strlen(last_entry->text) : 0;
-        size_t new_len = strlen(text);
-        char *new_text = realloc(last_entry->text, old_len + new_len + 1);
-        if (new_text) {
-            if (old_len == 0) {
-                new_text[0] = '\0';
-            }
-            strlcat(new_text, text, old_len + new_len + 1);
-            last_entry->text = new_text;
-
-            // Just append to the end of the pad (simple approach)
-            // Get current cursor position
-            int cur_y, cur_x;
-            getyx(tui->wm.conv_pad, cur_y, cur_x);
-
-            // If we're at the beginning of a line and there's a prefix,
-            // we need to handle it differently
-            if (cur_x == 0 && last_entry->prefix && last_entry->prefix[0] != '\0') {
-                // We shouldn't get here in streaming mode
-                LOG_WARN("[TUI] Streaming update but at start of line");
-                return;
-            }
-
-            // Write the new text at current position
-            waddstr(tui->wm.conv_pad, text);
-
-            // Update content lines
-            getyx(tui->wm.conv_pad, cur_y, cur_x);
-            (void)cur_x;
-            window_manager_set_content_lines(&tui->wm, cur_y);
-        }
-    } else {
-        // No entries exist - create a new one
-        add_conversation_entry(tui, "", text, COLOR_PAIR_ASSISTANT);
-    }
-
-    // Auto-scroll logic:
-    // - In INSERT mode: always auto-scroll
-    // - In NORMAL/COMMAND mode: auto-scroll only if we WERE at 98-100% scroll height
-    //   BEFORE content was added (using was_at_bottom captured earlier)
-    if (tui->mode == TUI_MODE_INSERT) {
-        window_manager_scroll_to_bottom(&tui->wm);
-    } else if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
-        // Use the was_at_bottom state captured BEFORE content was added
-        if (was_at_bottom) {
-            window_manager_scroll_to_bottom(&tui->wm);
-            LOG_DEBUG("[TUI] Auto-scroll (update): scrolling to bottom (was_at_bottom=1)");
-        } else {
-            LOG_DEBUG("[TUI] Auto-scroll (update): not scrolling (was_at_bottom=0)");
-        }
-    }
-    window_manager_refresh_conversation(&tui->wm);
-
-    // Redraw input window
-    if (tui->wm.input_win) {
-        touchwin(tui->wm.input_win);
-        wrefresh(tui->wm.input_win);
-    }
-}
 
 void tui_render_todo_list(TUIState *tui, const TodoList *list) {
     if (!tui || !list || list->count == 0) {
@@ -2569,11 +1941,12 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
     }
 
     // Free all conversation entries
-    free_conversation_entries(tui);
+    tui_conversation_free_entries(tui);
 
     // Clear search pattern when conversation is cleared
     free(tui->last_search_pattern);
     tui->last_search_pattern = NULL;
+
 
     // Clear pad and reset content lines
     werase(tui->wm.conv_pad);
@@ -4161,7 +3534,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
             // Selection made - insert path into input buffer
             const char *selected = file_search_get_selected(&tui->file_search);
             if (selected) {
-                input_insert_string(tui->input_buffer, selected);
+                tui_input_insert_string(tui->input_buffer, selected);
                 LOG_DEBUG("[TUI] Inserted file path: %s", selected);
             }
             file_search_stop(&tui->file_search);
@@ -4191,7 +3564,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
             // Selection made - insert command into input buffer
             const char *selected = history_search_get_selected(&tui->history_search);
             if (selected) {
-                input_insert_string(tui->input_buffer, selected);
+                tui_input_insert_string(tui->input_buffer, selected);
                 LOG_DEBUG("[TUI] Inserted history command: %s", selected);
             }
             history_search_stop(&tui->history_search);
@@ -4393,11 +3766,11 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         tui->last_search_match_line = -1;
         input_redraw(tui, prompt);
     } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {  // Backspace
-        if (input_backspace(input) > 0) {
+        if (tui_input_backspace(input) > 0) {
             input_redraw(tui, prompt);
         }
     } else if (ch == KEY_DC) {  // Delete key
-        if (input_delete_char(input) > 0) {
+        if (tui_input_delete_char(input) > 0) {
             input_redraw(tui, prompt);
         }
     } else if (ch == KEY_LEFT) {  // Left arrow
@@ -4526,7 +3899,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         input_redraw(tui, prompt);
     } else if (ch == 10) {  // Ctrl+J: insert newline
         unsigned char newline = '\n';
-        if (input_insert_char(input, &newline, 1) == 0) {
+        if (tui_input_insert_char(input, &newline, 1) == 0) {
             // Skip redraw during paste mode - will redraw once at end
             if (!input->paste_mode) {
                 input_redraw(tui, prompt);
@@ -4536,7 +3909,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         if (input->paste_mode) {
             // In paste mode, Enter inserts newline instead of submitting
             unsigned char newline = '\n';
-            if (input_insert_char(input, &newline, 1) == 0) {
+            if (tui_input_insert_char(input, &newline, 1) == 0) {
                 // Skip redraw during paste mode - will redraw once at end
                 // (This shouldn't happen since we're in paste mode, but defensive)
                 if (!input->paste_mode) {
@@ -4634,17 +4007,17 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
 
         // Handle Alt key combinations
         if (next_ch == 'b' || next_ch == 'B') {  // Alt+b: backward word
-            input->cursor = move_backward_word(input->buffer, input->cursor);
+            input->cursor = tui_input_move_backward_word(input->buffer, input->cursor);
             input_redraw(tui, prompt);
         } else if (next_ch == 'f' || next_ch == 'F') {  // Alt+f: forward word
-            input->cursor = move_forward_word(input->buffer, input->cursor, input->length);
+            input->cursor = tui_input_move_forward_word(input->buffer, input->cursor, input->length);
             input_redraw(tui, prompt);
         } else if (next_ch == 'd' || next_ch == 'D') {  // Alt+d: delete next word
-            if (input_delete_word_forward(input) > 0) {
+            if (tui_input_delete_word_forward(input) > 0) {
                 input_redraw(tui, prompt);
             }
         } else if (next_ch == KEY_BACKSPACE || next_ch == 127 || next_ch == 8) {  // Alt+Backspace
-            if (input_delete_word_backward(input) > 0) {
+            if (tui_input_delete_word_backward(input) > 0) {
                 input_redraw(tui, prompt);
             }
         }
@@ -4655,7 +4028,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         } else {
             // Insert tab character
             unsigned char tab = '\t';
-            if (input_insert_char(input, &tab, 1) == 0) {
+            if (tui_input_insert_char(input, &tab, 1) == 0) {
                 if (!input->paste_mode) {
                     input_redraw(tui, prompt);
                 }
@@ -4663,7 +4036,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         }
     } else if (ch >= 32 && ch < 127) {  // Printable ASCII
         unsigned char c = (unsigned char)ch;
-        if (input_insert_char(input, &c, 1) == 0) {
+        if (tui_input_insert_char(input, &c, 1) == 0) {
             // Skip redraw during paste mode - will redraw once at end
             if (!input->paste_mode) {
                 input_redraw(tui, prompt);
@@ -4671,7 +4044,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         }
     } else if (ch >= 128) {  // UTF-8 multibyte character (basic support)
         unsigned char c = (unsigned char)ch;
-        if (input_insert_char(input, &c, 1) == 0) {
+        if (tui_input_insert_char(input, &c, 1) == 0) {
             // Skip redraw during paste mode - will redraw once at end
             if (!input->paste_mode) {
                 input_redraw(tui, prompt);
@@ -4775,7 +4148,7 @@ int tui_insert_input_text(TUIState *tui, const char *text) {
     }
 
     // Insert the text into the input buffer
-    if (input_insert_string(tui->input_buffer, text) != 0) {
+    if (tui_input_insert_string(tui->input_buffer, text) != 0) {
         return -1;
     }
 
