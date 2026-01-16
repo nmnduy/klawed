@@ -549,19 +549,48 @@ void history_search_render(HistorySearchState *state) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
 
-        // Truncate command if too long
+        // Truncate command if too long - show first 500 chars
         const char *cmd = state->results[i].command;
         int max_len = width - 4;
-        if ((int)strlen(cmd) > max_len) {
-            mvwprintw(win, line, 2, "...%s", cmd + strlen(cmd) - max_len + 3);
+        int cmd_len = (int)strlen(cmd);
+
+        // Limit to first 500 characters
+        #define MAX_HISTORY_DISPLAY_CHARS 500
+        int display_len = cmd_len;
+        if (display_len > MAX_HISTORY_DISPLAY_CHARS) {
+            display_len = MAX_HISTORY_DISPLAY_CHARS;
+        }
+
+        if (display_len > max_len) {
+            // Show first max_len-3 chars + "..."
+            char truncated[4096];
+            int copy_len = max_len - 3;
+            if (copy_len > display_len) copy_len = display_len;
+            if (copy_len < 0) copy_len = 0;
+            strlcpy(truncated, cmd, (size_t)(copy_len + 1));
+            mvwprintw(win, line, 2, "%s...", truncated);
         } else {
-            mvwprintw(win, line, 2, "%s", cmd);
+            // Fits within display limit
+            if (display_len == cmd_len) {
+                mvwprintw(win, line, 2, "%s", cmd);
+            } else {
+                // Command is longer than 500 chars, show first 500 with "..."
+                char truncated[MAX_HISTORY_DISPLAY_CHARS + 1];
+                strlcpy(truncated, cmd, sizeof(truncated));
+                mvwprintw(win, line, 2, "%s...", truncated);
+            }
         }
 
         // Pad to end for reverse highlight
-        int path_len = (int)strlen(cmd);
-        if (path_len > max_len) path_len = max_len;
-        for (int j = path_len + 1; j < max_len + 1; j++) {
+        int shown_len = display_len;
+        if (shown_len > max_len) {
+            shown_len = max_len;  // Includes "..." in the display
+        } else if (display_len < cmd_len) {
+            shown_len += 3;  // Add space for "..." suffix
+        }
+        if (shown_len > max_len) shown_len = max_len;
+
+        for (int j = shown_len + 1; j < max_len + 1; j++) {
             waddch(win, ' ');
         }
 
