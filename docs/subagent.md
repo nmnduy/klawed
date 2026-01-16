@@ -56,7 +56,7 @@ The Subagent tool allows klawed to spawn a new instance of itself with a fresh c
 2. **Logging**: All stdout and stderr output is written to a timestamped log file in `.klawed/subagent/`
 3. **Return value**: Returns immediately with PID and log file path
 4. **Monitoring**: Use `CheckSubagentProgress` to monitor progress by reading the log
-5. **Interruption**: Use `InterruptSubagent` to stop a stuck subagent
+5. **Interruption**: Use `InterruptSubagent` only if the subagent is clearly stuck or task is no longer needed
 
 ## Output Structure
 
@@ -95,47 +95,61 @@ The Subagent tool allows klawed to spawn a new instance of itself with a fresh c
 
 ## Monitoring Patterns
 
-### Basic Monitoring Loop
+### Patience is Key
 
-When delegating a task to a subagent, the orchestrator should follow this pattern:
+When delegating a task to a subagent:
 
-1. **Start subagent** - Get PID and log file
-2. **Periodically check progress** - Use `CheckSubagentProgress` every 30-60 seconds
-3. **Analyze log tail** - Look for signs of progress or stuckness
-4. **Interrupt if stuck** - If no progress for several checks, use `InterruptSubagent`
-5. **Restart with guidance** - Start a new subagent with specific guidance to overcome blocker
+1. **Give adequate time** - Complex tasks need time to complete. Check progress at reasonable intervals (every 1-2 minutes for complex tasks) rather than repeatedly polling.
+
+2. **The subagent reports its status** - The subagent will log its progress and either:
+   - Complete the task successfully
+   - Stop and report that it cannot proceed with clear information about why
+   - Ask for further instructions if blocked
+
+3. **Only interrupt when necessary** - Use `InterruptSubagent` only when:
+   - The subagent has been given adequate time to work
+   - There is clear evidence of being stuck (no progress for extended period)
+   - Repeated errors that prevent forward progress
+   - The task is no longer needed
+
+4. **Avoid premature interruption** - The subagent is designed to be stable and will communicate its status. Frequent interruption disrupts the subagent's ability to complete its work.
 
 ### Example Orchestrator Workflow
 
 ```bash
-# 1. Start subagent
+# 1. Start subagent with clear task
 Subagent: "Analyze all Python files and create a summary report"
 → Returns: { "pid": 12345, "log_file": "/path/to/log" }
 
-# 2. Wait and check progress
-Sleep: 30 seconds
+# 2. Wait for meaningful progress (complex tasks take time)
+Sleep: 60 seconds
 CheckSubagentProgress: { "pid": 12345, "log_file": "/path/to/log", "tail_lines": 20 }
-→ Returns: { "is_running": true, "tail_output": "Found 10 Python files...", "total_lines": 50 }
+→ Returns: { "is_running": true, "tail_output": "Found 50 Python files. Analyzing...", "total_lines": 100 }
 
-# 3. Check again after more time
-Sleep: 30 seconds
+# 3. Wait again for continued progress
+Sleep: 60 seconds
 CheckSubagentProgress: { "pid": 12345, "log_file": "/path/to/log", "tail_lines": 20 }
-→ Returns: { "is_running": true, "tail_output": "Still analyzing file complex_module.py...", "total_lines": 55 }
+→ Returns: { "is_running": true, "tail_output": "Analyzed 30/50 files. Creating report...", "total_lines": 200 }
 
-# 4. If stuck on same file for too long, interrupt and restart with guidance
-InterruptSubagent: { "pid": 12345 }
-→ Returns: { "killed": true }
+# 4. Subagent completes - review results
+Sleep: 60 seconds
+CheckSubagentProgress: { "pid": 12345, "log_file": "/path/to/log", "tail_lines": 50 }
+→ Returns: { "is_running": false, "exit_code": 0, "tail_output": "Report created: summary.txt\nAnalyzed 50 files." }
 
-# 5. Restart with specific guidance
-Subagent: "Analyze all Python files and create a summary report. Skip complex_module.py for now as it seems to be causing issues. Focus on the other files first."
+# OR: Subagent reports it cannot proceed
+→ Returns: { "is_running": false, "exit_code": 1, "tail_output": "Error: Cannot access file X. Please provide access or alternative approach." }
+
+# 5. Only interrupt if truly stuck (no progress for several checks with adequate wait time)
+# This should be rare - the subagent will report its status
 ```
 
-### Signs a Subagent is Stuck
+### Signs a Subagent Needs Attention
 
-- Same log message repeated multiple times
-- No new lines added to log for several checks
-- Log shows error messages or exceptions
-- Process is running but CPU usage is low (inferred from lack of progress)
+Rather than "stuck", look for these signals that may require intervention:
+
+- **Subagent reports it cannot proceed** - Clear error message about what's blocking
+- **No new lines added after extended wait** - Several checks with no activity
+- **Subagent explicitly asks for guidance** - Look for questions or requests for clarification in the log
 
 ## Best Practices
 
@@ -154,12 +168,20 @@ Subagent: "Analyze all Python files and create a summary report. Skip complex_mo
 - When immediate real-time feedback is needed
 - Highly interactive workflows
 
+### Orchestrator Guidelines
+
+1. **Set clear, complete prompts** - Include all necessary context in the initial prompt
+2. **Wait for meaningful intervals** - Check progress every 1-2 minutes for complex tasks
+3. **Trust the subagent to report** - It will communicate progress and blockers
+4. **Avoid micromanagement** - Frequent interruption disrupts the subagent's workflow
+5. **Provide guidance when restarting** - If you do need to interrupt and restart, be specific about what changed
+
 ### Reading Subagent Output
 
 The master agent should follow these guidelines:
 
 1. **Start with the tail** - The returned `tail_output` typically contains the summary
-2. **Check exit code** - `exit_code == 0` indicates success
+2. **Check exit code** - `exit_code == 0` indicates success, non-zero means the subagent stopped with an issue
 3. **Count lines first** - Use `total_lines` to assess log size before reading
 4. **Use Grep for search** - Search the log file for specific content rather than reading it all
 5. **Read strategically** - Use Read tool with line ranges if you need specific sections
@@ -234,6 +256,12 @@ find .klawed/subagent/ -name "*.log" -mtime +7 -delete
 - Solution: Use Read tool to access full log file, or increase tail_lines
 
 **Problem**: "Task not completed"
-- Check tail_output for errors or incomplete status
-- Use Grep to search log for "error" or "failed"
+- Check tail_output for the subagent's report on why it couldn't proceed
+- Use Grep to search log for "error", "failed", or "cannot"
 - Read the full log file to understand what happened
+- The subagent should have reported its status clearly
+
+**Problem**: "Subagent seems slow"
+- Complex tasks take time - wait for meaningful intervals before checking
+- Review total_lines to see if the subagent is actively working
+- Only consider intervention if there's no activity after several minutes
