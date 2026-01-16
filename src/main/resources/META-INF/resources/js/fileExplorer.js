@@ -173,6 +173,12 @@ class FileExplorer {
         return imageExtensions.some(ext => fileName.endsWith(ext));
     }
 
+    // Check if file is a SQLite database
+    isDatabaseFile(fileName) {
+        const lowerName = fileName.toLowerCase();
+        return lowerName.endsWith('.db') || lowerName.endsWith('.sqlite') || lowerName.endsWith('.sqlite3');
+    }
+
     // Format date
     formatDate(dateStr) {
         try {
@@ -1224,6 +1230,26 @@ class FileExplorer {
 
         try {
             const lowerFileName = fileName ? fileName.toLowerCase() : '';
+            
+            // Handle SQLite database files - open in DB Viewer
+            if (lowerFileName && this.isDatabaseFile(lowerFileName)) {
+                // Hide the standard preview modal since DB Viewer has its own
+                this.filePreviewPanel.classList.add('hidden');
+                document.body.style.overflow = '';
+                
+                // Open DB Viewer
+                if (typeof window.DBViewer !== 'undefined') {
+                    if (!this.dbViewer) {
+                        this.dbViewer = new window.DBViewer();
+                    }
+                    this.dbViewer.setSession(this.sessionId);
+                    this.dbViewer.open(filePath, fileName);
+                } else {
+                    console.error('[file-explorer] DBViewer module not loaded');
+                    this.showToast('Database viewer not available', 'error');
+                }
+                return;
+            }
             
             // Handle images
             if (lowerFileName && this.isImageFile(lowerFileName)) {

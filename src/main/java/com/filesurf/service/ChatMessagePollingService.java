@@ -5,17 +5,14 @@ import com.filesurf.model.KlawedSocketMessage;
 import com.filesurf.model.ChatConstants;
 import com.filesurf.service.FileChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.websockets.next.WebSocketConnection;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,15 +28,8 @@ public class ChatMessagePollingService {
     @Inject
     FileChatService fileChatService;
     
-    @ConfigProperty(name = "klawed.sqlite-queue.sender-name", defaultValue = "client")
-    String senderName;
-    
-    @ConfigProperty(name = "klawed.sqlite-queue.receiver-name", defaultValue = "klawed")
-    String receiverName;
-    
-    // Klawed messages directory (where DB files are stored)
-    @ConfigProperty(name = "klawed.sqlite-queue.db-dir", defaultValue = "./data/klawed-messages")
-    String sqliteQueueDbDir;
+    @Inject
+    SQLiteQueueClientPool clientPool;
     
     // Store active WebSocket connections by session ID
     private final Map<String, WebSocketConnection> activeConnections = new ConcurrentHashMap<>();
@@ -89,30 +79,21 @@ public class ChatMessagePollingService {
     public void sendMessageToKlawed(String sessionId, String userId, String message) throws IOException {
         LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via SQLite queue");
         
-        // Determine SQLite database path (in separate messages directory)
-        String dbFileName = "klawed_messages_" + sessionId + ".db";
-        Path sqliteDbPath = Path.of(sqliteQueueDbDir).resolve(dbFileName);
-        
-        // Create SQLiteQueueClient with proper configuration
-        SQLiteQueueClient.Config config = new SQLiteQueueClient.Config(sqliteDbPath.toString())
-            .withSenderName(senderName)
-            .withReceiverName(receiverName)
-            .withSessionId(sessionId)
-            .withFileChatService(fileChatService);
-        
-        SQLiteQueueClient queueClient = new SQLiteQueueClient(config);
-        
         try {
-            // Connect and initialize schema
-            queueClient.connect();
+            // Get the pooled client
+            SQLiteQueueClient queueClient = clientPool.getOrCreateClient(sessionId);
             
-            // Send message
-            queueClient.sendMessage(message);
+            // Client is configured for RECEIVING (sender=klawed, receiver=client)
+            // For SENDING, we need sender=client, receiver=klawed
+            // Since sendMessage() always uses config.getSenderName() as sender,
+            // we need to directly insert the message with correct sender/receiver
+            
+            queueClient.sendMessageFrom("client", "klawed", message);
             
             LOGGER.info("[SESSION:" + sessionId + "] Message sent to klawed (length: " + message.length() + " chars)");
-        } finally {
-            // Clean up
-            queueClient.shutdown();
+        } catch (Exception e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Error sending message to klawed: " + e.getMessage());
+            throw new IOException("Failed to send message to klawed", e);
         }
     }
 

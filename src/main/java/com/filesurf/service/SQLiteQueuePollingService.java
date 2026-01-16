@@ -6,8 +6,6 @@ import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,15 +28,8 @@ public class SQLiteQueuePollingService {
     @Inject
     FileChatService fileChatService;
     
-    @ConfigProperty(name = "klawed.sqlite-queue.sender-name", defaultValue = "client")
-    String senderName;
-    
-    @ConfigProperty(name = "klawed.sqlite-queue.receiver-name", defaultValue = "klawed")
-    String receiverName;
-    
-    // Klawed messages directory (where DB files are stored)
-    @ConfigProperty(name = "klawed.sqlite-queue.db-dir", defaultValue = "./data/klawed-messages")
-    String sqliteQueueDbDir;
+    @Inject
+    SQLiteQueueClientPool clientPool;
     
     // Track active sessions that need polling
     // Map: sessionId -> userId
@@ -57,6 +48,8 @@ public class SQLiteQueuePollingService {
      */
     public void unregisterSession(String sessionId) {
         activeSessions.remove(sessionId);
+        // Clean up the pooled client for this session
+        clientPool.removeSession(sessionId);
         LOGGER.info("[SESSION:" + sessionId + "] Unregistered from SQLite queue polling (total active: " + activeSessions.size() + ")");
     }
     
@@ -87,29 +80,9 @@ public class SQLiteQueuePollingService {
      * Poll a specific session's SQLite queue for klawed responses
      */
     private void pollSessionQueue(String sessionId, String userId) {
-        // Determine SQLite database path (in separate messages directory)
-        String dbFileName = "klawed_messages_" + sessionId + ".db";
-        Path sqliteDbPath = Path.of(sqliteQueueDbDir).resolve(dbFileName);
-        
-        // Check if database exists
-        if (!Files.exists(sqliteDbPath)) {
-            // Database doesn't exist yet (klawed container hasn't started or created it)
-            return;
-        }
-        
-        // Create SQLiteQueueClient to poll for messages
-        SQLiteQueueClient.Config config = new SQLiteQueueClient.Config(sqliteDbPath.toString())
-            .withSenderName(receiverName)  // We receive from klawed
-            .withReceiverName(senderName)  // Klawed receives from client
-            .withSessionId(sessionId)
-            .withFileChatService(fileChatService)
-            .withPollTimeoutMs(100);  // Short timeout for quick polls
-        
-        SQLiteQueueClient queueClient = new SQLiteQueueClient(config);
-        
         try {
-            // Connect and poll for messages
-            queueClient.connect();
+            // Get or create the singleton client for this session
+            SQLiteQueueClient queueClient = clientPool.getOrCreateClient(sessionId);
             
             // receiveMessages() will automatically save messages to the main database
             // via FileChatService (see SQLiteQueueClient.receiveMessages() implementation)
@@ -121,13 +94,6 @@ public class SQLiteQueuePollingService {
             
         } catch (Exception e) {
             LOGGER.warning("[SESSION:" + sessionId + "] Error receiving messages from SQLite queue: " + e.getMessage());
-        } finally {
-            // Always clean up
-            try {
-                queueClient.shutdown();
-            } catch (Exception e) {
-                // Ignore shutdown errors
-            }
         }
     }
 }

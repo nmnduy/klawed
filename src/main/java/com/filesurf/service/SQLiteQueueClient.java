@@ -230,9 +230,60 @@ public class SQLiteQueueClient {
     }
     
     /**
-     * Send a message to a specific receiver
+     * Send a message to a specific receiver (sender is from config)
      */
     public void sendMessage(String message, String receiver) throws IOException {
+        sendMessageFrom(config.getSenderName(), receiver, message);
+    }
+    
+    /**
+     * Send a message with explicit sender and receiver (for bidirectional clients)
+     */
+    public void sendMessageFrom(String sender, String receiver, String message) throws IOException {
+        LOGGER.info("SQLiteQueueClient.sendMessageFrom called (sender=" + sender + ", receiver=" + receiver + ")");
+        
+        if (!connected.get() || connection == null) {
+            throw new IOException("SQLiteQueueClient not connected");
+        }
+        
+        // Validate message size
+        if (message.length() > config.getMaxMessageSize()) {
+            throw new IOException("Message too large: " + message.length() + 
+                                " bytes (max: " + config.getMaxMessageSize() + ")");
+        }
+        
+        // Create JSON message
+        String jsonMessage;
+        try {
+            ObjectNode json = objectMapper.createObjectNode();
+            json.put("messageType", "TEXT");
+            json.put("content", message);
+            jsonMessage = objectMapper.writeValueAsString(json);
+        } catch (Exception e) {
+            throw new IOException("Failed to create JSON message", e);
+        }
+        
+        // Insert message into database
+        try (PreparedStatement pstmt = connection.prepareStatement(INSERT_MESSAGE_SQL)) {
+            pstmt.setString(1, sender);
+            pstmt.setString(2, receiver);
+            pstmt.setString(3, jsonMessage);
+            pstmt.executeUpdate();
+            
+            messagesSent.incrementAndGet();
+            lastActivityTime.set(System.currentTimeMillis());
+            
+            LOGGER.info("Message sent from " + sender + " to " + receiver + " (length: " + message.length() + " chars)");
+        } catch (SQLException e) {
+            throw new IOException("Failed to send message via SQLite queue", e);
+        }
+    }
+    
+    /**
+     * @deprecated Use sendMessageFrom() for explicit sender/receiver control
+     */
+    @Deprecated
+    private void sendMessageOld(String message, String receiver) throws IOException {
         LOGGER.info("SQLiteQueueClient.sendMessage called");
         
         if (!connected.get() || connection == null) {
