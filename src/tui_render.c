@@ -658,7 +658,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
     if (tui->input_box_style == INPUT_STYLE_BORDER) {
         window_height_needed += 2;  // +2 for top and bottom borders
     } else if (tui->input_box_style == INPUT_STYLE_HORIZONTAL) {
-        window_height_needed += 3;  // +3 for caret row + top and bottom borders
+        window_height_needed += 2;  // +2 for top and bottom borders
     } else if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
         window_height_needed += 2;  // +2 for top and bottom padding
     }
@@ -711,14 +711,14 @@ void input_redraw(TUIState *tui, const char *prompt) {
 
     // Adjust vertical scroll to keep cursor visible
     // For BORDER/HORIZONTAL style, we need to account for top and bottom borders
-    // For HORIZONTAL style with caret: row 0 = caret, row 1 = top border, row 2+ = content
+    // For HORIZONTAL style: row 0 = top border, row 1+ = content, last row = bottom border
     // For BACKGROUND style, we account for top and bottom padding
     // For BLAND style, no offset needed
     int content_start_row = (tui->input_box_style == INPUT_STYLE_BORDER) ? 1 :
-                            (tui->input_box_style == INPUT_STYLE_HORIZONTAL) ? 2 :
+                            (tui->input_box_style == INPUT_STYLE_HORIZONTAL) ? 1 :
                             (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 1 : 0;
     int border_height_offset = (tui->input_box_style == INPUT_STYLE_BORDER) ? 2 :
-                               (tui->input_box_style == INPUT_STYLE_HORIZONTAL) ? 3 :
+                               (tui->input_box_style == INPUT_STYLE_HORIZONTAL) ? 2 :
                                (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 2 : 0;
     int max_visible_lines = input->win_height - border_height_offset;
     if (cursor_line < input->line_scroll_offset) {
@@ -765,37 +765,38 @@ void input_redraw(TUIState *tui, const char *prompt) {
         }
     } else if (tui->input_box_style == INPUT_STYLE_HORIZONTAL) {
         // Style 3: Horizontal borders only (top and bottom, no left/right borders)
+        // Layout: row 0 = top border, row 1+ = content with caret, last row = bottom border
         // Reset to default background
         if (has_colors()) {
             wbkgd(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-        }
-
-        // Draw the '❯ ' caret in prompt color (only in INSERT mode)
-        // In COMMAND/SEARCH mode, the mode prefix (: or /) will be displayed instead
-        if (tui->mode == TUI_MODE_INSERT) {
-            if (has_colors()) {
-                wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
-            }
-            mvwprintw(win, 0, 0, "❯ ");
-            if (has_colors()) {
-                wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
-            }
         }
 
         // Draw top and bottom horizontal borders
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
         }
-        // Top border (drawn on row 1 to leave room for caret on row 0)
+        // Top border at row 0
         for (int col = 0; col < input->win_width; col++) {
-            mvwaddch(win, 1, col, ACS_HLINE);
+            mvwaddch(win, 0, col, ACS_HLINE);
         }
-        // Bottom border
+        // Bottom border at last row
         for (int col = 0; col < input->win_width; col++) {
             mvwaddch(win, input->win_height - 1, col, ACS_HLINE);
         }
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+        }
+
+        // Draw the '❯ ' caret in prompt color at content area (only in INSERT mode)
+        // In COMMAND/SEARCH mode, the mode prefix (: or /) will be displayed instead
+        if (tui->mode == TUI_MODE_INSERT) {
+            if (has_colors()) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
+            }
+            mvwprintw(win, 1, 0, "❯ ");
+            if (has_colors()) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
+            }
         }
     } else {
         // Style 4: BLAND - just caret '❯' on general background, no borders
@@ -839,7 +840,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
     int screen_x = content_start_col + effective_prefix_len;
 
     // Calculate bottom boundary (accounts for border in BORDER/HORIZONTAL style)
-    int bottom_boundary = (tui->input_box_style == INPUT_STYLE_BORDER || 
+    int bottom_boundary = (tui->input_box_style == INPUT_STYLE_BORDER ||
                            tui->input_box_style == INPUT_STYLE_HORIZONTAL) ?
                           (input->win_height - 1) : input->win_height;
 

@@ -161,33 +161,33 @@ int tui_handle_tab_completion(TUIState *tui, const char *prompt) {
         if (input->length >= 2 && input->buffer[1] == '!') {
             // Extract the bash command part (after :!)
             // bash_cmd would be: input->buffer + 2
-            
+
             // Find the start of the word at cursor
             int word_start = input->cursor - 1;
-            while (word_start > 1 && input->buffer[word_start] != ' ' && 
+            while (word_start > 1 && input->buffer[word_start] != ' ' &&
                    input->buffer[word_start] != '\t' && input->buffer[word_start] != '!') {
                 word_start--;
             }
-            if (input->buffer[word_start] == ' ' || input->buffer[word_start] == '\t' || 
+            if (input->buffer[word_start] == ' ' || input->buffer[word_start] == '\t' ||
                 input->buffer[word_start] == '!') {
                 word_start++;
             }
-            
+
             // Extract prefix for completion
             int prefix_len = input->cursor - word_start;
             if (prefix_len < 0) prefix_len = 0;
             if (prefix_len > 63) prefix_len = 63;
-            
+
             char prefix[64];
             if (prefix_len > 0) {
                 memcpy(prefix, input->buffer + word_start, (size_t)prefix_len);
             }
             prefix[prefix_len] = '\0';
-            
+
             // Find matching bash commands
             const char *matches[64];
             int match_count = tui_find_bash_command_matches(prefix, matches, 64);
-            
+
             if (match_count == 0) {
                 beep();
                 return 0;
@@ -201,23 +201,23 @@ int tui_handle_tab_completion(TUIState *tui, const char *prompt) {
                 return 0;
             }
         }
-        
+
         // Regular vim command (e.g., :q, :w, :quit)
         // Extract command part (after :)
         const char *cmd = input->buffer + 1;
-        
+
         // Find where the command name ends (space or end of string)
         int cmd_len = 0;
         while (cmd[cmd_len] != '\0' && cmd[cmd_len] != ' ' && cmd[cmd_len] != '\t') {
             cmd_len++;
         }
-        
+
         // Only complete if cursor is within the command name
         if (input->cursor <= cmd_len + 1) {  // +1 for the ':'
             // Find matching vim commands
             const char *matches[32];
             int match_count = tui_find_command_matches(cmd, matches, 32);
-            
+
             if (match_count == 0) {
                 beep();
                 return 0;
@@ -231,7 +231,7 @@ int tui_handle_tab_completion(TUIState *tui, const char *prompt) {
                 return 0;
             }
         }
-        
+
         return 0;
     }
 
