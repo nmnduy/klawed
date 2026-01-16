@@ -1,0 +1,21 @@
+/**
+ * Dynamic Feedback Modal Classes
+ * 
+ * Used in feedback.js for the feedback modal styling.
+ * These classes are dynamically applied based on interaction state.
+ * 
+ * Note: These classes must be referenced in class-reference.html to ensure
+ * they're included in the build.
+ */
+
+@layer components {
+  /* Feedback type button - default state */
+  .feedback-type-btn {
+    @apply flex flex-col items-center gap-1 p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-500 transition-all duration-200;
+  }
+
+  /* Feedback type button - active state */
+  .feedback-type-btn.active {
+    @apply border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400;
+  }
+}

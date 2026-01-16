@@ -1,0 +1,204 @@
+<!--
+  Feedback Modal Partial
+  
+  A modal dialog for users to submit feedback, bug reports, or suggestions.
+  
+  Expected data attributes:
+  - (none - this is a modal that gets dynamically shown)
+-->
+<div 
+    id="feedback-modal" 
+    data-feedback-modal
+    class="fixed inset-0 z-50 hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="feedback-modal-title"
+>
+    <!-- Backdrop -->
+    <div 
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        data-feedback-backdrop
+    ></div>
+
+    <!-- Modal Panel -->
+    <div class="fixed inset-0 z-10 overflow-y-auto">
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div 
+                class="relative w-full max-w-lg transform overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-2xl transition-all"
+                data-feedback-panel
+            >
+                <!-- Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <div class="flex items-center gap-3">
+                        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 id="feedback-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                                Send Feedback
+                            </h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">
+                                Help us improve FileSurf
+                            </p>
+                        </div>
+                    </div>
+                    <button 
+                        type="button"
+                        class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                        data-feedback-close
+                        aria-label="Close feedback dialog"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Form -->
+                <form id="feedback-form" data-feedback-form class="px-6 py-4 space-y-4">
+                    <!-- Feedback Type -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            What type of feedback is this?
+                        </label>
+                        <div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Feedback type">
+                            <button 
+                                type="button"
+                                class="feedback-type-btn active"
+                                data-feedback-type="bug"
+                                role="radio"
+                                aria-checked="true"
+                            >
+                                <svg class="w-5 h-5 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <span class="text-xs font-medium">Bug</span>
+                            </button>
+                            <button 
+                                type="button"
+                                class="feedback-type-btn"
+                                data-feedback-type="suggestion"
+                                role="radio"
+                                aria-checked="false"
+                            >
+                                <svg class="w-5 h-5 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                </svg>
+                                <span class="text-xs font-medium">Suggestion</span>
+                            </button>
+                            <button 
+                                type="button"
+                                class="feedback-type-btn"
+                                data-feedback-type="praise"
+                                role="radio"
+                                aria-checked="false"
+                            >
+                                <svg class="w-5 h-5 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                                </svg>
+                                <span class="text-xs font-medium">Praise</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div>
+                        <label for="feedback-description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            Description <span class="text-red-500">*</span>
+                        </label>
+                        <textarea 
+                            id="feedback-description"
+                            data-feedback-description
+                            class="w-full px-4 py-3 rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-body-m placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-900/50 resize-none transition-all"
+                            rows="4"
+                            placeholder="Please describe the issue, suggestion, or what you liked..."
+                            required
+                        ></textarea>
+                    </div>
+
+                    <!-- Error Details (shown for bug reports) -->
+                    <div id="feedback-error-section" data-feedback-error-section class="hidden">
+                        <label for="feedback-error-details" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            Error Details (optional)
+                        </label>
+                        <textarea 
+                            id="feedback-error-details"
+                            data-feedback-error-details
+                            class="w-full px-4 py-3 rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 text-body-s font-mono placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-900/50 resize-none transition-all"
+                            rows="3"
+                            placeholder="Paste any error messages, stack traces, or steps to reproduce..."
+                        ></textarea>
+                        <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                            Include any relevant screenshots or steps to help us reproduce the issue.
+                        </p>
+                    </div>
+
+                    <!-- Email (optional) -->
+                    <div>
+                        <label for="feedback-email" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            Email (optional)
+                        </label>
+                        <input 
+                            type="email"
+                            id="feedback-email"
+                            data-feedback-email
+                            class="w-full px-4 py-3 rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-body-m placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-900/50 transition-all"
+                            placeholder="your@email.com"
+                        />
+                        <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                            We'll only use this to respond to your feedback.
+                        </p>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="flex gap-3 pt-2">
+                        <button 
+                            type="submit"
+                            class="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-200/50 hover:shadow-orange-300/60 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                            data-feedback-submit
+                        >
+                            <span data-feedback-submit-text>Send Feedback</span>
+                            <span data-feedback-submit-loading class="hidden">
+                                <svg class="animate-spin h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </span>
+                        </button>
+                        <button 
+                            type="button"
+                            class="px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                            data-feedback-cancel
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Success State (hidden by default) -->
+                <div id="feedback-success" data-feedback-success class="hidden px-6 py-8 text-center">
+                    <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                        <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                        Thank you for your feedback!
+                    </h3>
+                    <p class="text-slate-600 dark:text-slate-400 mb-6">
+                        We appreciate you taking the time to help us improve FileSurf.
+                    </p>
+                    <button 
+                        type="button"
+                        class="px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                        data-feedback-done
+                    >
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

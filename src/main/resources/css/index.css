@@ -8,6 +8,7 @@
 @import './dynamic-toasts.css';
 @import './dynamic-latex.css';
 @import './dynamic-file-explorer.css';
+@import './dynamic-feedback.css';
 
 @tailwind base;
 @tailwind components;
