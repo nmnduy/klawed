@@ -47,19 +47,16 @@ int tui_window_calculate_needed_lines(const char *buffer, int buffer_len, int wi
 
     int lines = 1;
     int current_col = prompt_len;  // First line starts after prompt
-    int current_line = 0;
 
     for (int i = 0; i < buffer_len; i++) {
         if (buffer[i] == '\n') {
             lines++;
-            current_line++;
             current_col = 0;  // Newlines don't have prompt
         } else {
             current_col++;
             // All lines have full window width
             if (current_col >= win_width) {
                 lines++;
-                current_line++;
                 current_col = 0;
             }
         }
