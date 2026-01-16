@@ -580,6 +580,12 @@ class FileExplorer {
                                     </svg>
                                     <span>Download file</span>
                                 </button>
+                                <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-foreground hover:bg-muted flex items-center gap-2 copy-path-option">
+                                    <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                    </svg>
+                                    <span>Copy path to input</span>
+                                </button>
                                 <div class="border-t border-border my-1"></div>
                                 <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 delete-file-option">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -646,6 +652,14 @@ class FileExplorer {
             if (e.target.closest('.download-file-option')) {
                 e.stopPropagation();
                 this.downloadFile(path, name);
+                fileItem.querySelector('.file-options-dropdown')?.classList.add('hidden');
+                return;
+            }
+
+            // Handle copy path option
+            if (e.target.closest('.copy-path-option')) {
+                e.stopPropagation();
+                this.copyPathToInput(path);
                 fileItem.querySelector('.file-options-dropdown')?.classList.add('hidden');
                 return;
             }
@@ -748,6 +762,12 @@ class FileExplorer {
                                         </svg>
                                         <span>Download file</span>
                                     </button>
+                                    <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-slate-700 hover:bg-slate-50 flex items-center gap-2 copy-path-option">
+                                        <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                        </svg>
+                                        <span>Copy path to input</span>
+                                    </button>
                                     <div class="border-t border-slate-200 my-1"></div>
                                     <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-red-600 hover:bg-red-50 flex items-center gap-2 delete-file-option">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -808,6 +828,19 @@ class FileExplorer {
                         downloadOption.addEventListener('click', (e) => {
                             e.stopPropagation();
                             this.downloadFile(item.path, item.name);
+                            // Close dropdown after selection
+                            const dropdown = itemElement.querySelector('.file-options-dropdown');
+                            if (dropdown) {
+                                dropdown.classList.add('hidden');
+                            }
+                        });
+                    }
+
+                    const copyPathOption = itemElement.querySelector('.copy-path-option');
+                    if (copyPathOption) {
+                        copyPathOption.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            this.copyPathToInput(item.path);
                             // Close dropdown after selection
                             const dropdown = itemElement.querySelector('.file-options-dropdown');
                             if (dropdown) {
@@ -1200,6 +1233,45 @@ class FileExplorer {
             console.error('Failed to delete file:', error);
             this.showToast(`Failed to delete file: ${error.message}`, 'error');
         }
+    }
+
+    // Copy file path to chat input
+    copyPathToInput(filePath) {
+        const messageInput = document.getElementById('message-input');
+        if (!messageInput) {
+            console.error('[file-explorer] Message input not found');
+            this.showToast('Could not find message input', 'error');
+            return;
+        }
+
+        // Get current value and cursor position
+        const currentValue = messageInput.value;
+        const cursorPos = messageInput.selectionStart || currentValue.length;
+
+        // Insert the file path at cursor position
+        const beforeCursor = currentValue.substring(0, cursorPos);
+        const afterCursor = currentValue.substring(cursorPos);
+        
+        // Add space before if there's text before and it doesn't end with space
+        const prefix = beforeCursor && !beforeCursor.endsWith(' ') ? ' ' : '';
+        
+        // Add space after if there's text after and it doesn't start with space
+        const suffix = afterCursor && !afterCursor.startsWith(' ') ? ' ' : '';
+        
+        const newValue = beforeCursor + prefix + filePath + suffix + afterCursor;
+        
+        // Update the textarea value
+        messageInput.value = newValue;
+        
+        // Set cursor position after the inserted path
+        const newCursorPos = cursorPos + prefix.length + filePath.length + suffix.length;
+        messageInput.setSelectionRange(newCursorPos, newCursorPos);
+        
+        // Focus the input
+        messageInput.focus();
+        
+        // Show feedback
+        this.showToast('File path copied to input', 'success');
     }
 
     // Preview file
