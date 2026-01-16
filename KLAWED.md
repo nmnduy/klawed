@@ -55,6 +55,12 @@ You're encoureaged to create commits when finish a task, fix a bug or adding a n
 - Klawed agent logs: `logs/klawed-agents.log` (rotates at 50MB)
 - Console output also available in dev mode
 
+### JavaScript Conventions
+See `docs/JS_CONVENTIONS.md` for full details. Key points:
+- Classic scripts use `<script defer>` with **NO** `export`/`import`
+- ES modules use `<script type="module">` and MAY use `export`/`import`
+- Run `npm run build` to validate conventions automatically
+
 ### Klawed Communication Mode
 FileSurf v2 uses SQLite queue mode for communication with klawed agents:
 

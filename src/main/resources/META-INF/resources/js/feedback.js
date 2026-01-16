@@ -331,7 +331,7 @@ class FeedbackModule {
     }
 }
 
-export function init(rootEl) {
+function init(rootEl) {
     // Create or get the singleton instance
     if (!feedbackModuleInstance) {
         feedbackModuleInstance = new FeedbackModule();

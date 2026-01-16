@@ -33,13 +33,7 @@ KillSignal=SIGTERM
 TimeoutStopSec=60
 
 # Environment variables
-Environment="KLAWED_SANDBOX_IMAGE=klawed-sandbox:0.15.0"
-Environment="KLAWED_AUTO_COMPACT=1"
-Environment="KLAWED_USE_BEDROCK=1"
-Environment="ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0"
-Environment="AWS_REGION=us-west-2"
-
-Environment="KLAWED_DISABLE_TOOLS=UploadImage"
+Environment="JAVA_OPTS=-Xmx256m -Xms128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m"
 
 # Security hardening
 NoNewPrivileges=true
