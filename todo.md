@@ -1,26 +1,21 @@
 ## General
 
-- [x] lots of left over klawed db files in the workspace. maybe klawed files dont get cleaned up?
-- [x] fix svg icons for open file and download file. use three dots to open file options like show open and download
-
-- [x] auto-scroll should not scroll all the way down. should stop at the first response from AI, then let user scroll. also add scroll to bottom floatting button
-- [x] show progress bar for file upload if the file is gonna be large.
-- [x] file explorer search doesn't work. use fuzzy search with optimization. use libraries if neeced. this can be very fast if we use specialized algo and and build specific data structure
-
 ---
 
 - [ ]
-- [ ] feedback button and error reporting
+- [x] feedback button and error reporting
+- [ ] one button in file drop down menu copy full file path into input box
+- [ ] file search does not include folder in results
+
+
 
 - [x] prompts
     - [x] give subagents more time. esp for tasks that might take time
     - [x] subagents are more resilient now. give them time. they will stop when fail/ needs more guidance
     - [x] you should build software
     - [x] You are FileSurf. A personal computer in the Cloud, with AI.
-- [ ] one button in file drop down menu copy full file path into input box
 - [x] database viewer with: sql runner. tabular view. search. filter.
     - [x] of course for now we only support file based databases: sqlite3
-- [ ] file search does not include folder in results
 - [ ] web search
 - [ ] backups/ folder
     - [ ] LLM can't delete files here
@@ -31,6 +26,13 @@
 - [ ] one narrated demo
 - [ ] randomnized tips
 
+
+- [x] lots of left over klawed db files in the workspace. maybe klawed files dont get cleaned up?
+- [x] fix svg icons for open file and download file. use three dots to open file options like show open and download
+
+- [x] auto-scroll should not scroll all the way down. should stop at the first response from AI, then let user scroll. also add scroll to bottom floatting button
+- [x] show progress bar for file upload if the file is gonna be large.
+- [x] file explorer search doesn't work. use fuzzy search with optimization. use libraries if neeced. this can be very fast if we use specialized algo and and build specific data structure
 
 ---
 
