@@ -1,6 +1,6 @@
 package com.filesurf.repository;
 
-import com.filesurf.db.SQLiteManager;
+import com.filesurf.db.FeedbackDatabaseManager;
 import com.filesurf.model.FeedbackRecord;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -13,52 +13,14 @@ import java.util.logging.Logger;
 
 /**
  * Repository for feedback management operations.
- * Stores user feedback in SQLite database.
+ * Stores user feedback in a separate SQLite database (feedback.db).
  */
 @ApplicationScoped
 public class FeedbackRepository {
     private static final Logger LOGGER = Logger.getLogger(FeedbackRepository.class.getName());
 
     @Inject
-    SQLiteManager sqliteManager;
-
-    /**
-     * Initialize the feedback table schema
-     */
-    public void initializeSchema() {
-        try {
-            sqliteManager.execute(conn -> {
-                try (Statement stmt = conn.createStatement()) {
-                    // Create feedback table
-                    stmt.execute("""
-                        CREATE TABLE IF NOT EXISTS feedback (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            feedback_id TEXT NOT NULL UNIQUE,
-                            type TEXT NOT NULL,
-                            description TEXT NOT NULL,
-                            user_id TEXT NOT NULL,
-                            user_email TEXT NOT NULL,
-                            error_details TEXT,
-                            environment TEXT,
-                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                        )
-                    """);
-
-                    // Create indexes for performance
-                    stmt.execute("CREATE INDEX IF NOT EXISTS idx_feedback_feedback_id ON feedback(feedback_id)");
-                    stmt.execute("CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id)");
-                    stmt.execute("CREATE INDEX IF NOT EXISTS idx_feedback_type ON feedback(type)");
-                    stmt.execute("CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at)");
-
-                    LOGGER.info("Feedback table schema initialized successfully");
-                }
-                return null;
-            });
-        } catch (SQLException e) {
-            LOGGER.severe("Failed to initialize feedback table schema: " + e.getMessage());
-            throw new RuntimeException("Database initialization failed", e);
-        }
-    }
+    FeedbackDatabaseManager feedbackDb;
 
     /**
      * Create a new feedback entry
@@ -67,7 +29,7 @@ public class FeedbackRepository {
                                  String userId, String userEmail, String errorDetails,
                                  String environment) {
         try {
-            return sqliteManager.executeInTransaction(conn -> {
+            return feedbackDb.executeInTransaction(conn -> {
                 try (PreparedStatement ps = conn.prepareStatement(
                         """
                         INSERT INTO feedback (feedback_id, type, description, user_id, user_email, 
@@ -107,7 +69,7 @@ public class FeedbackRepository {
      */
     public FeedbackRecord findByFeedbackId(String feedbackId) {
         try {
-            return sqliteManager.execute((SQLiteManager.ConnectionConsumer<FeedbackRecord>) conn -> {
+            return feedbackDb.execute((FeedbackDatabaseManager.ConnectionConsumer<FeedbackRecord>) conn -> {
                 try (PreparedStatement ps = conn.prepareStatement(
                         "SELECT * FROM feedback WHERE feedback_id = ?")) {
                     ps.setString(1, feedbackId);
@@ -130,7 +92,7 @@ public class FeedbackRepository {
      */
     public List<FeedbackRecord> findByUserId(String userId) {
         try {
-            return sqliteManager.execute((SQLiteManager.ConnectionConsumer<List<FeedbackRecord>>) conn -> {
+            return feedbackDb.execute((FeedbackDatabaseManager.ConnectionConsumer<List<FeedbackRecord>>) conn -> {
                 List<FeedbackRecord> feedbacks = new ArrayList<>();
                 try (PreparedStatement ps = conn.prepareStatement(
                         "SELECT * FROM feedback WHERE user_id = ? ORDER BY created_at DESC")) {
@@ -154,7 +116,7 @@ public class FeedbackRepository {
      */
     public List<FeedbackRecord> findByType(String type) {
         try {
-            return sqliteManager.execute((SQLiteManager.ConnectionConsumer<List<FeedbackRecord>>) conn -> {
+            return feedbackDb.execute((FeedbackDatabaseManager.ConnectionConsumer<List<FeedbackRecord>>) conn -> {
                 List<FeedbackRecord> feedbacks = new ArrayList<>();
                 try (PreparedStatement ps = conn.prepareStatement(
                         "SELECT * FROM feedback WHERE type = ? ORDER BY created_at DESC")) {
@@ -178,7 +140,7 @@ public class FeedbackRepository {
      */
     public List<FeedbackRecord> findAll(int limit, int offset) {
         try {
-            return sqliteManager.execute((SQLiteManager.ConnectionConsumer<List<FeedbackRecord>>) conn -> {
+            return feedbackDb.execute((FeedbackDatabaseManager.ConnectionConsumer<List<FeedbackRecord>>) conn -> {
                 List<FeedbackRecord> feedbacks = new ArrayList<>();
                 try (PreparedStatement ps = conn.prepareStatement(
                         "SELECT * FROM feedback ORDER BY created_at DESC LIMIT ? OFFSET ?")) {
@@ -203,7 +165,7 @@ public class FeedbackRepository {
      */
     public long count() {
         try {
-            return sqliteManager.execute((SQLiteManager.ConnectionConsumer<Long>) conn -> {
+            return feedbackDb.execute((FeedbackDatabaseManager.ConnectionConsumer<Long>) conn -> {
                 try (Statement stmt = conn.createStatement();
                      ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM feedback")) {
                     if (rs.next()) {
@@ -223,7 +185,7 @@ public class FeedbackRepository {
      */
     public long countByType(String type) {
         try {
-            return sqliteManager.execute((SQLiteManager.ConnectionConsumer<Long>) conn -> {
+            return feedbackDb.execute((FeedbackDatabaseManager.ConnectionConsumer<Long>) conn -> {
                 try (PreparedStatement ps = conn.prepareStatement(
                         "SELECT COUNT(*) FROM feedback WHERE type = ?")) {
                     ps.setString(1, type);
@@ -246,7 +208,7 @@ public class FeedbackRepository {
      */
     public boolean delete(String feedbackId) {
         try {
-            return sqliteManager.executeInTransaction(conn -> {
+            return feedbackDb.executeInTransaction(conn -> {
                 try (PreparedStatement ps = conn.prepareStatement(
                         "DELETE FROM feedback WHERE feedback_id = ?")) {
                     ps.setString(1, feedbackId);

@@ -2,7 +2,6 @@ package com.filesurf.service;
 
 import com.filesurf.model.FeedbackRecord;
 import com.filesurf.repository.FeedbackRepository;
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -19,12 +18,6 @@ public class FeedbackService {
 
     @Inject
     FeedbackRepository feedbackRepository;
-
-    @PostConstruct
-    void init() {
-        LOGGER.info("Initializing FeedbackService and feedback table schema...");
-        feedbackRepository.initializeSchema();
-    }
 
     /**
      * Get all feedback with pagination
