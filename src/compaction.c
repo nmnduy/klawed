@@ -274,6 +274,7 @@ static int compaction_store_message(const InternalMessage *msg, int msg_index, c
         case MSG_USER: role_str = "user"; break;
         case MSG_ASSISTANT: role_str = "assistant"; break;
         case MSG_SYSTEM: role_str = "system"; break;
+        case MSG_AUTO_COMPACTION: role_str = "auto_compaction"; break;
         default: role_str = "unknown"; break;
     }
 

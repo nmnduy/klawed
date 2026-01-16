@@ -285,7 +285,8 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         // Check and perform compaction if needed (before API call)
         if (state->compaction_config && compaction_should_trigger(state, state->compaction_config)) {
             LOG_INFO("Context compaction triggered before API call");
-            if (compaction_perform(state, state->compaction_config, state->session_id) != 0) {
+            CompactionResult compaction_result = {0};
+            if (compaction_perform(state, state->compaction_config, state->session_id, &compaction_result) != 0) {
                 LOG_WARN("Compaction failed, continuing with API call");
             }
         }

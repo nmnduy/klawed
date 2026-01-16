@@ -13,7 +13,7 @@
 #include "../logger.h"
 
 #ifdef HAVE_MEMVID
-#include "memvid.h"
+#include "../memvid.h"
 
 /**
  * Build memory context string from memvid searches.
