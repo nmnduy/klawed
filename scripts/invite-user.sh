@@ -9,20 +9,6 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DB_PATH="${PROJECT_DIR}/data/filesurf.db"
-
-# If database doesn't exist in current directory, check parent (for worktrees)
-if [ ! -f "$DB_PATH" ]; then
-    PARENT_PROJECT_DIR="$(dirname "$PROJECT_DIR")"
-    PARENT_DB_PATH="${PARENT_PROJECT_DIR}/data/filesurf.db"
-    if [ -f "$PARENT_DB_PATH" ]; then
-        DB_PATH="$PARENT_DB_PATH"
-        PROJECT_DIR="$PARENT_PROJECT_DIR"
-    fi
-fi
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -30,21 +16,23 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 usage() {
-    echo "Usage: $0 <email>"
+    echo "Usage: $0 [options] <email>"
     echo ""
     echo "Invite a user to FileSurf by adding their email to the database."
     echo ""
     echo "Examples:"
-    echo "  $0 user@example.com                 # Invite/create a new user"
-    echo "  $0 -a user@example.com              # Activate user (or create if doesn't exist)"
-    echo "  $0 -d user@example.com              # Deactivate user"
-    echo "  $0 -l                               # List all users"
+    echo "  $0 user@example.com                  # Invite/create a new user"
+    echo "  $0 --db /path/to/db.db user@example.com  # Use custom database path"
+    echo "  $0 -a user@example.com               # Activate user (or create if doesn't exist)"
+    echo "  $0 -d user@example.com               # Deactivate user"
+    echo "  $0 -l                                # List all users"
     echo ""
     echo "Options:"
-    echo "  -a, --activate     Activate a user (or create if doesn't exist)"
-    echo "  -d, --deactivate   Deactivate a user"
-    echo "  -l, --list         List all invited users"
-    echo "  -h, --help         Show this help message"
+    echo "  --db <path>       Path to SQLite database file"
+    echo "  -a, --activate    Activate a user (or create if doesn't exist)"
+    echo "  -d, --deactivate  Deactivate a user"
+    echo "  -l, --list        List all invited users"
+    echo "  -h, --help        Show this help message"
     exit 1
 }
 
@@ -164,31 +152,63 @@ activate_user() {
 }
 
 # Parse arguments
-case "$1" in
-    -h|--help)
-        usage
-        ;;
-    -l|--list)
-        list_users
-        ;;
-    -d|--deactivate)
-        if [ -z "$2" ]; then
-            echo -e "${RED}Error: Email required${NC}"
+DB_PATH=""  # Will be set by --db option if provided
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --db)
+            if [ -z "$2" ]; then
+                echo -e "${RED}Error: Database path required${NC}"
+                usage
+            fi
+            DB_PATH="$2"
+            shift 2
+            ;;
+        -h|--help)
             usage
+            ;;
+        -l|--list)
+            list_users
+            ;;
+        -d|--deactivate)
+            if [ -z "$2" ]; then
+                echo -e "${RED}Error: Email required${NC}"
+                usage
+            fi
+            deactivate_user "$2"
+            ;;
+        -a|--activate)
+            if [ -z "$2" ]; then
+                echo -e "${RED}Error: Email required${NC}"
+                usage
+            fi
+            activate_user "$2"
+            ;;
+        *)
+            invite_user "$1"
+            ;;
+    esac
+    exit $?
+done
+
+# If DB_PATH was not set via --db, use default logic
+if [ -z "$DB_PATH" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+    DEFAULT_DB_PATH="${PROJECT_DIR}/data/filesurf.db"
+
+    # If database doesn't exist in current directory, check parent (for worktrees)
+    if [ ! -f "$DEFAULT_DB_PATH" ]; then
+        PARENT_PROJECT_DIR="$(dirname "$PROJECT_DIR")"
+        PARENT_DB_PATH="${PARENT_PROJECT_DIR}/data/filesurf.db"
+        if [ -f "$PARENT_DB_PATH" ]; then
+            DB_PATH="$PARENT_DB_PATH"
+        else
+            DB_PATH="$DEFAULT_DB_PATH"
         fi
-        deactivate_user "$2"
-        ;;
-    -a|--activate)
-        if [ -z "$2" ]; then
-            echo -e "${RED}Error: Email required${NC}"
-            usage
-        fi
-        activate_user "$2"
-        ;;
-    "")
-        usage
-        ;;
-    *)
-        invite_user "$1"
-        ;;
-esac
+    else
+        DB_PATH="$DEFAULT_DB_PATH"
+    fi
+fi
+
+usage

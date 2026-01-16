@@ -68,7 +68,7 @@ test_server_health() {
     print_header "TEST 1: Server Health"
 
     section "Checking if server is reachable"
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$SERVER_URL/" --connect-timeout 5 2>/dev/null || echo "000")
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$SERVER_URL/file-chat" --connect-timeout 5 2>/dev/null || echo "000")
     if [ "$HTTP_CODE" = "200" ]; then
         pass "Server is reachable (HTTP $HTTP_CODE)"
     else
@@ -92,7 +92,7 @@ test_authentication() {
     print_header "TEST 2: Authentication Flow"
 
     section "Getting auth status (unauthenticated)"
-    AUTH_STATUS=$(curl -s "$SERVER_URL/auth/status" --connect-timeout 5 2>/dev/null)
+    AUTH_STATUS=$(curl -s "$SERVER_URL/auth/status" --connect-timeout 5 2>/dev/null || echo "")
     if echo "$AUTH_STATUS" | grep -q '"authenticated":false'; then
         pass "Auth status correctly shows unauthenticated"
     else

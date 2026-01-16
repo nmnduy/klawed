@@ -7,7 +7,27 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/root/filesurf_v2
-ExecStart=/root/filesurf_v2/target/filesurf-1.0.0-SNAPSHOT-runner -Dquarkus.profile=prod
+
+# Load environment file
+EnvironmentFile=-/etc/filesurf/.env
+
+# Detect executable: prefer native if available, otherwise use JVM
+ExecStart=/bin/bash -c ' \
+    if [ -x "/root/filesurf_v2/target/filesurf-1.0.0-SNAPSHOT-runner" ]; then \
+        exec /root/filesurf_v2/target/filesurf-1.0.0-SNAPSHOT-runner -Dquarkus.profile=prod; \
+    else \
+        exec /usr/bin/java \
+            -Xmx256m \
+            -Xms128m \
+            -XX:+UseSerialGC \
+            -XX:MaxMetaspaceSize=128m \
+            -XX:+TieredCompilation \
+            -XX:TieredStopAtLevel=1 \
+            -Djava.net.preferIPv4Stack=true \
+            -Dquarkus.profile=prod \
+            -jar /root/filesurf_v2/target/quarkus-app/quarkus-run.jar; \
+    fi'
+
 Restart=always
 RestartSec=10
 

@@ -4,7 +4,7 @@
 
 - [ ]
 - [x] feedback button and error reporting
-- [ ] one button in file drop down menu copy full file path into input box
+- [x] one button in file drop down menu copy full file path into input box
 - [ ] file search does not include folder in results
 
 - [x] prompts

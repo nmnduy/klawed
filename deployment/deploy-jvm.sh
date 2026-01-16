@@ -35,7 +35,7 @@ else
 fi
 
 echo "Step 4: Installing systemd service..."
-cp "$DEPLOY_DIR/deployment/filesurf-v2-jvm.service" /etc/systemd/system/filesurf-v2.service
+cp "$DEPLOY_DIR/deployment/filesurf-v2.service" /etc/systemd/system/filesurf-v2.service
 systemctl daemon-reload
 
 echo "Step 5: Enabling and restarting service..."
