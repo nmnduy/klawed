@@ -764,13 +764,16 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
             break;
 
         case 'b':  // Toggle input box style
-            // Cycle through bland -> background -> border -> bland
+            // Cycle through bland -> background -> border -> horizontal -> bland
             if (tui->input_box_style == INPUT_STYLE_BLAND) {
                 tui->input_box_style = INPUT_STYLE_BACKGROUND;
                 tui_update_status(tui, "Input box style: background");
             } else if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
                 tui->input_box_style = INPUT_STYLE_BORDER;
                 tui_update_status(tui, "Input box style: border");
+            } else if (tui->input_box_style == INPUT_STYLE_BORDER) {
+                tui->input_box_style = INPUT_STYLE_HORIZONTAL;
+                tui_update_status(tui, "Input box style: horizontal");
             } else {
                 tui->input_box_style = INPUT_STYLE_BLAND;
                 tui_update_status(tui, "Input box style: bland");
