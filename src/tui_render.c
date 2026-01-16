@@ -626,7 +626,13 @@ void input_redraw(TUIState *tui, const char *prompt) {
         right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;      // padding + right border = 2
     } else {
         // BLAND style: just '❯ ' prefix (2 display cols), no padding
-        content_start_col = 2;  // '❯ ' = 2 display columns
+        // In COMMAND/SEARCH mode, the mode prefix starts at column 0 (no caret)
+        // In INSERT mode, the caret '❯ ' starts at column 0
+        if (tui->mode == TUI_MODE_COMMAND || tui->mode == TUI_MODE_SEARCH) {
+            content_start_col = 0;  // Mode prefix (: or /) starts at beginning
+        } else {
+            content_start_col = 2;  // '❯ ' = 2 display columns in INSERT mode
+        }
         right_margin = 0;       // no right padding
     }
 
@@ -665,8 +671,13 @@ void input_redraw(TUIState *tui, const char *prompt) {
         content_start_col = INPUT_LEFT_BORDER_WIDTH + INPUT_LEFT_PADDING;
         right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;
     } else {
-        // BLAND style: '❯ ' = 2 display columns
-        content_start_col = 2;
+        // BLAND style: In COMMAND/SEARCH mode, mode prefix starts at column 0
+        // In INSERT mode, '❯ ' = 2 display columns
+        if (tui->mode == TUI_MODE_COMMAND || tui->mode == TUI_MODE_SEARCH) {
+            content_start_col = 0;
+        } else {
+            content_start_col = 2;
+        }
         right_margin = 0;
     }
     content_width = input->win_width - content_start_col - right_margin;
@@ -746,13 +757,16 @@ void input_redraw(TUIState *tui, const char *prompt) {
             wbkgd(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
 
-        // Draw the '❯ ' caret in prompt color
-        if (has_colors()) {
-            wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
-        }
-        mvwprintw(win, 0, 0, "❯ ");
-        if (has_colors()) {
-            wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
+        // Draw the '❯ ' caret in prompt color (only in INSERT mode)
+        // In COMMAND/SEARCH mode, the mode prefix (: or /) will be displayed instead
+        if (tui->mode == TUI_MODE_INSERT) {
+            if (has_colors()) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
+            }
+            mvwprintw(win, 0, 0, "❯ ");
+            if (has_colors()) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
+            }
         }
     }
 
