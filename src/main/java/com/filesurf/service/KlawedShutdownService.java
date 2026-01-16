@@ -257,7 +257,7 @@ public class KlawedShutdownService {
                             try {
                                 long pid = Long.parseLong(parts[1]);
                                 pids.add(pid);
-                                String mode = line.contains("--sqlite-queue") ? "sqlite-queue" : "unix-socket";
+                                String mode = line.contains("--sqlite-queue") ? "sqlite-queue" : "unknown";
                                 LOGGER.fine("Found klawed " + mode + " process: PID=" + pid);
                             } catch (NumberFormatException e) {
                                 // Skip invalid PID

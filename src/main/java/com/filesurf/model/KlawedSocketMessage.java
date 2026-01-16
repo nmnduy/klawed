@@ -158,7 +158,7 @@ public class KlawedSocketMessage {
             return null;
         }
         
-        // For ZMQ TEXT responses, content is directly the text string
+        // For TEXT responses, content is directly the text string
         if (ChatConstants.MESSAGE_TYPE_TEXT.equals(messageType) && content instanceof String) {
             String text = (String) content;
             return text;
