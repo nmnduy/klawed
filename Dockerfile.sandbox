@@ -1,5 +1,5 @@
-# klawed Sandbox Container - Minimal Runtime Image
-# Multi-stage build to keep the final image compact (~250MB)
+# klawed Sandbox Container with Web Browse Agent - Minimal Runtime Image
+# Multi-stage build to keep the final image compact
 #
 # Build on fandalf (same x86_64 arch as production):
 #   podman build -f Dockerfile.sandbox -t klawed-sandbox:latest .
@@ -26,7 +26,7 @@ LABEL stage="builder"
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
 
-# Install build dependencies
+# Install build dependencies including Go
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build essentials
     build-essential \
@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     curl \
+    wget \
     \
     # klawed C dependencies (dev packages)
     libcurl4-openssl-dev \
@@ -45,6 +46,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libbsd-dev \
     libncursesw5-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Go 1.22+ for web_browse_agent
+ENV GO_VERSION=1.22.0
+RUN wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
+    rm go${GO_VERSION}.linux-amd64.tar.gz
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPATH="/go"
+ENV PATH="${GOPATH}/bin:${PATH}"
 
 # Install Rust (needed for memvid-ffi)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
@@ -68,18 +78,25 @@ RUN make clean && \
     # Verify memvid is linked
     ldd build/klawed | grep -q memvid || echo "WARNING: memvid not dynamically linked (may be static)"
 
+# Build web_browse_agent
+RUN cd vendors/web_browse_agent && \
+    go mod download && \
+    go build -ldflags "-s -w" -o web_browse_agent ./cmd/agent && \
+    ls -lh web_browse_agent && \
+    chmod +x web_browse_agent
+
 # =============================================================================
-# Stage 2: Runtime Stage - Minimal production image
+# Stage 2: Runtime Stage - Minimal production image with Chromium
 # =============================================================================
 FROM debian:12-slim
 
 LABEL maintainer="FileSurf Team"
-LABEL description="Sandbox container for running the klawed AI agent"
-LABEL version="1.0"
+LABEL description="Sandbox container for running the klawed AI agent with web browser capabilities"
+LABEL version="2.0"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install only runtime dependencies (not dev packages)
+# Install runtime dependencies including Chromium and Playwright deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Networking
     curl \
@@ -107,6 +124,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     libbsd0 \
     libncursesw6 \
+    \
+    # Chromium and browser dependencies for Playwright
+    chromium \
+    chromium-driver \
+    # Additional Playwright dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0 \
+    libxshmfence1 \
+    # Fonts for proper rendering
+    fonts-liberation \
+    fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -116,13 +159,33 @@ COPY --from=builder /build/build/klawed /usr/local/bin/klawed
 # Copy memvid shared library from builder
 COPY --from=builder /build/vendors/memvid-ffi/target/release/libmemvid_ffi.so /usr/local/lib/libmemvid_ffi.so
 
+# Copy web_browse_agent binary from builder
+COPY --from=builder /build/vendors/web_browse_agent/web_browse_agent /usr/local/bin/web_browse_agent
+
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # Set up library paths and permissions
 RUN chmod +x /usr/local/bin/klawed && \
+    chmod +x /usr/local/bin/web_browse_agent && \
     chmod +x /usr/local/bin/docker-entrypoint.sh && \
     ldconfig
+
+# Install Go runtime (needed by Playwright for web_browse_agent)
+ENV GO_VERSION=1.22.0
+RUN wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
+    rm go${GO_VERSION}.linux-amd64.tar.gz
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPATH="/root/go"
+ENV PATH="${GOPATH}/bin:${PATH}"
+
+# Install Playwright CLI and download Chromium browser
+# This pre-installs the browsers so web_browse_agent doesn't need to download them at runtime
+RUN go install github.com/playwright-community/playwright-go/cmd/playwright@latest && \
+    playwright install chromium && \
+    # Verify Chromium was installed
+    ls -lah ~/.cache/ms-playwright/ || true
 
 # Create workspace directory structure
 RUN mkdir -p /workspace/.klawed/logs /workspace/.klawed/mcp
@@ -132,8 +195,14 @@ WORKDIR /workspace
 
 # Set environment variables for runtime
 ENV LD_LIBRARY_PATH=/usr/local/lib \
-    HOME=/workspace \
-    TERM=xterm-256color
+    HOME=/root \
+    TERM=xterm-256color \
+    # Browser configuration for web_browse_agent
+    BROWSER_TYPE=CHROMIUM \
+    BROWSER_HEADLESS=true \
+    KLAWED_WEB_BROWSE_AGENT_PATH=/usr/local/bin/web_browse_agent \
+    # Playwright browsers are pre-installed in the image
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Configure git
 RUN git config --system init.defaultBranch main \

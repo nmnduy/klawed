@@ -55,6 +55,7 @@ Project instructions for Klawed when working with this codebase.
 
 **Tests**: `tests/test_*.c` (unit tests for all major components)
 **Build**: `Makefile`
+**Docker**: `Dockerfile.sandbox`, `docs/DOCKER_QUICKSTART.md`, `docs/docker-web-browser.md`, `docs/docker-sandbox-deployment.md`
 
 ## Project Overview
 

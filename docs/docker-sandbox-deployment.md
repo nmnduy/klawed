@@ -4,6 +4,8 @@
 
 The klawed sandbox container is designed to run the klawed AI agent in an isolated environment with proper security constraints. This document covers deployment requirements, troubleshooting, and best practices.
 
+**Note**: For information about web browser capabilities and Chromium pre-installation, see [docker-web-browser.md](./docker-web-browser.md).
+
 ## Security Model
 
 The container runs as a non-root user (`agent`, UID 1000) with the following restrictions:
