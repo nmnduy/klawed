@@ -127,7 +127,7 @@ deactivate_user() {
     fi
 
     sqlite3 "$DB_PATH" "UPDATE users SET is_active = 0 WHERE LOWER(email) = LOWER('${EMAIL}');"
-    
+
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ User deactivated: ${EMAIL}${NC}"
     else
@@ -154,7 +154,7 @@ activate_user() {
     fi
 
     sqlite3 "$DB_PATH" "UPDATE users SET is_active = 1 WHERE LOWER(email) = LOWER('${EMAIL}');"
-    
+
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ User activated: ${EMAIL}${NC}"
     else

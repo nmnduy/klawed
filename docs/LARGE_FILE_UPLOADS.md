@@ -130,17 +130,17 @@ const uploader = new ChunkedUploader({
     chunkSize: 5 * 1024 * 1024, // 5 MB chunks
     maxRetries: 3,
     retryDelay: 1000,
-    
+
     onProgress: (progress) => {
         console.log(`Progress: ${progress.progress.toFixed(2)}%`);
         console.log(`Uploaded: ${progress.uploadedSize} / ${progress.totalSize} bytes`);
         console.log(`Chunk: ${progress.chunkIndex} / ${progress.totalChunks}`);
     },
-    
+
     onComplete: (result) => {
         console.log('Upload complete:', result.fileName);
     },
-    
+
     onError: (error) => {
         console.error('Upload failed:', error.message);
     }
@@ -188,15 +188,15 @@ const uploader = new ChunkedUploader({
     onProgress: (progress) => {
         const percent = progress.progress.toFixed(1);
         document.getElementById('progressBar').style.width = percent + '%';
-        document.getElementById('progressText').textContent = 
+        document.getElementById('progressText').textContent =
             `${percent}% (${formatBytes(progress.uploadedSize)} / ${formatBytes(progress.totalSize)})`;
     },
-    
+
     onComplete: (result) => {
         showSuccess(`Upload complete: ${result.fileName}`);
         refreshFileList();
     },
-    
+
     onError: (error) => {
         showError(`Upload failed: ${error.message}`);
     }
@@ -206,11 +206,11 @@ const uploader = new ChunkedUploader({
 document.getElementById('fileInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     // Show upload UI
     document.getElementById('uploadSection').style.display = 'block';
     document.getElementById('fileName').textContent = file.name;
-    
+
     try {
         // Start upload
         await uploader.upload(file, currentSessionId);
@@ -350,19 +350,19 @@ ChunkedUploadResource.cleanupStaleUploads();
 ### Logging
 ```java
 // Upload started
-LOGGER.info("Initialized chunked upload: " + uploadId + 
-           ", file=" + fileName + 
+LOGGER.info("Initialized chunked upload: " + uploadId +
+           ", file=" + fileName +
            ", size=" + totalSize);
 
 // Chunk uploaded
-LOGGER.info("Uploaded chunk " + chunkIndex + 
-           " for " + uploadId + 
+LOGGER.info("Uploaded chunk " + chunkIndex +
+           " for " + uploadId +
            " (" + uploadedSize + "/" + totalSize + " bytes)");
 
 // Upload completed
-LOGGER.info("Completed upload: " + uploadId + 
-           ", file=" + fileName + 
-           ", size=" + uploadedSize + 
+LOGGER.info("Completed upload: " + uploadId +
+           ", file=" + fileName +
+           ", size=" + uploadedSize +
            ", md5=" + md5Hash);
 ```
 

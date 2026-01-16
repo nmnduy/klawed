@@ -102,7 +102,7 @@ Notes:
 So: spawn bwrap from your app, keep the PID, and kill it when done. Systemd not required.
 
   [user]
-  how battle-tested is bwrap. any previous exploits? 
+  how battle-tested is bwrap. any previous exploits?
 
 RESPONSE:
 
@@ -172,10 +172,10 @@ bwrap --unshare-user --unshare-pid --unshare-ipc --unshare-uts \
    ```sh
    # Debian/Ubuntu
    sudo apt install podman
-   
+
    # RHEL/Fedora/CentOS
    sudo dnf install podman
-   
+
    # Arch
    sudo pacman -S podman
    ```
@@ -192,24 +192,24 @@ bwrap --unshare-user --unshare-pid --unshare-ipc --unshare-uts \
    ```dockerfile
    FROM debian:bookworm-slim
    # or ubuntu:22.04, alpine:latest, etc.
-   
+
    # Install runtime dependencies
    RUN apt-get update && apt-get install -y \
        python3 python3-pip curl git \
        && rm -rf /var/lib/apt/lists/*
-   
+
    # Copy agent binary/code
    COPY agent-binary /usr/local/bin/agent
    RUN chmod +x /usr/local/bin/agent
-   
+
    # Non-root user inside container
    RUN useradd -m -u 1000 agentuser
    USER agentuser
    WORKDIR /workspace
-   
+
    ENTRYPOINT ["/usr/local/bin/agent"]
    ```
-   
+
    Build it:
    ```sh
    podman build -t agent-sandbox:latest .
@@ -240,14 +240,14 @@ bwrap --unshare-user --unshare-pid --unshare-ipc --unshare-uts \
    - `--memory`, `--cpus`, `--pids-limit`: Resource limits
 
 5) **Managing the container from your app**:
-   
+
    **Spawn container** (store the container name/ID):
    ```python
    import subprocess
-   
+
    container_name = f"agent-task-{task_id}"
    subprocess.Popen([
-       "podman", "run", "--rm", 
+       "podman", "run", "--rm",
        f"--name={container_name}",
        "--user=root",
        "--network=bridge",
@@ -260,13 +260,13 @@ bwrap --unshare-user --unshare-pid --unshare-ipc --unshare-uts \
        "agent-sandbox:latest"
    ])
    ```
-   
+
    **Kill container** when done:
    ```python
    subprocess.run(["podman", "kill", container_name])
    # or: podman stop --time=5 {container_name}  (graceful shutdown)
    ```
-   
+
    **Check if running**:
    ```python
    result = subprocess.run(

@@ -25,17 +25,17 @@ for video in "$DEMO_DIR"/*.mp4; do
     if [ ! -f "$video" ]; then
         continue
     fi
-    
+
     name="${video%.mp4}"
     thumb="${name}.jpg"
-    
+
     if [ -f "$thumb" ]; then
         echo "⏭️  Skipping (thumbnail exists): $(basename "$video")"
         continue
     fi
-    
+
     echo "🎬 Processing: $(basename "$video")"
-    
+
     # Extract frame at 5 seconds (or 10% into the video, whichever is smaller)
     # Use high quality JPEG (q:v 2 = very high quality)
     if ffmpeg -i "$video" -ss 00:00:05 -vframes 1 -q:v 2 "$thumb" -y &>/dev/null; then

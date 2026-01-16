@@ -20,7 +20,7 @@ This project implements content-based cache busting for CSS files to prevent bro
    ```html
    <link rel="stylesheet" href="{cssPath}">
    ```
-   
+
    This automatically renders as:
    ```html
    <link rel="stylesheet" href="/dist/main.b017b445.css">

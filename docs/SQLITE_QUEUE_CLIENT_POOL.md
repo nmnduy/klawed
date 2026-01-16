@@ -4,7 +4,7 @@
 
 Fixed excessive database connection churn by implementing **one singleton `SQLiteQueueClient` per session**. Each session has its own dedicated SQLite database file, so a single reusable connection is optimal.
 
-**Before**: Init → Connect → Shutdown (every 500ms)  
+**Before**: Init → Connect → Shutdown (every 500ms)
 **After**: Init → Connect → ... (reuse forever) ... → Shutdown (only on session end)
 
 ## The Fix
@@ -30,7 +30,7 @@ For **SENDING**, we use `sendMessageFrom("client", "klawed", message)` to overri
 **Each session = dedicated SQLite DB file = no contention**
 
 - Session A → `klawed_messages_sessionA.db` → 1 client
-- Session B → `klawed_messages_sessionB.db` → 1 client  
+- Session B → `klawed_messages_sessionB.db` → 1 client
 - SQLite performs best with single connection per database
 
 ## Changes

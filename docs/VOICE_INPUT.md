@@ -45,7 +45,7 @@ Speech recognition error: network
 
 **Cause**: User denied microphone permission, or browser blocked microphone access.
 
-**Solution**: 
+**Solution**:
 - Click the microphone icon in the browser's address bar
 - Grant microphone permission
 - Reload the page
@@ -57,7 +57,7 @@ Speech recognition error: network
 
 **Cause**: The speech recognition API didn't detect any speech within the timeout period.
 
-**Solution**: 
+**Solution**:
 - Try speaking closer to the microphone
 - Check that your microphone is working
 - Try again and speak immediately after clicking the voice button
@@ -71,16 +71,16 @@ Use nginx, Caddy, or Apache as a reverse proxy with Let's Encrypt SSL:
 server {
     listen 443 ssl http2;
     server_name filesurf.example.com;
-    
+
     ssl_certificate /etc/letsencrypt/live/filesurf.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/filesurf.example.com/privkey.pem;
-    
+
     location / {
         proxy_pass http://localhost:9090;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         # WebSocket support
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -135,7 +135,7 @@ tailscale cert filesurf-machine.tailnet-name.ts.net
 ### "Voice input requires HTTPS or localhost access"
 **Cause**: Accessing the app over HTTP from a non-localhost URL
 
-**Solution**: 
+**Solution**:
 - Access via `http://localhost:9090`
 - Or set up HTTPS (see "Setting Up HTTPS" above)
 
