@@ -81,7 +81,8 @@ typedef enum {
 // Input box style (visual appearance)
 typedef enum {
     INPUT_STYLE_BACKGROUND,  // Background color + left border (default)
-    INPUT_STYLE_BORDER       // Full border with no background
+    INPUT_STYLE_BORDER,      // Full border with no background
+    INPUT_STYLE_BLAND        // Just caret '>>>' with text on general background, no padding
 } TUIInputBoxStyle;
 
 // TUI State
