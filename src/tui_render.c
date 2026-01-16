@@ -613,7 +613,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
     // Layout depends on style:
     // - BACKGROUND: border (1) + left padding (1) + content + right padding (1)
     // - BORDER: box border (1) + left padding (1) + content + right padding (1) + box border (1)
-    // - BLAND: caret '>>> ' (4 chars) + content (no padding, no borders)
+    // - BLAND: caret '❯ ' (4 chars) + content (no padding, no borders)
     int content_start_col;
     int right_margin;
 
@@ -625,8 +625,8 @@ void input_redraw(TUIState *tui, const char *prompt) {
         content_start_col = INPUT_LEFT_BORDER_WIDTH + INPUT_LEFT_PADDING;  // 1 + 1 = 2
         right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;      // padding + right border = 2
     } else {
-        // BLAND style: just '>>> ' prefix (4 chars), no padding
-        content_start_col = 4;  // '>>> ' = 4 characters
+        // BLAND style: just '❯ ' prefix (4 chars), no padding
+        content_start_col = 4;  // '❯ ' = 4 characters
         right_margin = 0;       // no right padding
     }
 
@@ -740,17 +740,17 @@ void input_redraw(TUIState *tui, const char *prompt) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
         }
     } else {
-        // Style 3: BLAND - just caret '>>>' on general background, no borders
+        // Style 3: BLAND - just caret '❯' on general background, no borders
         // Reset to default background
         if (has_colors()) {
             wbkgd(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
 
-        // Draw the '>>> ' caret in prompt color
+        // Draw the '❯ ' caret in prompt color
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         }
-        mvwprintw(win, 0, 0, ">>> ");
+        mvwprintw(win, 0, 0, "❯ ");
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         }
