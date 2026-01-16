@@ -7,6 +7,7 @@
 #include "openai_messages.h"
 #include "logger.h"
 #include "klawed_internal.h"
+#include "tools/tool_definitions.h"
 
 #include <stdio.h>
 #include <stdlib.h>

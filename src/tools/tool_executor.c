@@ -1,4 +1,5 @@
 #include "tool_registry.h"
+#include "tool_definitions.h"
 #include "../tool_utils.h"
 #include "../logger.h"
 #include "../util/timestamp_utils.h"

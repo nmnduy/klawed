@@ -9,6 +9,7 @@
 #include "../openai_messages.h"
 #include "../tool_utils.h"
 #include "../logger.h"
+#include "../tools/tool_definitions.h"
 
 #ifndef TEST_BUILD
 #include "../mcp.h"

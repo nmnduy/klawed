@@ -390,9 +390,6 @@ void api_response_free(ApiResponse *response);
 // Add cache_control marker to a content block
 void add_cache_control(cJSON *obj);
 
-// Get tool definitions for the API request
-cJSON* get_tool_definitions(ConversationState *state, int enable_caching);
-
 // Tool implementations (memory tools and MCP tools)
 cJSON* tool_memory_store(cJSON *params, ConversationState *state);
 cJSON* tool_memory_recall(cJSON *params, ConversationState *state);
