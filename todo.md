@@ -1,3 +1,4 @@
+- [ ] dont print the user input caret when i type something out in the normal mode
 - [ ] show the entire first 500 chars of prompt in input history search
 - [ ] add the java browser user agent here
 
