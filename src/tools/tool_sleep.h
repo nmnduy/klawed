@@ -12,7 +12,7 @@ typedef struct ConversationState ConversationState;
 
 /**
  * tool_sleep - Pauses execution for specified duration
- * 
+ *
  * @param params JSON object with: { "duration": <seconds> }
  * @param state Conversation state (unused)
  * @return JSON object with status and duration

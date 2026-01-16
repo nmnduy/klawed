@@ -5,7 +5,7 @@
 
 /**
  * Output Utilities
- * 
+ *
  * Helper functions for formatting and emitting tool output.
  * These functions are aware of TUI mode and oneshot mode.
  */

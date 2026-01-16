@@ -181,7 +181,7 @@ static char* remove_memory_context(const char *prompt) {
     }
 
     // Calculate size for new prompt (before start + after end)
-    size_t before_len = start - prompt;
+    size_t before_len = (size_t)(start - prompt);
     size_t after_len = strlen(end);
     size_t new_size = before_len + after_len + 1;
 
@@ -241,16 +241,22 @@ int inject_memory_context(ConversationState *state) {
 
     // Remove any existing memory context first
     char *base_prompt = remove_memory_context(current_prompt);
+    int base_prompt_allocated = (base_prompt != NULL);
     if (!base_prompt) {
-        // No existing memory context, use current prompt as base
-        base_prompt = (char *)current_prompt;  // Cast away const for temporary use
+        // No existing memory context, duplicate current prompt as base
+        base_prompt = strdup(current_prompt);
+        if (!base_prompt) {
+            LOG_ERROR("Memory context injection: Failed to duplicate prompt");
+            return -1;
+        }
+        base_prompt_allocated = 1;
     }
 
     // Build fresh memory context
     char *memory_context = build_memory_context(state->working_dir);
     if (!memory_context) {
         // No memories to inject
-        if (base_prompt != current_prompt) {
+        if (base_prompt_allocated) {
             // We removed old memory but have no new memory to add
             // Update the prompt to the cleaned version
             free(sys_msg->contents[0].text);
@@ -272,7 +278,7 @@ int inject_memory_context(ConversationState *state) {
     if (!new_prompt) {
         LOG_ERROR("Memory context injection: Failed to allocate memory for new prompt");
         free(memory_context);
-        if (base_prompt != current_prompt) {
+        if (base_prompt_allocated) {
             free(base_prompt);
         }
         return -1;
@@ -292,10 +298,10 @@ int inject_memory_context(ConversationState *state) {
 
     // Free the old prompt and base_prompt if it was allocated
     free(sys_msg->contents[0].text);
-    if (base_prompt != current_prompt) {
+    if (base_prompt_allocated) {
         free(base_prompt);
     }
-    
+
     sys_msg->contents[0].text = new_prompt;
 
     LOG_INFO("Memory context injected into system prompt (%zu bytes added)", start_len + context_len + end_len);

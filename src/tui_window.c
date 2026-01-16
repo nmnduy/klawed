@@ -247,23 +247,33 @@ void tui_handle_resize(TUIState *tui) {
         if (is_user_message) {
             // Add one blank line for top padding
             waddch(tui->wm.conv_pad, '\n');
-            
+
             // Get updated position after adding blank line
             int msg_y, msg_x;
             getyx(tui->wm.conv_pad, msg_y, msg_x);
             getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
             (void)msg_x;
 
-            // Draw full-width background bar
+            // Calculate how many lines the user message will need
+            // The prefix " > " takes 3 characters
+            int prefix_len = 3;
+            int text_len = entry->text ? (int)strlen(entry->text) : 0;
+            int needed_lines = tui_window_calculate_needed_lines(entry->text, text_len, pad_width, prefix_len);
+
+            // Draw full-width background for ALL lines the message will occupy
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG));
             }
-            for (int j = 0; j < pad_width; j++) {
-                waddch(tui->wm.conv_pad, ' ');
+            int bg_start_y = msg_y;
+            for (int line = 0; line < needed_lines; line++) {
+                wmove(tui->wm.conv_pad, bg_start_y + line, 0);
+                for (int col = 0; col < pad_width; col++) {
+                    waddch(tui->wm.conv_pad, ' ');
+                }
             }
             // Keep color active for text rendering
 
-            // Move back to start of line to draw content on top
+            // Move back to start of first line to draw content on top
             wmove(tui->wm.conv_pad, msg_y, 0);
 
             // Render prefix '>' with bold user color on top of background
@@ -318,12 +328,12 @@ void tui_handle_resize(TUIState *tui) {
                 getyx(tui->wm.conv_pad, msg_y, msg_x);
                 getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
                 (void)msg_x;
-                
+
                 wmove(tui->wm.conv_pad, msg_y, pad_width - 1);
                 waddch(tui->wm.conv_pad, '\n');
                 // Add one blank line for bottom padding
                 waddch(tui->wm.conv_pad, '\n');
-                
+
                 // Skip the regular newline below for user messages
                 continue;
             } else if (entry->prefix && entry->prefix[0] != '\0') {

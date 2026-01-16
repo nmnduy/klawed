@@ -6,7 +6,7 @@
 
 /**
  * Oneshot Response Processor
- * 
+ *
  * Processes API responses in oneshot mode, handling tool execution
  * and recursive response processing until completion.
  */
@@ -14,7 +14,7 @@
 /**
  * Process a single API response in oneshot mode
  * Recursively handles tool calls and follow-up responses
- * 
+ *
  * @param state Conversation state
  * @param response API response to process
  * @param output_format Output format mode (HUMAN or MACHINE)

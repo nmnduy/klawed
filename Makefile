@@ -94,106 +94,18 @@ WHISPER_GGML_BLAS_LIB = $(WHISPER_BUILD_DIR)/ggml/src/ggml-blas/libggml-blas.a
 WHISPER_METAL_LIB = $(WHISPER_BUILD_DIR)/ggml/src/ggml-metal/libggml-metal.a
 DEFAULT_MODEL = whisper_models/ggml-small.en.bin
 
-# Optional ZeroMQ socket support (ZMQ=auto|1|0)
-ZMQ ?= auto
+# Voice input configuration (VOICE=auto|1|0)
+# Default: disabled (use VOICE=1 to enable)
+VOICE ?= auto
 
 ifeq ($(VOICE),1)
     # Explicitly enable voice with whisper.cpp
     CFLAGS += -DHAVE_WHISPER=1 -I$(WHISPER_DIR)/include -I$(WHISPER_DIR)/ggml/include
     VOICE_INPUT_SRC = src/voice_input.c
-    
-    # Link whisper libraries (order matters: whisper depends on ggml components)
-    # Order: whisper -> metal -> ggml -> ggml-cpu -> ggml-base -> ggml-blas
-    VOICE_LIBS = $(WHISPER_LIB) $(WHISPER_METAL_LIB) $(WHISPER_GGML_LIB) $(WHISPER_GGML_CPU_LIB) $(WHISPER_GGML_BASE_LIB) $(WHISPER_GGML_BLAS_LIB)
-    LDFLAGS += $(VOICE_LIBS)
-    DEBUG_LDFLAGS += $(VOICE_LIBS)
-    
-    # Add C++ standard library and Metal framework (whisper.cpp is C++ with Metal on macOS)
-    ifeq ($(UNAME_S),Darwin)
-        LDFLAGS += -lc++ -framework Accelerate -framework Foundation -framework Metal -framework MetalKit
-        DEBUG_LDFLAGS += -lc++ -framework Accelerate -framework Foundation -framework Metal -framework MetalKit
-    else
-        LDFLAGS += -lstdc++ -lm
-        DEBUG_LDFLAGS += -lstdc++ -lm
-    endif
-    
-else ifeq ($(VOICE),0)
-    # Explicitly disable voice
+else
+    # Default/disabled: use stub implementation
     CFLAGS += -DDISABLE_VOICE=1
     VOICE_INPUT_SRC = src/voice_stub.c
-    VOICE_LIBS =
-else
-    # Default: disabled (use VOICE=1 to enable)
-    CFLAGS += -DDISABLE_VOICE=1
-    VOICE_INPUT_SRC = src/voice_stub.c
-    VOICE_LIBS =
-endif
-
-# ZeroMQ socket support configuration
-ifeq ($(ZMQ),1)
-    # Explicitly enable ZMQ
-    CFLAGS += -DHAVE_ZMQ=1
-    DEBUG_CFLAGS += -DHAVE_ZMQ=1
-    ZMQ_SOCKET_SRC = src/zmq_socket.c
-    ZMQ_CLIENT_SRC = src/zmq_client.c
-    ZMQ_DAEMON_SRC = src/zmq_daemon.c
-    ZMQ_LIBS = -lzmq
-    LDFLAGS += $(ZMQ_LIBS)
-    DEBUG_LDFLAGS += $(ZMQ_LIBS)
-    ZMQ_TESTS = test-zmq-socket
-else ifeq ($(ZMQ),0)
-    # Explicitly disable ZMQ
-    CFLAGS += -DDISABLE_ZMQ=1
-    DEBUG_CFLAGS += -DDISABLE_ZMQ=1
-    ZMQ_SOCKET_SRC = src/zmq_socket_stub.c
-    ZMQ_CLIENT_SRC = src/zmq_client_stub.c
-    ZMQ_DAEMON_SRC = src/zmq_daemon_stub.c
-    ZMQ_LIBS =
-    ZMQ_TESTS =
-else
-    # Default: auto-detect
-    # Check if libzmq is available via pkg-config
-    ifeq ($(shell pkg-config --exists libzmq && echo yes),yes)
-        CFLAGS += -DHAVE_ZMQ=1 $(shell pkg-config --cflags libzmq)
-        DEBUG_CFLAGS += -DHAVE_ZMQ=1 $(shell pkg-config --cflags libzmq)
-        ZMQ_SOCKET_SRC = src/zmq_socket.c
-        ZMQ_CLIENT_SRC = src/zmq_client.c
-        ZMQ_DAEMON_SRC = src/zmq_daemon.c
-        ZMQ_LIBS = $(shell pkg-config --libs libzmq)
-        LDFLAGS += $(ZMQ_LIBS)
-        DEBUG_LDFLAGS += $(ZMQ_LIBS)
-        ZMQ_TESTS = test-zmq-socket
-    else
-        # ZMQ not available, disable it
-        CFLAGS += -DDISABLE_ZMQ=1
-        DEBUG_CFLAGS += -DDISABLE_ZMQ=1
-        ZMQ_SOCKET_SRC = src/zmq_socket_stub.c
-        ZMQ_CLIENT_SRC = src/zmq_client_stub.c
-        ZMQ_DAEMON_SRC = src/zmq_daemon_stub.c
-        ZMQ_LIBS =
-        ZMQ_TESTS =
-    endif
-endif
-
-# Unix Domain Socket support configuration (UDS=auto|1|0)
-# UDS is always available on POSIX systems, but can be disabled
-UDS ?= auto
-
-ifeq ($(UDS),1)
-    # Explicitly enable UDS
-    CFLAGS += -DHAVE_UDS=1
-    DEBUG_CFLAGS += -DHAVE_UDS=1
-    UDS_SOCKET_SRC = src/uds_socket.c
-else ifeq ($(UDS),0)
-    # Explicitly disable UDS
-    CFLAGS += -DDISABLE_UDS=1
-    DEBUG_CFLAGS += -DDISABLE_UDS=1
-    UDS_SOCKET_SRC = src/uds_socket_stub.c
-else
-    # Default: auto-enable (UDS is available on all POSIX systems)
-    CFLAGS += -DHAVE_UDS=1
-    DEBUG_CFLAGS += -DHAVE_UDS=1
-    UDS_SOCKET_SRC = src/uds_socket.c
 endif
 
 # Optional Memvid support for video-based memory storage (MEMVID=auto|1|0)
@@ -299,9 +211,7 @@ TEST_ARENA_TARGET = $(BUILD_DIR)/test_arena
 TEST_MEMVID_TARGET = $(BUILD_DIR)/test_memvid
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
-TEST_ZMQ_SOCKET_TARGET = $(BUILD_DIR)/test_zmq_socket
 TEST_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_sqlite_queue
-TEST_UDS_SOCKET_TARGET = $(BUILD_DIR)/test_uds_socket
 QUERY_TOOL = $(BUILD_DIR)/query_logs
 SRC = src/klawed.c
 ARRAY_RESIZE_SRC = src/array_resize.c
@@ -371,22 +281,11 @@ MESSAGE_QUEUE_OBJ = $(BUILD_DIR)/message_queue.o
 AI_WORKER_SRC = src/ai_worker.c
 AI_WORKER_OBJ = $(BUILD_DIR)/ai_worker.o
 VOICE_INPUT_OBJ = $(BUILD_DIR)/voice_input.o
-ZMQ_SOCKET_OBJ = $(BUILD_DIR)/zmq_socket.o
-ZMQ_CLIENT_OBJ = $(BUILD_DIR)/zmq_client.o
-ZMQ_MESSAGE_QUEUE_SRC = src/zmq_message_queue.c
-ZMQ_MESSAGE_QUEUE_OBJ = $(BUILD_DIR)/zmq_message_queue.o
-ZMQ_DAEMON_OBJ = $(BUILD_DIR)/zmq_daemon.o
-ZMQ_THREAD_POOL_SRC = src/zmq_thread_pool.c
-ZMQ_THREAD_POOL_OBJ = $(BUILD_DIR)/zmq_thread_pool.o
-# ZMQ_CLIENT_SRC and ZMQ_CLIENT_OBJ are now consolidated into ZMQ_CLIENT_SRC and ZMQ_CLIENT_OBJ
-# ZMQ_CLIENT_SRC = src/zmq_client.c
-# ZMQ_CLIENT_OBJ = $(BUILD_DIR)/zmq_client.o
 SQLITE_QUEUE_SRC = src/sqlite_queue.c
 SQLITE_QUEUE_OBJ = $(BUILD_DIR)/sqlite_queue.o
 MEMVID_OBJ = $(BUILD_DIR)/memvid.o
 COMPACTION_SRC = src/compaction.c
 COMPACTION_OBJ = $(BUILD_DIR)/compaction.o
-UDS_SOCKET_OBJ = $(BUILD_DIR)/uds_socket.o
 
 MCP_SRC = src/mcp.c
 MCP_OBJ = $(BUILD_DIR)/mcp.o
@@ -563,15 +462,12 @@ TEST_TOKEN_USAGE_SRC = tests/test_token_usage.c
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
 TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
 TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
-TEST_ZMQ_SOCKET_SRC = tests/test_zmq_socket.c
 TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
-TEST_UDS_SOCKET_SRC = tests/test_uds_socket.c
 TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
-# Socket test removed - will be reimplemented with ZMQ
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-zmq-socket test-zmq-message-queue test-zmq-connection test-sqlite-queue test-uds-socket test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -586,7 +482,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client $(ZMQ_TESTS) test-file-search
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-file-search
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -839,12 +735,6 @@ test-http-client: check-deps $(TEST_HTTP_CLIENT_TARGET)
 	@echo ""
 	@./$(TEST_HTTP_CLIENT_TARGET)
 
-test-zmq-socket: check-deps $(TEST_ZMQ_SOCKET_TARGET)
-	@echo ""
-	@echo "Running ZMQ Socket tests..."
-	@echo ""
-	@./$(TEST_ZMQ_SOCKET_TARGET)
-
 
 
 test-sqlite-queue: check-deps $(TEST_SQLITE_QUEUE_TARGET)
@@ -853,23 +743,17 @@ test-sqlite-queue: check-deps $(TEST_SQLITE_QUEUE_TARGET)
 	@echo ""
 	@./$(TEST_SQLITE_QUEUE_TARGET)
 
-test-uds-socket: check-deps $(TEST_UDS_SOCKET_TARGET)
-	@echo ""
-	@echo "Running UDS Socket tests..."
-	@echo ""
-	@./$(TEST_UDS_SOCKET_TARGET)
-
 test-file-search: check-deps $(TEST_FILE_SEARCH_TARGET)
 	@echo ""
 	@echo "Running File Search fuzzy matching tests..."
 	@echo ""
 	@./$(TEST_FILE_SEARCH_TARGET)
 
-# Socket test removed - will be reimplemented with ZMQ
+# Socket test removed
 
-$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(TUI_CORE_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_WINDOW_OBJ) $(TUI_RENDER_OBJ) $(TUI_MODES_OBJ) $(TUI_INPUT_OBJ) $(TUI_HISTORY_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_PASTE_OBJ) $(TUI_SEARCH_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(EXPLORE_TOOLS_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(TOOL_REGISTRY_OBJ) $(TOOL_EXECUTOR_OBJ) $(TOOL_DEFINITIONS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ) $(VERSION_H)
+$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(TUI_CORE_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_WINDOW_OBJ) $(TUI_RENDER_OBJ) $(TUI_MODES_OBJ) $(TUI_INPUT_OBJ) $(TUI_HISTORY_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_PASTE_OBJ) $(TUI_SEARCH_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(EXPLORE_TOOLS_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(TOOL_REGISTRY_OBJ) $(TOOL_EXECUTOR_OBJ) $(TOOL_DEFINITIONS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ) $(VERSION_H)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(TUI_CORE_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_WINDOW_OBJ) $(TUI_RENDER_OBJ) $(TUI_MODES_OBJ) $(TUI_INPUT_OBJ) $(TUI_HISTORY_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_PASTE_OBJ) $(TUI_SEARCH_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(EXPLORE_TOOLS_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(TOOL_REGISTRY_OBJ) $(TOOL_EXECUTOR_OBJ) $(TOOL_DEFINITIONS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(TUI_CORE_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_WINDOW_OBJ) $(TUI_RENDER_OBJ) $(TUI_MODES_OBJ) $(TUI_INPUT_OBJ) $(TUI_HISTORY_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_PASTE_OBJ) $(TUI_SEARCH_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(EXPLORE_TOOLS_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(TOOL_REGISTRY_OBJ) $(TOOL_EXECUTOR_OBJ) $(TOOL_DEFINITIONS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Build successful!"
 	@echo "Version: $(VERSION)"
@@ -896,44 +780,9 @@ $(BUILD_DIR)/session.o: src/session.c src/session.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/session.o src/session.c
 
-# Build UDS socket object
-$(BUILD_DIR)/uds_socket.o: $(UDS_SOCKET_SRC) src/uds_socket.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/uds_socket.o $(UDS_SOCKET_SRC)
-
 $(BUILD_DIR)/retry_logic.o: src/retry_logic.c src/retry_logic.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/retry_logic.o src/retry_logic.c
-
-# Build ZMQ socket object
-$(BUILD_DIR)/zmq_socket.o: $(ZMQ_SOCKET_SRC) src/zmq_socket.h src/zmq_thread_pool.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_socket.o $(ZMQ_SOCKET_SRC)
-
-# Build ZMQ thread pool object
-$(BUILD_DIR)/zmq_thread_pool.o: $(ZMQ_THREAD_POOL_SRC) src/zmq_thread_pool.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_thread_pool.o $(ZMQ_THREAD_POOL_SRC)
-
-# Build ZMQ client object (threaded version)
-$(BUILD_DIR)/zmq_client.o: $(ZMQ_CLIENT_SRC) src/zmq_client.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_client.o $(ZMQ_CLIENT_SRC)
-
-# Build ZMQ message queue object
-$(BUILD_DIR)/zmq_message_queue.o: $(ZMQ_MESSAGE_QUEUE_SRC) src/zmq_message_queue.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_message_queue.o $(ZMQ_MESSAGE_QUEUE_SRC)
-
-# Build ZMQ daemon object
-$(BUILD_DIR)/zmq_daemon.o: $(ZMQ_DAEMON_SRC) src/zmq_daemon.h src/zmq_message_queue.h src/zmq_socket.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_daemon.o $(ZMQ_DAEMON_SRC)
-
-# Build ZMQ client object - rule is already defined above using ZMQ_CLIENT_SRC
-# $(BUILD_DIR)/zmq_client.o: $(ZMQ_CLIENT_SRC) src/zmq_client.h src/zmq_message_queue.h src/zmq_socket.h
-#	@mkdir -p $(BUILD_DIR)
-#	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/zmq_client.o $(ZMQ_CLIENT_SRC)
 
 # Build SQLite queue object
 $(BUILD_DIR)/sqlite_queue.o: $(SQLITE_QUEUE_SRC) src/sqlite_queue.h
@@ -1120,10 +969,6 @@ $(BUILD_DIR)/oneshot_output.o: $(ONESHOT_OUTPUT_SRC) src/oneshot/oneshot_output.
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/oneshot_output.o $(ONESHOT_OUTPUT_SRC)
 
-# Build ZMQ reliable queue object
-
-
-# Generate version.h from VERSION file
 $(VERSION_H): $(VERSION_FILE)
 	@echo "Generating version.h..."
 	@mkdir -p src
@@ -1198,14 +1043,9 @@ $(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/http_client_debug.o $(HTTP_CLIENT_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/session_debug.o $(SESSION_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/retry_logic_debug.o $(RETRY_LOGIC_SRC)
-	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_socket_debug.o $(ZMQ_SOCKET_SRC)
-	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_message_queue_debug.o $(ZMQ_MESSAGE_QUEUE_SRC)
-	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_daemon_debug.o $(ZMQ_DAEMON_SRC)
-	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_client_debug.o $(ZMQ_CLIENT_SRC)
-	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/zmq_thread_pool_debug.o $(ZMQ_THREAD_POOL_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/sqlite_queue_debug.o $(SQLITE_QUEUE_SRC)
 	$(CC) $(DEBUG_CFLAGS) -c -o $(BUILD_DIR)/process_utils_debug.o $(PROCESS_UTILS_SRC)
-	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/window_manager_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/openai_responses_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/subagent_manager_debug.o $(BUILD_DIR)/base64_debug.o $(BUILD_DIR)/history_file_debug.o $(BUILD_DIR)/array_resize_debug.o $(BUILD_DIR)/http_client_debug.o $(BUILD_DIR)/session_debug.o $(BUILD_DIR)/retry_logic_debug.o $(BUILD_DIR)/zmq_socket_debug.o $(BUILD_DIR)/zmq_message_queue_debug.o $(BUILD_DIR)/zmq_daemon_debug.o $(BUILD_DIR)/zmq_client_debug.o $(BUILD_DIR)/zmq_thread_pool_debug.o $(BUILD_DIR)/sqlite_queue_debug.o $(BUILD_DIR)/process_utils_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
+	$(CC) $(DEBUG_CFLAGS) -o $(BUILD_DIR)/klawed-debug $(SRC) $(BUILD_DIR)/logger_debug.o $(BUILD_DIR)/persistence_debug.o $(BUILD_DIR)/migrations_debug.o $(BUILD_DIR)/commands_debug.o $(BUILD_DIR)/completion_debug.o $(BUILD_DIR)/tui_debug.o $(BUILD_DIR)/window_manager_debug.o $(BUILD_DIR)/todo_debug.o $(BUILD_DIR)/aws_bedrock_debug.o $(BUILD_DIR)/provider_debug.o $(BUILD_DIR)/openai_provider_debug.o $(BUILD_DIR)/openai_messages_debug.o $(BUILD_DIR)/openai_responses_debug.o $(BUILD_DIR)/bedrock_provider_debug.o $(BUILD_DIR)/anthropic_provider_debug.o $(BUILD_DIR)/builtin_themes_debug.o $(BUILD_DIR)/message_queue_debug.o $(BUILD_DIR)/ai_worker_debug.o $(BUILD_DIR)/voice_input_debug.o $(BUILD_DIR)/mcp_debug.o $(BUILD_DIR)/subagent_manager_debug.o $(BUILD_DIR)/base64_debug.o $(BUILD_DIR)/history_file_debug.o $(BUILD_DIR)/array_resize_debug.o $(BUILD_DIR)/http_client_debug.o $(BUILD_DIR)/session_debug.o $(BUILD_DIR)/retry_logic_debug.o $(BUILD_DIR)/sqlite_queue_debug.o $(BUILD_DIR)/process_utils_debug.o $(TOOL_UTILS_SRC) $(DEBUG_LDFLAGS)
 	@echo ""
 	@echo "✓ Debug build successful with AddressSanitizer!"
 	@echo "Run: ./$(BUILD_DIR)/klawed-debug \"your prompt here\""
@@ -1218,10 +1058,10 @@ $(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_
 	@echo ""
 
 # Build with clang compiler
-$(BUILD_DIR)/klawed-clang: $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(AI_WORKER_OBJ) $(MESSAGE_QUEUE_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(PROCESS_UTILS_OBJ) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
+$(BUILD_DIR)/klawed-clang: $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(AI_WORKER_OBJ) $(MESSAGE_QUEUE_OBJ) $(VOICE_INPUT_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(PROCESS_UTILS_OBJ) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building with clang compiler..."
-	$(CLANG) $(CFLAGS) -o $(BUILD_DIR)/klawed-clang $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(PROCESS_UTILS_OBJ) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
+	$(CLANG) $(CFLAGS) -o $(BUILD_DIR)/klawed-clang $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(PROCESS_UTILS_OBJ) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Clang build successful!"
 	@echo "Version: $(VERSION)"
@@ -1303,11 +1143,6 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/message_queue_all.o $(MESSAGE_QUEUE_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/ai_worker_all.o $(AI_WORKER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/voice_input_all.o $(VOICE_INPUT_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_socket_all.o $(ZMQ_SOCKET_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_client_all.o $(ZMQ_CLIENT_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_message_queue_all.o $(ZMQ_MESSAGE_QUEUE_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_daemon_all.o $(ZMQ_DAEMON_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_thread_pool_all.o $(ZMQ_THREAD_POOL_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/sqlite_queue_all.o $(SQLITE_QUEUE_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/mcp_all.o $(MCP_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_utils_all.o $(TOOL_UTILS_SRC); \
@@ -1382,8 +1217,6 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/builtin_themes_all.o \
 		$(BUILD_DIR)/message_queue_all.o $(BUILD_DIR)/ai_worker_all.o \
 		$(BUILD_DIR)/voice_input_all.o \
-		$(BUILD_DIR)/zmq_socket_all.o $(BUILD_DIR)/zmq_client_all.o \
-		$(BUILD_DIR)/zmq_message_queue_all.o $(BUILD_DIR)/zmq_daemon_all.o $(BUILD_DIR)/zmq_thread_pool_all.o \
 		$(BUILD_DIR)/sqlite_queue_all.o \
 		$(BUILD_DIR)/mcp_all.o \
 		$(BUILD_DIR)/tool_utils_all.o $(BUILD_DIR)/process_utils_all.o \
@@ -1394,7 +1227,6 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/session_all.o \
 		$(BUILD_DIR)/retry_logic_all.o \
 		$(BUILD_DIR)/memvid_all.o $(BUILD_DIR)/compaction_all.o \
-		$(BUILD_DIR)/uds_socket_all.o \
 		$(BUILD_DIR)/file_utils_all.o $(BUILD_DIR)/string_utils_all.o \
 		$(BUILD_DIR)/timestamp_utils_all.o $(BUILD_DIR)/format_utils_all.o \
 		$(BUILD_DIR)/env_utils_all.o $(BUILD_DIR)/output_utils_all.o $(BUILD_DIR)/diff_utils_all.o \
@@ -2278,12 +2110,6 @@ check-deps:
 	@pkg-config --exists openssl 2>/dev/null || { echo "Error: OpenSSL not found. Install with: brew install openssl (macOS) or apt-get install libssl-dev (Linux)"; exit 1; }
 	@pkg-config --exists libcjson 2>/dev/null || { echo "Error: cJSON not found. Install with: brew install cjson (macOS) or apt-get install libcjson-dev (Linux)"; exit 1; }
 	@pkg-config --exists libbsd 2>/dev/null || { echo "Error: libbsd not found. Install with: brew install libbsd (macOS) or apt-get install libbsd-dev (Linux)"; exit 1; }
-	@# Check for ZMQ if explicitly enabled
-	@if [ "$(ZMQ)" = "1" ]; then \
-		echo "Checking for ZeroMQ (ZMQ=1 specified)..."; \
-		pkg-config --exists libzmq 2>/dev/null || { echo "Error: libzmq not found. Install with: brew install zeromq (macOS) or apt-get install libzmq3-dev (Linux)"; exit 1; }; \
-		echo "✓ ZeroMQ found"; \
-	fi
 	@# Check for memvid-ffi if explicitly enabled
 	@if [ "$(MEMVID)" = "1" ]; then \
 		echo "Checking for memvid-ffi (MEMVID=1 specified)..."; \
@@ -2364,21 +2190,14 @@ help:
 	@echo "  - libbsd (for safer C functions)"
 	@echo "  - pthread (usually included with OS)"
 	@echo "  - valgrind (optional, for memory leak detection)"
-	@echo "  - libzmq (optional, for ZMQ socket support)"
 	@echo ""
 	@echo "macOS installation:"
 	@echo "  brew install curl cjson sqlite3 openssl libbsd valgrind"
-	@echo "  # For ZMQ support:"
-	@echo "  brew install zeromq"
 	@echo ""
 	@echo "Linux installation:"
 	@echo "  apt-get install libcurl4-openssl-dev libcjson-dev libsqlite3-dev libssl-dev libbsd-dev valgrind"
-	@echo "  # For ZMQ support:"
-	@echo "  apt-get install libzmq3-dev"
 	@echo "  or"
 	@echo "  yum install libcurl-devel cjson-devel sqlite-devel openssl-devel libbsd-devel valgrind"
-	@echo "  # For ZMQ support:"
-	@echo "  yum install zeromq-devel"
 	@echo ""
 	@echo "Static Analysis Tools (optional):"
 	@echo "  macOS: brew install llvm cppcheck flawfinder"
@@ -2647,7 +2466,7 @@ TOOL_DEFINITIONS_TEST_OBJ = $(BUILD_DIR)/tool_definitions_test.o
 # Tool registry and executor are excluded from TEST_COMMON_OBJS because they need to be
 # compiled with -DTEST_BUILD to exclude MCP tool references. They are compiled into
 # claude_test.o instead.
-TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(TUI_CORE_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_WINDOW_OBJ) $(TUI_RENDER_OBJ) $(TUI_MODES_OBJ) $(TUI_INPUT_OBJ) $(TUI_HISTORY_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_PASTE_OBJ) $(TUI_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(EXPLORE_TOOLS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ)
+TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(TUI_CORE_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_WINDOW_OBJ) $(TUI_RENDER_OBJ) $(TUI_MODES_OBJ) $(TUI_INPUT_OBJ) $(TUI_HISTORY_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_PASTE_OBJ) $(TUI_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(EXPLORE_TOOLS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ)
 
 test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET)
 	@echo ""
@@ -2661,17 +2480,6 @@ $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET): $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC)
 $(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ) $(RETRY_LOGIC_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_HTTP_CLIENT_TARGET) $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
 
-$(TEST_ZMQ_SOCKET_TARGET): $(SRC) $(TEST_ZMQ_SOCKET_SRC) $(TEST_COMMON_OBJS)
-	@mkdir -p $(BUILD_DIR)
-	@echo "Compiling klawed.c for ZMQ socket testing (renaming main)..."
-	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_zmq_test.o $(SRC)
-	@echo "Compiling ZMQ socket test suite..."
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_zmq_socket.o $(TEST_ZMQ_SOCKET_SRC)
-	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
-	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
-	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_ZMQ_SOCKET_TARGET) $(BUILD_DIR)/claude_zmq_test.o $(BUILD_DIR)/test_zmq_socket.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
-
 
 
 
@@ -2679,15 +2487,6 @@ $(TEST_ZMQ_SOCKET_TARGET): $(SRC) $(TEST_ZMQ_SOCKET_SRC) $(TEST_COMMON_OBJS)
 $(TEST_SQLITE_QUEUE_TARGET): $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_SQLITE_QUEUE_TARGET) $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
 
-# Test target for UDS Socket
-$(TEST_UDS_SOCKET_TARGET): $(TEST_UDS_SOCKET_SRC) $(UDS_SOCKET_OBJ) $(LOGGER_OBJ)
-	@mkdir -p $(BUILD_DIR)
-	@echo "Compiling UDS Socket test suite..."
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_uds_socket.o $(TEST_UDS_SOCKET_SRC)
-	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_UDS_SOCKET_TARGET) $(BUILD_DIR)/test_uds_socket.o $(UDS_SOCKET_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
-	@echo ""
-	@echo "✓ UDS Socket test build successful!"
 
 # Test target for File Search fuzzy matching
 $(TEST_FILE_SEARCH_TARGET): $(FILE_SEARCH_SRC) $(TEST_FILE_SEARCH_SRC) $(LOGGER_OBJ)

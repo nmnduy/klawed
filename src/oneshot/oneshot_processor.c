@@ -1,6 +1,6 @@
 /*
  * Oneshot Response Processor
- * 
+ *
  * Processes API responses in oneshot mode, handling tool execution
  * and recursive response processing until completion.
  */

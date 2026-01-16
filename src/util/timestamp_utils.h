@@ -5,7 +5,7 @@
 
 /**
  * Timestamp Utilities
- * 
+ *
  * Helper functions for timestamp generation and formatting.
  */
 

@@ -5,7 +5,7 @@
 
 /**
  * Format Utilities
- * 
+ *
  * Helper functions for formatting values.
  */
 

@@ -73,12 +73,12 @@ const Tool* find_tool_by_name(const char *name) {
     if (!name) {
         return NULL;
     }
-    
+
     for (int i = 0; i < num_tools; i++) {
         if (strcmp(tools[i].name, name) == 0) {
             return &tools[i];
         }
     }
-    
+
     return NULL;
 }

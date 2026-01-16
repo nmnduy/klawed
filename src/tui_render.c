@@ -430,7 +430,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     if (is_user_message) {
         // Add one blank line for top padding
         waddch(tui->wm.conv_pad, '\n');
-        
+
         // Get updated position after adding blank line
         int cur_y, cur_x;
         int pad_height, pad_width;
@@ -439,16 +439,26 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         (void)pad_height;
         (void)cur_x;
 
-        // Draw full-width background bar
+        // Calculate how many lines the user message will need
+        // The prefix " > " takes 3 characters
+        int prefix_len = 3;
+        int text_len = text ? (int)strlen(text) : 0;
+        int needed_lines = tui_window_calculate_needed_lines(text, text_len, pad_width, prefix_len);
+
+        // Draw full-width background for ALL lines the message will occupy
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG));
         }
-        for (int i = 0; i < pad_width; i++) {
-            waddch(tui->wm.conv_pad, ' ');
+        int bg_start_y = cur_y;
+        for (int line = 0; line < needed_lines; line++) {
+            wmove(tui->wm.conv_pad, bg_start_y + line, 0);
+            for (int col = 0; col < pad_width; col++) {
+                waddch(tui->wm.conv_pad, ' ');
+            }
         }
         // Keep color active for text rendering
 
-        // Move back to start of line to draw content on top
+        // Move back to start of first line to draw content on top
         wmove(tui->wm.conv_pad, cur_y, 0);
 
         // Render prefix '>' with bold user color on top of background
@@ -525,16 +535,16 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
             (void)pad_height;
             (void)msg_x;
-            
+
             // Move to end of line
             wmove(tui->wm.conv_pad, msg_y, pad_width - 1);
-            
+
             // Add newline to finish the background line
             waddch(tui->wm.conv_pad, '\n');
-            
+
             // Add one blank line for bottom padding
             waddch(tui->wm.conv_pad, '\n');
-            
+
             // Exit early to avoid duplicate newline below
             goto skip_newline;
         }
@@ -542,7 +552,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
 
     // Add newline for non-user messages
     waddch(tui->wm.conv_pad, '\n');
-    
+
 skip_newline:
     ; // Empty statement required after label
 
@@ -648,16 +658,21 @@ void input_redraw(TUIState *tui, const char *prompt) {
     // Layout depends on style:
     // - BACKGROUND: border (1) + left padding (1) + content + right padding (1)
     // - BORDER: box border (1) + left padding (1) + content + right padding (1) + box border (1)
+    // - BLAND: caret '>>> ' (4 chars) + content (no padding, no borders)
     int content_start_col;
     int right_margin;
 
     if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
         content_start_col = INPUT_CONTENT_START;  // border (1) + padding (1) = 2
         right_margin = INPUT_RIGHT_PADDING;       // padding (1) = 1
-    } else {
+    } else if (tui->input_box_style == INPUT_STYLE_BORDER) {
         // BORDER style: box border on left + padding
         content_start_col = INPUT_LEFT_BORDER_WIDTH + INPUT_LEFT_PADDING;  // 1 + 1 = 2
         right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;      // padding + right border = 2
+    } else {
+        // BLAND style: just '>>> ' prefix (4 chars), no padding
+        content_start_col = 4;  // '>>> ' = 4 characters
+        right_margin = 0;       // no right padding
     }
 
     int content_width = input->win_width - content_start_col - right_margin;
@@ -672,12 +687,14 @@ void input_redraw(TUIState *tui, const char *prompt) {
     // Request window resize (this will be a no-op if size hasn't changed)
     // For BORDER style, we need extra height for top and bottom borders
     // For BACKGROUND style, we add one line of top padding and one line of bottom padding
+    // For BLAND style, no extra height needed
     int window_height_needed = needed_lines;
     if (tui->input_box_style == INPUT_STYLE_BORDER) {
         window_height_needed += 2;  // +2 for top and bottom borders
     } else if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
         window_height_needed += 2;  // +2 for top and bottom padding
     }
+    // BLAND style: no extra height
     tui_window_resize_input(tui, window_height_needed);
     input = tui->input_buffer;
     win = input->win;
@@ -689,9 +706,13 @@ void input_redraw(TUIState *tui, const char *prompt) {
     if (tui->input_box_style == INPUT_STYLE_BACKGROUND) {
         content_start_col = INPUT_CONTENT_START;
         right_margin = INPUT_RIGHT_PADDING;
-    } else {
+    } else if (tui->input_box_style == INPUT_STYLE_BORDER) {
         content_start_col = INPUT_LEFT_BORDER_WIDTH + INPUT_LEFT_PADDING;
         right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;
+    } else {
+        // BLAND style
+        content_start_col = 4;
+        right_margin = 0;
     }
     content_width = input->win_width - content_start_col - right_margin;
     if (content_width < 10) content_width = 10;
@@ -715,6 +736,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
     // Adjust vertical scroll to keep cursor visible
     // For BORDER style, we need to account for top and bottom borders
     // For BACKGROUND style, we account for top and bottom padding
+    // For BLAND style, no offset needed
     int content_start_row = (tui->input_box_style == INPUT_STYLE_BORDER) ? 1 :
                             (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 1 : 0;
     int border_height_offset = (tui->input_box_style == INPUT_STYLE_BORDER) ? 2 :
@@ -747,7 +769,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
         }
-    } else {
+    } else if (tui->input_box_style == INPUT_STYLE_BORDER) {
         // Style 2: Full border with no background
         // Reset to default background (removes any previously set background color)
         if (has_colors()) {
@@ -761,6 +783,21 @@ void input_redraw(TUIState *tui, const char *prompt) {
         box(win, 0, 0);
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+        }
+    } else {
+        // Style 3: BLAND - just caret '>>>' on general background, no borders
+        // Reset to default background
+        if (has_colors()) {
+            wbkgd(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
+
+        // Draw the '>>> ' caret in prompt color
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
+        }
+        mvwprintw(win, 0, 0, ">>> ");
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         }
     }
 
@@ -785,7 +822,11 @@ void input_redraw(TUIState *tui, const char *prompt) {
     int screen_y = content_start_row;
     int screen_x = content_start_col + effective_prefix_len;
 
-    for (int i = 0; i < input->length && screen_y < (input->win_height - (tui->input_box_style == INPUT_STYLE_BORDER ? 1 : 0)); i++) {
+    // Calculate bottom boundary (accounts for border in BORDER style)
+    int bottom_boundary = (tui->input_box_style == INPUT_STYLE_BORDER) ?
+                          (input->win_height - 1) : input->win_height;
+
+    for (int i = 0; i < input->length && screen_y < bottom_boundary; i++) {
         // Skip lines before scroll offset
         if (current_line < input->line_scroll_offset) {
             if (input->buffer[i] == '\n') {
@@ -845,7 +886,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
 
     // Bounds check for cursor position
     if (cursor_screen_y >= content_start_row &&
-        cursor_screen_y < (input->win_height - (tui->input_box_style == INPUT_STYLE_BORDER ? 1 : 0)) &&
+        cursor_screen_y < bottom_boundary &&
         cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
         wmove(win, cursor_screen_y, cursor_screen_x);
     }
@@ -909,7 +950,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
 
             // Restore cursor position after drawing indicators
             if (cursor_screen_y >= content_start_row &&
-                cursor_screen_y < (input->win_height - (tui->input_box_style == INPUT_STYLE_BORDER ? 1 : 0)) &&
+                cursor_screen_y < bottom_boundary &&
                 cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
                 wmove(win, cursor_screen_y, cursor_screen_x);
             }

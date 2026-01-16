@@ -53,10 +53,6 @@ Project instructions for Klawed when working with this codebase.
 - **File search (Ctrl+F)**: `src/file_search.c`, `src/file_search.h` (fuzzy file finder popup)
 - **Streaming**: `docs/streaming.md` (real-time response display)
 
-**Network & Communication:**
-- **ZMQ socket**: `src/zmq_socket.c`, `src/zmq_socket.h`, `docs/zmq_input_output.md`
-- **Unix domain socket**: `src/uds_socket.c`, `src/uds_socket.h` (synchronous peer-to-peer IPC)
-
 **Tests**: `tests/test_*.c` (unit tests for all major components)
 **Build**: `Makefile`
 
@@ -139,14 +135,6 @@ make              # Build: output to build/klawed
 make test         # Run unit tests (tests/ directory)
 ```
 
-**With ZMQ support:**
-```bash
-make ZMQ=1        # Build with ZeroMQ socket support (requires libzmq)
-make ZMQ=0        # Explicitly disable ZMQ support
-# Or let it auto-detect (default):
-make              # Will auto-detect libzmq if available
-```
-
 **With Memvid support (persistent memory):**
 ```bash
 make MEMVID=1     # Build with memvid support (requires memvid-ffi library)
@@ -199,11 +187,6 @@ export OPENAI_API_KEY="your-api-key"
 - **MCP**: `KLAWED_MCP_ENABLED=1` to enable (disabled by default), `KLAWED_MCP_CONFIG` for config path
   - `KLAWED_MCP_INIT_TIMEOUT` - Timeout for MCP server initialization in seconds (default: 10, 0=no timeout, overrides config file)
   - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
-- **ZMQ Socket**: `KLAWED_ZMQ_ENDPOINT` - ZMQ endpoint (e.g., "tcp://127.0.0.1:5555" or "ipc:///tmp/klawed.sock")
-  - `KLAWED_ZMQ_MODE` - ZMQ mode ("daemon")
-- **Unix Socket**: `KLAWED_UNIX_SOCKET_PATH` - Unix domain socket path (e.g., "/tmp/klawed.sock")
-  - `KLAWED_UNIX_SOCKET_RETRIES` - Max reconnection attempts (default: 5)
-  - `KLAWED_UNIX_SOCKET_TIMEOUT` - Timeout for operations in seconds (default: 30)
 - **Memory**: `KLAWED_MEMORY_PATH` for custom memory file location (default: `.klawed/memory.mv2`)
 - **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes, requires memvid)
   - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of model token limit (default: 60)

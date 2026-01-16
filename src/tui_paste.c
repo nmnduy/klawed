@@ -179,7 +179,7 @@ int tui_paste_check_timeout(TUIState *tui, const char *prompt) {
 
         // Insert placeholder or content directly
         tui_paste_finalize(input);
-        
+
         // Redraw input window
         if (tui->wm.input_win) {
             // We need to call input_redraw, but it's in the main tui.c
@@ -202,7 +202,7 @@ void tui_paste_start_mode(TUIInputBuffer *input) {
     input->paste_mode = 1;
     input->paste_start_pos = input->cursor;
     input->paste_content_len = 0;
-    
+
     // Allocate paste buffer if not already allocated
     if (!input->paste_content) {
         input->paste_capacity = 4096;
@@ -213,7 +213,7 @@ void tui_paste_start_mode(TUIInputBuffer *input) {
             return;
         }
     }
-    
+
     LOG_DEBUG("[TUI] Bracketed paste mode started at position %d", input->paste_start_pos);
 }
 

@@ -45,15 +45,6 @@
 #include "process_utils.h"
 #include "http_client.h"  // For StreamEvent and HttpStreamCallback
 
-#ifdef HAVE_ZMQ
-#include "zmq_socket.h"
-#include "zmq_client.h"
-#include <zmq.h>
-#endif
-
-#ifdef HAVE_UDS
-#include "uds_socket.h"
-#endif
 
 #include "sqlite_queue.h"
 #include "explore_tools.h"
@@ -1263,13 +1254,7 @@ int main(int argc, char *argv[]) {
         printf("  %s -r, --resume [ID]             Resume a previous conversation session\n", argv[0]);
         printf("                                      (defaults to most recent session if no ID given)\n");
         printf("  %s -l, --list-sessions [N]       List available sessions (N = max to show)\n", argv[0]);
-#ifdef HAVE_ZMQ
-        printf("  %s -z, --zmq ENDPOINT           Run in ZMQ daemon mode (e.g., tcp://127.0.0.1:5555)\n", argv[0]);
-        printf("  %s -c, --zmq-client ENDPOINT    Run as ZMQ client (connect to daemon)\n", argv[0]);
-#endif
-#ifdef HAVE_UDS
-        printf("  %s -u, --uds SOCKET_PATH        Run in Unix socket daemon mode (e.g., /tmp/klawed.sock)\n", argv[0]);
-#endif
+
         printf("  %s -h, --help                     Show this help message\n", argv[0]);
         printf("  %s --auto-compact               Enable automatic context compaction\n", argv[0]);
         printf("  %s --version                      Show version information\n\n", argv[0]);
@@ -1307,17 +1292,7 @@ int main(int argc, char *argv[]) {
         printf("    KLAWED_AUTO_COMPACT       Optional: Enable automatic context compaction (1=true, 0=false)\n");
         printf("    KLAWED_COMPACT_THRESHOLD  Optional: Trigger compaction at this %% of max messages (default: 60)\n");
         printf("    KLAWED_COMPACT_KEEP_RECENT Optional: Number of recent messages to keep (default: 20)\n\n");
-#ifdef HAVE_ZMQ
-        printf("  ZMQ Socket Mode:\n");
-        printf("    KLAWED_ZMQ_ENDPOINT  Optional: ZMQ endpoint (e.g., tcp://127.0.0.1:5555)\n");
-        printf("    KLAWED_ZMQ_MODE      Optional: ZMQ mode (daemon)\n\n");
-#endif
-#ifdef HAVE_UDS
-        printf("  Unix Socket Mode:\n");
-        printf("    KLAWED_UNIX_SOCKET_PATH    Optional: Path to Unix socket file (e.g., /tmp/klawed.sock)\n");
-        printf("    KLAWED_UNIX_SOCKET_RETRIES Optional: Max reconnection attempts (default: 5)\n");
-        printf("    KLAWED_UNIX_SOCKET_TIMEOUT Optional: Timeout for operations in seconds (default: 30)\n\n");
-#endif
+
         printf("  SQLite Queue Mode:\n");
         printf("    KLAWED_SQLITE_DB_PATH  Optional: Path to SQLite database for message queue\n");
         printf("    KLAWED_SQLITE_SENDER   Optional: Sender name for messages (default: klawed)\n\n");
@@ -1390,67 +1365,7 @@ int main(int argc, char *argv[]) {
 #endif
 
     // Check for ZMQ daemon mode
-#ifdef HAVE_ZMQ
-    int zmq_daemon_mode = 0;
-    const char *zmq_endpoint = NULL;
 
-    if (argc == 3 && (strcmp(argv[1], "-z") == 0 || strcmp(argv[1], "--zmq") == 0)) {
-        zmq_daemon_mode = 1;
-        zmq_endpoint = argv[2];
-        LOG_INFO("ZMQ daemon mode enabled, endpoint: %s", zmq_endpoint);
-    }
-
-    // Also check environment variable for ZMQ endpoint
-    if (!zmq_endpoint) {
-        zmq_endpoint = getenv("KLAWED_ZMQ_ENDPOINT");
-        if (zmq_endpoint) {
-            const char *zmq_mode = getenv("KLAWED_ZMQ_MODE");
-            if (zmq_mode && strcmp(zmq_mode, "daemon") == 0) {
-                zmq_daemon_mode = 1;
-            }
-        }
-    }
-
-    // Check for ZMQ client mode
-    int zmq_client_mode_flag = 0;
-    const char *zmq_client_endpoint = NULL;
-
-    if (argc == 3 && (strcmp(argv[1], "-c") == 0 || strcmp(argv[1], "--zmq-client") == 0)) {
-        zmq_client_mode_flag = 1;
-        zmq_client_endpoint = argv[2];
-        LOG_INFO("ZMQ client mode enabled, connecting to: %s", zmq_client_endpoint);
-    }
-#endif
-
-    // Check for UDS daemon mode
-#ifdef HAVE_UDS
-    int uds_daemon_mode = 0;
-    const char *uds_socket_path = NULL;
-
-    if (argc == 3 && (strcmp(argv[1], "-u") == 0 || strcmp(argv[1], "--uds") == 0)) {
-        uds_daemon_mode = 1;
-        uds_socket_path = argv[2];
-        LOG_INFO("UDS daemon mode enabled, socket path: %s", uds_socket_path);
-    }
-
-    // Also check environment variable for UDS socket path
-    if (!uds_socket_path) {
-        uds_socket_path = getenv("KLAWED_UNIX_SOCKET_PATH");
-        if (uds_socket_path) {
-            uds_daemon_mode = 1;
-            LOG_INFO("UDS daemon mode enabled via environment, socket path: %s", uds_socket_path);
-        }
-    }
-
-    // UDS and ZMQ are mutually exclusive
-#ifdef HAVE_ZMQ
-    if (uds_daemon_mode && (zmq_daemon_mode || zmq_client_mode_flag)) {
-        LOG_ERROR("UDS and ZMQ modes are mutually exclusive");
-        fprintf(stderr, "Error: Cannot use UDS (-u/--uds) and ZMQ (-z/--zmq) at the same time.\n");
-        return 1;
-    }
-#endif
-#endif
 
     // Check for auto-compact flag (can appear anywhere in argv)
     int auto_compact_enabled = 0;
@@ -1519,16 +1434,7 @@ int main(int argc, char *argv[]) {
     // Check for single command mode: ./klawed "prompt"
     int is_single_command_mode = 0;
     char *single_command = NULL;
-#ifdef HAVE_ZMQ
-    int socket_ipc_enabled = zmq_daemon_mode || zmq_client_mode_flag;
-#else
     int socket_ipc_enabled = 0;
-#endif
-#ifdef HAVE_UDS
-    if (uds_daemon_mode) {
-        socket_ipc_enabled = 1;
-    }
-#endif
     if (sqlite_daemon_mode) {
         socket_ipc_enabled = 1;
     }
@@ -1921,38 +1827,6 @@ int main(int argc, char *argv[]) {
             sqlite_queue_cleanup(sqlite_ctx);
         }
     }
-#ifdef HAVE_ZMQ
-    else if (zmq_client_mode_flag) {
-        // ZMQ client mode (threaded version)
-        return zmq_client_mode(zmq_client_endpoint);
-    }
-    else if (zmq_daemon_mode) {
-        // ZMQ daemon mode
-        LOG_INFO("Starting ZMQ daemon mode on %s", zmq_endpoint);
-        ZMQContext *zmq_ctx = zmq_socket_init(zmq_endpoint, ZMQ_PAIR);
-        if (!zmq_ctx) {
-            LOG_ERROR("Failed to initialize ZMQ socket");
-            exit_code = 1;
-        } else {
-            exit_code = zmq_socket_daemon_mode(zmq_ctx, &state);
-            zmq_socket_cleanup(zmq_ctx);
-        }
-    }
-#endif
-#ifdef HAVE_UDS
-    else if (uds_daemon_mode) {
-        // UDS daemon mode
-        LOG_INFO("Starting UDS daemon mode on %s", uds_socket_path);
-        UDSContext *uds_ctx = uds_socket_init(uds_socket_path);
-        if (!uds_ctx) {
-            LOG_ERROR("Failed to initialize UDS socket");
-            exit_code = 1;
-        } else {
-            exit_code = uds_socket_daemon_mode(uds_ctx, &state);
-            uds_socket_cleanup(uds_ctx);
-        }
-    }
-#endif
     else if (is_single_command_mode) {
         exit_code = oneshot_execute(&state, single_command);
     } else {

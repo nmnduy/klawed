@@ -5,7 +5,7 @@
 
 /**
  * File Utilities
- * 
+ *
  * Helper functions for file I/O operations.
  */
 

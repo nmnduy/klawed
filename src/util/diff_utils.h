@@ -3,7 +3,7 @@
 
 /**
  * Diff Utilities
- * 
+ *
  * Helper functions for generating and displaying diffs.
  */
 

@@ -44,7 +44,7 @@ int tui_history_navigate_next(TUIState *tui, const char *prompt);
  * Append input to history (both in-memory and persistent)
  * Performs simple de-duplication (skips if same as last entry)
  * Resets history navigation state after append
- * 
+ *
  * input: The input string to append (must be non-NULL)
  */
 void tui_history_append(TUIState *tui, const char *input);

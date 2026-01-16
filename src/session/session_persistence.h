@@ -8,14 +8,14 @@
 
 /**
  * Dump a conversation from the database
- * 
+ *
  * This function retrieves and displays all API calls from a session
  * in the specified format.
- * 
+ *
  * Parameters:
  *   session_id: Session identifier to dump (NULL = most recent session)
  *   format: Output format ("default", "json", "markdown"/"md")
- * 
+ *
  * Returns:
  *   0 on success, 1 on error
  */

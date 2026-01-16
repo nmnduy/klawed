@@ -5,7 +5,7 @@
 
 /**
  * Oneshot Output Formatting
- * 
+ *
  * Functions for formatting and printing tool execution results in oneshot mode.
  * Supports both human-readable and machine-readable (HTML+JSON) output formats.
  */

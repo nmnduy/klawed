@@ -1,6 +1,6 @@
 /*
  * Oneshot Output Formatting
- * 
+ *
  * Handles output formatting for oneshot mode execution.
  * Supports both human-readable and machine-readable (HTML+JSON) formats.
  */
@@ -31,7 +31,7 @@ OneshotFormat oneshot_get_output_format(void) {
         LOG_DEBUG("Oneshot mode: using human-readable output format");
         return ONESHOT_FORMAT_HUMAN;
     } else {
-        LOG_WARN("Unknown KLAWED_ONESHOT_FORMAT value: %s, using default (human-readable)", 
+        LOG_WARN("Unknown KLAWED_ONESHOT_FORMAT value: %s, using default (human-readable)",
                  output_format);
         return ONESHOT_FORMAT_HUMAN;
     }
