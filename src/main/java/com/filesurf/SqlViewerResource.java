@@ -97,9 +97,7 @@ public class SqlViewerResource {
             return Response.ok(response).build();
 
         } catch (SQLException e) {
-            LOGGER.severe("SQL error listing tables: " + e.getMessage());
-            metricsService.incrementErrors("sql_list_tables");
-            return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "SQL error: " + e.getMessage());
+            return handleSqlException(e, "sql_list_tables");
         } catch (IOException e) {
             LOGGER.severe("IO error listing tables: " + e.getMessage());
             metricsService.incrementErrors("sql_list_tables");
@@ -181,9 +179,7 @@ public class SqlViewerResource {
             return Response.ok(response).build();
 
         } catch (SQLException e) {
-            LOGGER.severe("SQL error getting schema: " + e.getMessage());
-            metricsService.incrementErrors("sql_get_schema");
-            return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "SQL error: " + e.getMessage());
+            return handleSqlException(e, "sql_get_schema");
         } catch (IOException e) {
             LOGGER.severe("IO error getting schema: " + e.getMessage());
             metricsService.incrementErrors("sql_get_schema");
@@ -328,9 +324,7 @@ public class SqlViewerResource {
             }
 
         } catch (SQLException e) {
-            LOGGER.severe("SQL error getting data: " + e.getMessage());
-            metricsService.incrementErrors("sql_get_data");
-            return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "SQL error: " + e.getMessage());
+            return handleSqlException(e, "sql_get_data");
         } catch (IOException e) {
             LOGGER.severe("IO error getting data: " + e.getMessage());
             metricsService.incrementErrors("sql_get_data");
@@ -451,9 +445,7 @@ public class SqlViewerResource {
             return Response.ok(response).build();
 
         } catch (SQLException e) {
-            LOGGER.severe("SQL error executing query: " + e.getMessage());
-            metricsService.incrementErrors("sql_execute_query");
-            return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "SQL error: " + e.getMessage());
+            return handleSqlException(e, "sql_execute_query");
         } catch (IOException e) {
             LOGGER.severe("IO error executing query: " + e.getMessage());
             metricsService.incrementErrors("sql_execute_query");
@@ -583,9 +575,7 @@ public class SqlViewerResource {
                     .build();
 
         } catch (SQLException e) {
-            LOGGER.severe("SQL error exporting data: " + e.getMessage());
-            metricsService.incrementErrors("sql_export");
-            return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "SQL error: " + e.getMessage());
+            return handleSqlException(e, "sql_export");
         } catch (IOException e) {
             LOGGER.severe("IO error exporting data: " + e.getMessage());
             metricsService.incrementErrors("sql_export");
@@ -623,6 +613,49 @@ public class SqlViewerResource {
         error.put("success", false);
         error.put("error", message);
         return Response.status(status).entity(error).type(MediaType.APPLICATION_JSON).build();
+    }
+
+    /**
+     * Handle SQLException and return appropriate HTTP response.
+     * Distinguishes between file/data errors (422) and actual server errors (500).
+     */
+    private Response handleSqlException(SQLException e, String operation) {
+        String message = e.getMessage();
+        
+        // Check for SQLite-specific error codes indicating file/data issues
+        // These are client-side data problems, not server errors
+        if (message != null) {
+            String upperMessage = message.toUpperCase();
+            
+            if (upperMessage.contains("SQLITE_CORRUPT") || upperMessage.contains("MALFORMED")) {
+                LOGGER.warning("Corrupted database file during " + operation + ": " + message);
+                return errorResponse(Response.Status.fromStatusCode(422), 
+                        "The database file is corrupted or incomplete. Please re-upload a valid SQLite database.");
+            }
+            
+            if (upperMessage.contains("SQLITE_NOTADB") || upperMessage.contains("NOT A DATABASE")) {
+                LOGGER.warning("Invalid database file during " + operation + ": " + message);
+                return errorResponse(Response.Status.fromStatusCode(422), 
+                        "The file is not a valid SQLite database.");
+            }
+            
+            if (upperMessage.contains("SQLITE_CANTOPEN") || upperMessage.contains("UNABLE TO OPEN")) {
+                LOGGER.warning("Cannot open database file during " + operation + ": " + message);
+                return errorResponse(Response.Status.fromStatusCode(422), 
+                        "Unable to open the database file. The file may be corrupted or in an unsupported format.");
+            }
+            
+            if (upperMessage.contains("ENCRYPTED") || upperMessage.contains("SQLITE_AUTH")) {
+                LOGGER.warning("Encrypted database file during " + operation + ": " + message);
+                return errorResponse(Response.Status.fromStatusCode(422), 
+                        "The database file appears to be encrypted. Encrypted databases are not supported.");
+            }
+        }
+        
+        // For other SQL errors, it's likely a server-side issue
+        LOGGER.severe("SQL error during " + operation + ": " + message);
+        metricsService.incrementErrors(operation);
+        return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "SQL error: " + message);
     }
 
     /**
