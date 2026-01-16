@@ -1,3 +1,4 @@
+- [ ] allow updating config for llm provider
 - [ ] show the entire first 500 chars of prompt in input history search
 - [ ] add the java browser user agent here
 
