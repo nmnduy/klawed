@@ -431,11 +431,11 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         // Add one blank line for top padding
         waddch(tui->wm.conv_pad, '\n');
 
-        // Render prefix '>' with bold user color
+        // Render prefix '❯' with bold user color
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
         }
-        waddstr(tui->wm.conv_pad, "> ");
+        waddstr(tui->wm.conv_pad, "❯ ");
         if (has_colors()) {
             wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
         }
