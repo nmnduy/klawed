@@ -777,8 +777,8 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
             }
         }
     } else if (ch == '\t' || ch == 9) {  // Tab key - trigger autocomplete
-        // Handle tab completion for commands starting with '/'
-        if (input->buffer && input->buffer[0] == '/') {
+        // Handle tab completion for commands starting with '/' or ':'
+        if (input->buffer && (input->buffer[0] == '/' || input->buffer[0] == ':')) {
             tui_handle_tab_completion(tui, prompt);
         } else {
             // Insert tab character
