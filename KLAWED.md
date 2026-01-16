@@ -310,25 +310,3 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 ## Deployment
 
 **DO NOT COMMIT EXTRA MARKDOWN FILES UNLESS SPECIFICALLY ASKED TO DO SO**
-
-### Quick Deploy (Recommended)
-Build assets locally and sync to server:
-```bash
-# JVM mode (production standard)
-./deployment/deploy-rsync.sh
-```
-
-This script will:
-1. Build CSS assets locally (`npm run build`)
-2. Build the JVM application (Maven package)
-3. Rsync only the required files to `filesurf-0:/root/filesurf_v2`
-4. Deploy and restart the service on the remote server
-
-**Requirements:**
-- SSH access to filesurf-0
-- Node.js and Maven installed locally
-
-**Note:** We use JVM builds for production. Native builds are currently disabled due to known issues.
-
-### Manual Deployment
-See detailed instructions in `deployment/README.md`
