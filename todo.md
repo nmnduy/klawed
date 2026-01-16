@@ -1,3 +1,4 @@
+- [ ] allow updating config for llm provider
 - [x] auto complete command if i put ':!' in the input box
 - [x] dont print the user input caret when i type something out in the normal mode
 - [x] show the entire first 500 chars of prompt in input history search
