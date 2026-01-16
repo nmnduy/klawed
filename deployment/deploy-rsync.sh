@@ -11,6 +11,8 @@ echo ""
 REMOTE_HOST="filesurf-0"
 REMOTE_PATH="/root/filesurf_v2"
 LOCAL_PATH="$(cd "$(dirname "$0")/.." && pwd)"
+LOCAL_TEST_PORT="${LOCAL_TEST_PORT:-8085}"
+LOCAL_TEST_DURATION="${LOCAL_TEST_DURATION:-10}"
 
 echo "Local path:  $LOCAL_PATH"
 echo "Remote host: $REMOTE_HOST"
@@ -91,16 +93,16 @@ npm run build
 echo "   ✓ CSS build complete"
 echo ""
 
-# Step 2: Build Java application
-echo "Step 2: Building Java application (JVM mode)..."
+# Step 2: Build application
+echo "Step 2: Building application..."
 mvn clean package -DskipTests -Dquarkus.profile=prod
-echo "   ✓ Maven build complete"
+echo "   ✓ Build complete"
 echo ""
 
 # Step 3: Verify build artifacts
 echo "Step 3: Verifying build artifacts..."
 if [ ! -f "$LOCAL_PATH/target/quarkus-app/quarkus-run.jar" ]; then
-    echo "   ✗ ERROR: quarkus-run.jar not found!"
+    echo "   ✗ ERROR: JVM build artifact not found!"
     exit 1
 fi
 if [ ! -d "$LOCAL_PATH/src/main/resources/META-INF/resources/dist" ]; then
@@ -108,15 +110,78 @@ if [ ! -d "$LOCAL_PATH/src/main/resources/META-INF/resources/dist" ]; then
     exit 1
 fi
 echo "   ✓ All artifacts present"
+ls -lh "$LOCAL_PATH/target/quarkus-app/quarkus-run.jar"
 echo ""
 
-# Step 4: Sync to remote server
-echo "Step 4: Syncing to $REMOTE_HOST..."
+# Step 4: Run locally to verify build works
+echo "Step 4: Running build locally to verify..."
+echo "   Starting on port $LOCAL_TEST_PORT for $LOCAL_TEST_DURATION seconds..."
 echo ""
 
-# Sync target directory (built JAR and dependencies)
-echo "   → Syncing target/quarkus-app/..."
-rsync -avz --delete \
+# Create temporary data directory for local test
+LOCAL_TEST_DIR=$(mktemp -d)
+mkdir -p "$LOCAL_TEST_DIR/data"
+
+# Start the application in background
+cd "$LOCAL_PATH/target/quarkus-app"
+java \
+    -Dquarkus.http.port="$LOCAL_TEST_PORT" \
+    -Dquarkus.datasource.jdbc.url="jdbc:sqlite:$LOCAL_TEST_DIR/data/test.db?journal_mode=WAL" \
+    -jar quarkus-run.jar &
+LOCAL_PID=$!
+
+# Give it time to start
+sleep 5
+
+# Check if process is still running
+if ! kill -0 "$LOCAL_PID" 2>/dev/null; then
+    echo "   ✗ ERROR: Application failed to start!"
+    echo "   Check the output above for errors."
+    rm -rf "$LOCAL_TEST_DIR"
+    exit 1
+fi
+
+# Try to hit the health endpoint
+echo "   Testing health endpoint..."
+HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$LOCAL_TEST_PORT/q/health/ready" 2>/dev/null || echo "000")
+
+if [ "$HEALTH_RESPONSE" = "200" ]; then
+    echo "   ✓ Health check passed (HTTP $HEALTH_RESPONSE)"
+else
+    echo "   ⚠ Health check returned HTTP $HEALTH_RESPONSE (may still be starting)"
+fi
+
+# Let it run for a bit more to verify stability
+echo "   Running for $LOCAL_TEST_DURATION seconds to verify stability..."
+sleep "$LOCAL_TEST_DURATION"
+
+# Check if still running
+if kill -0 "$LOCAL_PID" 2>/dev/null; then
+    echo "   ✓ Application ran successfully for $LOCAL_TEST_DURATION seconds"
+    echo "   Stopping local test instance..."
+    kill "$LOCAL_PID" 2>/dev/null || true
+    wait "$LOCAL_PID" 2>/dev/null || true
+else
+    echo "   ✗ ERROR: Application crashed during test run!"
+    rm -rf "$LOCAL_TEST_DIR"
+    exit 1
+fi
+
+# Cleanup
+rm -rf "$LOCAL_TEST_DIR"
+echo "   ✓ Local verification complete"
+echo ""
+
+# Step 5: Sync to remote server
+echo "Step 5: Syncing to $REMOTE_HOST..."
+echo ""
+
+# Create target directory on remote
+ssh "$REMOTE_HOST" "mkdir -p $REMOTE_PATH/target"
+
+# Sync quarkus-app directory (contains JAR and all dependencies)
+echo "   → Syncing quarkus-app directory..."
+rsync -avz --progress --delete \
     "$LOCAL_PATH/target/quarkus-app/" \
     "$REMOTE_HOST:$REMOTE_PATH/target/quarkus-app/"
 
@@ -144,8 +209,8 @@ echo ""
 echo "   ✓ Sync complete"
 echo ""
 
-# Step 5: Deploy on remote server
-echo "Step 5: Deploying on remote server..."
+# Step 6: Deploy on remote server
+echo "Step 6: Deploying on remote server..."
 echo ""
 ssh "$REMOTE_HOST" "cd $REMOTE_PATH && ./deployment/deploy-jvm.sh"
 

@@ -8,58 +8,38 @@ This directory contains scripts for building and deploying FileSurf v2.
 
 Build the application on your local machine and sync to the server using rsync. This is faster and more reliable when you have a proper development environment locally.
 
-#### JVM Mode (Faster Build)
 ```bash
 ./deployment/deploy-rsync.sh
 ```
 
 This script will:
-1. Build CSS assets locally (`npm run build`)
-2. Build the Java application with Maven
-3. Rsync the following to filesurf-0:/root/filesurf_v2:
+1. Rotate rollback tags (production-rollback-n1, n2, n3) and tag current commit as 'production'
+2. Build CSS assets locally (`npm run build`)
+3. Build the Java application with Maven
+4. Run locally for 10 seconds to verify the build works
+5. Rsync the following to filesurf-0:/root/filesurf_v2:
    - `target/quarkus-app/` (JAR and dependencies)
    - `deployment/` (scripts and service files)
    - `src/main/resources/` (templates, CSS, JS, built assets)
    - `pom.xml` and `package.json` (for reference)
-4. Run `deploy-jvm.sh` on the remote server to install/restart the service
-
-#### Native Mode (Smaller Memory Footprint)
-```bash
-./deployment/deploy-rsync-native.sh
-```
-
-This script will:
-1. Build CSS assets locally (`npm run build`)
-2. Build native executable with GraalVM (takes 5-10 minutes)
-3. Rsync the native executable and resources to filesurf-0
-4. Run `deploy.sh` on the remote server to install/restart the service
-
-**Requirements:**
-- GraalVM with native-image installed locally
-- Same CPU architecture as target server (x86_64)
+6. Run `deploy.sh` on the remote server to install/restart the service
 
 ### Remote Build (Alternative)
 
 Build directly on the server. Useful if you don't have the proper build environment locally.
 
-#### JVM Mode
 ```bash
-./deployment/build-jvm.sh    # On server
-./deployment/deploy-jvm.sh   # On server
-```
-
-#### Native Mode
-```bash
-./deployment/build-native.sh # On server
-./deployment/deploy.sh       # On server
+# On server
+./deployment/build.sh    # Build the application
+./deployment/deploy.sh   # Deploy and restart service
 ```
 
 ## Directory Sync Details
 
-The rsync scripts only sync the **necessary directories** to minimize transfer size:
+The rsync script only syncs the **necessary directories** to minimize transfer size:
 
 ### Always Synced
-- `target/quarkus-app/` or `target/*-runner` - Built application
+- `target/quarkus-app/` - Built application (JAR and dependencies)
 - `deployment/` - Deployment scripts (excludes *.md files)
 - `src/main/resources/` - Templates, CSS, JS, and built assets
 - `pom.xml`, `package.json` - Project metadata
@@ -70,25 +50,50 @@ The rsync scripts only sync the **necessary directories** to minimize transfer s
 - `.git/` - Version control data
 - `target/classes/`, `target/maven-status/` - Build intermediates
 
+## Production Rollback System
+
+The deployment script maintains a rollback tag history:
+
+- `production` - Current production version
+- `production-rollback-n1` - Previous production (1 version back)
+- `production-rollback-n2` - 2 versions back
+- `production-rollback-n3` - 3 versions back
+
+To rollback to a previous version:
+
+```bash
+# Check out the rollback tag
+git checkout production-rollback-n1
+
+# Deploy (will skip tag rotation since you're on a rollback tag)
+./deployment/deploy-rsync.sh
+
+# After verifying, make it the new production
+git tag -f production HEAD
+git push -f origin production
+```
+
 ## Remote Server Configuration
 
 - **Host:** filesurf-0
 - **Path:** /root/filesurf_v2
 - **Service:** filesurf-v2
 - **Port:** 9090
+- **Data Directory:** /var/lib/filesurf
+- **Log Directory:** /var/log/filesurf
 
 ## Prerequisites
 
 ### Local Machine
 - Node.js and npm (for CSS builds)
 - Maven (for Java builds)
-- GraalVM with native-image (for native builds)
+- Java 21 (for local testing)
 - SSH access to filesurf-0
 
 ### Remote Server
-- Java 21 runtime (for JVM mode)
-- No Java needed (for native mode)
+- Java 21 runtime
 - systemd
+- Podman (for sandboxed klawed agents)
 - Required directories created by deployment scripts
 
 ## Troubleshooting
@@ -121,3 +126,31 @@ ssh filesurf-0 'journalctl -u filesurf-v2 -f'
 # Restart service
 ssh filesurf-0 'systemctl restart filesurf-v2'
 ```
+
+### Local Testing
+```bash
+# Test the build locally before deploying
+cd target/quarkus-app
+java -Dquarkus.profile=prod -jar quarkus-run.jar
+
+# Access at http://localhost:9090
+```
+
+## Environment Configuration
+
+### Production Overrides
+Production-specific configuration is set via `%prod.` prefixes in `application.properties`:
+
+- Database: `/var/lib/filesurf/data/filesurf.db`
+- Sessions DB: `/var/lib/filesurf/data/sessions.db`
+- Container Tracking DB: `/var/lib/filesurf/data/containers.db`
+- Feedback DB: `/var/lib/filesurf/data/feedback.db`
+- Klawed Messages: `/var/lib/filesurf/data/klawed-messages/`
+- Persistent Storage: `/var/lib/filesurf/persistent/`
+- Session Files: `/var/lib/filesurf/sessions/`
+- Demo Videos: `/var/lib/filesurf/demos/`
+- Application Log: `/var/log/filesurf/application.log`
+- Klawed Agent Log: `/var/log/filesurf/klawed-agents.log`
+
+### Environment File
+Sensitive configuration (API keys, etc.) is stored in `/etc/filesurf/.env` on the server and loaded by systemd.

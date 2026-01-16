@@ -2,10 +2,10 @@
 set -e
 
 echo "================================"
-echo "FileSurf v2 JVM Build Script"
+echo "FileSurf v2 Build Script"
 echo "================================"
 echo ""
-echo "Building optimized JVM package (faster than native, but uses more memory)"
+echo "Building optimized package"
 echo ""
 
 # Set JAVA_HOME for Maven (use GraalVM if available, fallback to system Java)

@@ -304,4 +304,4 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 
 ## Deployment
 
-`deployment/deploy-rsync-jvm.sh`
+`deployment/deploy-rsync.sh`

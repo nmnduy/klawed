@@ -24,18 +24,18 @@ chmod 755 "$DATA_DIR"
 chmod 755 "$LOG_DIR"
 chmod 700 "$DATA_DIR/data"
 
-echo "Step 3: Checking for native executable..."
-if [ -f "$DEPLOY_DIR/target/filesurf-1.0.0-SNAPSHOT-runner" ]; then
-    echo "   ✓ Native executable found"
-    chmod +x "$DEPLOY_DIR/target/filesurf-1.0.0-SNAPSHOT-runner"
+echo "Step 3: Checking for build artifacts..."
+if [ -f "$DEPLOY_DIR/target/quarkus-app/quarkus-run.jar" ]; then
+    echo "   ✓ Build found"
+    ls -lh "$DEPLOY_DIR/target/quarkus-app/quarkus-run.jar"
 else
-    echo "   ✗ Native executable not found at $DEPLOY_DIR/target/filesurf-1.0.0-SNAPSHOT-runner"
-    echo "   Run 'mvn clean package -Pnative' to build it first"
+    echo "   ✗ Build not found at $DEPLOY_DIR/target/quarkus-app/quarkus-run.jar"
+    echo "   Run './deployment/build.sh' to build it first"
     exit 1
 fi
 
 echo "Step 4: Installing systemd service..."
-cp "$DEPLOY_DIR/deployment/filesurf-v2.service" /etc/systemd/system/
+cp "$DEPLOY_DIR/deployment/filesurf-v2.service" /etc/systemd/system/filesurf-v2.service
 systemctl daemon-reload
 
 echo "Step 5: Enabling and restarting service..."
@@ -65,6 +65,7 @@ echo ""
 echo "Service: $SERVICE_NAME"
 echo "Status: $(systemctl is-active $SERVICE_NAME)"
 echo "Application URL: http://localhost:9090"
+echo "Metrics endpoint: http://localhost:9090/metrics"
 echo ""
 echo "To view logs:"
 echo "  sudo journalctl -u $SERVICE_NAME -f"
