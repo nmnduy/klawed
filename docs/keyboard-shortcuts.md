@@ -38,6 +38,9 @@ The TUI operates in different modes, similar to vim:
 - `n` - Jump to next search result
 - `N` - Jump to previous search result
 
+### UI Customization
+- `b` - Toggle input box style (cycles: bland → background → border → bland)
+
 ## Insert Mode Shortcuts
 
 ### Text Editing
@@ -162,3 +165,8 @@ From Insert mode, type commands starting with `/`:
    - `/pattern<Enter>` to search
    - `n` to jump to next occurrence
    - `:noh<Tab><Enter>` to clear highlights
+
+6. **Input Box Styles** (toggle with `b` in Normal mode):
+   - **Bland** (default): Minimal style with just '>>>' caret, no borders or padding
+   - **Background**: Left border line + colored background with padding
+   - **Border**: Full box border around input, no background color

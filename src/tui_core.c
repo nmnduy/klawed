@@ -355,7 +355,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
 
     // Initialize mode (start in INSERT mode for immediate input)
     tui->mode = TUI_MODE_INSERT;
-    tui->input_box_style = INPUT_STYLE_BACKGROUND;  // Default to background style
+    tui->input_box_style = INPUT_STYLE_BLAND;  // Default to bland style (minimal)
     tui->normal_mode_last_key = 0;
 
     // Initialize command mode buffer
