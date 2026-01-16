@@ -1796,14 +1796,8 @@ int main(int argc, char *argv[]) {
         free(system_prompt);
         LOG_DEBUG("System prompt added with environment context");
 
-#ifdef HAVE_MEMVID
-        // Inject memory context from persistent memory (if available)
-        if (inject_memory_context(&state) == 0) {
-            LOG_DEBUG("Memory context injection completed");
-        } else {
-            LOG_WARN("Memory context injection failed");
-        }
-#endif
+        // Note: Memory context injection is now done before each API call in api_client.c
+        // This ensures the memory context is always fresh and up-to-date
 
         // Debug: print system prompt if DEBUG_PROMPT environment variable is set
         if (getenv("DEBUG_PROMPT")) {

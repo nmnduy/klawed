@@ -23,7 +23,8 @@ char* build_memory_context(const char *working_dir);
 
 /**
  * Inject memory context into conversation state.
- * Called after memvid is initialized and before the conversation loop starts.
+ * Can be called before each API request to refresh memory context.
+ * Removes any existing memory section before adding a new one.
  * The memory context is appended to the system prompt if available.
  *
  * Returns: 0 on success (or if no memories to inject), -1 on error
