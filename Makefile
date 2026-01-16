@@ -9,7 +9,7 @@
 #   make MEMVID=1 - Enable memvid support (requires memvid-ffi library)
 #   make MEMVID=0 - Disable memvid support (default)
 #   make          - Auto-detect if libmemvid_ffi is available
-#   Memvid FFI is vendored in: vendor/memvid-ffi/memvid-ffi/
+#   Memvid FFI is vendored in: vendors/memvid-ffi/memvid-ffi/
 
 CC ?= gcc
 CLANG = clang
@@ -111,7 +111,7 @@ endif
 # Optional Memvid support for video-based memory storage (MEMVID=auto|1|0)
 # Memvid FFI library path (uses vendored submodule)
 # Static linking is used to avoid needing .so files at runtime in containers
-MEMVID_FFI_DIR = $(CURDIR)/vendor/memvid-ffi
+MEMVID_FFI_DIR = $(CURDIR)/vendors/memvid-ffi
 MEMVID_FFI_LIB = $(MEMVID_FFI_DIR)/target/release/libmemvid_ffi.a
 MEMVID ?= auto
 

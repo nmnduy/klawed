@@ -30,7 +30,7 @@ The injection system:
 
 ```bash
 # Initialize the memvid submodule (first time only)
-git submodule update --init vendor/memvid
+git submodule update --init vendors/memvid
 
 # Build the FFI library
 make memvid-ffi
