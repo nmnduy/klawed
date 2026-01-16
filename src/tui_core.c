@@ -24,6 +24,7 @@
 #include "window_manager.h"
 #include "history_file.h"
 #include "subagent_manager.h"
+#include "config.h"
 #include <stdlib.h>
 #include <bsd/stdlib.h>
 #include <string.h>
@@ -355,8 +356,17 @@ int tui_init(TUIState *tui, ConversationState *state) {
 
     // Initialize mode (start in INSERT mode for immediate input)
     tui->mode = TUI_MODE_INSERT;
-    tui->input_box_style = INPUT_STYLE_BLAND;  // Default to bland style (minimal)
     tui->normal_mode_last_key = 0;
+
+    // Load config and apply input box style (default to bland if not found)
+    KlawedConfig loaded_config;
+    if (config_load(&loaded_config) == 0) {
+        tui->input_box_style = loaded_config.input_box_style;
+        LOG_DEBUG("[TUI] Loaded input_box_style from config: %s",
+                  config_input_style_to_string(tui->input_box_style));
+    } else {
+        tui->input_box_style = INPUT_STYLE_BLAND;
+    }
 
     // Initialize command mode buffer
     tui->command_buffer = NULL;

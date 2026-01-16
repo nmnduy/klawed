@@ -28,6 +28,7 @@
 #include "message_queue.h"
 #include "logger.h"
 #include "klawed_internal.h"
+#include "config.h"
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -773,6 +774,13 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
             } else {
                 tui->input_box_style = INPUT_STYLE_BLAND;
                 tui_update_status(tui, "Input box style: bland");
+            }
+            // Save the new style to config
+            {
+                KlawedConfig cfg;
+                config_init_defaults(&cfg);
+                cfg.input_box_style = tui->input_box_style;
+                config_save(&cfg);
             }
             // Refresh to show the style change
             if (tui->wm.status_height > 0) {
