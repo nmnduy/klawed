@@ -114,10 +114,8 @@ async function submitFeedback(data) {
     const feedbackData = {
         type: data.type,
         description: data.description,
-        email: data.email || null,
         errorDetails: data.errorDetails || null,
-        environment: collectEnvironmentInfo(),
-        sessionId: sessionStorage.getItem('filesurf_sessionId') || null
+        environment: collectEnvironmentInfo()
     };
 
     try {
@@ -310,7 +308,6 @@ class FeedbackModule {
             await submitFeedback({
                 type: this.currentType,
                 description: description,
-                email: document.querySelector('[data-feedback-email]')?.value.trim() || null,
                 errorDetails: this.currentType === 'bug' ? (this.errorDetailsInput?.value.trim() || null) : null
             });
 

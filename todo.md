@@ -7,8 +7,6 @@
 - [ ] one button in file drop down menu copy full file path into input box
 - [ ] file search does not include folder in results
 
-
-
 - [x] prompts
     - [x] give subagents more time. esp for tasks that might take time
     - [x] subagents are more resilient now. give them time. they will stop when fail/ needs more guidance
@@ -16,6 +14,7 @@
     - [x] You are FileSurf. A personal computer in the Cloud, with AI.
 - [x] database viewer with: sql runner. tabular view. search. filter.
     - [x] of course for now we only support file based databases: sqlite3
+
 - [ ] web search
 - [ ] backups/ folder
     - [ ] LLM can't delete files here

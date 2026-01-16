@@ -1,6 +1,9 @@
 package com.filesurf;
 
-import com.filesurf.service.SessionManager;
+import com.filesurf.model.FeedbackRecord;
+import com.filesurf.model.UserRecord;
+import com.filesurf.repository.FeedbackRepository;
+import com.filesurf.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.inject.Inject;
@@ -9,27 +12,23 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 /**
  * REST endpoint for handling user feedback, bug reports, and suggestions.
  *
- * Feedback is stored in a JSON file for later review by administrators.
+ * Feedback is stored in SQLite database for later review by administrators.
  */
 @jakarta.ws.rs.Path("/file-chat/http/feedback")
 public class FeedbackResource {
 
     private static final Logger LOGGER = Logger.getLogger(FeedbackResource.class.getName());
-    private static final String FEEDBACK_DIR = "data/feedback";
 
     @Inject
-    SessionManager sessionManager;
+    UserRepository userRepository;
+
+    @Inject
+    FeedbackRepository feedbackRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -40,7 +39,6 @@ public class FeedbackResource {
     public static class FeedbackRequest {
         public String type;        // "bug", "suggestion", "praise"
         public String description; // Required: the feedback content
-        public String email;       // Optional: user's email for response
         public String errorDetails; // Optional: error logs, stack traces
         public EnvironmentInfo environment; // Optional: browser/OS info
 
@@ -57,7 +55,6 @@ public class FeedbackResource {
         public String viewportSize;
         public String timestamp;
         public String url;
-        public String sessionId;
 
         public EnvironmentInfo() {
         }
@@ -85,8 +82,26 @@ public class FeedbackResource {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response submitFeedback(FeedbackRequest request) {
-        LOGGER.info("Received feedback submission: type=" + request.type);
+    public Response submitFeedback(
+            FeedbackRequest request,
+            @CookieParam("filesurf_userId") String userId) {
+        LOGGER.info("Received feedback submission: type=" + request.type + " from userId=" + userId);
+
+        // Validate userId from cookie
+        if (userId == null || userId.isBlank()) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(new FeedbackResponse(false, "User not authenticated", null))
+                    .build();
+        }
+
+        // Lookup user by userId to get email
+        UserRecord user = userRepository.findByUserId(userId);
+        if (user == null) {
+            LOGGER.warn("Feedback submission from unknown userId: " + userId);
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(new FeedbackResponse(false, "User not found", null))
+                    .build();
+        }
 
         // Validate request
         if (request.type == null || request.type.isBlank()) {
@@ -110,66 +125,40 @@ public class FeedbackResource {
         // Generate feedback ID
         String feedbackId = UUID.randomUUID().toString();
 
-        // Create feedback record
-        FeedbackRecord record = new FeedbackRecord();
-        record.id = feedbackId;
-        record.type = request.type;
-        record.description = request.description;
-        record.email = request.email != null && !request.email.isBlank() ? request.email : null;
-        record.errorDetails = request.errorDetails != null && !request.errorDetails.isBlank() ? request.errorDetails : null;
-        record.environment = request.environment;
-        record.timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-
         try {
-            // Save feedback to file
-            saveFeedback(record);
-            LOGGER.info("Feedback saved successfully: " + feedbackId);
+            // Serialize environment info to JSON string
+            String environmentJson = null;
+            if (request.environment != null) {
+                environmentJson = objectMapper.writeValueAsString(request.environment);
+            }
 
-            return Response.ok(new FeedbackResponse(true, "Feedback received successfully", feedbackId))
-                    .build();
+            // Save feedback to database
+            FeedbackRecord record = feedbackRepository.create(
+                    feedbackId,
+                    request.type,
+                    request.description,
+                    userId,
+                    user.getEmail(),
+                    request.errorDetails,
+                    environmentJson
+            );
 
-        } catch (IOException e) {
+            if (record != null) {
+                LOGGER.info("Feedback saved successfully: " + feedbackId);
+                return Response.ok(new FeedbackResponse(true, "Feedback received successfully", feedbackId))
+                        .build();
+            } else {
+                LOGGER.error("Failed to save feedback: record is null");
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .entity(new FeedbackResponse(false, "Failed to save feedback", feedbackId))
+                        .build();
+            }
+
+        } catch (Exception e) {
             LOGGER.error("Failed to save feedback: " + e.getMessage(), e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity(new FeedbackResponse(false, "Failed to save feedback: " + e.getMessage(), feedbackId))
                     .build();
         }
-    }
-
-    /**
-     * Save feedback record to JSON file
-     */
-    private void saveFeedback(FeedbackRecord record) throws IOException {
-        Path feedbackPath = Path.of(FEEDBACK_DIR);
-
-        // Create directory if it doesn't exist
-        if (!Files.exists(feedbackPath)) {
-            Files.createDirectories(feedbackPath);
-        }
-
-        // Create individual feedback file
-        Path filePath = feedbackPath.resolve(record.id + ".json");
-        String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(record);
-        Files.writeString(filePath, json, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-
-        // Also append to a daily log for easy review
-        String dateSuffix = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        Path dailyLogPath = feedbackPath.resolve("feedback-" + dateSuffix + ".log");
-        String logEntry = objectMapper.writeValueAsString(record) + "\n---\n";
-        Files.writeString(dailyLogPath, logEntry, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-    }
-
-    /**
-     * Feedback record data structure
-     */
-    @RegisterForReflection
-    public static class FeedbackRecord {
-        public String id;
-        public String type;
-        public String description;
-        public String email;
-        public String errorDetails;
-        public EnvironmentInfo environment;
-        public String timestamp;
     }
 }
