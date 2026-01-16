@@ -250,6 +250,20 @@ public class ChatMessagePollingService {
                     KlawedSocketMessage.createStatus("AI is working")
                 );
             }
+        } else if (ChatConstants.DB_MESSAGE_TYPE_FILE_UPLOAD.equals(messageType)) {
+            // File upload system events - send as FILE_UPLOAD type to klawed
+            try {
+                Map<String, Object> fileUploadData = objectMapper.readValue(content, Map.class);
+                return objectMapper.writeValueAsString(
+                    KlawedSocketMessage.create(ChatConstants.MESSAGE_TYPE_FILE_UPLOAD, fileUploadData)
+                );
+            } catch (Exception e) {
+                LOGGER.warning("Failed to parse FILE_UPLOAD message: " + e.getMessage());
+                // Still send the raw content as a status message
+                return objectMapper.writeValueAsString(
+                    KlawedSocketMessage.createStatus("Files uploaded to workspace")
+                );
+            }
         } else {
             // Default to text message
             return objectMapper.writeValueAsString(

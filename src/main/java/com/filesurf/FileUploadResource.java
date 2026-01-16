@@ -1,6 +1,9 @@
 package com.filesurf;
 
+import com.filesurf.service.FileChatService;
 import com.filesurf.service.SessionManager;
+import com.filesurf.model.ChatConstants;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -57,6 +60,11 @@ public class FileUploadResource {
 
     @Inject
     SessionManager sessionManager;
+
+    @Inject
+    FileChatService fileChatService;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private String resolveUserId(String headerUserId, String cookieUserId) {
         if (headerUserId != null && !headerUserId.isBlank()) {
@@ -272,8 +280,49 @@ public class FileUploadResource {
             return;
         }
 
-        // Note: File upload notification to klawed is now handled via the chat interface
-        // Users can ask about uploaded files and klawed will see them in the workspace
-        LOGGER.info("[SESSION:" + sessionId + "] Files uploaded: " + String.join(", ", uploadedFiles));
+        LOGGER.info("[SESSION:" + sessionId + "] Notifying klawed about uploaded files: " + String.join(", ", uploadedFiles));
+
+        try {
+            // Create a structured file upload event with metadata
+            FileUploadEvent event = new FileUploadEvent(
+                uploadedFiles.size(),
+                uploadedFiles,
+                System.currentTimeMillis()
+            );
+
+            String eventContent = objectMapper.writeValueAsString(event);
+
+            // Save as a system message marked as file_upload type
+            fileChatService.createChatMessage(
+                sessionId,
+                ChatConstants.SYSTEM,
+                ChatConstants.AGENT,
+                eventContent,
+                ChatConstants.DB_MESSAGE_TYPE_FILE_UPLOAD
+            );
+
+            LOGGER.info("[SESSION:" + sessionId + "] File upload notification sent to klawed");
+        } catch (Exception e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to notify klawed about file upload: " + e.getMessage());
+        }
+    }
+
+    /**
+     * File upload event data structure
+     */
+    @RegisterForReflection
+    public static class FileUploadEvent {
+        public int fileCount;
+        public List<String> files;
+        public long timestamp;
+
+        public FileUploadEvent() {
+        }
+
+        public FileUploadEvent(int fileCount, List<String> files, long timestamp) {
+            this.fileCount = fileCount;
+            this.files = files;
+            this.timestamp = timestamp;
+        }
     }
 }
