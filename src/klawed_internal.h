@@ -242,24 +242,82 @@ typedef struct ConversationState {
 // Function Declarations
 // ============================================================================
 
+// NOTE: The following conversation management functions are implemented in
+// src/conversation/*.c modules. They are declared here for backward compatibility.
+
 /**
  * Add a directory to the additional working directories list
  * Returns: 0 on success, -1 on error
+ * Implementation: src/conversation/conversation_state.c
  */
 int add_directory(ConversationState *state, const char *path);
 
 /**
  * Add a user message to the conversation
+ * Implementation: src/conversation/message_builder.c
  */
 void add_user_message(ConversationState *state, const char *text);
 
 /**
+ * Add a system message to the conversation
+ * (Internal function - typically called during initialization)
+ * Implementation: src/conversation/message_builder.c
+ */
+void add_system_message(ConversationState *state, const char *text);
+
+/**
  * Clear conversation history (keeps system message)
+ * Implementation: src/conversation/conversation_state.c
  */
 void clear_conversation(ConversationState *state);
 
-// Free all messages and their contents (including system message). Use at program shutdown.
+/**
+ * Free all messages and their contents (including system message)
+ * Use at program shutdown
+ * Implementation: src/conversation/conversation_state.c
+ */
 void conversation_free(ConversationState *state);
+
+/**
+ * Add tool results to conversation state
+ * Returns: 0 on success, -1 on error
+ * Implementation: src/conversation/message_builder.c
+ */
+int add_tool_results(ConversationState *state, InternalContent *results, int count);
+
+/**
+ * Add assistant message from OpenAI format JSON
+ * Implementation: src/conversation/message_parser.c
+ */
+void add_assistant_message_openai(ConversationState *state, cJSON *message);
+
+/**
+ * Initialize conversation state synchronization primitives
+ * Must be called before using ConversationState from multiple threads
+ * Returns 0 on success, -1 on failure
+ * Implementation: src/conversation/conversation_state.c
+ */
+int conversation_state_init(ConversationState *state);
+
+/**
+ * Destroy synchronization primitives for a ConversationState
+ * Safe to call on partially initialized structures
+ * Implementation: src/conversation/conversation_state.c
+ */
+void conversation_state_destroy(ConversationState *state);
+
+/**
+ * Acquire the conversation mutex, initializing it if needed
+ * Returns 0 on success, -1 on failure
+ * Implementation: src/conversation/conversation_state.c
+ */
+int conversation_state_lock(ConversationState *state);
+
+/**
+ * Release the conversation mutex if initialized
+ * Implementation: src/conversation/conversation_state.c
+ */
+void conversation_state_unlock(ConversationState *state);
 
 /**
  * Build system prompt with environment context
@@ -268,10 +326,32 @@ void conversation_free(ConversationState *state);
 char* build_system_prompt(ConversationState *state);
 
 /**
- * Add tool results to conversation state
- * Returns: 0 on success, -1 on error
+ * Register subagent manager for emergency cleanup on signals
+ * Called by conversation_state_init() to ensure subagents are cleaned up on crash
+ *
+ * @param manager Subagent manager to register (NULL to unregister)
  */
-int add_tool_results(ConversationState *state, InternalContent *results, int count);
+void register_subagent_manager_for_cleanup(SubagentManager *manager);
+
+/**
+ * Check if TodoWrite tool was executed in a results array
+ * Implementation: src/conversation/content_types.c
+ *
+ * @param results Array of InternalContent to check
+ * @param count Number of elements in the array
+ * @return 1 if TodoWrite was found, 0 otherwise
+ */
+int check_todo_write_executed(InternalContent *results, int count);
+
+/**
+ * Free an array of InternalContent and all internal allocations
+ * Safe to call with NULL pointer
+ * Implementation: src/conversation/content_types.c
+ *
+ * @param results Array of InternalContent to free
+ * @param count Number of elements in the array
+ */
+void free_internal_contents(InternalContent *results, int count);
 
 /**
  * Check if a tool is allowed (present in the tools list sent to API)
@@ -284,11 +364,6 @@ int is_tool_allowed(const char *tool_name, ConversationState *state);
  * Returns: JSON result object (caller must free with cJSON_Delete)
  */
 cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *state);
-
-/**
- * Add assistant message from OpenAI format JSON
- */
-void add_assistant_message_openai(ConversationState *state, cJSON *message);
 
 /**
  * Check for ESC key press without blocking
@@ -304,30 +379,6 @@ int check_for_esc(void);
 char* build_request_json_from_state(ConversationState *state);
 
 /**
- * Initialize conversation state synchronization primitives.
- * Must be called before using ConversationState from multiple threads.
- * Returns 0 on success, -1 on failure.
- */
-int conversation_state_init(ConversationState *state);
-
-/**
- * Destroy synchronization primitives for a ConversationState.
- * Safe to call on partially initialized structures.
- */
-void conversation_state_destroy(ConversationState *state);
-
-/**
- * Acquire the conversation mutex, initializing it if needed.
- * Returns 0 on success, -1 on failure.
- */
-int conversation_state_lock(ConversationState *state);
-
-/**
- * Release the conversation mutex if initialized.
- */
-void conversation_state_unlock(ConversationState *state);
-
-/**
  * Free an ApiResponse structure and all its owned resources
  */
 void api_response_free(ApiResponse *response);
@@ -340,8 +391,16 @@ void api_response_free(ApiResponse *response);
 // Add cache_control marker to a content block
 void add_cache_control(cJSON *obj);
 
-// Get tool definitions for the API request
-cJSON* get_tool_definitions(ConversationState *state, int enable_caching);
+// Tool implementations (memory tools and MCP tools)
+cJSON* tool_memory_store(cJSON *params, ConversationState *state);
+cJSON* tool_memory_recall(cJSON *params, ConversationState *state);
+cJSON* tool_memory_search(cJSON *params, ConversationState *state);
+
+#ifndef TEST_BUILD
+cJSON* tool_list_mcp_resources(cJSON *params, ConversationState *state);
+cJSON* tool_read_mcp_resource(cJSON *params, ConversationState *state);
+cJSON* tool_call_mcp_tool(cJSON *params, ConversationState *state);
+#endif
 
 /**
  * Extract and accumulate token usage from API response

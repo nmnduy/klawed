@@ -322,26 +322,6 @@ COMPLETION_SRC = src/completion.c
 COMPLETION_OBJ = $(BUILD_DIR)/completion.o
 TUI_SRC = src/tui.c
 TUI_OBJ = $(BUILD_DIR)/tui.o
-TUI_INPUT_SRC = src/tui_input.c
-TUI_INPUT_OBJ = $(BUILD_DIR)/tui_input.o
-TUI_CONVERSATION_SRC = src/tui_conversation.c
-TUI_CONVERSATION_OBJ = $(BUILD_DIR)/tui_conversation.o
-TUI_PASTE_SRC = src/tui_paste.c
-TUI_PASTE_OBJ = $(BUILD_DIR)/tui_paste.o
-TUI_WINDOW_SRC = src/tui_window.c
-TUI_WINDOW_OBJ = $(BUILD_DIR)/tui_window.o
-TUI_SEARCH_SRC = src/tui_search.c
-TUI_SEARCH_OBJ = $(BUILD_DIR)/tui_search.o
-TUI_COMPLETION_SRC = src/tui_completion.c
-TUI_COMPLETION_OBJ = $(BUILD_DIR)/tui_completion.o
-TUI_CORE_SRC = src/tui_core.c
-TUI_CORE_OBJ = $(BUILD_DIR)/tui_core.o
-TUI_HISTORY_SRC = src/tui_history.c
-TUI_HISTORY_OBJ = $(BUILD_DIR)/tui_history.o
-TUI_MODES_SRC = src/tui_modes.c
-TUI_MODES_OBJ = $(BUILD_DIR)/tui_modes.o
-TUI_RENDER_SRC = src/tui_render.c
-TUI_RENDER_OBJ = $(BUILD_DIR)/tui_render.o
 FILE_SEARCH_SRC = src/file_search.c
 HISTORY_SEARCH_SRC = src/history_search.c
 HISTORY_SEARCH_OBJ = $(BUILD_DIR)/history_search.o
@@ -413,6 +393,103 @@ SESSION_OBJ = $(BUILD_DIR)/session.o
 # Socket support removed - will be reimplemented with ZMQ
 RETRY_LOGIC_SRC = src/retry_logic.c
 RETRY_LOGIC_OBJ = $(BUILD_DIR)/retry_logic.o
+# Utility modules
+FILE_UTILS_SRC = src/util/file_utils.c
+FILE_UTILS_OBJ = $(BUILD_DIR)/file_utils.o
+STRING_UTILS_SRC = src/util/string_utils.c
+STRING_UTILS_OBJ = $(BUILD_DIR)/string_utils.o
+TIMESTAMP_UTILS_SRC = src/util/timestamp_utils.c
+TIMESTAMP_UTILS_OBJ = $(BUILD_DIR)/timestamp_utils.o
+FORMAT_UTILS_SRC = src/util/format_utils.c
+FORMAT_UTILS_OBJ = $(BUILD_DIR)/format_utils.o
+ENV_UTILS_SRC = src/util/env_utils.c
+ENV_UTILS_OBJ = $(BUILD_DIR)/env_utils.o
+OUTPUT_UTILS_SRC = src/util/output_utils.c
+OUTPUT_UTILS_OBJ = $(BUILD_DIR)/output_utils.o
+DIFF_UTILS_SRC = src/util/diff_utils.c
+DIFF_UTILS_OBJ = $(BUILD_DIR)/diff_utils.o
+# Tool modules
+TOOL_SLEEP_SRC = src/tools/tool_sleep.c
+TOOL_SLEEP_OBJ = $(BUILD_DIR)/tool_sleep.o
+TOOL_TODO_SRC = src/tools/tool_todo.c
+TOOL_TODO_OBJ = $(BUILD_DIR)/tool_todo.o
+TOOL_IMAGE_SRC = src/tools/tool_image.c
+TOOL_IMAGE_OBJ = $(BUILD_DIR)/tool_image.o
+TOOL_SEARCH_SRC = src/tools/tool_search.c
+TOOL_SEARCH_OBJ = $(BUILD_DIR)/tool_search.o
+TOOL_FILESYSTEM_SRC = src/tools/tool_filesystem.c
+TOOL_FILESYSTEM_OBJ = $(BUILD_DIR)/tool_filesystem.o
+TOOL_BASH_SRC = src/tools/tool_bash.c
+TOOL_BASH_OBJ = $(BUILD_DIR)/tool_bash.o
+TOOL_SUBAGENT_SRC = src/tools/tool_subagent.c
+TOOL_SUBAGENT_OBJ = $(BUILD_DIR)/tool_subagent.o
+TOOL_REGISTRY_SRC = src/tools/tool_registry.c
+TOOL_REGISTRY_OBJ = $(BUILD_DIR)/tool_registry.o
+TOOL_EXECUTOR_SRC = src/tools/tool_executor.c
+TOOL_EXECUTOR_OBJ = $(BUILD_DIR)/tool_executor.o
+TOOL_DEFINITIONS_SRC = src/tools/tool_definitions.c
+TOOL_DEFINITIONS_OBJ = $(BUILD_DIR)/tool_definitions.o
+
+# Conversation modules
+CONTENT_TYPES_SRC = src/conversation/content_types.c
+CONTENT_TYPES_OBJ = $(BUILD_DIR)/content_types.o
+CONVERSATION_STATE_SRC = src/conversation/conversation_state.c
+CONVERSATION_STATE_OBJ = $(BUILD_DIR)/conversation_state.o
+MESSAGE_BUILDER_SRC = src/conversation/message_builder.c
+MESSAGE_BUILDER_OBJ = $(BUILD_DIR)/message_builder.o
+MESSAGE_PARSER_SRC = src/conversation/message_parser.c
+MESSAGE_PARSER_OBJ = $(BUILD_DIR)/message_parser.o
+
+# Context modules
+CONTEXT_SYSTEM_PROMPT_SRC = src/context/system_prompt.c
+CONTEXT_SYSTEM_PROMPT_OBJ = $(BUILD_DIR)/system_prompt.o
+CONTEXT_ENVIRONMENT_SRC = src/context/environment.c
+CONTEXT_ENVIRONMENT_OBJ = $(BUILD_DIR)/environment.o
+CONTEXT_KLAWED_MD_SRC = src/context/klawed_md.c
+CONTEXT_KLAWED_MD_OBJ = $(BUILD_DIR)/klawed_md.o
+CONTEXT_MEMORY_INJECTION_SRC = src/context/memory_injection.c
+CONTEXT_MEMORY_INJECTION_OBJ = $(BUILD_DIR)/memory_injection.o
+
+# UI modules
+UI_OUTPUT_SRC = src/ui/ui_output.c
+UI_OUTPUT_OBJ = $(BUILD_DIR)/ui_output.o
+PRINT_HELPERS_SRC = src/ui/print_helpers.c
+PRINT_HELPERS_OBJ = $(BUILD_DIR)/print_helpers.o
+TOOL_OUTPUT_DISPLAY_SRC = src/ui/tool_output_display.c
+TOOL_OUTPUT_DISPLAY_OBJ = $(BUILD_DIR)/tool_output_display.o
+
+# Session modules
+SESSION_TOKEN_USAGE_SRC = src/session/token_usage.c
+SESSION_TOKEN_USAGE_OBJ = $(BUILD_DIR)/session_token_usage.o
+SESSION_PERSISTENCE_SRC = src/session/session_persistence.c
+SESSION_PERSISTENCE_OBJ = $(BUILD_DIR)/session_persistence.o
+
+# API layer modules
+API_RESPONSE_SRC = src/api/api_response.c
+API_RESPONSE_OBJ = $(BUILD_DIR)/api_response.o
+API_BUILDER_SRC = src/api/api_builder.c
+API_BUILDER_OBJ = $(BUILD_DIR)/api_builder.o
+API_CLIENT_SRC = src/api/api_client.c
+API_CLIENT_OBJ = $(BUILD_DIR)/api_client.o
+
+# Interactive mode modules
+INTERACTIVE_LOOP_SRC = src/interactive/interactive_loop.c
+INTERACTIVE_LOOP_OBJ = $(BUILD_DIR)/interactive_loop.o
+INPUT_HANDLER_SRC = src/interactive/input_handler.c
+INPUT_HANDLER_OBJ = $(BUILD_DIR)/input_handler.o
+RESPONSE_PROCESSOR_SRC = src/interactive/response_processor.c
+RESPONSE_PROCESSOR_OBJ = $(BUILD_DIR)/response_processor.o
+COMMAND_DISPATCH_SRC = src/interactive/command_dispatch.c
+COMMAND_DISPATCH_OBJ = $(BUILD_DIR)/command_dispatch.o
+
+# Oneshot mode modules
+ONESHOT_MODE_SRC = src/oneshot/oneshot_mode.c
+ONESHOT_MODE_OBJ = $(BUILD_DIR)/oneshot_mode.o
+ONESHOT_PROCESSOR_SRC = src/oneshot/oneshot_processor.c
+ONESHOT_PROCESSOR_OBJ = $(BUILD_DIR)/oneshot_processor.o
+ONESHOT_OUTPUT_SRC = src/oneshot/oneshot_output.c
+ONESHOT_OUTPUT_OBJ = $(BUILD_DIR)/oneshot_output.o
+
 TEST_EDIT_SRC = tests/test_edit.c
 TEST_EDIT_REGEX_SRC = tests/test_edit_regex_enhancements.c
 TEST_READ_SRC = tests/test_read.c
@@ -770,9 +847,9 @@ test-file-search: check-deps $(TEST_FILE_SEARCH_TARGET)
 
 # Socket test removed - will be reimplemented with ZMQ
 
-$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(TUI_INPUT_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_PASTE_OBJ) $(TUI_WINDOW_OBJ) $(TUI_SEARCH_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_CORE_OBJ) $(TUI_HISTORY_OBJ) $(TUI_MODES_OBJ) $(TUI_RENDER_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(EXPLORE_TOOLS_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(VERSION_H)
+$(TARGET): $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(EXPLORE_TOOLS_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(TOOL_REGISTRY_OBJ) $(TOOL_EXECUTOR_OBJ) $(TOOL_DEFINITIONS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ) $(VERSION_H)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(TUI_INPUT_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_PASTE_OBJ) $(TUI_WINDOW_OBJ) $(TUI_SEARCH_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_CORE_OBJ) $(TUI_HISTORY_OBJ) $(TUI_MODES_OBJ) $(TUI_RENDER_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(EXPLORE_TOOLS_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(DUMP_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(EXPLORE_TOOLS_OBJ) $(BASE64_OBJ) $(HISTORY_FILE_OBJ) $(ARRAY_RESIZE_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(TOOL_REGISTRY_OBJ) $(TOOL_EXECUTOR_OBJ) $(TOOL_DEFINITIONS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Build successful!"
 	@echo "Version: $(VERSION)"
@@ -853,6 +930,175 @@ $(BUILD_DIR)/memvid.o: $(MEMVID_SRC)
 $(BUILD_DIR)/compaction.o: $(COMPACTION_SRC) src/compaction.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/compaction.o $(COMPACTION_SRC)
+
+# Build utility objects
+$(BUILD_DIR)/file_utils.o: $(FILE_UTILS_SRC) src/util/file_utils.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/file_utils.o $(FILE_UTILS_SRC)
+
+$(BUILD_DIR)/string_utils.o: $(STRING_UTILS_SRC) src/util/string_utils.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/string_utils.o $(STRING_UTILS_SRC)
+
+$(BUILD_DIR)/timestamp_utils.o: $(TIMESTAMP_UTILS_SRC) src/util/timestamp_utils.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/timestamp_utils.o $(TIMESTAMP_UTILS_SRC)
+
+$(BUILD_DIR)/format_utils.o: $(FORMAT_UTILS_SRC) src/util/format_utils.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/format_utils.o $(FORMAT_UTILS_SRC)
+
+$(BUILD_DIR)/env_utils.o: $(ENV_UTILS_SRC) src/util/env_utils.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/env_utils.o $(ENV_UTILS_SRC)
+
+$(BUILD_DIR)/output_utils.o: $(OUTPUT_UTILS_SRC) src/util/output_utils.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/output_utils.o $(OUTPUT_UTILS_SRC)
+
+$(BUILD_DIR)/diff_utils.o: $(DIFF_UTILS_SRC) src/util/diff_utils.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/diff_utils.o $(DIFF_UTILS_SRC)
+
+# Build tool objects
+$(BUILD_DIR)/tool_sleep.o: $(TOOL_SLEEP_SRC) src/tools/tool_sleep.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_sleep.o $(TOOL_SLEEP_SRC)
+
+$(BUILD_DIR)/tool_todo.o: $(TOOL_TODO_SRC) src/tools/tool_todo.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_todo.o $(TOOL_TODO_SRC)
+
+$(BUILD_DIR)/tool_image.o: $(TOOL_IMAGE_SRC) src/tools/tool_image.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_image.o $(TOOL_IMAGE_SRC)
+
+$(BUILD_DIR)/tool_search.o: $(TOOL_SEARCH_SRC) src/tools/tool_search.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_search.o $(TOOL_SEARCH_SRC)
+
+$(BUILD_DIR)/tool_filesystem.o: $(TOOL_FILESYSTEM_SRC) src/tools/tool_filesystem.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_filesystem.o $(TOOL_FILESYSTEM_SRC)
+
+$(BUILD_DIR)/tool_bash.o: $(TOOL_BASH_SRC) src/tools/tool_bash.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_bash.o $(TOOL_BASH_SRC)
+
+$(BUILD_DIR)/tool_subagent.o: $(TOOL_SUBAGENT_SRC) src/tools/tool_subagent.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_subagent.o $(TOOL_SUBAGENT_SRC)
+
+$(BUILD_DIR)/tool_registry.o: $(TOOL_REGISTRY_SRC) src/tools/tool_registry.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_registry.o $(TOOL_REGISTRY_SRC)
+
+$(BUILD_DIR)/tool_executor.o: $(TOOL_EXECUTOR_SRC) src/tools/tool_executor.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_executor.o $(TOOL_EXECUTOR_SRC)
+
+$(BUILD_DIR)/tool_definitions.o: $(TOOL_DEFINITIONS_SRC) src/tools/tool_definitions.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_definitions.o $(TOOL_DEFINITIONS_SRC)
+
+# Build conversation objects
+$(BUILD_DIR)/content_types.o: $(CONTENT_TYPES_SRC) src/conversation/content_types.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/content_types.o $(CONTENT_TYPES_SRC)
+
+$(BUILD_DIR)/conversation_state.o: $(CONVERSATION_STATE_SRC) src/conversation/conversation_state.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/conversation_state.o $(CONVERSATION_STATE_SRC)
+
+$(BUILD_DIR)/message_builder.o: $(MESSAGE_BUILDER_SRC) src/conversation/message_builder.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/message_builder.o $(MESSAGE_BUILDER_SRC)
+
+$(BUILD_DIR)/message_parser.o: $(MESSAGE_PARSER_SRC) src/conversation/message_parser.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/message_parser.o $(MESSAGE_PARSER_SRC)
+
+# Build context objects
+$(BUILD_DIR)/system_prompt.o: $(CONTEXT_SYSTEM_PROMPT_SRC) src/context/system_prompt.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/system_prompt.o $(CONTEXT_SYSTEM_PROMPT_SRC)
+
+$(BUILD_DIR)/environment.o: $(CONTEXT_ENVIRONMENT_SRC) src/context/environment.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/environment.o $(CONTEXT_ENVIRONMENT_SRC)
+
+$(BUILD_DIR)/klawed_md.o: $(CONTEXT_KLAWED_MD_SRC) src/context/klawed_md.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/klawed_md.o $(CONTEXT_KLAWED_MD_SRC)
+
+$(BUILD_DIR)/memory_injection.o: $(CONTEXT_MEMORY_INJECTION_SRC) src/context/memory_injection.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/memory_injection.o $(CONTEXT_MEMORY_INJECTION_SRC)
+
+# Build UI module objects
+$(BUILD_DIR)/ui_output.o: $(UI_OUTPUT_SRC) src/ui/ui_output.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/ui_output.o $(UI_OUTPUT_SRC)
+
+$(BUILD_DIR)/print_helpers.o: $(PRINT_HELPERS_SRC) src/ui/print_helpers.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/print_helpers.o $(PRINT_HELPERS_SRC)
+
+$(BUILD_DIR)/tool_output_display.o: $(TOOL_OUTPUT_DISPLAY_SRC) src/ui/tool_output_display.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_output_display.o $(TOOL_OUTPUT_DISPLAY_SRC)
+
+# Build session module objects
+$(BUILD_DIR)/session_token_usage.o: $(SESSION_TOKEN_USAGE_SRC) src/session/token_usage.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/session_token_usage.o $(SESSION_TOKEN_USAGE_SRC)
+
+$(BUILD_DIR)/session_persistence.o: $(SESSION_PERSISTENCE_SRC) src/session/session_persistence.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/session_persistence.o $(SESSION_PERSISTENCE_SRC)
+
+# Build API layer objects
+$(BUILD_DIR)/api_response.o: $(API_RESPONSE_SRC) src/api/api_response.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/api_response.o $(API_RESPONSE_SRC)
+
+$(BUILD_DIR)/api_builder.o: $(API_BUILDER_SRC) src/api/api_builder.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/api_builder.o $(API_BUILDER_SRC)
+
+$(BUILD_DIR)/api_client.o: $(API_CLIENT_SRC) src/api/api_client.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/api_client.o $(API_CLIENT_SRC)
+
+# Build interactive mode objects
+$(BUILD_DIR)/interactive_loop.o: $(INTERACTIVE_LOOP_SRC) src/interactive/interactive_loop.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/interactive_loop.o $(INTERACTIVE_LOOP_SRC)
+
+$(BUILD_DIR)/input_handler.o: $(INPUT_HANDLER_SRC) src/interactive/input_handler.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/input_handler.o $(INPUT_HANDLER_SRC)
+
+$(BUILD_DIR)/response_processor.o: $(RESPONSE_PROCESSOR_SRC) src/interactive/response_processor.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/response_processor.o $(RESPONSE_PROCESSOR_SRC)
+
+$(BUILD_DIR)/command_dispatch.o: $(COMMAND_DISPATCH_SRC) src/interactive/command_dispatch.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/command_dispatch.o $(COMMAND_DISPATCH_SRC)
+
+# Build oneshot mode objects
+$(BUILD_DIR)/oneshot_mode.o: $(ONESHOT_MODE_SRC) src/oneshot/oneshot_mode.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/oneshot_mode.o $(ONESHOT_MODE_SRC)
+
+$(BUILD_DIR)/oneshot_processor.o: $(ONESHOT_PROCESSOR_SRC) src/oneshot/oneshot_processor.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/oneshot_processor.o $(ONESHOT_PROCESSOR_SRC)
+
+$(BUILD_DIR)/oneshot_output.o: $(ONESHOT_OUTPUT_SRC) src/oneshot/oneshot_output.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/oneshot_output.o $(ONESHOT_OUTPUT_SRC)
 
 # Build ZMQ reliable queue object
 
@@ -952,10 +1198,10 @@ $(BUILD_DIR)/klawed-debug: $(SRC) $(LOGGER_SRC) $(PERSISTENCE_SRC) $(MIGRATIONS_
 	@echo ""
 
 # Build with clang compiler
-$(BUILD_DIR)/klawed-clang: $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(TUI_PASTE_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(AI_WORKER_OBJ) $(MESSAGE_QUEUE_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(PROCESS_UTILS_OBJ) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
+$(BUILD_DIR)/klawed-clang: $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(AI_WORKER_OBJ) $(MESSAGE_QUEUE_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(PROCESS_UTILS_OBJ) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(VERSION_H)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building with clang compiler..."
-	$(CLANG) $(CFLAGS) -o $(BUILD_DIR)/klawed-clang $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(TUI_PASTE_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(PROCESS_UTILS_OBJ) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
+	$(CLANG) $(CFLAGS) -o $(BUILD_DIR)/klawed-clang $(SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(COMMANDS_OBJ) $(COMPLETION_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(TODO_OBJ) $(AWS_BEDROCK_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(BUILTIN_THEMES_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(SQLITE_QUEUE_OBJ) $(MCP_OBJ) $(TOOL_UTILS_SRC) $(PROCESS_UTILS_OBJ) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Clang build successful!"
 	@echo "Version: $(VERSION)"
@@ -1252,49 +1498,9 @@ $(COMPLETION_OBJ): $(COMPLETION_SRC) src/completion.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(COMPLETION_OBJ) $(COMPLETION_SRC)
 
-$(TUI_OBJ): $(TUI_SRC) src/tui.h src/klawed_internal.h src/file_search.h $(FILE_SEARCH_OBJ) $(TUI_PASTE_OBJ)
+$(TUI_OBJ): $(TUI_SRC) src/tui.h src/klawed_internal.h src/file_search.h $(FILE_SEARCH_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $(TUI_OBJ) $(TUI_SRC)
-
-$(TUI_INPUT_OBJ): $(TUI_INPUT_SRC) src/tui_input.h src/tui.h src/logger.h src/array_resize.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(TUI_INPUT_OBJ) $(TUI_INPUT_SRC)
-
-$(TUI_CONVERSATION_OBJ): $(TUI_CONVERSATION_SRC) src/tui_conversation.h src/tui.h src/logger.h src/window_manager.h src/array_resize.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(TUI_CONVERSATION_OBJ) $(TUI_CONVERSATION_SRC)
-
-$(TUI_PASTE_OBJ): $(TUI_PASTE_SRC) src/tui_paste.h src/tui_input.h src/tui.h src/logger.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(TUI_PASTE_OBJ) $(TUI_PASTE_SRC)
-
-$(TUI_WINDOW_OBJ): $(TUI_WINDOW_SRC) src/tui_window.h src/tui.h src/tui_input.h src/logger.h src/window_manager.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(TUI_WINDOW_OBJ) $(TUI_WINDOW_SRC)
-
-$(TUI_SEARCH_OBJ): $(TUI_SEARCH_SRC) src/tui_search.h src/tui.h src/logger.h src/window_manager.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(TUI_SEARCH_OBJ) $(TUI_SEARCH_SRC)
-
-$(TUI_COMPLETION_OBJ): $(TUI_COMPLETION_SRC) src/tui_completion.h src/tui.h src/tui_input.h src/commands.h src/array_resize.h src/logger.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(TUI_COMPLETION_OBJ) $(TUI_COMPLETION_SRC)
-
-$(TUI_CORE_OBJ): $(TUI_CORE_SRC) src/tui_core.h src/tui.h src/tui_input.h src/tui_conversation.h src/tui_window.h src/file_search.h src/history_search.h src/colorscheme.h src/fallback_colors.h src/logger.h src/window_manager.h src/history_file.h src/subagent_manager.h src/todo.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(TUI_CORE_OBJ) $(TUI_CORE_SRC)
-
-$(TUI_HISTORY_OBJ): $(TUI_HISTORY_SRC) src/tui_history.h src/tui.h src/tui_input.h src/tui_window.h src/history_search.h src/history_file.h src/logger.h src/array_resize.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(TUI_HISTORY_OBJ) $(TUI_HISTORY_SRC)
-
-$(TUI_MODES_OBJ): $(TUI_MODES_SRC) src/tui_modes.h src/tui.h src/tui_input.h src/tui_paste.h src/tui_window.h src/tui_search.h src/tui_history.h src/file_search.h src/logger.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(TUI_MODES_OBJ) $(TUI_MODES_SRC)
-
-$(TUI_RENDER_OBJ): $(TUI_RENDER_SRC) src/tui_render.h src/tui.h src/tui_window.h src/window_manager.h src/logger.h src/colorscheme.h src/indicators.h src/klawed_internal.h src/persistence.h
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $(TUI_RENDER_OBJ) $(TUI_RENDER_SRC)
 
 $(HISTORY_SEARCH_OBJ): $(HISTORY_SEARCH_SRC) src/history_search.h src/logger.h
 	@mkdir -p $(BUILD_DIR)
@@ -1420,6 +1626,21 @@ define BUILD_SQLITE_QUEUE_TEST_OBJ
 	fi
 endef
 
+define BUILD_TOOL_SYSTEM_TEST_OBJS
+	@if [ ! -f "$(TOOL_REGISTRY_TEST_OBJ)" ]; then \
+		echo "Building $(TOOL_REGISTRY_TEST_OBJ)..."; \
+		$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(TOOL_REGISTRY_TEST_OBJ) src/tools/tool_registry.c; \
+	fi
+	@if [ ! -f "$(TOOL_EXECUTOR_TEST_OBJ)" ]; then \
+		echo "Building $(TOOL_EXECUTOR_TEST_OBJ)..."; \
+		$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(TOOL_EXECUTOR_TEST_OBJ) src/tools/tool_executor.c; \
+	fi
+	@if [ ! -f "$(TOOL_DEFINITIONS_TEST_OBJ)" ]; then \
+		echo "Building $(TOOL_DEFINITIONS_TEST_OBJ)..."; \
+		$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(TOOL_DEFINITIONS_TEST_OBJ) src/tools/tool_definitions.c; \
+	fi
+endef
+
 $(TEST_EDIT_TARGET): $(SRC) $(TEST_EDIT_SRC) $(TEST_COMMON_OBJS)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling claude.c for testing (renaming main)..."
@@ -1427,8 +1648,10 @@ $(TEST_EDIT_TARGET): $(SRC) $(TEST_EDIT_SRC) $(TEST_COMMON_OBJS)
 	@echo "Compiling Edit tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_edit.o $(TEST_EDIT_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_EDIT_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_EDIT_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Edit tool test build successful!"
 	@echo ""
@@ -1441,8 +1664,9 @@ $(TEST_EDIT_REGEX_TARGET): $(SRC) $(TEST_EDIT_REGEX_SRC) $(TEST_COMMON_OBJS)
 	@echo "Compiling Edit tool regex enhancement test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_edit_regex.o $(TEST_EDIT_REGEX_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_EDIT_REGEX_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit_regex.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_EDIT_REGEX_TARGET) $(BUILD_DIR)/claude_test.o $(BUILD_DIR)/test_edit_regex.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Edit tool regex enhancement test build successful!"
 	@echo ""
@@ -1455,8 +1679,9 @@ $(TEST_READ_TARGET): $(SRC) $(TEST_READ_SRC) $(TEST_COMMON_OBJS)
 	@echo "Compiling Read tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_read.o $(TEST_READ_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_READ_TARGET) $(BUILD_DIR)/claude_read_test.o $(BUILD_DIR)/test_read.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_READ_TARGET) $(BUILD_DIR)/claude_read_test.o $(BUILD_DIR)/test_read.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Read tool test build successful!"
 	@echo ""
@@ -1483,8 +1708,9 @@ $(TEST_TODO_WRITE_TARGET): $(SRC) $(TEST_TODO_WRITE_SRC) $(TEST_COMMON_OBJS)
 	@echo "Compiling TodoWrite tool test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_todo_write.o $(TEST_TODO_WRITE_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_TODO_WRITE_TARGET) $(BUILD_DIR)/claude_todowrite_test.o $(BUILD_DIR)/test_todo_write.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_TODO_WRITE_TARGET) $(BUILD_DIR)/claude_todowrite_test.o $(BUILD_DIR)/test_todo_write.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ TodoWrite tool test build successful!"
 	@echo ""
@@ -1519,8 +1745,9 @@ $(TEST_BASH_TIMEOUT_TARGET): $(SRC) $(TEST_BASH_TIMEOUT_SRC) $(TEST_COMMON_OBJS)
 	@echo "Compiling Bash timeout test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_timeout.o $(TEST_BASH_TIMEOUT_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_TIMEOUT_TARGET) $(BUILD_DIR)/claude_bash_timeout_test.o $(BUILD_DIR)/test_bash_timeout.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_TIMEOUT_TARGET) $(BUILD_DIR)/claude_bash_timeout_test.o $(BUILD_DIR)/test_bash_timeout.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash timeout test build successful!"
 	@echo ""
@@ -1533,8 +1760,9 @@ $(TEST_BASH_STDERR_TARGET): $(SRC) $(TEST_BASH_STDERR_SRC) $(TEST_COMMON_OBJS)
 	@echo "Compiling Bash stderr test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_stderr.o $(TEST_BASH_STDERR_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_STDERR_TARGET) $(BUILD_DIR)/claude_bash_stderr_test.o $(BUILD_DIR)/test_bash_stderr.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_STDERR_TARGET) $(BUILD_DIR)/claude_bash_stderr_test.o $(BUILD_DIR)/test_bash_stderr.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash stderr test build successful!"
 	@echo ""
@@ -1547,8 +1775,9 @@ $(TEST_BASH_TRUNCATION_TARGET): $(SRC) $(TEST_BASH_TRUNCATION_SRC) $(TEST_COMMON
 	@echo "Compiling Bash truncation test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bash_truncation.o $(TEST_BASH_TRUNCATION_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BASH_TRUNCATION_TARGET) $(BUILD_DIR)/claude_bash_truncation_test.o $(BUILD_DIR)/test_bash_truncation.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_BASH_TRUNCATION_TARGET) $(BUILD_DIR)/claude_bash_truncation_test.o $(BUILD_DIR)/test_bash_truncation.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bash truncation test build successful!"
 	@echo ""
@@ -1634,8 +1863,9 @@ $(TEST_TOOL_RESULTS_REGRESSION_TARGET): $(SRC) $(TEST_TOOL_RESULTS_REGRESSION_SR
 	@echo "Compiling tool results regression test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_tool_results_regression.o $(TEST_TOOL_RESULTS_REGRESSION_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_TOOL_RESULTS_REGRESSION_TARGET) $(BUILD_DIR)/claude_tool_results_test.o $(BUILD_DIR)/test_tool_results_regression.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_TOOL_RESULTS_REGRESSION_TARGET) $(BUILD_DIR)/claude_tool_results_test.o $(BUILD_DIR)/test_tool_results_regression.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Tool results regression test build successful!"
 	@echo ""
@@ -1679,8 +1909,9 @@ $(TEST_OPENAI_RESPONSE_PARSING_TARGET): $(SRC) $(TEST_OPENAI_RESPONSE_PARSING_SR
 	@echo "Compiling OpenAI response parsing regression test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_openai_response_parsing.o $(TEST_OPENAI_RESPONSE_PARSING_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_OPENAI_RESPONSE_PARSING_TARGET) $(BUILD_DIR)/claude_openai_response_test.o $(BUILD_DIR)/test_openai_response_parsing.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_OPENAI_RESPONSE_PARSING_TARGET) $(BUILD_DIR)/claude_openai_response_test.o $(BUILD_DIR)/test_openai_response_parsing.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ OpenAI response parsing regression test build successful!"
 	@echo ""
@@ -1725,8 +1956,9 @@ $(TEST_CANCEL_FLOW_TARGET): $(SRC) tests/test_cancel_flow.c $(TEST_COMMON_OBJS)
 	@echo "Compiling cancel flow test suite..."
 	@$(CC) $(CFLAGS) -I./src -c -o $(BUILD_DIR)/test_cancel_flow.o tests/test_cancel_flow.c
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_CANCEL_FLOW_TARGET) $(BUILD_DIR)/klawed_cancel_flow_test.o $(BUILD_DIR)/test_cancel_flow.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_CANCEL_FLOW_TARGET) $(BUILD_DIR)/klawed_cancel_flow_test.o $(BUILD_DIR)/test_cancel_flow.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Cancel flow test build successful!"
 	@echo ""
@@ -1745,8 +1977,9 @@ $(TEST_WRITE_DIFF_INTEGRATION_TARGET): $(SRC) $(TEST_WRITE_DIFF_INTEGRATION_SRC)
 	@echo "Compiling Write tool diff integration test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_write_diff_integration.o $(TEST_WRITE_DIFF_INTEGRATION_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_WRITE_DIFF_INTEGRATION_TARGET) $(BUILD_DIR)/claude_write_diff_test.o $(BUILD_DIR)/test_write_diff_integration.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_WRITE_DIFF_INTEGRATION_TARGET) $(BUILD_DIR)/claude_write_diff_test.o $(BUILD_DIR)/test_write_diff_integration.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Write tool diff integration test build successful!"
 	@echo ""
@@ -1770,8 +2003,9 @@ $(TEST_FUNCTION_CONTEXT_TARGET): $(SRC) $(TEST_FUNCTION_CONTEXT_SRC) $(TEST_COMM
 	@echo "Compiling Function Context test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_function_context.o $(TEST_FUNCTION_CONTEXT_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_FUNCTION_CONTEXT_TARGET) $(BUILD_DIR)/claude_function_context_test.o $(BUILD_DIR)/test_function_context.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_FUNCTION_CONTEXT_TARGET) $(BUILD_DIR)/claude_function_context_test.o $(BUILD_DIR)/test_function_context.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Function Context test build successful!"
 	@echo ""
@@ -1808,8 +2042,9 @@ $(TEST_EVENT_LOOP_TARGET): $(SRC) $(TEST_EVENT_LOOP_SRC) $(TEST_STUBS_SRC) $(TES
 	@echo "Compiling claude.c for event loop testing (renaming main)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_event_loop_test.o $(SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Compiling Event Loop test..."
-	@$(CC) $(CFLAGS) -Wno-unused-function -o $(TEST_EVENT_LOOP_TARGET) $(BUILD_DIR)/claude_event_loop_test.o $(TEST_EVENT_LOOP_SRC) $(TEST_STUBS_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -Wno-unused-function -o $(TEST_EVENT_LOOP_TARGET) $(BUILD_DIR)/claude_event_loop_test.o $(TEST_EVENT_LOOP_SRC) $(TEST_STUBS_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Event Loop test build successful!"
 	@echo ""
@@ -2254,9 +2489,18 @@ $(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET): $(TEST_TOKEN_USAGE_SESSION_TOTALS_SRC
 	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET) $(TEST_TOKEN_USAGE_SESSION_TOTALS_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(LDFLAGS)
 # Test-specific SQLite queue object (compiled with TEST_BUILD to exclude klawed.c dependencies)
 SQLITE_QUEUE_TEST_OBJ = $(BUILD_DIR)/sqlite_queue_test.o
+
+# Test-specific tool system objects (compiled with TEST_BUILD to exclude MCP tools)
+TOOL_REGISTRY_TEST_OBJ = $(BUILD_DIR)/tool_registry_test.o
+TOOL_EXECUTOR_TEST_OBJ = $(BUILD_DIR)/tool_executor_test.o
+TOOL_DEFINITIONS_TEST_OBJ = $(BUILD_DIR)/tool_definitions_test.o
+
 # Common objects needed by tests that compile claude.c
 
-TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(TUI_INPUT_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_PASTE_OBJ) $(TUI_WINDOW_OBJ) $(TUI_SEARCH_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_CORE_OBJ) $(TUI_HISTORY_OBJ) $(TUI_MODES_OBJ) $(TUI_RENDER_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(EXPLORE_TOOLS_OBJ)
+# Tool registry and executor are excluded from TEST_COMMON_OBJS because they need to be
+# compiled with -DTEST_BUILD to exclude MCP tool references. They are compiled into
+# claude_test.o instead.
+TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(EXPLORE_TOOLS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ)
 
 test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET)
 	@echo ""
@@ -2277,8 +2521,9 @@ $(TEST_ZMQ_SOCKET_TARGET): $(SRC) $(TEST_ZMQ_SOCKET_SRC) $(TEST_COMMON_OBJS)
 	@echo "Compiling ZMQ socket test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_zmq_socket.o $(TEST_ZMQ_SOCKET_SRC)
 	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_ZMQ_SOCKET_TARGET) $(BUILD_DIR)/claude_zmq_test.o $(BUILD_DIR)/test_zmq_socket.o $(SQLITE_QUEUE_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@$(CC) -o $(TEST_ZMQ_SOCKET_TARGET) $(BUILD_DIR)/claude_zmq_test.o $(BUILD_DIR)/test_zmq_socket.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
 
 
 

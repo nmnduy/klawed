@@ -16,6 +16,7 @@
 #include "mcp.h"
 #include "arena.h"
 #include "tool_utils.h"
+#include "tools/tool_definitions.h"
 
 #include <stdio.h>
 #include <stdlib.h>
