@@ -10,6 +10,8 @@
 ---
 
 - [ ]
+- [ ] feedback button and error reporting
+
 - [x] prompts
     - [x] give subagents more time. esp for tasks that might take time
     - [x] subagents are more resilient now. give them time. they will stop when fail/ needs more guidance
@@ -18,18 +20,26 @@
 - [ ] one button in file drop down menu copy full file path into input box
 - [x] database viewer with: sql runner. tabular view. search. filter.
     - [x] of course for now we only support file based databases: sqlite3
+- [ ] file search does not include folder in results
 - [ ] web search
 - [ ] backups/ folder
     - [ ] LLM can't delete files here
     - [ ] files get synced into external
 
 - [x] handle out of context error...
-- [ ] feedback button and error reporting
-
 
 - [ ] one narrated demo
 - [ ] randomnized tips
 
+
+---
+
+## Marketing
+
+- [ ] help students with homework
+    - [ ] good for university
+    - [ ] dont give a crap about security
+    - [ ] is there a market for this
 
 ---
 
