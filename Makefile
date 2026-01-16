@@ -205,6 +205,8 @@ TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 TEST_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_sqlite_queue
 QUERY_TOOL = $(BUILD_DIR)/query_logs
+MEMVID_REPL = $(BUILD_DIR)/memvid_repl
+MEMVID_REPL_SRC = tools/memvid_repl.c
 SRC = src/klawed.c
 ARRAY_RESIZE_SRC = src/array_resize.c
 ARRAY_RESIZE_OBJ = $(BUILD_DIR)/array_resize.o
@@ -461,7 +463,7 @@ TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
+.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search query-tool memvid-repl debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -475,6 +477,8 @@ clang: check-deps $(BUILD_DIR)/klawed-clang
 debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
+
+memvid-repl: check-deps $(MEMVID_REPL)
 
 test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-file-search
 
@@ -1588,6 +1592,33 @@ $(QUERY_TOOL): $(QUERY_TOOL_SRC) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ)
 	@echo "Run: ./$(QUERY_TOOL) --help"
 	@echo ""
 
+# Memvid REPL - interactive tool for testing memvid files
+$(MEMVID_REPL): $(MEMVID_REPL_SRC) $(MEMVID_SRC) $(LOGGER_OBJ)
+ifeq ($(MEMVID),0)
+	@echo "Error: memvid-repl requires memvid support"
+	@echo "Build with: make MEMVID=1 memvid-repl"
+	@exit 1
+else ifeq ($(shell test -f $(MEMVID_FFI_LIB) || echo no),no)
+ifeq ($(MEMVID),1)
+	@echo "Error: memvid-ffi library not found at $(MEMVID_FFI_LIB)"
+	@echo "Build it first with: make memvid-ffi"
+	@exit 1
+else
+	@echo "Error: memvid-repl requires memvid support"
+	@echo "Build the FFI library first with: make memvid-ffi"
+	@echo "Then build with: make MEMVID=1 memvid-repl"
+	@exit 1
+endif
+else
+	@mkdir -p $(BUILD_DIR)
+	@echo "Building memvid REPL..."
+	$(CC) $(CFLAGS) -DHAVE_MEMVID=1 -o $(MEMVID_REPL) $(MEMVID_REPL_SRC) $(MEMVID_SRC) $(LOGGER_OBJ) $(MEMVID_LIBS) -lbsd -lpthread
+	@echo ""
+	@echo "✓ Memvid REPL built successfully!"
+	@echo "Run: ./$(MEMVID_REPL) [path/to/memory.mv2]"
+	@echo ""
+endif
+
 # Test target for Window Manager - layout and pad capacity behavior
 $(TEST_WM_TARGET): $(TEST_WM_SRC) $(WINDOW_MANAGER_OBJ) $(LOGGER_OBJ)
 	@mkdir -p $(BUILD_DIR)
@@ -2133,6 +2164,7 @@ help:
 	@echo "  make test-message-queue - Build and run Message Queue tests only"
 	@echo "  make test-token-usage - Build and run Token Usage tests only"
 	@echo "  make query-tool - Build the API call log query utility"
+	@echo "  make memvid-repl - Build the memvid interactive REPL (requires MEMVID=1)"
 	@echo "  make clean     - Remove built files"
 	@echo "  make install   - Install to \$$HOME/.local/bin as klawed (default)"
 	@echo "  make install INSTALL_PREFIX=/usr/local - Install to /usr/local/bin (requires sudo)"
