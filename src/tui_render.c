@@ -613,7 +613,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
     // Layout depends on style:
     // - BACKGROUND: border (1) + left padding (1) + content + right padding (1)
     // - BORDER: box border (1) + left padding (1) + content + right padding (1) + box border (1)
-    // - BLAND: caret '❯ ' (4 chars) + content (no padding, no borders)
+    // - BLAND: caret '❯ ' (2 display cols) + content (no padding, no borders)
     int content_start_col;
     int right_margin;
 
@@ -625,8 +625,8 @@ void input_redraw(TUIState *tui, const char *prompt) {
         content_start_col = INPUT_LEFT_BORDER_WIDTH + INPUT_LEFT_PADDING;  // 1 + 1 = 2
         right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;      // padding + right border = 2
     } else {
-        // BLAND style: just '❯ ' prefix (4 chars), no padding
-        content_start_col = 4;  // '❯ ' = 4 characters
+        // BLAND style: just '❯ ' prefix (2 display cols), no padding
+        content_start_col = 2;  // '❯ ' = 2 display columns
         right_margin = 0;       // no right padding
     }
 
@@ -665,8 +665,8 @@ void input_redraw(TUIState *tui, const char *prompt) {
         content_start_col = INPUT_LEFT_BORDER_WIDTH + INPUT_LEFT_PADDING;
         right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;
     } else {
-        // BLAND style
-        content_start_col = 4;
+        // BLAND style: '❯ ' = 2 display columns
+        content_start_col = 2;
         right_margin = 0;
     }
     content_width = input->win_width - content_start_col - right_margin;
