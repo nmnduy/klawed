@@ -255,8 +255,8 @@ void tui_handle_resize(TUIState *tui) {
             (void)msg_x;
 
             // Calculate how many lines the user message will need
-            // The prefix " > " takes 3 characters
-            int prefix_len = 3;
+            // The prefix "> " takes 2 characters
+            int prefix_len = 2;
             int text_len = entry->text ? (int)strlen(entry->text) : 0;
             int needed_lines = tui_window_calculate_needed_lines(entry->text, text_len, pad_width, prefix_len);
 
@@ -280,7 +280,7 @@ void tui_handle_resize(TUIState *tui) {
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
             }
-            waddstr(tui->wm.conv_pad, " > ");
+            waddstr(tui->wm.conv_pad, "> ");
             if (has_colors()) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
                 // Re-enable background color for text
