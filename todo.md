@@ -44,7 +44,7 @@
 ---
 
 - [ ] cronjobs
-- [ ] background services for notifications
+- [ ] background services for notifications and scheduled tasks
 - [ ] pricing
 - [ ] voice recording doesn't work
 - [ ] work on distribution
