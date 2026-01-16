@@ -426,50 +426,18 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     int is_user_message = (prefix && strcmp(prefix, "[User]") == 0);
     int is_assistant_message = (prefix && strcmp(prefix, "[Assistant]") == 0);
 
-    // For user messages, add padding line before and draw full-width background
+    // For user messages, add padding line before
     if (is_user_message) {
         // Add one blank line for top padding
         waddch(tui->wm.conv_pad, '\n');
 
-        // Get updated position after adding blank line
-        int cur_y, cur_x;
-        int pad_height, pad_width;
-        getyx(tui->wm.conv_pad, cur_y, cur_x);
-        getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
-        (void)pad_height;
-        (void)cur_x;
-
-        // Calculate how many lines the user message will need
-        // The prefix "> " takes 2 characters
-        int prefix_len = 2;
-        int text_len = text ? (int)strlen(text) : 0;
-        int needed_lines = tui_window_calculate_needed_lines(text, text_len, pad_width, prefix_len);
-
-        // Draw full-width background for ALL lines the message will occupy
-        if (has_colors()) {
-            wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG));
-        }
-        int bg_start_y = cur_y;
-        for (int line = 0; line < needed_lines; line++) {
-            wmove(tui->wm.conv_pad, bg_start_y + line, 0);
-            for (int col = 0; col < pad_width; col++) {
-                waddch(tui->wm.conv_pad, ' ');
-            }
-        }
-        // Keep color active for text rendering
-
-        // Move back to start of first line to draw content on top
-        wmove(tui->wm.conv_pad, cur_y, 0);
-
-        // Render prefix '>' with bold user color on top of background
+        // Render prefix '>' with bold user color
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
         }
         waddstr(tui->wm.conv_pad, "> ");
         if (has_colors()) {
             wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
-            // Re-enable background color for text
-            wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG));
         }
     } else {
         // Write prefix with special handling for Assistant and other messages
@@ -502,8 +470,8 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     if (text && text[0] != '\0') {
         int text_pair;
         if (is_user_message) {
-            // User message: text is already on background, just render it
-            text_pair = NCURSES_PAIR_USER_MSG_BG;  // Keep background active
+            // User message: use foreground color (no background)
+            text_pair = NCURSES_PAIR_FOREGROUND;
         } else if (prefix && prefix[0] != '\0') {
             // Other messages with prefix use foreground
             text_pair = NCURSES_PAIR_FOREGROUND;
@@ -512,7 +480,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             text_pair = mapped_pair;
         }
 
-        if (!is_user_message && has_colors()) {
+        if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
         }
 
@@ -527,21 +495,8 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
         }
 
-        // For user messages, move to end of line and add padding line after
+        // For user messages, add padding line after
         if (is_user_message) {
-            int msg_y, msg_x;
-            int pad_height, pad_width;
-            getyx(tui->wm.conv_pad, msg_y, msg_x);
-            getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
-            (void)pad_height;
-            (void)msg_x;
-
-            // Move to end of line
-            wmove(tui->wm.conv_pad, msg_y, pad_width - 1);
-
-            // Add newline to finish the background line
-            waddch(tui->wm.conv_pad, '\n');
-
             // Add one blank line for bottom padding
             waddch(tui->wm.conv_pad, '\n');
 
