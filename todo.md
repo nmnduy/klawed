@@ -5,7 +5,7 @@
 - [ ]
 - [x] feedback button and error reporting
 - [x] one button in file drop down menu copy full file path into input box
-- [ ] file search does not include folder in results
+- [x] file search does not include folder in results
 
 - [x] prompts
     - [x] give subagents more time. esp for tasks that might take time
