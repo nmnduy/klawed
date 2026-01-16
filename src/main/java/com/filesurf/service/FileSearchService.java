@@ -169,12 +169,11 @@ public class FileSearchService {
     private SearchResult searchWithFd(Path directory, String[] terms, int limit, FileFilter fileFilter) {
         try {
             // Build fd command
-            // fd --type f --no-ignore-vcs <pattern> <directory>
+            // fd --no-ignore-vcs <pattern> <directory>
             // For multi-term search, we use a regex pattern
             List<String> cmd = new ArrayList<>();
             cmd.add(fdPath);
-            cmd.add("--type");
-            cmd.add("f");
+            // No --type flag means search both files and directories
             cmd.add("--no-ignore-vcs"); // Don't use .gitignore since we have our own .filesurfignore
             cmd.add("--max-results");
             cmd.add(String.valueOf(limit + 1)); // +1 to detect if there are more
@@ -196,6 +195,8 @@ public class FileSearchService {
 
     /**
      * Search using rg (ripgrep) with --files flag.
+     * Note: rg --files only lists files, not directories.
+     * We fall back to find for directory listing and merge results.
      */
     private SearchResult searchWithRg(Path directory, String[] terms, int limit, FileFilter fileFilter) {
         try {
@@ -207,6 +208,27 @@ public class FileSearchService {
             cmd.add(directory.toString());
 
             List<String> files = runCommand(cmd, directory);
+            
+            // rg --files only lists files, so we need to also get directories
+            // Use find for directories if available
+            if (findPath != null) {
+                List<String> dirCmd = new ArrayList<>();
+                dirCmd.add(findPath);
+                dirCmd.add(directory.toString());
+                dirCmd.add("-type");
+                dirCmd.add("d");
+                dirCmd.add("-not");
+                dirCmd.add("-path");
+                dirCmd.add(directory.toString()); // Exclude the root directory itself
+                
+                try {
+                    List<String> dirs = runCommand(dirCmd, directory);
+                    files.addAll(dirs);
+                } catch (Exception e) {
+                    LOGGER.fine("Failed to get directories with find: " + e.getMessage());
+                }
+            }
+            
             return filterAndBuildResults(directory, files, terms, limit, fileFilter);
 
         } catch (Exception e) {
@@ -220,12 +242,13 @@ public class FileSearchService {
      */
     private SearchResult searchWithFind(Path directory, String[] terms, int limit, FileFilter fileFilter) {
         try {
-            // find <directory> -type f
+            // find <directory> - no type restriction to include both files and directories
+            // Exclude the root directory itself with -mindepth 1
             List<String> cmd = new ArrayList<>();
             cmd.add(findPath);
             cmd.add(directory.toString());
-            cmd.add("-type");
-            cmd.add("f");
+            cmd.add("-mindepth");
+            cmd.add("1");
 
             List<String> files = runCommand(cmd, directory);
             return filterAndBuildResults(directory, files, terms, limit, fileFilter);
@@ -316,14 +339,15 @@ public class FileSearchService {
                     }
 
                     BasicFileAttributes attrs = Files.readAttributes(fullPath, BasicFileAttributes.class);
+                    boolean isDirectory = attrs.isDirectory();
 
                     Map<String, Object> item = new HashMap<>();
                     item.put("name", name);
                     item.put("path", relativePathStr);
-                    item.put("type", "file");
-                    item.put("size", attrs.size());
+                    item.put("type", isDirectory ? "directory" : "file");
+                    item.put("size", isDirectory ? 0L : attrs.size());
                     item.put("modified", formatFileTime(attrs.lastModifiedTime()));
-                    item.put("icon", getFileIcon(name));
+                    item.put("icon", isDirectory ? "folder" : getFileIcon(name));
 
                     // Include parent directory for display
                     Path parent = relativePath.getParent();
@@ -356,10 +380,40 @@ public class FileSearchService {
                         return java.nio.file.FileVisitResult.TERMINATE;
                     }
 
-                    // Skip ignored directories
-                    if (!dir.equals(directory) && fileFilter != null) {
-                        if (fileFilter.shouldIgnore(dir, directory)) {
+                    // Skip ignored directories but still check if the directory itself matches
+                    if (!dir.equals(directory)) {
+                        if (fileFilter != null && fileFilter.shouldIgnore(dir, directory)) {
                             return java.nio.file.FileVisitResult.SKIP_SUBTREE;
+                        }
+                        
+                        // Check if directory matches search terms
+                        String name = dir.getFileName().toString();
+                        String relativePath = directory.relativize(dir).toString();
+                        String searchableName = name.toLowerCase();
+                        String searchablePath = relativePath.toLowerCase();
+
+                        boolean matches = true;
+                        for (String term : terms) {
+                            if (!searchableName.contains(term) && !searchablePath.contains(term)) {
+                                matches = false;
+                                break;
+                            }
+                        }
+
+                        if (matches && results.size() < limit) {
+                            Map<String, Object> item = new HashMap<>();
+                            item.put("name", name);
+                            item.put("path", relativePath);
+                            item.put("type", "directory");
+                            item.put("size", 0L);
+                            item.put("modified", formatFileTime(attrs.lastModifiedTime()));
+                            item.put("icon", "folder");
+
+                            Path parent = directory.relativize(dir).getParent();
+                            String parentStr = parent != null ? parent.toString() : "";
+                            item.put("directory", parentStr.isEmpty() ? "/" : "/" + parentStr);
+
+                            results.add(item);
                         }
                     }
                     return java.nio.file.FileVisitResult.CONTINUE;
