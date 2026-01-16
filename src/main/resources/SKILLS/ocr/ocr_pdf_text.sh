@@ -34,11 +34,11 @@ log_warn() {
 # Check dependencies
 check_dependencies() {
     local missing_deps=()
-    
+
     if ! command -v pdftotext &> /dev/null; then
         missing_deps+=("poppler-utils")
     fi
-    
+
     if [[ "${#missing_deps[@]}" -gt 0 ]]; then
         log_error "Missing dependencies: ${missing_deps[*]}"
         log_error "Install with: brew install poppler (macOS)"
@@ -50,17 +50,17 @@ check_dependencies() {
 # Check if file exists and is readable
 check_file() {
     local file="$1"
-    
+
     if [[ ! -f "$file" ]]; then
         log_error "File not found: $file"
         exit 3
     fi
-    
+
     if [[ ! -r "$file" ]]; then
         log_error "File not readable: $file"
         exit 3
     fi
-    
+
     # Check if it's a PDF
     if ! file "$file" | grep -q "PDF"; then
         log_error "File is not a PDF: $file"
@@ -81,22 +81,22 @@ main() {
         echo "For scanned PDFs, use ocr_tesseract.sh or ocr_combined.sh instead."
         exit 1
     fi
-    
+
     local pdf_file="$1"
     local output_file="${2:-}"
-    
+
     # Check dependencies and input file
     check_dependencies
     check_file "$pdf_file"
-    
+
     log_info "Extracting text from PDF..."
-    
+
     # Extract text
     local extracted_text
     if extracted_text=$(pdftotext -layout "$pdf_file" - 2>&1); then
         local char_count
         char_count=$(echo "$extracted_text" | wc -c | tr -d ' ')
-        
+
         # Check if we got meaningful text
         if [[ "$char_count" -lt 50 ]]; then
             log_warn "Very little text extracted ($char_count characters)"
@@ -105,7 +105,7 @@ main() {
         else
             log_info "Successfully extracted $char_count characters"
         fi
-        
+
         # Output results
         if [[ -n "$output_file" ]]; then
             echo "$extracted_text" > "$output_file"
@@ -118,7 +118,7 @@ main() {
         log_error "$extracted_text"
         exit 4
     fi
-    
+
     exit 0
 }
 

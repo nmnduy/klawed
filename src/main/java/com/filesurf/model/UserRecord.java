@@ -19,7 +19,7 @@ public class UserRecord {
 
     public UserRecord() {}
 
-    public UserRecord(Long id, String userId, String email, LocalDateTime createdAt, 
+    public UserRecord(Long id, String userId, String email, LocalDateTime createdAt,
                       LocalDateTime lastLoginAt, boolean isActive) {
         this.id = id;
         this.userId = userId;
@@ -34,19 +34,19 @@ public class UserRecord {
         record.setId(rs.getLong("id"));
         record.setUserId(rs.getString("user_id"));
         record.setEmail(rs.getString("email"));
-        
+
         Timestamp createdTs = rs.getTimestamp("created_at");
         if (createdTs != null) {
             record.setCreatedAt(createdTs.toLocalDateTime());
         }
-        
+
         Timestamp lastLoginTs = rs.getTimestamp("last_login_at");
         if (lastLoginTs != null) {
             record.setLastLoginAt(lastLoginTs.toLocalDateTime());
         }
-        
+
         record.setActive(rs.getBoolean("is_active"));
-        
+
         return record;
     }
 

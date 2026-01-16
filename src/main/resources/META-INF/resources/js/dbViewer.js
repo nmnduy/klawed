@@ -42,25 +42,25 @@ class DBViewer {
         this.columnFilters = {};
         this.queryHistory = [];
         this.historyIndex = -1;
-        
+
         // DOM elements (created dynamically)
         this.modal = null;
         this.modalContent = null;
-        
+
         // Query state
         this.isExecutingQuery = false;
         this.lastQueryResults = null;
-        
+
         // LocalStorage key prefix
         this.HISTORY_KEY_PREFIX = 'dbViewer_queryHistory_';
         this.MAX_HISTORY_SIZE = 50;
-        
+
         // Bind methods
         this.open = this.open.bind(this);
         this.close = this.close.bind(this);
         this.handleKeyDown = this.handleKeyDown.bind(this);
     }
-    
+
     /**
      * Set session ID
      */
@@ -68,7 +68,7 @@ class DBViewer {
         this.sessionId = sessionId;
         this.loadQueryHistory();
     }
-    
+
     /**
      * Open the viewer modal for a database file
      */
@@ -85,21 +85,21 @@ class DBViewer {
         this.searchTerm = '';
         this.columnFilters = {};
         this.lastQueryResults = null;
-        
+
         // Create modal if not exists
         this.createModal();
-        
+
         // Show modal
         this.modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
-        
+
         // Add keyboard listener
         document.addEventListener('keydown', this.handleKeyDown);
-        
+
         // Load tables
         await this.loadTables();
     }
-    
+
     /**
      * Close the modal
      */
@@ -110,7 +110,7 @@ class DBViewer {
         }
         document.removeEventListener('keydown', this.handleKeyDown);
     }
-    
+
     /**
      * Handle keyboard shortcuts
      */
@@ -120,7 +120,7 @@ class DBViewer {
             this.close();
             return;
         }
-        
+
         // Ctrl/Cmd+Enter to run query
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             const sqlInput = document.getElementById('dbv-sql-input');
@@ -129,7 +129,7 @@ class DBViewer {
                 this.executeQueryFromInput();
             }
         }
-        
+
         // Up/Down for history navigation in SQL input
         const sqlInput = document.getElementById('dbv-sql-input');
         if (sqlInput && document.activeElement === sqlInput) {
@@ -142,21 +142,21 @@ class DBViewer {
             }
         }
     }
-    
+
     /**
      * Check if cursor is at start of input
      */
     isAtStartOfInput(input) {
         return input.selectionStart === 0 && input.selectionEnd === 0;
     }
-    
+
     /**
      * Check if cursor is at end of input
      */
     isAtEndOfInput(input) {
         return input.selectionStart === input.value.length;
     }
-    
+
     /**
      * Create the modal HTML structure
      */
@@ -166,11 +166,11 @@ class DBViewer {
         if (existingModal) {
             existingModal.remove();
         }
-        
+
         this.modal = document.createElement('div');
         this.modal.id = 'db-viewer-modal';
         this.modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm hidden';
-        
+
         this.modal.innerHTML = `
             <div class="bg-card w-[90vw] h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden border border-border">
                 <!-- Header -->
@@ -187,7 +187,7 @@ class DBViewer {
                         </svg>
                     </button>
                 </div>
-                
+
                 <!-- Main content -->
                 <div class="flex flex-1 overflow-hidden">
                     <!-- Left sidebar -->
@@ -205,7 +205,7 @@ class DBViewer {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Schema panel -->
                         <div class="border-t border-border">
                             <button id="dbv-schema-toggle" class="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition">
@@ -219,7 +219,7 @@ class DBViewer {
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Main content area -->
                     <div class="flex-1 flex flex-col overflow-hidden">
                         <!-- SQL Runner section -->
@@ -238,7 +238,7 @@ class DBViewer {
                             <div id="dbv-sql-section" class="px-4 pb-4">
                                 <div class="flex gap-3">
                                     <div class="flex-1">
-                                        <textarea id="dbv-sql-input" 
+                                        <textarea id="dbv-sql-input"
                                             class="w-full h-20 px-3 py-2 bg-background border border-border rounded-lg text-body-s font-mono text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
                                             placeholder="Enter SQL query... (Ctrl+Enter to run)"></textarea>
                                     </div>
@@ -278,7 +278,7 @@ class DBViewer {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Table data section -->
                         <div class="flex-1 flex flex-col overflow-hidden">
                             <!-- Toolbar -->
@@ -288,11 +288,11 @@ class DBViewer {
                                     <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
-                                    <input id="dbv-search" type="text" 
+                                    <input id="dbv-search" type="text"
                                         class="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-body-s text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                                         placeholder="Search all columns...">
                                 </div>
-                                
+
                                 <!-- Export buttons -->
                                 <div class="flex items-center gap-2">
                                     <button id="dbv-export-csv" class="px-3 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition text-caption-m flex items-center gap-2">
@@ -309,7 +309,7 @@ class DBViewer {
                                     </button>
                                 </div>
                             </div>
-                            
+
                             <!-- Data table container -->
                             <div id="dbv-data-container" class="flex-1 overflow-auto">
                                 <div class="flex items-center justify-center h-full">
@@ -321,7 +321,7 @@ class DBViewer {
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <!-- Pagination -->
                             <div id="dbv-pagination" class="hidden px-4 py-3 border-t border-border flex items-center justify-between">
                                 <div class="text-caption-s text-muted-foreground">
@@ -356,25 +356,25 @@ class DBViewer {
                 </div>
             </div>
         `;
-        
+
         document.body.appendChild(this.modal);
         this.attachEventListeners();
     }
-    
+
     /**
      * Attach event listeners to modal elements
      */
     attachEventListeners() {
         // Close button
         document.getElementById('dbv-close').addEventListener('click', () => this.close());
-        
+
         // Click outside to close
         this.modal.addEventListener('click', (e) => {
             if (e.target === this.modal) {
                 this.close();
             }
         });
-        
+
         // Schema toggle
         document.getElementById('dbv-schema-toggle').addEventListener('click', () => {
             const panel = document.getElementById('dbv-schema-panel');
@@ -382,7 +382,7 @@ class DBViewer {
             panel.classList.toggle('hidden');
             chevron.classList.toggle('rotate-180');
         });
-        
+
         // SQL section toggle
         document.getElementById('dbv-sql-toggle').addEventListener('click', () => {
             const section = document.getElementById('dbv-sql-section');
@@ -390,30 +390,30 @@ class DBViewer {
             section.classList.toggle('hidden');
             chevron.classList.toggle('rotate-180');
         });
-        
+
         // Run query button
         document.getElementById('dbv-run-query').addEventListener('click', () => {
             this.executeQueryFromInput();
         });
-        
+
         // History dropdown
         const historyBtn = document.getElementById('dbv-history-btn');
         const historyDropdown = document.getElementById('dbv-history-dropdown');
-        
+
         historyBtn.addEventListener('click', () => {
             historyDropdown.classList.toggle('hidden');
             if (!historyDropdown.classList.contains('hidden')) {
                 this.renderHistoryDropdown();
             }
         });
-        
+
         // Close history dropdown when clicking outside
         document.addEventListener('click', (e) => {
             if (!historyBtn.contains(e.target) && !historyDropdown.contains(e.target)) {
                 historyDropdown.classList.add('hidden');
             }
         });
-        
+
         // Search input
         const searchInput = document.getElementById('dbv-search');
         let searchTimeout;
@@ -425,7 +425,7 @@ class DBViewer {
                 this.loadData();
             }, 300);
         });
-        
+
         // Export buttons
         document.getElementById('dbv-export-csv').addEventListener('click', () => {
             this.exportData('csv');
@@ -433,7 +433,7 @@ class DBViewer {
         document.getElementById('dbv-export-json').addEventListener('click', () => {
             this.exportData('json');
         });
-        
+
         // Pagination buttons
         document.getElementById('dbv-page-first').addEventListener('click', () => {
             this.handlePageChange(0);
@@ -449,7 +449,7 @@ class DBViewer {
             this.handlePageChange(lastPage);
         });
     }
-    
+
     /**
      * Load list of tables from database
      */
@@ -462,24 +462,24 @@ class DBViewer {
                 </svg>
             </div>
         `;
-        
+
         try {
             const response = await fetch(`/file-chat/explorer/sql/tables?path=${encodeURIComponent(this.currentDbPath)}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
             });
-            
+
             if (await handleAuthError(response)) {
                 return;
             }
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.tables = data.tables || [];
                 this.renderTablesList();
@@ -498,13 +498,13 @@ class DBViewer {
             `;
         }
     }
-    
+
     /**
      * Render the tables list in the sidebar
      */
     renderTablesList() {
         const tablesList = document.getElementById('dbv-tables-list');
-        
+
         if (this.tables.length === 0) {
             tablesList.innerHTML = `
                 <div class="px-3 py-4 text-center text-caption-s text-muted-foreground">
@@ -513,7 +513,7 @@ class DBViewer {
             `;
             return;
         }
-        
+
         tablesList.innerHTML = this.tables.map(table => `
             <button class="dbv-table-item w-full text-left px-3 py-2 rounded-lg hover:bg-muted/50 transition flex items-center gap-2 group ${this.currentTable === table ? 'bg-primary/10 text-primary' : 'text-foreground'}"
                 data-table="${this.escapeHtml(table)}">
@@ -523,7 +523,7 @@ class DBViewer {
                 <span class="text-caption-m truncate">${this.escapeHtml(table)}</span>
             </button>
         `).join('');
-        
+
         // Attach click handlers
         tablesList.querySelectorAll('.dbv-table-item').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -531,7 +531,7 @@ class DBViewer {
             });
         });
     }
-    
+
     /**
      * Select a table and load its data
      */
@@ -542,27 +542,27 @@ class DBViewer {
         this.columnFilters = {};
         this.sortColumn = null;
         this.sortDirection = 'asc';
-        
+
         // Update search input
         const searchInput = document.getElementById('dbv-search');
         if (searchInput) {
             searchInput.value = '';
         }
-        
+
         // Update tables list to show selection
         this.renderTablesList();
-        
+
         // Show toolbar and pagination
         document.getElementById('dbv-toolbar').classList.remove('hidden');
         document.getElementById('dbv-pagination').classList.remove('hidden');
-        
+
         // Load schema and data in parallel
         await Promise.all([
             this.loadSchema(tableName),
             this.loadData()
         ]);
     }
-    
+
     /**
      * Load schema for a table
      */
@@ -575,28 +575,28 @@ class DBViewer {
                 </svg>
             </div>
         `;
-        
+
         // Expand schema panel
         schemaPanel.classList.remove('hidden');
         document.getElementById('dbv-schema-chevron').classList.add('rotate-180');
-        
+
         try {
             const response = await fetch(`/file-chat/explorer/sql/schema/${encodeURIComponent(tableName)}?path=${encodeURIComponent(this.currentDbPath)}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
             });
-            
+
             if (await handleAuthError(response)) {
                 return;
             }
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.schema = data.columns || [];
                 this.renderSchema();
@@ -610,20 +610,20 @@ class DBViewer {
             `;
         }
     }
-    
+
     /**
      * Render the schema panel
      */
     renderSchema() {
         const schemaPanel = document.getElementById('dbv-schema-panel');
-        
+
         if (this.schema.length === 0) {
             schemaPanel.innerHTML = `
                 <p class="text-caption-s text-muted-foreground px-2 py-4 text-center">No columns found</p>
             `;
             return;
         }
-        
+
         schemaPanel.innerHTML = `
             <div class="space-y-1">
                 ${this.schema.map(col => `
@@ -637,13 +637,13 @@ class DBViewer {
             </div>
         `;
     }
-    
+
     /**
      * Load table data with pagination, search, and filters
      */
     async loadData() {
         if (!this.currentTable) return;
-        
+
         const dataContainer = document.getElementById('dbv-data-container');
         dataContainer.innerHTML = `
             <div class="flex items-center justify-center h-full">
@@ -652,7 +652,7 @@ class DBViewer {
                 </svg>
             </div>
         `;
-        
+
         try {
             // Build query params
             const params = new URLSearchParams({
@@ -660,36 +660,36 @@ class DBViewer {
                 page: this.currentPage,
                 pageSize: this.pageSize
             });
-            
+
             if (this.searchTerm) {
                 params.append('search', this.searchTerm);
             }
-            
+
             if (this.sortColumn) {
                 params.append('sortColumn', this.sortColumn);
                 params.append('sortDirection', this.sortDirection);
             }
-            
+
             if (Object.keys(this.columnFilters).length > 0) {
                 params.append('filters', JSON.stringify(this.columnFilters));
             }
-            
+
             const response = await fetch(`/file-chat/explorer/sql/data/${encodeURIComponent(this.currentTable)}?${params}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
             });
-            
+
             if (await handleAuthError(response)) {
                 return;
             }
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.totalRows = data.totalRows || 0;
                 this.renderDataTable(data.columns || [], data.rows || []);
@@ -711,13 +711,13 @@ class DBViewer {
             `;
         }
     }
-    
+
     /**
      * Render the data table
      */
     renderDataTable(columns, rows) {
         const dataContainer = document.getElementById('dbv-data-container');
-        
+
         if (rows.length === 0) {
             dataContainer.innerHTML = `
                 <div class="flex items-center justify-center h-full">
@@ -731,7 +731,7 @@ class DBViewer {
             `;
             return;
         }
-        
+
         // Build table HTML
         const tableHtml = `
             <table class="w-full border-collapse min-w-max">
@@ -755,7 +755,7 @@ class DBViewer {
                     <tr class="bg-muted/30">
                         ${columns.map(col => `
                             <th class="px-2 py-2 border-b border-border">
-                                <input type="text" 
+                                <input type="text"
                                     class="w-full px-2 py-1 text-caption-s bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary/50"
                                     placeholder="Filter..."
                                     data-filter-column="${this.escapeHtml(col)}"
@@ -784,16 +784,16 @@ class DBViewer {
                 </tbody>
             </table>
         `;
-        
+
         dataContainer.innerHTML = tableHtml;
-        
+
         // Attach sort handlers
         dataContainer.querySelectorAll('thead th[data-column]').forEach(th => {
             th.addEventListener('click', () => {
                 this.handleSort(th.dataset.column);
             });
         });
-        
+
         // Attach filter handlers
         dataContainer.querySelectorAll('input[data-filter-column]').forEach(input => {
             let filterTimeout;
@@ -805,7 +805,7 @@ class DBViewer {
             });
         });
     }
-    
+
     /**
      * Render pagination controls
      */
@@ -813,37 +813,37 @@ class DBViewer {
         const totalPages = Math.ceil(this.totalRows / this.pageSize);
         const startRow = this.currentPage * this.pageSize + 1;
         const endRow = Math.min((this.currentPage + 1) * this.pageSize, this.totalRows);
-        
+
         // Update info text
-        document.getElementById('dbv-pagination-info').textContent = 
+        document.getElementById('dbv-pagination-info').textContent =
             this.totalRows === 0 ? 'No rows' :
             `Showing ${startRow}-${endRow} of ${this.totalRows} rows`;
-        
+
         // Update page number
-        document.getElementById('dbv-page-number').textContent = 
+        document.getElementById('dbv-page-number').textContent =
             totalPages === 0 ? 'No pages' : `Page ${this.currentPage + 1} of ${totalPages}`;
-        
+
         // Update button states
         document.getElementById('dbv-page-first').disabled = this.currentPage === 0;
         document.getElementById('dbv-page-prev').disabled = this.currentPage === 0;
         document.getElementById('dbv-page-next').disabled = this.currentPage >= totalPages - 1;
         document.getElementById('dbv-page-last').disabled = this.currentPage >= totalPages - 1;
     }
-    
+
     /**
      * Execute SQL query from input
      */
     async executeQueryFromInput() {
         const sqlInput = document.getElementById('dbv-sql-input');
         const sql = sqlInput.value.trim();
-        
+
         if (!sql) {
             return;
         }
-        
+
         await this.executeQuery(sql);
     }
-    
+
     /**
      * Execute SQL query
      */
@@ -851,13 +851,13 @@ class DBViewer {
         if (this.isExecutingQuery) {
             return;
         }
-        
+
         this.isExecutingQuery = true;
         const runButton = document.getElementById('dbv-run-query');
         const queryResults = document.getElementById('dbv-query-results');
         const queryResultsContent = document.getElementById('dbv-query-results-content');
         const queryStats = document.getElementById('dbv-query-stats');
-        
+
         // Show loading state
         runButton.disabled = true;
         runButton.innerHTML = `
@@ -866,7 +866,7 @@ class DBViewer {
             </svg>
             Running...
         `;
-        
+
         queryResults.classList.remove('hidden');
         queryResultsContent.innerHTML = `
             <div class="flex items-center justify-center py-4">
@@ -875,7 +875,7 @@ class DBViewer {
                 </svg>
             </div>
         `;
-        
+
         try {
             const response = await fetch(`/file-chat/explorer/sql/query?path=${encodeURIComponent(this.currentDbPath)}`, {
                 method: 'POST',
@@ -888,17 +888,17 @@ class DBViewer {
                     params: []
                 })
             });
-            
+
             if (await handleAuthError(response)) {
                 return;
             }
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.lastQueryResults = data;
                 this.addToHistory(sql);
@@ -927,13 +927,13 @@ class DBViewer {
             `;
         }
     }
-    
+
     /**
      * Render query results
      */
     renderQueryResults(results) {
         const queryResultsContent = document.getElementById('dbv-query-results-content');
-        
+
         if (!results.rows || results.rows.length === 0) {
             queryResultsContent.innerHTML = `
                 <div class="px-4 py-3 text-caption-m text-muted-foreground">
@@ -942,9 +942,9 @@ class DBViewer {
             `;
             return;
         }
-        
+
         const columns = results.columns || Object.keys(results.rows[0] || {});
-        
+
         queryResultsContent.innerHTML = `
             <table class="w-full border-collapse min-w-max">
                 <thead class="sticky top-0 bg-muted/50">
@@ -976,7 +976,7 @@ class DBViewer {
             </table>
         `;
     }
-    
+
     /**
      * Export table data
      */
@@ -984,39 +984,39 @@ class DBViewer {
         if (!this.currentTable) {
             return;
         }
-        
+
         try {
             const response = await fetch(`/file-chat/explorer/sql/export/${encodeURIComponent(this.currentTable)}?path=${encodeURIComponent(this.currentDbPath)}&format=${format}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
             });
-            
+
             if (await handleAuthError(response)) {
                 return;
             }
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
-            
+
             const a = document.createElement('a');
             a.href = url;
             a.download = `${this.currentTable}.${format}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            
+
             setTimeout(() => URL.revokeObjectURL(url), 30000);
         } catch (error) {
             console.error('[db-viewer] Export failed:', error);
             alert('Export failed: ' + error.message);
         }
     }
-    
+
     /**
      * Handle search input
      */
@@ -1025,7 +1025,7 @@ class DBViewer {
         this.currentPage = 0;
         this.loadData();
     }
-    
+
     /**
      * Handle column filter
      */
@@ -1038,7 +1038,7 @@ class DBViewer {
         this.currentPage = 0;
         this.loadData();
     }
-    
+
     /**
      * Handle column sort
      */
@@ -1052,7 +1052,7 @@ class DBViewer {
         this.currentPage = 0;
         this.loadData();
     }
-    
+
     /**
      * Handle page change
      */
@@ -1064,7 +1064,7 @@ class DBViewer {
         this.currentPage = page;
         this.loadData();
     }
-    
+
     /**
      * Load query history from localStorage
      */
@@ -1072,7 +1072,7 @@ class DBViewer {
         if (!this.sessionId) {
             return;
         }
-        
+
         try {
             const key = this.HISTORY_KEY_PREFIX + this.sessionId;
             const stored = localStorage.getItem(key);
@@ -1084,7 +1084,7 @@ class DBViewer {
             this.queryHistory = [];
         }
     }
-    
+
     /**
      * Save query history to localStorage
      */
@@ -1092,7 +1092,7 @@ class DBViewer {
         if (!this.sessionId) {
             return;
         }
-        
+
         try {
             const key = this.HISTORY_KEY_PREFIX + this.sessionId;
             localStorage.setItem(key, JSON.stringify(this.queryHistory));
@@ -1100,7 +1100,7 @@ class DBViewer {
             console.warn('[db-viewer] Failed to save query history:', error);
         }
     }
-    
+
     /**
      * Add query to history
      */
@@ -1109,21 +1109,21 @@ class DBViewer {
         if (this.queryHistory.length > 0 && this.queryHistory[0] === sql) {
             return;
         }
-        
+
         // Add to beginning
         this.queryHistory.unshift(sql);
-        
+
         // Trim to max size
         if (this.queryHistory.length > this.MAX_HISTORY_SIZE) {
             this.queryHistory = this.queryHistory.slice(0, this.MAX_HISTORY_SIZE);
         }
-        
+
         // Reset history navigation
         this.historyIndex = -1;
-        
+
         this.saveQueryHistory();
     }
-    
+
     /**
      * Navigate query history
      */
@@ -1132,43 +1132,43 @@ class DBViewer {
         if (!sqlInput || this.queryHistory.length === 0) {
             return;
         }
-        
+
         const newIndex = this.historyIndex + direction;
-        
+
         if (newIndex < -1) {
             return;
         }
-        
+
         if (newIndex >= this.queryHistory.length) {
             return;
         }
-        
+
         this.historyIndex = newIndex;
-        
+
         if (this.historyIndex === -1) {
             sqlInput.value = '';
         } else {
             sqlInput.value = this.queryHistory[this.historyIndex];
         }
-        
+
         // Move cursor to end
         sqlInput.selectionStart = sqlInput.value.length;
         sqlInput.selectionEnd = sqlInput.value.length;
     }
-    
+
     /**
      * Render history dropdown
      */
     renderHistoryDropdown() {
         const dropdown = document.getElementById('dbv-history-dropdown');
-        
+
         if (this.queryHistory.length === 0) {
             dropdown.innerHTML = `
                 <div class="p-3 text-caption-s text-muted-foreground text-center">No query history</div>
             `;
             return;
         }
-        
+
         dropdown.innerHTML = this.queryHistory.map((sql, index) => `
             <button class="w-full text-left px-3 py-2 hover:bg-muted/50 transition text-caption-s text-foreground font-mono truncate"
                 data-history-index="${index}"
@@ -1176,7 +1176,7 @@ class DBViewer {
                 ${this.escapeHtml(sql.length > 60 ? sql.substring(0, 60) + '...' : sql)}
             </button>
         `).join('');
-        
+
         // Attach click handlers
         dropdown.querySelectorAll('button').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1189,7 +1189,7 @@ class DBViewer {
             });
         });
     }
-    
+
     /**
      * Escape HTML special characters
      */

@@ -14,22 +14,22 @@ import java.util.Properties;
  */
 @ApplicationScoped
 public class CssVersionProvider {
-    
+
     private static final Logger LOG = LoggerFactory.getLogger(CssVersionProvider.class);
     private static final String VERSION_FILE = "css-version.properties";
     private static final String DEFAULT_FILENAME = "main.css";
-    
+
     private final String cssFilename;
     private final String cssHash;
-    
+
     public CssVersionProvider() {
         Properties props = loadProperties();
         this.cssFilename = props.getProperty("css.filename", DEFAULT_FILENAME);
         this.cssHash = props.getProperty("css.hash", "unknown");
-        
+
         LOG.info("CSS Version Provider initialized: filename={}, hash={}", cssFilename, cssHash);
     }
-    
+
     /**
      * Get the hashed CSS filename for use in templates.
      * Returns "main.[hash].css" in production or "main.css" if version file not found.
@@ -37,24 +37,24 @@ public class CssVersionProvider {
     public String getCssFilename() {
         return cssFilename;
     }
-    
+
     /**
      * Get the CSS content hash.
      */
     public String getCssHash() {
         return cssHash;
     }
-    
+
     /**
      * Get the full CSS path including /dist/ prefix.
      */
     public String getCssPath() {
         return "/dist/" + cssFilename;
     }
-    
+
     private Properties loadProperties() {
         Properties props = new Properties();
-        
+
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(VERSION_FILE)) {
             if (is != null) {
                 props.load(is);
@@ -66,7 +66,7 @@ public class CssVersionProvider {
         } catch (IOException e) {
             LOG.error("Error loading CSS version properties from {}: {}", VERSION_FILE, e.getMessage());
         }
-        
+
         return props;
     }
 }

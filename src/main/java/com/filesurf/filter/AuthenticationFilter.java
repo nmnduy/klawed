@@ -97,8 +97,8 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         }
 
         // Skip static assets
-        if (normalizedPath.startsWith("assets/") || 
-            normalizedPath.startsWith("js/") || 
+        if (normalizedPath.startsWith("assets/") ||
+            normalizedPath.startsWith("js/") ||
             normalizedPath.startsWith("css/")) {
             return true;
         }
@@ -112,8 +112,8 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         }
 
         // Skip health/metrics endpoints
-        if (normalizedPath.equals("health") || 
-            normalizedPath.equals("health/live") || 
+        if (normalizedPath.equals("health") ||
+            normalizedPath.equals("health/live") ||
             normalizedPath.equals("health/ready") ||
             normalizedPath.equals("metrics") ||
             normalizedPath.startsWith("q/")) {  // Quarkus dev endpoints
@@ -149,7 +149,7 @@ public class AuthenticationFilter implements ContainerRequestFilter {
     public boolean isApiRequest(ContainerRequestContext requestContext, String path) {
         String accept = requestContext.getHeaderString("Accept");
         String contentType = requestContext.getHeaderString("Content-Type");
-        
+
         // Check headers
         if ((accept != null && accept.contains("application/json")) ||
             (contentType != null && contentType.contains("application/json"))) {
@@ -160,7 +160,7 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         if (path == null) {
             return false;
         }
-        
+
         String normalizedPath = path.startsWith("/") ? path.substring(1) : path;
         return normalizedPath.startsWith("file-chat/http/") ||
                normalizedPath.startsWith("session/") ||
@@ -182,7 +182,7 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         if (path.startsWith("/")) {
             return path;
         }
-        
+
         return "/" + path;
     }
 

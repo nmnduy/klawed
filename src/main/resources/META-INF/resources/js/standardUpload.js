@@ -15,14 +15,14 @@ class StandardUploader {
     static async upload(files, sessionId, path = '/', options = {}) {
         const useProgressUI = options.useProgressUI !== false;
         const uploadId = 'standard-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-        
+
         // Calculate total size
         const totalSize = files.reduce((sum, file) => sum + file.size, 0);
         const fileNames = files.map(f => f.name).join(', ');
 
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
-            
+
             // Show progress UI if enabled
             if (useProgressUI && typeof window !== 'undefined' && window.uploadProgress) {
                 window.uploadProgress.showProgress(
@@ -36,7 +36,7 @@ class StandardUploader {
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable) {
                     const progress = (e.loaded / e.total) * 100;
-                    
+
                     if (useProgressUI && typeof window !== 'undefined' && window.uploadProgress) {
                         window.uploadProgress.updateProgress(uploadId, progress, e.loaded);
                     }
@@ -58,7 +58,7 @@ class StandardUploader {
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try {
                         const result = JSON.parse(xhr.responseText);
-                        
+
                         // Mark as complete in progress UI
                         if (useProgressUI && typeof window !== 'undefined' && window.uploadProgress) {
                             window.uploadProgress.completeUpload(uploadId, true);

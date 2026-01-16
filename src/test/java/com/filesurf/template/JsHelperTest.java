@@ -42,8 +42,8 @@ public class JsHelperTest {
         String baseName = "fileChat";
         String helperPath = jsHelper.path(baseName);
         String providerPath = jsVersionProvider.getJsPath(baseName);
-        
-        assertEquals(providerPath, helperPath, 
+
+        assertEquals(providerPath, helperPath,
             "JsHelper path should match JsVersionProvider path");
     }
 
@@ -52,8 +52,8 @@ public class JsHelperTest {
         String baseName = "fileExplorer";
         String helperFilename = jsHelper.filename(baseName);
         String providerFilename = jsVersionProvider.getJsFilename(baseName);
-        
-        assertEquals(providerFilename, helperFilename, 
+
+        assertEquals(providerFilename, helperFilename,
             "JsHelper filename should match JsVersionProvider filename");
     }
 }

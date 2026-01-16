@@ -33,7 +33,7 @@ public class RootResource {
     public Response root(@Context HttpHeaders headers) {
         // Check if user is already authenticated
         String userId = extractUserIdFromCookies(headers);
-        
+
         if (userId != null && !userId.isBlank()) {
             UserRecord user = userService.getUserByUserId(userId);
             if (user != null && user.isActive()) {

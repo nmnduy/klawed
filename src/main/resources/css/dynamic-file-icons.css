@@ -1,9 +1,9 @@
 /**
  * Dynamic File Icon Classes
- * 
+ *
  * Used in fileExplorer.js getFileIcon() to colorize file type icons.
  * These classes are dynamically applied based on file extension.
- * 
+ *
  * Note: These classes must be referenced in class-reference.html to ensure
  * they're included in the build.
  */

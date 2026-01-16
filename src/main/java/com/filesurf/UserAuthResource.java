@@ -225,32 +225,32 @@ public class UserAuthResource {
         if (redirect == null || redirect.isEmpty()) {
             return "/file-chat";
         }
-        
+
         // Block dangerous URL schemes
         String lower = redirect.toLowerCase().trim();
-        if (lower.startsWith("javascript:") || 
-            lower.startsWith("data:") || 
+        if (lower.startsWith("javascript:") ||
+            lower.startsWith("data:") ||
             lower.startsWith("vbscript:") ||
             lower.startsWith("file:") ||
             lower.startsWith("about:")) {
             LOGGER.warning("Blocked dangerous redirect URL scheme: " + redirect);
             return "/file-chat";
         }
-        
+
         // Block protocol-relative URLs
         if (lower.startsWith("//")) {
             LOGGER.warning("Blocked protocol-relative redirect: " + redirect);
             return "/file-chat";
         }
-        
+
         // Only allow relative paths starting with /
         if (!redirect.startsWith("/")) {
             return "/" + redirect;
         }
-        
+
         // Additional safety: ensure no double slashes (except at start)
         String sanitized = redirect.replaceAll("//+", "/");
-        
+
         return sanitized;
     }
 

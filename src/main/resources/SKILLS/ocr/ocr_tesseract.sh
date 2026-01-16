@@ -40,11 +40,11 @@ log_warn() {
 # Check dependencies
 check_dependencies() {
     local missing_deps=()
-    
+
     if ! command -v tesseract &> /dev/null; then
         missing_deps+=("tesseract")
     fi
-    
+
     if [[ "${#missing_deps[@]}" -gt 0 ]]; then
         log_error "Missing dependencies: ${missing_deps[*]}"
         log_error "Install with: brew install ${missing_deps[*]} (macOS)"
@@ -56,12 +56,12 @@ check_dependencies() {
 # Check if file exists and is readable
 check_file() {
     local file="$1"
-    
+
     if [[ ! -f "$file" ]]; then
         log_error "File not found: $file"
         exit 3
     fi
-    
+
     if [[ ! -r "$file" ]]; then
         log_error "File not readable: $file"
         exit 3
@@ -78,9 +78,9 @@ get_extension() {
 convert_pdf_to_image() {
     local pdf_file="$1"
     local output_dir="$2"
-    
+
     log_info "Converting PDF to images at ${OCR_DPI} DPI..."
-    
+
     # Check for conversion tools
     if command -v pdftoppm &> /dev/null; then
         pdftoppm -png -r "$OCR_DPI" "$pdf_file" "$output_dir/page"
@@ -90,7 +90,7 @@ convert_pdf_to_image() {
         log_error "No PDF conversion tool found. Install poppler-utils or imagemagick."
         exit 2
     fi
-    
+
     # Return the list of generated images
     find "$output_dir" -name "page*.png" | sort
 }
@@ -99,9 +99,9 @@ convert_pdf_to_image() {
 ocr_image() {
     local image_file="$1"
     local language="$2"
-    
+
     log_info "Processing: $(basename "$image_file")"
-    
+
     # Run tesseract
     tesseract "$image_file" stdout \
         -l "$language" \
@@ -127,33 +127,33 @@ main() {
         echo "Common languages: eng (English), spa (Spanish), fra (French), deu (German)"
         exit 1
     fi
-    
+
     local input_file="$1"
     local output_file="${2:-}"
     local language="${3:-$OCR_LANG}"
-    
+
     # Check dependencies and input file
     check_dependencies
     check_file "$input_file"
-    
+
     local extension
     extension=$(get_extension "$input_file")
-    
+
     log_info "Starting OCR with Tesseract..."
     log_info "Language: $language, DPI: $OCR_DPI, PSM: $OCR_PSM"
-    
+
     local ocr_output=""
-    
+
     # Handle PDF files
     if [[ "$extension" == "pdf" ]]; then
         local temp_dir
         temp_dir=$(mktemp -d)
         trap 'rm -rf "$temp_dir"' EXIT
-        
+
         # Convert PDF to images
         local images
         images=$(convert_pdf_to_image "$input_file" "$temp_dir")
-        
+
         # OCR each page
         while IFS= read -r image; do
             ocr_output+=$(ocr_image "$image" "$language")
@@ -163,7 +163,7 @@ main() {
         # Direct OCR for image files
         ocr_output=$(ocr_image "$input_file" "$language")
     fi
-    
+
     # Output results
     if [[ -n "$output_file" ]]; then
         echo "$ocr_output" > "$output_file"
@@ -172,7 +172,7 @@ main() {
     else
         echo "$ocr_output"
     fi
-    
+
     exit 0
 }
 

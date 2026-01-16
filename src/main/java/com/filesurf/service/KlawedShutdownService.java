@@ -14,28 +14,28 @@ import java.util.logging.Logger;
 /**
  * Service to handle SIGKILL and other shutdown signals to clean up
  * running klawed sqlite-queue instances before shutting down the server.
- * 
+ *
  * This service registers a shutdown hook that will be called when the
  * JVM receives SIGTERM, SIGINT, or other termination signals.
  */
 @ApplicationScoped
 public class KlawedShutdownService {
-    
+
     private static final Logger LOGGER = Logger.getLogger(KlawedShutdownService.class.getName());
-    
+
     @Inject
     KlawedSandboxService klawedSandboxService;
-    
+
     private final AtomicBoolean shutdownInProgress = new AtomicBoolean(false);
     private Thread shutdownHook;
-    
+
     /**
      * Initialize the shutdown service and register shutdown hook
      */
     @PostConstruct
     public void init() {
         LOGGER.info("Initializing KlawedShutdownService");
-        
+
         // Register shutdown hook
         shutdownHook = new Thread(() -> {
             if (shutdownInProgress.compareAndSet(false, true)) {
@@ -43,26 +43,26 @@ public class KlawedShutdownService {
                 cleanupAllKlawedProcesses();
             }
         }, "KlawedShutdownHook");
-        
+
         Runtime.getRuntime().addShutdownHook(shutdownHook);
         LOGGER.info("Registered shutdown hook for klawed process cleanup");
-        
+
         // Also register signal handlers for more immediate response
         registerSignalHandlers();
     }
-    
+
     /**
      * Cleanup method called on application shutdown
      */
     @PreDestroy
     public void cleanup() {
         LOGGER.info("KlawedShutdownService cleanup called");
-        
+
         if (shutdownInProgress.compareAndSet(false, true)) {
             LOGGER.info("Application shutdown detected, cleaning up klawed processes...");
             cleanupAllKlawedProcesses();
         }
-        
+
         // Remove shutdown hook to avoid duplicate cleanup
         if (shutdownHook != null) {
             try {
@@ -74,7 +74,7 @@ public class KlawedShutdownService {
             }
         }
     }
-    
+
     /**
      * Register signal handlers for SIGTERM, SIGINT, etc.
      */
@@ -83,7 +83,7 @@ public class KlawedShutdownService {
             // Use sun.misc.Signal for signal handling if available
             Class<?> signalClass = Class.forName("sun.misc.Signal");
             Class<?> signalHandlerClass = Class.forName("sun.misc.SignalHandler");
-            
+
             // Create signal handler
             Object signalHandler = java.lang.reflect.Proxy.newProxyInstance(
                 getClass().getClassLoader(),
@@ -92,7 +92,7 @@ public class KlawedShutdownService {
                     if (method.getName().equals("handle")) {
                         sun.misc.Signal signal = (sun.misc.Signal) args[0];
                         LOGGER.warning("Received signal: " + signal.getName() + " (" + signal.getNumber() + ")");
-                        
+
                         if (shutdownInProgress.compareAndSet(false, true)) {
                             LOGGER.info("Signal handler triggered, cleaning up klawed processes...");
                             cleanupAllKlawedProcesses();
@@ -101,7 +101,7 @@ public class KlawedShutdownService {
                     return null;
                 }
             );
-            
+
             // Register for common termination signals
             String[] signals = {"TERM", "INT", "HUP"};
             for (String sigName : signals) {
@@ -120,24 +120,24 @@ public class KlawedShutdownService {
             LOGGER.warning("Failed to register signal handlers: " + e.getMessage());
         }
     }
-    
+
     /**
      * Clean up all running klawed processes
      */
     public void cleanupAllKlawedProcesses() {
         LOGGER.info("Starting cleanup of all klawed processes");
-        
+
         try {
             // KlawedSandboxService will handle stopping containers on shutdown
             // via its @PreDestroy method
             LOGGER.info("Container cleanup delegated to KlawedSandboxService");
-            
+
             LOGGER.info("Klawed process cleanup completed");
         } catch (Exception e) {
             LOGGER.severe("Error during klawed process cleanup: " + e.getMessage());
         }
     }
-    
+
     /**
      * Find orphaned klawed process PIDs from tracked agents.
      * This method now works with the agent manager's tracked sessions
@@ -145,26 +145,26 @@ public class KlawedShutdownService {
      */
     private List<Long> findOrphanedKlawedPids() {
         List<Long> pids = new ArrayList<>();
-        
+
         // In the new model, agents are tracked by KlawedAgentManager
         // Orphaned agents should be cleaned up by stopAllAgents()
         // This method is now mostly for emergency cleanup via ps
-        
+
         return pids;
     }
-    
+
     /**
      * Kill a process by PID
      */
     private void killProcess(long pid) {
         LOGGER.info("Attempting to kill process with PID: " + pid);
-        
+
         try {
             // First try graceful termination
             ProcessHandle processHandle = ProcessHandle.of(pid).orElse(null);
             if (processHandle != null && processHandle.isAlive()) {
                 LOGGER.info("Process " + pid + " is alive, attempting to destroy...");
-                
+
                 // Try to get process info
                 try {
                     ProcessHandle.Info info = processHandle.info();
@@ -173,10 +173,10 @@ public class KlawedShutdownService {
                 } catch (Exception e) {
                     LOGGER.fine("Could not get process info: " + e.getMessage());
                 }
-                
+
                 // Destroy the process
                 processHandle.destroy();
-                
+
                 // Wait for termination
                 boolean terminated = processHandle.onExit().thenApply(ph -> {
                     LOGGER.info("Process " + pid + " terminated gracefully");
@@ -185,18 +185,18 @@ public class KlawedShutdownService {
                     LOGGER.warning("Process " + pid + " did not terminate gracefully: " + e.getMessage());
                     return false;
                 }).get(5, java.util.concurrent.TimeUnit.SECONDS);
-                
+
                 if (!terminated) {
                     // Force kill if graceful termination failed
                     LOGGER.warning("Process " + pid + " did not terminate, forcing kill...");
                     processHandle.destroyForcibly();
-                    
+
                     try {
                         boolean forceTerminated = processHandle.onExit().thenApply(ph -> {
                             LOGGER.info("Process " + pid + " force terminated");
                             return true;
                         }).get(2, java.util.concurrent.TimeUnit.SECONDS);
-                        
+
                         if (!forceTerminated) {
                             LOGGER.severe("Failed to force terminate process " + pid);
                         }
@@ -209,7 +209,7 @@ public class KlawedShutdownService {
             }
         } catch (Exception e) {
             LOGGER.warning("Error killing process " + pid + ": " + e.getMessage());
-            
+
             // Fallback to system kill command
             try {
                 LOGGER.info("Trying system kill command for PID " + pid);
@@ -225,7 +225,7 @@ public class KlawedShutdownService {
             }
         }
     }
-    
+
     /**
      * Clean up PID files is now handled by KlawedAgentManager when agents are stopped.
      * This method is kept for compatibility but does nothing in the new model.
@@ -235,18 +235,18 @@ public class KlawedShutdownService {
         // and stored in user workspaces rather than /tmp/is-sessions
         LOGGER.fine("PID file cleanup delegated to KlawedAgentManager");
     }
-    
+
     /**
      * Find all running klawed processes using ps command
      * This is a more aggressive method that finds all klawed processes
      */
     public List<Long> findAllKlawedProcesses() {
         List<Long> pids = new ArrayList<>();
-        
+
         try {
             ProcessBuilder pb = new ProcessBuilder("ps", "aux");
             Process process = pb.start();
-            
+
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
@@ -266,31 +266,31 @@ public class KlawedShutdownService {
                     }
                 }
             }
-            
+
             process.waitFor();
         } catch (Exception e) {
             LOGGER.warning("Error finding klawed processes: " + e.getMessage());
         }
-        
+
         return pids;
     }
-    
+
     /**
      * Emergency cleanup - kill all klawed processes found via ps
      */
     public void emergencyCleanup() {
         LOGGER.warning("Performing emergency cleanup of all klawed processes");
-        
+
         List<Long> allPids = findAllKlawedProcesses();
         LOGGER.warning("Found " + allPids.size() + " klawed processes to kill");
-        
+
         for (Long pid : allPids) {
             killProcess(pid);
         }
-        
+
         LOGGER.warning("Emergency cleanup completed");
     }
-    
+
     /**
      * Check if shutdown is in progress
      */

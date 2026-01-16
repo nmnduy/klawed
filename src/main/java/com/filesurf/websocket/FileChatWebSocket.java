@@ -60,7 +60,7 @@ public class FileChatWebSocket {
 
     @Inject
     KlawedSandboxService klawedSandboxService;
-    
+
     @Inject
     SessionManager sessionManager;
 
@@ -150,7 +150,7 @@ public class FileChatWebSocket {
 
         // Register connection with polling service (for sending messages to WebSocket)
         chatMessagePollingService.registerConnection(sessionId, connection);
-        
+
         // Register session with SQLite queue polling service (for receiving messages from klawed)
         sqliteQueuePollingService.registerSession(sessionId, userId);
 
@@ -175,7 +175,7 @@ public class FileChatWebSocket {
                 metricsService.incrementWebSocketConnections();
                 metricsService.incrementChatSessions();
                 metricsService.trackUserActivity(userId);
-                
+
                 return objectMapper.writeValueAsString(KlawedSocketMessage.createStatus(statusMessage));
             } catch (Exception e) {
                 LOGGER.severe("Failed to serialize status message: " + e.getMessage());
@@ -187,10 +187,10 @@ public class FileChatWebSocket {
         } catch (Exception e) {
             LOGGER.severe("[SESSION:" + sessionId + "] Failed to initialize session: " + e.getMessage());
             e.printStackTrace();
-            
+
             // Track error metrics
             metricsService.incrementErrors("session_initialization");
-            
+
             try {
                 // Do not forward internal details to the client
                 return objectMapper.writeValueAsString(KlawedSocketMessage.createError(
@@ -223,23 +223,23 @@ public class FileChatWebSocket {
             }
             return;
         }
-        
-        LOGGER.info("[SESSION:" + sessionId + "] Received message from client: " + 
-                   message.substring(0, Math.min(100, message.length())) + 
+
+        LOGGER.info("[SESSION:" + sessionId + "] Received message from client: " +
+                   message.substring(0, Math.min(100, message.length())) +
                    (message.length() > 100 ? "..." : ""));
         LOGGER.info("[SESSION:" + sessionId + "] Full message length: " + message.length() + " chars");
-        
+
         // Check for special commands
         if (message != null && !message.trim().isEmpty()) {
             String trimmedMessage = message.trim();
-            
+
             // Handle conclude session command
             if ("/conclude".equalsIgnoreCase(trimmedMessage) || "/conclude session".equalsIgnoreCase(trimmedMessage)) {
                 handleConcludeCommand(sessionId, connection);
                 return;
             }
         }
-        
+
         // Save incoming message to database and mark as sent immediately
         // (client-to-agent messages don't need to be sent via WebSocket)
         try {
@@ -253,7 +253,7 @@ public class FileChatWebSocket {
             // Track error in metrics
             metricsService.incrementErrors("database_save");
         }
-        
+
         // Determine user ID from cookies (HandshakeRequest); if absent, fail message handling
         String userId = null;
         HandshakeRequest handshake = connection.handshakeRequest();
@@ -280,18 +280,18 @@ public class FileChatWebSocket {
             }
             return;
         }
-        
+
         // Track metrics for chat message
         metricsService.incrementChatMessages();
         metricsService.trackUserActivity(userId);
 
         try {
             LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via ChatMessagePollingService");
-            
+
             // Send message to klawed via SQLite queue
             chatMessagePollingService.sendMessageToKlawed(sessionId, userId, message);
             LOGGER.info("[SESSION:" + sessionId + "] Message sent to klawed, responses will be delivered via polling service");
-            
+
         } catch (Exception e) {
             String errorMsg = "Error communicating with klawed agent: " + e.getMessage();
             LOGGER.severe("[SESSION:" + sessionId + "] " + errorMsg);
@@ -312,12 +312,12 @@ public class FileChatWebSocket {
     public void onClose(WebSocketConnection connection) {
         // Get session ID from path parameter (same as in onOpen)
         String sessionId = connection.pathParam("sessionId");
-        
+
         if (sessionId == null || sessionId.trim().isEmpty()) {
             LOGGER.severe("WebSocket connection closed without session ID");
             return;
         }
-        
+
         LOGGER.info("[SESSION:" + sessionId + "] WebSocket connection closed");
 
         // Determine user ID from cookies (HandshakeRequest); if absent, log and skip persistence
@@ -358,24 +358,24 @@ public class FileChatWebSocket {
         // DON'T release session tracking, remove from store, or deactivate on temporary WebSocket close
         // These should only happen on explicit session conclusion (/conclude command)
         // This allows the user to reconnect and resume their session seamlessly
-        
+
         // DO unregister from polling services to stop sending/receiving messages for this closed connection
         chatMessagePollingService.unregisterConnection(sessionId);
         sqliteQueuePollingService.unregisterSession(sessionId);
-        
+
         // DO update metrics for WebSocket connection closure (but not session metrics - session is still active)
         metricsService.decrementWebSocketConnections();
         LOGGER.info("[SESSION:" + sessionId + "] WebSocket closed, session remains active for reconnection");
     }
-    
 
-    
+
+
     /**
      * Handle conclude session command
      */
     private void handleConcludeCommand(String sessionId, WebSocketConnection connection) {
         LOGGER.info("[SESSION:" + sessionId + "] Handling conclude session command");
-        
+
         try {
             // Get user ID from cookies
             String userId = null;
@@ -392,7 +392,7 @@ public class FileChatWebSocket {
                     }
                 }
             }
-            
+
             if (userId == null || userId.isBlank()) {
                 LOGGER.severe("[SESSION:" + sessionId + "] Missing userId cookie on conclude command");
                 connection.sendText(objectMapper.writeValueAsString(
@@ -400,31 +400,31 @@ public class FileChatWebSocket {
                 )).subscribe();
                 return;
             }
-            
+
             // Get workspace path before cleanup
             Path workspace = sessionManager.getWorkspaceForSession(sessionId);
-            
+
             // Clean up klawed artifacts from workspace (.klawed/, SQLite queue files)
             if (workspace != null) {
                 cleanupKlawedArtifacts(sessionId, workspace);
             }
-            
+
             // Persist session folders back to per-user storage
             LOGGER.info("[SESSION:" + sessionId + "] Conclude: Persisting session data for user=" + userId);
             sessionManager.persistSession(sessionId, userId);
             LOGGER.info("[SESSION:" + sessionId + "] Conclude: Session data persisted for user=" + userId);
-            
+
             // Release session tracking
             sessionManager.releaseSessionTracking(sessionId);
-            
+
             // Remove session from session store
             SessionResource.removeSession(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Session removed from session store");
-            
+
             // Deactivate chat session in database (don't delete messages)
             fileChatService.deactivateChatSession(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Chat session deactivated in database");
-            
+
             // Send success response
             String response = "Session concluded. Persistent files saved and temporary directory cleaned up.";
             connection.sendText(objectMapper.writeValueAsString(
@@ -433,10 +433,10 @@ public class FileChatWebSocket {
                 success -> LOGGER.info("[SESSION:" + sessionId + "] Conclude command response sent"),
                 failure -> LOGGER.severe("[SESSION:" + sessionId + "] Failed to send conclude command response: " + failure.getMessage())
             );
-            
+
             // Close the WebSocket connection since session is concluded
             connection.close();
-            
+
         } catch (Exception e) {
             LOGGER.severe("[SESSION:" + sessionId + "] Failed to conclude session: " + e.getMessage());
             try {
@@ -448,7 +448,7 @@ public class FileChatWebSocket {
             }
         }
     }
-    
+
     /**
      * Clean up klawed artifacts from the user's workspace.
      * This includes:
@@ -457,7 +457,7 @@ public class FileChatWebSocket {
      */
     private void cleanupKlawedArtifacts(String sessionId, Path workspace) {
         LOGGER.info("[SESSION:" + sessionId + "] Cleaning up klawed artifacts from workspace: " + workspace);
-        
+
         // Delete .klawed/ directory
         Path klawedDir = workspace.resolve(".klawed");
         if (java.nio.file.Files.exists(klawedDir)) {
@@ -468,11 +468,11 @@ public class FileChatWebSocket {
                 LOGGER.warning("[SESSION:" + sessionId + "] Failed to delete .klawed/ directory: " + e.getMessage());
             }
         }
-        
+
         // Delete SQLite queue files (klawed_messages_{sessionId}.db, .db-shm, .db-wal)
         String dbFileName = "klawed_messages_" + sessionId + ".db";
         String[] sqliteExtensions = {"", "-shm", "-wal"};
-        
+
         for (String ext : sqliteExtensions) {
             Path dbFile = workspace.resolve(dbFileName + ext);
             if (java.nio.file.Files.exists(dbFile)) {
@@ -484,10 +484,10 @@ public class FileChatWebSocket {
                 }
             }
         }
-        
+
         LOGGER.info("[SESSION:" + sessionId + "] Klawed artifact cleanup completed");
     }
-    
+
     /**
      * Recursively delete a directory.
      */

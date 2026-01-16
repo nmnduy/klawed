@@ -56,14 +56,14 @@ public class ChunkedUploadResource {
         "srt", "vtt", "ass", "ssa", "sub", "sbv", "smi", "sami"
         // Add more as needed, but NEVER: exe, sh, bat, cmd, msi, app, dmg, deb, rpm
     );
-    
+
     // Human-readable list of allowed file types for error messages
-    private static final String ALLOWED_TYPES_MESSAGE = 
+    private static final String ALLOWED_TYPES_MESSAGE =
         "File type not allowed. Accepted: documents (pdf, doc, docx, txt, md, rtf), " +
         "spreadsheets (csv, xlsx, xls), images (png, jpg, gif, svg), " +
         "archives (zip, tar, gz, 7z), code/text (json, xml, yaml, tex, html, css, js), " +
         "presentations (ppt, pptx), databases (db, sqlite), subtitles (srt, vtt, ass, sub)";
-    
+
     @Inject
     SessionManager sessionManager;
 
@@ -76,14 +76,14 @@ public class ChunkedUploadResource {
             LOGGER.warning("File upload rejected: no extension in filename: " + filename);
             return false;
         }
-        
+
         String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
         boolean allowed = ALLOWED_EXTENSIONS.contains(extension);
-        
+
         if (!allowed) {
             LOGGER.warning("File upload rejected: disallowed extension '" + extension + "' in file: " + filename);
         }
-        
+
         return allowed;
     }
 
@@ -155,10 +155,10 @@ public class ChunkedUploadResource {
     public static class ChunkUploadForm {
         @FormParam("uploadId")
         public String uploadId;
-        
+
         @FormParam("chunkIndex")
         public int chunkIndex;
-        
+
         @FormParam("chunk")
         public FileUpload chunk;
     }
@@ -169,7 +169,7 @@ public class ChunkedUploadResource {
     @POST
     @Path("/init")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response initUpload(InitUploadRequest request, 
+    public Response initUpload(InitUploadRequest request,
                               @Context HttpHeaders headers) {
         try {
             // Extract userId from cookie
@@ -204,17 +204,17 @@ public class ChunkedUploadResource {
             // Create upload session
             String uploadId = UUID.randomUUID().toString();
             UploadSession session = new UploadSession(
-                uploadId, 
-                request.sessionId, 
-                userId, 
-                request.fileName, 
+                uploadId,
+                request.sessionId,
+                userId,
+                request.fileName,
                 request.totalSize
             );
-            
+
             uploadSessions.put(uploadId, session);
 
-            LOGGER.info("Initialized chunked upload: " + uploadId + 
-                       ", file=" + request.fileName + 
+            LOGGER.info("Initialized chunked upload: " + uploadId +
+                       ", file=" + request.fileName +
                        ", size=" + request.totalSize);
 
             return Response.ok()
@@ -260,8 +260,8 @@ public class ChunkedUploadResource {
             byte[] chunkData = Files.readAllBytes(form.chunk.filePath());
             session.appendChunk(chunkData);
 
-            LOGGER.info("Uploaded chunk " + form.chunkIndex + 
-                       " for " + form.uploadId + 
+            LOGGER.info("Uploaded chunk " + form.chunkIndex +
+                       " for " + form.uploadId +
                        " (" + session.uploadedSize + "/" + session.totalSize + " bytes)");
 
             // Check if upload is complete
@@ -362,10 +362,10 @@ public class ChunkedUploadResource {
             Files.move(session.tempFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
 
             String md5Hash = session.getMd5Hash();
-            
-            LOGGER.info("Completed upload: " + session.uploadId + 
-                       ", file=" + safeFileName + 
-                       ", size=" + session.uploadedSize + 
+
+            LOGGER.info("Completed upload: " + session.uploadId +
+                       ", file=" + safeFileName +
+                       ", size=" + session.uploadedSize +
                        ", md5=" + md5Hash);
 
             // Cleanup session

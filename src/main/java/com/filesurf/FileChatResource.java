@@ -21,7 +21,7 @@ public class FileChatResource {
     @Inject
     @Location("fileChat.html")
     Template fileChat;
-    
+
     @Inject
     CssVersionProvider cssVersionProvider;
 

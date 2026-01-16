@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Test to ensure all REST DTOs can be serialized/deserialized by Jackson.
  * This catches missing @RegisterForReflection annotations before native image build.
- * 
+ *
  * This is a plain JUnit test (not @QuarkusTest) to avoid startup overhead
  * and make it suitable for fast pre-deployment checks.
  */
@@ -28,14 +28,14 @@ public class NativeReflectionTest {
     @Test
     public void testUploadResponseSerialization() throws Exception {
         UploadResponse response = new UploadResponse(2, List.of("file1.txt", "file2.pdf"), "Success");
-        
+
         // Serialize to JSON
         String json = objectMapper.writeValueAsString(response);
         assertNotNull(json);
         assertTrue(json.contains("file1.txt"));
         assertTrue(json.contains("Success"));
         assertTrue(json.contains("\"count\":2"));
-        
+
         // Deserialize back
         UploadResponse deserialized = objectMapper.readValue(json, UploadResponse.class);
         assertEquals(2, deserialized.count);
@@ -50,12 +50,12 @@ public class NativeReflectionTest {
         request.sessionId = "test-session";
         request.fileName = "largefile.zip";
         request.totalSize = 1024 * 1024 * 100; // 100MB
-        
+
         String json = objectMapper.writeValueAsString(request);
         assertNotNull(json);
         assertTrue(json.contains("test-session"));
         assertTrue(json.contains("largefile.zip"));
-        
+
         InitUploadRequest deserialized = objectMapper.readValue(json, InitUploadRequest.class);
         assertEquals("test-session", deserialized.sessionId);
         assertEquals("largefile.zip", deserialized.fileName);
@@ -66,11 +66,11 @@ public class NativeReflectionTest {
     public void testLoginRequestSerialization() throws Exception {
         LoginRequest request = new LoginRequest();
         request.email = "user@example.com";
-        
+
         String json = objectMapper.writeValueAsString(request);
         assertNotNull(json);
         assertTrue(json.contains("user@example.com"));
-        
+
         LoginRequest deserialized = objectMapper.readValue(json, LoginRequest.class);
         assertEquals("user@example.com", deserialized.email);
     }
@@ -81,13 +81,13 @@ public class NativeReflectionTest {
         request.email = "user@example.com";
         request.name = "John Doe";
         request.useCase = "File management";
-        
+
         String json = objectMapper.writeValueAsString(request);
         assertNotNull(json);
         assertTrue(json.contains("John Doe"));
         assertTrue(json.contains("user@example.com"));
         assertTrue(json.contains("File management"));
-        
+
         WaitlistRequest deserialized = objectMapper.readValue(json, WaitlistRequest.class);
         assertEquals("user@example.com", deserialized.email);
         assertEquals("John Doe", deserialized.name);
@@ -104,7 +104,7 @@ public class NativeReflectionTest {
         UploadForm form = new UploadForm();
         form.files = new ArrayList<>();
         assertNotNull(form.files);
-        
+
         // Verify reflection access to the class
         assertNotNull(UploadForm.class.getDeclaredFields());
     }
@@ -117,11 +117,11 @@ public class NativeReflectionTest {
         ChunkUploadForm form = new ChunkUploadForm();
         form.uploadId = "test-upload-123";
         form.chunkIndex = 5;
-        
+
         // ChunkUploadForm contains FileUpload, so just test basic structure
         assertNotNull(form.uploadId);
         assertEquals(5, form.chunkIndex);
-        
+
         // Verify reflection access to the class
         assertNotNull(ChunkUploadForm.class.getDeclaredFields());
     }
@@ -135,10 +135,10 @@ public class NativeReflectionTest {
     public void testDocumentExpectedBehavior() {
         // This test just documents that Jackson can serialize in JVM mode
         // but would fail in native mode without @RegisterForReflection
-        
+
         // In JVM mode (this test), Jackson uses reflection freely
         // In native mode, only classes with @RegisterForReflection work
-        
+
         assertTrue(true, "This test documents that all DTOs need @RegisterForReflection for native mode");
     }
 }

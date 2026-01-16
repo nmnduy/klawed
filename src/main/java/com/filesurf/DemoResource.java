@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
 
 /**
  * REST endpoint for serving demo MP4 videos.
- * 
+ *
  * Security considerations:
  * - Protected by AuthenticationFilter (requires valid user session)
  * - Only serves .mp4 files (whitelist approach)
@@ -33,17 +33,17 @@ import java.util.regex.Pattern;
 public class DemoResource {
 
     private static final Logger LOGGER = Logger.getLogger(DemoResource.class.getName());
-    
+
     // Only allow alphanumeric, hyphen, underscore in filenames (no dots except for extension)
     private static final Pattern SAFE_FILENAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+$");
-    
+
     // Content type for MP4 videos
     private static final String MP4_CONTENT_TYPE = "video/mp4";
     private static final String JPEG_CONTENT_TYPE = "image/jpeg";
     private static final String PNG_CONTENT_TYPE = "image/png";
     private static final String WEBP_CONTENT_TYPE = "image/webp";
     private static final String OCTET_STREAM = "application/octet-stream";
-    
+
     // Maximum file size to serve (1 GB)
     private static final long MAX_FILE_SIZE = 1L * 1024 * 1024 * 1024;
 
@@ -54,10 +54,10 @@ public class DemoResource {
 
     @ConfigProperty(name = "demo.videos.directory", defaultValue = "data/demos")
     String demosDirectory;
-    
+
     @Inject
     com.filesurf.service.MetricsService metricsService;
-    
+
     @Inject
     Template demos;
 
@@ -125,19 +125,19 @@ public class DemoResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response listDemos() {
         LOGGER.info("Listing demo videos");
-        
+
         try {
             Path demoDir = Paths.get(demosDirectory);
-            
+
             if (!Files.exists(demoDir) || !Files.isDirectory(demoDir)) {
                 LOGGER.warning("Demo directory does not exist: " + demosDirectory);
                 return Response.ok()
                         .entity("{\"demos\": [], \"count\": 0}")
                         .build();
             }
-            
+
             List<Map<String, Object>> demos = new ArrayList<>();
-            
+
             try (var stream = Files.list(demoDir)) {
                 stream.filter(path -> {
                     String filename = path.getFileName().toString().toLowerCase();
@@ -146,7 +146,7 @@ public class DemoResource {
                     try {
                         String filename = path.getFileName().toString();
                         String name = filename.substring(0, filename.length() - 4); // Remove .mp4
-                        
+
                         Map<String, Object> demo = new HashMap<>();
                         demo.put("name", name);
                         demo.put("filename", filename);
@@ -159,16 +159,16 @@ public class DemoResource {
                     }
                 });
             }
-            
+
             // Sort by name
             demos.sort((a, b) -> ((String) a.get("name")).compareToIgnoreCase((String) b.get("name")));
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("demos", demos);
             response.put("count", demos.size());
-            
+
             return Response.ok(response).build();
-            
+
         } catch (IOException e) {
             LOGGER.severe("Failed to list demo videos: " + e.getMessage());
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
@@ -180,7 +180,7 @@ public class DemoResource {
     /**
      * Stream a demo video by name.
      * Supports HTTP Range requests for efficient video streaming.
-     * 
+     *
      * @param name The demo video name (without .mp4 extension)
      * @param rangeHeader Optional Range header for partial content requests
      */
@@ -191,10 +191,10 @@ public class DemoResource {
             @PathParam("name") String name,
             @HeaderParam("Range") String rangeHeader,
             @CookieParam("filesurf_userId") String userId) {
-        
-        LOGGER.info("Demo video request: " + name + " by user: " + (userId != null ? userId : "unknown") + 
+
+        LOGGER.info("Demo video request: " + name + " by user: " + (userId != null ? userId : "unknown") +
                    (rangeHeader != null ? " (Range: " + rangeHeader + ")" : ""));
-        
+
         // Validate filename - strict whitelist approach
         if (name == null || name.isEmpty()) {
             LOGGER.warning("Demo request with empty name");
@@ -203,7 +203,7 @@ public class DemoResource {
                     .type(MediaType.TEXT_PLAIN)
                     .build();
         }
-        
+
         // Security: Only allow safe characters in filename
         if (!SAFE_FILENAME_PATTERN.matcher(name).matches()) {
             LOGGER.warning("Demo request with invalid name pattern: " + name);
@@ -212,7 +212,7 @@ public class DemoResource {
                     .type(MediaType.TEXT_PLAIN)
                     .build();
         }
-        
+
         // Security: Limit name length to prevent buffer issues
         if (name.length() > 100) {
             LOGGER.warning("Demo request with name too long: " + name.length() + " chars");
@@ -221,12 +221,12 @@ public class DemoResource {
                     .type(MediaType.TEXT_PLAIN)
                     .build();
         }
-        
+
         try {
             // Build the path - only look for .mp4 files
             java.nio.file.Path demoDir = Paths.get(demosDirectory).toAbsolutePath().normalize();
             java.nio.file.Path videoPath = demoDir.resolve(name + ".mp4").normalize();
-            
+
             // Security: Ensure the resolved path is within the demo directory
             if (!videoPath.startsWith(demoDir)) {
                 LOGGER.severe("Path traversal attempt detected: " + name);
@@ -235,7 +235,7 @@ public class DemoResource {
                         .type(MediaType.TEXT_PLAIN)
                         .build();
             }
-            
+
             // Check if file exists
             if (!Files.exists(videoPath)) {
                 LOGGER.info("Demo video not found: " + name);
@@ -244,7 +244,7 @@ public class DemoResource {
                         .type(MediaType.TEXT_PLAIN)
                         .build();
             }
-            
+
             // Verify it's a regular file (not a symlink, directory, etc.)
             if (!Files.isRegularFile(videoPath)) {
                 LOGGER.warning("Demo path is not a regular file: " + name);
@@ -253,10 +253,10 @@ public class DemoResource {
                         .type(MediaType.TEXT_PLAIN)
                         .build();
             }
-            
+
             // Get file size
             long fileSize = Files.size(videoPath);
-            
+
             // Security: Check file size limit
             if (fileSize > MAX_FILE_SIZE) {
                 LOGGER.warning("Demo video exceeds size limit: " + name + " (" + fileSize + " bytes)");
@@ -265,7 +265,7 @@ public class DemoResource {
                         .type(MediaType.TEXT_PLAIN)
                         .build();
             }
-            
+
             // Track metrics
             if (metricsService != null) {
                 metricsService.incrementFileOperations();
@@ -273,15 +273,15 @@ public class DemoResource {
                     metricsService.trackUserActivity(userId);
                 }
             }
-            
+
             // Handle Range request for video streaming
             if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
                 return handleRangeRequest(videoPath, fileSize, rangeHeader, name);
             }
-            
+
             // Full file response
             LOGGER.info("Serving full demo video: " + name + " (" + formatFileSize(fileSize) + ")");
-            
+
             return Response.ok(videoPath.toFile())
                     .type(MP4_CONTENT_TYPE)
                     .header("Content-Length", fileSize)
@@ -289,7 +289,7 @@ public class DemoResource {
                     .header("Content-Disposition", "inline; filename=\"" + name + ".mp4\"")
                     .header("Cache-Control", "public, max-age=86400") // Cache for 24 hours
                     .build();
-            
+
         } catch (IOException e) {
             LOGGER.severe("Failed to serve demo video " + name + ": " + e.getMessage());
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
@@ -302,16 +302,16 @@ public class DemoResource {
     /**
      * Handle HTTP Range requests for partial content (video seeking).
      */
-    private Response handleRangeRequest(java.nio.file.Path videoPath, long fileSize, 
+    private Response handleRangeRequest(java.nio.file.Path videoPath, long fileSize,
                                         String rangeHeader, String name) throws IOException {
-        
+
         // Parse range header: "bytes=start-end" or "bytes=start-"
         String rangeValue = rangeHeader.substring(6); // Remove "bytes="
         String[] ranges = rangeValue.split("-");
-        
+
         long start = 0;
         long end = fileSize - 1;
-        
+
         try {
             if (ranges.length > 0 && !ranges[0].isEmpty()) {
                 start = Long.parseLong(ranges[0]);
@@ -325,7 +325,7 @@ public class DemoResource {
                     .header("Content-Range", "bytes */" + fileSize)
                     .build();
         }
-        
+
         // Validate range
         if (start < 0 || end >= fileSize || start > end) {
             LOGGER.warning("Invalid range requested: " + start + "-" + end + " for file size " + fileSize);
@@ -333,18 +333,18 @@ public class DemoResource {
                     .header("Content-Range", "bytes */" + fileSize)
                     .build();
         }
-        
+
         long contentLength = end - start + 1;
-        
+
         LOGGER.fine("Serving partial content for " + name + ": bytes " + start + "-" + end + "/" + fileSize);
-        
+
         // Create input stream for the range
         RandomAccessFile raf = new RandomAccessFile(videoPath.toFile(), "r");
         raf.seek(start);
-        
+
         // Create a limited input stream
         InputStream rangeStream = new RangeInputStream(raf, contentLength);
-        
+
         return Response.status(Response.Status.PARTIAL_CONTENT)
                 .entity(rangeStream)
                 .type(MP4_CONTENT_TYPE)

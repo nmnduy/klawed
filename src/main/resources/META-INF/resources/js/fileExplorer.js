@@ -48,7 +48,7 @@ class FileExplorer {
         this.fileExplorerSearchClear = document.getElementById('file-explorer-search-clear');
         this.fileExplorerFilterButtons = document.querySelectorAll('[data-filter]');
         this.fileExplorerSortButtons = document.querySelectorAll('[data-sort-field]');
-        
+
         // Upload elements
         this.fileExplorerUpload = document.getElementById('file-explorer-upload');
         this.fileExplorerFileInput = document.getElementById('file-explorer-file-input');
@@ -89,7 +89,7 @@ class FileExplorer {
         this.searchTerm = '';
         this.currentPreviewFilePath = null;
         this.currentPreviewFileName = null;
-        
+
         // Workspace search state (for searching all files)
         this.searchDebounceTimer = null;
         this.isSearchingWorkspace = false; // True when showing workspace search results
@@ -151,7 +151,7 @@ class FileExplorer {
         console.log('[file-explorer] setSession called, sessionId:', sessionId, 'userId:', userId);
         this.sessionId = sessionId;
         this.userId = userId;
-        
+
         // Enable upload button when session is set
         if (this.fileExplorerUpload && sessionId) {
             this.fileExplorerUpload.disabled = false;
@@ -198,14 +198,14 @@ class FileExplorer {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
-        
+
         // Apply syntax highlighting in a specific order
         let highlighted = escaped;
-        
+
         // 1. Handle environments first (they contain braces we don't want to highlight separately)
         highlighted = highlighted.replace(/\\begin\{([^}]+)\}/g, '<span class="latex-environment">\\begin{$1}</span>');
         highlighted = highlighted.replace(/\\end\{([^}]+)\}/g, '<span class="latex-environment">\\end{$1}</span>');
-        
+
         // 2. Handle other elements
         highlighted = highlighted
             // Comments: % comment
@@ -222,7 +222,7 @@ class FileExplorer {
             .replace(/\}/g, '<span class="latex-brace">}</span>')
             // Parameters: #1, #2, etc.
             .replace(/#(\d+)/g, '<span class="latex-parameter">#$1</span>');
-        
+
         return highlighted;
     }
 
@@ -250,10 +250,10 @@ class FileExplorer {
 
             // Success - preview the generated PDF
             this.previewFile(result.pdfPath, result.pdfPath.split('/').pop(), result.pdfSize);
-            
+
         } catch (error) {
             console.error('Failed to compile LaTeX:', error);
-            
+
             // Show LaTeX source code with retry option as fallback
             const fallbackDiv = document.createElement('div');
             fallbackDiv.className = 'space-y-4';
@@ -324,11 +324,11 @@ class FileExplorer {
                     'X-Session-ID': this.sessionId
                 }
             });
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             const latexContent = await response.text();
             this.compileLatexAndPreview(filePath, fileName, latexContent);
         } catch (error) {
@@ -481,14 +481,14 @@ class FileExplorer {
         if (this._renderRAF) {
             cancelAnimationFrame(this._renderRAF);
         }
-        
+
         this._renderRAF = requestAnimationFrame(() => {
             try {
                 // For search results or large changes, just rebuild the DOM
                 // This is faster than trying to diff when most items change
-                const shouldRebuild = this.isSearchingWorkspace || 
+                const shouldRebuild = this.isSearchingWorkspace ||
                     Math.abs(this.fileExplorerTree.children.length - itemsToRender.length) > 20;
-                
+
                 if (shouldRebuild) {
                     this._renderFileTreeFast(itemsToRender, isLimited, items.length);
                 } else {
@@ -502,17 +502,17 @@ class FileExplorer {
             }
         });
     }
-    
+
     /**
      * Fast render - rebuilds DOM completely. Better for search results.
      */
     _renderFileTreeFast(items, isLimited, totalCount) {
         // Build HTML string in one go (much faster than individual DOM operations)
         const html = items.map(item => this._buildFileItemHTML(item)).join('');
-        
+
         // Single DOM update
         this.fileExplorerTree.innerHTML = html;
-        
+
         // Add "show more" indicator if limited
         if (isLimited) {
             const moreDiv = document.createElement('div');
@@ -520,11 +520,11 @@ class FileExplorer {
             moreDiv.textContent = `Showing ${items.length} of ${totalCount} results. Refine your search to see more.`;
             this.fileExplorerTree.appendChild(moreDiv);
         }
-        
+
         // Attach event listeners using delegation (much faster than per-element)
         this._attachFileTreeEventDelegation();
     }
-    
+
     /**
      * Build HTML for a single file item (used by fast render)
      */
@@ -535,13 +535,13 @@ class FileExplorer {
         const date = this.formatDate(item.modified);
         const showDirectory = this.isSearchingWorkspace && item.directory && item.directory !== '/';
         const directoryDisplay = showDirectory ? `<span class="text-muted-foreground text-caption-s truncate" title="${item.directory}">${item.directory}</span>` : '';
-        
+
         // Escape HTML in item properties to prevent XSS
         const escapedName = this._escapeHtml(item.name);
         const escapedPath = this._escapeHtml(item.path);
-        
+
         return `
-            <div class="file-item group px-3 py-2 hover:bg-orange-50/60 dark:hover:bg-orange-950/20 transition cursor-pointer" 
+            <div class="file-item group px-3 py-2 hover:bg-orange-50/60 dark:hover:bg-orange-950/20 transition cursor-pointer"
                  data-path="${escapedPath}" data-type="${item.type}" data-name="${escapedName}">
                 <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_112px] items-center gap-3">
                     <div class="flex items-center gap-3 min-w-0">
@@ -594,7 +594,7 @@ class FileExplorer {
             </div>
         `;
     }
-    
+
     /**
      * Escape HTML special characters
      */
@@ -606,7 +606,7 @@ class FileExplorer {
                   .replace(/"/g, '&quot;')
                   .replace(/'/g, '&#39;');
     }
-    
+
     /**
      * Attach event delegation for file tree (more efficient than per-element listeners)
      */
@@ -615,15 +615,15 @@ class FileExplorer {
         if (this._fileTreeClickHandler) {
             this.fileExplorerTree.removeEventListener('click', this._fileTreeClickHandler);
         }
-        
+
         this._fileTreeClickHandler = (e) => {
             const fileItem = e.target.closest('.file-item');
             if (!fileItem) return;
-            
+
             const path = fileItem.dataset.path;
             const type = fileItem.dataset.type;
             const name = fileItem.dataset.name;
-            
+
             // Handle options button click
             if (e.target.closest('.file-options-btn')) {
                 e.stopPropagation();
@@ -633,7 +633,7 @@ class FileExplorer {
                 if (dropdown) dropdown.classList.toggle('hidden');
                 return;
             }
-            
+
             // Handle open option
             if (e.target.closest('.open-file-option')) {
                 e.stopPropagation();
@@ -641,7 +641,7 @@ class FileExplorer {
                 fileItem.querySelector('.file-options-dropdown')?.classList.add('hidden');
                 return;
             }
-            
+
             // Handle download option
             if (e.target.closest('.download-file-option')) {
                 e.stopPropagation();
@@ -649,7 +649,7 @@ class FileExplorer {
                 fileItem.querySelector('.file-options-dropdown')?.classList.add('hidden');
                 return;
             }
-            
+
             // Handle delete option
             if (e.target.closest('.delete-file-option')) {
                 e.stopPropagation();
@@ -657,7 +657,7 @@ class FileExplorer {
                 fileItem.querySelector('.file-options-dropdown')?.classList.add('hidden');
                 return;
             }
-            
+
             // Handle file/folder click
             if (type === 'directory') {
                 this.clearSearchAndNavigate(path);
@@ -667,10 +667,10 @@ class FileExplorer {
                 this.previewFile(path, name, 0);
             }
         };
-        
+
         this.fileExplorerTree.addEventListener('click', this._fileTreeClickHandler);
     }
-    
+
     /**
      * Incremental render - updates existing DOM. Better for small changes.
      */
@@ -693,7 +693,7 @@ class FileExplorer {
             const icon = this.fileIcons[item.icon] || this.fileIcons.file;
             const size = isDirectory ? '' : `${this.formatFileSize(item.size)}`;
             const date = this.formatDate(item.modified);
-            
+
             // For workspace search, show the directory path
             const showDirectory = this.isSearchingWorkspace && item.directory && item.directory !== '/';
             const directoryDisplay = showDirectory ? `<span class="text-muted-foreground text-caption-s truncate" title="${item.directory}">${item.directory}</span>` : '';
@@ -776,19 +776,19 @@ class FileExplorer {
                 if (optionsButton) {
                     optionsButton.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        
+
                         // Close any other open dropdowns
                         document.querySelectorAll('.file-options-dropdown').forEach(dropdown => {
                             dropdown.classList.add('hidden');
                         });
-                        
+
                         // Toggle this dropdown
                         const dropdown = itemElement.querySelector('.file-options-dropdown');
                         if (dropdown) {
                             dropdown.classList.toggle('hidden');
                         }
                     });
-                    
+
                     // Add click handlers for dropdown options
                     const openOption = itemElement.querySelector('.open-file-option');
                     if (openOption) {
@@ -802,7 +802,7 @@ class FileExplorer {
                             }
                         });
                     }
-                    
+
                     const downloadOption = itemElement.querySelector('.download-file-option');
                     if (downloadOption) {
                         downloadOption.addEventListener('click', (e) => {
@@ -815,7 +815,7 @@ class FileExplorer {
                             }
                         });
                     }
-                    
+
                     const deleteOption = itemElement.querySelector('.delete-file-option');
                     if (deleteOption) {
                         deleteOption.addEventListener('click', (e) => {
@@ -856,9 +856,9 @@ class FileExplorer {
         if (this.searchAbortController) {
             this.searchAbortController.abort();
         }
-        
+
         this.searchAbortController = new AbortController();
-        
+
         try {
             const response = await fetch(`/file-chat/explorer/search?q=${encodeURIComponent(query)}&limit=100`, {
                 headers: {
@@ -866,23 +866,23 @@ class FileExplorer {
                 },
                 signal: this.searchAbortController.signal
             });
-            
+
             if (await handleAuthError(response)) {
                 return { items: [], hasMore: false };
             }
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            
+
             const data = await response.json();
             if (data.success) {
-                return { 
-                    items: data.items || [], 
-                    hasMore: data.hasMore || false 
+                return {
+                    items: data.items || [],
+                    hasMore: data.hasMore || false
                 };
             }
-            
+
             return { items: [], hasMore: false };
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -893,7 +893,7 @@ class FileExplorer {
             return { items: [], hasMore: false };
         }
     }
-    
+
     /**
      * Invalidate the workspace files cache.
      * Call this after file uploads, deletes, or other changes.
@@ -907,7 +907,7 @@ class FileExplorer {
         // If we have search results from server, use those
         // Otherwise use current directory items
         let filtered;
-        
+
         if (searchResults !== null) {
             // Server-side search results (already filtered)
             filtered = searchResults.items;
@@ -935,11 +935,11 @@ class FileExplorer {
             } else if (this.activeFilter === 'files') {
                 filtered = filtered.filter(i => i.type !== 'directory');
             }
-            
+
             // Apply local search filter for current directory
             if (this.searchTerm && this.searchTerm.trim() !== '') {
                 const searchLower = this.searchTerm.toLowerCase();
-                filtered = filtered.filter(item => 
+                filtered = filtered.filter(item =>
                     item.name.toLowerCase().includes(searchLower)
                 );
             }
@@ -962,7 +962,7 @@ class FileExplorer {
         });
 
         this.renderFileTree(filtered);
-        
+
         // Update stats with search context
         let statsText = `• ${filtered.length} item${filtered.length !== 1 ? 's' : ''}`;
         if (this.isSearchingWorkspace) {
@@ -972,28 +972,28 @@ class FileExplorer {
             }
         }
         this.fileExplorerStats.textContent = statsText;
-        
+
         if (!filtered.length && this.fileExplorerEmptyMessage) {
             this.fileExplorerEmptyMessage.textContent = this.searchTerm ? 'No results match your search' : 'No files found';
         }
     }
-    
+
     /**
      * Handle search input with debouncing and server-side search.
      */
     async handleSearchInput(searchTerm) {
         this.searchTerm = searchTerm || '';
-        
+
         // Clear any pending debounce
         if (this.searchDebounceTimer) {
             clearTimeout(this.searchDebounceTimer);
         }
-        
+
         // Update clear button visibility
         if (this.fileExplorerSearchClear) {
             this.fileExplorerSearchClear.classList.toggle('hidden', !this.searchTerm);
         }
-        
+
         // If search is empty, return to current directory view immediately
         if (!this.searchTerm.trim()) {
             this.isSearchingWorkspace = false;
@@ -1005,23 +1005,23 @@ class FileExplorer {
             }
             return;
         }
-        
+
         // Debounce the actual search (250ms for smoother typing)
         this.searchDebounceTimer = setTimeout(async () => {
             // Show loading indicator in stats
             this.fileExplorerStats.textContent = '• Searching...';
-            
+
             // Perform server-side search
             const results = await this.searchFilesOnServer(this.searchTerm);
-            
+
             // If null, the request was cancelled (new search started)
             if (results === null) {
                 return;
             }
-            
+
             // Render results
             this.applyFiltersAndSort(results);
-            
+
             // Update breadcrumbs to show search context
             if (this.fileExplorerBreadcrumbs) {
                 this.fileExplorerBreadcrumbs.innerHTML = `
@@ -1030,7 +1030,7 @@ class FileExplorer {
             }
         }, 250);
     }
-    
+
     /**
      * Clear search and navigate to a directory.
      * Used when clicking on a folder from search results.
@@ -1046,7 +1046,7 @@ class FileExplorer {
         if (this.fileExplorerSearchClear) {
             this.fileExplorerSearchClear.classList.add('hidden');
         }
-        
+
         // Navigate to the directory
         this.loadDirectory(path);
     }
@@ -1156,10 +1156,10 @@ class FileExplorer {
     // Show confirmation dialog and delete file
     confirmDeleteFile(filePath, fileName) {
         if (!this.sessionId) return;
-        
+
         // Show confirmation dialog
         const confirmed = window.confirm(`Are you sure you want to delete "${fileName}"?\n\nThis action cannot be undone.`);
-        
+
         if (confirmed) {
             this.deleteFile(filePath, fileName);
         }
@@ -1168,7 +1168,7 @@ class FileExplorer {
     // Delete file from the server
     async deleteFile(filePath, fileName) {
         if (!this.sessionId) return;
-        
+
         try {
             const url = `/file-chat/explorer/delete?path=${encodeURIComponent(filePath)}`;
             const response = await fetch(url, {
@@ -1184,13 +1184,13 @@ class FileExplorer {
             }
 
             const result = await response.json();
-            
+
             if (result.success) {
                 this.showToast(`File "${fileName}" deleted successfully`, 'success');
-                
+
                 // Refresh the current directory to show the file is gone
                 await this.loadDirectory(this.currentPath);
-                
+
                 // Invalidate workspace cache since files changed
                 this.invalidateWorkspaceCache();
             } else {
@@ -1223,20 +1223,20 @@ class FileExplorer {
         if (this.filePreviewHtmlFrame) this.filePreviewHtmlFrame.src = '';
         if (this.filePreviewImage) this.filePreviewImage.classList.add('hidden');
         if (this.filePreviewImageImg) this.filePreviewImageImg.src = '';
-        
+
         // Hide any previous warning banner
         const warningBanner = document.getElementById('file-preview-warning');
         if (warningBanner) warningBanner.classList.add('hidden');
 
         try {
             const lowerFileName = fileName ? fileName.toLowerCase() : '';
-            
+
             // Handle SQLite database files - open in DB Viewer
             if (lowerFileName && this.isDatabaseFile(lowerFileName)) {
                 // Hide the standard preview modal since DB Viewer has its own
                 this.filePreviewPanel.classList.add('hidden');
                 document.body.style.overflow = '';
-                
+
                 // Open DB Viewer
                 if (typeof window.DBViewer !== 'undefined') {
                     if (!this.dbViewer) {
@@ -1250,7 +1250,7 @@ class FileExplorer {
                 }
                 return;
             }
-            
+
             // Handle images
             if (lowerFileName && this.isImageFile(lowerFileName)) {
                 const fileUrl = `/file-chat/explorer/open?path=${encodeURIComponent(filePath)}`;
@@ -1285,7 +1285,7 @@ class FileExplorer {
                 setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
                 return;
             }
-            
+
             // Handle HTML files
             if (lowerFileName && (lowerFileName.endsWith('.html') || lowerFileName.endsWith('.htm'))) {
                 const fileUrl = `/file-chat/explorer/open?path=${encodeURIComponent(filePath)}`;
@@ -1316,7 +1316,7 @@ class FileExplorer {
                 setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
                 return;
             }
-            
+
             // Handle PDFs
             if (lowerFileName && lowerFileName.endsWith('.pdf')) {
                 const fileUrl = `/file-chat/explorer/open?path=${encodeURIComponent(filePath)}`;
@@ -1373,14 +1373,14 @@ class FileExplorer {
                 let content = responseText;
                 let tier = 'small';
                 let warning = null;
-                
+
                 try {
                     const jsonResponse = JSON.parse(responseText);
                     if (jsonResponse.tier) {
                         tier = jsonResponse.tier;
                         warning = jsonResponse.warning;
                         content = jsonResponse.content;
-                        
+
                         // Handle "too_large" tier
                         if (tier === 'too_large') {
                             this.filePreviewBinarySize.textContent = jsonResponse.fileSizeFormatted || '';
@@ -1398,9 +1398,9 @@ class FileExplorer {
                     // Not JSON, use raw text (backward compatibility)
                     content = responseText;
                 }
-                
+
                 let pre = this.filePreviewText.querySelector('pre');
-                
+
                 // Create pre element if it doesn't exist
                 if (!pre) {
                     console.warn('pre element not found in filePreviewText, creating it');
@@ -1408,10 +1408,10 @@ class FileExplorer {
                     pre.className = 'text-caption-m font-mono whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300';
                     this.filePreviewText.appendChild(pre);
                 }
-                
+
                 // Show warning banner if present
                 this.showPreviewWarning(warning, tier);
-                
+
                 // Handle LaTeX files specially - auto-compile and show PDF
                 if (fileName && fileName.toLowerCase().endsWith('.tex')) {
                     // Show loading state for LaTeX compilation
@@ -1428,11 +1428,11 @@ class FileExplorer {
                             </div>
                         </div>
                     `;
-                    
+
                     // Replace the pre element with loading state
                     pre.parentNode.replaceChild(loadingDiv, pre);
                     this.filePreviewText.classList.remove('hidden');
-                    
+
                     // Auto-compile the LaTeX file
                     this.compileLatexAndPreview(filePath, fileName, content);
                 } else {
@@ -1461,7 +1461,7 @@ class FileExplorer {
     showPreviewWarning(warning, tier) {
         // Get or create warning banner element
         let warningBanner = document.getElementById('file-preview-warning');
-        
+
         if (!warning) {
             // Hide warning if no warning message
             if (warningBanner) {
@@ -1469,7 +1469,7 @@ class FileExplorer {
             }
             return;
         }
-        
+
         // Create warning banner if it doesn't exist
         if (!warningBanner) {
             warningBanner = document.createElement('div');
@@ -1478,21 +1478,21 @@ class FileExplorer {
             // Insert at the beginning of preview content
             this.filePreviewContent.insertBefore(warningBanner, this.filePreviewContent.firstChild);
         }
-        
+
         // Set appropriate styling based on tier
         if (tier === 'large') {
             warningBanner.className = 'mb-3 px-4 py-2 rounded-lg flex items-center gap-2 text-caption-m bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800';
         } else {
             warningBanner.className = 'mb-3 px-4 py-2 rounded-lg flex items-center gap-2 text-caption-m bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800';
         }
-        
+
         warningBanner.innerHTML = `
             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <span>${warning}</span>
         `;
-        
+
         warningBanner.classList.remove('hidden');
     }
 
@@ -1584,7 +1584,7 @@ class FileExplorer {
             this.fileExplorerUpload.addEventListener('click', () => {
                 this.fileExplorerFileInput.click();
             });
-            
+
             this.fileExplorerFileInput.addEventListener('change', (e) => {
                 this.handleFileUpload(e.target.files);
             });
@@ -1719,11 +1719,11 @@ class FileExplorer {
         if (!files || files.length === 0) return;
 
         console.log(`[file-explorer] Uploading ${files.length} file(s)`);
-        
+
         const MAX_STANDARD_UPLOAD = 100 * 1024 * 1024; // 100 MB
         const largeFiles = [];
         const standardFiles = [];
-        
+
         // Separate large files from standard files
         for (let i = 0; i < files.length; i++) {
             if (files[i].size > MAX_STANDARD_UPLOAD) {
@@ -1732,9 +1732,9 @@ class FileExplorer {
                 standardFiles.push(files[i]);
             }
         }
-        
+
         const originalText = this.fileExplorerUpload.innerHTML;
-        
+
         try {
             // Show loading state on button (minimal, since progress bar shows details)
             this.fileExplorerUpload.innerHTML = `
@@ -1752,7 +1752,7 @@ class FileExplorer {
             if (standardFiles.length > 0) {
                 try {
                     console.log(`[file-explorer] Uploading ${standardFiles.length} standard file(s)`);
-                    
+
                     const result = await StandardUploader.upload(standardFiles, this.sessionId, this.currentPath, {
                         useProgressUI: true
                     });
@@ -1775,7 +1775,7 @@ class FileExplorer {
                     for (const file of largeFiles) {
                         try {
                             console.log(`[file-explorer] Uploading large file via chunked upload: ${file.name} (${file.size} bytes)`);
-                            
+
                             const uploader = new ChunkedUploader({
                                 useProgressUI: true, // Use the progress UI
                                 onError: (error) => {
@@ -1796,7 +1796,7 @@ class FileExplorer {
 
             // Refresh file list
             await this.loadDirectory(this.currentPath);
-            
+
             // Invalidate workspace cache since files changed
             this.invalidateWorkspaceCache();
 
@@ -1816,7 +1816,7 @@ class FileExplorer {
             // Reset button state
             this.fileExplorerUpload.innerHTML = originalText;
             this.fileExplorerUpload.disabled = false;
-            
+
             // Clear file input
             if (this.fileExplorerFileInput) {
                 this.fileExplorerFileInput.value = '';
@@ -1834,7 +1834,7 @@ class FileExplorer {
             type === 'warning' ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
             'bg-blue-50 text-blue-800 border border-blue-200'
         }`;
-        
+
         toast.innerHTML = `
             <div class="flex items-start gap-2">
                 <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1846,14 +1846,14 @@ class FileExplorer {
                 <span class="text-caption-m-bold break-words">${message}</span>
             </div>
         `;
-        
+
         document.body.appendChild(toast);
-        
+
         // Calculate duration based on message length (minimum 3s, add 1s per 50 chars, max 15s)
         const baseTimeout = 3000;
         const extraTime = Math.min(Math.floor(message.length / 50) * 1000, 12000);
         const totalTimeout = baseTimeout + extraTime;
-        
+
         // Remove toast after calculated duration
         setTimeout(() => {
             toast.classList.add('animate-fade-out');

@@ -29,19 +29,19 @@ import java.util.logging.Logger;
 public class SessionResource {
 
     private static final Logger LOGGER = Logger.getLogger(SessionResource.class.getName());
-    
+
     @Inject
     UserService userService;
-    
+
     @Inject
     KlawedSandboxService klawedSandboxService;
-    
+
     @ConfigProperty(name = "cookie.secure", defaultValue = "false")
     Optional<Boolean> cookieSecure;
-    
+
     // In-memory session store (maps session ID to client identity)
     private static final ConcurrentHashMap<String, String> sessionStore = new ConcurrentHashMap<>();
-    
+
     /**
      * Generate a new session ID for authenticated users.
      * Requires the user to have a valid userId cookie linked to an email.
@@ -73,7 +73,7 @@ public class SessionResource {
 
         // Store the session ID with user identity
         sessionStore.put(sessionId, user.getEmail());
-        
+
         // Register session in sessions.db for container management
         klawedSandboxService.registerSession(sessionId, userId);
 
@@ -98,7 +98,7 @@ public class SessionResource {
                 .entity("{\"sessionId\": \"" + sessionId + "\", \"userId\": \"" + userId + "\", \"email\": \"" + user.getEmail() + "\"}")
                 .build();
     }
-    
+
     /**
      * Extract userId from cookies in headers (helper)
      */
@@ -120,7 +120,7 @@ public class SessionResource {
     public static boolean validateSession(String sessionId) {
         return sessionStore.containsKey(sessionId);
     }
-    
+
     /**
      * Get client identity for a session
      * @param sessionId The session ID
@@ -129,7 +129,7 @@ public class SessionResource {
     public static String getClientIdentity(String sessionId) {
         return sessionStore.get(sessionId);
     }
-    
+
     /**
      * Remove a session (e.g., when WebSocket closes)
      * @param sessionId The session ID to remove
@@ -138,7 +138,7 @@ public class SessionResource {
         sessionStore.remove(sessionId);
         LOGGER.info("Removed session: " + sessionId);
     }
-    
+
     /**
      * Get all active sessions (for debugging/monitoring)
      * @return Number of active sessions

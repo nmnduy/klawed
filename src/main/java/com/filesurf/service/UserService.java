@@ -40,7 +40,7 @@ public class UserService {
         }
 
         String normalizedEmail = email.toLowerCase().trim();
-        
+
         // Check if user exists
         UserRecord existingUser = userRepository.findByEmail(normalizedEmail);
         if (existingUser != null) {
@@ -123,7 +123,7 @@ public class UserService {
         }
 
         String normalizedEmail = email.toLowerCase().trim();
-        
+
         // Check if user already exists
         UserRecord existingUser = userRepository.findByEmail(normalizedEmail);
         if (existingUser != null) {

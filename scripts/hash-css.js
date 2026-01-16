@@ -2,7 +2,7 @@
 
 /**
  * CSS Hash Generator
- * 
+ *
  * This script generates a content-based hash for the built CSS file and:
  * 1. Copies main.css to main.[hash].css
  * 2. Creates a css-version.properties file with the hashed filename
@@ -31,7 +31,7 @@ function generateHash(filePath) {
 function main() {
     // Skip hashing in development mode
     const isDev = process.env.NODE_ENV !== 'production';
-    
+
     if (isDev) {
         console.log('🔧 Development mode: Skipping CSS hashing');
         // Create a simple properties file pointing to main.css
@@ -47,41 +47,41 @@ css.generated=${new Date().toISOString()}
         console.log('💡 Tip: Run "npm run build" for production build with cache busting');
         return;
     }
-    
+
     console.log('🔨 Generating CSS hash for cache busting (production mode)...');
-    
+
     // Check if CSS file exists
     if (!existsSync(CSS_SOURCE)) {
         console.error(`❌ Error: CSS file not found at ${CSS_SOURCE}`);
         console.error('   Run "npm run build" first to generate the CSS file.');
         process.exit(1);
     }
-    
+
     // Generate hash
     const hash = generateHash(CSS_SOURCE);
     const hashedFilename = `main.${hash}.css`;
     const hashedFilePath = join(DIST_DIR, hashedFilename);
-    
+
     console.log(`   Hash: ${hash}`);
     console.log(`   Hashed filename: ${hashedFilename}`);
-    
+
     // Copy CSS file with hash
     copyFileSync(CSS_SOURCE, hashedFilePath);
     console.log(`✅ Copied CSS to ${hashedFilename}`);
-    
+
     // Create properties file
     const propertiesContent = `# CSS version file for cache busting (auto-generated)
 css.filename=${hashedFilename}
 css.hash=${hash}
 css.generated=${new Date().toISOString()}
 `;
-    
+
     // Ensure directory exists
     const versionDir = dirname(VERSION_FILE);
     if (!existsSync(versionDir)) {
         mkdirSync(versionDir, { recursive: true });
     }
-    
+
     writeFileSync(VERSION_FILE, propertiesContent);
     console.log(`✅ Created version file: ${VERSION_FILE}`);
     console.log(`   CSS filename: ${hashedFilename}`);

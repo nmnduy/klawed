@@ -9,18 +9,18 @@ import jakarta.inject.Named;
 /**
  * Helper bean for JS file paths with cache busting.
  * Made available to templates via @Named("jsHelper").
- * 
- * Usage in templates: 
+ *
+ * Usage in templates:
  *   <script src="{inject:jsHelper.path('fileChat')}"></script>
  */
 @Named("jsHelper")
 @ApplicationScoped
 @TemplateData
 public class JsHelper {
-    
+
     @Inject
     JsVersionProvider jsVersionProvider;
-    
+
     /**
      * Get the hashed JS path for a given base name.
      * @param baseName The base name of the JS file (e.g., "fileChat")
@@ -29,7 +29,7 @@ public class JsHelper {
     public String path(String baseName) {
         return jsVersionProvider != null ? jsVersionProvider.getJsPath(baseName) : "/dist/" + baseName + ".js";
     }
-    
+
     /**
      * Get the JS filename only (without /js/ prefix).
      * @param baseName The base name of the JS file (e.g., "fileChat")

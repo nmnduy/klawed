@@ -59,7 +59,7 @@ deployment/klawed/
 
 Multi-stage Dockerfile optimized for minimal image size:
 
-1. **Builder Stage**: 
+1. **Builder Stage**:
    - Installs build dependencies (gcc, make, Rust, etc.)
    - Builds memvid-ffi Rust library
    - Builds klawed with memvid support (`MEMVID=1 ZMQ=0`)

@@ -40,7 +40,7 @@ for file in $REST_RESOURCES; do
     if grep -q "public static class" "$file"; then
         # Get the inner class names
         INNER_CLASSES=$(grep "public static class" "$file" | sed 's/.*public static class \([^ {]*\).*/\1/')
-        
+
         for class in $INNER_CLASSES; do
             # Check if @RegisterForReflection is present near the class definition
             if ! grep -B2 "public static class $class" "$file" | grep -q "@RegisterForReflection"; then
@@ -87,7 +87,7 @@ echo -e "${YELLOW}ℹ️  Note: This is a heuristic check - manual verification 
 for file in $REST_RESOURCES; do
     if grep -q "public static class" "$file"; then
         INNER_CLASSES=$(grep "public static class" "$file" | sed 's/.*public static class \([^ {]*\).*/\1/')
-        
+
         for class in $INNER_CLASSES; do
             # Extract the class definition (basic heuristic)
             # Look for explicit constructor with parameters but no default constructor

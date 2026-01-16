@@ -43,12 +43,12 @@ log_debug() {
 # Check if file exists and is readable
 check_file() {
     local file="$1"
-    
+
     if [[ ! -f "$file" ]]; then
         log_error "File not found: $file"
         exit 3
     fi
-    
+
     if [[ ! -r "$file" ]]; then
         log_error "File not readable: $file"
         exit 3
@@ -64,22 +64,22 @@ get_extension() {
 # Try to extract embedded text from PDF
 try_pdf_text_extraction() {
     local pdf_file="$1"
-    
+
     log_info "Attempting to extract embedded text from PDF..."
-    
+
     if ! command -v pdftotext &> /dev/null; then
         log_warn "pdftotext not found, skipping text extraction"
         return 1
     fi
-    
+
     local text
     text=$(pdftotext -layout "$pdf_file" - 2>/dev/null || echo "")
-    
+
     local char_count
     char_count=$(echo "$text" | tr -d '[:space:]' | wc -c | tr -d ' ')
-    
+
     log_debug "Extracted $char_count non-whitespace characters"
-    
+
     # If we got meaningful text (more than 100 chars), return it
     if [[ "$char_count" -gt 100 ]]; then
         log_info "Successfully extracted embedded text"
@@ -95,14 +95,14 @@ try_pdf_text_extraction() {
 perform_ocr() {
     local input_file="$1"
     local language="$2"
-    
+
     log_info "Performing OCR on document..."
-    
+
     if [[ ! -x "$SCRIPT_DIR/ocr_tesseract.sh" ]]; then
         log_error "ocr_tesseract.sh not found or not executable"
         exit 4
     fi
-    
+
     "$SCRIPT_DIR/ocr_tesseract.sh" "$input_file" "" "$language"
 }
 
@@ -123,21 +123,21 @@ main() {
         echo "Supported formats: PDF, PNG, JPG, JPEG, TIFF"
         exit 1
     fi
-    
+
     local input_file="$1"
     local output_file="${2:-}"
     local language="${3:-eng}"
-    
+
     check_file "$input_file"
-    
+
     local extension
     extension=$(get_extension "$input_file")
-    
+
     log_info "Processing file: $(basename "$input_file")"
     log_info "File type: $extension"
-    
+
     local extracted_text=""
-    
+
     # Strategy depends on file type
     if [[ "$extension" == "pdf" ]]; then
         # Try embedded text first for PDFs
@@ -153,7 +153,7 @@ main() {
         log_info "Image file detected, using OCR"
         extracted_text=$(perform_ocr "$input_file" "$language")
     fi
-    
+
     # Output results
     if [[ -n "$output_file" ]]; then
         echo "$extracted_text" > "$output_file"
@@ -163,7 +163,7 @@ main() {
     else
         echo "$extracted_text"
     fi
-    
+
     exit 0
 }
 

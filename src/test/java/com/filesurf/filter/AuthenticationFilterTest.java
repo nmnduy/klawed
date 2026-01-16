@@ -38,7 +38,7 @@ class AuthenticationFilterTest {
         filter = new AuthenticationFilter();
         userService = mock(UserService.class);
         filter.userService = userService;
-        
+
         mockRequestContext = mock(ContainerRequestContext.class);
         mockUriInfo = mock(UriInfo.class);
         when(mockRequestContext.getUriInfo()).thenReturn(mockUriInfo);
@@ -104,22 +104,22 @@ class AuthenticationFilterTest {
             // Test the full flow: normalize path + build URL
             String normalizedPath = filter.normalizeRedirectPath("/");
             String redirectUrl = filter.buildLoginRedirectUrl(normalizedPath);
-            
+
             // The normalized path should be /file-chat (not / anymore)
             assertEquals("/file-chat", normalizedPath);
             // The redirect should not have // in the decoded form
             assertEquals("/auth/login?redirect=%2Ffile-chat", redirectUrl);
-            assertFalse(redirectUrl.contains("//"), 
+            assertFalse(redirectUrl.contains("//"),
                 "Redirect URL should not contain double slashes: " + redirectUrl);
         }
-        
+
         @Test
         @DisplayName("Should not produce double slashes in redirect when processing empty path")
         void shouldNotProduceDoubleSlashesForEmpty() {
             // Test the full flow: normalize path + build URL
             String normalizedPath = filter.normalizeRedirectPath("");
             String redirectUrl = filter.buildLoginRedirectUrl(normalizedPath);
-            
+
             // The normalized path should be /file-chat (not // )
             assertEquals("/file-chat", normalizedPath);
             // The redirect should point to /file-chat
@@ -288,17 +288,17 @@ class AuthenticationFilterTest {
             // Setup
             when(mockUriInfo.getPath()).thenReturn("/");
             when(mockRequestContext.getCookies()).thenReturn(new HashMap<>());
-            
+
             // Execute
             filter.filter(mockRequestContext);
-            
+
             // Verify redirect response
             ArgumentCaptor<Response> responseCaptor = ArgumentCaptor.forClass(Response.class);
             verify(mockRequestContext).abortWith(responseCaptor.capture());
-            
+
             Response response = responseCaptor.getValue();
             assertEquals(Response.Status.SEE_OTHER.getStatusCode(), response.getStatus());
-            
+
             URI location = (URI) response.getMetadata().getFirst("Location");
             assertNotNull(location);
             String locationStr = location.toString();
@@ -313,14 +313,14 @@ class AuthenticationFilterTest {
             when(mockUriInfo.getPath()).thenReturn("/session/generate");
             when(mockRequestContext.getCookies()).thenReturn(new HashMap<>());
             when(mockRequestContext.getHeaderString("Accept")).thenReturn("application/json");
-            
+
             // Execute
             filter.filter(mockRequestContext);
-            
+
             // Verify 401 response
             ArgumentCaptor<Response> responseCaptor = ArgumentCaptor.forClass(Response.class);
             verify(mockRequestContext).abortWith(responseCaptor.capture());
-            
+
             Response response = responseCaptor.getValue();
             assertEquals(Response.Status.UNAUTHORIZED.getStatusCode(), response.getStatus());
         }
@@ -331,21 +331,21 @@ class AuthenticationFilterTest {
             // Setup
             String userId = "user-123";
             String email = "user@example.com";
-            
+
             Map<String, Cookie> cookies = new HashMap<>();
             cookies.put("filesurf_userId", new Cookie("filesurf_userId", userId));
-            
+
             UserRecord mockUser = new UserRecord();
             mockUser.setUserId(userId);
             mockUser.setEmail(email);
-            
+
             when(mockUriInfo.getPath()).thenReturn("/file-chat");
             when(mockRequestContext.getCookies()).thenReturn(cookies);
             when(userService.getUserByUserId(userId)).thenReturn(mockUser);
-            
+
             // Execute
             filter.filter(mockRequestContext);
-            
+
             // Verify no abort
             verify(mockRequestContext, never()).abortWith(any());
         }
@@ -355,21 +355,21 @@ class AuthenticationFilterTest {
         void shouldRejectInvalidCookie() throws Exception {
             // Setup
             String userId = "invalid-user";
-            
+
             Map<String, Cookie> cookies = new HashMap<>();
             cookies.put("filesurf_userId", new Cookie("filesurf_userId", userId));
-            
+
             when(mockUriInfo.getPath()).thenReturn("/file-chat");
             when(mockRequestContext.getCookies()).thenReturn(cookies);
             when(userService.getUserByUserId(userId)).thenReturn(null);
-            
+
             // Execute
             filter.filter(mockRequestContext);
-            
+
             // Verify redirect
             ArgumentCaptor<Response> responseCaptor = ArgumentCaptor.forClass(Response.class);
             verify(mockRequestContext).abortWith(responseCaptor.capture());
-            
+
             Response response = responseCaptor.getValue();
             assertEquals(Response.Status.SEE_OTHER.getStatusCode(), response.getStatus());
         }
@@ -380,10 +380,10 @@ class AuthenticationFilterTest {
             // Setup - no cookies
             when(mockUriInfo.getPath()).thenReturn("/auth/login");
             when(mockRequestContext.getCookies()).thenReturn(new HashMap<>());
-            
+
             // Execute
             filter.filter(mockRequestContext);
-            
+
             // Verify no abort
             verify(mockRequestContext, never()).abortWith(any());
         }
@@ -398,12 +398,12 @@ class AuthenticationFilterTest {
         void shouldHandleEmptyCookie() throws Exception {
             Map<String, Cookie> cookies = new HashMap<>();
             cookies.put("filesurf_userId", new Cookie("filesurf_userId", ""));
-            
+
             when(mockUriInfo.getPath()).thenReturn("/file-chat");
             when(mockRequestContext.getCookies()).thenReturn(cookies);
-            
+
             filter.filter(mockRequestContext);
-            
+
             verify(mockRequestContext).abortWith(any());
         }
 
@@ -412,12 +412,12 @@ class AuthenticationFilterTest {
         void shouldHandleBlankCookie() throws Exception {
             Map<String, Cookie> cookies = new HashMap<>();
             cookies.put("filesurf_userId", new Cookie("filesurf_userId", "   "));
-            
+
             when(mockUriInfo.getPath()).thenReturn("/file-chat");
             when(mockRequestContext.getCookies()).thenReturn(cookies);
-            
+
             filter.filter(mockRequestContext);
-            
+
             verify(mockRequestContext).abortWith(any());
         }
 
@@ -426,7 +426,7 @@ class AuthenticationFilterTest {
         void shouldHandleDoubleSlashesInPath() {
             String normalized = filter.normalizeRedirectPath("//file-chat");
             assertEquals("//file-chat", normalized);
-            
+
             String redirectUrl = filter.buildLoginRedirectUrl(normalized);
             assertTrue(redirectUrl.contains("%2F%2Ffile-chat"));
         }

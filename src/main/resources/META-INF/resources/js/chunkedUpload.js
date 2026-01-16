@@ -90,7 +90,7 @@ class ChunkedUploader {
             };
 
             this.onComplete(result);
-            
+
             // Mark upload as complete in progress UI
             if (this.useProgressUI && typeof window !== 'undefined' && window.uploadProgress) {
                 window.uploadProgress.completeUpload(uploadId, true);
@@ -101,12 +101,12 @@ class ChunkedUploader {
 
         } catch (error) {
             this.onError(error);
-            
+
             // Mark upload as failed in progress UI
             if (this.useProgressUI && typeof window !== 'undefined' && window.uploadProgress && this.uploadId) {
                 window.uploadProgress.completeUpload(this.uploadId, false);
             }
-            
+
             throw error;
         }
     }

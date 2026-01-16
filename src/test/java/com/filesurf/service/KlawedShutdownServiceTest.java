@@ -17,25 +17,25 @@ import static org.junit.jupiter.api.Assertions.*;
  * Test for KlawedShutdownService
  */
 class KlawedShutdownServiceTest {
-    
+
     private KlawedShutdownService shutdownService;
-    
+
     @BeforeEach
     void setUp() {
         shutdownService = new KlawedShutdownService();
     }
-    
+
     @AfterEach
     void tearDown() throws Exception {
         // Nothing to clean up
     }
-    
+
     @Test
     void testShutdownInProgressFlag() {
-        assertFalse(shutdownService.isShutdownInProgress(), 
+        assertFalse(shutdownService.isShutdownInProgress(),
                    "Shutdown should not be in progress initially");
     }
-    
+
     @Test
     void testFindAllKlawedProcesses() {
         // This test just verifies the method doesn't throw exceptions
@@ -44,7 +44,7 @@ class KlawedShutdownServiceTest {
             assertNotNull(pids, "Should return a list (even if empty)");
         });
     }
-    
+
     @Test
     void testCleanupAllKlawedProcesses() {
         // Test that cleanup doesn't throw exceptions
@@ -56,7 +56,7 @@ class KlawedShutdownServiceTest {
             KlawedShutdownService.class.getMethod("cleanupAllKlawedProcesses");
         });
     }
-    
+
     @Test
     void testEmergencyCleanup() {
         // Test that emergency cleanup doesn't throw exceptions
@@ -64,13 +64,13 @@ class KlawedShutdownServiceTest {
             shutdownService.emergencyCleanup();
         });
     }
-    
+
     @Test
     void testPidFileCleanup() throws IOException {
         // Create a test session directory with a PID file
         Path testSessionDir = Paths.get("/tmp/test-is-sessions-shutdown-test");
         Path pidFile = testSessionDir.resolve("klawed.pid");
-        
+
         try {
             // Clean up any existing test directory
             if (Files.exists(testSessionDir)) {
@@ -80,13 +80,13 @@ class KlawedShutdownServiceTest {
                          try { Files.delete(p); } catch (IOException e) { /* ignore */ }
                      });
             }
-            
+
             // Create test directory and PID file
             Files.createDirectories(testSessionDir);
             Files.writeString(pidFile, "pid=12345\ndb_path=/tmp/test.db\ntimestamp=1234567890\n");
-            
+
             assertTrue(Files.exists(pidFile), "PID file should exist");
-            
+
         } finally {
             // Clean up test directory
             if (Files.exists(testSessionDir)) {
@@ -98,21 +98,21 @@ class KlawedShutdownServiceTest {
             }
         }
     }
-    
+
     @Test
     void testShutdownHookRegistration() {
         // This is more of an integration test, but we can verify
         // that the service can be instantiated without errors
         assertNotNull(shutdownService, "Service should be instantiated");
-        
+
         // The actual shutdown hook registration happens in @PostConstruct
         // which isn't called in unit tests, but we can verify the method exists
         assertDoesNotThrow(() -> {
             KlawedShutdownService.class.getMethod("cleanup");
         });
-        
+
         // Test that isShutdownInProgress returns false initially
-        assertFalse(shutdownService.isShutdownInProgress(), 
+        assertFalse(shutdownService.isShutdownInProgress(),
                    "Shutdown should not be in progress initially");
     }
 }

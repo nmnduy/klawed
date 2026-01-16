@@ -5,12 +5,12 @@ package com.filesurf.model;
  * Using constants helps prevent typos and makes refactoring easier.
  */
 public class ChatConstants {
-    
+
     // Common values for sender and receiver
     public static final String CLIENT = "client";
     public static final String AGENT = "agent";
     public static final String SYSTEM = "system";
-    
+
     // WebSocket/SQLite queue message types
     public static final String MESSAGE_TYPE_TEXT = "TEXT";
     public static final String MESSAGE_TYPE_ERROR = "ERROR";
@@ -21,7 +21,7 @@ public class ChatConstants {
     public static final String MESSAGE_TYPE_END_AI_TURN = "END_AI_TURN";
     public static final String MESSAGE_TYPE_AGENT_STATUS = "AGENT_STATUS";
     public static final String MESSAGE_TYPE_FILE_UPLOAD = "FILE_UPLOAD";
-    
+
     // Database message types
     public static final String DB_MESSAGE_TYPE_TEXT = "text";
     public static final String DB_MESSAGE_TYPE_ERROR = "error";
@@ -30,7 +30,7 @@ public class ChatConstants {
     public static final String DB_MESSAGE_TYPE_TOOL = "tool";
     public static final String DB_MESSAGE_TYPE_TOOL_RESULT = "tool_result";
     public static final String DB_MESSAGE_TYPE_FILE_UPLOAD = "file_upload";
-    
+
     private ChatConstants() {
         // Utility class, prevent instantiation
     }

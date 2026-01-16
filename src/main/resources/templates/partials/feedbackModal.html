@@ -1,13 +1,13 @@
 <!--
   Feedback Modal Partial
-  
+
   A modal dialog for users to submit feedback, bug reports, or suggestions.
-  
+
   Expected data attributes:
   - (none - this is a modal that gets dynamically shown)
 -->
-<div 
-    id="feedback-modal" 
+<div
+    id="feedback-modal"
     data-feedback-modal
     class="fixed inset-0 z-50 hidden"
     role="dialog"
@@ -15,7 +15,7 @@
     aria-labelledby="feedback-modal-title"
 >
     <!-- Backdrop -->
-    <div 
+    <div
         class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         data-feedback-backdrop
     ></div>
@@ -23,7 +23,7 @@
     <!-- Modal Panel -->
     <div class="fixed inset-0 z-10 overflow-y-auto">
         <div class="flex min-h-full items-center justify-center p-4">
-            <div 
+            <div
                 class="relative w-full max-w-lg transform overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-2xl transition-all"
                 data-feedback-panel
             >
@@ -44,7 +44,7 @@
                             </p>
                         </div>
                     </div>
-                    <button 
+                    <button
                         type="button"
                         class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                         data-feedback-close
@@ -64,7 +64,7 @@
                             What type of feedback is this?
                         </label>
                         <div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Feedback type">
-                            <button 
+                            <button
                                 type="button"
                                 class="feedback-type-btn active"
                                 data-feedback-type="bug"
@@ -76,7 +76,7 @@
                                 </svg>
                                 <span class="text-xs font-medium">Bug</span>
                             </button>
-                            <button 
+                            <button
                                 type="button"
                                 class="feedback-type-btn"
                                 data-feedback-type="suggestion"
@@ -88,7 +88,7 @@
                                 </svg>
                                 <span class="text-xs font-medium">Suggestion</span>
                             </button>
-                            <button 
+                            <button
                                 type="button"
                                 class="feedback-type-btn"
                                 data-feedback-type="praise"
@@ -108,7 +108,7 @@
                         <label for="feedback-description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                             Description <span class="text-red-500">*</span>
                         </label>
-                        <textarea 
+                        <textarea
                             id="feedback-description"
                             data-feedback-description
                             class="w-full px-4 py-3 rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-body-m placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-900/50 resize-none transition-all"
@@ -123,7 +123,7 @@
                         <label for="feedback-error-details" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                             Error Details (optional)
                         </label>
-                        <textarea 
+                        <textarea
                             id="feedback-error-details"
                             data-feedback-error-details
                             class="w-full px-4 py-3 rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 text-body-s font-mono placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-900/50 resize-none transition-all"
@@ -140,7 +140,7 @@
                         <label for="feedback-email" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                             Email (optional)
                         </label>
-                        <input 
+                        <input
                             type="email"
                             id="feedback-email"
                             data-feedback-email
@@ -154,7 +154,7 @@
 
                     <!-- Submit Button -->
                     <div class="flex gap-3 pt-2">
-                        <button 
+                        <button
                             type="submit"
                             class="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-200/50 hover:shadow-orange-300/60 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                             data-feedback-submit
@@ -167,7 +167,7 @@
                                 </svg>
                             </span>
                         </button>
-                        <button 
+                        <button
                             type="button"
                             class="px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                             data-feedback-cancel
@@ -190,7 +190,7 @@
                     <p class="text-slate-600 dark:text-slate-400 mb-6">
                         We appreciate you taking the time to help us improve FileSurf.
                     </p>
-                    <button 
+                    <button
                         type="button"
                         class="px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                         data-feedback-done

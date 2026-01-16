@@ -18,6 +18,8 @@ tail -f logs/application.log
 
 ## Development
 
+**DO NOT COMMIT EXTRA MARKDOWN FILES UNLESS SPECIFICALLY ASKED TO DO SO**
+
 ### Using Git
 
 You're encoureaged to create commits when finish a task, fix a bug or adding a new feature. Unless specified otherwise, do not stage markdown files for commit. I will review them and commit myself.
@@ -244,19 +246,6 @@ CREATE TABLE users (
 - **Monitoring**: Micrometer + Prometheus registry
 - **Dark Mode**: Class-based theming with localStorage persistence (see `docs/DARK_MODE.md`)
 
-## Building for Production
-```bash
-# Build CSS, JS, and Quarkus JAR (JVM mode - production standard)
-make build-dist
-
-# Or manually:
-npm run build          # Build Tailwind CSS + hash JS files (production)
-mvn clean package -DskipTests
-
-# Note: We use JVM mode for production builds (not native)
-# Native builds have known issues and are not recommended at this time
-```
-
 ## Building for Development
 ```bash
 # Build CSS and JS without cache busting (faster for development)
@@ -276,7 +265,7 @@ Both CSS and JS files are automatically hashed during **production** builds to p
   - CSS: Generates `main.[hash].css` (e.g., `main.d44edce3.css`)
   - JS: Generates `[name].[hash].js` (e.g., `fileChat.9bc4af5d.js`)
   - All hashed files are output to `dist/` directory
-- **Development** (`npm run build:dev`): 
+- **Development** (`npm run build:dev`):
   - CSS: Generates `main.css` (no hash)
   - JS: Generates standard filenames (no hashes, faster iteration)
 - Templates use `{cssPath}` and `{inject:jsHelper.path('name')}` which automatically resolve to correct filenames
@@ -315,4 +304,4 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 
 ## Deployment
 
-**DO NOT COMMIT EXTRA MARKDOWN FILES UNLESS SPECIFICALLY ASKED TO DO SO**
+`deployment/deploy-rsync-jvm.sh`

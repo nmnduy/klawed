@@ -30,14 +30,14 @@ public class MetricsAccessFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
         String path = requestContext.getUriInfo().getPath();
-        
+
         // Only apply this filter to /metrics endpoint
         if (!isMetricsEndpoint(path)) {
             return;
         }
 
         String clientIp = getClientIp();
-        
+
         // Check if IP is from Tailscale network
         if (!isTailscaleIp(clientIp)) {
             LOGGER.warning(String.format("Access denied to /metrics from non-Tailscale IP: %s", clientIp));
@@ -61,7 +61,7 @@ public class MetricsAccessFilter implements ContainerRequestFilter {
         if (path == null) {
             return false;
         }
-        
+
         String normalizedPath = path.startsWith("/") ? path.substring(1) : path;
         return normalizedPath.equals("metrics") || normalizedPath.equals("q/metrics");
     }
@@ -74,10 +74,10 @@ public class MetricsAccessFilter implements ContainerRequestFilter {
         if (ip == null || ip.isEmpty() || ip.equals("Unknown")) {
             return false;
         }
-        
+
         // Extract IP address if it includes port
         String ipOnly = ip.split(":")[0];
-        
+
         // Check if it starts with 100.
         return ipOnly.startsWith(TAILSCALE_NETWORK_PREFIX);
     }
@@ -87,21 +87,21 @@ public class MetricsAccessFilter implements ContainerRequestFilter {
      * 1. CF-Connecting-IP (Cloudflare's real IP header - most reliable behind Cloudflare)
      * 2. X-Forwarded-For (standard proxy header)
      * 3. Direct connection IP
-     * 
+     *
      * Public for testing purposes.
      */
     public String getClientIp() {
         if (httpServerRequest == null) {
             return "Unknown";
         }
-        
+
         // Priority 1: CF-Connecting-IP (Cloudflare's real IP header)
         String cfConnectingIp = httpServerRequest.getHeader("CF-Connecting-IP");
         if (cfConnectingIp != null && !cfConnectingIp.isEmpty()) {
             LOGGER.fine(String.format("Using CF-Connecting-IP: %s", cfConnectingIp));
             return cfConnectingIp.trim();
         }
-        
+
         // Priority 2: X-Forwarded-For (standard proxy header)
         String xForwardedFor = httpServerRequest.getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
@@ -112,10 +112,10 @@ public class MetricsAccessFilter implements ContainerRequestFilter {
             LOGGER.fine(String.format("Using X-Forwarded-For: %s (from: %s)", firstIp, xForwardedFor));
             return firstIp;
         }
-        
+
         // Priority 3: Direct connection IP
-        String remoteAddress = httpServerRequest.remoteAddress() != null 
-            ? httpServerRequest.remoteAddress().toString() 
+        String remoteAddress = httpServerRequest.remoteAddress() != null
+            ? httpServerRequest.remoteAddress().toString()
             : "Unknown";
         LOGGER.fine(String.format("Using remote address: %s", remoteAddress));
         return remoteAddress;
