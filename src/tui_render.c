@@ -430,7 +430,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     if (is_user_message) {
         // Add one blank line for top padding
         waddch(tui->wm.conv_pad, '\n');
-        
+
         // Get updated position after adding blank line
         int cur_y, cur_x;
         int pad_height, pad_width;
@@ -439,16 +439,26 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         (void)pad_height;
         (void)cur_x;
 
-        // Draw full-width background bar
+        // Calculate how many lines the user message will need
+        // The prefix " > " takes 3 characters
+        int prefix_len = 3;
+        int text_len = text ? (int)strlen(text) : 0;
+        int needed_lines = tui_window_calculate_needed_lines(text, text_len, pad_width, prefix_len);
+
+        // Draw full-width background for ALL lines the message will occupy
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER_MSG_BG));
         }
-        for (int i = 0; i < pad_width; i++) {
-            waddch(tui->wm.conv_pad, ' ');
+        int bg_start_y = cur_y;
+        for (int line = 0; line < needed_lines; line++) {
+            wmove(tui->wm.conv_pad, bg_start_y + line, 0);
+            for (int col = 0; col < pad_width; col++) {
+                waddch(tui->wm.conv_pad, ' ');
+            }
         }
         // Keep color active for text rendering
 
-        // Move back to start of line to draw content on top
+        // Move back to start of first line to draw content on top
         wmove(tui->wm.conv_pad, cur_y, 0);
 
         // Render prefix '>' with bold user color on top of background
@@ -525,16 +535,16 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
             (void)pad_height;
             (void)msg_x;
-            
+
             // Move to end of line
             wmove(tui->wm.conv_pad, msg_y, pad_width - 1);
-            
+
             // Add newline to finish the background line
             waddch(tui->wm.conv_pad, '\n');
-            
+
             // Add one blank line for bottom padding
             waddch(tui->wm.conv_pad, '\n');
-            
+
             // Exit early to avoid duplicate newline below
             goto skip_newline;
         }
@@ -542,7 +552,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
 
     // Add newline for non-user messages
     waddch(tui->wm.conv_pad, '\n');
-    
+
 skip_newline:
     ; // Empty statement required after label
 
@@ -813,7 +823,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
     int screen_x = content_start_col + effective_prefix_len;
 
     // Calculate bottom boundary (accounts for border in BORDER style)
-    int bottom_boundary = (tui->input_box_style == INPUT_STYLE_BORDER) ? 
+    int bottom_boundary = (tui->input_box_style == INPUT_STYLE_BORDER) ?
                           (input->win_height - 1) : input->win_height;
 
     for (int i = 0; i < input->length && screen_y < bottom_boundary; i++) {
