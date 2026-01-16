@@ -626,7 +626,13 @@ void input_redraw(TUIState *tui, const char *prompt) {
         right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;      // padding + right border = 2
     } else if (tui->input_box_style == INPUT_STYLE_HORIZONTAL) {
         // HORIZONTAL style: only top and bottom borders, caret '❯ ' but no left/right border
-        content_start_col = 2;  // '❯ ' = 2 display columns in INSERT mode, padding (1) for others
+        // In COMMAND/SEARCH mode, the mode prefix starts at column 0 (no caret)
+        // In INSERT mode, the caret '❯ ' starts at column 0
+        if (tui->mode == TUI_MODE_COMMAND || tui->mode == TUI_MODE_SEARCH) {
+            content_start_col = 0;  // Mode prefix (: or /) starts at beginning
+        } else {
+            content_start_col = 2;  // '❯ ' = 2 display columns in INSERT mode
+        }
         right_margin = INPUT_RIGHT_PADDING;      // just padding (1)
     } else {
         // BLAND style: just '❯ ' prefix (2 display cols), no padding
@@ -678,7 +684,13 @@ void input_redraw(TUIState *tui, const char *prompt) {
         content_start_col = INPUT_LEFT_BORDER_WIDTH + INPUT_LEFT_PADDING;
         right_margin = INPUT_RIGHT_PADDING + INPUT_LEFT_BORDER_WIDTH;
     } else if (tui->input_box_style == INPUT_STYLE_HORIZONTAL) {
-        content_start_col = INPUT_LEFT_PADDING;
+        // In INSERT mode, '❯ ' = 2 display columns (same as BLAND style)
+        // In COMMAND/SEARCH mode, mode prefix starts at column 0
+        if (tui->mode == TUI_MODE_COMMAND || tui->mode == TUI_MODE_SEARCH) {
+            content_start_col = 0;
+        } else {
+            content_start_col = 2;
+        }
         right_margin = INPUT_RIGHT_PADDING;
     } else {
         // BLAND style: In COMMAND/SEARCH mode, mode prefix starts at column 0
