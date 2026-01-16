@@ -755,11 +755,31 @@ void input_redraw(TUIState *tui, const char *prompt) {
             wbkgd(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
 
-        // Draw box border around the input area
+        // Draw box border with rounded corners around the input area
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
         }
-        box(win, 0, 0);
+        // Draw rounded corners using Unicode box-drawing characters
+        int max_y, max_x;
+        getmaxyx(win, max_y, max_x);
+        // Top-left corner
+        mvwprintw(win, 0, 0, "╭");
+        // Top-right corner
+        mvwprintw(win, 0, max_x - 1, "╮");
+        // Bottom-left corner
+        mvwprintw(win, max_y - 1, 0, "╰");
+        // Bottom-right corner
+        mvwprintw(win, max_y - 1, max_x - 1, "╯");
+        // Top and bottom horizontal lines
+        for (int col = 1; col < max_x - 1; col++) {
+            mvwprintw(win, 0, col, "─");
+            mvwprintw(win, max_y - 1, col, "─");
+        }
+        // Left and right vertical lines
+        for (int row = 1; row < max_y - 1; row++) {
+            mvwprintw(win, row, 0, "│");
+            mvwprintw(win, row, max_x - 1, "│");
+        }
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
         }
@@ -839,7 +859,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
     int screen_x = content_start_col + effective_prefix_len;
 
     // Calculate bottom boundary (accounts for border in BORDER/HORIZONTAL style)
-    int bottom_boundary = (tui->input_box_style == INPUT_STYLE_BORDER || 
+    int bottom_boundary = (tui->input_box_style == INPUT_STYLE_BORDER ||
                            tui->input_box_style == INPUT_STYLE_HORIZONTAL) ?
                           (input->win_height - 1) : input->win_height;
 
