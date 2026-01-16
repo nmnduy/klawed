@@ -2,6 +2,7 @@ package com.filesurf.service;
 
 import com.filesurf.model.UserRecord;
 import com.filesurf.repository.UserRepository;
+import io.quarkus.runtime.Startup;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -13,6 +14,7 @@ import java.util.logging.Logger;
  * Service for user management operations.
  * Provides authentication and user lookup functionality.
  */
+@Startup
 @ApplicationScoped
 public class UserService {
     private static final Logger LOGGER = Logger.getLogger(UserService.class.getName());
