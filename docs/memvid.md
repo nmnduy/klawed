@@ -8,6 +8,23 @@ Memvid provides persistent memory for klawed, enabling the agent to remember fac
 - Memories are structured as entity:slot = value pairs
 - Supports different memory types: facts, preferences, events, profiles, relationships, goals
 - Memories persist across sessions and can be searched
+- **Memory context is automatically injected before each API request** to ensure fresh, up-to-date information
+
+## Memory Context Injection
+
+Klawed automatically injects relevant memory context into the system prompt before each API request. This ensures that:
+
+1. **Always Fresh**: Memory context is rebuilt from current memories on each request
+2. **No Stale Data**: Previous memory sections are removed before adding new ones
+3. **Minimal Overhead**: Only relevant memories are included (user prefs, tasks, project knowledge)
+4. **Automatic**: No manual intervention required - happens transparently
+
+The injection system:
+- Searches for user preferences and facts
+- Looks for active tasks/goals
+- Includes project-specific knowledge
+- Removes old memory sections before adding new ones (using HTML markers)
+- Limits each section to avoid context bloat (10 items max per section)
 
 ## Building with Memvid Support
 
