@@ -10,12 +10,19 @@
 ---
 
 - [ ]
-- [ ] handle out of context error...
-- [ ] feedback button and error reporting
-
+- [x] prompts
+    - [x] give subagents more time. esp for tasks that might take time
+    - [x] subagents are more resilient now. give them time. they will stop when fail/ needs more guidance
+    - [x] you should build software
+    - [x] You are FileSurf. A personal computer in the Cloud, with AI.
+- [ ] database viewer with sql runner. tabular view. search. filter.
 - [ ] backups/ folder
     - [ ] LLM can't delete files here
     - [ ] files get synced into external
+
+- [x] handle out of context error...
+- [ ] feedback button and error reporting
+
 
 - [ ] one narrated demo
 - [ ] randomnized tips
@@ -24,6 +31,7 @@
 ---
 
 - [ ] cronjobs
+- [ ] background services for notifications
 - [ ] pricing
 - [ ] voice recording doesn't work
 - [ ] work on distribution
