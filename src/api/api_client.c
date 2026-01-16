@@ -13,6 +13,10 @@
 #include "../persistence.h"
 #include "../ui/print_helpers.h"
 
+#ifdef HAVE_MEMVID
+#include "../context/memory_injection.h"
+#endif
+
 #ifdef HAVE_ZMQ
 #include "../zmq_socket.h"
 #endif
@@ -290,6 +294,15 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
                 LOG_WARN("Compaction failed, continuing with API call");
             }
         }
+
+#ifdef HAVE_MEMVID
+        // Inject/refresh memory context before each API call
+        if (inject_memory_context(state) == 0) {
+            LOG_DEBUG("Memory context injection/refresh completed");
+        } else {
+            LOG_WARN("Memory context injection/refresh failed");
+        }
+#endif
 
         ApiCallResult result = state->provider->call_api(state->provider, state);
 

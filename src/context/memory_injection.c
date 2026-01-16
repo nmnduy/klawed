@@ -151,10 +151,66 @@ char* build_memory_context(const char *working_dir) {
     return context;
 }
 
+// Markers to identify memory section in system prompt
+#define MEMORY_START_MARKER "\n\n## Background Knowledge (from memory)\n\n"
+#define MEMORY_END_MARKER "\n<!-- END_MEMORY_CONTEXT -->\n"
+
+/**
+ * Remove existing memory context from system prompt if present.
+ * Returns the prompt with memory section removed (may be the original if no memory found).
+ * Caller must NOT free the original prompt if it's returned unchanged.
+ */
+static char* remove_memory_context(const char *prompt) {
+    if (!prompt) return NULL;
+
+    // Find the memory section markers
+    const char *start = strstr(prompt, MEMORY_START_MARKER);
+    if (!start) {
+        // No memory section, return NULL to indicate unchanged
+        return NULL;
+    }
+
+    const char *end = strstr(start, MEMORY_END_MARKER);
+    if (!end) {
+        // Start marker found but no end marker - remove everything after start
+        LOG_WARN("Memory context: Found start marker but no end marker, removing to end");
+        end = prompt + strlen(prompt);
+    } else {
+        // Skip past the end marker
+        end += strlen(MEMORY_END_MARKER);
+    }
+
+    // Calculate size for new prompt (before start + after end)
+    size_t before_len = start - prompt;
+    size_t after_len = strlen(end);
+    size_t new_size = before_len + after_len + 1;
+
+    char *new_prompt = malloc(new_size);
+    if (!new_prompt) {
+        LOG_ERROR("Memory context removal: Failed to allocate memory");
+        return NULL;
+    }
+
+    // Copy parts before and after memory section
+    size_t pos = 0;
+    if (before_len > 0) {
+        memcpy(new_prompt, prompt, before_len);
+        pos = before_len;
+    }
+    if (after_len > 0) {
+        memcpy(new_prompt + pos, end, after_len);
+        pos += after_len;
+    }
+    new_prompt[pos] = '\0';
+
+    LOG_DEBUG("Memory context removed from prompt (%zu bytes removed)", (start - prompt) + (end - start));
+    return new_prompt;
+}
+
 /**
  * Inject memory context into conversation state.
- * Called after memvid is initialized and before the conversation loop starts.
- * The memory context is appended to the system prompt if available.
+ * Can be called before each API request to refresh memory context.
+ * Removes any existing memory section before adding a new one.
  */
 int inject_memory_context(ConversationState *state) {
     if (!state) {
@@ -167,16 +223,9 @@ int inject_memory_context(ConversationState *state) {
         return 0;  // Not an error, just nothing to inject
     }
 
-    // Build memory context
-    char *memory_context = build_memory_context(state->working_dir);
-    if (!memory_context) {
-        return 0;  // No memories to inject
-    }
-
     // Get the current system message (should be the first message)
     if (state->count == 0 || state->messages[0].role != MSG_SYSTEM) {
         LOG_WARN("Memory context injection: No system message found");
-        free(memory_context);
         return 0;
     }
 
@@ -185,41 +234,71 @@ int inject_memory_context(ConversationState *state) {
     if (sys_msg->content_count == 0 || sys_msg->contents[0].type != INTERNAL_TEXT ||
         !sys_msg->contents[0].text) {
         LOG_WARN("Memory context injection: System message has no text content");
-        free(memory_context);
         return 0;
     }
 
     const char *current_prompt = sys_msg->contents[0].text;
 
+    // Remove any existing memory context first
+    char *base_prompt = remove_memory_context(current_prompt);
+    if (!base_prompt) {
+        // No existing memory context, use current prompt as base
+        base_prompt = (char *)current_prompt;  // Cast away const for temporary use
+    }
+
+    // Build fresh memory context
+    char *memory_context = build_memory_context(state->working_dir);
+    if (!memory_context) {
+        // No memories to inject
+        if (base_prompt != current_prompt) {
+            // We removed old memory but have no new memory to add
+            // Update the prompt to the cleaned version
+            free(sys_msg->contents[0].text);
+            sys_msg->contents[0].text = base_prompt;
+            LOG_DEBUG("Memory context removed, no new memories to inject");
+        }
+        return 0;
+    }
+
     // Calculate new prompt size
-    // Format: current_prompt + "\n\n## Background Knowledge (from memory)\n\n" + memory_context
-    const char *header = "\n\n## Background Knowledge (from memory)\n\n";
-    size_t header_len = strlen(header);
-    size_t current_len = strlen(current_prompt);
+    // Format: base_prompt + MEMORY_START_MARKER + memory_context + MEMORY_END_MARKER
+    size_t base_len = strlen(base_prompt);
+    size_t start_len = strlen(MEMORY_START_MARKER);
     size_t context_len = strlen(memory_context);
-    size_t new_size = current_len + header_len + context_len + 1;
+    size_t end_len = strlen(MEMORY_END_MARKER);
+    size_t new_size = base_len + start_len + context_len + end_len + 1;
 
     char *new_prompt = malloc(new_size);
     if (!new_prompt) {
         LOG_ERROR("Memory context injection: Failed to allocate memory for new prompt");
         free(memory_context);
+        if (base_prompt != current_prompt) {
+            free(base_prompt);
+        }
         return -1;
     }
 
     // Build the new prompt
-    size_t pos = strlcpy(new_prompt, current_prompt, new_size);
+    size_t pos = strlcpy(new_prompt, base_prompt, new_size);
     if (pos < new_size) {
-        pos += strlcpy(new_prompt + pos, header, new_size - pos);
+        pos += strlcpy(new_prompt + pos, MEMORY_START_MARKER, new_size - pos);
     }
     if (pos < new_size) {
-        strlcpy(new_prompt + pos, memory_context, new_size - pos);
+        pos += strlcpy(new_prompt + pos, memory_context, new_size - pos);
+    }
+    if (pos < new_size) {
+        strlcpy(new_prompt + pos, MEMORY_END_MARKER, new_size - pos);
     }
 
-    // Replace the system prompt
+    // Free the old prompt and base_prompt if it was allocated
     free(sys_msg->contents[0].text);
+    if (base_prompt != current_prompt) {
+        free(base_prompt);
+    }
+    
     sys_msg->contents[0].text = new_prompt;
 
-    LOG_INFO("Memory context injected into system prompt (%zu bytes added)", header_len + context_len);
+    LOG_INFO("Memory context injected into system prompt (%zu bytes added)", start_len + context_len + end_len);
     free(memory_context);
     return 0;
 }
