@@ -21,11 +21,15 @@
 #include "../fallback_colors.h"
 
 // Thread-local state for tool output
-static _Thread_local TUIMessageQueue *g_active_tool_queue = NULL;
+// The tool queue is defined in klawed.c and shared across modules
+// Use extern to reference the global variable set by response_processor.c
+extern _Thread_local TUIMessageQueue *g_active_tool_queue;
 static _Thread_local int g_oneshot_mode = 0;
 
 /**
  * Set the active tool queue for output
+ * Note: This is provided for API compatibility but the queue is typically
+ * set directly by response_processor.c via the extern variable.
  */
 void output_set_tool_queue(TUIMessageQueue *queue) {
     g_active_tool_queue = queue;
