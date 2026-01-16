@@ -15,7 +15,9 @@
     - [x] subagents are more resilient now. give them time. they will stop when fail/ needs more guidance
     - [x] you should build software
     - [x] You are FileSurf. A personal computer in the Cloud, with AI.
+- [ ] copy file path into input box
 - [ ] database viewer with sql runner. tabular view. search. filter.
+- [ ] web search
 - [ ] backups/ folder
     - [ ] LLM can't delete files here
     - [ ] files get synced into external

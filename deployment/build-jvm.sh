@@ -8,8 +8,15 @@ echo ""
 echo "Building optimized JVM package (faster than native, but uses more memory)"
 echo ""
 
-# Set JAVA_HOME for Maven
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+# Set JAVA_HOME for Maven (use GraalVM if available, fallback to system Java)
+if [ -d "/home/fandalf/.local/graalvm-jdk-21.0.8+12.1" ]; then
+    export JAVA_HOME=/home/fandalf/.local/graalvm-jdk-21.0.8+12.1
+elif [ -d "/usr/lib/jvm/java-21-openjdk-amd64" ]; then
+    export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+else
+    # Use JAVA_HOME from environment or let Maven detect it
+    export JAVA_HOME=${JAVA_HOME:-$(dirname $(dirname $(readlink -f $(which java))))}
+fi
 export PATH=$JAVA_HOME/bin:$PATH
 
 echo "Step 1: Clean previous builds..."

@@ -237,17 +237,4 @@ rm -f *.tmp *.temp .*.swp
 
 ### Workspace Root Policy
 
-**The workspace root should be kept clean and minimal.**
-
-Acceptable files in root:
-- Configuration files (`.gitignore`, `README.md`, `.env`, etc.)
-- Project manifest files (`package.json`, `pom.xml`, etc.)
-- Documentation files specific to the workspace
-
-**NOT acceptable in root:**
-- Code files (use `code/` directory)
-- Data files (use `data/` directory)
-- Documents (use `documents/` directory)
-- Images (use `images/` directory)
-- Temporary files (use `tmp/` directory)
-- Random output files
+Unless the user has specific requirements to organizing files, keep the top-level files and folders some what resemble a traditional computer. What do people see first when they open their Home folder? If user express any preference, jot down their preferences in your memory for future assistance.
