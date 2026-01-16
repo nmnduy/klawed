@@ -56,7 +56,7 @@ WORKDIR /build
 COPY . .
 
 # Build memvid-ffi Rust library
-RUN cd vendor/memvid-ffi && \
+RUN cd vendors/memvid-ffi && \
     cargo build --release && \
     ls -lh target/release/libmemvid_ffi.a && \
     ls -lh target/release/libmemvid_ffi.so
@@ -114,7 +114,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /build/build/klawed /usr/local/bin/klawed
 
 # Copy memvid shared library from builder
-COPY --from=builder /build/vendor/memvid-ffi/target/release/libmemvid_ffi.so /usr/local/lib/libmemvid_ffi.so
+COPY --from=builder /build/vendors/memvid-ffi/target/release/libmemvid_ffi.so /usr/local/lib/libmemvid_ffi.so
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
