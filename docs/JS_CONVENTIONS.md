@@ -24,25 +24,25 @@ Only use `type="module"` when the file needs to `import` from other modules (e.g
 // myModule.js
 (function() {
     'use strict';
-    
+
     class MyModule { /* ... */ }
-    
+
     let instance = null;
-    
+
     function init() {
         if (!instance) {
             instance = new MyModule();
         }
         instance.init();
     }
-    
+
     // Auto-init when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
-    
+
     // Public API (optional)
     window.FilesurfMyModule = {
         open: () => instance?.open(),

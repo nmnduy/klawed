@@ -52,7 +52,7 @@ public class FeedbackDatabaseManager {
             }
 
             LOGGER.info("Feedback database initialized: " + feedbackDbPath);
-            
+
             // Initialize schema
             initializeSchema();
         } catch (Exception e) {

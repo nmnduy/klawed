@@ -32,7 +32,7 @@ public class FeedbackRepository {
             return feedbackDb.executeInTransaction(conn -> {
                 try (PreparedStatement ps = conn.prepareStatement(
                         """
-                        INSERT INTO feedback (feedback_id, type, description, user_id, user_email, 
+                        INSERT INTO feedback (feedback_id, type, description, user_id, user_email,
                                             error_details, environment, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
