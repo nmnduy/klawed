@@ -287,9 +287,9 @@ static void test_tool_definition_includes_timeout(void) {
     // For now, we'll verify the timeout parameter is documented in the description
     // by checking the actual implementation
 
-    // Read the tool definition section from klawed.c
-    FILE *file = fopen("src/klawed.c", "r");
-    ASSERT(file != NULL, "Should be able to open klawed.c");
+    // Read the tool definition section from tool_definitions.c (extracted from klawed.c)
+    FILE *file = fopen("src/tools/tool_definitions.c", "r");
+    ASSERT(file != NULL, "Should be able to open src/tools/tool_definitions.c");
 
     char line[1024];
     int found_timeout_description = 0;

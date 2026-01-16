@@ -280,8 +280,8 @@ static void test_tool_definition_truncation_mention(void) {
     printf(COLOR_CYAN "\nTest: Tool definition mentions truncation feature\n" COLOR_RESET);
 
     // Verify that the tool description mentions output truncation
-    FILE *file = fopen("src/klawed.c", "r");
-    ASSERT(file != NULL, "Should be able to open klawed.c");
+    FILE *file = fopen("src/tools/tool_definitions.c", "r");
+    ASSERT(file != NULL, "Should be able to open src/tools/tool_definitions.c");
 
     char line[1024];
     int found_truncation_mention = 0;

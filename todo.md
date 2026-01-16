@@ -4,7 +4,7 @@
 - [x] allow setting env vars when spawning subagents to change model, provider, etc.
 - [x] in CheckSubAgentProgress tool, also enforce max char count. to avoid line that is huge and consumes lots of context
 - [x] j and k can't be used in file search model
-
+- [ ] auto complete command if i put :! in the input box
 ---
 
 - [x] /help doesn't show shit

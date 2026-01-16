@@ -297,8 +297,8 @@ static void test_tool_definition_stderr_mention(void) {
     printf(COLOR_CYAN "\nTest: Tool definition mentions stderr redirection\n" COLOR_RESET);
 
     // Verify that the tool description mentions stderr redirection
-    FILE *file = fopen("src/klawed.c", "r");
-    ASSERT(file != NULL, "Should be able to open klawed.c");
+    FILE *file = fopen("src/tools/tool_definitions.c", "r");
+    ASSERT(file != NULL, "Should be able to open src/tools/tool_definitions.c");
 
     char line[1024];
     int found_stderr_mention = 0;

@@ -1274,58 +1274,145 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/migrations_all.o $(MIGRATIONS_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/persistence_all.o $(PERSISTENCE_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/commands_all.o $(COMMANDS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/theme_explorer_all.o $(THEME_EXPLORER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/help_modal_all.o $(HELP_MODAL_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/completion_all.o $(COMPLETION_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_all.o $(TUI_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_core_all.o $(TUI_CORE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_conversation_all.o $(TUI_CONVERSATION_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_window_all.o $(TUI_WINDOW_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_render_all.o $(TUI_RENDER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_modes_all.o $(TUI_MODES_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_input_all.o $(TUI_INPUT_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_history_all.o $(TUI_HISTORY_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_completion_all.o $(TUI_COMPLETION_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_paste_all.o $(TUI_PASTE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_search_all.o $(TUI_SEARCH_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/file_search_all.o $(FILE_SEARCH_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/history_search_all.o $(HISTORY_SEARCH_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/window_manager_all.o $(WINDOW_MANAGER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/todo_all.o $(TODO_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/aws_bedrock_all.o $(AWS_BEDROCK_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/provider_all.o $(PROVIDER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/openai_provider_all.o $(OPENAI_PROVIDER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/openai_messages_all.o $(OPENAI_MESSAGES_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/openai_responses_all.o $(OPENAI_RESPONSES_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/bedrock_provider_all.o $(BEDROCK_PROVIDER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/anthropic_provider_all.o $(ANTHROPIC_PROVIDER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/builtin_themes_all.o $(BUILTIN_THEMES_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/message_queue_all.o $(MESSAGE_QUEUE_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/ai_worker_all.o $(AI_WORKER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/voice_input_all.o $(VOICE_INPUT_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/mcp_all.o $(MCP_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/window_manager_all.o $(WINDOW_MANAGER_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_utils_all.o $(TOOL_UTILS_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/history_file_all.o $(HISTORY_FILE_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/base64_all.o $(BASE64_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/anthropic_provider_all.o $(ANTHROPIC_PROVIDER_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/array_resize_all.o $(ARRAY_RESIZE_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/http_client_all.o $(HTTP_CLIENT_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/session_all.o $(SESSION_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/sqlite_queue_all.o $(SQLITE_QUEUE_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/subagent_manager_all.o $(SUBAGENT_MANAGER_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/explore_tools_all.o $(EXPLORE_TOOLS_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_socket_all.o $(ZMQ_SOCKET_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_client_all.o $(ZMQ_CLIENT_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_message_queue_all.o $(ZMQ_MESSAGE_QUEUE_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_daemon_all.o $(ZMQ_DAEMON_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/zmq_thread_pool_all.o $(ZMQ_THREAD_POOL_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/retry_logic_all.o $(RETRY_LOGIC_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/file_search_all.o $(FILE_SEARCH_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/history_search_all.o $(HISTORY_SEARCH_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/theme_explorer_all.o $(THEME_EXPLORER_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/help_modal_all.o $(HELP_MODAL_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/openai_responses_all.o $(OPENAI_RESPONSES_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/dump_utils_all.o $(DUMP_UTILS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/sqlite_queue_all.o $(SQLITE_QUEUE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/mcp_all.o $(MCP_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_utils_all.o $(TOOL_UTILS_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/process_utils_all.o $(PROCESS_UTILS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/dump_utils_all.o $(DUMP_UTILS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/subagent_manager_all.o $(SUBAGENT_MANAGER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/explore_tools_all.o $(EXPLORE_TOOLS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/base64_all.o $(BASE64_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/history_file_all.o $(HISTORY_FILE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/array_resize_all.o $(ARRAY_RESIZE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/http_client_all.o $(HTTP_CLIENT_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/session_all.o $(SESSION_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/retry_logic_all.o $(RETRY_LOGIC_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/memvid_all.o $(MEMVID_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/compaction_all.o $(COMPACTION_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/uds_socket_all.o $(UDS_SOCKET_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/file_utils_all.o $(FILE_UTILS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/string_utils_all.o $(STRING_UTILS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/timestamp_utils_all.o $(TIMESTAMP_UTILS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/format_utils_all.o $(FORMAT_UTILS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/env_utils_all.o $(ENV_UTILS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/output_utils_all.o $(OUTPUT_UTILS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/diff_utils_all.o $(DIFF_UTILS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_sleep_all.o $(TOOL_SLEEP_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_todo_all.o $(TOOL_TODO_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_image_all.o $(TOOL_IMAGE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_search_all.o $(TOOL_SEARCH_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_filesystem_all.o $(TOOL_FILESYSTEM_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_bash_all.o $(TOOL_BASH_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_subagent_all.o $(TOOL_SUBAGENT_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_registry_all.o $(TOOL_REGISTRY_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_executor_all.o $(TOOL_EXECUTOR_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_definitions_all.o $(TOOL_DEFINITIONS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/content_types_all.o $(CONTENT_TYPES_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/conversation_state_all.o $(CONVERSATION_STATE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/message_builder_all.o $(MESSAGE_BUILDER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/message_parser_all.o $(MESSAGE_PARSER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/system_prompt_all.o $(CONTEXT_SYSTEM_PROMPT_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/environment_all.o $(CONTEXT_ENVIRONMENT_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/klawed_md_all.o $(CONTEXT_KLAWED_MD_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/memory_injection_all.o $(CONTEXT_MEMORY_INJECTION_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/ui_output_all.o $(UI_OUTPUT_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/print_helpers_all.o $(PRINT_HELPERS_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_output_display_all.o $(TOOL_OUTPUT_DISPLAY_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/session_token_usage_all.o $(SESSION_TOKEN_USAGE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/session_persistence_all.o $(SESSION_PERSISTENCE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/api_response_all.o $(API_RESPONSE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/api_builder_all.o $(API_BUILDER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/api_client_all.o $(API_CLIENT_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/interactive_loop_all.o $(INTERACTIVE_LOOP_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/input_handler_all.o $(INPUT_HANDLER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/response_processor_all.o $(RESPONSE_PROCESSOR_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/command_dispatch_all.o $(COMMAND_DISPATCH_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/oneshot_mode_all.o $(ONESHOT_MODE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/oneshot_processor_all.o $(ONESHOT_PROCESSOR_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/oneshot_output_all.o $(ONESHOT_OUTPUT_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -o $(BUILD_DIR)/klawed-allsan $(SRC) \
-		$(BUILD_DIR)/logger_all.o $(BUILD_DIR)/persistence_all.o $(BUILD_DIR)/migrations_all.o $(BUILD_DIR)/commands_all.o \
-		$(BUILD_DIR)/completion_all.o $(BUILD_DIR)/tui_all.o $(BUILD_DIR)/todo_all.o $(BUILD_DIR)/aws_bedrock_all.o \
-		$(BUILD_DIR)/provider_all.o $(BUILD_DIR)/openai_provider_all.o $(BUILD_DIR)/openai_messages_all.o \
-		$(BUILD_DIR)/bedrock_provider_all.o $(BUILD_DIR)/builtin_themes_all.o \
-		$(BUILD_DIR)/message_queue_all.o $(BUILD_DIR)/ai_worker_all.o $(BUILD_DIR)/voice_input_all.o $(BUILD_DIR)/mcp_all.o \
-		$(BUILD_DIR)/window_manager_all.o $(BUILD_DIR)/tool_utils_all.o $(BUILD_DIR)/history_file_all.o $(BUILD_DIR)/base64_all.o \
-		$(BUILD_DIR)/anthropic_provider_all.o $(BUILD_DIR)/array_resize_all.o $(BUILD_DIR)/http_client_all.o \
-		$(BUILD_DIR)/session_all.o $(BUILD_DIR)/sqlite_queue_all.o $(BUILD_DIR)/subagent_manager_all.o $(BUILD_DIR)/explore_tools_all.o \
-		$(BUILD_DIR)/zmq_socket_all.o $(BUILD_DIR)/zmq_client_all.o $(BUILD_DIR)/zmq_message_queue_all.o \
-		$(BUILD_DIR)/zmq_daemon_all.o $(BUILD_DIR)/zmq_thread_pool_all.o $(BUILD_DIR)/retry_logic_all.o \
-		$(BUILD_DIR)/file_search_all.o $(BUILD_DIR)/history_search_all.o $(BUILD_DIR)/theme_explorer_all.o $(BUILD_DIR)/help_modal_all.o $(BUILD_DIR)/openai_responses_all.o $(BUILD_DIR)/dump_utils_all.o $(BUILD_DIR)/process_utils_all.o $(BUILD_DIR)/memvid_all.o $(BUILD_DIR)/compaction_all.o $(BUILD_DIR)/uds_socket_all.o \
+		$(BUILD_DIR)/logger_all.o $(BUILD_DIR)/persistence_all.o $(BUILD_DIR)/migrations_all.o \
+		$(BUILD_DIR)/commands_all.o $(BUILD_DIR)/theme_explorer_all.o $(BUILD_DIR)/help_modal_all.o \
+		$(BUILD_DIR)/completion_all.o \
+		$(BUILD_DIR)/tui_all.o $(BUILD_DIR)/tui_core_all.o $(BUILD_DIR)/tui_conversation_all.o \
+		$(BUILD_DIR)/tui_window_all.o $(BUILD_DIR)/tui_render_all.o $(BUILD_DIR)/tui_modes_all.o \
+		$(BUILD_DIR)/tui_input_all.o $(BUILD_DIR)/tui_history_all.o $(BUILD_DIR)/tui_completion_all.o \
+		$(BUILD_DIR)/tui_paste_all.o $(BUILD_DIR)/tui_search_all.o \
+		$(BUILD_DIR)/file_search_all.o $(BUILD_DIR)/history_search_all.o \
+		$(BUILD_DIR)/window_manager_all.o \
+		$(BUILD_DIR)/todo_all.o \
+		$(BUILD_DIR)/aws_bedrock_all.o \
+		$(BUILD_DIR)/provider_all.o $(BUILD_DIR)/openai_provider_all.o \
+		$(BUILD_DIR)/openai_messages_all.o $(BUILD_DIR)/openai_responses_all.o \
+		$(BUILD_DIR)/bedrock_provider_all.o $(BUILD_DIR)/anthropic_provider_all.o \
+		$(BUILD_DIR)/builtin_themes_all.o \
+		$(BUILD_DIR)/message_queue_all.o $(BUILD_DIR)/ai_worker_all.o \
+		$(BUILD_DIR)/voice_input_all.o \
+		$(BUILD_DIR)/zmq_socket_all.o $(BUILD_DIR)/zmq_client_all.o \
+		$(BUILD_DIR)/zmq_message_queue_all.o $(BUILD_DIR)/zmq_daemon_all.o $(BUILD_DIR)/zmq_thread_pool_all.o \
+		$(BUILD_DIR)/sqlite_queue_all.o \
+		$(BUILD_DIR)/mcp_all.o \
+		$(BUILD_DIR)/tool_utils_all.o $(BUILD_DIR)/process_utils_all.o \
+		$(BUILD_DIR)/dump_utils_all.o \
+		$(BUILD_DIR)/subagent_manager_all.o $(BUILD_DIR)/explore_tools_all.o \
+		$(BUILD_DIR)/base64_all.o $(BUILD_DIR)/history_file_all.o \
+		$(BUILD_DIR)/array_resize_all.o $(BUILD_DIR)/http_client_all.o \
+		$(BUILD_DIR)/session_all.o \
+		$(BUILD_DIR)/retry_logic_all.o \
+		$(BUILD_DIR)/memvid_all.o $(BUILD_DIR)/compaction_all.o \
+		$(BUILD_DIR)/uds_socket_all.o \
+		$(BUILD_DIR)/file_utils_all.o $(BUILD_DIR)/string_utils_all.o \
+		$(BUILD_DIR)/timestamp_utils_all.o $(BUILD_DIR)/format_utils_all.o \
+		$(BUILD_DIR)/env_utils_all.o $(BUILD_DIR)/output_utils_all.o $(BUILD_DIR)/diff_utils_all.o \
+		$(BUILD_DIR)/tool_sleep_all.o $(BUILD_DIR)/tool_todo_all.o \
+		$(BUILD_DIR)/tool_image_all.o $(BUILD_DIR)/tool_search_all.o \
+		$(BUILD_DIR)/tool_filesystem_all.o $(BUILD_DIR)/tool_bash_all.o \
+		$(BUILD_DIR)/tool_subagent_all.o $(BUILD_DIR)/tool_registry_all.o \
+		$(BUILD_DIR)/tool_executor_all.o $(BUILD_DIR)/tool_definitions_all.o \
+		$(BUILD_DIR)/content_types_all.o $(BUILD_DIR)/conversation_state_all.o \
+		$(BUILD_DIR)/message_builder_all.o $(BUILD_DIR)/message_parser_all.o \
+		$(BUILD_DIR)/system_prompt_all.o $(BUILD_DIR)/environment_all.o \
+		$(BUILD_DIR)/klawed_md_all.o $(BUILD_DIR)/memory_injection_all.o \
+		$(BUILD_DIR)/ui_output_all.o $(BUILD_DIR)/print_helpers_all.o $(BUILD_DIR)/tool_output_display_all.o \
+		$(BUILD_DIR)/session_token_usage_all.o $(BUILD_DIR)/session_persistence_all.o \
+		$(BUILD_DIR)/api_response_all.o $(BUILD_DIR)/api_builder_all.o $(BUILD_DIR)/api_client_all.o \
+		$(BUILD_DIR)/interactive_loop_all.o $(BUILD_DIR)/input_handler_all.o \
+		$(BUILD_DIR)/response_processor_all.o $(BUILD_DIR)/command_dispatch_all.o \
+		$(BUILD_DIR)/oneshot_mode_all.o $(BUILD_DIR)/oneshot_processor_all.o $(BUILD_DIR)/oneshot_output_all.o \
 		$(LDFLAGS) -fsanitize=address,undefined
 	@echo ""
 	@echo "✓ Build successful with combined sanitizers!"
@@ -2560,7 +2647,7 @@ TOOL_DEFINITIONS_TEST_OBJ = $(BUILD_DIR)/tool_definitions_test.o
 # Tool registry and executor are excluded from TEST_COMMON_OBJS because they need to be
 # compiled with -DTEST_BUILD to exclude MCP tool references. They are compiled into
 # claude_test.o instead.
-TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(EXPLORE_TOOLS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ)
+TEST_COMMON_OBJS = $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(PATCH_PARSER_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(TUI_OBJ) $(TUI_CORE_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_WINDOW_OBJ) $(TUI_RENDER_OBJ) $(TUI_MODES_OBJ) $(TUI_INPUT_OBJ) $(TUI_HISTORY_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_PASTE_OBJ) $(TUI_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(ZMQ_SOCKET_OBJ) $(ZMQ_THREAD_POOL_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(ZMQ_CLIENT_OBJ) $(ZMQ_MESSAGE_QUEUE_OBJ) $(ZMQ_DAEMON_OBJ) $(MEMVID_OBJ) $(COMPACTION_OBJ) $(UDS_SOCKET_OBJ) $(EXPLORE_TOOLS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ)
 
 test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET)
 	@echo ""
