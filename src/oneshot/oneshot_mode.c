@@ -62,7 +62,7 @@ int oneshot_execute(ConversationState *state, const char *prompt) {
     }
 
     // Process response recursively (handles tool calls and follow-up responses)
-    int result = oneshot_process_response(state, response, output_format);
+    int result = oneshot_process_response(state, response, (int)output_format);
     api_response_free(response);
 
     // Print token usage summary at the end of single command mode
