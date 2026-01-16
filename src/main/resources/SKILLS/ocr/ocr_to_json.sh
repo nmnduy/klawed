@@ -38,15 +38,15 @@ log_warn() {
 # Check dependencies
 check_dependencies() {
     local missing_deps=()
-    
+
     if ! command -v tesseract &> /dev/null; then
         missing_deps+=("tesseract")
     fi
-    
+
     if ! command -v jq &> /dev/null; then
         log_warn "jq not found - JSON will not be pretty-printed"
     fi
-    
+
     if [[ "${#missing_deps[@]}" -gt 0 ]]; then
         log_error "Missing dependencies: ${missing_deps[*]}"
         exit 2
@@ -56,7 +56,7 @@ check_dependencies() {
 # Check file
 check_file() {
     local file="$1"
-    
+
     if [[ ! -f "$file" ]]; then
         log_error "File not found: $file"
         exit 3
@@ -73,29 +73,29 @@ get_extension() {
 hocr_to_json() {
     local hocr_file="$1"
     local input_file="$2"
-    
+
     # Extract text and confidence from hOCR using basic parsing
     local text_content
     text_content=$(grep -o 'ocrx_word[^>]*>[^<]*' "$hocr_file" | sed 's/.*>//' | tr '\n' ' ')
-    
+
     # Extract confidence scores
     local confidences
     confidences=$(grep -o "x_wconf [0-9]*" "$hocr_file" | awk '{print $2}' | tr '\n' ',')
     confidences="${confidences%,}"  # Remove trailing comma
-    
+
     # Calculate average confidence
     local avg_confidence=0
     if [[ -n "$confidences" ]]; then
         avg_confidence=$(echo "$confidences" | awk -F',' '{sum=0; for(i=1;i<=NF;i++) sum+=$i; print int(sum/NF)}')
     fi
-    
+
     # Get file metadata
     local file_size
     file_size=$(stat -f%z "$input_file" 2>/dev/null || stat -c%s "$input_file" 2>/dev/null || echo "0")
-    
+
     local file_type
     file_type=$(file -b "$input_file" | cut -d',' -f1)
-    
+
     # Build JSON
     cat <<EOF
 {
@@ -130,9 +130,9 @@ ocr_to_hocr() {
     local input_file="$1"
     local language="$2"
     local temp_output="$3"
-    
+
     log_info "Running Tesseract with hOCR output..."
-    
+
     tesseract "$input_file" "$temp_output" \
         -l "$language" \
         --psm "$OCR_PSM" \
@@ -156,31 +156,31 @@ main() {
         echo "Output: JSON with text, confidence scores, and metadata"
         exit 1
     fi
-    
+
     local input_file="$1"
     local output_file="${2:-}"
     local language="${3:-$OCR_LANG}"
-    
+
     check_dependencies
     check_file "$input_file"
-    
+
     local extension
     extension=$(get_extension "$input_file")
-    
+
     log_info "Starting OCR with JSON output..."
     log_info "Language: $language, DPI: $OCR_DPI"
-    
+
     # Create temp directory
     local temp_dir
     temp_dir=$(mktemp -d)
     trap 'rm -rf "$temp_dir"' EXIT
-    
+
     local json_output=""
-    
+
     # Handle PDF files
     if [[ "$extension" == "pdf" ]]; then
         log_info "Converting PDF to image..."
-        
+
         # Convert first page to image
         if command -v pdftoppm &> /dev/null; then
             pdftoppm -png -f 1 -l 1 -r "$OCR_DPI" "$input_file" "$temp_dir/page"
@@ -193,18 +193,18 @@ main() {
     else
         image_file="$input_file"
     fi
-    
+
     # Perform OCR with hOCR output
     ocr_to_hocr "$image_file" "$language" "$temp_dir/output"
-    
+
     # Convert hOCR to JSON
     json_output=$(hocr_to_json "$temp_dir/output.hocr" "$input_file")
-    
+
     # Pretty print if jq is available
     if command -v jq &> /dev/null; then
         json_output=$(echo "$json_output" | jq .)
     fi
-    
+
     # Output results
     if [[ -n "$output_file" ]]; then
         echo "$json_output" > "$output_file"
@@ -212,7 +212,7 @@ main() {
     else
         echo "$json_output"
     fi
-    
+
     exit 0
 }
 

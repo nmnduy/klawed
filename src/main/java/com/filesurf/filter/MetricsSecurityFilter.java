@@ -24,7 +24,7 @@ public class MetricsSecurityFilter {
             @Override
             public void handle(RoutingContext rc) {
                 String path = rc.request().path();
-                
+
                 // Only check /metrics and /q/metrics endpoints
                 if (!isMetricsEndpoint(path)) {
                     rc.next();
@@ -32,7 +32,7 @@ public class MetricsSecurityFilter {
                 }
 
                 String clientIp = getClientIp(rc);
-                
+
                 // Check if IP is from Tailscale network
                 if (!isTailscaleIp(clientIp)) {
                     LOGGER.warning(String.format("Access denied to %s from non-Tailscale IP: %s", path, clientIp));
@@ -56,7 +56,7 @@ public class MetricsSecurityFilter {
         if (path == null) {
             return false;
         }
-        
+
         // Normalize path (remove leading slash for comparison)
         String normalizedPath = path.startsWith("/") ? path.substring(1) : path;
         return normalizedPath.equals("metrics") || normalizedPath.equals("q/metrics");
@@ -69,10 +69,10 @@ public class MetricsSecurityFilter {
         if (ip == null || ip.isEmpty() || ip.equals("Unknown")) {
             return false;
         }
-        
+
         // Extract IP address if it includes port
         String ipOnly = ip.split(":")[0];
-        
+
         // Check if it starts with 100.
         return ipOnly.startsWith(TAILSCALE_NETWORK_PREFIX);
     }
@@ -91,7 +91,7 @@ public class MetricsSecurityFilter {
             LOGGER.fine(String.format("Using CF-Connecting-IP: %s", cfConnectingIp));
             return cfConnectingIp.trim();
         }
-        
+
         // Priority 2: X-Forwarded-For (standard proxy header)
         String xForwardedFor = rc.request().getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
@@ -102,16 +102,16 @@ public class MetricsSecurityFilter {
             LOGGER.fine(String.format("Using X-Forwarded-For: %s (from: %s)", firstIp, xForwardedFor));
             return firstIp;
         }
-        
+
         // Priority 3: X-Real-IP (alternative proxy header)
         String xRealIp = rc.request().getHeader("X-Real-IP");
         if (xRealIp != null && !xRealIp.isEmpty()) {
             LOGGER.fine(String.format("Using X-Real-IP: %s", xRealIp));
             return xRealIp.trim();
         }
-        
+
         // Priority 4: Direct connection IP
-        String remoteAddress = rc.request().remoteAddress() != null 
+        String remoteAddress = rc.request().remoteAddress() != null
             ? rc.request().remoteAddress().host()
             : "Unknown";
         LOGGER.fine(String.format("Using remote address: %s", remoteAddress));

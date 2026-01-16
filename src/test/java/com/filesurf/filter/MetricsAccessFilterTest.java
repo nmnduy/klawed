@@ -32,7 +32,7 @@ class MetricsAccessFilterTest {
         requestContext = mock(ContainerRequestContext.class);
         httpServerRequest = mock(HttpServerRequest.class);
         uriInfo = mock(UriInfo.class);
-        
+
         when(requestContext.getUriInfo()).thenReturn(uriInfo);
         filter.httpServerRequest = httpServerRequest;
     }
@@ -133,13 +133,13 @@ class MetricsAccessFilterTest {
         void shouldPrioritizeCfConnectingIp() {
             when(httpServerRequest.getHeader("CF-Connecting-IP")).thenReturn("100.0.0.1");
             when(httpServerRequest.getHeader("X-Forwarded-For")).thenReturn("192.168.1.1");
-            
+
             SocketAddress socketAddress = mock(SocketAddress.class);
             when(socketAddress.toString()).thenReturn("10.0.0.1");
             when(httpServerRequest.remoteAddress()).thenReturn(socketAddress);
 
             String clientIp = filter.getClientIp();
-            
+
             assertEquals("100.0.0.1", clientIp);
         }
 
@@ -148,13 +148,13 @@ class MetricsAccessFilterTest {
         void shouldUseXForwardedForIfCfHeaderMissing() {
             when(httpServerRequest.getHeader("CF-Connecting-IP")).thenReturn(null);
             when(httpServerRequest.getHeader("X-Forwarded-For")).thenReturn("100.0.0.1");
-            
+
             SocketAddress socketAddress = mock(SocketAddress.class);
             when(socketAddress.toString()).thenReturn("10.0.0.1");
             when(httpServerRequest.remoteAddress()).thenReturn(socketAddress);
 
             String clientIp = filter.getClientIp();
-            
+
             assertEquals("100.0.0.1", clientIp);
         }
 
@@ -165,7 +165,7 @@ class MetricsAccessFilterTest {
             when(httpServerRequest.getHeader("X-Forwarded-For")).thenReturn("100.0.0.1, 192.168.1.1, 10.0.0.1");
 
             String clientIp = filter.getClientIp();
-            
+
             assertEquals("100.0.0.1", clientIp);
         }
 
@@ -174,13 +174,13 @@ class MetricsAccessFilterTest {
         void shouldUseRemoteAddressIfNoProxyHeaders() {
             when(httpServerRequest.getHeader("CF-Connecting-IP")).thenReturn(null);
             when(httpServerRequest.getHeader("X-Forwarded-For")).thenReturn(null);
-            
+
             SocketAddress socketAddress = mock(SocketAddress.class);
             when(socketAddress.toString()).thenReturn("100.0.0.1:8080");
             when(httpServerRequest.remoteAddress()).thenReturn(socketAddress);
 
             String clientIp = filter.getClientIp();
-            
+
             assertEquals("100.0.0.1:8080", clientIp);
         }
 
@@ -190,7 +190,7 @@ class MetricsAccessFilterTest {
             filter.httpServerRequest = null;
 
             String clientIp = filter.getClientIp();
-            
+
             assertEquals("Unknown", clientIp);
         }
 
@@ -202,7 +202,7 @@ class MetricsAccessFilterTest {
             when(httpServerRequest.remoteAddress()).thenReturn(null);
 
             String clientIp = filter.getClientIp();
-            
+
             assertEquals("Unknown", clientIp);
         }
     }
@@ -232,7 +232,7 @@ class MetricsAccessFilterTest {
 
             ArgumentCaptor<Response> responseCaptor = ArgumentCaptor.forClass(Response.class);
             verify(requestContext).abortWith(responseCaptor.capture());
-            
+
             Response response = responseCaptor.getValue();
             assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
             assertTrue(response.getEntity().toString().contains("Tailscale network"));
@@ -248,7 +248,7 @@ class MetricsAccessFilterTest {
 
             ArgumentCaptor<Response> responseCaptor = ArgumentCaptor.forClass(Response.class);
             verify(requestContext).abortWith(responseCaptor.capture());
-            
+
             Response response = responseCaptor.getValue();
             assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
         }
@@ -293,7 +293,7 @@ class MetricsAccessFilterTest {
             when(uriInfo.getPath()).thenReturn("/metrics");
             when(httpServerRequest.getHeader("CF-Connecting-IP")).thenReturn(null);
             when(httpServerRequest.getHeader("X-Forwarded-For")).thenReturn(null);
-            
+
             SocketAddress socketAddress = mock(SocketAddress.class);
             when(socketAddress.toString()).thenReturn("100.0.0.1:8080");
             when(httpServerRequest.remoteAddress()).thenReturn(socketAddress);

@@ -37,10 +37,10 @@ public class FileChatHttpResource {
 
     @Inject
     KlawedSandboxService klawedSandboxService;
-    
+
     @Inject
     SessionManager sessionManager;
-    
+
     @Inject
     ChatMessagePollingService chatMessagePollingService;
 
@@ -61,7 +61,7 @@ public class FileChatHttpResource {
     public Response initializeSession(
             @PathParam("sessionId") String sessionId,
             @Context HttpHeaders headers) {
-        
+
         LOGGER.info("[SESSION:" + sessionId + "] HTTP session initialization requested");
 
         // Validate session ID
@@ -102,7 +102,7 @@ public class FileChatHttpResource {
             // Register session with KlawedSandboxService
             klawedSandboxService.registerSession(sessionId, userId);
             LOGGER.info("[SESSION:" + sessionId + "] Session registered with KlawedSandboxService");
-            
+
             // Register session with SQLite queue polling service (for receiving messages from klawed)
             sqliteQueuePollingService.registerSession(sessionId, userId);
             LOGGER.info("[SESSION:" + sessionId + "] Session registered with SQLiteQueuePollingService");
@@ -118,7 +118,7 @@ public class FileChatHttpResource {
             LOGGER.info("[SESSION:" + sessionId + "] Status message saved to database with ID: " + statusDbMessage.getId());
 
             return Response.ok()
-                    .entity("{\"status\": \"connected\", \"sessionId\": \"" + sessionId + 
+                    .entity("{\"status\": \"connected\", \"sessionId\": \"" + sessionId +
                             "\", \"message\": \"" + statusMessage + "\"}")
                     .build();
 
@@ -145,19 +145,19 @@ public class FileChatHttpResource {
             @PathParam("sessionId") String sessionId,
             String message,
             @Context HttpHeaders headers) {
-        
+
         if (sessionId == null || sessionId.trim().isEmpty()) {
             LOGGER.severe("Received HTTP message without session ID");
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity("{\"error\": \"No session ID provided\"}")
                     .build();
         }
-        
-        LOGGER.info("[SESSION:" + sessionId + "] Received HTTP message from client: " + 
-                   message.substring(0, Math.min(100, message.length())) + 
+
+        LOGGER.info("[SESSION:" + sessionId + "] Received HTTP message from client: " +
+                   message.substring(0, Math.min(100, message.length())) +
                    (message.length() > 100 ? "..." : ""));
         LOGGER.info("[SESSION:" + sessionId + "] Full message length: " + message.length() + " chars");
-        
+
         // Save incoming message to database and mark as sent immediately
         try {
             ChatMessageRecord clientMessage = fileChatService.createChatMessage(
@@ -169,7 +169,7 @@ public class FileChatHttpResource {
         } catch (Exception dbEx) {
             LOGGER.warning("[SESSION:" + sessionId + "] Failed to save incoming message to database: " + dbEx.getMessage());
         }
-        
+
         // Get user ID from cookies
         String userId = extractUserIdFromCookies(headers);
         if (userId == null || userId.isBlank()) {
@@ -181,16 +181,16 @@ public class FileChatHttpResource {
 
         try {
             LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via ChatMessagePollingService");
-            
+
             // Send message to klawed via SQLite queue
             chatMessagePollingService.sendMessageToKlawed(sessionId, userId, message);
             LOGGER.info("[SESSION:" + sessionId + "] Message sent to klawed, responses will be available via polling");
-            
+
             return Response.ok()
-                    .entity("{\"status\": \"message_sent\", \"sessionId\": \"" + sessionId + 
+                    .entity("{\"status\": \"message_sent\", \"sessionId\": \"" + sessionId +
                             "\", \"messageId\": \"queued\", \"message\": \"Message sent to agent\"}")
                     .build();
-            
+
         } catch (Exception e) {
             String errorMsg = "Error communicating with klawed agent: " + e.getMessage();
             LOGGER.severe("[SESSION:" + sessionId + "] " + errorMsg);
@@ -204,7 +204,7 @@ public class FileChatHttpResource {
             } catch (Exception dbEx) {
                 LOGGER.warning("[SESSION:" + sessionId + "] Failed to save error message to database: " + dbEx.getMessage());
             }
-            
+
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity("{\"error\": \"" + errorMsg + "\"}")
                     .build();
@@ -223,7 +223,7 @@ public class FileChatHttpResource {
             @PathParam("sessionId") String sessionId,
             @QueryParam("since") Long sinceTimestamp,
             @Context HttpHeaders headers) {
-        
+
         if (sessionId == null || sessionId.trim().isEmpty()) {
             LOGGER.severe("Poll request without session ID");
             return Response.status(Response.Status.BAD_REQUEST)
@@ -252,22 +252,22 @@ public class FileChatHttpResource {
                 // Get all unsent messages for this session
                 unsentMessages = fileChatService.findUnsentMessagesForSession(sessionId);
             }
-            
+
             LOGGER.info("[SESSION:" + sessionId + "] Found " + unsentMessages.size() + " unsent messages");
-            
+
             // Mark messages as sent
             for (ChatMessageRecord message : unsentMessages) {
                 fileChatService.markMessageAsSent(message.getId());
             }
-            
+
             // Convert messages to JSON
             String messagesJson = objectMapper.writeValueAsString(unsentMessages);
-            
+
             return Response.ok()
-                    .entity("{\"status\": \"success\", \"sessionId\": \"" + sessionId + 
+                    .entity("{\"status\": \"success\", \"sessionId\": \"" + sessionId +
                             "\", \"count\": " + unsentMessages.size() + ", \"messages\": " + messagesJson + "}")
                     .build();
-            
+
         } catch (Exception e) {
             LOGGER.severe("[SESSION:" + sessionId + "] Failed to poll messages: " + e.getMessage());
             e.printStackTrace();
@@ -287,7 +287,7 @@ public class FileChatHttpResource {
     public Response getAllMessages(
             @PathParam("sessionId") String sessionId,
             @Context HttpHeaders headers) {
-        
+
         if (sessionId == null || sessionId.trim().isEmpty()) {
             LOGGER.severe("Get messages request without session ID");
             return Response.status(Response.Status.BAD_REQUEST)
@@ -308,17 +308,17 @@ public class FileChatHttpResource {
 
         try {
             List<ChatMessageRecord> allMessages = fileChatService.findMessagesBySession(sessionId);
-            
+
             LOGGER.info("[SESSION:" + sessionId + "] Found " + allMessages.size() + " total messages");
-            
+
             // Convert messages to JSON
             String messagesJson = objectMapper.writeValueAsString(allMessages);
-            
+
             return Response.ok()
-                    .entity("{\"status\": \"success\", \"sessionId\": \"" + sessionId + 
+                    .entity("{\"status\": \"success\", \"sessionId\": \"" + sessionId +
                             "\", \"count\": " + allMessages.size() + ", \"messages\": " + messagesJson + "}")
                     .build();
-            
+
         } catch (Exception e) {
             LOGGER.severe("[SESSION:" + sessionId + "] Failed to get messages: " + e.getMessage());
             e.printStackTrace();
@@ -339,14 +339,14 @@ public class FileChatHttpResource {
     public Response closeSession(
             @PathParam("sessionId") String sessionId,
             @Context HttpHeaders headers) {
-        
+
         if (sessionId == null || sessionId.trim().isEmpty()) {
             LOGGER.severe("HTTP session close request without session ID");
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity("{\"error\": \"No session ID provided\"}")
                     .build();
         }
-        
+
         LOGGER.info("[SESSION:" + sessionId + "] HTTP session close request received");
 
         // Get user ID from cookies
@@ -361,7 +361,7 @@ public class FileChatHttpResource {
             // Unregister session from KlawedSandboxService
             klawedSandboxService.unregisterSession(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Session unregistered from KlawedSandboxService");
-            
+
             // Unregister session from SQLite queue polling service
             sqliteQueuePollingService.unregisterSession(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Session unregistered from SQLiteQueuePollingService");
@@ -408,14 +408,14 @@ public class FileChatHttpResource {
     public Response concludeSession(
             @PathParam("sessionId") String sessionId,
             @Context HttpHeaders headers) {
-        
+
         if (sessionId == null || sessionId.trim().isEmpty()) {
             LOGGER.severe("HTTP session conclude request without session ID");
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity("{\"error\": \"No session ID provided\"}")
                     .build();
         }
-        
+
         LOGGER.info("[SESSION:" + sessionId + "] HTTP session conclude request received");
 
         // Get user ID from cookies
@@ -430,30 +430,30 @@ public class FileChatHttpResource {
         try {
             // Get workspace path before cleanup
             java.nio.file.Path workspace = sessionManager.getWorkspaceForSession(sessionId);
-            
+
             // Clean up klawed artifacts from workspace (.klawed/, SQLite queue files)
             if (workspace != null) {
                 cleanupKlawedArtifacts(sessionId, workspace);
             }
-            
+
             // Persist session folders back to per-user storage
             LOGGER.info("[SESSION:" + sessionId + "] Conclude: Persisting session data for user=" + userId);
             sessionManager.persistSession(sessionId, userId);
             LOGGER.info("[SESSION:" + sessionId + "] Conclude: Session data persisted for user=" + userId);
-            
+
             // Release session tracking
             sessionManager.releaseSessionTracking(sessionId);
-            
+
             // Remove session from session store
             SessionResource.removeSession(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Session removed from session store");
-            
+
             // Deactivate chat session in database (don't delete messages)
             fileChatService.deactivateChatSession(sessionId);
             LOGGER.info("[SESSION:" + sessionId + "] Chat session deactivated in database");
-            
+
             return Response.ok()
-                    .entity("{\"status\": \"concluded\", \"sessionId\": \"" + sessionId + 
+                    .entity("{\"status\": \"concluded\", \"sessionId\": \"" + sessionId +
                             "\", \"message\": \"Session concluded. Klawed artifacts cleaned up.\"}")
                     .build();
 
@@ -465,13 +465,13 @@ public class FileChatHttpResource {
                     .build();
         }
     }
-    
+
     /**
      * Clean up klawed artifacts from the user's workspace.
      */
     private void cleanupKlawedArtifacts(String sessionId, java.nio.file.Path workspace) {
         LOGGER.info("[SESSION:" + sessionId + "] Cleaning up klawed artifacts from workspace: " + workspace);
-        
+
         // Delete .klawed/ directory
         java.nio.file.Path klawedDir = workspace.resolve(".klawed");
         if (java.nio.file.Files.exists(klawedDir)) {
@@ -482,11 +482,11 @@ public class FileChatHttpResource {
                 LOGGER.warning("[SESSION:" + sessionId + "] Failed to delete .klawed/ directory: " + e.getMessage());
             }
         }
-        
+
         // Delete SQLite queue files
         String dbFileName = "klawed_messages_" + sessionId + ".db";
         String[] sqliteExtensions = {"", "-shm", "-wal"};
-        
+
         for (String ext : sqliteExtensions) {
             java.nio.file.Path dbFile = workspace.resolve(dbFileName + ext);
             if (java.nio.file.Files.exists(dbFile)) {
@@ -499,7 +499,7 @@ public class FileChatHttpResource {
             }
         }
     }
-    
+
     /**
      * Recursively delete a directory.
      */
@@ -518,7 +518,7 @@ public class FileChatHttpResource {
                 });
         }
     }
-    
+
     /**
      * Create and configure ObjectMapper with JavaTimeModule
      */

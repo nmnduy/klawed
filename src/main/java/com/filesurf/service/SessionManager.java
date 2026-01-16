@@ -68,7 +68,7 @@ public class SessionManager {
             // The workspace is the user's persistent directory
             Path workspace = userRoot(sanitizedUser);
             Files.createDirectories(workspace);
-            
+
             LOGGER.info("[SESSION:" + sessionId + "] Initializing workspace: " + workspace);
 
             // Create tmp folder for temporary files
@@ -99,7 +99,7 @@ public class SessionManager {
             lock.unlock();
         }
     }
-    
+
     /**
      * Get the session directory for a given session ID
      * Creates it if it doesn't exist. Requires userId for hydration.
@@ -111,7 +111,7 @@ public class SessionManager {
         }
         return sessionDir;
     }
-    
+
     /**
      * Get the uploads directory for a given session
      * Creates the directory only when needed (on first file upload)
@@ -128,7 +128,7 @@ public class SessionManager {
 
         return uploadsDir;
     }
-    
+
     /**
      * Copy SKILLS folder to the session directory so the AI can access and use the scripts
      */
@@ -145,7 +145,7 @@ public class SessionManager {
                 LOGGER.info("Copied SKILLS directory to workspace: " + targetSkillsDir);
                 return;
             }
-            
+
             // Second try: just SKILLS (alternative location)
             sourceSkillsDir = Path.of("SKILLS");
             if (Files.exists(sourceSkillsDir)) {
@@ -172,7 +172,7 @@ public class SessionManager {
             LOGGER.warning("Failed to copy SKILLS directory to workspace: " + e.getMessage());
         }
     }
-    
+
     private void copySkillsToSession(Path sessionDir) {
         try {
             // Try to copy from filesystem first (development mode)
@@ -186,7 +186,7 @@ public class SessionManager {
                 LOGGER.info("Copied SKILLS directory to session: " + targetSkillsDir);
                 return;
             }
-            
+
             // Second try: just SKILLS (alternative location)
             sourceSkillsDir = Path.of("SKILLS");
             if (Files.exists(sourceSkillsDir)) {
@@ -213,7 +213,7 @@ public class SessionManager {
             LOGGER.warning("Failed to copy SKILLS directory to session: " + e.getMessage());
         }
     }
-    
+
     /**
      * Copy SKILLS from classpath resources
      */
@@ -222,14 +222,14 @@ public class SessionManager {
             // Get the SKILLS directory from classpath
             var classLoader = Thread.currentThread().getContextClassLoader();
             var skillsUrl = classLoader.getResource("SKILLS");
-            
+
             if (skillsUrl == null) {
                 LOGGER.warning("SKILLS not found in classpath");
                 return false;
             }
-            
+
             LOGGER.info("Found SKILLS in classpath: " + skillsUrl);
-            
+
             // For JAR files, we need to extract resources differently
             if (skillsUrl.getProtocol().equals("jar")) {
                 // Extract from JAR
@@ -239,21 +239,21 @@ public class SessionManager {
                 Path sourcePath = Path.of(skillsUrl.toURI());
                 copyDirectory(sourcePath, targetDir);
             }
-            
+
             return true;
-            
+
         } catch (Exception e) {
             LOGGER.warning("Failed to copy from classpath: " + e.getMessage());
             return false;
         }
     }
-    
+
     /**
      * Extract SKILLS from JAR file
      */
     private void copySkillsFromJar(Path targetDir) throws IOException {
         Files.createDirectories(targetDir);
-        
+
         // List of known SKILLS resources to extract
         String[] skillsResources = {
             // OCR scripts
@@ -274,9 +274,9 @@ public class SessionManager {
             // Invoice recipe index
             "SKILLS/invoice-recipes/README.txt"
         };
-        
+
         var classLoader = Thread.currentThread().getContextClassLoader();
-        
+
         for (String resourcePath : skillsResources) {
             try (var inputStream = classLoader.getResourceAsStream(resourcePath)) {
                 if (inputStream != null) {
@@ -287,7 +287,7 @@ public class SessionManager {
                         throw new IOException("Invalid target path for resource " + resourcePath);
                     }
                     Files.createDirectories(normalizedTarget.getParent());
-                    
+
                     // Copy the file
                     Files.copy(inputStream, normalizedTarget, StandardCopyOption.REPLACE_EXISTING);
                     LOGGER.fine("Copied from JAR: " + resourcePath);
@@ -297,7 +297,7 @@ public class SessionManager {
             }
         }
     }
-    
+
     /**
      * Recursively copy a directory
      */
@@ -307,13 +307,13 @@ public class SessionManager {
             LOGGER.fine("[COPY-DIRECTORY] Source does not exist, skipping: " + source);
             return;
         }
-        
+
         // Create target directory if it doesn't exist
         Files.createDirectories(target);
-        
+
         int fileCount = 0;
         int dirCount = 0;
-        
+
         // Walk through source directory
         try (Stream<Path> stream = Files.walk(source, FileVisitOption.FOLLOW_LINKS)) {
             stream.forEach(sourcePath -> {
@@ -333,17 +333,17 @@ public class SessionManager {
                 }
             });
         }
-        
+
         LOGGER.fine("[COPY-DIRECTORY] Copy completed from " + source + " to " + target);
     }
-    
+
     /**
      * Copy .fileexplorerignore to session directory for file explorer filtering
      */
     private void copyFileExplorerIgnoreToWorkspace(Path workspace) {
         copyResourceToWorkspace(workspace, ".fileexplorerignore");
     }
-    
+
     private void copyFileExplorerIgnoreToSession(Path sessionDir) {
         copyResourceToSession(sessionDir, ".fileexplorerignore");
     }
@@ -355,7 +355,7 @@ public class SessionManager {
     private void copyKlawedMdToWorkspace(Path workspace) {
         copyResourceToWorkspace(workspace, "KLAWED.md");
     }
-    
+
     /**
      * Copy KLAWED.md to session directory so the AI agent gets proper instructions
      * Appends dynamic content listing files in DATA and SKILLS folders
@@ -373,12 +373,12 @@ public class SessionManager {
             if (!targetPath.startsWith(workspace)) {
                 throw new IOException("Invalid target path for " + resourceName);
             }
-            
+
             // Special handling for KLAWED.md - read content and append dynamic listing
             if (resourceName.equals("KLAWED.md")) {
                 // Read the original KLAWED.md content
                 String originalContent = "";
-                
+
                 // Try to read from classpath resources first (packaged mode)
                 var classLoader = Thread.currentThread().getContextClassLoader();
                 try (var inputStream = classLoader.getResourceAsStream(resourceName)) {
@@ -387,7 +387,7 @@ public class SessionManager {
                         LOGGER.info("Read KLAWED.md from classpath resources");
                     }
                 }
-                
+
                 // Fallback: try to read from filesystem (development mode)
                 if (originalContent.isEmpty()) {
                     Path sourceKlawedMd = Path.of("src/main/resources/KLAWED.md");
@@ -396,24 +396,24 @@ public class SessionManager {
                         LOGGER.info("Read KLAWED.md from filesystem: " + sourceKlawedMd);
                     }
                 }
-                
+
                 if (originalContent.isEmpty()) {
                     LOGGER.warning("KLAWED.md not found in classpath resources or filesystem");
                     return;
                 }
-                
+
                 // Generate dynamic content listing files in workspace
                 String dynamicContent = generateWorkspaceListing(workspace);
-                
+
                 // Combine original content with dynamic content
                 String combinedContent = originalContent + "\n\n" + dynamicContent;
-                
+
                 // Write the combined content to workspace
                 Files.writeString(targetPath, combinedContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
                 LOGGER.info("Copied KLAWED.md with dynamic content to workspace: " + targetPath);
                 return;
             }
-            
+
             // For other resources, just copy them directly
             // Try to copy from classpath resources first (packaged mode)
             var classLoader = Thread.currentThread().getContextClassLoader();
@@ -439,7 +439,7 @@ public class SessionManager {
             LOGGER.warning("Failed to copy " + resourceName + " to workspace: " + e.getMessage());
         }
     }
-    
+
     /**
      * Generic helper to copy a resource to the session dir (classpath first, filesystem fallback)
      */
@@ -449,12 +449,12 @@ public class SessionManager {
             if (!targetPath.startsWith(sessionDir)) {
                 throw new IOException("Invalid target path for " + resourceName);
             }
-            
+
             // Special handling for KLAWED.md - read content and append dynamic listing
             if (resourceName.equals("KLAWED.md")) {
                 // Read the original KLAWED.md content
                 String originalContent = "";
-                
+
                 // Try to read from classpath resources first (packaged mode)
                 var classLoader = Thread.currentThread().getContextClassLoader();
                 try (var inputStream = classLoader.getResourceAsStream(resourceName)) {
@@ -463,7 +463,7 @@ public class SessionManager {
                         LOGGER.info("Read KLAWED.md from classpath resources");
                     }
                 }
-                
+
                 // Fallback: try to read from filesystem (development mode)
                 if (originalContent.isEmpty()) {
                     Path sourceKlawedMd = Path.of("src/main/resources/KLAWED.md");
@@ -472,24 +472,24 @@ public class SessionManager {
                         LOGGER.info("Read KLAWED.md from filesystem: " + sourceKlawedMd);
                     }
                 }
-                
+
                 if (originalContent.isEmpty()) {
                     LOGGER.warning("KLAWED.md not found in classpath resources or filesystem");
                     return;
                 }
-                
+
                 // Generate dynamic content listing files in persistent folders
                 String dynamicContent = generatePersistentFoldersListing(sessionDir);
-                
+
                 // Combine original content with dynamic content
                 String combinedContent = originalContent + "\n\n" + dynamicContent;
-                
+
                 // Write the combined content to session directory
                 Files.writeString(targetPath, combinedContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
                 LOGGER.info("Copied KLAWED.md with dynamic content to session: " + targetPath);
                 return;
             }
-            
+
             // For other resources, just copy them directly
             // Try to copy from classpath resources first (packaged mode)
             var classLoader = Thread.currentThread().getContextClassLoader();
@@ -515,7 +515,7 @@ public class SessionManager {
             LOGGER.warning("Failed to copy " + resourceName + " to session directory: " + e.getMessage());
         }
     }
-    
+
     /**
      * Generate a listing of files in the workspace (excluding tmp folder)
      * Limits to 100 items and adds [...] if truncated
@@ -524,7 +524,7 @@ public class SessionManager {
         StringBuilder sb = new StringBuilder();
         sb.append("## Workspace Files and Directories\n\n");
         sb.append("The following are files and directories available in your workspace:\n\n");
-        
+
         try (Stream<Path> paths = Files.list(workspace)) {
             List<Path> items = paths
                 .filter(p -> !p.getFileName().toString().equals("tmp")) // Exclude tmp folder from listing
@@ -536,20 +536,20 @@ public class SessionManager {
                     return p1.getFileName().toString().compareToIgnoreCase(p2.getFileName().toString());
                 })
                 .collect(Collectors.toList());
-            
+
             if (items.isEmpty()) {
                 sb.append("- No files or directories found\n");
             } else {
                 int count = 0;
                 int maxItems = 100;
                 boolean truncated = false;
-                
+
                 for (Path item : items) {
                     if (count >= maxItems) {
                         truncated = true;
                         break;
                     }
-                    
+
                     String name = item.getFileName().toString();
                     if (Files.isDirectory(item)) {
                         sb.append("- `").append(name).append("/` - Directory\n");
@@ -558,7 +558,7 @@ public class SessionManager {
                     }
                     count++;
                 }
-                
+
                 if (truncated) {
                     sb.append("- [...] (more items not shown)\n");
                 }
@@ -566,13 +566,13 @@ public class SessionManager {
         } catch (IOException e) {
             sb.append("- Unable to list workspace contents: ").append(e.getMessage()).append("\n");
         }
-        
+
         sb.append("\n**Note:** Files in the `tmp/` folder are temporary and will be cleaned up when the session ends.\n");
         sb.append("Use the `tmp/` folder for temporary files that don't need to persist between sessions.\n");
-        
+
         return sb.toString();
     }
-    
+
     /**
      * Generate a listing of files in DATA and SKILLS folders
      * Limits to 100 items per folder and adds [...] if truncated
@@ -581,18 +581,18 @@ public class SessionManager {
         StringBuilder sb = new StringBuilder();
         sb.append("## Session Files and Directories\n\n");
         sb.append("The following are files and directories available in your current session's persistent folders:\n\n");
-        
+
         String[] folders = {"DATA", "SKILLS"};
-        
+
         for (String folderName : folders) {
             Path folderPath = sessionDir.resolve(folderName);
             sb.append("### ").append(folderName).append(" Folder\n");
-            
+
             if (!Files.exists(folderPath) || !Files.isDirectory(folderPath)) {
                 sb.append("- No files or directories found\n\n");
                 continue;
             }
-            
+
             try (Stream<Path> paths = Files.list(folderPath)) {
                 List<Path> items = paths
                     .sorted((p1, p2) -> {
@@ -603,20 +603,20 @@ public class SessionManager {
                         return p1.getFileName().toString().compareToIgnoreCase(p2.getFileName().toString());
                     })
                     .collect(Collectors.toList());
-                
+
                 if (items.isEmpty()) {
                     sb.append("- No files or directories found\n");
                 } else {
                     int count = 0;
                     int maxItems = 100;
                     boolean truncated = false;
-                    
+
                     for (Path item : items) {
                         if (count >= maxItems) {
                             truncated = true;
                             break;
                         }
-                        
+
                         String name = item.getFileName().toString();
                         if (Files.isDirectory(item)) {
                             sb.append("- `").append(name).append("/` - Directory\n");
@@ -625,25 +625,25 @@ public class SessionManager {
                         }
                         count++;
                     }
-                    
+
                     if (truncated) {
                         sb.append("- [...] (list truncated at ").append(maxItems).append(" items)\n");
                     }
                 }
-                
+
             } catch (IOException e) {
                 sb.append("- Error reading directory: ").append(e.getMessage()).append("\n");
             }
-            
+
             sb.append("\n");
         }
-        
+
         sb.append("_Note: These are the files available in your current session. " +
                  "You can upload additional files to the DATA folder._\n");
-        
+
         return sb.toString();
     }
-    
+
     /**
      * Make all shell scripts executable
      */
@@ -651,13 +651,13 @@ public class SessionManager {
         if (!Files.exists(skillsDir)) {
             return;
         }
-        
+
         try (Stream<Path> stream = Files.walk(skillsDir)) {
             stream.filter(path -> path.toString().endsWith(".sh"))
                   .forEach(path -> {
                       try {
                           // Make executable (read + execute for owner, group, others)
-                          java.util.Set<java.nio.file.attribute.PosixFilePermission> perms = 
+                          java.util.Set<java.nio.file.attribute.PosixFilePermission> perms =
                               new java.util.HashSet<>();
                           perms.add(java.nio.file.attribute.PosixFilePermission.OWNER_READ);
                           perms.add(java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
@@ -666,7 +666,7 @@ public class SessionManager {
                           perms.add(java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE);
                           perms.add(java.nio.file.attribute.PosixFilePermission.OTHERS_READ);
                           perms.add(java.nio.file.attribute.PosixFilePermission.OTHERS_EXECUTE);
-                          
+
                           Files.setPosixFilePermissions(path, perms);
                           LOGGER.fine("Made executable: " + path);
                       } catch (Exception e) {
@@ -675,7 +675,7 @@ public class SessionManager {
                   });
         }
     }
-    
+
     /**
      * Clean up a session's tmp folder immediately (synchronous).
      * The workspace itself persists - only temporary files are removed.
@@ -707,7 +707,7 @@ public class SessionManager {
         userToSessions.forEach((user, sessions) -> sessions.remove(sessionId));
         LOGGER.info("[SESSION:" + sessionId + "] Released session tracking (directory not deleted)");
     }
-    
+
     /**
      * Get the workspace path for a session if it's currently tracked.
      * Returns null if the session is not currently tracked.
@@ -775,7 +775,7 @@ public class SessionManager {
         Objects.requireNonNull(userId, "userId");
         String sanitizedUser = sanitizeUserId(userId);
         LOGGER.info("[SESSION:" + sessionId + "] Persist session for user: " + sanitizedUser);
-        
+
         ReentrantLock lock = userLocks.computeIfAbsent(sanitizedUser, u -> new ReentrantLock());
         lock.lock();
         try {
@@ -785,7 +785,7 @@ public class SessionManager {
             // With the new workspace model, files are already persistent
             // We just need to ensure the workspace exists and clean tmp if needed
             Files.createDirectories(workspace);
-            
+
             // Clean tmp folder during persistence (optional)
             Path tmpDir = workspace.resolve("tmp");
             if (Files.exists(tmpDir)) {
@@ -793,7 +793,7 @@ public class SessionManager {
                 Files.createDirectories(tmpDir);
                 LOGGER.info("[SESSION:" + sessionId + "] Cleaned tmp folder during persistence");
             }
-            
+
             LOGGER.info("[SESSION:" + sessionId + "] Persistence completed (workspace is already persistent)");
         } finally {
             lock.unlock();
@@ -818,7 +818,7 @@ public class SessionManager {
     private void copyWithDelete(Path source, Path target) throws IOException {
         LOGGER.info("[COPY-WITH-DELETE] Source: " + source + " exists: " + Files.exists(source));
         LOGGER.info("[COPY-WITH-DELETE] Target: " + target);
-        
+
         if (Files.exists(source)) {
             try {
                 long fileCount = Files.list(source).count();
@@ -827,7 +827,7 @@ public class SessionManager {
                 LOGGER.warning("[COPY-WITH-DELETE] Failed to count files in source: " + e.getMessage());
             }
         }
-        
+
         deleteDirectoryIfExists(target);
         LOGGER.info("[COPY-WITH-DELETE] Copying from " + source + " to " + target);
         copyDirectory(source, target);
@@ -866,7 +866,7 @@ public class SessionManager {
     }
 
     // ---------- End persistent storage helpers ----------
-    
+
     /**
      * Recursively delete a directory
      */
@@ -898,7 +898,7 @@ public class SessionManager {
             }
         }
     }
-    
+
     /**
      * Check if a directory is empty
      */
@@ -910,7 +910,7 @@ public class SessionManager {
             return !stream.findAny().isPresent();
         }
     }
-    
+
     /**
      * Check if a session exists
      */
@@ -918,7 +918,7 @@ public class SessionManager {
         Path sessionDir = sessionDirectories.get(sessionId);
         return sessionDir != null && Files.exists(sessionDir);
     }
-    
+
     /**
      * Get all session IDs for a user
      * @param userId The user ID

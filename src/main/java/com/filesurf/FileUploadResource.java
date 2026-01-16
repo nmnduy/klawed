@@ -50,9 +50,9 @@ public class FileUploadResource {
         "srt", "vtt", "ass", "ssa", "sub", "sbv", "smi", "sami"
         // Add more as needed, but NEVER: exe, sh, bat, cmd, msi, app, dmg, deb, rpm
     );
-    
+
     // Human-readable list of allowed file types for error messages
-    private static final String ALLOWED_TYPES_MESSAGE = 
+    private static final String ALLOWED_TYPES_MESSAGE =
         "File type not allowed. Accepted: documents (pdf, doc, docx, txt, md, rtf), " +
         "spreadsheets (csv, xlsx, xls), images (png, jpg, gif, svg), " +
         "archives (zip, tar, gz, 7z), code/text (json, xml, yaml, tex, html, css, js), " +
@@ -85,33 +85,33 @@ public class FileUploadResource {
             LOGGER.warning("File upload rejected: no extension in filename: " + filename);
             return false;
         }
-        
+
         String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
         boolean allowed = ALLOWED_EXTENSIONS.contains(extension);
-        
+
         if (!allowed) {
             LOGGER.warning("File upload rejected: disallowed extension '" + extension + "' in file: " + filename);
         }
-        
+
         return allowed;
     }
-    
+
     @RegisterForReflection
     public static class UploadForm {
         @FormParam("files")
         public List<FileUpload> files;
     }
-    
+
     @RegisterForReflection
     public static class UploadResponse {
         public int count;
         public List<String> files;
         public String message;
-        
+
         // Default constructor required for Jackson deserialization
         public UploadResponse() {
         }
-        
+
         public UploadResponse(int count, List<String> files, String message) {
             this.count = count;
             this.files = files;
@@ -169,7 +169,7 @@ public class FileUploadResource {
                     errors.add(fileUpload.fileName() + ": " + ALLOWED_TYPES_MESSAGE);
                     continue;
                 }
-                
+
                 // Validate file size
                 if (fileUpload.size() > MAX_FILE_SIZE) {
                     errors.add(fileUpload.fileName() + " exceeds maximum size of 100 MB");
@@ -183,10 +183,10 @@ public class FileUploadResource {
 
                 // Copy file to upload directory
                 Files.copy(fileUpload.filePath(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-                
+
                 uploadedFiles.add(safeFileName);
                 LOGGER.info("Successfully uploaded file: " + safeFileName + " (" + fileUpload.size() + " bytes)");
-                
+
             } catch (IOException e) {
                 LOGGER.severe("Failed to upload file " + fileUpload.fileName() + ": " + e.getMessage());
                 errors.add(fileUpload.fileName() + ": " + e.getMessage());
@@ -200,31 +200,31 @@ public class FileUploadResource {
                     .build();
         }
 
-        String message = uploadedFiles.size() == form.files.size() 
-                ? "All files uploaded successfully" 
+        String message = uploadedFiles.size() == form.files.size()
+                ? "All files uploaded successfully"
                 : "Some files uploaded successfully. Errors: " + String.join(", ", errors);
 
         UploadResponse response = new UploadResponse(uploadedFiles.size(), uploadedFiles, message);
-        
+
         // Notify klawed agent about the uploaded files
         notifyKlawedAboutUpload(sessionId, uploadedFiles);
-        
+
         return Response.ok(response).build();
     }
 
     private String sanitizeFileName(String fileName, java.nio.file.Path uploadDir) {
         // Remove path separators and other dangerous characters
         String sanitized = fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
-        
+
         // Ensure unique filename by adding timestamp if needed
         String baseName = sanitized.substring(0, sanitized.lastIndexOf('.') >= 0 ? sanitized.lastIndexOf('.') : sanitized.length());
         String extension = sanitized.lastIndexOf('.') >= 0 ? sanitized.substring(sanitized.lastIndexOf('.')) : "";
-        
+
         java.nio.file.Path targetPath = uploadDir.resolve(sanitized);
         if (Files.exists(targetPath)) {
             sanitized = baseName + "_" + System.currentTimeMillis() + extension;
         }
-        
+
         return sanitized;
     }
 
@@ -260,7 +260,7 @@ public class FileUploadResource {
                     .filter(Files::isRegularFile)
                     .map(path -> path.getFileName().toString())
                     .toList();
-            
+
             return Response.ok()
                     .entity("{\"files\": [\"" + String.join("\",\"", files) + "\"], \"count\": " + files.size() + "}")
                     .build();

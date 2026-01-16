@@ -20,10 +20,10 @@ public class ApplicationStartupListener {
 
     void onStart(@Observes StartupEvent ev) {
         LOGGER.info("FileSurf v2 application starting up...");
-        
+
         // Initialize metrics
         metricsService.initializeMetrics();
-        
+
         LOGGER.info("Application startup completed. Metrics initialized.");
         LOGGER.info("Prometheus metrics available at: /metrics");
         LOGGER.info("Application endpoints:");

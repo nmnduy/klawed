@@ -14,16 +14,16 @@ function canSubmitFeedback() {
     try {
         const today = new Date().toDateString();
         const stored = localStorage.getItem(FEEDBACK_STORAGE_KEY);
-        
+
         if (!stored) return true;
-        
+
         const data = JSON.parse(stored);
         if (data.date !== today) {
             // Reset count for new day
             localStorage.removeItem(FEEDBACK_STORAGE_KEY);
             return true;
         }
-        
+
         return data.count < MAX_FEEDBACK_PER_DAY;
     } catch (e) {
         return true;
@@ -38,14 +38,14 @@ function incrementFeedbackCount() {
         const today = new Date().toDateString();
         const stored = localStorage.getItem(FEEDBACK_STORAGE_KEY);
         let data = { date: today, count: 0 };
-        
+
         if (stored) {
             const parsed = JSON.parse(stored);
             if (parsed.date === today) {
                 data = parsed;
             }
         }
-        
+
         data.count += 1;
         localStorage.setItem(FEEDBACK_STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
@@ -89,7 +89,7 @@ function showToast(message, type = 'info') {
         detail: { message, type }
     });
     window.dispatchEvent(event);
-    
+
     // Also create a simple fallback toast if no listener
     const toastId = 'feedback-toast-' + Date.now();
     const toast = document.createElement('div');
@@ -101,7 +101,7 @@ function showToast(message, type = 'info') {
     }`;
     toast.textContent = message;
     document.body.appendChild(toast);
-    
+
     setTimeout(() => {
         toast.remove();
     }, 3000);
@@ -160,7 +160,7 @@ class FeedbackModule {
         this.submitBtn = null;
         this.submitText = null;
         this.submitLoading = null;
-        
+
         this.currentType = 'bug';
         this.isOpen = false;
         this.initialized = false;
@@ -168,7 +168,7 @@ class FeedbackModule {
 
     init() {
         if (this.initialized) return;
-        
+
         // Find all elements in the document
         this.modal = document.querySelector('[data-feedback-modal]');
         this.openButton = document.querySelector('[data-feedback-button]');
@@ -260,7 +260,7 @@ class FeedbackModule {
         this.errorSection?.classList.add('hidden');
         this.successState?.classList.add('hidden');
         this.form?.classList.remove('hidden');
-        
+
         // Set default type
         this.currentType = 'bug';
         this.typeButtons.forEach(btn => {
@@ -275,12 +275,12 @@ class FeedbackModule {
 
         this.modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
-        
+
         // Focus on description textarea
         setTimeout(() => {
             this.descriptionInput?.focus();
         }, 100);
-        
+
         this.isOpen = true;
     }
 
@@ -343,7 +343,7 @@ export function init(rootEl) {
 function autoInit() {
     const modal = document.querySelector('[data-feedback-modal]');
     const button = document.querySelector('[data-feedback-button]');
-    
+
     if (modal || button) {
         init();
     }

@@ -13,10 +13,10 @@ import java.util.logging.Logger;
 public class FileChatService {
 
     private static final Logger LOGGER = Logger.getLogger(FileChatService.class.getName());
-    
+
     @Inject
     ChatRepository chatRepository;
-    
+
     @PostConstruct
     void init() {
         LOGGER.info("Initializing FileChatService and database schema...");
@@ -28,7 +28,7 @@ public class FileChatService {
         return chatRepository.createOrUpdateChatSession(sessionId, clientIdentity);
     }
 
-    public ChatMessageRecord createChatMessage(String sessionId, String sender, String receiver, 
+    public ChatMessageRecord createChatMessage(String sessionId, String sender, String receiver,
                                          String content, String messageType) {
         LOGGER.info("Creating chat message for session: " + sessionId + " from " + sender + " to " + receiver);
         return chatRepository.createChatMessage(sessionId, sender, receiver, content, messageType);
@@ -38,7 +38,7 @@ public class FileChatService {
         LOGGER.info("Deactivating chat session: " + sessionId);
         chatRepository.deactivateChatSession(sessionId);
     }
-    
+
     /**
      * Check if a chat session is still active in the database.
      */
@@ -78,7 +78,7 @@ public class FileChatService {
     public ChatMessageRecord findChatMessageById(Long id) {
         return chatRepository.findChatMessageById(id);
     }
-    
+
     public void markMessageAsSent(Long messageId) {
         LOGGER.info("Marking message as sent: " + messageId);
         chatRepository.markMessageAsSent(messageId);

@@ -14,16 +14,16 @@ import java.util.logging.Logger;
 @ApplicationScoped
 public class SQLiteManager {
     private static final Logger LOGGER = Logger.getLogger(SQLiteManager.class.getName());
-    
+
     private Connection connection;
     private final Object lock = new Object();
-    
+
     @PostConstruct
     void init() throws SQLException {
         LOGGER.info("Initializing SQLiteManager...");
         // Create single connection
         connection = DriverManager.getConnection("jdbc:sqlite:data/filesurf.db");
-        
+
         // Set PRAGMAs for optimal SQLite performance
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("PRAGMA journal_mode = WAL");
@@ -35,10 +35,10 @@ public class SQLiteManager {
             stmt.execute("PRAGMA temp_store = MEMORY");
             stmt.execute("PRAGMA encoding = 'UTF-8'");
         }
-        
+
         LOGGER.info("SQLiteManager initialized with WAL mode and optimal PRAGMAs");
     }
-    
+
     @PreDestroy
     void cleanup() {
         LOGGER.info("Cleaning up SQLiteManager...");
@@ -50,19 +50,19 @@ public class SQLiteManager {
             }
         }
     }
-    
+
     public <T> T execute(ConnectionConsumer<T> operation) throws SQLException {
         synchronized(lock) {
             return operation.accept(connection);
         }
     }
-    
+
     public void execute(ConnectionOperation operation) throws SQLException {
         synchronized(lock) {
             operation.accept(connection);
         }
     }
-    
+
     public <T> T executeInTransaction(ConnectionConsumer<T> operation) throws SQLException {
         return execute(conn -> {
             boolean autoCommit = conn.getAutoCommit();
@@ -79,12 +79,12 @@ public class SQLiteManager {
             }
         });
     }
-    
-    public <T> T executeWithTimeout(ConnectionConsumer<T> operation, long timeoutMs) 
+
+    public <T> T executeWithTimeout(ConnectionConsumer<T> operation, long timeoutMs)
             throws TimeoutException, SQLException {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         Future<T> future = executor.submit(() -> execute(operation));
-        
+
         try {
             return future.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
@@ -99,12 +99,12 @@ public class SQLiteManager {
             executor.shutdown();
         }
     }
-    
+
     @FunctionalInterface
     public interface ConnectionConsumer<T> {
         T accept(Connection conn) throws SQLException;
     }
-    
+
     @FunctionalInterface
     public interface ConnectionOperation {
         void accept(Connection conn) throws SQLException;

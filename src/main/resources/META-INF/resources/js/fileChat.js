@@ -55,7 +55,7 @@ export function init(rootEl) {
     let tabManager = null;
     try {
         tabManager = new TabManager(rootEl);
-        
+
         // Listen for tab switches to load file explorer when Files tab is activated
         rootEl.addEventListener('tab-switched', (event) => {
             const { tabId } = event.detail;
@@ -101,12 +101,12 @@ export function init(rootEl) {
     if (tabManager) {
         const activeTab = tabManager.getActiveTab();
         console.log('[file-chat] Active tab on page load:', activeTab ? activeTab.id : 'none');
-        
+
         // On desktop (>= 1024px), both panels are visible and activeTab is null
         // On mobile, only the active tab is visible
         const isDesktop = window.innerWidth >= 1024;
         console.log('[file-chat] Is desktop:', isDesktop);
-        
+
         if (isDesktop) {
             // On desktop, file explorer panel is always visible
             isFilesTabVisibleOnLoad = true;
@@ -127,17 +127,17 @@ export function init(rootEl) {
     let typingIndicatorEl = rootEl.querySelector('[data-typing-indicator]') || null;
     let hasSeededPlaceholders = false;
     let lastApiCallTime = null;
-    
+
     // Tool activity tracking
     let toolActivityEl = null;
     let pendingTools = new Map(); // Map<toolId, {toolName, startTime, element}>
     let completedTools = []; // Array of {toolName, toolId, isError, duration}
-    
+
     // Auto-scroll behavior tracking
     let hasReceivedFirstAiResponse = false;
     let isUserScrolledUp = false;
     let scrollToBottomButton = null;
-    
+
     // Reconnection logic with exponential backoff
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 10;
@@ -182,12 +182,12 @@ export function init(rootEl) {
     function showKlawedStatus(statusMessage) {
         // Connection status should only show connection state, not "AI is thinking"
         // The typing indicator (3-dot bubble) handles showing AI processing state
-        
+
         // Ignore messages about AI thinking - those are handled by the typing indicator
         if (statusMessage && /(processing|working|Klawed is|AI is thinking)/i.test(statusMessage)) {
             return; // Don't update status for processing messages
         }
-        
+
         elements.statusIndicator && (elements.statusIndicator.className = 'status-indicator status-indicator--working');
         elements.statusPulse && (elements.statusPulse.className = 'status-pulse status-pulse--working');
         if (elements.statusText) {
@@ -213,7 +213,7 @@ export function init(rootEl) {
 
     function scrollToBottom(force = false) {
         if (!scrollContainer || typeof scrollContainer.scrollTo !== 'function') return;
-        
+
         // Only auto-scroll if:
         // 1. Force is true (manual scroll or first response), OR
         // 2. We haven't received first AI response yet (welcome flow), OR
@@ -222,7 +222,7 @@ export function init(rootEl) {
             scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
         }
     }
-    
+
     function isScrolledToBottom() {
         if (!scrollContainer) return true;
         const threshold = 100; // pixels from bottom
@@ -231,16 +231,16 @@ export function init(rootEl) {
         const clientHeight = scrollContainer.clientHeight;
         return (scrollHeight - scrollTop - clientHeight) < threshold;
     }
-    
+
     function updateScrollState() {
         if (!scrollContainer) return;
         isUserScrolledUp = !isScrolledToBottom();
         updateScrollToBottomButton();
     }
-    
+
     function createScrollToBottomButton() {
         if (scrollToBottomButton) return scrollToBottomButton;
-        
+
         const button = document.createElement('button');
         button.className = 'absolute bottom-24 right-6 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center opacity-0 pointer-events-none hover:scale-110 active:scale-95';
         button.setAttribute('aria-label', 'Scroll to bottom');
@@ -249,7 +249,7 @@ export function init(rootEl) {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
             </svg>
         `;
-        
+
         button.addEventListener('click', () => {
             if (scrollContainer) {
                 scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
@@ -258,7 +258,7 @@ export function init(rootEl) {
                 updateScrollToBottomButton();
             }
         });
-        
+
         scrollToBottomButton = button;
         // Append to chat panel instead of body so it's contained within the chat area
         const chatPanel = document.getElementById('chat-panel');
@@ -269,10 +269,10 @@ export function init(rootEl) {
         }
         return button;
     }
-    
+
     function updateScrollToBottomButton() {
         const button = createScrollToBottomButton();
-        
+
         if (isUserScrolledUp) {
             // Show button with animation
             button.style.opacity = '1';
@@ -283,7 +283,7 @@ export function init(rootEl) {
             button.style.pointerEvents = 'none';
         }
     }
-    
+
     // Set up scroll listener
     if (scrollContainer) {
         scrollContainer.addEventListener('scroll', updateScrollState);
@@ -327,7 +327,7 @@ export function init(rootEl) {
             }
 
             messageParent.appendChild(messageDiv);
-            
+
             // Handle auto-scroll for first AI response
             if (!isUser && !hasReceivedFirstAiResponse) {
                 hasReceivedFirstAiResponse = true;
@@ -335,7 +335,7 @@ export function init(rootEl) {
             } else {
                 scrollToBottom(); // Regular scroll behavior
             }
-            
+
             return messageDiv;
         } catch (error) {
             console.error('Error in addMessage:', error);
@@ -372,7 +372,7 @@ export function init(rootEl) {
             updateMessage(currentStreamMessageId, content ?? '');
             currentStreamMessageId = null;
             currentStreamContent = '';
-            
+
             // Mark first AI response as received
             if (!hasReceivedFirstAiResponse) {
                 hasReceivedFirstAiResponse = true;
@@ -443,7 +443,7 @@ export function init(rootEl) {
     // ----------------------
     // Tool Activity Display
     // ----------------------
-    
+
     /**
      * Get a friendly display name and icon for a tool
      */
@@ -474,16 +474,16 @@ export function init(rootEl) {
      */
     function getToolInputSummary(toolName, toolInput) {
         if (!toolInput) return null;
-        
+
         try {
             const input = typeof toolInput === 'string' ? JSON.parse(toolInput) : toolInput;
-            
+
             switch (toolName) {
                 case 'Read':
                     if (input.file_path) {
                         const fileName = input.file_path.split('/').pop();
-                        const lines = input.start_line && input.end_line 
-                            ? ` (lines ${input.start_line}-${input.end_line})` 
+                        const lines = input.start_line && input.end_line
+                            ? ` (lines ${input.start_line}-${input.end_line})`
                             : '';
                         return fileName + lines;
                     }
@@ -509,8 +509,8 @@ export function init(rootEl) {
                 case 'Bash':
                     if (input.command) {
                         // Truncate long commands
-                        const cmd = input.command.length > 50 
-                            ? input.command.substring(0, 47) + '...' 
+                        const cmd = input.command.length > 50
+                            ? input.command.substring(0, 47) + '...'
                             : input.command;
                         return cmd;
                     }
@@ -537,12 +537,12 @@ export function init(rootEl) {
         if (isError) {
             return 'Error';
         }
-        
+
         if (!result) return 'Done';
-        
+
         try {
             const output = typeof result === 'string' ? result : JSON.stringify(result);
-            
+
             // For Grep, try to extract match count
             if (toolName === 'Grep' && output.includes('match_count')) {
                 const match = output.match(/"match_count"\s*:\s*(\d+)/);
@@ -550,7 +550,7 @@ export function init(rootEl) {
                     return `${match[1]} matches`;
                 }
             }
-            
+
             // For Glob, try to extract file count
             if (toolName === 'Glob' && output.includes('"count"')) {
                 const match = output.match(/"count"\s*:\s*(\d+)/);
@@ -558,7 +558,7 @@ export function init(rootEl) {
                     return `${match[1]} files`;
                 }
             }
-            
+
             // For Read, show line count
             if (toolName === 'Read' && output.includes('total_lines')) {
                 const match = output.match(/"total_lines"\s*:\s*(\d+)/);
@@ -566,7 +566,7 @@ export function init(rootEl) {
                     return `${match[1]} lines`;
                 }
             }
-            
+
             return 'Done';
         } catch (e) {
             return 'Done';
@@ -578,15 +578,15 @@ export function init(rootEl) {
      */
     function ensureToolActivityContainer() {
         if (toolActivityEl) return toolActivityEl;
-        
+
         const wrapper = document.createElement('div');
         wrapper.className = 'flex justify-start animate-fade-in';
         wrapper.setAttribute('data-tool-activity', '');
-        
+
         const container = document.createElement('div');
         container.className = 'inline-block max-w-[85%] sm:max-w-2xl rounded-2xl border shadow-sm transition-all duration-300 ' +
             'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 overflow-hidden';
-        
+
         // Header (always visible, clickable to expand/collapse)
         const header = document.createElement('div');
         header.className = 'flex items-center gap-2 px-4 py-2.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors';
@@ -599,21 +599,21 @@ export function init(rootEl) {
             </svg>
         `;
         header.setAttribute('data-tool-header', '');
-        
+
         // Details (collapsible)
         const details = document.createElement('div');
         details.className = 'border-t border-slate-200 dark:border-slate-700 max-h-0 overflow-hidden transition-all duration-300';
         details.setAttribute('data-tool-details', '');
-        
+
         const detailsList = document.createElement('div');
         detailsList.className = 'px-4 py-2 space-y-1.5';
         detailsList.setAttribute('data-tool-list', '');
-        
+
         details.appendChild(detailsList);
         container.appendChild(header);
         container.appendChild(details);
         wrapper.appendChild(container);
-        
+
         // Toggle expand/collapse on header click
         let isExpanded = false;
         header.addEventListener('click', () => {
@@ -627,7 +627,7 @@ export function init(rootEl) {
                 chevron.style.transform = 'rotate(0deg)';
             }
         });
-        
+
         toolActivityEl = wrapper;
         return toolActivityEl;
     }
@@ -638,28 +638,28 @@ export function init(rootEl) {
     function addToolActivity(toolName, toolId, toolInput) {
         hideEmptyState();
         removeTypingIndicator();
-        
+
         const container = ensureToolActivityContainer();
         const toolList = container.querySelector('[data-tool-list]');
         const toolSummary = container.querySelector('[data-tool-summary]');
         const toolCount = container.querySelector('[data-tool-count]');
         const toolDetails = container.querySelector('[data-tool-details]');
-        
+
         // Get display info
         const displayInfo = getToolDisplayInfo(toolName);
         const inputSummary = getToolInputSummary(toolName, toolInput);
-        
+
         // Create tool item element
         const toolItem = document.createElement('div');
         toolItem.className = 'flex items-center gap-2 text-sm animate-fade-in';
         toolItem.setAttribute('data-tool-id', toolId);
-        
+
         // Spinner for in-progress
         const spinner = `<svg class="w-3.5 h-3.5 animate-spin text-orange-500" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>`;
-        
+
         toolItem.innerHTML = `
             <span class="flex-shrink-0" data-tool-status>${spinner}</span>
             <span class="text-slate-600 dark:text-slate-400">${displayInfo.icon}</span>
@@ -667,37 +667,37 @@ export function init(rootEl) {
             ${inputSummary ? `<span class="text-slate-500 dark:text-slate-400 truncate max-w-[200px]" title="${inputSummary}">${inputSummary}</span>` : ''}
             <span class="ml-auto text-xs text-slate-400 dark:text-slate-500" data-tool-result></span>
         `;
-        
+
         toolList.appendChild(toolItem);
-        
+
         // Track pending tool
         pendingTools.set(toolId, {
             toolName,
             startTime: Date.now(),
             element: toolItem
         });
-        
+
         // Update summary
         const pendingCount = pendingTools.size;
         const completedCount = completedTools.length;
-        toolSummary.textContent = pendingCount > 0 
+        toolSummary.textContent = pendingCount > 0
             ? `${displayInfo.label}...`
             : 'Completed';
-        toolCount.textContent = completedCount > 0 
-            ? `${completedCount} done` 
+        toolCount.textContent = completedCount > 0
+            ? `${completedCount} done`
             : '';
-        
+
         // Ensure container is in DOM
         if (!container.parentElement) {
             messageParent.appendChild(container);
         }
-        
+
         // Auto-expand details if this is the first tool
         if (pendingTools.size === 1 && completedTools.length === 0) {
             toolDetails.style.maxHeight = toolDetails.scrollHeight + 100 + 'px';
             container.querySelector('[data-tool-chevron]').style.transform = 'rotate(180deg)';
         }
-        
+
         scrollToBottom();
     }
 
@@ -710,36 +710,36 @@ export function init(rootEl) {
             debug('completeToolActivity: Tool not found in pending:', toolId);
             return;
         }
-        
+
         const duration = Date.now() - pending.startTime;
         const displayInfo = getToolDisplayInfo(toolName);
         const resultSummary = getToolResultSummary(toolName, result, isError);
-        
+
         // Update the element
         const element = pending.element;
         if (element) {
             const statusEl = element.querySelector('[data-tool-status]');
             const resultEl = element.querySelector('[data-tool-result]');
-            
+
             if (isError) {
                 statusEl.innerHTML = `<span class="text-red-500">✗</span>`;
                 element.classList.add('text-red-600', 'dark:text-red-400');
             } else {
                 statusEl.innerHTML = `<span class="text-emerald-500">✓</span>`;
             }
-            
+
             resultEl.textContent = resultSummary + (duration > 1000 ? ` (${(duration/1000).toFixed(1)}s)` : '');
         }
-        
+
         // Move from pending to completed
         pendingTools.delete(toolId);
         completedTools.push({ toolName, toolId, isError, duration });
-        
+
         // Update summary
         const container = ensureToolActivityContainer();
         const toolSummary = container.querySelector('[data-tool-summary]');
         const toolCount = container.querySelector('[data-tool-count]');
-        
+
         if (pendingTools.size > 0) {
             // Still have pending tools, show the current one
             const [, nextPending] = pendingTools.entries().next().value;
@@ -749,10 +749,10 @@ export function init(rootEl) {
             // All done
             toolSummary.textContent = `Completed ${completedTools.length} action${completedTools.length > 1 ? 's' : ''}`;
         }
-        toolCount.textContent = completedTools.length > 0 
-            ? `${completedTools.length} done` 
+        toolCount.textContent = completedTools.length > 0
+            ? `${completedTools.length} done`
             : '';
-        
+
         scrollToBottom();
     }
 
@@ -936,7 +936,7 @@ export function init(rootEl) {
         // Create backdrop
         const backdrop = document.createElement('div');
         backdrop.className = 'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4';
-        
+
         // Create modal with scrollable content
         const modal = document.createElement('div');
         modal.className = 'bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col animate-fade-in';
@@ -951,12 +951,12 @@ export function init(rootEl) {
                     <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-2 sm:mb-3">Welcome to FileSurf</h2>
                     <p class="text-slate-600 text-base sm:text-lg mb-3 sm:mb-4">Your personal AI-powered computer in the cloud</p>
                 </div>
-                
+
                 <div class="space-y-3 sm:space-y-4 text-left mb-6 sm:mb-8">
                     <p class="text-slate-700 text-sm sm:text-base leading-relaxed">
                         FileSurf is far more than a file editor. Think of it as your personal workspace where an AI assistant can help you with almost anything:
                     </p>
-                    
+
                     <ul class="space-y-2 sm:space-y-3 text-slate-600 text-sm sm:text-base">
                         <li class="flex items-start gap-2 sm:gap-3">
                             <span class="text-orange-500 mt-1">📁</span>
@@ -983,10 +983,10 @@ export function init(rootEl) {
                             <span><strong>Remember Preferences</strong> — Tell me to remember things and I will</span>
                         </li>
                     </ul>
-                    
+
                 </div>
             </div>
-            
+
             <div class="flex flex-col sm:flex-row gap-3 p-4 sm:p-6 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
                 <button id="tour-continue-btn" class="flex-1 px-4 sm:px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-200/50 hover:shadow-orange-300/60 transition-all duration-200 hover:scale-[1.02] text-sm sm:text-base">
                     Take a Quick Tour
@@ -996,21 +996,21 @@ export function init(rootEl) {
                 </button>
             </div>
         `;
-        
+
         backdrop.appendChild(modal);
         document.body.appendChild(backdrop);
-        
+
         // Add event listeners
         modal.querySelector('#tour-continue-btn').addEventListener('click', () => {
             backdrop.remove();
             onContinue();
         });
-        
+
         modal.querySelector('#tour-skip-btn').addEventListener('click', () => {
             backdrop.remove();
             onSkip();
         });
-        
+
         return backdrop;
     }
 
@@ -1078,7 +1078,7 @@ export function init(rootEl) {
         // Step 4: Files tab / File Explorer
         steps.push(() => {
             const isDesktop = window.innerWidth >= 1024;
-            
+
             if (isDesktop) {
                 // On larger screens, highlight the file panel directly since it's always visible
                 const filePanel = rootEl.querySelector('#file-panel');
@@ -1120,7 +1120,7 @@ export function init(rootEl) {
         steps.push(() => {
             const wrapper = document.createElement('div');
             wrapper.className = 'fixed inset-0 z-40 flex items-center justify-center pointer-events-none';
-            
+
             const tip = document.createElement('div');
             tip.className = 'max-w-md px-6 py-5 rounded-2xl bg-white shadow-[0_0_40px_rgba(249,115,22,0.3)] border-2 border-orange-500 text-slate-800 pointer-events-auto cursor-pointer';
             tip.innerHTML = `
@@ -1137,14 +1137,14 @@ export function init(rootEl) {
                     <p class="mt-4 text-xs text-orange-600 font-medium">Click anywhere to start</p>
                 </div>
             `;
-            
+
             tip.addEventListener('click', () => {
                 overlay.dispatchEvent(new Event('click'));
             }, { once: true });
-            
+
             wrapper.appendChild(tip);
             document.body.appendChild(wrapper);
-            
+
             return () => { wrapper.remove(); };
         });
 
@@ -1193,13 +1193,13 @@ export function init(rootEl) {
         if (fileExplorer && typeof fileExplorer.setSession === 'function') {
             fileExplorer.setSession(sessionId, userId);
             console.log('[file-chat] fileExplorer session set with sessionId:', sessionId);
-            
+
             // Check if Files tab is visible
             // On desktop (>= 1024px), both panels are always visible
             // On mobile, check if files tab is the active one
             const isDesktop = window.innerWidth >= 1024;
             let shouldLoadExplorer = false;
-            
+
             if (isDesktop) {
                 // On desktop, file explorer is always visible
                 shouldLoadExplorer = true;
@@ -1215,7 +1215,7 @@ export function init(rootEl) {
                     console.log('[file-chat] Files tab is NOT active, skipping directory load');
                 }
             }
-            
+
             if (shouldLoadExplorer) {
                 console.log('[file-chat] Loading file explorer directory');
                 fileExplorer.loadDirectory();
@@ -1234,9 +1234,9 @@ export function init(rootEl) {
         if (reconnectTimeoutId) {
             clearTimeout(reconnectTimeoutId);
         }
-        
+
         reconnectAttempts++;
-        
+
         // Calculate delay with exponential backoff: delay = baseDelay * 2^attempts
         // Add jitter (±25%) to prevent thundering herd
         const exponentialDelay = Math.min(
@@ -1245,10 +1245,10 @@ export function init(rootEl) {
         );
         const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1); // ±25%
         const delay = Math.round(exponentialDelay + jitter);
-        
+
         console.log(`[file-chat] Scheduling reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`);
         updateStatus(false, `Reconnecting in ${Math.round(delay / 1000)}s... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-        
+
         reconnectTimeoutId = setTimeout(() => {
             connectWebSocket();
         }, delay);
@@ -1256,18 +1256,18 @@ export function init(rootEl) {
 
     async function connectWebSocket() {
         console.log('[file-chat] connectWebSocket called, attempt:', reconnectAttempts + 1);
-        
+
         // Don't reconnect if manually disconnected or after auth failure
         if (isManuallyDisconnected) {
             console.log('[file-chat] Manual disconnect - not reconnecting');
             return;
         }
-        
+
         if (isAuthFailure) {
             console.log('[file-chat] Auth failure detected - not reconnecting');
             return;
         }
-        
+
         // Check if we've exceeded max reconnect attempts
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
             console.error('[file-chat] Max reconnect attempts reached');
@@ -1285,11 +1285,11 @@ export function init(rootEl) {
             }
             return;
         }
-        
+
         try {
             // Check sessionStorage for existing session ID
             const storedSessionId = sessionStorage.getItem('filesurf_sessionId');
-            
+
             if (storedSessionId) {
                 // Reuse existing session
                 sessionId = storedSessionId;
@@ -1316,7 +1316,7 @@ export function init(rootEl) {
                 const sessionData = await response.json();
                 sessionId = sessionData.sessionId;
                 console.log('[file-chat] Session generated:', sessionId);
-                
+
                 // Store in sessionStorage for reuse on reconnect
                 sessionStorage.setItem('filesurf_sessionId', sessionId);
             }
@@ -1398,7 +1398,7 @@ export function init(rootEl) {
                         // Show typing indicator (3-dot bubble) when AI is processing
                         addTypingIndicator();
                         // Connection status stays "Connected" - no need to change it
-                        
+
                         // Add a system message for API calls (optional info)
                         if (content && typeof content === 'object') {
                             // Only add system message if we haven't recently added one
@@ -1432,13 +1432,13 @@ export function init(rootEl) {
                     case 'TOOL_RESULT':
                         // Display tool activity in a collapsible card
                         debug('Processing ' + messageType + ' message:', content);
-                        
+
                         if (messageType === 'TOOL') {
                             // Extract tool info
                             let toolName = null;
                             let toolId = null;
                             let toolInput = null;
-                            
+
                             if (content && typeof content === 'object') {
                                 toolName = content.toolName;
                                 toolId = content.toolId;
@@ -1454,7 +1454,7 @@ export function init(rootEl) {
                                     // Not JSON
                                 }
                             }
-                            
+
                             if (toolName && toolId) {
                                 addToolActivity(toolName, toolId, toolInput);
                                 // Don't update connection status - it stays "Connected"
@@ -1470,7 +1470,7 @@ export function init(rootEl) {
                             let toolId = null;
                             let isError = false;
                             let result = null;
-                            
+
                             if (content && typeof content === 'object') {
                                 toolName = content.toolName;
                                 toolId = content.toolId;
@@ -1488,7 +1488,7 @@ export function init(rootEl) {
                                     // Not JSON
                                 }
                             }
-                            
+
                             if (toolName && toolId) {
                                 completeToolActivity(toolName, toolId, isError, result);
                             }
@@ -1534,7 +1534,7 @@ export function init(rootEl) {
                     // Don't remove typing indicator here - wait for END_AI_TURN
                 } else {
                     // Check if it's a tool-related message in legacy format
-                    if (event.data.includes('[TOOL') || event.data.includes('[TOOL RESULT') || 
+                    if (event.data.includes('[TOOL') || event.data.includes('[TOOL RESULT') ||
                         event.data.startsWith('[TOOL') || event.data.startsWith('[TOOL RESULT')) {
                         debug('Filtered out tool-related legacy message:', event.data);
                         // Don't update connection status - typing indicator shows AI is working
@@ -1556,13 +1556,13 @@ export function init(rootEl) {
             console.info('WebSocket closed', event.code, event.reason);
             removeTypingIndicator();
             isConnected = false;
-            
+
             // Don't reconnect if this was a manual disconnect
             if (isManuallyDisconnected) {
                 updateStatus(false, 'Disconnected');
                 return;
             }
-            
+
             // Use exponential backoff for automatic reconnection
             updateStatus(false, 'Disconnected');
             scheduleReconnect();
@@ -1604,7 +1604,7 @@ export function init(rootEl) {
 
     function requiresHTTPS() {
         // Web Speech API requires HTTPS except for localhost
-        const isLocalhost = window.location.hostname === 'localhost' || 
+        const isLocalhost = window.location.hostname === 'localhost' ||
                            window.location.hostname === '127.0.0.1' ||
                            window.location.hostname === '[::1]';
         const isHTTPS = window.location.protocol === 'https:';
@@ -1628,7 +1628,7 @@ export function init(rootEl) {
         recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
             let errorMsg = '✗ Voice error: ' + event.error;
-            
+
             // Provide helpful context for common errors
             if (event.error === 'network') {
                 if (requiresHTTPS()) {
@@ -1641,7 +1641,7 @@ export function init(rootEl) {
             } else if (event.error === 'no-speech') {
                 errorMsg = '✗ No speech detected. Please try again.';
             }
-            
+
             addSystemMessage(errorMsg, 'error');
             stopListening();
         };
@@ -1705,7 +1705,7 @@ export function init(rootEl) {
             addSystemMessage('✗ Voice input requires HTTPS or localhost access', 'error');
             return;
         }
-        
+
         const rec = getRecognition();
         if (!rec) {
             addSystemMessage('✗ Voice input not supported in this browser', 'error');
@@ -1725,7 +1725,7 @@ export function init(rootEl) {
         // Hide voice button completely for now (feature not ready for production)
         // TODO: Re-enable when HTTPS is set up in production
         elements.voiceButton.style.display = 'none';
-        
+
         // Original implementation (commented out until HTTPS is ready):
         /*
         if (requiresHTTPS()) {
@@ -1810,14 +1810,14 @@ export function init(rootEl) {
                 }
             } catch (error) {
                 console.error('Upload error:', error);
-                
+
                 // Check if it's an auth error
                 if (error.message && error.message.includes('401')) {
                     // Redirect to login
                     window.location.href = '/auth/login?redirect=' + encodeURIComponent(window.location.pathname);
                     return;
                 }
-                
+
                 addSystemMessage('✗ Upload error: ' + error.message, 'error');
             }
 

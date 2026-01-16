@@ -29,7 +29,7 @@ public class PrivacyPolicyResource {
         // Format current date as "January 8, 2026"
         String lastUpdated = LocalDate.now()
                 .format(DateTimeFormatter.ofPattern("MMMM d, yyyy"));
-        
+
         return privacy.data("lastUpdated", lastUpdated);
     }
 }

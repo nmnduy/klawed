@@ -401,7 +401,7 @@ public class SqlViewerResource {
                     }
 
                     try {
-                        Map<String, Object> result = executeSingleStatement(conn, trimmedStatement, 
+                        Map<String, Object> result = executeSingleStatement(conn, trimmedStatement,
                                 statementIndex == 1 ? params : new ArrayList<>());
                         results.add(result);
 
@@ -621,37 +621,37 @@ public class SqlViewerResource {
      */
     private Response handleSqlException(SQLException e, String operation) {
         String message = e.getMessage();
-        
+
         // Check for SQLite-specific error codes indicating file/data issues
         // These are client-side data problems, not server errors
         if (message != null) {
             String upperMessage = message.toUpperCase();
-            
+
             if (upperMessage.contains("SQLITE_CORRUPT") || upperMessage.contains("MALFORMED")) {
                 LOGGER.warning("Corrupted database file during " + operation + ": " + message);
-                return errorResponse(Response.Status.fromStatusCode(422), 
+                return errorResponse(Response.Status.fromStatusCode(422),
                         "The database file is corrupted or incomplete. Please re-upload a valid SQLite database.");
             }
-            
+
             if (upperMessage.contains("SQLITE_NOTADB") || upperMessage.contains("NOT A DATABASE")) {
                 LOGGER.warning("Invalid database file during " + operation + ": " + message);
-                return errorResponse(Response.Status.fromStatusCode(422), 
+                return errorResponse(Response.Status.fromStatusCode(422),
                         "The file is not a valid SQLite database.");
             }
-            
+
             if (upperMessage.contains("SQLITE_CANTOPEN") || upperMessage.contains("UNABLE TO OPEN")) {
                 LOGGER.warning("Cannot open database file during " + operation + ": " + message);
-                return errorResponse(Response.Status.fromStatusCode(422), 
+                return errorResponse(Response.Status.fromStatusCode(422),
                         "Unable to open the database file. The file may be corrupted or in an unsupported format.");
             }
-            
+
             if (upperMessage.contains("ENCRYPTED") || upperMessage.contains("SQLITE_AUTH")) {
                 LOGGER.warning("Encrypted database file during " + operation + ": " + message);
-                return errorResponse(Response.Status.fromStatusCode(422), 
+                return errorResponse(Response.Status.fromStatusCode(422),
                         "The database file appears to be encrypted. Encrypted databases are not supported.");
             }
         }
-        
+
         // For other SQL errors, it's likely a server-side issue
         LOGGER.severe("SQL error during " + operation + ": " + message);
         metricsService.incrementErrors(operation);
@@ -689,7 +689,7 @@ public class SqlViewerResource {
     /**
      * Resolve and validate the database file path within the session directory.
      */
-    private java.nio.file.Path resolveAndValidateDbPath(String sessionId, String userId, String dbPath) 
+    private java.nio.file.Path resolveAndValidateDbPath(String sessionId, String userId, String dbPath)
             throws IOException {
         // Get session directory
         java.nio.file.Path sessionDir = sessionManager.getSessionDirectory(sessionId, userId);
@@ -934,13 +934,13 @@ public class SqlViewerResource {
     /**
      * Execute a single SQL statement and return the result.
      */
-    private Map<String, Object> executeSingleStatement(Connection conn, String sql, List<Object> params) 
+    private Map<String, Object> executeSingleStatement(Connection conn, String sql, List<Object> params)
             throws SQLException {
         Map<String, Object> result = new HashMap<>();
 
         // Determine if this is a query (SELECT) or update (INSERT/UPDATE/DELETE)
         String upperSql = sql.trim().toUpperCase();
-        boolean isQuery = upperSql.startsWith("SELECT") || upperSql.startsWith("PRAGMA") || 
+        boolean isQuery = upperSql.startsWith("SELECT") || upperSql.startsWith("PRAGMA") ||
                           upperSql.startsWith("EXPLAIN");
 
         if (isQuery) {

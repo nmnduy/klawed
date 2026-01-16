@@ -1,9 +1,9 @@
 /**
  * Dynamic Toast Notification Classes
- * 
+ *
  * Used in fileChat.js showToast() for success, error, and info messages.
  * These classes are dynamically applied based on toast type.
- * 
+ *
  * Note: These classes must be referenced in class-reference.html to ensure
  * they're included in the build.
  */

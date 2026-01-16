@@ -6,7 +6,7 @@
     const gridEl = document.getElementById('demos-grid');
     const statsEl = document.getElementById('demo-stats');
     const retryBtn = document.getElementById('demos-retry');
-    
+
     const videoModal = document.getElementById('video-modal');
     const videoPlayer = document.getElementById('video-player');
     const videoModalTitle = document.getElementById('video-modal-title');
@@ -17,7 +17,7 @@
         emptyEl.classList.add('hidden');
         errorEl.classList.add('hidden');
         gridEl.classList.add('hidden');
-        
+
         if (state === 'loading') loadingEl.classList.remove('hidden');
         else if (state === 'empty') emptyEl.classList.remove('hidden');
         else if (state === 'error') errorEl.classList.remove('hidden');
@@ -51,7 +51,7 @@
                 <p class="text-caption-s text-muted-foreground">${demo.sizeFormatted}</p>
             </div>
         `;
-        
+
         card.addEventListener('click', () => openVideo(demo));
         return card;
     }
@@ -91,29 +91,29 @@
     async function loadDemos() {
         showState('loading');
         statsEl.textContent = 'Loading...';
-        
+
         try {
             const response = await fetch('/demo/list');
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            
+
             const data = await response.json();
-            
+
             if (!data.demos || data.demos.length === 0) {
                 showState('empty');
                 statsEl.textContent = '0 videos';
                 return;
             }
-            
+
             gridEl.innerHTML = '';
             data.demos.forEach(demo => {
                 gridEl.appendChild(createDemoCard(demo));
             });
-            
+
             showState('grid');
             statsEl.textContent = `${data.count} video${data.count === 1 ? '' : 's'}`;
-            
+
         } catch (error) {
             console.error('Failed to load demos:', error);
             showState('error');
@@ -123,7 +123,7 @@
     }
 
     retryBtn.addEventListener('click', loadDemos);
-    
+
     // Load demos on page load
     loadDemos();
 })();

@@ -50,13 +50,13 @@ export class DarkModeManager {
      */
     applyTheme(theme) {
         const html = document.documentElement;
-        
+
         if (theme === 'dark') {
             html.classList.add(DARK_CLASS);
         } else {
             html.classList.remove(DARK_CLASS);
         }
-        
+
         this.theme = theme;
         this.notifyListeners(theme);
     }
@@ -97,7 +97,7 @@ export class DarkModeManager {
      */
     init() {
         this.applyTheme(this.theme);
-        
+
         // Listen for system theme changes
         if (window.matchMedia) {
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {

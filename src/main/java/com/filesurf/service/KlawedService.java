@@ -10,11 +10,11 @@ import java.util.logging.Logger;
 public class KlawedService {
 
     private static final Logger LOGGER = Logger.getLogger(KlawedService.class.getName());
-    
+
     public KlawedService() {
         LOGGER.info("KlawedService initialized");
     }
-    
+
     public void onStop() {
         LOGGER.info("KlawedService shutdown");
     }

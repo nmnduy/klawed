@@ -68,13 +68,13 @@ public class StartupConfigLogger {
         LOGGER.info("================================================================================");
         LOGGER.info("Profile: " + profile);
         LOGGER.info("");
-        
+
         LOGGER.info("HTTP Configuration:");
         LOGGER.info("  Port: " + httpPort);
         LOGGER.info("  Host: " + httpHost);
         LOGGER.info("  Secure Cookies: " + cookieSecure);
         LOGGER.info("");
-        
+
         LOGGER.info("Storage Paths:");
         LOGGER.info("  Persistent Root: " + persistRoot);
         LOGGER.info("  Sessions Base Dir: " + sessionsBaseDir);
@@ -83,18 +83,18 @@ public class StartupConfigLogger {
         LOGGER.info("  Container Tracking DB: " + containerTrackingDbPath);
         LOGGER.info("  Log File: " + logFilePath);
         LOGGER.info("");
-        
+
         LOGGER.info("Klawed Configuration:");
         LOGGER.info("  Podman Sandbox: " + (podmanEnabled ? "enabled" : "disabled"));
         LOGGER.info("  Podman Image: " + podmanImage);
         LOGGER.info("  Podman Env File: " + podmanEnvFile);
         LOGGER.info("  SQLite Queue Messages Dir: " + sqliteQueueDbDir);
         LOGGER.info("");
-        
+
         LOGGER.info("Container Management:");
         LOGGER.info("  Liveness Monitoring: " + (containerLivenessEnabled ? "enabled" : "disabled"));
         LOGGER.info("");
-        
+
         LOGGER.info("================================================================================");
     }
 }

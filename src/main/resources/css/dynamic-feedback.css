@@ -1,9 +1,9 @@
 /**
  * Dynamic Feedback Modal Classes
- * 
+ *
  * Used in feedback.js for the feedback modal styling.
  * These classes are dynamically applied based on interaction state.
- * 
+ *
  * Note: These classes must be referenced in class-reference.html to ensure
  * they're included in the build.
  */

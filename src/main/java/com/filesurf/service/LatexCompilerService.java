@@ -24,7 +24,7 @@ public class LatexCompilerService {
 
     /**
      * Compile a LaTeX file to PDF
-     * 
+     *
      * @param texFile Path to the .tex file
      * @param outputDir Directory where PDF should be created (defaults to same directory as .tex file)
      * @param engine LaTeX engine to use (pdflatex, xelatex, lualatex)
@@ -95,16 +95,16 @@ public class LatexCompilerService {
                 "-output-directory=" + workingDir.toString(),
                 texFile.toString()
             );
-            
+
             // Set working directory to the tex file's directory for proper relative paths
             pb.directory(texFile.getParent().toFile());
-            
+
             // Redirect error stream to output stream
             pb.redirectErrorStream(true);
-            
+
             // Start process
             Process process = pb.start();
-            
+
             // Read output
             StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
@@ -113,36 +113,36 @@ public class LatexCompilerService {
                     output.append(line).append("\n");
                 }
             }
-            
+
             // Wait for process with timeout
             boolean completed = process.waitFor(latexTimeout, TimeUnit.SECONDS);
-            
+
             if (!completed) {
                 process.destroyForcibly();
                 LOGGER.warning("LaTeX compilation timed out after " + latexTimeout + " seconds");
                 return null;
             }
-            
+
             int exitCode = process.exitValue();
-            
+
             if (exitCode != 0) {
                 LOGGER.warning("LaTeX compilation failed with exit code " + exitCode + "\nOutput:\n" + output.toString());
-                
+
                 // Try to extract error message
                 String errorMessage = extractErrorMessage(output.toString());
                 LOGGER.warning("LaTeX error: " + errorMessage);
-                
+
                 return null;
             }
-            
+
             LOGGER.info("LaTeX compilation successful: " + pdfFile);
-            
+
             // Check if PDF was actually created
             if (!Files.exists(pdfFile)) {
                 LOGGER.warning("PDF file was not created: " + pdfFile);
                 return null;
             }
-            
+
             // Sometimes LaTeX needs multiple passes for references, table of contents, etc.
             // Run a second pass if file size is suspiciously small (< 100 bytes)
             long fileSize = Files.size(pdfFile);
@@ -150,29 +150,29 @@ public class LatexCompilerService {
                 LOGGER.info("PDF file is very small (" + fileSize + " bytes), running second compilation pass");
                 return compileToPdf(texFile, outputDir, validEngine);
             }
-            
+
             return pdfFile;
-            
+
         } catch (IOException | InterruptedException e) {
             LOGGER.warning("Failed to compile LaTeX: " + e.getMessage());
             return null;
         }
     }
-    
+
     /**
      * Compile LaTeX to PDF with default engine (pdflatex)
      */
     public Path compileToPdf(Path texFile) {
         return compileToPdf(texFile, null, "pdflatex");
     }
-    
+
     /**
      * Compile LaTeX to PDF with specified engine
      */
     public Path compileToPdf(Path texFile, String engine) {
         return compileToPdf(texFile, null, engine);
     }
-    
+
     /**
      * Validate and normalize LaTeX engine name
      */
@@ -180,7 +180,7 @@ public class LatexCompilerService {
         if (engine == null || engine.trim().isEmpty()) {
             return "pdflatex";
         }
-        
+
         String normalized = engine.trim().toLowerCase();
         switch (normalized) {
             case "pdflatex":
@@ -200,7 +200,7 @@ public class LatexCompilerService {
                 return null;
         }
     }
-    
+
     /**
      * Extract error message from LaTeX output
      */
@@ -208,7 +208,7 @@ public class LatexCompilerService {
         if (output == null || output.isEmpty()) {
             return "Unknown error";
         }
-        
+
         // Look for common LaTeX error patterns
         String[] lines = output.split("\n");
         for (int i = 0; i < lines.length; i++) {
@@ -223,7 +223,7 @@ public class LatexCompilerService {
                 return error.toString();
             }
         }
-        
+
         // If no specific error found, return first 5 lines
         StringBuilder firstLines = new StringBuilder();
         for (int i = 0; i < Math.min(5, lines.length); i++) {
@@ -231,7 +231,7 @@ public class LatexCompilerService {
         }
         return firstLines.toString();
     }
-    
+
     /**
      * Check if a LaTeX engine is available
      */
@@ -240,7 +240,7 @@ public class LatexCompilerService {
         if (validEngine == null) {
             return false;
         }
-        
+
         try {
             Process process = new ProcessBuilder(validEngine, "--version").start();
             return process.waitFor(2, TimeUnit.SECONDS) && process.exitValue() == 0;
@@ -248,30 +248,30 @@ public class LatexCompilerService {
             return false;
         }
     }
-    
+
     /**
      * Get available LaTeX engines
      */
     public String[] getAvailableEngines() {
         java.util.List<String> engines = new java.util.ArrayList<>();
         String[] possibleEngines = {"pdflatex", "xelatex", "lualatex"};
-        
+
         for (String engine : possibleEngines) {
             if (isEngineAvailable(engine)) {
                 engines.add(engine);
             }
         }
-        
+
         return engines.toArray(new String[0]);
     }
-    
+
     /**
      * Check if LaTeX file contains dangerous shell escape commands.
      * This is defense in depth - -no-shell-escape flag is the primary protection.
      */
     private boolean containsDangerousCommands(Path texFile) throws IOException {
         String content = Files.readString(texFile);
-        
+
         // Check for shell escape commands (even though -no-shell-escape blocks them)
         String[] dangerousPatterns = {
             "\\write18",
@@ -281,7 +281,7 @@ public class LatexCompilerService {
             "\\include{|",
             "\\ShellEscape"
         };
-        
+
         for (String pattern : dangerousPatterns) {
             if (content.contains(pattern)) {
                 LOGGER.severe("Dangerous LaTeX command detected in " + texFile + ": " + pattern);
@@ -290,7 +290,7 @@ public class LatexCompilerService {
         }
         return false;
     }
-    
+
     /**
      * Validate LaTeX syntax before compilation
      * Checks for common syntax errors that would cause compilation to fail
@@ -298,9 +298,9 @@ public class LatexCompilerService {
     private boolean validateLatexSyntax(Path texFile, String engine) {
         try {
             String content = Files.readString(texFile);
-            
+
             // Check for common LaTeX syntax errors
-            
+
             // 1. Check for mismatched braces
             int openBraces = 0;
             int closeBraces = 0;
@@ -313,7 +313,7 @@ public class LatexCompilerService {
                 LOGGER.warning("Mismatched braces in LaTeX file: " + openBraces + " opening vs " + closeBraces + " closing");
                 return false;
             }
-            
+
             // 2. Check for common tabular errors
             if (content.contains("\\begin{tabular")) {
                 // Check for broken column specifications
@@ -333,36 +333,36 @@ public class LatexCompilerService {
                     }
                 }
             }
-            
+
             // 3. Check for Unicode characters when using pdflatex
             if ("pdflatex".equals(engine)) {
                 // Simple check for non-ASCII characters
                 for (int i = 0; i < content.length(); i++) {
                     char c = content.charAt(i);
                     if (c > 127 && c != '\n' && c != '\r' && c != '\t') {
-                        LOGGER.warning("Non-ASCII character detected at position " + i + " (char code: " + (int)c + 
+                        LOGGER.warning("Non-ASCII character detected at position " + i + " (char code: " + (int)c +
                                      "). Use xelatex or lualatex for Unicode support.");
                         return false;
                     }
                 }
             }
-            
+
             // 4. Check for common LaTeX command errors
             String[] problematicPatterns = {
                 "@{\\\\",  // Double backslash in column spec
                 "\\\\\\[", // Escaped bracket
                 "\\\\\\]"  // Escaped bracket
             };
-            
+
             for (String pattern : problematicPatterns) {
                 if (content.contains(pattern)) {
                     LOGGER.warning("Potential LaTeX syntax issue detected: " + pattern);
                     // Don't fail immediately, just warn
                 }
             }
-            
+
             return true;
-            
+
         } catch (IOException e) {
             LOGGER.warning("Failed to read LaTeX file for syntax validation: " + e.getMessage());
             return false;

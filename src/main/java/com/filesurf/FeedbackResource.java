@@ -19,7 +19,7 @@ import java.util.UUID;
 
 /**
  * REST endpoint for handling user feedback, bug reports, and suggestions.
- * 
+ *
  * Feedback is stored in a JSON file for later review by administrators.
  */
 @jakarta.ws.rs.Path("/file-chat/http/feedback")
@@ -141,7 +141,7 @@ public class FeedbackResource {
      */
     private void saveFeedback(FeedbackRecord record) throws IOException {
         Path feedbackPath = Path.of(FEEDBACK_DIR);
-        
+
         // Create directory if it doesn't exist
         if (!Files.exists(feedbackPath)) {
             Files.createDirectories(feedbackPath);

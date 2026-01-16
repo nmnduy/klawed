@@ -24,16 +24,16 @@ public class ChatMessagePollingService {
 
     private static final Logger LOGGER = Logger.getLogger(ChatMessagePollingService.class.getName());
     private final ObjectMapper objectMapper = new ObjectMapper();
-    
+
     @Inject
     FileChatService fileChatService;
-    
+
     @Inject
     SQLiteQueueClientPool clientPool;
-    
+
     // Store active WebSocket connections by session ID
     private final Map<String, WebSocketConnection> activeConnections = new ConcurrentHashMap<>();
-    
+
     // Control flag for polling loop
     private final AtomicBoolean pollingActive = new AtomicBoolean(true);
 
@@ -44,7 +44,7 @@ public class ChatMessagePollingService {
         activeConnections.put(sessionId, connection);
         LOGGER.info("[SESSION:" + sessionId + "] Connection registered for polling (total active: " + activeConnections.size() + ")");
     }
-    
+
     /**
      * Unregister a WebSocket connection for a session
      */
@@ -52,14 +52,14 @@ public class ChatMessagePollingService {
         activeConnections.remove(sessionId);
         LOGGER.info("[SESSION:" + sessionId + "] Connection unregistered from polling (total active: " + activeConnections.size() + ")");
     }
-    
+
     /**
      * Get active connection for a session
      */
     public WebSocketConnection getConnection(String sessionId) {
         return activeConnections.get(sessionId);
     }
-    
+
     /**
      * Check if a session has an active connection
      */
@@ -67,10 +67,10 @@ public class ChatMessagePollingService {
         WebSocketConnection connection = activeConnections.get(sessionId);
         return connection != null && !connection.isClosed();
     }
-    
+
     /**
      * Send a message to klawed via SQLite queue
-     * 
+     *
      * @param sessionId The session ID
      * @param userId The user ID
      * @param message The message to send
@@ -78,18 +78,18 @@ public class ChatMessagePollingService {
      */
     public void sendMessageToKlawed(String sessionId, String userId, String message) throws IOException {
         LOGGER.info("[SESSION:" + sessionId + "] Sending message to klawed via SQLite queue");
-        
+
         try {
             // Get the pooled client
             SQLiteQueueClient queueClient = clientPool.getOrCreateClient(sessionId);
-            
+
             // Client is configured for RECEIVING (sender=klawed, receiver=client)
             // For SENDING, we need sender=client, receiver=klawed
             // Since sendMessage() always uses config.getSenderName() as sender,
             // we need to directly insert the message with correct sender/receiver
-            
+
             queueClient.sendMessageFrom("client", "klawed", message);
-            
+
             LOGGER.info("[SESSION:" + sessionId + "] Message sent to klawed (length: " + message.length() + " chars)");
         } catch (Exception e) {
             LOGGER.warning("[SESSION:" + sessionId + "] Error sending message to klawed: " + e.getMessage());
@@ -125,7 +125,7 @@ public class ChatMessagePollingService {
             LOGGER.fine("Polling is paused");
             return;
         }
-        
+
         // Clean up stale connections first
         activeConnections.entrySet().removeIf(entry -> {
             if (entry.getValue().isClosed()) {
@@ -134,36 +134,36 @@ public class ChatMessagePollingService {
             }
             return false;
         });
-        
+
         // Only poll if there are active connections
         if (activeConnections.isEmpty()) {
             return; // Silent - don't log when there are no connections
         }
-        
+
         // Don't log every poll - only log when we find messages (below)
-        
+
         // Poll for unsent messages only for sessions with active connections
         for (Map.Entry<String, WebSocketConnection> entry : activeConnections.entrySet()) {
             String sessionId = entry.getKey();
             WebSocketConnection connection = entry.getValue();
-            
+
             // Double-check connection is still open
             if (connection.isClosed()) {
                 continue;
             }
-            
+
             try {
                 List<ChatMessageRecord> unsentMessages = fileChatService.findUnsentMessagesForSession(sessionId);
-                
+
                 if (!unsentMessages.isEmpty()) {
                     LOGGER.fine("[SESSION:" + sessionId + "] Found " + unsentMessages.size() + " unsent messages");
                 }
-                
+
                 for (ChatMessageRecord message : unsentMessages) {
                     try {
                         // Create appropriate message based on message type
                         String jsonMessage = createJsonMessage(message);
-                        
+
                         // Send the message asynchronously
                         connection.sendText(jsonMessage).subscribe().with(
                             success -> {
@@ -171,11 +171,11 @@ public class ChatMessagePollingService {
                                 markMessageAsSent(message.getId());
                             },
                             failure -> {
-                                LOGGER.warning("[SESSION:" + sessionId + "] Failed to send message ID: " + message.getId() + 
+                                LOGGER.warning("[SESSION:" + sessionId + "] Failed to send message ID: " + message.getId() +
                                              ", error: " + failure.getMessage());
                             }
                         );
-                        
+
                     } catch (Exception e) {
                         LOGGER.severe("[SESSION:" + sessionId + "] Error processing message ID: " + message.getId() + ", error: " + e.getMessage());
                     }
@@ -185,14 +185,14 @@ public class ChatMessagePollingService {
             }
         }
     }
-    
+
     /**
      * Create JSON message string based on message type
      */
     private String createJsonMessage(ChatMessageRecord message) throws Exception {
         String messageType = message.getMessageType();
         String content = message.getContent();
-        
+
         if (ChatConstants.DB_MESSAGE_TYPE_ERROR.equals(messageType)) {
             return objectMapper.writeValueAsString(
                 KlawedSocketMessage.createError(content)
@@ -289,26 +289,26 @@ public class ChatMessagePollingService {
     @ActivateRequestContext
     public void pollAndSendUnsentMessagesForSession(String sessionId) {
         LOGGER.fine("[SESSION:" + sessionId + "] Polling for unsent messages...");
-        
+
         try {
             // Get unsent messages for this session
             List<ChatMessageRecord> unsentMessages = fileChatService.findUnsentMessagesForSession(sessionId);
-            
+
             if (!unsentMessages.isEmpty()) {
                 LOGGER.fine("[SESSION:" + sessionId + "] Found " + unsentMessages.size() + " unsent messages");
             }
-            
+
             WebSocketConnection connection = activeConnections.get(sessionId);
             if (connection == null || connection.isClosed()) {
                 LOGGER.fine("[SESSION:" + sessionId + "] No active WebSocket connection, skipping poll");
                 return;
             }
-            
+
             for (ChatMessageRecord message : unsentMessages) {
                 try {
                     // Create appropriate message based on message type
                     String jsonMessage = createJsonMessage(message);
-                    
+
                     // Send the message asynchronously
                     connection.sendText(jsonMessage).subscribe().with(
                         success -> {
@@ -316,13 +316,13 @@ public class ChatMessagePollingService {
                             markMessageAsSent(message.getId());
                         },
                         failure -> {
-                            LOGGER.warning("[SESSION:" + sessionId + "] Failed to send message ID: " + message.getId() + 
+                            LOGGER.warning("[SESSION:" + sessionId + "] Failed to send message ID: " + message.getId() +
                                          ", error: " + failure.getMessage());
                         }
                     );
-                    
+
                 } catch (Exception e) {
-                    LOGGER.severe("[SESSION:" + sessionId + "] Error processing message ID: " + message.getId() + 
+                    LOGGER.severe("[SESSION:" + sessionId + "] Error processing message ID: " + message.getId() +
                                 ", error: " + e.getMessage());
                 }
             }

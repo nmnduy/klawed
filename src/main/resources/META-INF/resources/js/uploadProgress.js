@@ -160,7 +160,7 @@ class UploadProgress {
                 <span class="text-sm font-semibold text-orange-600 dark:text-orange-400 ml-2" data-progress-text>0%</span>
             </div>
             <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                <div 
+                <div
                     class="bg-orange-500 h-full transition-all duration-300 ease-out rounded-full"
                     data-progress-fill
                     style="width: 0%"
