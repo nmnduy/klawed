@@ -140,11 +140,12 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
                 "delegated task in a fresh context. The subagent runs independently and writes "
                 "all output (stdout and stderr) to a log file. Returns the tail of the log "
                 "(last 100 lines by default) which typically contains the task summary. "
-                "For large outputs, use Read tool to access the full log file, or Grep to "
-                "search for specific content. Use this when: (1) you need a fresh context "
-                "without conversation history, (2) delegating a complex independent task, "
-                "(3) avoiding context limit issues. Note: The subagent has full tool access "
-                "including Write, Edit, and Bash.");
+                "Use this when: (1) you need a fresh context without conversation history, "
+                "(2) delegating a complex independent task, (3) avoiding context limit issues. "
+                "Note: The subagent has full tool access including Write, Edit, and Bash. "
+                "IMPORTANT: Give the subagent adequate time to complete its work before "
+                "interrupting. The subagent will report its progress and either complete "
+                "successfully or stop and ask for further instructions if it cannot proceed.");
             cJSON *subagent_params = cJSON_CreateObject();
             cJSON_AddStringToObject(subagent_params, "type", "object");
             cJSON *subagent_props = cJSON_CreateObject();
@@ -180,7 +181,10 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
             cJSON_AddStringToObject(check_progress_func, "description",
                 "Checks the progress of a running subagent by reading its log file. "
                 "Returns whether the subagent is still running and the tail of its output. "
-                "Use this to monitor long-running subagent tasks.");
+                "Use this to monitor long-running subagent tasks. The subagent will log "
+                "its progress and will stop and report if it encounters issues or needs "
+                "further instructions. Check progress at reasonable intervals (every 1-2 "
+                "minutes for complex tasks) rather than repeatedly.");
             cJSON *check_progress_params = cJSON_CreateObject();
             cJSON_AddStringToObject(check_progress_params, "type", "object");
             cJSON *check_progress_props = cJSON_CreateObject();
@@ -210,9 +214,11 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
             cJSON *interrupt_func = cJSON_CreateObject();
             cJSON_AddStringToObject(interrupt_func, "name", "InterruptSubagent");
             cJSON_AddStringToObject(interrupt_func, "description",
-                "Interrupts and stops a running subagent. Use this to cancel a subagent "
-                "that is stuck, taking too long, or no longer needed. "
-                "You can interrupt a subagent at any time.");
+                "Interrupts and stops a running subagent. Use this only when the subagent "
+                "is clearly stuck (no progress for extended period, repeated errors) or "
+                "when the task is no longer needed. The subagent will report its status "
+                "and either complete or ask for further instructions if it cannot proceed. "
+                "Only interrupt if the subagent has been given adequate time to work.");
             cJSON *interrupt_params = cJSON_CreateObject();
             cJSON_AddStringToObject(interrupt_params, "type", "object");
             cJSON *interrupt_props = cJSON_CreateObject();
