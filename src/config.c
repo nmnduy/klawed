@@ -28,6 +28,8 @@ const char* config_input_style_to_string(TUIInputBoxStyle style) {
             return "background";
         case INPUT_STYLE_BORDER:
             return "border";
+        case INPUT_STYLE_HORIZONTAL:
+            return "horizontal";
         case INPUT_STYLE_BLAND:
         default:
             return "bland";
@@ -41,6 +43,8 @@ TUIInputBoxStyle config_input_style_from_string(const char *str) {
         return INPUT_STYLE_BACKGROUND;
     } else if (strcmp(str, "border") == 0) {
         return INPUT_STYLE_BORDER;
+    } else if (strcmp(str, "horizontal") == 0) {
+        return INPUT_STYLE_HORIZONTAL;
     }
     return INPUT_STYLE_BLAND;
 }

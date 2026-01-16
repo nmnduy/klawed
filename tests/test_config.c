@@ -43,6 +43,12 @@ int main(void) {
     } else {
         printf("  PASS: INPUT_STYLE_BORDER -> 'border'\n");
     }
+    if (strcmp(config_input_style_to_string(INPUT_STYLE_HORIZONTAL), "horizontal") != 0) {
+        printf("  FAIL: Expected 'horizontal' for INPUT_STYLE_HORIZONTAL\n");
+        failures++;
+    } else {
+        printf("  PASS: INPUT_STYLE_HORIZONTAL -> 'horizontal'\n");
+    }
 
     // Test 3: String to style conversion
     printf("\nTest 3: config_input_style_from_string()\n");
@@ -63,6 +69,12 @@ int main(void) {
         failures++;
     } else {
         printf("  PASS: 'border' -> INPUT_STYLE_BORDER\n");
+    }
+    if (config_input_style_from_string("horizontal") != INPUT_STYLE_HORIZONTAL) {
+        printf("  FAIL: Expected INPUT_STYLE_HORIZONTAL for 'horizontal'\n");
+        failures++;
+    } else {
+        printf("  PASS: 'horizontal' -> INPUT_STYLE_HORIZONTAL\n");
     }
     if (config_input_style_from_string("unknown") != INPUT_STYLE_BLAND) {
         printf("  FAIL: Expected INPUT_STYLE_BLAND for unknown value\n");
