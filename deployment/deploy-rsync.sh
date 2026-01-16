@@ -192,6 +192,12 @@ rsync -avz \
     "$LOCAL_PATH/deployment/" \
     "$REMOTE_HOST:$REMOTE_PATH/deployment/"
 
+# Sync admin scripts
+echo "   → Syncing scripts/..."
+rsync -avz \
+    "$LOCAL_PATH/scripts/" \
+    "$REMOTE_HOST:$REMOTE_PATH/scripts/"
+
 # Sync source resources (templates, CSS, JS, built assets)
 echo "   → Syncing src/main/resources/..."
 rsync -avz \

@@ -153,6 +153,8 @@ activate_user() {
 
 # Parse arguments
 DB_PATH=""  # Will be set by --db option if provided
+ACTION=""
+EMAIL=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -168,37 +170,52 @@ while [[ $# -gt 0 ]]; do
             usage
             ;;
         -l|--list)
-            list_users
+            ACTION="list"
+            shift
             ;;
         -d|--deactivate)
             if [ -z "$2" ]; then
                 echo -e "${RED}Error: Email required${NC}"
                 usage
             fi
-            deactivate_user "$2"
+            ACTION="deactivate"
+            EMAIL="$2"
+            shift 2
             ;;
         -a|--activate)
             if [ -z "$2" ]; then
                 echo -e "${RED}Error: Email required${NC}"
                 usage
             fi
-            activate_user "$2"
+            ACTION="activate"
+            EMAIL="$2"
+            shift 2
             ;;
         *)
-            invite_user "$1"
+            ACTION="invite"
+            EMAIL="$1"
+            shift
             ;;
     esac
-    exit $?
 done
 
 # If DB_PATH was not set via --db, use default logic
 if [ -z "$DB_PATH" ]; then
+    # Production database path
+    PROD_DB_PATH="/var/lib/filesurf/data/filesurf.db"
+    
+    # Development database paths
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
     DEFAULT_DB_PATH="${PROJECT_DIR}/data/filesurf.db"
-
-    # If database doesn't exist in current directory, check parent (for worktrees)
-    if [ ! -f "$DEFAULT_DB_PATH" ]; then
+    
+    # Check in order: production, development, worktree parent
+    if [ -f "$PROD_DB_PATH" ]; then
+        DB_PATH="$PROD_DB_PATH"
+    elif [ -f "$DEFAULT_DB_PATH" ]; then
+        DB_PATH="$DEFAULT_DB_PATH"
+    else
+        # Check parent directory (for worktrees)
         PARENT_PROJECT_DIR="$(dirname "$PROJECT_DIR")"
         PARENT_DB_PATH="${PARENT_PROJECT_DIR}/data/filesurf.db"
         if [ -f "$PARENT_DB_PATH" ]; then
@@ -206,9 +223,27 @@ if [ -z "$DB_PATH" ]; then
         else
             DB_PATH="$DEFAULT_DB_PATH"
         fi
-    else
-        DB_PATH="$DEFAULT_DB_PATH"
     fi
 fi
 
-usage
+# Execute action
+case "$ACTION" in
+    list)
+        list_users
+        ;;
+    deactivate)
+        deactivate_user "$EMAIL"
+        ;;
+    activate)
+        activate_user "$EMAIL"
+        ;;
+    invite)
+        if [ -z "$EMAIL" ]; then
+            usage
+        fi
+        invite_user "$EMAIL"
+        ;;
+    *)
+        usage
+        ;;
+esac
