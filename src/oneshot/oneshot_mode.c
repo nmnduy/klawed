@@ -1,6 +1,6 @@
 /*
  * Oneshot Mode
- * 
+ *
  * Main entry point for single-command (oneshot) mode execution.
  * Executes a single prompt, processes tool calls recursively, and exits.
  */

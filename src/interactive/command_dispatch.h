@@ -6,7 +6,7 @@
 
 /**
  * Handle vim-style commands from input box
- * 
+ *
  * Processes commands starting with ':' including:
  * - :q, :quit, :wq - Exit klawed
  * - :clear - Clear conversation history
@@ -15,7 +15,7 @@
  * - :re !<cmd> - Execute command and insert output into input buffer
  * - :vim - Open vim editor
  * - :git - Open vim-fugitive
- * 
+ *
  * @param tui       TUI state
  * @param queue     Message queue for async updates
  * @param command   Command string (starting with ':')

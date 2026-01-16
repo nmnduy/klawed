@@ -3,7 +3,7 @@
 
 /**
  * String Utilities
- * 
+ *
  * Helper functions for string manipulation.
  */
 

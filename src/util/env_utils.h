@@ -3,7 +3,7 @@
 
 /**
  * Environment Utilities
- * 
+ *
  * Helper functions for environment variables and system information.
  */
 

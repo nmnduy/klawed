@@ -33,7 +33,7 @@ int tui_history_start_search(TUIState *tui) {
 
     LOG_DEBUG("[TUI] Ctrl+R pressed - starting history search (history entries: %p, count: %d)",
               (void *)tui->input_history, tui->input_history_count);
-    
+
     if (history_search_start(&tui->history_search,
                              tui->wm.screen_height,
                              tui->wm.screen_width,
@@ -60,7 +60,7 @@ int tui_history_process_search_key(TUIState *tui, int ch, const char *prompt) {
 
     LOG_DEBUG("[TUI] Processing key %d in history search mode", ch);
     int result = history_search_process_key(&tui->history_search, ch);
-    
+
     if (result == 1) {
         // Selection made - insert command into input buffer
         const char *selected = history_search_get_selected(&tui->history_search);
@@ -84,7 +84,7 @@ int tui_history_process_search_key(TUIState *tui, int ch, const char *prompt) {
         // Continue - just render the popup
         history_search_render(&tui->history_search);
     }
-    
+
     return 0;
 }
 
@@ -132,7 +132,7 @@ int tui_history_navigate_prev(TUIState *tui, const char *prompt) {
             }
         }
     }
-    
+
     return 0;
 }
 
@@ -202,7 +202,7 @@ int tui_history_navigate_next(TUIState *tui, const char *prompt) {
             }
         }
     }
-    
+
     return 0;
 }
 
@@ -218,7 +218,7 @@ void tui_history_append(TUIState *tui, const char *input) {
     if (tui->history_file) {
         history_file_append(tui->history_file, input);
     }
-    
+
     // Append to in-memory history with simple de-dup of last entry
     if (tui->input_history_count == 0 ||
         strcmp(tui->input_history[tui->input_history_count - 1], input) != 0) {
@@ -235,7 +235,7 @@ void tui_history_append(TUIState *tui, const char *input) {
             tui->input_history[tui->input_history_count++] = strdup(input);
         }
     }
-    
+
     // Reset history navigation state after append
     tui_history_reset_navigation(tui);
 }

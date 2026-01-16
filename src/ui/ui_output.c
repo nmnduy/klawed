@@ -122,7 +122,7 @@ void ui_set_status(TUIState *tui,
         tui_update_status(tui, safe);
         return;
     }
-    
+
     // Console mode fallback
     if (safe[0] != '\0') {
         print_status(safe);

@@ -36,7 +36,7 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
                                          strcasecmp(is_subagent_env, "yes") == 0);
 
     LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d, is_subagent=%d", plan_mode, is_subagent);
-    
+
     // Sleep tool
     cJSON *sleep_tool = cJSON_CreateObject();
     cJSON_AddStringToObject(sleep_tool, "type", "function");

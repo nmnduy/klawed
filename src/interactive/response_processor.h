@@ -9,10 +9,10 @@
 
 /**
  * Process API response in interactive mode
- * 
+ *
  * Handles assistant text content, tool calls, and recursive API calls.
  * Executes tools in parallel threads and processes follow-up responses.
- * 
+ *
  * @param state         Conversation state
  * @param response      API response to process
  * @param tui           TUI state (NULL for non-TUI mode)
@@ -27,9 +27,9 @@ void process_response(ConversationState *state,
 
 /**
  * AI worker instruction handler
- * 
+ *
  * Called by AI worker thread to handle API calls and process responses.
- * 
+ *
  * @param ctx           AI worker context
  * @param instruction   Instruction to execute
  */

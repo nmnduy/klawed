@@ -12,7 +12,7 @@ typedef struct ConversationState ConversationState;
 
 /**
  * tool_bash - Executes bash commands with timeout protection
- * 
+ *
  * @param params JSON object with: { "command": <command>, "timeout": <optional_seconds> }
  * @param state Conversation state containing interrupt flag
  * @return JSON object with exit_code, output, and optional timeout_error/truncation_warning

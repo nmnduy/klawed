@@ -10,13 +10,13 @@
 
 /**
  * Print token usage summary for the current session
- * 
+ *
  * This function retrieves token usage statistics from the persistence database
  * and prints a formatted summary to stderr.
- * 
+ *
  * Parameters:
  *   state: Conversation state containing session_id and persistence_db
- * 
+ *
  * Returns:
  *   void
  */
