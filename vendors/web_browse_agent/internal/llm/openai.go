@@ -134,19 +134,6 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 	}
 
 	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Debug logging for request payload
-	log.Printf("DEBUG: OpenAI API Request URL: %s", c.baseURL)
-	log.Printf("DEBUG: OpenAI API Request Model: %s", c.model)
-	log.Printf("DEBUG: OpenAI API Tools count: %d", len(responsesTools))
-	if len(responsesTools) > 0 {
-		toolsJSON, _ := json.Marshal(responsesTools)
-		log.Printf("DEBUG: OpenAI API Tools payload: %s", string(toolsJSON))
-	}
-	log.Printf("DEBUG: OpenAI API Full Request: %s", string(jsonData))
 
 	// Create HTTP request
 	req, err := http.NewRequest("POST", c.baseURL, bytes.NewBuffer(jsonData))
