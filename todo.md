@@ -16,7 +16,7 @@
 - [ ] how to segment by markets?
     - [ ] .edu?
     - [ ] use ai to segment 
-    - [ ] find products
+        - [ ] find products
 
 ### Features
 
