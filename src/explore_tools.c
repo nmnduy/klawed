@@ -205,61 +205,6 @@ static char* execute_web_agent_raw(const char *args, int *exit_code) {
     return output;
 }
 
-// Execute web_browse_agent with a raw command string (no prompt wrapping)
-static char* execute_web_agent_raw(const char *args, int *exit_code) {
-    if (!args) {
-        return NULL;
-    }
-
-    const char *agent_path = get_web_agent_path();
-    int headless = is_headless_mode();
-
-    size_t cmd_size = strlen(agent_path) + strlen(args) + 256;
-    char *command = malloc(cmd_size);
-    if (!command) {
-        return NULL;
-    }
-
-    snprintf(command, cmd_size, "timeout %d %s %s %s 2>&1",
-             WEB_AGENT_TIMEOUT,
-             agent_path,
-             headless ? "--headless" : "",
-             args);
-
-    LOG_INFO("Executing web_browse_agent (raw): %s", command);
-
-    FILE *fp = popen(command, "r");
-    free(command);
-
-    if (!fp) {
-        LOG_ERROR("Failed to execute web_browse_agent: %s", strerror(errno));
-        return NULL;
-    }
-
-    char *output = malloc(MAX_WEB_OUTPUT);
-    if (!output) {
-        pclose(fp);
-        return NULL;
-    }
-
-    size_t total = 0;
-    size_t n;
-    while ((n = fread(output + total, 1, MAX_WEB_OUTPUT - total - 1, fp)) > 0) {
-        total += n;
-        if (total >= MAX_WEB_OUTPUT - 1) {
-            break;
-        }
-    }
-    output[total] = '\0';
-
-    int status = pclose(fp);
-    if (exit_code) {
-        *exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-    }
-
-    return output;
-}
-
 // HTTP response buffer for Context7 API
 typedef struct {
     char *data;
