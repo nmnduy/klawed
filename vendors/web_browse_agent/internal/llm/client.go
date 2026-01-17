@@ -42,4 +42,6 @@ type ToolDefinition struct {
 type Client interface {
 	Chat(messages []Message, tools []ToolDefinition) (*Response, error)
 	GetModel() string
+	GetBaseURL() string
+	Provider() string
 }

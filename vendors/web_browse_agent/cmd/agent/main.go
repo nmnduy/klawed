@@ -34,8 +34,8 @@ Examples:
   web-browse-agent "go to google.com and search for playwright"
   web-browse-agent --interactive
   web-browse-agent --provider anthropic "test the login form"`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: runAgent,
+		Args:    cobra.MaximumNArgs(1),
+		RunE:    runAgent,
 		Version: version.Version,
 	}
 

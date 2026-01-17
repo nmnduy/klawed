@@ -17,9 +17,10 @@ const (
 
 // AnthropicClient implements the Client interface for Anthropic Claude
 type AnthropicClient struct {
-	apiKey string
-	model  string
-	client *http.Client
+	apiKey  string
+	model   string
+	baseURL string
+	client  *http.Client
 }
 
 // NewAnthropicClient creates a new Anthropic client
@@ -44,6 +45,16 @@ func NewAnthropicClient() (*AnthropicClient, error) {
 // GetModel returns the model name
 func (c *AnthropicClient) GetModel() string {
 	return c.model
+}
+
+// GetBaseURL returns the base URL for the Anthropic API
+func (c *AnthropicClient) GetBaseURL() string {
+	return anthropicAPIURL
+}
+
+// Provider returns the provider name
+func (c *AnthropicClient) Provider() string {
+	return "anthropic"
 }
 
 // Anthropic API request/response types

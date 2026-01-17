@@ -10,11 +10,12 @@ import (
 )
 
 const (
-	openAIAPIURL     = "https://api.openai.com/v1/chat/completions"
+	openAIAPIURL       = "https://api.openai.com/v1/responses"
 	defaultOpenAIModel = "gpt-4o"
 )
 
 // OpenAIClient implements the Client interface for OpenAI
+// using the newer /v1/responses endpoint.
 type OpenAIClient struct {
 	apiKey  string
 	model   string
@@ -52,73 +53,74 @@ func (c *OpenAIClient) GetModel() string {
 	return c.model
 }
 
-// OpenAI API request/response types
-type openAIRequest struct {
-	Model    string          `json:"model"`
-	Messages []openAIMessage `json:"messages"`
-	Tools    []openAITool    `json:"tools,omitempty"`
+// GetBaseURL returns the base URL for the OpenAI API
+func (c *OpenAIClient) GetBaseURL() string {
+	return c.baseURL
 }
 
-type openAIMessage struct {
-	Role       string           `json:"role"`
-	Content    interface{}      `json:"content,omitempty"`
-	ToolCalls  []openAIToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string           `json:"tool_call_id,omitempty"`
+// Provider returns the provider name
+func (c *OpenAIClient) Provider() string {
+	return "openai"
 }
 
-type openAITool struct {
-	Type     string         `json:"type"`
-	Function openAIFunction `json:"function"`
+// OpenAI Responses API request/response types
+type responsesRequest struct {
+	Model           string             `json:"model"`
+	Input           []responsesMessage `json:"input"`
+	Tools           []responsesTool    `json:"tools,omitempty"`
+	Instructions    string             `json:"instructions,omitempty"`
+	MaxOutputTokens int                `json:"max_output_tokens,omitempty"`
 }
 
-type openAIFunction struct {
+type responsesMessage struct {
+	Type    string             `json:"type"`
+	Role    string             `json:"role"`
+	Content []responsesContent `json:"content"`
+}
+
+type responsesContent struct {
+	Type      string `json:"type"`
+	Text      string `json:"text,omitempty"`
+	ID        string `json:"id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
+}
+
+type responsesTool struct {
+	Type     string            `json:"type"`
+	Function responsesFunction `json:"function"`
+}
+
+type responsesFunction struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
 	Parameters  map[string]interface{} `json:"parameters"`
 }
 
-type openAIToolCall struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
-}
-
-type openAIResponse struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	Model   string `json:"model"`
-	Choices []struct {
-		Index        int           `json:"index"`
-		Message      openAIMessage `json:"message"`
-		FinishReason string        `json:"finish_reason"`
-	} `json:"choices"`
-	Error *struct {
+type responsesResponse struct {
+	Output []responsesMessage `json:"output"`
+	Status string             `json:"status,omitempty"`
+	Error  *struct {
 		Message string `json:"message"`
-		Type    string `json:"type"`
+		Type    string `json:"type,omitempty"`
 	} `json:"error,omitempty"`
 }
 
-// Chat sends messages to OpenAI and returns the response
+// Chat sends messages to OpenAI and returns the response using the Responses API
 func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Response, error) {
-	// Convert messages to OpenAI format
-	openAIMessages := make([]openAIMessage, 0, len(messages))
-	for _, msg := range messages {
-		openAIMsg := convertToOpenAIMessage(msg)
-		openAIMessages = append(openAIMessages, openAIMsg)
+	instructions, inputItems, err := convertToResponsesInput(messages)
+	if err != nil {
+		return nil, err
 	}
 
-	// Convert tools to OpenAI format
-	var openAITools []openAITool
+	// Convert tools to Responses API format
+	var responsesTools []responsesTool
 	if len(tools) > 0 {
-		openAITools = make([]openAITool, len(tools))
+		responsesTools = make([]responsesTool, len(tools))
 		for i, tool := range tools {
-			openAITools[i] = openAITool{
+			responsesTools[i] = responsesTool{
 				Type: "function",
-				Function: openAIFunction{
+				Function: responsesFunction{
 					Name:        tool.Name,
 					Description: tool.Description,
 					Parameters:  tool.InputSchema,
@@ -128,10 +130,12 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 	}
 
 	// Build request
-	reqBody := openAIRequest{
-		Model:    c.model,
-		Messages: openAIMessages,
-		Tools:    openAITools,
+	reqBody := responsesRequest{
+		Model:        c.model,
+		Input:        inputItems,
+		Tools:        responsesTools,
+		Instructions: instructions,
+		// We currently rely on model defaults for max tokens
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -161,136 +165,229 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("OpenAI API error: status %d: %s", resp.StatusCode, string(body))
+	}
+
 	// Parse response
-	var openAIResp openAIResponse
-	if err := json.Unmarshal(body, &openAIResp); err != nil {
+	var responsesResp responsesResponse
+	if err := json.Unmarshal(body, &responsesResp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	// Check for API error
-	if openAIResp.Error != nil {
-		return nil, fmt.Errorf("OpenAI API error: %s", openAIResp.Error.Message)
+	if responsesResp.Error != nil {
+		return nil, fmt.Errorf("OpenAI API error: %s", responsesResp.Error.Message)
 	}
 
-	if len(openAIResp.Choices) == 0 {
-		return nil, fmt.Errorf("no choices in OpenAI response")
+	if len(responsesResp.Output) == 0 {
+		return nil, fmt.Errorf("no output in OpenAI response")
 	}
 
 	// Convert response to our format
-	choice := openAIResp.Choices[0]
 	response := &Response{
-		StopReason: choice.FinishReason,
+		StopReason: responsesResp.Status,
 	}
 
-	// Extract content
-	if choice.Message.Content != nil {
-		switch v := choice.Message.Content.(type) {
-		case string:
-			response.Content = v
+	// Collect text and tool calls from the assistant messages
+	var textContent string
+	var toolCalls []ToolCall
+
+	for _, item := range responsesResp.Output {
+		for _, content := range item.Content {
+			switch content.Type {
+			case "output_text":
+				textContent += content.Text
+			case "function_call":
+				// Parse arguments JSON string to map
+				var input map[string]interface{}
+				if content.Arguments != "" {
+					_ = json.Unmarshal([]byte(content.Arguments), &input)
+				}
+				if input == nil {
+					input = make(map[string]interface{})
+				}
+				toolCalls = append(toolCalls, ToolCall{
+					ID:    content.ID,
+					Name:  content.Name,
+					Input: input,
+				})
+			}
 		}
 	}
 
-	// Extract tool calls
-	if len(choice.Message.ToolCalls) > 0 {
-		response.ToolCalls = make([]ToolCall, len(choice.Message.ToolCalls))
-		for i, tc := range choice.Message.ToolCalls {
-			var input map[string]interface{}
-			if err := json.Unmarshal([]byte(tc.Function.Arguments), &input); err != nil {
-				input = make(map[string]interface{})
-			}
-			response.ToolCalls[i] = ToolCall{
-				ID:    tc.ID,
-				Name:  tc.Function.Name,
-				Input: input,
-			}
+	response.Content = textContent
+	response.ToolCalls = toolCalls
+
+	// If no explicit status, set a default stop reason
+	if response.StopReason == "" {
+		if len(toolCalls) > 0 {
+			response.StopReason = "tool_calls"
+		} else {
+			response.StopReason = "stop"
 		}
 	}
 
 	return response, nil
 }
 
-// convertToOpenAIMessage converts our Message type to OpenAI format
-func convertToOpenAIMessage(msg Message) openAIMessage {
-	openAIMsg := openAIMessage{
-		Role: msg.Role,
+// convertToResponsesInput converts our Message list to the Responses API input format.
+// Returns the instructions string (from the first system message) and the input array.
+func convertToResponsesInput(messages []Message) (string, []responsesMessage, error) {
+	var instructions string
+	inputItems := make([]responsesMessage, 0, len(messages))
+
+	for _, msg := range messages {
+		switch msg.Role {
+		case "system":
+			if instructions == "" {
+				if s, ok := msg.Content.(string); ok {
+					instructions = s
+				} else if blocks, ok := msg.Content.([]ContentBlock); ok {
+					for _, b := range blocks {
+						if b.Type == "text" && b.Text != "" {
+							instructions = b.Text
+							break
+						}
+					}
+				}
+			}
+			// System messages are not appended to input; instructions covers them
+			continue
+		case "user":
+			contents := buildUserContents(msg.Content)
+			if len(contents) == 0 {
+				continue
+			}
+			inputItems = append(inputItems, responsesMessage{
+				Type:    "message",
+				Role:    "user",
+				Content: contents,
+			})
+		case "assistant":
+			contents := buildAssistantContents(msg.Content)
+			if len(contents) == 0 {
+				continue
+			}
+			inputItems = append(inputItems, responsesMessage{
+				Type:    "message",
+				Role:    "assistant",
+				Content: contents,
+			})
+		}
 	}
 
-	switch content := msg.Content.(type) {
+	return instructions, inputItems, nil
+}
+
+// buildUserContents converts user content into Responses API content blocks.
+func buildUserContents(content interface{}) []responsesContent {
+	switch v := content.(type) {
 	case string:
-		openAIMsg.Content = content
+		if v == "" {
+			return nil
+		}
+		return []responsesContent{{
+			Type: "input_text",
+			Text: v,
+		}}
 	case []ContentBlock:
-		// Handle content blocks - check for tool results
-		for _, block := range content {
-			if block.Type == "tool_result" {
-				openAIMsg.Role = "tool"
-				openAIMsg.ToolCallID = block.ToolUseID
-				openAIMsg.Content = block.Content
-				return openAIMsg
+		blocks := make([]responsesContent, 0, len(v))
+		for _, b := range v {
+			switch b.Type {
+			case "text":
+				if b.Text != "" {
+					blocks = append(blocks, responsesContent{Type: "input_text", Text: b.Text})
+				}
+			case "tool_result":
+				// Encode tool result as JSON string with call id so the model can associate it
+				wrapped := map[string]interface{}{
+					"tool_call_id": b.ToolUseID,
+					"output":       b.Content,
+				}
+				wrappedJSON, _ := json.Marshal(wrapped)
+				blocks = append(blocks, responsesContent{Type: "input_text", Text: string(wrappedJSON)})
 			}
 		}
-		// For assistant messages with tool_use blocks
-		var textContent string
-		var toolCalls []openAIToolCall
-		for _, block := range content {
-			switch block.Type {
+		return blocks
+	case []interface{}:
+		converted := convertInterfaceBlocks(v)
+		return buildUserContents(converted)
+	default:
+		return nil
+	}
+}
+
+// buildAssistantContents converts assistant content into Responses API content blocks.
+func buildAssistantContents(content interface{}) []responsesContent {
+	switch v := content.(type) {
+	case string:
+		if v == "" {
+			return nil
+		}
+		return []responsesContent{{
+			Type: "output_text",
+			Text: v,
+		}}
+	case []ContentBlock:
+		blocks := make([]responsesContent, 0, len(v))
+		for _, b := range v {
+			switch b.Type {
 			case "text":
-				textContent = block.Text
+				if b.Text != "" {
+					blocks = append(blocks, responsesContent{Type: "output_text", Text: b.Text})
+				}
 			case "tool_use":
-				inputJSON, _ := json.Marshal(block.Input)
-				toolCalls = append(toolCalls, openAIToolCall{
-					ID:   block.ID,
-					Type: "function",
-					Function: struct {
-						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
-					}{
-						Name:      block.Name,
-						Arguments: string(inputJSON),
-					},
+				argsBytes, _ := json.Marshal(b.Input)
+				blocks = append(blocks, responsesContent{
+					Type:      "function_call",
+					ID:        b.ID,
+					Name:      b.Name,
+					Arguments: string(argsBytes),
 				})
 			}
 		}
-		if len(toolCalls) > 0 {
-			openAIMsg.ToolCalls = toolCalls
-			if textContent != "" {
-				openAIMsg.Content = textContent
-			}
-		} else if textContent != "" {
-			openAIMsg.Content = textContent
-		}
+		return blocks
 	case []interface{}:
-		// Handle raw interface array (from JSON unmarshaling)
-		blocks := make([]ContentBlock, 0)
-		for _, item := range content {
-			if m, ok := item.(map[string]interface{}); ok {
-				block := ContentBlock{}
-				if t, ok := m["type"].(string); ok {
-					block.Type = t
-				}
-				if t, ok := m["text"].(string); ok {
-					block.Text = t
-				}
-				if t, ok := m["id"].(string); ok {
-					block.ID = t
-				}
-				if t, ok := m["name"].(string); ok {
-					block.Name = t
-				}
-				if t, ok := m["input"]; ok {
-					block.Input = t
-				}
-				if t, ok := m["tool_use_id"].(string); ok {
-					block.ToolUseID = t
-				}
-				if t, ok := m["content"].(string); ok {
-					block.Content = t
-				}
-				blocks = append(blocks, block)
-			}
-		}
-		// Recursively convert with typed blocks
-		return convertToOpenAIMessage(Message{Role: msg.Role, Content: blocks})
+		converted := convertInterfaceBlocks(v)
+		return buildAssistantContents(converted)
+	default:
+		return nil
 	}
+}
 
-	return openAIMsg
+// convertInterfaceBlocks converts a raw []interface{} (from JSON) into []ContentBlock
+// so we can reuse the typed handlers above.
+func convertInterfaceBlocks(raw []interface{}) []ContentBlock {
+	blocks := make([]ContentBlock, 0, len(raw))
+	for _, item := range raw {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		block := ContentBlock{}
+		if t, ok := m["type"].(string); ok {
+			block.Type = t
+		}
+		if t, ok := m["text"].(string); ok {
+			block.Text = t
+		}
+		if t, ok := m["id"].(string); ok {
+			block.ID = t
+		}
+		if t, ok := m["name"].(string); ok {
+			block.Name = t
+		}
+		if t, ok := m["input"]; ok {
+			block.Input = t
+		}
+		if t, ok := m["tool_use_id"].(string); ok {
+			block.ToolUseID = t
+		}
+		if t, ok := m["content"].(string); ok {
+			block.Content = t
+		}
+		blocks = append(blocks, block)
+	}
+	return blocks
 }
