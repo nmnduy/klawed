@@ -131,10 +131,18 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
                     cJSON *content_array = cJSON_CreateArray();
                     cJSON *tool_result = cJSON_CreateObject();
                     cJSON_AddStringToObject(tool_result, "type", "input_text");
-                    cJSON_AddStringToObject(tool_result, "call_id", c->tool_id);
 
-                    // Convert output to string
-                    char *output_str = cJSON_PrintUnformatted(c->tool_output);
+                    // Wrap tool output with its call id inside the text payload. The Responses
+                    // API rejects unknown fields on input_text (e.g., call_id), so we encode
+                    // the call_id alongside the output JSON inside the text field.
+                    cJSON *wrapped = cJSON_CreateObject();
+                    cJSON_AddStringToObject(wrapped, "tool_call_id", c->tool_id ? c->tool_id : "");
+                    cJSON_AddItemToObject(wrapped, "output",
+                        cJSON_Duplicate(c->tool_output, /*recurse*/1));
+
+                    char *output_str = cJSON_PrintUnformatted(wrapped);
+                    cJSON_Delete(wrapped);
+
                     cJSON_AddStringToObject(tool_result, "text", output_str ? output_str : "{}");
                     free(output_str);
 
