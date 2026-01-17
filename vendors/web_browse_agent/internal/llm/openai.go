@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 )
@@ -87,14 +88,10 @@ type responsesContent struct {
 }
 
 type responsesTool struct {
-	Type     string            `json:"type"`
-	Function responsesFunction `json:"function"`
-}
-
-type responsesFunction struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Parameters  map[string]interface{} `json:"parameters"`
+	Type        string                 `json:"type"`
+	Name        string                 `json:"name,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 }
 
 type responsesResponse struct {
@@ -119,12 +116,10 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 		responsesTools = make([]responsesTool, len(tools))
 		for i, tool := range tools {
 			responsesTools[i] = responsesTool{
-				Type: "function",
-				Function: responsesFunction{
-					Name:        tool.Name,
-					Description: tool.Description,
-					Parameters:  tool.InputSchema,
-				},
+				Type:        "function",
+				Name:        tool.Name,
+				Description: tool.Description,
+				Parameters:  tool.InputSchema,
 			}
 		}
 	}
@@ -142,6 +137,16 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
+
+	// Debug logging for request payload
+	log.Printf("DEBUG: OpenAI API Request URL: %s", c.baseURL)
+	log.Printf("DEBUG: OpenAI API Request Model: %s", c.model)
+	log.Printf("DEBUG: OpenAI API Tools count: %d", len(responsesTools))
+	if len(responsesTools) > 0 {
+		toolsJSON, _ := json.Marshal(responsesTools)
+		log.Printf("DEBUG: OpenAI API Tools payload: %s", string(toolsJSON))
+	}
+	log.Printf("DEBUG: OpenAI API Full Request: %s", string(jsonData))
 
 	// Create HTTP request
 	req, err := http.NewRequest("POST", c.baseURL, bytes.NewBuffer(jsonData))
