@@ -126,6 +126,61 @@ export BROWSER_HEADLESS=true
 | `BROWSER_OUTPUT_DIR` | Directory for screenshots and outputs | `.` (current) |
 | `BROWSER_USER_DATA_DIR` | Path to user data directory for persistent sessions | - |
 
+### SQLite Logging Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `WEB_BROWSE_AGENT_DB_PATH` | Path to SQLite database for API call logging | `.klawed/web_browse_agent_api_calls.db` |
+| `KLAWED_DB_PATH` | Alternative path (for consistency with klawed) | Same as above |
+
+## SQLite API Call Logging
+
+The web_browse_agent can log all API calls to a SQLite database for debugging and analysis purposes. This feature is similar to the logging in klawed.
+
+### Enabling SQLite Logging
+
+```bash
+# Enable logging with default database path
+./web-browse-agent --sqlite-log "your prompt"
+
+# Enable logging with custom database path
+./web-browse-agent --sqlite-log --sqlite-db-path ./my_api_calls.db "your prompt"
+
+# Using environment variable
+export WEB_BROWSE_AGENT_DB_PATH="./custom_path.db"
+./web-browse-agent --sqlite-log "your prompt"
+```
+
+### Database Schema
+
+The SQLite database contains two main tables:
+
+1. **api_calls** - Logs each API call with:
+   - Timestamp and duration
+   - Request and response JSON
+   - Model and provider information
+   - HTTP status and error messages
+   - Tool call count
+
+2. **token_usage** - Logs token usage statistics (when available from API response):
+   - Prompt, completion, and total tokens
+   - Cached tokens and cache hit/miss statistics
+
+### Querying the Database
+
+You can use standard SQLite tools to query the logged data:
+
+```bash
+# Count total API calls
+sqlite3 .klawed/web_browse_agent_api_calls.db "SELECT COUNT(*) FROM api_calls;"
+
+# View recent API calls
+sqlite3 .klawed/web_browse_agent_api_calls.db "SELECT timestamp, model, status, duration_ms FROM api_calls ORDER BY created_at DESC LIMIT 10;"
+
+# Check for errors
+sqlite3 .klawed/web_browse_agent_api_calls.db "SELECT timestamp, error_message FROM api_calls WHERE status = 'error';"
+```
+
 ## Available Tools
 
 ### Core Tools

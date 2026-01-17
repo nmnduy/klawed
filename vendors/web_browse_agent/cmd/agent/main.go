@@ -5,22 +5,26 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/puter/web-browse-agent/internal/agent"
 	"github.com/puter/web-browse-agent/internal/browser"
 	"github.com/puter/web-browse-agent/internal/llm"
+	"github.com/puter/web-browse-agent/internal/persistence"
 	"github.com/puter/web-browse-agent/internal/tool"
 	"github.com/puter/web-browse-agent/pkg/version"
 	"github.com/spf13/cobra"
 )
 
 var (
-	provider    string
-	interactive bool
-	verbose     bool
-	headless    bool
-	noBrowser   bool
-	logFile     string
+	provider       string
+	interactive    bool
+	verbose        bool
+	headless       bool
+	noBrowser      bool
+	logFile        string
+	sqliteLog      bool
+	sqliteDBPath   string
 )
 
 func main() {
@@ -46,6 +50,8 @@ Examples:
 	rootCmd.Flags().BoolVar(&headless, "headless", false, "Run browser in headless mode")
 	rootCmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Disable browser tools")
 	rootCmd.Flags().StringVar(&logFile, "log-file", "", "Log file path (default: console only)")
+	rootCmd.Flags().BoolVar(&sqliteLog, "sqlite-log", false, "Enable SQLite logging of API calls")
+	rootCmd.Flags().StringVar(&sqliteDBPath, "sqlite-db-path", "", "SQLite database path (default: ./.klawed/web_browse_agent_api_calls.db or $WEB_BROWSE_AGENT_DB_PATH/$KLAWED_DB_PATH)")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -104,8 +110,30 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Initialize persistence if enabled
+	var persistenceDB *persistence.DB
+	if sqliteLog {
+		dbPath := sqliteDBPath
+		if dbPath == "" {
+			dbPath = persistence.GetDefaultDBPath()
+		}
+		
+		var err error
+		persistenceDB, err = persistence.NewDB(dbPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to initialize SQLite logging: %v\n", err)
+			fmt.Fprintln(os.Stderr, "Continuing without SQLite logging...")
+		} else {
+			defer persistenceDB.Close()
+			fmt.Printf("SQLite logging enabled: %s\n", dbPath)
+		}
+	}
+
+	// Generate session ID
+	sessionID := fmt.Sprintf("web-browse-agent-%d", time.Now().Unix())
+
 	// Create agent
-	ag := agent.NewAgent(client, registry, verbose, logFile)
+	ag := agent.NewAgent(client, registry, verbose, logFile, persistenceDB, sessionID)
 
 	if interactive {
 		return runInteractive(ag)

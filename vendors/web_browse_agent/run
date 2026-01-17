@@ -1,6 +1,18 @@
+#!/bin/bash
+
+# Set up LLM configuration for DeepSeek
 export LLM_PROVIDER=openai
 export OPENAI_API_BASE=https://api.deepseek.com/v1/chat/completions
 export OPENAI_API_KEY=$DEEPSEEK_API_KEY
 export OPENAI_MODEL=deepseek-chat
-go run cmd/agent/main.go "go to shopee.vn and says what's on the front page" --log-file agent.log -v
 
+# Check if a prompt was provided
+if [ $# -eq 0 ]; then
+    echo "Error: No prompt provided"
+    echo "Usage: ./run \"<your prompt>\""
+    echo "Example: ./run \"go to google.com and search for something\""
+    exit 1
+fi
+
+# Run the agent with the provided prompt
+go run cmd/agent/main.go "$1" --log-file agent.log

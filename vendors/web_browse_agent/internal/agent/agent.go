@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/puter/web-browse-agent/internal/llm"
+	"github.com/puter/web-browse-agent/internal/persistence"
 	"github.com/puter/web-browse-agent/internal/tool"
 )
 
@@ -41,16 +42,18 @@ DO NOT respond with just text describing what you would do. You MUST actually ca
 
 // Agent implements the agentic loop
 type Agent struct {
-	client   llm.Client
-	registry *tool.Registry
-	messages []llm.Message
-	verbose  bool
-	logFile  *os.File
-	logPath  string
+	client      llm.Client
+	registry    *tool.Registry
+	messages    []llm.Message
+	verbose     bool
+	logFile     *os.File
+	logPath     string
+	persistence *persistence.DB
+	sessionID   string
 }
 
 // NewAgent creates a new agent with the given LLM client and tool registry
-func NewAgent(client llm.Client, registry *tool.Registry, verbose bool, logPath string) *Agent {
+func NewAgent(client llm.Client, registry *tool.Registry, verbose bool, logPath string, persistenceDB *persistence.DB, sessionID string) *Agent {
 	var logFile *os.File
 	var err error
 
@@ -62,12 +65,14 @@ func NewAgent(client llm.Client, registry *tool.Registry, verbose bool, logPath 
 	}
 
 	return &Agent{
-		client:   client,
-		registry: registry,
-		messages: []llm.Message{},
-		verbose:  verbose,
-		logFile:  logFile,
-		logPath:  logPath,
+		client:      client,
+		registry:    registry,
+		messages:    []llm.Message{},
+		verbose:     verbose,
+		logFile:     logFile,
+		logPath:     logPath,
+		persistence: persistenceDB,
+		sessionID:   sessionID,
 	}
 }
 
@@ -117,8 +122,19 @@ func (a *Agent) Run(userPrompt string) (string, error) {
 	for iteration := 0; iteration < MaxIterations; iteration++ {
 		a.log("--- Iteration", iteration+1, "---")
 
-		// Call LLM
-		response, err := a.client.Chat(a.messages, tools)
+		// Call LLM with optional logging
+		var response *llm.Response
+		var err error
+		
+		if a.persistence != nil {
+			// Use logging client
+			loggingClient := llm.NewLoggingClient(a.client, a.persistence, a.sessionID)
+			response, err = loggingClient.Chat(a.messages, tools)
+		} else {
+			// Use regular client
+			response, err = a.client.Chat(a.messages, tools)
+		}
+		
 		if err != nil {
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
