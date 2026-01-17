@@ -2,7 +2,49 @@
 
 ---
 
-- [ ]
+## Distribution
+
+### SEO
+
+- [ ] find semrush keywords
+- [ ] write blogs
+- [ ] check seo output
+
+### Email
+
+- [ ] list of emails from database
+- [ ] how to segment by markets?
+    - [ ] .edu?
+    - [ ] use ai to segment 
+    - [ ] find products
+
+### Features
+
+- [ ] context7: documentation search mcp
+- [ ] web browsing agent
+- [ ] secrets management
+- [ ] cronjobs
+- [ ] background services for notifications and scheduled tasks
+- [ ] pricing
+- [ ] voice input
+- [ ] web search
+- [ ] backups/ folder
+    - [ ] LLM can't delete files here
+    - [ ] files get synced into external
+
+- [ ] s3 as workspace backend
+    - [ ] progress bar for sync status
+
+- [ ] connector
+    - [ ] google drive
+    - [ ] box
+    - [ ] dropbox
+
+- [ ] randomnized tips
+- [ ] highlight related new files after a work session
+- [ ] show KLAWED what cli tools it already has
+
+- [x] handle out of context error...
 - [x] feedback button and error reporting
 - [x] one button in file drop down menu copy full file path into input box
 - [x] file search does not include folder in results
@@ -15,17 +57,6 @@
 - [x] database viewer with: sql runner. tabular view. search. filter.
     - [x] of course for now we only support file based databases: sqlite3
 
-- [ ] web search
-- [ ] backups/ folder
-    - [ ] LLM can't delete files here
-    - [ ] files get synced into external
-
-- [x] handle out of context error...
-
-- [ ] one narrated demo
-- [ ] randomnized tips
-
-
 - [x] lots of left over klawed db files in the workspace. maybe klawed files dont get cleaned up?
 - [x] fix svg icons for open file and download file. use three dots to open file options like show open and download
 
@@ -35,7 +66,7 @@
 
 ---
 
-## Marketing
+## In general...
 
 - [ ] help students with homework
     - [ ] good for university
@@ -44,17 +75,9 @@
 
 ---
 
-- [ ] cronjobs
-- [ ] background services for notifications and scheduled tasks
-- [ ] pricing
-- [ ] voice recording doesn't work
-- [ ] work on distribution
-
----
+## In general...
 
 - [ ] bug: having multiple windows for the same user means all windows will return the same response. we manage by workspace and not sessions
-- [ ] highlight related new files after a work session
-- [ ] show KLAWED what cli tools it already has
 - [ ] chrome extension that communicate with local file system
 - [ ] ui test scenarios
 - [ ] test auto compaction
@@ -64,9 +87,6 @@
 
 ---
 
-- [ ] context7: documentation search mcp
-- [ ] web browsing agent
-- [ ] secrets management
 - [ ] put some stuff in the starting workspace for everyone
     - [ ] stock analysis
     - [ ] youtube video transcriber
@@ -104,10 +124,6 @@
 ---
 
 ## Improvements
-
-- [ ] s3 as workspace backend
-    - [ ] progress bar for sync status
-
 ---
 
 ## Security Hardening

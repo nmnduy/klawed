@@ -113,6 +113,7 @@ logs/                          # Application logs (dev only)
 - REST API: Various endpoints under `/file-chat/http/`
 - **Demo Videos**: `GET /demo/{name}` - Stream demo MP4 videos
 - **Monitoring**: `GET /metrics` - Prometheus metrics endpoint (Tailscale-only access on port 9090)
+- **Sanity Tests**: Automated production health checks run every 8 hours (see `docs/PRODUCTION_SANITY_TEST.md`)
 
 ## REST API Endpoints
 ### Authentication
