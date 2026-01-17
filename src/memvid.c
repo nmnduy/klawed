@@ -21,6 +21,7 @@
 /* Default memory file path (project-local) */
 #define MEMVID_DEFAULT_DIR ".klawed"
 #define MEMVID_DEFAULT_FILE ".klawed/memory.mv2"
+#define MEMVID_MAX_PATH 4096
 
 /* Global instance management */
 static MemvidHandle *g_memvid_handle = NULL;
@@ -71,6 +72,57 @@ static int mkdir_p(const char *path) {
 }
 
 /*
+ * Ensure parent directory for a file path exists.
+ * Returns: 0 on success, -1 on error.
+ */
+static int ensure_parent_dir_exists(const char *file_path) {
+    const char *slash = NULL;
+    char *dir = NULL;
+    size_t dir_len;
+    int rc = 0;
+
+    if (file_path == NULL) {
+        return -1;
+    }
+
+    slash = strrchr(file_path, '/');
+    if (slash == NULL) {
+        /* No directory component (current working directory) */
+        return 0;
+    }
+
+    dir_len = (size_t)(slash - file_path);
+    if (dir_len == 0) {
+        /* Path like "/file"; root directory is assumed to exist */
+        return 0;
+    }
+
+    if (dir_len >= MEMVID_MAX_PATH) {
+        LOG_ERROR("Memvid: Directory portion of path is too long");
+        return -1;
+    }
+
+    dir = calloc(dir_len + 1, sizeof(char));
+    if (dir == NULL) {
+        LOG_ERROR("Memvid: Failed to allocate directory buffer");
+        return -1;
+    }
+
+    /* Copy just the directory component; strlcpy would report truncation because
+     * it measures the full source length (file_path), not the slice we want. */
+    memcpy(dir, file_path, dir_len);
+    dir[dir_len] = '\0';
+
+    rc = mkdir_p(dir);
+    if (rc != 0) {
+        LOG_ERROR("Memvid: Failed to create directory %s: %s", dir, strerror(errno));
+    }
+
+    free(dir);
+    return rc;
+}
+
+/*
  * Internal initialization function (called via pthread_once)
  */
 static void memvid_do_init(void) {
@@ -79,14 +131,11 @@ static void memvid_do_init(void) {
     /* Use default path if none provided */
     if (path == NULL) {
         path = MEMVID_DEFAULT_FILE;
+    }
 
-        /* Ensure .klawed directory exists */
-        if (mkdir_p(MEMVID_DEFAULT_DIR) != 0) {
-            LOG_ERROR("Memvid: Failed to create directory %s: %s",
-                      MEMVID_DEFAULT_DIR, strerror(errno));
-            g_memvid_init_result = -1;
-            return;
-        }
+    if (ensure_parent_dir_exists(path) != 0) {
+        g_memvid_init_result = -1;
+        return;
     }
 
     LOG_INFO("Memvid: Opening database at %s", path);
@@ -104,6 +153,9 @@ static void memvid_do_init(void) {
 }
 
 int memvid_init_global(const char *path) {
+    const char *effective_path = NULL;
+    size_t path_len = 0;
+
     pthread_mutex_lock(&g_memvid_mutex);
 
     /* If already initialized, return previous result */
@@ -112,9 +164,24 @@ int memvid_init_global(const char *path) {
         return 0;
     }
 
-    /* Store path for pthread_once callback */
-    if (path != NULL) {
-        g_memvid_path = strdup(path);
+    /* Precedence: explicit argument > env var > default */
+    effective_path = path;
+    if (effective_path == NULL || effective_path[0] == '\0') {
+        const char *env_path = getenv("KLAWED_MEMORY_PATH");
+        if (env_path != NULL && env_path[0] != '\0') {
+            effective_path = env_path;
+        }
+    }
+
+    if (effective_path != NULL && effective_path[0] != '\0') {
+        path_len = strnlen(effective_path, MEMVID_MAX_PATH + 1);
+        if (path_len == 0 || path_len > MEMVID_MAX_PATH) {
+            LOG_ERROR("Memvid: Memory path too long (max %d)", MEMVID_MAX_PATH);
+            pthread_mutex_unlock(&g_memvid_mutex);
+            return -1;
+        }
+
+        g_memvid_path = strdup(effective_path);
         if (g_memvid_path == NULL) {
             LOG_ERROR("Memvid: Failed to allocate memory for path");
             pthread_mutex_unlock(&g_memvid_mutex);

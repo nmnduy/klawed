@@ -21,6 +21,12 @@ struct ConversationState;
  * - MCP enabled: Includes MCP resource and dynamic tools
  * - Explore mode: Includes web search and Context7 tools
  */
+typedef enum {
+    TOOL_SCHEMA_MESSAGES,
+    TOOL_SCHEMA_RESPONSES
+} ToolSchemaFormat;
+
+void add_memory_tools(cJSON *tool_array, ToolSchemaFormat format);
 cJSON* get_tool_definitions(struct ConversationState *state, int enable_caching);
 
 #endif // TOOL_DEFINITIONS_H

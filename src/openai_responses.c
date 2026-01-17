@@ -1097,10 +1097,13 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
                 "Creates and updates a task list to track progress on multi-step tasks",
                 todo_params);
 
-    // Add cache_control to the last tool (TodoWrite) if caching is enabled
+    // Add cache_control to TodoWrite if caching is enabled (cache breakpoint before dynamic tools)
     if (enable_caching) {
         add_cache_control(todo_tool);
     }
+
+    // Memory tools (Responses format)
+    add_memory_tools(tool_array, TOOL_SCHEMA_RESPONSES);
 
     // Add MCP tools if MCP is enabled and configured
     #ifndef TEST_BUILD

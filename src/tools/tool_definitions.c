@@ -25,6 +25,177 @@
 #include <strings.h>
 #include <stdlib.h>
 
+// ---------------------------------------------------------------------------
+// Shared memory tool helpers
+// ---------------------------------------------------------------------------
+
+static cJSON* build_memory_store_params(void) {
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddStringToObject(params, "type", "object");
+    cJSON *props = cJSON_CreateObject();
+
+    cJSON *entity = cJSON_CreateObject();
+    cJSON_AddStringToObject(entity, "type", "string");
+    cJSON_AddStringToObject(entity, "description",
+        "Who/what this is about (e.g., 'user', 'project.klawed', 'user.team')");
+    cJSON_AddItemToObject(props, "entity", entity);
+
+    cJSON *slot = cJSON_CreateObject();
+    cJSON_AddStringToObject(slot, "type", "string");
+    cJSON_AddStringToObject(slot, "description",
+        "The attribute (e.g., 'employer', 'preferred_language', 'coding_style')");
+    cJSON_AddItemToObject(props, "slot", slot);
+
+    cJSON *value = cJSON_CreateObject();
+    cJSON_AddStringToObject(value, "type", "string");
+    cJSON_AddStringToObject(value, "description", "The value to store");
+    cJSON_AddItemToObject(props, "value", value);
+
+    cJSON *kind = cJSON_CreateObject();
+    cJSON_AddStringToObject(kind, "type", "string");
+    cJSON *kind_enum = cJSON_CreateArray();
+    cJSON_AddItemToArray(kind_enum, cJSON_CreateString("fact"));
+    cJSON_AddItemToArray(kind_enum, cJSON_CreateString("preference"));
+    cJSON_AddItemToArray(kind_enum, cJSON_CreateString("event"));
+    cJSON_AddItemToArray(kind_enum, cJSON_CreateString("profile"));
+    cJSON_AddItemToArray(kind_enum, cJSON_CreateString("relationship"));
+    cJSON_AddItemToArray(kind_enum, cJSON_CreateString("goal"));
+    cJSON_AddItemToObject(kind, "enum", kind_enum);
+    cJSON_AddStringToObject(kind, "description", "Type of memory");
+    cJSON_AddItemToObject(props, "kind", kind);
+
+    cJSON *relation = cJSON_CreateObject();
+    cJSON_AddStringToObject(relation, "type", "string");
+    cJSON *relation_enum = cJSON_CreateArray();
+    cJSON_AddItemToArray(relation_enum, cJSON_CreateString("sets"));
+    cJSON_AddItemToArray(relation_enum, cJSON_CreateString("updates"));
+    cJSON_AddItemToArray(relation_enum, cJSON_CreateString("extends"));
+    cJSON_AddItemToArray(relation_enum, cJSON_CreateString("retracts"));
+    cJSON_AddItemToObject(relation, "enum", relation_enum);
+    cJSON_AddStringToObject(relation, "description",
+        "How this relates to existing values (default: sets)");
+    cJSON_AddItemToObject(props, "relation", relation);
+
+    cJSON_AddItemToObject(params, "properties", props);
+
+    cJSON *required = cJSON_CreateArray();
+    cJSON_AddItemToArray(required, cJSON_CreateString("entity"));
+    cJSON_AddItemToArray(required, cJSON_CreateString("slot"));
+    cJSON_AddItemToArray(required, cJSON_CreateString("value"));
+    cJSON_AddItemToArray(required, cJSON_CreateString("kind"));
+    cJSON_AddItemToObject(params, "required", required);
+
+    return params;
+}
+
+static cJSON* build_memory_recall_params(void) {
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddStringToObject(params, "type", "object");
+    cJSON *props = cJSON_CreateObject();
+
+    cJSON *entity = cJSON_CreateObject();
+    cJSON_AddStringToObject(entity, "type", "string");
+    cJSON_AddStringToObject(entity, "description", "Who/what to look up");
+    cJSON_AddItemToObject(props, "entity", entity);
+
+    cJSON *slot = cJSON_CreateObject();
+    cJSON_AddStringToObject(slot, "type", "string");
+    cJSON_AddStringToObject(slot, "description", "The attribute to recall");
+    cJSON_AddItemToObject(props, "slot", slot);
+
+    cJSON_AddItemToObject(params, "properties", props);
+
+    cJSON *required = cJSON_CreateArray();
+    cJSON_AddItemToArray(required, cJSON_CreateString("entity"));
+    cJSON_AddItemToArray(required, cJSON_CreateString("slot"));
+    cJSON_AddItemToObject(params, "required", required);
+
+    return params;
+}
+
+static cJSON* build_memory_search_params(void) {
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddStringToObject(params, "type", "object");
+    cJSON *props = cJSON_CreateObject();
+
+    cJSON *query = cJSON_CreateObject();
+    cJSON_AddStringToObject(query, "type", "string");
+    cJSON_AddStringToObject(query, "description", "Search query");
+    cJSON_AddItemToObject(props, "query", query);
+
+    cJSON *top_k = cJSON_CreateObject();
+    cJSON_AddStringToObject(top_k, "type", "integer");
+    cJSON_AddStringToObject(top_k, "description", "Number of results (default: 10)");
+    cJSON_AddItemToObject(props, "top_k", top_k);
+
+    cJSON_AddItemToObject(params, "properties", props);
+
+    cJSON *required = cJSON_CreateArray();
+    cJSON_AddItemToArray(required, cJSON_CreateString("query"));
+    cJSON_AddItemToObject(params, "required", required);
+
+    return params;
+}
+
+static void append_memory_tool(cJSON *tool_array,
+                               ToolSchemaFormat format,
+                               const char *name,
+                               const char *description,
+                               cJSON *params) {
+    if (!tool_array || !name || !description || !params) {
+        if (params) {
+            cJSON_Delete(params);
+        }
+        return;
+    }
+
+    if (format == TOOL_SCHEMA_MESSAGES) {
+        cJSON *tool = cJSON_CreateObject();
+        cJSON_AddStringToObject(tool, "type", "function");
+        cJSON *func = cJSON_CreateObject();
+        cJSON_AddStringToObject(func, "name", name);
+        cJSON_AddStringToObject(func, "description", description);
+        cJSON_AddItemToObject(func, "parameters", params);
+        cJSON_AddItemToObject(tool, "function", func);
+        cJSON_AddItemToArray(tool_array, tool);
+    } else {
+        cJSON *tool = cJSON_CreateObject();
+        cJSON_AddStringToObject(tool, "type", "function");
+        cJSON_AddStringToObject(tool, "name", name);
+        cJSON_AddStringToObject(tool, "description", description);
+        cJSON_AddItemToObject(tool, "parameters", params);
+        cJSON_AddItemToArray(tool_array, tool);
+    }
+}
+
+void add_memory_tools(cJSON *tool_array, ToolSchemaFormat format) {
+    const char *store_desc =
+        "Store a memory about the user or project. Memories persist across sessions. "
+        "BE PROACTIVE - Store important information when you notice: "
+        "(1) User preferences: 'I prefer...', 'I don't like...', 'always use...', 'never use...'; "
+        "(2) User facts: 'I work at...', 'I'm learning...', 'my team uses...'; "
+        "(3) Project constraints: 'we use tabs', 'we follow style X', 'this project requires Y'; "
+        "(4) Recurring patterns in their coding style or requests; "
+        "(5) User explicitly asks 'remember that...' or 'keep in mind...'. "
+        "DO NOT store: temporary context, sensitive data (API keys/passwords), transient state, or information already in KLAWED.md.";
+
+    const char *recall_desc =
+        "Recall the current value for an entity's attribute from persistent memory. "
+        "Use this when: (1) You need to check what you already know about user preferences or project details; "
+        "(2) Starting a new conversation and want to recall context from previous sessions; "
+        "(3) User mentions something you may have stored before.";
+
+    const char *search_desc =
+        "Search all memories by text query. Use this when: (1) You need to find related past context but don't know the specific entity/slot; "
+        "(2) User asks about something you may have discussed before; "
+        "(3) After auto-compaction notice - search for relevant past conversation context; "
+        "(4) Starting a complex task and want to check for relevant project knowledge.";
+
+    append_memory_tool(tool_array, format, "MemoryStore", store_desc, build_memory_store_params());
+    append_memory_tool(tool_array, format, "MemoryRecall", recall_desc, build_memory_recall_params());
+    append_memory_tool(tool_array, format, "MemorySearch", search_desc, build_memory_search_params());
+}
+
 cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON *tool_array = cJSON_CreateArray();
     int plan_mode = state ? state->plan_mode : 0;
@@ -499,141 +670,7 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
 
     cJSON_AddItemToArray(tool_array, todo_tool);
 
-    // MemoryStore tool
-    cJSON *memory_store_tool = cJSON_CreateObject();
-    cJSON_AddStringToObject(memory_store_tool, "type", "function");
-    cJSON *memory_store_func = cJSON_CreateObject();
-    cJSON_AddStringToObject(memory_store_func, "name", "MemoryStore");
-    cJSON_AddStringToObject(memory_store_func, "description",
-        "Store a memory about the user or project. Memories persist across sessions. "
-        "BE PROACTIVE - Store important information when you notice: "
-        "(1) User preferences: 'I prefer...', 'I don't like...', 'always use...', 'never use...'; "
-        "(2) User facts: 'I work at...', 'I'm learning...', 'my team uses...'; "
-        "(3) Project constraints: 'we use tabs', 'we follow style X', 'this project requires Y'; "
-        "(4) Recurring patterns in their coding style or requests; "
-        "(5) User explicitly asks 'remember that...' or 'keep in mind...'. "
-        "DO NOT store: temporary context, sensitive data (API keys/passwords), transient state, or information already in KLAWED.md.");
-    cJSON *memory_store_params = cJSON_CreateObject();
-    cJSON_AddStringToObject(memory_store_params, "type", "object");
-    cJSON *memory_store_props = cJSON_CreateObject();
-
-    cJSON *ms_entity = cJSON_CreateObject();
-    cJSON_AddStringToObject(ms_entity, "type", "string");
-    cJSON_AddStringToObject(ms_entity, "description",
-        "Who/what this is about (e.g., 'user', 'project.klawed', 'user.team')");
-    cJSON_AddItemToObject(memory_store_props, "entity", ms_entity);
-
-    cJSON *ms_slot = cJSON_CreateObject();
-    cJSON_AddStringToObject(ms_slot, "type", "string");
-    cJSON_AddStringToObject(ms_slot, "description",
-        "The attribute (e.g., 'employer', 'preferred_language', 'coding_style')");
-    cJSON_AddItemToObject(memory_store_props, "slot", ms_slot);
-
-    cJSON *ms_value = cJSON_CreateObject();
-    cJSON_AddStringToObject(ms_value, "type", "string");
-    cJSON_AddStringToObject(ms_value, "description", "The value to store");
-    cJSON_AddItemToObject(memory_store_props, "value", ms_value);
-
-    cJSON *ms_kind = cJSON_CreateObject();
-    cJSON_AddStringToObject(ms_kind, "type", "string");
-    cJSON *ms_kind_enum = cJSON_CreateArray();
-    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("fact"));
-    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("preference"));
-    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("event"));
-    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("profile"));
-    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("relationship"));
-    cJSON_AddItemToArray(ms_kind_enum, cJSON_CreateString("goal"));
-    cJSON_AddItemToObject(ms_kind, "enum", ms_kind_enum);
-    cJSON_AddStringToObject(ms_kind, "description", "Type of memory");
-    cJSON_AddItemToObject(memory_store_props, "kind", ms_kind);
-
-    cJSON *ms_relation = cJSON_CreateObject();
-    cJSON_AddStringToObject(ms_relation, "type", "string");
-    cJSON *ms_relation_enum = cJSON_CreateArray();
-    cJSON_AddItemToArray(ms_relation_enum, cJSON_CreateString("sets"));
-    cJSON_AddItemToArray(ms_relation_enum, cJSON_CreateString("updates"));
-    cJSON_AddItemToArray(ms_relation_enum, cJSON_CreateString("extends"));
-    cJSON_AddItemToArray(ms_relation_enum, cJSON_CreateString("retracts"));
-    cJSON_AddItemToObject(ms_relation, "enum", ms_relation_enum);
-    cJSON_AddStringToObject(ms_relation, "description",
-        "How this relates to existing values (default: sets)");
-    cJSON_AddItemToObject(memory_store_props, "relation", ms_relation);
-
-    cJSON_AddItemToObject(memory_store_params, "properties", memory_store_props);
-    cJSON *memory_store_req = cJSON_CreateArray();
-    cJSON_AddItemToArray(memory_store_req, cJSON_CreateString("entity"));
-    cJSON_AddItemToArray(memory_store_req, cJSON_CreateString("slot"));
-    cJSON_AddItemToArray(memory_store_req, cJSON_CreateString("value"));
-    cJSON_AddItemToArray(memory_store_req, cJSON_CreateString("kind"));
-    cJSON_AddItemToObject(memory_store_params, "required", memory_store_req);
-    cJSON_AddItemToObject(memory_store_func, "parameters", memory_store_params);
-    cJSON_AddItemToObject(memory_store_tool, "function", memory_store_func);
-    cJSON_AddItemToArray(tool_array, memory_store_tool);
-
-    // MemoryRecall tool
-    cJSON *memory_recall_tool = cJSON_CreateObject();
-    cJSON_AddStringToObject(memory_recall_tool, "type", "function");
-    cJSON *memory_recall_func = cJSON_CreateObject();
-    cJSON_AddStringToObject(memory_recall_func, "name", "MemoryRecall");
-    cJSON_AddStringToObject(memory_recall_func, "description",
-        "Recall the current value for an entity's attribute from persistent memory. "
-        "Use this when: (1) You need to check what you already know about user preferences or project details; "
-        "(2) Starting a new conversation and want to recall context from previous sessions; "
-        "(3) User mentions something you may have stored before.");
-    cJSON *memory_recall_params = cJSON_CreateObject();
-    cJSON_AddStringToObject(memory_recall_params, "type", "object");
-    cJSON *memory_recall_props = cJSON_CreateObject();
-
-    cJSON *mr_entity = cJSON_CreateObject();
-    cJSON_AddStringToObject(mr_entity, "type", "string");
-    cJSON_AddStringToObject(mr_entity, "description", "Who/what to look up");
-    cJSON_AddItemToObject(memory_recall_props, "entity", mr_entity);
-
-    cJSON *mr_slot = cJSON_CreateObject();
-    cJSON_AddStringToObject(mr_slot, "type", "string");
-    cJSON_AddStringToObject(mr_slot, "description", "The attribute to recall");
-    cJSON_AddItemToObject(memory_recall_props, "slot", mr_slot);
-
-    cJSON_AddItemToObject(memory_recall_params, "properties", memory_recall_props);
-    cJSON *memory_recall_req = cJSON_CreateArray();
-    cJSON_AddItemToArray(memory_recall_req, cJSON_CreateString("entity"));
-    cJSON_AddItemToArray(memory_recall_req, cJSON_CreateString("slot"));
-    cJSON_AddItemToObject(memory_recall_params, "required", memory_recall_req);
-    cJSON_AddItemToObject(memory_recall_func, "parameters", memory_recall_params);
-    cJSON_AddItemToObject(memory_recall_tool, "function", memory_recall_func);
-    cJSON_AddItemToArray(tool_array, memory_recall_tool);
-
-    // MemorySearch tool
-    cJSON *memory_search_tool = cJSON_CreateObject();
-    cJSON_AddStringToObject(memory_search_tool, "type", "function");
-    cJSON *memory_search_func = cJSON_CreateObject();
-    cJSON_AddStringToObject(memory_search_func, "name", "MemorySearch");
-    cJSON_AddStringToObject(memory_search_func, "description",
-        "Search all memories by text query. Use this when: (1) You need to find related past context but don't know the specific entity/slot; "
-        "(2) User asks about something you may have discussed before; "
-        "(3) After auto-compaction notice - search for relevant past conversation context; "
-        "(4) Starting a complex task and want to check for relevant project knowledge.");
-    cJSON *memory_search_params = cJSON_CreateObject();
-    cJSON_AddStringToObject(memory_search_params, "type", "object");
-    cJSON *memory_search_props = cJSON_CreateObject();
-
-    cJSON *msearch_query = cJSON_CreateObject();
-    cJSON_AddStringToObject(msearch_query, "type", "string");
-    cJSON_AddStringToObject(msearch_query, "description", "Search query");
-    cJSON_AddItemToObject(memory_search_props, "query", msearch_query);
-
-    cJSON *msearch_top_k = cJSON_CreateObject();
-    cJSON_AddStringToObject(msearch_top_k, "type", "integer");
-    cJSON_AddStringToObject(msearch_top_k, "description", "Number of results (default: 10)");
-    cJSON_AddItemToObject(memory_search_props, "top_k", msearch_top_k);
-
-    cJSON_AddItemToObject(memory_search_params, "properties", memory_search_props);
-    cJSON *memory_search_req = cJSON_CreateArray();
-    cJSON_AddItemToArray(memory_search_req, cJSON_CreateString("query"));
-    cJSON_AddItemToObject(memory_search_params, "required", memory_search_req);
-    cJSON_AddItemToObject(memory_search_func, "parameters", memory_search_params);
-    cJSON_AddItemToObject(memory_search_tool, "function", memory_search_func);
-    cJSON_AddItemToArray(tool_array, memory_search_tool);
+    add_memory_tools(tool_array, TOOL_SCHEMA_MESSAGES);
 
 #ifndef TEST_BUILD
     // Add MCP tools if MCP is enabled and configured
