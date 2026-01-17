@@ -53,10 +53,19 @@ int is_web_agent_available(void) {
     return access(agent_path, X_OK) == 0;
 }
 
+static int is_web_agent_configured_only(void) {
+    const char *agent_path = get_web_agent_path();
+    return agent_path && agent_path[0] != '\0';
+}
+
 // Check if headless mode is enabled (default: true)
 static int is_headless_mode(void) {
-    const char *headless = getenv("KLAWED_EXPLORE_HEADLESS");
-    // Default to headless
+    // Prefer dedicated override for the browser agent; fallback to explore flag for compatibility
+    const char *headless = getenv("KLAWED_WEB_BROWSE_AGENT_HEADLESS");
+    if (!headless || headless[0] == '\0') {
+        headless = getenv("KLAWED_EXPLORE_HEADLESS");
+    }
+    // Default to headless when unset
     if (!headless || headless[0] == '\0') {
         return 1;
     }
@@ -117,6 +126,116 @@ static char* execute_web_agent(const char *prompt, int *exit_code) {
     }
 
     // Read output
+    char *output = malloc(MAX_WEB_OUTPUT);
+    if (!output) {
+        pclose(fp);
+        return NULL;
+    }
+
+    size_t total = 0;
+    size_t n;
+    while ((n = fread(output + total, 1, MAX_WEB_OUTPUT - total - 1, fp)) > 0) {
+        total += n;
+        if (total >= MAX_WEB_OUTPUT - 1) {
+            break;
+        }
+    }
+    output[total] = '\0';
+
+    int status = pclose(fp);
+    if (exit_code) {
+        *exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    }
+
+    return output;
+}
+
+// Execute web_browse_agent with a raw command string (no prompt wrapping)
+static char* execute_web_agent_raw(const char *args, int *exit_code) {
+    if (!args) {
+        return NULL;
+    }
+
+    const char *agent_path = get_web_agent_path();
+    int headless = is_headless_mode();
+
+    size_t cmd_size = strlen(agent_path) + strlen(args) + 256;
+    char *command = malloc(cmd_size);
+    if (!command) {
+        return NULL;
+    }
+
+    snprintf(command, cmd_size, "timeout %d %s %s %s 2>&1",
+             WEB_AGENT_TIMEOUT,
+             agent_path,
+             headless ? "--headless" : "",
+             args);
+
+    LOG_INFO("Executing web_browse_agent (raw): %s", command);
+
+    FILE *fp = popen(command, "r");
+    free(command);
+
+    if (!fp) {
+        LOG_ERROR("Failed to execute web_browse_agent: %s", strerror(errno));
+        return NULL;
+    }
+
+    char *output = malloc(MAX_WEB_OUTPUT);
+    if (!output) {
+        pclose(fp);
+        return NULL;
+    }
+
+    size_t total = 0;
+    size_t n;
+    while ((n = fread(output + total, 1, MAX_WEB_OUTPUT - total - 1, fp)) > 0) {
+        total += n;
+        if (total >= MAX_WEB_OUTPUT - 1) {
+            break;
+        }
+    }
+    output[total] = '\0';
+
+    int status = pclose(fp);
+    if (exit_code) {
+        *exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    }
+
+    return output;
+}
+
+// Execute web_browse_agent with a raw command string (no prompt wrapping)
+static char* execute_web_agent_raw(const char *args, int *exit_code) {
+    if (!args) {
+        return NULL;
+    }
+
+    const char *agent_path = get_web_agent_path();
+    int headless = is_headless_mode();
+
+    size_t cmd_size = strlen(agent_path) + strlen(args) + 256;
+    char *command = malloc(cmd_size);
+    if (!command) {
+        return NULL;
+    }
+
+    snprintf(command, cmd_size, "timeout %d %s %s %s 2>&1",
+             WEB_AGENT_TIMEOUT,
+             agent_path,
+             headless ? "--headless" : "",
+             args);
+
+    LOG_INFO("Executing web_browse_agent (raw): %s", command);
+
+    FILE *fp = popen(command, "r");
+    free(command);
+
+    if (!fp) {
+        LOG_ERROR("Failed to execute web_browse_agent: %s", strerror(errno));
+        return NULL;
+    }
+
     char *output = malloc(MAX_WEB_OUTPUT);
     if (!output) {
         pclose(fp);
@@ -402,6 +521,62 @@ cJSON* tool_web_read(cJSON *params, void *state) {
 }
 
 // ============================================================================
+// Tool: web_browse_agent - direct access to binary (no explore mode gate)
+// ============================================================================
+
+cJSON* tool_web_browse_agent(cJSON *params, void *state) {
+    (void)state;
+
+    if (!is_web_agent_configured_only()) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error",
+            "web_browse_agent path not set. Set KLAWED_WEB_BROWSE_AGENT_PATH or place the binary at vendors/web_browse_agent/web_browse_agent");
+        return error;
+    }
+
+    cJSON *args_json = cJSON_GetObjectItem(params, "args");
+    cJSON *prompt_json = cJSON_GetObjectItem(params, "prompt");
+    const char *prompt = NULL;
+    const char *args = NULL;
+
+    if (prompt_json && cJSON_IsString(prompt_json)) {
+        prompt = prompt_json->valuestring;
+    }
+    if (args_json && cJSON_IsString(args_json)) {
+        args = args_json->valuestring;
+    }
+
+    if (!prompt && !args) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error",
+            "Provide either prompt (for wrapped mode) or args (raw arguments) for web_browse_agent");
+        return error;
+    }
+
+    int exit_code = -1;
+    char *output = NULL;
+    if (prompt && args) {
+        output = execute_web_agent_raw(args, &exit_code);
+    } else if (prompt) {
+        output = execute_web_agent(prompt, &exit_code);
+    } else {
+        output = execute_web_agent_raw(args, &exit_code);
+    }
+
+    cJSON *result = cJSON_CreateObject();
+    if (!output) {
+        cJSON_AddStringToObject(result, "error", "Failed to execute web_browse_agent");
+        return result;
+    }
+
+    cJSON_AddNumberToObject(result, "exit_code", exit_code);
+    cJSON_AddStringToObject(result, "output", output);
+
+    free(output);
+    return result;
+}
+
+// ============================================================================
 // Tool: context7_search - Search for library documentation
 // ============================================================================
 
@@ -529,6 +704,23 @@ cJSON* tool_context7_docs(cJSON *params, void *state) {
 // ============================================================================
 // Tool definitions for Explore mode
 // ============================================================================
+
+const char* explore_tool_web_browse_agent_schema(void) {
+    return "{"
+        "\"type\": \"function\","
+        "\"function\": {"
+            "\"name\": \"web_browse_agent\","
+            "\"description\": \"Directly run the web_browse_agent binary. Provide either a full argument string (args) or a prompt to wrap. Headless mode follows KLAWED_EXPLORE_HEADLESS (default: on).\","
+            "\"parameters\": {"
+                "\"type\": \"object\","
+                "\"properties\": {"
+                    "\"args\": {\"type\": \"string\", \"description\": \"Raw arguments to pass to web_browse_agent (e.g., 'browser_navigate https://example.com')\"},"
+                    "\"prompt\": {\"type\": \"string\", \"description\": \"Optional prompt; if provided, prompt mode is used instead of raw args\"}"
+                "}"
+            "}"
+        "}"
+    "}";
+}
 
 const char* explore_tool_web_search_schema(void) {
     return "{"
