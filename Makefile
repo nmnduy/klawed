@@ -49,7 +49,16 @@ endif
 INSTALL_PREFIX ?= $(HOME)/.local
 WEB_BROWSE_AGENT_DIR := vendors/web_browse_agent
 WEB_BROWSE_AGENT_BIN := $(WEB_BROWSE_AGENT_DIR)/web_browse_agent
-WEB_BROWSE_AGENT_VERSION ?= $(shell cd $(WEB_BROWSE_AGENT_DIR) && git describe --always --dirty --tags 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+# Get web_browse_agent version from its own version.go file (not klawed's git tags)
+# The version.go file contains: const Version = "X.Y.Z"
+WEB_BROWSE_AGENT_VERSION := $(shell \
+	if [ -f "$(WEB_BROWSE_AGENT_DIR)/pkg/version/version.go" ]; then \
+		sed -n 's/.*Version *= *"\([0-9.]*\)".*/\1/p' "$(WEB_BROWSE_AGENT_DIR)/pkg/version/version.go" | head -1; \
+	elif [ -d "$(WEB_BROWSE_AGENT_DIR)/.git" ]; then \
+		cd "$(WEB_BROWSE_AGENT_DIR)" && git describe --always --tags 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo "unknown"; \
+	else \
+		echo "unknown"; \
+	fi)
 
 # Version management
 VERSION_FILE := VERSION
