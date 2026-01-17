@@ -10,9 +10,13 @@
 
 #include "tui.h"  // For TUIInputBoxStyle enum
 
+// Maximum length for theme string (including NUL)
+#define CONFIG_THEME_MAX 256
+
 // Configuration structure
 typedef struct {
     TUIInputBoxStyle input_box_style;
+    char theme[CONFIG_THEME_MAX];
     // Add more settings here as needed
 } KlawedConfig;
 

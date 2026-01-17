@@ -10,6 +10,7 @@
 #include "tui.h"
 #include "theme_explorer.h"
 #include "help_modal.h"
+#include "config.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
 #include <bsd/string.h>
@@ -327,15 +328,36 @@ static int cmd_themes(ConversationState *state, const char *args) {
         if (selected) {
             LOG_INFO("[CMD_THEMES] User selected theme: %s", selected);
 
-            // Provide instructions to the user
-            // Note: We can't change the theme at runtime easily since it's
-            // loaded at startup. We'll show instructions instead.
+            // Save theme to config (preserve other fields)
+            KlawedConfig cfg;
+            if (config_load(&cfg) != 0) {
+                config_init_defaults(&cfg);
+            }
+            strlcpy(cfg.theme, selected, sizeof(cfg.theme));
+            if (config_save(&cfg) == 0) {
+                LOG_INFO("[CMD_THEMES] Theme saved to config file");
+            }
+
+            // Try to reload the theme immediately
+            if (init_colorscheme(selected) == 0) {
+                g_theme_loaded = 1;
+                LOG_INFO("[CMD_THEMES] Theme applied successfully");
+                // Redraw the TUI to reflect the new theme
+                tui_resume(state->tui);
+                tui_refresh(state->tui);
+                tui_update_status(state->tui, "Theme applied successfully");
+                theme_explorer_cleanup(&explorer);
+                return 0;
+            } else {
+                LOG_WARN("[CMD_THEMES] Failed to reload theme immediately, will apply on next restart");
+            }
+
+            // If we couldn't reload immediately, show instructions
             char msg[256];
             snprintf(msg, sizeof(msg),
                      "Selected theme: %s\n"
-                     "To apply, set: export KLAWED_THEME=\"%s\"\n"
-                     "Then restart klawed.",
-                     selected, selected);
+                     "Theme saved to config - restart klawed to apply, or set KLAWED_THEME env var.",
+                     selected);
 
             // Clean up explorer before resuming TUI
             theme_explorer_cleanup(&explorer);

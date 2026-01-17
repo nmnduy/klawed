@@ -20,6 +20,7 @@
 void config_init_defaults(KlawedConfig *config) {
     if (!config) return;
     config->input_box_style = INPUT_STYLE_BLAND;
+    config->theme[0] = '\0';  // Empty means use default or KLAWED_THEME env var
 }
 
 const char* config_input_style_to_string(TUIInputBoxStyle style) {
@@ -106,6 +107,13 @@ int config_load(KlawedConfig *config) {
         LOG_DEBUG("[Config] Loaded input_box_style: %s", style_item->valuestring);
     }
 
+    // Read theme
+    cJSON *theme_item = cJSON_GetObjectItem(root, "theme");
+    if (theme_item && cJSON_IsString(theme_item) && theme_item->valuestring) {
+        strlcpy(config->theme, theme_item->valuestring, sizeof(config->theme));
+        LOG_DEBUG("[Config] Loaded theme: %s", config->theme);
+    }
+
     cJSON_Delete(root);
     LOG_INFO("[Config] Configuration loaded from %s", CONFIG_FILE);
     return 0;
@@ -160,6 +168,16 @@ int config_save(const KlawedConfig *config) {
         cJSON_SetValuestring(existing_style, config_input_style_to_string(config->input_box_style));
     } else {
         cJSON_AddStringToObject(root, "input_box_style", config_input_style_to_string(config->input_box_style));
+    }
+
+    // Update theme (only if non-empty)
+    if (config->theme[0] != '\0') {
+        cJSON *existing_theme = cJSON_GetObjectItem(root, "theme");
+        if (existing_theme) {
+            cJSON_SetValuestring(existing_theme, config->theme);
+        } else {
+            cJSON_AddStringToObject(root, "theme", config->theme);
+        }
     }
 
     // Write to file

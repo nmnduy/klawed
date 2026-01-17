@@ -53,6 +53,7 @@
 #ifndef TEST_BUILD
 #include "openai_messages.h"
 #endif
+#include "config.h"
 
 #ifdef TEST_BUILD
 // Disable unused function warnings for test builds since not all functions are used by tests
@@ -1535,7 +1536,16 @@ int main(int argc, char *argv[]) {
     LOG_INFO("Model: %s", model);
 
     // Initialize colorscheme EARLY (before any colored output/spinners)
+    // Priority: KLAWED_THEME env var > config file theme > default "tender"
     const char *theme = getenv("KLAWED_THEME");
+    if (!theme || strlen(theme) == 0) {
+        // Try loading theme from config file
+        KlawedConfig cfg;
+        if (config_load(&cfg) == 0 && cfg.theme[0] != '\0') {
+            theme = cfg.theme;
+            LOG_DEBUG("[Config] Using theme from config file: %s", theme);
+        }
+    }
     if (theme && strlen(theme) > 0) {
         // Theme can be:
         // 1. Built-in theme name (e.g., "dracula", "gruvbox-dark")
