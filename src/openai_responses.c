@@ -130,7 +130,7 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
 
                     cJSON *content_array = cJSON_CreateArray();
                     cJSON *tool_result = cJSON_CreateObject();
-                    cJSON_AddStringToObject(tool_result, "type", "function_call_output");
+                    cJSON_AddStringToObject(tool_result, "type", "input_text");
                     cJSON_AddStringToObject(tool_result, "call_id", c->tool_id);
 
                     // Convert output to string
