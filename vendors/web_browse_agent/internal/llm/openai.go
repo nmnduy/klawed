@@ -155,8 +155,16 @@ type chatCompletionRequest struct {
 }
 
 type chatCompletionMessage struct {
-	Role    string      `json:"role"`
-	Content interface{} `json:"content"` // string or array
+	Role     string                   `json:"role"`
+	Content  interface{}              `json:"content"` // string or array
+	ToolCalls []chatCompletionToolCall `json:"tool_calls,omitempty"`
+}
+
+type chatCompletionToolCall struct {
+	ID       string                     `json:"id"`
+	Type     string                     `json:"type"`
+	Function chatCompletionToolFunction `json:"function"`
+	Index    int                        `json:"index,omitempty"`
 }
 
 type chatCompletionTool struct {
@@ -168,6 +176,7 @@ type chatCompletionToolFunction struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description,omitempty"`
 	Parameters  map[string]interface{} `json:"parameters"`
+	Arguments   string                 `json:"arguments,omitempty"`
 }
 
 type chatCompletionResponse struct {
@@ -656,7 +665,27 @@ func convertContentBlocksForChatCompletions(blocks []ContentBlock, role string) 
 		return blocks[0].Text, nil
 	}
 	
-	// Otherwise, build an array of content blocks
+	// Check if we're talking to DeepSeek - it has stricter format requirements
+	// For DeepSeek, we need to convert tool calls and tool results to text
+	baseURL := os.Getenv("OPENAI_API_BASE")
+	if strings.Contains(baseURL, "deepseek.com") {
+		// For DeepSeek, convert everything to text
+		var textParts []string
+		for _, block := range blocks {
+			switch block.Type {
+			case "text":
+				textParts = append(textParts, block.Text)
+			case "tool_use":
+				argsBytes, _ := json.Marshal(block.Input)
+				textParts = append(textParts, fmt.Sprintf("[Called tool: %s with args: %s]", block.Name, string(argsBytes)))
+			case "tool_result":
+				textParts = append(textParts, fmt.Sprintf("[Tool result: %s]", block.Content))
+			}
+		}
+		return strings.Join(textParts, "\n"), nil
+	}
+	
+	// Otherwise, build an array of content blocks for standard OpenAI-compatible APIs
 	result := make([]map[string]interface{}, 0, len(blocks))
 	
 	for _, block := range blocks {
@@ -697,6 +726,7 @@ func extractFromChatCompletionMessage(msg chatCompletionMessage) (string, []Tool
 	var textContent string
 	var toolCalls []ToolCall
 	
+	// First, extract text content from the Content field
 	switch content := msg.Content.(type) {
 	case string:
 		textContent = content
@@ -708,6 +738,7 @@ func extractFromChatCompletionMessage(msg chatCompletionMessage) (string, []Tool
 						textContent += text
 					}
 				} else if typ == "tool_call" {
+					// This is for when tool calls are embedded in content array
 					if funcObj, ok := m["function"].(map[string]interface{}); ok {
 						name, _ := funcObj["name"].(string)
 						argsStr, _ := funcObj["arguments"].(string)
@@ -730,6 +761,23 @@ func extractFromChatCompletionMessage(msg chatCompletionMessage) (string, []Tool
 				}
 			}
 		}
+	}
+	
+	// Also check for tool calls in the ToolCalls field (OpenAI format)
+	for _, tc := range msg.ToolCalls {
+		var input map[string]interface{}
+		if tc.Function.Arguments != "" {
+			_ = json.Unmarshal([]byte(tc.Function.Arguments), &input)
+		}
+		if input == nil {
+			input = make(map[string]interface{})
+		}
+		
+		toolCalls = append(toolCalls, ToolCall{
+			ID:    tc.ID,
+			Name:  tc.Function.Name,
+			Input: input,
+		})
 	}
 	
 	return textContent, toolCalls

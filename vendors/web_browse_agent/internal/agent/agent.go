@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/puter/web-browse-agent/internal/llm"
 	"github.com/puter/web-browse-agent/internal/tool"
@@ -14,10 +15,28 @@ const (
 	MaxIterations = 1000000
 	SystemPrompt  = `You are an AI agent that can browse the web and perform tasks using tools.
 You have access to browser automation tools and file system tools.
-When given a task, break it down into steps and use the available tools to accomplish it.
-Always verify your actions by checking the results.
-If a tool call fails, try alternative approaches.
-When the task is complete, provide a summary of what was accomplished.`
+
+IMPORTANT: When given a task, you MUST use the available tools to accomplish it. Do not just describe what you would do - actually use the tools.
+
+Available tools include:
+- browser_navigate: Navigate to a URL
+- browser_click: Click on an element
+- browser_type: Type text into an input field
+- browser_screenshot: Take a screenshot
+- browser_get_text: Get text from an element
+- browser_tabs_list: List open tabs
+- read_file: Read contents of a file
+- write_file: Write content to a file
+- bash: Execute shell commands
+
+When given a task:
+1. Break it down into steps
+2. Use the appropriate tools for each step
+3. Always verify your actions by checking the results
+4. If a tool call fails, try alternative approaches
+5. When the task is complete, provide a summary of what was accomplished
+
+DO NOT respond with just text describing what you would do. You MUST actually call the tools.`
 )
 
 // Agent implements the agentic loop
@@ -149,7 +168,24 @@ func (a *Agent) Run(userPrompt string) (string, error) {
 			}
 		} else if response.Content != "" {
 			// No tool calls, just content - might be done
-			return response.Content, nil
+			// But first check if this looks like a task that requires tools
+			// If it's a simple greeting or acknowledgment, it's probably done
+			// If it's describing actions without taking them, we should continue
+			lowerContent := strings.ToLower(response.Content)
+			if strings.Contains(lowerContent, "i'll ") || strings.Contains(lowerContent, "i will ") || 
+			   strings.Contains(lowerContent, "let me ") || strings.Contains(lowerContent, "going to ") {
+				// LLM is describing what it will do instead of doing it
+				a.log("LLM is describing actions instead of using tools. Adding reminder to use tools...")
+				a.addAssistantMessage(response)
+				// Add a reminder to use tools
+				a.messages = append(a.messages, llm.Message{
+					Role: "user",
+					Content: "Please use the available tools to actually perform the actions instead of just describing them. For example, use browser_navigate to go to a website, browser_click to click elements, etc.",
+				})
+			} else {
+				// Probably a final response
+				return response.Content, nil
+			}
 		}
 	}
 
