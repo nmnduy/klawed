@@ -219,16 +219,15 @@ void render_status_window(TUIState *tui) {
         }
     }
 
-    // Layout (from right to left):
-    // [status_message] <- rightmost
-    // [plan_mode] [scroll%] [token] [status_message] <- in NORMAL mode
-    // [plan_mode] [status_message] <- in INSERT/COMMAND mode
+    // Layout: keep spinner + status message on the right, float the rest on the left
+    // Left side (in order): plan mode, scroll %, token usage
+    // Right side: spinner + LLM status message
+
+    int status_col = width - status_str_len;
+    if (status_col < 0) status_col = 0;
 
     // Render status message on the right (rightmost position)
     if (status_str_len > 0 && status_str_len < width) {
-        int status_col = width - status_str_len;
-        if (status_col < 0) status_col = 0;
-
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
@@ -242,63 +241,53 @@ void render_status_window(TUIState *tui) {
         }
     }
 
-    // Render token usage (in NORMAL mode, to the left of status)
-    if (token_str_len > 0 && token_str_len < width) {
-        int token_col = width - status_str_len - token_str_len;
-        if (token_col < 0) token_col = 0;
+    // Float left-aligned info, stopping before the status block starts
+    int left_col = 0;
+    int left_limit = status_col;
 
-        if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
-        }
-        mvwaddnstr(tui->wm.status_win, 0, token_col, token_str, token_str_len);
-        if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
-        }
-    }
-
-    // Render scroll percentage (in NORMAL mode, to the left of token)
-    if (scroll_str_len > 0 && scroll_str_len < width) {
-        int scroll_col = width - status_str_len - token_str_len - scroll_str_len;
-        if (scroll_col < 0) scroll_col = 0;
-
-        if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
-        }
-        mvwaddnstr(tui->wm.status_win, 0, scroll_col, scroll_str, scroll_str_len);
-        if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
-        }
-    }
-
-    // Render plan mode indicator (to the left of scroll/token or status, depending on mode)
-    if (plan_str_len > 0 && plan_str_len < width) {
-        int plan_col;
-        if (tui->mode == TUI_MODE_NORMAL) {
-            // In NORMAL mode: place to the left of scroll percentage
-            plan_col = width - status_str_len - token_str_len - scroll_str_len - plan_str_len;
-        } else {
-            // In INSERT/COMMAND mode: place to the left of status message
-            plan_col = width - status_str_len - plan_str_len;
-        }
-        if (plan_col < 0) plan_col = 0;
-
+    // Plan mode indicator (always visible when enabled)
+    if (plan_str_len > 0 && plan_str_len < width && left_col + plan_str_len < left_limit) {
         LOG_DEBUG("[TUI] Rendering plan mode at col=%d, width=%d, plan_str_len=%d, mode=%d",
-                  plan_col, width, plan_str_len, tui->mode);
-
+                  left_col, width, plan_str_len, tui->mode);
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
-        mvwaddnstr(tui->wm.status_win, 0, plan_col, plan_str, plan_str_len);
+        mvwaddnstr(tui->wm.status_win, 0, left_col, plan_str, plan_str_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         } else {
             wattroff(tui->wm.status_win, A_BOLD);
         }
+        left_col += plan_str_len;
     } else if (plan_str_len > 0) {
         LOG_DEBUG("[TUI] Plan mode indicator not rendered: plan_str_len=%d, width=%d, condition=%d",
                   plan_str_len, width, (plan_str_len > 0 && plan_str_len < width));
+    }
+
+    // Scroll percentage (NORMAL mode only)
+    if (scroll_str_len > 0 && scroll_str_len < width && left_col + scroll_str_len < left_limit) {
+        if (has_colors()) {
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        mvwaddnstr(tui->wm.status_win, 0, left_col, scroll_str, scroll_str_len);
+        if (has_colors()) {
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        left_col += scroll_str_len;
+    }
+
+    // Token usage (NORMAL mode only)
+    if (token_str_len > 0 && token_str_len < width && left_col + token_str_len < left_limit) {
+        if (has_colors()) {
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+        }
+        mvwaddnstr(tui->wm.status_win, 0, left_col, token_str, token_str_len);
+        if (has_colors()) {
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+        }
+        left_col += token_str_len;
     }
 
     (void)col;  // Suppress unused variable warning
