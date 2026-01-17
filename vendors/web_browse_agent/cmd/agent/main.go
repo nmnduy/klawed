@@ -65,6 +65,11 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		os.Setenv("BROWSER_HEADLESS", "true")
 	}
 
+	// Enable verbose LLM debugging when verbose flag is set
+	if verbose {
+		os.Setenv("WEB_BROWSE_AGENT_DEBUG", "1")
+	}
+
 	// Create LLM client
 	client, err := llm.NewClient(provider)
 	if err != nil {

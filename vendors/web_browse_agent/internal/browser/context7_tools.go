@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -36,12 +37,17 @@ type Context7SearchResponse struct {
 // ============================================================================
 
 type Context7SearchTool struct {
-	ctx    *Context
-	apiKey string
+	ctx     *Context
+	apiKey  string
+	baseURL string
 }
 
 func NewContext7SearchTool(ctx *Context, apiKey string) *Context7SearchTool {
-	return &Context7SearchTool{ctx: ctx, apiKey: apiKey}
+	baseURL := os.Getenv("CONTEXT7_API_BASE")
+	if baseURL == "" {
+		baseURL = context7APIURL
+	}
+	return &Context7SearchTool{ctx: ctx, apiKey: apiKey, baseURL: baseURL}
 }
 
 func (t *Context7SearchTool) Name() string {

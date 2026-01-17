@@ -35,10 +35,16 @@ func NewAnthropicClient() (*AnthropicClient, error) {
 		model = defaultAnthropicModel
 	}
 
+	baseURL := os.Getenv("ANTHROPIC_API_BASE")
+	if baseURL == "" {
+		baseURL = anthropicAPIURL
+	}
+
 	return &AnthropicClient{
-		apiKey: apiKey,
-		model:  model,
-		client: &http.Client{},
+		apiKey:  apiKey,
+		model:   model,
+		baseURL: baseURL,
+		client:  &http.Client{},
 	}, nil
 }
 
@@ -49,7 +55,7 @@ func (c *AnthropicClient) GetModel() string {
 
 // GetBaseURL returns the base URL for the Anthropic API
 func (c *AnthropicClient) GetBaseURL() string {
-	return anthropicAPIURL
+	return c.baseURL
 }
 
 // Provider returns the provider name
@@ -144,7 +150,7 @@ func (c *AnthropicClient) Chat(messages []Message, tools []ToolDefinition) (*Res
 	fmt.Printf("[anthropic] request body: %s\n", string(jsonData))
 
 	// Create HTTP request
-	req, err := http.NewRequest("POST", anthropicAPIURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", c.baseURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

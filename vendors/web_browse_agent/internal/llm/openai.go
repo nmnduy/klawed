@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 const (
@@ -40,6 +41,20 @@ func NewOpenAIClient() (*OpenAIClient, error) {
 	baseURL := os.Getenv("OPENAI_API_BASE")
 	if baseURL == "" {
 		baseURL = openAIAPIURL
+	}
+	
+	// If using a non-OpenAI provider that likely uses chat completions API,
+	// ensure we have the correct endpoint path
+	if !strings.Contains(baseURL, "openai.com") {
+		// Check if we need to append /v1/chat/completions
+		if !strings.Contains(baseURL, "/v1/") {
+			// Try to detect what endpoint to use
+			if strings.Contains(baseURL, "deepseek.com") {
+				baseURL = strings.TrimSuffix(baseURL, "/") + "/v1/chat/completions"
+			} else if strings.Contains(baseURL, "openrouter.ai") {
+				baseURL = strings.TrimSuffix(baseURL, "/") + "/api/v1/chat/completions"
+			}
+		}
 	}
 
 	debug := os.Getenv("WEB_BROWSE_AGENT_DEBUG") == "1"
@@ -98,6 +113,31 @@ type responsesTool struct {
 	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 }
 
+// isChatCompletionsAPI returns true if the endpoint uses Chat Completions format
+// (like OpenRouter, Together AI, etc.) instead of the Responses API format
+func (c *OpenAIClient) isChatCompletionsAPI() bool {
+	// OpenRouter and similar proxies use /chat/completions endpoint
+	if strings.Contains(c.baseURL, "chat/completions") {
+		return true
+	}
+	// OpenRouter explicitly uses chat completions format
+	if strings.Contains(c.baseURL, "openrouter.ai") {
+		return true
+	}
+	// DeepSeek uses chat completions format
+	if strings.Contains(c.baseURL, "deepseek.com") {
+		return true
+	}
+	// Check if this is likely a chat completions endpoint (not responses)
+	// Responses API is specific to OpenAI's newer API
+	if !strings.Contains(c.baseURL, "openai.com/v1/responses") &&
+	   !strings.Contains(c.baseURL, "responses") {
+		// If it's not explicitly the responses endpoint, assume chat completions
+		return true
+	}
+	return false
+}
+
 type responsesResponse struct {
 	Output []responsesMessage `json:"output"`
 	Status string             `json:"status,omitempty"`
@@ -107,8 +147,61 @@ type responsesResponse struct {
 	} `json:"error,omitempty"`
 }
 
-// Chat sends messages to OpenAI and returns the response using the Responses API
+// Chat Completions API types
+type chatCompletionRequest struct {
+	Model    string                  `json:"model"`
+	Messages []chatCompletionMessage `json:"messages"`
+	Tools    []chatCompletionTool    `json:"tools,omitempty"`
+}
+
+type chatCompletionMessage struct {
+	Role    string      `json:"role"`
+	Content interface{} `json:"content"` // string or array
+}
+
+type chatCompletionTool struct {
+	Type     string                     `json:"type"`
+	Function chatCompletionToolFunction `json:"function"`
+}
+
+type chatCompletionToolFunction struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Parameters  map[string]interface{} `json:"parameters"`
+}
+
+type chatCompletionResponse struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	Model   string `json:"model"`
+	Choices []struct {
+		Index        int                   `json:"index"`
+		Message      chatCompletionMessage `json:"message"`
+		FinishReason string                `json:"finish_reason"`
+	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
+	Error *struct {
+		Message string `json:"message"`
+		Type    string `json:"type,omitempty"`
+		Code    string `json:"code,omitempty"`
+	} `json:"error,omitempty"`
+}
+
+// Chat sends messages to OpenAI and returns the response using the appropriate API format
 func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Response, error) {
+	if c.isChatCompletionsAPI() {
+		return c.chatCompletions(messages, tools)
+	}
+	return c.responsesAPI(messages, tools)
+}
+
+// responsesAPI sends messages using the Responses API format
+func (c *OpenAIClient) responsesAPI(messages []Message, tools []ToolDefinition) (*Response, error) {
 	instructions, inputItems, err := convertToResponsesInput(messages)
 	if err != nil {
 		return nil, err
@@ -143,7 +236,7 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 	}
 
 	if c.debug {
-		log.Printf("[openai] request body: %s", string(jsonData))
+		log.Printf("[openai] request body (formatted):\n%s", formatJSONStruct(reqBody))
 	}
 
 	// Create HTTP request
@@ -170,7 +263,7 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 
 	if c.debug {
 		log.Printf("[openai] status: %s", resp.Status)
-		log.Printf("[openai] raw response: %s", string(body))
+		log.Printf("[openai] raw response (formatted):\n%s", formatJSONBytes(body))
 	}
 
 	if resp.StatusCode >= 300 {
@@ -235,6 +328,103 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 			response.StopReason = "stop"
 		}
 	}
+
+	return response, nil
+}
+
+// chatCompletions sends messages using the Chat Completions API format
+func (c *OpenAIClient) chatCompletions(messages []Message, tools []ToolDefinition) (*Response, error) {
+	// Convert messages to chat completions format
+	chatMessages, err := convertToChatCompletionsMessages(messages)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert tools to chat completions format
+	var chatTools []chatCompletionTool
+	if len(tools) > 0 {
+		chatTools = make([]chatCompletionTool, len(tools))
+		for i, tool := range tools {
+			chatTools[i] = chatCompletionTool{
+				Type: "function",
+				Function: chatCompletionToolFunction{
+					Name:        tool.Name,
+					Description: tool.Description,
+					Parameters:  tool.InputSchema,
+				},
+			}
+		}
+	}
+
+	// Build request
+	reqBody := chatCompletionRequest{
+		Model:    c.model,
+		Messages: chatMessages,
+		Tools:    chatTools,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	if c.debug {
+		log.Printf("[openai] request body (formatted):\n%s", formatJSONStruct(reqBody))
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", c.baseURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	// Send request
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if c.debug {
+		log.Printf("[openai] status: %s", resp.Status)
+		log.Printf("[openai] raw response (formatted):\n%s", formatJSONBytes(body))
+	}
+
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("OpenAI API error: status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var chatResp chatCompletionResponse
+	if err := json.Unmarshal(body, &chatResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Check for API error
+	if chatResp.Error != nil {
+		return nil, fmt.Errorf("OpenAI API error: %s", chatResp.Error.Message)
+	}
+
+	if len(chatResp.Choices) == 0 {
+		return nil, fmt.Errorf("no choices in OpenAI response")
+	}
+
+	choice := chatResp.Choices[0]
+	response := &Response{
+		StopReason: choice.FinishReason,
+	}
+
+	// Extract content and tool calls from the message
+	response.Content, response.ToolCalls = extractFromChatCompletionMessage(choice.Message)
 
 	return response, nil
 }
@@ -414,4 +604,133 @@ func convertInterfaceBlocks(raw []interface{}) []ContentBlock {
 		blocks = append(blocks, block)
 	}
 	return blocks
+}
+
+// convertToChatCompletionsMessages converts our Message list to the Chat Completions API format.
+func convertToChatCompletionsMessages(messages []Message) ([]chatCompletionMessage, error) {
+	chatMessages := make([]chatCompletionMessage, 0, len(messages))
+	
+	for _, msg := range messages {
+		// Include system messages as regular messages with role "system"
+		chatMsg := chatCompletionMessage{
+			Role: msg.Role,
+		}
+		
+		// Convert content
+		switch content := msg.Content.(type) {
+		case string:
+			chatMsg.Content = content
+		case []ContentBlock:
+			// For chat completions, we need to convert tool results and tool calls
+			converted, err := convertContentBlocksForChatCompletions(content, msg.Role)
+			if err != nil {
+				return nil, err
+			}
+			chatMsg.Content = converted
+		case []interface{}:
+			// Convert from raw JSON
+			blocks := convertInterfaceBlocks(content)
+			converted, err := convertContentBlocksForChatCompletions(blocks, msg.Role)
+			if err != nil {
+				return nil, err
+			}
+			chatMsg.Content = converted
+		default:
+			return nil, fmt.Errorf("unsupported content type: %T", content)
+		}
+		
+		chatMessages = append(chatMessages, chatMsg)
+	}
+	
+	return chatMessages, nil
+}
+
+// convertContentBlocksForChatCompletions converts ContentBlock slices to chat completions format.
+func convertContentBlocksForChatCompletions(blocks []ContentBlock, role string) (interface{}, error) {
+	if len(blocks) == 0 {
+		return "", nil
+	}
+	
+	// If there's only one text block, return it as a string
+	if len(blocks) == 1 && blocks[0].Type == "text" {
+		return blocks[0].Text, nil
+	}
+	
+	// Otherwise, build an array of content blocks
+	result := make([]map[string]interface{}, 0, len(blocks))
+	
+	for _, block := range blocks {
+		switch block.Type {
+		case "text":
+			result = append(result, map[string]interface{}{
+				"type": "text",
+				"text": block.Text,
+			})
+		case "tool_use":
+			if role == "assistant" {
+				argsBytes, _ := json.Marshal(block.Input)
+				result = append(result, map[string]interface{}{
+					"type": "tool_call",
+					"id":   block.ID,
+					"function": map[string]interface{}{
+						"name":      block.Name,
+						"arguments": string(argsBytes),
+					},
+				})
+			}
+		case "tool_result":
+			if role == "user" {
+				result = append(result, map[string]interface{}{
+					"type": "tool_result",
+					"tool_call_id": block.ToolUseID,
+					"content": block.Content,
+				})
+			}
+		}
+	}
+	
+	return result, nil
+}
+
+// extractFromChatCompletionMessage extracts content and tool calls from a chat completion message.
+func extractFromChatCompletionMessage(msg chatCompletionMessage) (string, []ToolCall) {
+	var textContent string
+	var toolCalls []ToolCall
+	
+	switch content := msg.Content.(type) {
+	case string:
+		textContent = content
+	case []interface{}:
+		for _, item := range content {
+			if m, ok := item.(map[string]interface{}); ok {
+				if typ, _ := m["type"].(string); typ == "text" {
+					if text, ok := m["text"].(string); ok {
+						textContent += text
+					}
+				} else if typ == "tool_call" {
+					if funcObj, ok := m["function"].(map[string]interface{}); ok {
+						name, _ := funcObj["name"].(string)
+						argsStr, _ := funcObj["arguments"].(string)
+						
+						var input map[string]interface{}
+						if argsStr != "" {
+							_ = json.Unmarshal([]byte(argsStr), &input)
+						}
+						if input == nil {
+							input = make(map[string]interface{})
+						}
+						
+						id, _ := m["id"].(string)
+						toolCalls = append(toolCalls, ToolCall{
+							ID:    id,
+							Name:  name,
+							Input: input,
+						})
+					}
+				}
+			}
+		}
+	}
+	
+	return textContent, toolCalls
 }
