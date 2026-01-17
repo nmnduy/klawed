@@ -10,6 +10,7 @@ import (
 	"github.com/puter/web-browse-agent/internal/browser"
 	"github.com/puter/web-browse-agent/internal/llm"
 	"github.com/puter/web-browse-agent/internal/tool"
+	"github.com/puter/web-browse-agent/pkg/version"
 	"github.com/spf13/cobra"
 )
 
@@ -35,6 +36,7 @@ Examples:
   web-browse-agent --provider anthropic "test the login form"`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runAgent,
+		Version: version.Version,
 	}
 
 	rootCmd.Flags().StringVarP(&provider, "provider", "p", "", "LLM provider (openai or anthropic)")

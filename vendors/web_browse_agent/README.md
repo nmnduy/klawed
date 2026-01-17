@@ -1,5 +1,7 @@
 # Web Browse Agent
 
+Version: `0.1.0`
+
 An AI-powered agent for web browsing and UI testing, written in Go. This agent uses an agentic loop pattern to accomplish complex tasks through recursive tool calls, combining browser automation with LLM reasoning.
 
 ## Features
