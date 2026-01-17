@@ -22,12 +22,12 @@ When the task is complete, provide a summary of what was accomplished.`
 
 // Agent implements the agentic loop
 type Agent struct {
-	client    llm.Client
-	registry  *tool.Registry
-	messages  []llm.Message
-	verbose   bool
-	logFile   *os.File
-	logPath   string
+	client   llm.Client
+	registry *tool.Registry
+	messages []llm.Message
+	verbose  bool
+	logFile  *os.File
+	logPath  string
 }
 
 // NewAgent creates a new agent with the given LLM client and tool registry
@@ -106,6 +106,7 @@ func (a *Agent) Run(userPrompt string) (string, error) {
 
 		// Log LLM response
 		a.log("=== LLM Response ===")
+		a.logJSON("raw response", response)
 		if response.Content != "" {
 			a.log(response.Content)
 		}
@@ -117,10 +118,21 @@ func (a *Agent) Run(userPrompt string) (string, error) {
 		}
 		a.log("=== End LLM Response ===")
 
-		// Check stop reason
-		if response.StopReason == "end_turn" || response.StopReason == "stop" {
+		// Handle known stop reasons first
+		switch response.StopReason {
+		case "end_turn", "stop":
 			a.log("=== Task Completed ===")
 			return response.Content, nil
+		case "in_progress":
+			a.log("LLM reported in_progress; waiting for more output")
+			continue
+		}
+
+		// Handle empty responses to avoid infinite loops
+		if response.Content == "" && len(response.ToolCalls) == 0 {
+			errMsg := fmt.Sprintf("LLM returned empty response (stop_reason=%s)", response.StopReason)
+			a.log(errMsg)
+			return "", fmt.Errorf(errMsg)
 		}
 
 		// Handle tool calls

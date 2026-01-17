@@ -140,6 +140,9 @@ func (c *AnthropicClient) Chat(messages []Message, tools []ToolDefinition) (*Res
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	// Log request JSON for debugging
+	fmt.Printf("[anthropic] request body: %s\n", string(jsonData))
+
 	// Create HTTP request
 	req, err := http.NewRequest("POST", anthropicAPIURL, bytes.NewBuffer(jsonData))
 	if err != nil {

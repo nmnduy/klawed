@@ -121,7 +121,7 @@ static int is_headless_mode(void) {
            strcasecmp(headless, "yes") == 0;
 }
 
-static bool is_headless_mode(void) {
+static char* execute_web_agent(const char *prompt, int *exit_code) {
     if (!prompt) {
         return NULL;
     }

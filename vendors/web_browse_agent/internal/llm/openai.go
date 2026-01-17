@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 )
@@ -21,6 +22,7 @@ type OpenAIClient struct {
 	model   string
 	baseURL string
 	client  *http.Client
+	debug   bool
 }
 
 // NewOpenAIClient creates a new OpenAI client
@@ -40,11 +42,14 @@ func NewOpenAIClient() (*OpenAIClient, error) {
 		baseURL = openAIAPIURL
 	}
 
+	debug := os.Getenv("WEB_BROWSE_AGENT_DEBUG") == "1"
+
 	return &OpenAIClient{
 		apiKey:  apiKey,
 		model:   model,
 		baseURL: baseURL,
 		client:  &http.Client{},
+		debug:   debug,
 	}, nil
 }
 
@@ -133,6 +138,13 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 	}
 
 	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	if c.debug {
+		log.Printf("[openai] request body: %s", string(jsonData))
+	}
 
 	// Create HTTP request
 	req, err := http.NewRequest("POST", c.baseURL, bytes.NewBuffer(jsonData))
@@ -156,6 +168,11 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	if c.debug {
+		log.Printf("[openai] status: %s", resp.Status)
+		log.Printf("[openai] raw response: %s", string(body))
+	}
+
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("OpenAI API error: status %d: %s", resp.StatusCode, string(body))
 	}
@@ -177,7 +194,7 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 
 	// Convert response to our format
 	response := &Response{
-		StopReason: responsesResp.Status,
+		StopReason: mapStatus(responsesResp.Status),
 	}
 
 	// Collect text and tool calls from the assistant messages
@@ -220,6 +237,22 @@ func (c *OpenAIClient) Chat(messages []Message, tools []ToolDefinition) (*Respon
 	}
 
 	return response, nil
+}
+
+// mapStatus converts the Responses API status into the agent stop reason.
+func mapStatus(status string) string {
+	switch status {
+	case "completed", "done", "finished":
+		return "stop"
+	case "requires_action":
+		return "tool_calls"
+	case "in_progress":
+		return "in_progress"
+	case "failed", "expired", "cancelled":
+		return status
+	default:
+		return status
+	}
 }
 
 // convertToResponsesInput converts our Message list to the Responses API input format.
