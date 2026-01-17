@@ -39,7 +39,7 @@ public class MetricsService {
     private Counter containerStartFailures;
 
     // Gauges for current state
-    private AtomicInteger activeWebSocketConnections;
+    private AtomicInteger activeWebSocketConnections = new AtomicInteger(0);
 
     // Timers for performance metrics
     private Timer chatResponseTime;

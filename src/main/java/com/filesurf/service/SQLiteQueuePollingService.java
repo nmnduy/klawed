@@ -56,7 +56,7 @@ public class SQLiteQueuePollingService {
     /**
      * Poll SQLite queues for klawed responses every 500ms
      */
-    @Scheduled(every = "0.5s")
+    @Scheduled(every = "1s")
     @ActivateRequestContext
     public void pollSQLiteQueues() {
         if (activeSessions.isEmpty()) {

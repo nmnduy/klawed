@@ -118,7 +118,7 @@ public class ChatMessagePollingService {
      * Only polls for messages belonging to sessions with active WebSocket connections.
      * Messages for disconnected sessions are ignored - users who drop off don't need those messages.
      */
-    @Scheduled(every = "0.3s")
+    @Scheduled(every = "1s")
     @ActivateRequestContext
     public void pollAndSendUnsentMessages() {
         if (!pollingActive.get()) {
