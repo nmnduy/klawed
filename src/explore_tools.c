@@ -121,33 +121,7 @@ static int is_headless_mode(void) {
            strcasecmp(headless, "yes") == 0;
 }
 
-static char* get_llm_config_string(void) {
-    static char config[1024];
-    const char *model = getenv("OPENAI_MODEL");
-    const char *api_base = getenv("OPENAI_API_BASE");
-    const char *api_key = getenv("OPENAI_API_KEY");
-
-    if (!model) {
-        model = getenv("ANTHROPIC_MODEL");
-    }
-    if (!api_base) {
-        api_base = getenv("ANTHROPIC_API_URL");
-        if (!api_base) {
-            api_base = getenv("ANTHROPIC_BASE_URL");
-        }
-    }
-
-    snprintf(config, sizeof(config),
-             "LLM config: model=%s, api_base=%s, api_key=%s",
-             model ? model : "(not set)",
-             api_base ? api_base : "(default)",
-             api_key ? "[set]" : "(not set)");
-
-    return config;
-}
-
-// Execute web_browse_agent with a prompt and capture output
-static char* execute_web_agent(const char *prompt, int *exit_code) {
+static bool is_headless_mode(void) {
     if (!prompt) {
         return NULL;
     }
@@ -188,7 +162,6 @@ static char* execute_web_agent(const char *prompt, int *exit_code) {
     free(escaped_prompt);
 
     LOG_INFO("Executing web_browse_agent: %s", command);
-    LOG_INFO("%s", get_llm_config_string());
 
     FILE *fp = popen(command, "r");
     free(command);
@@ -245,7 +218,6 @@ static char* execute_web_agent_raw(const char *args, int *exit_code) {
              args);
 
     LOG_INFO("Executing web_browse_agent (raw): %s", command);
-    LOG_INFO("%s", get_llm_config_string());
 
     FILE *fp = popen(command, "r");
     free(command);
