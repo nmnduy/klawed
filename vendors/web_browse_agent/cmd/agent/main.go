@@ -51,6 +51,12 @@ Examples:
 	}
 }
 
+// printLLMConfig prints the LLM configuration during startup
+func printLLMConfig(client llm.Client) {
+	fmt.Printf("LLM config: provider=%s, model=%s, base_url=%s\n",
+		client.Provider(), client.GetModel(), client.GetBaseURL())
+}
+
 func runAgent(cmd *cobra.Command, args []string) error {
 	// Override headless from flag
 	if headless {
@@ -63,9 +69,8 @@ func runAgent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create LLM client: %w", err)
 	}
 
-	if verbose {
-		fmt.Printf("Using LLM provider: %s, model: %s\n", provider, client.GetModel())
-	}
+	// Print LLM configuration
+	printLLMConfig(client)
 
 	// Create tool registry
 	registry := tool.NewRegistry()

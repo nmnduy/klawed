@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	MaxIterations = 50
+	MaxIterations = 1000000
 	SystemPrompt  = `You are an AI agent that can browse the web and perform tasks using tools.
 You have access to browser automation tools and file system tools.
 When given a task, break it down into steps and use the available tools to accomplish it.
@@ -125,6 +125,9 @@ func (a *Agent) executeTool(tc llm.ToolCall) *tool.Result {
 	if a.verbose {
 		log.Printf("Tool %s succeeded", tc.Name)
 	}
+
+	// Print tool result
+	fmt.Printf("--- Tool: %s ---\n%s\n--- End Tool: %s ---\n", tc.Name, output, tc.Name)
 
 	return tool.Success(output)
 }
