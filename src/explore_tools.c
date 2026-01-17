@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <limits.h>
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
 #include <bsd/string.h>
@@ -28,15 +29,61 @@
 #define MAX_WEB_OUTPUT 100000  // 100KB max output from web_browse_agent
 #define WEB_AGENT_TIMEOUT 120  // 2 minute timeout for web operations
 
-// Get the path to web_browse_agent binary
+// Get the path to web_browse_agent binary, preferring env override, then vendor copy, then PATH
 static const char* get_web_agent_path(void) {
-    const char *path = getenv("KLAWED_WEB_BROWSE_AGENT_PATH");
-    if (path && path[0] != '\0') {
-        return path;
+    static char resolved_path[PATH_MAX];
+
+    const char *env_path = getenv("KLAWED_WEB_BROWSE_AGENT_PATH");
+    if (env_path && env_path[0] != '\0' && access(env_path, X_OK) == 0) {
+        return env_path;
     }
-    // Default to vendors directory relative to executable
-    // This will be resolved at runtime
-    return "vendors/web_browse_agent/web_browse_agent";
+
+    const char *vendor_path = "vendors/web_browse_agent/web_browse_agent";
+    if (access(vendor_path, X_OK) == 0) {
+        if (strlcpy(resolved_path, vendor_path, sizeof(resolved_path)) < sizeof(resolved_path)) {
+            return resolved_path;
+        }
+    }
+
+    const char *path_env = getenv("PATH");
+    if (!path_env || path_env[0] == '\0') {
+        return env_path && env_path[0] != '\0' ? env_path : vendor_path;
+    }
+
+    char *path_copy = strdup(path_env);
+    if (!path_copy) {
+        return env_path && env_path[0] != '\0' ? env_path : vendor_path;
+    }
+
+    const char *found_path = NULL;
+    char *saveptr = NULL;
+    for (char *token = strtok_r(path_copy, ":", &saveptr); token; token = strtok_r(NULL, ":", &saveptr)) {
+        if (strlcpy(resolved_path, token, sizeof(resolved_path)) >= sizeof(resolved_path)) {
+            continue;
+        }
+        size_t len = strnlen(resolved_path, sizeof(resolved_path));
+        if (len + 1 >= sizeof(resolved_path)) {
+            continue;
+        }
+        resolved_path[len] = '/';
+        resolved_path[len + 1] = '\0';
+        if (strlcat(resolved_path, "web_browse_agent", sizeof(resolved_path)) >= sizeof(resolved_path)) {
+            continue;
+        }
+
+        if (access(resolved_path, X_OK) == 0) {
+            found_path = resolved_path;
+            break;
+        }
+    }
+
+    free(path_copy);
+
+    if (found_path) {
+        return found_path;
+    }
+
+    return env_path && env_path[0] != '\0' ? env_path : vendor_path;
 }
 
 // Check if explore mode is enabled

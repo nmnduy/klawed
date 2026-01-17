@@ -47,6 +47,9 @@ endif
 
 # Installation prefix (can be overridden via command line)
 INSTALL_PREFIX ?= $(HOME)/.local
+WEB_BROWSE_AGENT_DIR := vendors/web_browse_agent
+WEB_BROWSE_AGENT_BIN := $(WEB_BROWSE_AGENT_DIR)/web_browse_agent
+WEB_BROWSE_AGENT_VERSION ?= $(shell cd $(WEB_BROWSE_AGENT_DIR) && git describe --always --dirty --tags 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 # Version management
 VERSION_FILE := VERSION
@@ -463,7 +466,7 @@ TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 
-.PHONY: all clean check-deps install test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search query-tool memvid-repl debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search query-tool memvid-repl debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -2112,6 +2115,16 @@ endif
 	@echo ""
 	@echo "Note: Make sure $(INSTALL_PREFIX)/bin is in your PATH:"
 	@echo "  export PATH=\"$(INSTALL_PREFIX)/bin:$$PATH\""
+
+install-web-browse-agent:
+	@echo "Building web_browse_agent (version: $(WEB_BROWSE_AGENT_VERSION))..."
+	@command -v go >/dev/null 2>&1 || { echo "Error: go not found. Install Go to build web_browse_agent."; exit 1; }
+	@cd $(WEB_BROWSE_AGENT_DIR) && GO111MODULE=on go build -ldflags "-s -w" -o web_browse_agent ./cmd/agent
+	@echo "Installing web_browse_agent to $(INSTALL_PREFIX)/bin..."
+	@mkdir -p $(INSTALL_PREFIX)/bin
+	@cp $(WEB_BROWSE_AGENT_BIN) $(INSTALL_PREFIX)/bin/web_browse_agent
+	@echo "$(WEB_BROWSE_AGENT_VERSION)" > $(INSTALL_PREFIX)/bin/web_browse_agent.version
+	@echo "✓ web_browse_agent installed (version: $(WEB_BROWSE_AGENT_VERSION)). Ensure $(INSTALL_PREFIX)/bin is in your PATH."
 
 clean:
 	rm -rf $(BUILD_DIR)

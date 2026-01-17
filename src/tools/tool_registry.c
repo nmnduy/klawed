@@ -20,6 +20,10 @@ static cJSON* tool_web_read_wrapper(cJSON *params, ConversationState *state) {
     return tool_web_read(params, state);
 }
 
+static cJSON* tool_web_browse_agent_wrapper(cJSON *params, ConversationState *state) {
+    return tool_web_browse_agent(params, state);
+}
+
 static cJSON* tool_context7_search_wrapper(cJSON *params, ConversationState *state) {
     return tool_context7_search(params, state);
 }
@@ -48,7 +52,7 @@ static Tool tools[] = {
     {"MemoryRecall", tool_memory_recall},
     {"MemorySearch", tool_memory_search},
     // Web browse agent direct tool (works when binary path configured)
-    {"web_browse_agent", tool_web_browse_agent},
+    {"web_browse_agent", tool_web_browse_agent_wrapper},
     // Explore tools (only work when KLAWED_EXPLORE_MODE=1)
     {"web_search", tool_web_search_wrapper},
     {"web_read", tool_web_read_wrapper},
