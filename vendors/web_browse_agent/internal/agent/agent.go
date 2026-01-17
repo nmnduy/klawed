@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/puter/web-browse-agent/internal/llm"
 	"github.com/puter/web-browse-agent/internal/tool"
@@ -20,37 +22,81 @@ When the task is complete, provide a summary of what was accomplished.`
 
 // Agent implements the agentic loop
 type Agent struct {
-	client   llm.Client
-	registry *tool.Registry
-	messages []llm.Message
-	verbose  bool
+	client    llm.Client
+	registry  *tool.Registry
+	messages  []llm.Message
+	verbose   bool
+	logFile   *os.File
+	logPath   string
 }
 
 // NewAgent creates a new agent with the given LLM client and tool registry
-func NewAgent(client llm.Client, registry *tool.Registry, verbose bool) *Agent {
+func NewAgent(client llm.Client, registry *tool.Registry, verbose bool, logPath string) *Agent {
+	var logFile *os.File
+	var err error
+
+	if logPath != "" {
+		logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			log.Printf("Warning: failed to open log file %s: %v", logPath, err)
+		}
+	}
+
 	return &Agent{
 		client:   client,
 		registry: registry,
 		messages: []llm.Message{},
 		verbose:  verbose,
+		logFile:  logFile,
+		logPath:  logPath,
+	}
+}
+
+// log writes a message to both console and log file (if configured)
+func (a *Agent) log(args ...interface{}) {
+	msg := fmt.Sprint(args...)
+	fmt.Println(msg)
+	if a.logFile != nil {
+		fmt.Fprintln(a.logFile, msg)
+	}
+}
+
+// logJSON writes a JSON object to both console and log file (if configured)
+func (a *Agent) logJSON(prefix string, data interface{}) {
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		a.log(prefix, ": failed to marshal JSON:", err)
+		return
+	}
+	a.log(prefix, "\n", string(jsonData))
+}
+
+// Close closes the log file if open
+func (a *Agent) Close() {
+	if a.logFile != nil {
+		a.logFile.Close()
 	}
 }
 
 // Run executes the agentic loop for the given user prompt
 func (a *Agent) Run(userPrompt string) (string, error) {
+	defer a.Close()
+
 	// Initialize conversation with system prompt and user message
 	a.messages = []llm.Message{
 		{Role: "system", Content: SystemPrompt},
 		{Role: "user", Content: userPrompt},
 	}
 
+	a.log("=== User Prompt ===")
+	a.log(userPrompt)
+	a.log("=== End User Prompt ===")
+
 	// Get tool definitions for LLM
 	tools := a.getToolDefinitions()
 
 	for iteration := 0; iteration < MaxIterations; iteration++ {
-		if a.verbose {
-			log.Printf("Iteration %d", iteration+1)
-		}
+		a.log("--- Iteration", iteration+1, "---")
 
 		// Call LLM
 		response, err := a.client.Chat(a.messages, tools)
@@ -58,12 +104,22 @@ func (a *Agent) Run(userPrompt string) (string, error) {
 			return "", fmt.Errorf("LLM call failed: %w", err)
 		}
 
+		// Log LLM response
+		a.log("=== LLM Response ===")
+		if response.Content != "" {
+			a.log(response.Content)
+		}
+		if len(response.ToolCalls) > 0 {
+			a.log("=== Tool Calls ===")
+			for _, tc := range response.ToolCalls {
+				a.logJSON("Tool Call:", tc)
+			}
+		}
+		a.log("=== End LLM Response ===")
+
 		// Check stop reason
 		if response.StopReason == "end_turn" || response.StopReason == "stop" {
-			// Task complete
-			if a.verbose {
-				log.Println("Task completed")
-			}
+			a.log("=== Task Completed ===")
 			return response.Content, nil
 		}
 
@@ -74,8 +130,10 @@ func (a *Agent) Run(userPrompt string) (string, error) {
 
 			// Execute tools and add results
 			for _, tc := range response.ToolCalls {
+				a.log("--- Executing Tool:", tc.Name, "---")
 				result := a.executeTool(tc)
 				a.addToolResult(tc.ID, tc.Name, result)
+				a.log("--- End Tool:", tc.Name, "---")
 			}
 		} else if response.Content != "" {
 			// No tool calls, just content - might be done
@@ -104,10 +162,6 @@ func (a *Agent) getToolDefinitions() []llm.ToolDefinition {
 
 // executeTool runs a tool and returns the result
 func (a *Agent) executeTool(tc llm.ToolCall) *tool.Result {
-	if a.verbose {
-		log.Printf("Executing tool: %s", tc.Name)
-	}
-
 	t, exists := a.registry.Get(tc.Name)
 	if !exists {
 		return tool.Error(fmt.Sprintf("unknown tool: %s", tc.Name))
@@ -116,18 +170,13 @@ func (a *Agent) executeTool(tc llm.ToolCall) *tool.Result {
 	// tc.Input is already map[string]interface{}
 	output, err := t.Execute(tc.Input)
 	if err != nil {
-		if a.verbose {
-			log.Printf("Tool %s failed: %s", tc.Name, err)
-		}
 		return tool.Error(fmt.Sprintf("tool execution error: %v", err))
 	}
 
-	if a.verbose {
-		log.Printf("Tool %s succeeded", tc.Name)
-	}
-
-	// Print tool result
-	fmt.Printf("--- Tool: %s ---\n%s\n--- End Tool: %s ---\n", tc.Name, output, tc.Name)
+	// Print tool result to both console and log file
+	a.log("=== Tool Output:", tc.Name, "===")
+	a.log(output)
+	a.log("=== End Tool Output:", tc.Name, "===")
 
 	return tool.Success(output)
 }

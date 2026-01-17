@@ -20,6 +20,7 @@ var (
 	verbose     bool
 	headless    bool
 	noBrowser   bool
+	logFile     string
 )
 
 func main() {
@@ -44,6 +45,7 @@ Examples:
 	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
 	rootCmd.Flags().BoolVar(&headless, "headless", false, "Run browser in headless mode")
 	rootCmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Disable browser tools")
+	rootCmd.Flags().StringVar(&logFile, "log-file", "", "Log file path (default: console only)")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -98,7 +100,7 @@ func runAgent(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create agent
-	ag := agent.NewAgent(client, registry, verbose)
+	ag := agent.NewAgent(client, registry, verbose, logFile)
 
 	if interactive {
 		return runInteractive(ag)
