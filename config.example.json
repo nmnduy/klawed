@@ -1,0 +1,43 @@
+{
+  "input_box_style": "horizontal",
+  "theme": "tender",
+  
+  // Legacy single provider configuration (for backward compatibility)
+  "llm_provider": {
+    "provider_type": "openai",
+    "provider_name": "OpenAI",
+    "model": "gpt-4",
+    "api_base": "https://api.openai.com/v1",
+    "api_key": "",
+    "use_bedrock": 0
+  },
+  
+  // Multiple named providers (recommended)
+  "active_provider": "sonnet-4.5-bedrock",
+  "providers": {
+    "sonnet-4.5-bedrock": {
+      "provider_type": "bedrock",
+      "provider_name": "AWS Bedrock",
+      "model": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+      "use_bedrock": 1
+    },
+    "opus-4.5": {
+      "provider_type": "anthropic",
+      "provider_name": "Anthropic",
+      "model": "claude-3-5-sonnet-20241022",
+      "api_base": "https://api.anthropic.com/v1"
+    },
+    "gpt-4-turbo": {
+      "provider_type": "openai",
+      "provider_name": "OpenAI",
+      "model": "gpt-4-turbo",
+      "api_base": "https://api.openai.com/v1"
+    },
+    "local-llm": {
+      "provider_type": "openai",
+      "provider_name": "Local LLM",
+      "model": "local-model",
+      "api_base": "http://localhost:8080/v1"
+    }
+  }
+}

@@ -159,6 +159,8 @@ export OPENAI_API_KEY="your-api-key"
 
 ## Configuration
 
+**Configuration file:** `.klawed/config.json` - Stores user preferences including LLM provider configurations. See `docs/llm-provider-configuration.md` for detailed documentation and examples.
+
 **Environment variables:**
 - **API**: `OPENAI_API_KEY` (required), `OPENAI_MODEL`, `OPENAI_API_BASE`
 - **OpenAI Authentication**: `OPENAI_AUTH_HEADER` - Custom auth header template (e.g., "x-api-key: %s" or "Authorization: Bearer %s")

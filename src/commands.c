@@ -11,6 +11,7 @@
 #include "theme_explorer.h"
 #include "help_modal.h"
 #include "config.h"
+#include "provider_command.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
 #include <bsd/string.h>
@@ -647,6 +648,15 @@ static Command dump_cmd = {
     .needs_terminal = 0
 };
 
+static Command provider_cmd = {
+    .name = "provider",
+    .usage = "/provider [name|list]",
+    .description = "View or switch LLM providers (use /provider list to see available)",
+    .handler = cmd_provider,
+    .completer = commands_tab_completer,
+    .needs_terminal = 0
+};
+
 // ============================================================================
 // API Implementation
 // ============================================================================
@@ -662,6 +672,7 @@ void commands_init(void) {
     commands_register(&themes_cmd);
     commands_register(&vim_cmd);
     commands_register(&dump_cmd);
+    commands_register(&provider_cmd);
 }
 
 void commands_set_tui_mode(int enabled) {
