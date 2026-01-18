@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -730,12 +731,16 @@ func extractFromChatCompletionMessage(msg chatCompletionMessage) (string, []Tool
 	switch content := msg.Content.(type) {
 	case string:
 		textContent = content
+		// Check for tool calls in text format [Called tool: ...] (DeepSeek format)
+		toolCalls = append(toolCalls, extractToolCallsFromText(textContent)...)
 	case []interface{}:
 		for _, item := range content {
 			if m, ok := item.(map[string]interface{}); ok {
 				if typ, _ := m["type"].(string); typ == "text" {
 					if text, ok := m["text"].(string); ok {
 						textContent += text
+						// Check for tool calls in text format [Called tool: ...] (DeepSeek format)
+						toolCalls = append(toolCalls, extractToolCallsFromText(text)...)
 					}
 				} else if typ == "tool_call" {
 					// This is for when tool calls are embedded in content array
@@ -781,4 +786,50 @@ func extractFromChatCompletionMessage(msg chatCompletionMessage) (string, []Tool
 	}
 	
 	return textContent, toolCalls
+}
+
+// extractToolCallsFromText extracts tool calls from text in the format [Called tool: name with args: {...}]
+func extractToolCallsFromText(text string) []ToolCall {
+	var toolCalls []ToolCall
+	
+	// Look for patterns like [Called tool: bash with args: {"command":"find ..."}]
+	// or [Called tool: read_file with args: {"path":"./semrush_search_notes.md"}]
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[Called tool: ") && strings.Contains(line, " with args: ") {
+			// Extract tool name and arguments
+			// Format: [Called tool: NAME with args: {JSON}]
+			prefix := "[Called tool: "
+			suffix := " with args: "
+			nameStart := len(prefix)
+			nameEnd := strings.Index(line, suffix)
+			if nameEnd > nameStart {
+				toolName := line[nameStart:nameEnd]
+				argsStart := nameEnd + len(suffix)
+				argsStr := line[argsStart:]
+				argsStr = strings.TrimSuffix(argsStr, "]")
+				
+				// Parse JSON arguments
+				var input map[string]interface{}
+				if argsStr != "" {
+					_ = json.Unmarshal([]byte(argsStr), &input)
+				}
+				if input == nil {
+					input = make(map[string]interface{})
+				}
+				
+				// Generate a unique ID
+				id := fmt.Sprintf("call_%s_%d", toolName, time.Now().UnixNano())
+				
+				toolCalls = append(toolCalls, ToolCall{
+					ID:    id,
+					Name:  toolName,
+					Input: input,
+				})
+			}
+		}
+	}
+	
+	return toolCalls
 }

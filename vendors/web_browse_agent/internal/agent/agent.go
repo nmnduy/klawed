@@ -153,16 +153,6 @@ func (a *Agent) Run(userPrompt string) (string, error) {
 		}
 		a.log("=== End LLM Response ===")
 
-		// Handle known stop reasons first
-		switch response.StopReason {
-		case "end_turn", "stop":
-			a.log("=== Task Completed ===")
-			return response.Content, nil
-		case "in_progress":
-			a.log("LLM reported in_progress; waiting for more output")
-			continue
-		}
-
 		// Handle empty responses to avoid infinite loops
 		if response.Content == "" && len(response.ToolCalls) == 0 {
 			errMsg := fmt.Sprintf("LLM returned empty response (stop_reason=%s)", response.StopReason)
@@ -170,7 +160,7 @@ func (a *Agent) Run(userPrompt string) (string, error) {
 			return "", fmt.Errorf(errMsg)
 		}
 
-		// Handle tool calls
+		// Handle tool calls - even if StopReason is "stop", we should execute tool calls
 		if len(response.ToolCalls) > 0 {
 			// Add assistant message with tool calls
 			a.addAssistantMessage(response)
@@ -182,7 +172,23 @@ func (a *Agent) Run(userPrompt string) (string, error) {
 				a.addToolResult(tc.ID, tc.Name, result)
 				a.log("--- End Tool:", tc.Name, "---")
 			}
-		} else if response.Content != "" {
+			
+			// Continue the loop to get next response
+			continue
+		}
+
+		// Handle known stop reasons
+		switch response.StopReason {
+		case "end_turn", "stop":
+			a.log("=== Task Completed ===")
+			return response.Content, nil
+		case "in_progress":
+			a.log("LLM reported in_progress; waiting for more output")
+			continue
+		}
+
+		// Handle content without tool calls
+		if response.Content != "" {
 			// No tool calls, just content - might be done
 			// But first check if this looks like a task that requires tools
 			// If it's a simple greeting or acknowledgment, it's probably done
