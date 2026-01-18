@@ -12,10 +12,91 @@
 #include "ui/ui_output.h"
 #include "conversation/conversation_state.h"
 #include "util/string_utils.h"
+#include "provider.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <bsd/string.h>
+
+/**
+ * Switch provider for the current session
+ * 
+ * @param state Conversation state
+ * @param provider_key Provider key to switch to
+ * @return 0 on success, -1 on error
+ */
+static int switch_provider_for_session(ConversationState *state, const char *provider_key) {
+    if (!state || !provider_key) {
+        LOG_ERROR("[Provider] Invalid arguments for switch_provider_for_session");
+        return -1;
+    }
+    
+    LOG_INFO("[Provider] Switching to provider '%s' for current session", provider_key);
+    
+    // Load configuration
+    KlawedConfig config;
+    if (config_load(&config) != 0) {
+        config_init_defaults(&config);
+    }
+    
+    // Find the provider configuration
+    const NamedProviderConfig *named_provider = config_find_provider(&config, provider_key);
+    if (!named_provider) {
+        LOG_ERROR("[Provider] Provider '%s' not found in configuration", provider_key);
+        return -1;
+    }
+    
+    const LLMProviderConfig *provider_config = &named_provider->config;
+    
+    // Clean up old provider if it exists
+    if (state->provider) {
+        state->provider->cleanup(state->provider);
+        state->provider = NULL;
+        LOG_DEBUG("[Provider] Old provider cleaned up");
+    }
+    
+    // Free old API URL if it exists
+    if (state->api_url) {
+        free(state->api_url);
+        state->api_url = NULL;
+    }
+    
+    // Update model
+    if (state->model) {
+        free(state->model);
+    }
+    state->model = strdup(provider_config->model[0] != '\0' ? provider_config->model : "gpt-4");
+    if (!state->model) {
+        LOG_ERROR("[Provider] Failed to allocate memory for model");
+        return -1;
+    }
+    
+    // Update API key (use from config or keep existing)
+    // Note: We don't update state->api_key here as it might be from environment variable
+    // The provider_init function will handle getting the right API key
+    
+    // Initialize new provider
+    ProviderInitResult provider_result;
+    provider_init(state->model, state->api_key, &provider_result);
+    
+    if (!provider_result.provider) {
+        const char *error_msg = provider_result.error_message ? provider_result.error_message : "unknown error";
+        LOG_ERROR("[Provider] Failed to initialize provider '%s': %s", provider_key, error_msg);
+        free(provider_result.error_message);
+        free(provider_result.api_url);
+        return -1;
+    }
+    
+    // Update state with new provider and API URL
+    state->provider = provider_result.provider;
+    state->api_url = provider_result.api_url;
+    free(provider_result.error_message);
+    
+    LOG_INFO("[Provider] Successfully switched to provider '%s' (model: %s, API URL: %s)",
+             provider_key, state->model, state->api_url ? state->api_url : "(null)");
+    
+    return 0;
+}
 
 /**
  * Handle /provider command
@@ -134,7 +215,10 @@ int cmd_provider(ConversationState *state, const char *args) {
     if (!provider) {
         if (state->tui) {
             char error_msg[256];
-            snprintf(error_msg, sizeof(error_msg), "Provider '%s' not found", args);
+            // Truncate args if too long for error message
+            char truncated_args[64];
+            strlcpy(truncated_args, args, sizeof(truncated_args));
+            snprintf(error_msg, sizeof(error_msg), "Provider '%s' not found", truncated_args);
             tui_update_status(state->tui, error_msg);
         }
         fprintf(stderr, "Error: Provider '%s' not found\n", args);
@@ -154,10 +238,20 @@ int cmd_provider(ConversationState *state, const char *args) {
         return -1;
     }
     
+    // Also switch provider for the current session
+    int session_switch_result = switch_provider_for_session(state, args);
+    
     // Show success message
     if (state->tui) {
         char success_msg[256];
-        snprintf(success_msg, sizeof(success_msg), "Switched to provider '%s'", args);
+        // Truncate args if too long for success message
+        char truncated_args[64];
+        strlcpy(truncated_args, args, sizeof(truncated_args));
+        if (session_switch_result == 0) {
+            snprintf(success_msg, sizeof(success_msg), "Switched to provider '%s' (current session)", truncated_args);
+        } else {
+            snprintf(success_msg, sizeof(success_msg), "Switched to provider '%s' (config only)", truncated_args);
+        }
         tui_update_status(state->tui, success_msg);
     }
     
@@ -167,6 +261,11 @@ int cmd_provider(ConversationState *state, const char *args) {
         printf("  Model: %s\n", provider->config.model);
     }
     printf("Configuration saved to .klawed/config.json\n");
+    if (session_switch_result == 0) {
+        printf("Provider switched for current session\n");
+    } else {
+        printf("Note: Provider configuration saved but could not switch for current session\n");
+    }
     printf("Note: Environment variable KLAWED_LLM_PROVIDER overrides this setting\n");
     
     return 0;

@@ -12,6 +12,7 @@
 #include "help_modal.h"
 #include "config.h"
 #include "provider_command.h"
+#include "config_command.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
 #include <bsd/string.h>
@@ -657,6 +658,15 @@ static Command provider_cmd = {
     .needs_terminal = 0
 };
 
+static Command config_cmd = {
+    .name = "config",
+    .usage = "/config <setting> <value>",
+    .description = "Modify configuration settings (e.g., /config llm_provider <name>)",
+    .handler = cmd_config,
+    .completer = commands_tab_completer,
+    .needs_terminal = 0
+};
+
 // ============================================================================
 // API Implementation
 // ============================================================================
@@ -673,6 +683,7 @@ void commands_init(void) {
     commands_register(&vim_cmd);
     commands_register(&dump_cmd);
     commands_register(&provider_cmd);
+    commands_register(&config_cmd);
 }
 
 void commands_set_tui_mode(int enabled) {
