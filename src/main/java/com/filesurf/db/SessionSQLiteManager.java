@@ -4,6 +4,9 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.*;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,6 +36,9 @@ public class SessionSQLiteManager {
                 String dbFileName = "chat_messages_" + sid + ".db";
                 String dbPath = chatMessagesDbDir + "/" + dbFileName;
                 String jdbcUrl = "jdbc:sqlite:" + dbPath;
+                
+                // Ensure directory exists before creating database
+                ensureDirectoryExists(chatMessagesDbDir);
                 
                 Connection conn = DriverManager.getConnection(jdbcUrl);
                 
@@ -109,6 +115,22 @@ public class SessionSQLiteManager {
             } catch (SQLException e) {
                 LOGGER.warning("[SESSION:" + sessionId + "] Error closing SQLite connection: " + e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Ensures the directory exists, creating it if necessary.
+     */
+    private void ensureDirectoryExists(String dirPath) {
+        try {
+            Path path = Paths.get(dirPath);
+            if (!Files.exists(path)) {
+                Files.createDirectories(path);
+                LOGGER.info("Created directory for chat messages: " + dirPath);
+            }
+        } catch (Exception e) {
+            LOGGER.severe("Failed to create directory '" + dirPath + "': " + e.getMessage());
+            throw new RuntimeException("Failed to create directory for chat messages: " + dirPath, e);
         }
     }
 

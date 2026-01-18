@@ -6,6 +6,7 @@ import com.filesurf.model.ChatConstants;
 import com.filesurf.model.SQLiteQueueConstants;
 import jakarta.inject.Inject;
 
+import java.io.File;
 import java.io.IOException;
 import java.sql.*;
 import java.util.ArrayList;
@@ -184,6 +185,9 @@ public class SQLiteQueueClient {
         LOGGER.info("Connecting to SQLite database: " + config.getDbPath());
 
         try {
+            // Ensure directory exists before creating database
+            ensureDirectoryExists(config.getDbPath());
+            
             // Create database connection
             connection = DriverManager.getConnection("jdbc:sqlite:" + config.getDbPath());
 
@@ -219,6 +223,26 @@ public class SQLiteQueueClient {
             stmt.execute(CREATE_INDEX_RECEIVER_SQL);
 
             LOGGER.info("SQLite queue schema initialized");
+        }
+    }
+
+    /**
+     * Ensures the directory for the database file exists.
+     * Extracts directory from dbPath and creates it if necessary.
+     */
+    private void ensureDirectoryExists(String dbPath) {
+        try {
+            File dbFile = new File(dbPath);
+            File parentDir = dbFile.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                if (parentDir.mkdirs()) {
+                    LOGGER.info("Created directory for SQLite queue: " + parentDir.getAbsolutePath());
+                } else {
+                    LOGGER.warning("Failed to create directory: " + parentDir.getAbsolutePath());
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warning("Error ensuring directory exists for path '" + dbPath + "': " + e.getMessage());
         }
     }
 
