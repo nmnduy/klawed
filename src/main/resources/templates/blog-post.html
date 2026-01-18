@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{pageTitle}</title>
+    <link rel="stylesheet" href="{cssPath}">
+    {#if post.featuredImageUrl}
+    <meta property="og:image" content="{siteUrl}{post.featuredImageUrl}" />
+    {/if}
+    <meta property="og:title" content="{metaTitle}" />
+    <meta property="og:description" content="{metaDescription}" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="{canonicalUrl}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{metaTitle}" />
+    <meta name="twitter:description" content="{metaDescription}" />
+    {#if post.featuredImageUrl}
+    <meta name="twitter:image" content="{siteUrl}{post.featuredImageUrl}" />
+    {/if}
+    <meta name="description" content="{metaDescription}" />
+    {#if keywords}
+    <meta name="keywords" content="{keywords}" />
+    {/if}
+    <link rel="canonical" href="{canonicalUrl}" />
+    {#if structuredData}
+    <script type="application/ld+json">{structuredData}</script>
+    {/if}
+</head>
+<body class="bg-background min-h-screen">
+    <!-- Header -->
+    <header class="border-b border-border/60 bg-card/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2 text-h4-headline-s font-bold text-foreground">
+                <svg class="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                </svg>
+                <span>FileSurf Blog</span>
+            </a>
+            <nav class="hidden md:flex items-center gap-6">
+                <a href="/blog" class="text-body-m font-medium text-foreground hover:text-orange-500 transition-colors">Home</a>
+                <a href="/blog/search" class="text-body-m font-medium text-muted-foreground hover:text-orange-500 transition-colors">Search</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 py-8">
+        <article>
+            <!-- Breadcrumb -->
+            <nav class="flex items-center gap-2 text-caption-s text-muted-foreground mb-6">
+                <a href="/blog" class="hover:text-orange-500 transition-colors">Blog</a>
+                <span>/</span>
+                {#if post.category}
+                <a href="/blog/category/{post.category.slug}" class="hover:text-orange-500 transition-colors">{post.category.name}</a>
+                <span>/</span>
+                {/if}
+                <span class="text-foreground">{post.title}</span>
+            </nav>
+
+            <!-- Post Header -->
+            <header class="mb-8">
+                <div class="flex items-center gap-3 mb-4">
+                    {#if post.category}
+                    <a href="/blog/category/{post.category.slug}" class="blog-tag">{post.category.name}</a>
+                    {/if}
+                    <span class="text-caption-s text-muted-foreground">{post.readingTimeText}</span>
+                    <span class="text-caption-s text-muted-foreground">{post.views} views</span>
+                </div>
+                <h1 class="text-h1-headline-xl font-bold text-foreground mb-4">{post.title}</h1>
+                {#if post.excerpt}
+                <p class="text-h5-headline-m text-muted-foreground">{post.excerpt}</p>
+                {/if}
+                <div class="flex items-center gap-4 mt-6">
+                    {#if post.author.avatarUrl}
+                    <img src="{post.author.avatarUrl}" alt="{post.author.name}" class="w-12 h-12 rounded-full" />
+                    {/if}
+                    <div>
+                        <p class="text-body-m font-medium text-foreground">
+                            {#if post.author}
+                            <a href="/blog/author/{post.author.id}" class="hover:text-orange-500 transition-colors">{post.author.name}</a>
+                            {/if}
+                        </p>
+                        {#if post.publishedAt}
+                        <p class="text-caption-s text-muted-foreground">
+                            {post.publishedAt.toLocalDate().toString()}
+                        </p>
+                        {/if}
+                    </div>
+                </div>
+            </header>
+
+            <!-- Featured Image -->
+            {#if post.featuredImageUrl}
+            <figure class="mb-8">
+                <img src="{post.featuredImageUrl}" alt="{post.title}" class="w-full h-auto rounded-xl" />
+            </figure>
+            {/if}
+
+            <!-- Post Content -->
+            <div class="prose prose-lg max-w-none dark:prose-invert">
+                {#if post.content}
+                <div class="content">
+                    {post.content}
+                </div>
+                {/if}
+            </div>
+
+            <!-- Tags -->
+            {#if post.tags.isNotEmpty()}
+            <div class="mt-8 pt-8 border-t border-border/60">
+                <h3 class="text-body-m font-medium text-foreground mb-4">Tags:</h3>
+                <div class="flex flex-wrap gap-2">
+                    {#for tag in post.tags}
+                    <a href="/blog/tag/{tag.slug}" class="blog-tag">{tag.name}</a>
+                    {/for}
+                </div>
+            </div>
+            {/if}
+
+            <!-- Share -->
+            <div class="mt-8 pt-8 border-t border-border/60">
+                <p class="text-body-m font-medium text-foreground mb-4">Share this post:</p>
+                <div class="flex gap-4">
+                    <a href="https://twitter.com/intent/tweet?url={canonicalUrl}&text={post.title}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted transition-colors">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                        </svg>
+                        Twitter
+                    </a>
+                    <a href="https://www.linkedin.com/sharing/share-offsite/?url={canonicalUrl}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted transition-colors">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                        </svg>
+                        LinkedIn
+                    </a>
+                </div>
+            </div>
+            {/if}
+        </article>
+
+        <!-- Related Posts -->
+        {#if relatedPosts.isNotEmpty()}
+        <section class="mt-12 pt-8 border-t border-border/60">
+            <h2 class="text-h3-headline-m font-bold text-foreground mb-6">Related Posts</h2>
+            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {#for related in relatedPosts}
+                <article class="blog-card">
+                    {#if related.featuredImageUrl}
+                    <a href="/blog/{related.slug}">
+                        <img src="{related.featuredImageUrl}" alt="{related.title}" class="w-full h-32 object-cover" />
+                    </a>
+                    {/if}
+                    <div class="p-4">
+                        <h3 class="text-h5-headline-xs font-bold text-foreground mb-2">
+                            <a href="/blog/{related.slug}" class="hover:text-orange-500 transition-colors line-clamp-2">{related.title}</a>
+                        </h3>
+                        <p class="text-caption-s text-muted-foreground">{related.readingTimeText}</p>
+                    </div>
+                </article>
+                {/for}
+            </div>
+        </section>
+        {/if}
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-border/60 bg-card/80 backdrop-blur mt-12">
+        <div class="max-w-6xl mx-auto px-4 py-8 text-center">
+            <p class="text-caption-m text-muted-foreground">© 2026 FileSurf Blog. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

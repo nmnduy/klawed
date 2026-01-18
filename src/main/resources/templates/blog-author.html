@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{pageTitle}</title>
+    <link rel="stylesheet" href="{cssPath}">
+</head>
+<body class="bg-background min-h-screen">
+    <header class="border-b border-border/60 bg-card/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2 text-h4-headline-s font-bold text-foreground">
+                <svg class="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                </svg>
+                <span>FileSurf Blog</span>
+            </a>
+            <nav class="flex items-center gap-6">
+                <a href="/blog" class="text-body-m font-medium text-foreground hover:text-orange-500 transition-colors">Home</a>
+                <a href="/blog/search" class="text-body-m font-medium text-muted-foreground hover:text-orange-500 transition-colors">Search</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-8">
+        <nav class="flex items-center gap-2 text-caption-s text-muted-foreground mb-6">
+            <a href="/blog" class="hover:text-orange-500 transition-colors">Blog</a>
+            <span>/</span>
+            <span class="text-foreground">{author.name}</span>
+        </nav>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <div class="lg:col-span-3 space-y-8">
+                <!-- Author Info -->
+                <div class="flex items-center gap-4 p-6 bg-card/80 backdrop-blur rounded-xl border border-border/60">
+                    {#if author.avatarUrl}
+                    <img src="{author.avatarUrl}" alt="{author.name}" class="w-20 h-20 rounded-full" />
+                    {/if}
+                    <div>
+                        <h1 class="text-h1-headline-l font-bold text-foreground">{author.name}</h1>
+                        {#if author.bio}
+                        <p class="text-body-m text-muted-foreground mt-2">{author.bio}</p>
+                        {/if}
+                    </div>
+                </div>
+
+                <h2 class="text-h3-headline-m font-bold text-foreground">Posts by {author.name}</h2>
+
+                {#if posts.isEmpty()}
+                <div class="text-center py-12">
+                    <p class="text-body-m text-muted-foreground">No posts by this author yet.</p>
+                </div>
+                {:else}
+                <div class="grid gap-6">
+                    {#for post in posts}
+                    <article class="blog-card">
+                        {#if post.featuredImageUrl}
+                        <a href="/blog/{post.slug}">
+                            <img src="{post.featuredImageUrl}" alt="{post.title}" class="w-full h-48 object-cover" />
+                        </a>
+                        {/if}
+                        <div class="p-6">
+                            <div class="flex items-center gap-2 mb-3">
+                                {#if post.category}
+                                <a href="/blog/category/{post.category.slug}" class="blog-category">{post.category.name}</a>
+                                {/if}
+                                <span class="text-muted-foreground">•</span>
+                                <span class="blog-meta">{post.readingTimeText}</span>
+                            </div>
+                            <h2 class="text-h3-headline-m font-bold text-foreground mb-2">
+                                <a href="/blog/{post.slug}" class="hover:text-orange-500 transition-colors">{post.title}</a>
+                            </h2>
+                            {#if post.excerpt}
+                            <p class="blog-excerpt mb-4">{post.excerpt}</p>
+                            {/if}
+                            <a href="/blog/{post.slug}" class="text-orange-500 hover:text-orange-600 font-medium text-body-s">Read more →</a>
+                        </div>
+                    </article>
+                    {/for}
+                </div>
+                {/if}
+            </div>
+
+            <aside class="space-y-6">
+                {#if categories.isNotEmpty()}
+                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
+                    <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Categories</h3>
+                    <ul class="space-y-2">
+                        {#for cat in categories}
+                        <li>
+                            <a href="/blog/category/{cat.slug}" class="py-1.5 text-body-s text-muted-foreground hover:text-orange-500 transition-colors">{cat.name}</a>
+                        </li>
+                        {/for}
+                    </ul>
+                </div>
+                {/if}
+
+                {#if tags.isNotEmpty()}
+                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
+                    <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Tags</h3>
+                    <div class="flex flex-wrap gap-2">
+                        {#for tag in tags}
+                        <a href="/blog/tag/{tag.slug}" class="blog-tag">{tag.name}</a>
+                        {/for}
+                    </div>
+                </div>
+                {/if}
+            </aside>
+        </div>
+    </main>
+
+    <footer class="border-t border-border/60 bg-card/80 backdrop-blur mt-12">
+        <div class="max-w-6xl mx-auto px-4 py-8 text-center">
+            <p class="text-caption-m text-muted-foreground">© 2026 FileSurf Blog</p>
+        </div>
+    </footer>
+</body>
+</html>

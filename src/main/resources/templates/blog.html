@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{pageTitle}</title>
+    <link rel="stylesheet" href="{cssPath}">
+    <!-- Blog-specific styles -->
+    <style>
+        .blog-card { @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-orange-500/30; }
+        .blog-card:hover { transform: translateY(-2px); }
+        .blog-excerpt { @apply text-muted-foreground line-clamp-3; }
+        .blog-meta { @apply text-caption-s text-muted-foreground flex items-center gap-4; }
+        .blog-tag { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-caption-s font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400; }
+        .blog-category { @apply inline-flex items-center text-caption-s font-medium text-orange-600 dark:text-orange-400 hover:underline; }
+        .pagination-btn { @apply inline-flex items-center px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted transition-colors; }
+        .pagination-btn.active { @apply bg-orange-500 text-white border-orange-500; }
+    </style>
+</head>
+<body class="bg-background min-h-screen">
+    <!-- Header -->
+    <header class="border-b border-border/60 bg-card/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2 text-h4-headline-s font-bold text-foreground">
+                <svg class="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                </svg>
+                <span>FileSurf Blog</span>
+            </a>
+            <nav class="hidden md:flex items-center gap-6">
+                <a href="/blog" class="text-body-m font-medium text-foreground hover:text-orange-500 transition-colors">Home</a>
+                <a href="/blog/search" class="text-body-m font-medium text-muted-foreground hover:text-orange-500 transition-colors">Search</a>
+                <a href="/rss.xml" class="text-body-m font-medium text-muted-foreground hover:text-orange-500 transition-colors" title="RSS Feed">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6.18 15.64a2.18 2.18 0 012.82 2.82v4.02c0 1.1.9 2 2 2h4.36c1.1 0 2-.9 2-2v-4.02a2.18 2.18 0 012.82-2.82 4 4 0 00-4.82-4.82v-1.6a2.18 2.18 0 012.82-2.82 6 6 0 00-6.18 6.18z"/>
+                        <path d="M4 4.44v2.83c7.03 0 12.73 5.7 12.73 12.73h2.83c0-8.59-6.97-15.56-15.56-15.56zm0 5.66v2.83c3.9 0 7.07 3.17 7.07 7.07h2.83c0-5.47-4.43-9.9-9.9-9.9z"/>
+                    </svg>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-8">
+        {#if error}
+        <div class="text-center py-12">
+            <h1 class="text-h2-headline-l text-foreground mb-4">Error</h1>
+            <p class="text-body-m text-muted-foreground">{error}</p>
+        </div>
+        {:else}
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- Main Content -->
+            <div class="lg:col-span-3 space-y-8">
+                {#if posts.isEmpty()}
+                <div class="text-center py-12">
+                    <svg class="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                    </svg>
+                    <h2 class="text-h3-headline-m text-foreground mb-2">No posts yet</h2>
+                    <p class="text-body-m text-muted-foreground">Check back soon for new content!</p>
+                </div>
+                {:else}
+                <!-- Posts Grid -->
+                <div class="grid gap-6">
+                    {#for post in posts}
+                    <article class="blog-card">
+                        {#if post.featuredImageUrl}
+                        <a href="/blog/{post.slug}" class="block">
+                            <img src="{post.featuredImageUrl}" alt="{post.title}" class="w-full h-48 object-cover" />
+                        </a>
+                        {/if}
+                        <div class="p-6">
+                            <div class="flex items-center gap-2 mb-3">
+                                {#if post.category}
+                                <a href="/blog/category/{post.category.slug}" class="blog-category">{post.category.name}</a>
+                                {/if}
+                                <span class="text-muted-foreground">•</span>
+                                <span class="blog-meta">{post.readingTimeText}</span>
+                                <span class="text-muted-foreground">•</span>
+                                <span class="blog-meta">{post.views} views</span>
+                            </div>
+                            <h2 class="text-h3-headline-m font-bold text-foreground mb-2">
+                                <a href="/blog/{post.slug}" class="hover:text-orange-500 transition-colors">{post.title}</a>
+                            </h2>
+                            {#if post.excerpt}
+                            <p class="blog-excerpt mb-4">{post.excerpt}</p>
+                            {/if}
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    {#if post.author.avatarUrl}
+                                    <img src="{post.author.avatarUrl}" alt="{post.author.name}" class="w-8 h-8 rounded-full" />
+                                    {/if}
+                                    <span class="text-caption-m text-muted-foreground">{post.author.name}</span>
+                                </div>
+                                <a href="/blog/{post.slug}" class="text-orange-500 hover:text-orange-600 font-medium text-body-s">Read more →</a>
+                            </div>
+                        </div>
+                    </article>
+                    {/for}
+                </div>
+
+                <!-- Pagination -->
+                {#if hasMore || hasPrevious}
+                <div class="flex items-center justify-center gap-2 pt-8">
+                    {#if hasPrevious}
+                    <a href="/blog?page={previousPage}" class="pagination-btn">
+                        ← Previous
+                    </a>
+                    {/if}
+                    <span class="px-4 py-2 text-body-s text-muted-foreground">
+                        Page {page + 1} of {total / perPage + 1}
+                    </span>
+                    {#if hasMore}
+                    <a href="/blog?page={nextPage}" class="pagination-btn">
+                        Next →
+                    </a>
+                    {/if}
+                </div>
+                {/if}
+                {/if}
+            </div>
+
+            <!-- Sidebar -->
+            <aside class="space-y-6">
+                <!-- Search -->
+                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
+                    <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Search</h3>
+                    <form action="/blog/search" method="GET" class="flex gap-2">
+                        <input type="text" name="q" placeholder="Search posts..." class="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-body-s focus:outline-none focus:border-orange-500" />
+                        <button type="submit" class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M10 18a8 8 0 100-16 8 8 0 000 16z" />
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Categories -->
+                {#if categories.isNotEmpty()}
+                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
+                    <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Categories</h3>
+                    <ul class="space-y-2">
+                        {#for cat in categories}
+                        <li>
+                            <a href="/blog/category/{cat.slug}" class="flex items-center justify-between py-1.5 text-body-s text-muted-foreground hover:text-orange-500 transition-colors">
+                                <span>{cat.name}</span>
+                            </a>
+                        </li>
+                        {/for}
+                    </ul>
+                </div>
+                {/if}
+
+                <!-- Popular Posts -->
+                {#if popularPosts.isNotEmpty()}
+                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
+                    <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Popular Posts</h3>
+                    <ul class="space-y-3">
+                        {#for pop in popularPosts}
+                        <li>
+                            <a href="/blog/{pop.slug}" class="block py-1.5">
+                                <h4 class="text-body-s font-medium text-foreground hover:text-orange-500 transition-colors line-clamp-2">{pop.title}</h4>
+                                <span class="text-caption-s text-muted-foreground">{pop.views} views</span>
+                            </a>
+                        </li>
+                        {/for}
+                    </ul>
+                </div>
+                {/if}
+
+                <!-- Tags -->
+                {#if tags.isNotEmpty()}
+                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
+                    <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Tags</h3>
+                    <div class="flex flex-wrap gap-2">
+                        {#for tag in tags}
+                        <a href="/blog/tag/{tag.slug}" class="blog-tag">{tag.name}</a>
+                        {/for}
+                    </div>
+                </div>
+                {/if}
+            </aside>
+        </div>
+        {/if}
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-border/60 bg-card/80 backdrop-blur mt-12">
+        <div class="max-w-6xl mx-auto px-4 py-8">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                <p class="text-caption-m text-muted-foreground">
+                    © 2026 FileSurf Blog. All rights reserved.
+                </p>
+                <div class="flex items-center gap-4">
+                    <a href="/rss.xml" class="text-caption-m text-muted-foreground hover:text-orange-500 transition-colors">RSS Feed</a>
+                    <a href="/atom.xml" class="text-caption-m text-muted-foreground hover:text-orange-500 transition-colors">Atom Feed</a>
+                    <a href="/sitemap.xml" class="text-caption-m text-muted-foreground hover:text-orange-500 transition-colors">Sitemap</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

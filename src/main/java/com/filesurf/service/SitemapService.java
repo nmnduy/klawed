@@ -13,8 +13,7 @@ import java.util.List;
 import java.util.logging.Logger;
 
 /**
- * Service for generating XML sitemaps for SEO.
- * Generates sitemaps conforming to sitemaps.org protocol.
+ * Service for generating sitemap.xml and robots.txt for SEO purposes.
  */
 @ApplicationScoped
 public class SitemapService {
@@ -30,175 +29,140 @@ public class SitemapService {
     @ConfigProperty(name = "blog.sitemap.max-urls", defaultValue = "1000")
     int maxUrls;
 
-    private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_INSTANT;
-    private static final DateTimeFormatter SITEMAP_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter ISO_DATE_FORMAT = 
+        DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    private static final String SITEMAP_HEADER = 
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+        "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
+
+    private static final String SITEMAP_FOOTER = "</urlset>";
 
     /**
-     * Generate sitemap index XML (for multiple sitemaps)
-     */
-    public String generateSitemapIndex(List<String> sitemapUrls) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-        sb.append("<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
-        
-        for (String url : sitemapUrls) {
-            sb.append("  <sitemap>\n");
-            sb.append("    <loc>").append(escapeXml(url)).append("</loc>\n");
-            sb.append("    <lastmod>").append(SITEMAP_DATE_FORMAT.format(java.time.LocalDate.now())).append("</lastmod>\n");
-            sb.append("  </sitemap>\n");
-        }
-        
-        sb.append("</sitemapindex>");
-        return sb.toString();
-    }
-
-    /**
-     * Generate main sitemap with all content URLs
+     * Generate XML sitemap with all published posts, categories, and tags.
+     * 
+     * @return XML sitemap content
      */
     public String generateSitemap() {
         StringBuilder sb = new StringBuilder();
-        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-        sb.append("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
-        
-        int urlCount = 0;
-        
-        // Add blog home page
-        urlCount += addUrl(sb, siteUrl + "/blog", "1.0", "daily", null);
-        
-        // Add RSS and Atom feed URLs
-        urlCount += addUrl(sb, siteUrl + "/rss.xml", "0.9", "weekly", null);
-        urlCount += addUrl(sb, siteUrl + "/atom.xml", "0.9", "weekly", null);
-        
+        sb.append(SITEMAP_HEADER);
+
         try {
-            // Add published posts
-            List<BlogPost> posts = db.getPublishedPosts(maxUrls, 0);
-            for (BlogPost post : posts) {
-                if (urlCount >= maxUrls) break;
-                String loc = siteUrl + "/blog/" + post.getSlug();
-                String lastmod = post.getUpdatedAt() != null ? 
-                    post.getUpdatedAt().format(SITEMAP_DATE_FORMAT) : null;
-                String changefreq = "weekly";
-                String priority = "0.8";
-                
-                urlCount += addUrl(sb, loc, priority, changefreq, lastmod);
-            }
+            // Add blog home page
+            sb.append(createUrlEntry(siteUrl + "/blog", null, "daily", "1.0"));
+
+            // Fetch all content
+            int totalPosts = db.countPublishedPosts();
+            int limit = Math.min(maxUrls - 1, totalPosts); // Reserve space for home page
             
-            // Add categories
+            List<BlogPost> posts = db.getPublishedPosts(limit, 0);
             List<BlogCategory> categories = db.listCategories();
-            for (BlogCategory category : categories) {
-                if (urlCount >= maxUrls) break;
-                String loc = siteUrl + "/blog/category/" + category.getSlug();
-                urlCount += addUrl(sb, loc, "0.6", "daily", null);
-            }
-            
-            // Add tags
             List<BlogTag> tags = db.listTags();
-            for (BlogTag tag : tags) {
-                if (urlCount >= maxUrls) break;
-                String loc = siteUrl + "/blog/tag/" + tag.getSlug();
-                urlCount += addUrl(sb, loc, "0.5", "weekly", null);
+
+            // Add posts (priority 0.8, weekly changefreq)
+            for (BlogPost post : posts) {
+                String lastmod = null;
+                if (post.getUpdatedAt() != null) {
+                    lastmod = post.getUpdatedAt().format(ISO_DATE_FORMAT);
+                } else if (post.getPublishedAt() != null) {
+                    lastmod = post.getPublishedAt().format(ISO_DATE_FORMAT);
+                }
+                sb.append(createUrlEntry(
+                    siteUrl + "/blog/" + post.getSlug(),
+                    lastmod,
+                    "weekly",
+                    "0.8"
+                ));
             }
-            
+
+            // Add categories (priority 0.5, monthly changefreq)
+            for (BlogCategory category : categories) {
+                sb.append(createUrlEntry(
+                    siteUrl + "/blog/category/" + category.getSlug(),
+                    category.getCreatedAt() != null ? category.getCreatedAt().format(ISO_DATE_FORMAT) : null,
+                    "monthly",
+                    "0.5"
+                ));
+            }
+
+            // Add tags (priority 0.5, monthly changefreq)
+            for (BlogTag tag : tags) {
+                sb.append(createUrlEntry(
+                    siteUrl + "/blog/tag/" + tag.getSlug(),
+                    tag.getCreatedAt() != null ? tag.getCreatedAt().format(ISO_DATE_FORMAT) : null,
+                    "monthly",
+                    "0.5"
+                ));
+            }
+
         } catch (Exception e) {
             LOGGER.severe("Error generating sitemap: " + e.getMessage());
         }
+
+        sb.append(SITEMAP_FOOTER);
         
-        sb.append("</urlset>");
-        
-        LOGGER.info("Generated sitemap with " + urlCount + " URLs");
+        LOGGER.info("Generated sitemap with up to " + maxUrls + " URLs");
         return sb.toString();
     }
 
     /**
-     * Generate sitemap for a specific category
-     */
-    public String generateCategorySitemap(BlogCategory category) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-        sb.append("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
-        
-        // Category page
-        addUrl(sb, siteUrl + "/blog/category/" + category.getSlug(), "0.7", "daily", null);
-        
-        try {
-            List<BlogPost> posts = db.getPostsByCategory(category.getId(), maxUrls, 0);
-            for (BlogPost post : posts) {
-                String loc = siteUrl + "/blog/" + post.getSlug();
-                String lastmod = post.getUpdatedAt() != null ? 
-                    post.getUpdatedAt().format(SITEMAP_DATE_FORMAT) : null;
-                addUrl(sb, loc, "0.6", "weekly", lastmod);
-            }
-        } catch (Exception e) {
-            LOGGER.severe("Error generating category sitemap: " + e.getMessage());
-        }
-        
-        sb.append("</urlset>");
-        return sb.toString();
-    }
-
-    /**
-     * Generate sitemap for a specific tag
-     */
-    public String generateTagSitemap(BlogTag tag) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-        sb.append("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
-        
-        // Tag page
-        addUrl(sb, siteUrl + "/blog/tag/" + tag.getSlug(), "0.5", "weekly", null);
-        
-        try {
-            List<BlogPost> posts = db.getPostsByTag(tag.getId(), maxUrls, 0);
-            for (BlogPost post : posts) {
-                String loc = siteUrl + "/blog/" + post.getSlug();
-                String lastmod = post.getUpdatedAt() != null ? 
-                    post.getUpdatedAt().format(SITEMAP_DATE_FORMAT) : null;
-                addUrl(sb, loc, "0.5", "weekly", lastmod);
-            }
-        } catch (Exception e) {
-            LOGGER.severe("Error generating tag sitemap: " + e.getMessage());
-        }
-        
-        sb.append("</urlset>");
-        return sb.toString();
-    }
-
-    /**
-     * Generate robots.txt content
+     * Generate robots.txt content with sitemap reference.
+     * 
+     * @return robots.txt content
      */
     public String generateRobotsTxt() {
         StringBuilder sb = new StringBuilder();
-        sb.append("User-agent: *\n");
-        sb.append("Allow: /blog\n");
-        sb.append("Allow: /rss.xml\n");
-        sb.append("Allow: /atom.xml\n");
-        sb.append("Allow: /sitemap.xml\n");
+        
+        sb.append("# Robots.txt for ").append(siteUrl).append("\n");
+        sb.append("# Generated by FileSurf Blog\n");
         sb.append("\n");
-        sb.append("Sitemap: ").append(siteUrl).append("/sitemap.xml\n");
+        
+        // Default rules - allow all crawlers
+        sb.append("User-agent: *\n");
+        sb.append("Allow: /\n");
+        sb.append("\n");
+        
+        // Sitemap location
+        sb.append("Sitemap: ").append(siteUrl).append("/blog/sitemap.xml\n");
+        
+        // Also reference RSS/Atom feeds for discovery
+        sb.append("Sitemap: ").append(siteUrl).append("/blog/rss.xml\n");
+        sb.append("Sitemap: ").append(siteUrl).append("/blog/atom.xml\n");
+        
+        LOGGER.info("Generated robots.txt");
         return sb.toString();
     }
 
     /**
-     * Add a URL entry to the sitemap
-     * @return 1 if URL was added, 0 otherwise
+     * Create a single URL entry for the sitemap.
+     * 
+     * @param loc URL location
+     * @param lastmod Last modification date (ISO format, can be null)
+     * @param changefreq Change frequency (daily, weekly, monthly, etc.)
+     * @param priority URL priority (0.0 to 1.0)
+     * @return XML URL entry
      */
-    private int addUrl(StringBuilder sb, String loc, String priority, String changefreq, String lastmod) {
-        sb.append("  <url>\n");
-        sb.append("    <loc>").append(escapeXml(loc)).append("</loc>\n");
+    private String createUrlEntry(String loc, String lastmod, String changefreq, String priority) {
+        StringBuilder entry = new StringBuilder();
+        entry.append("  <url>\n");
+        entry.append("    <loc>").append(escapeXml(loc)).append("</loc>\n");
         
         if (lastmod != null) {
-            sb.append("    <lastmod>").append(escapeXml(lastmod)).append("</lastmod>\n");
+            entry.append("    <lastmod>").append(lastmod).append("</lastmod>\n");
         }
         
-        sb.append("    <changefreq>").append(escapeXml(changefreq)).append("</changefreq>\n");
-        sb.append("    <priority>").append(escapeXml(priority)).append("</priority>\n");
+        entry.append("    <changefreq>").append(changefreq).append("</changefreq>\n");
+        entry.append("    <priority>").append(priority).append("</priority>\n");
+        entry.append("  </url>\n");
         
-        sb.append("  </url>\n");
-        return 1;
+        return entry.toString();
     }
 
     /**
-     * Escape special XML characters
+     * Escape special XML characters for safe inclusion in XML content.
+     * 
+     * @param str Input string (typically a URL)
+     * @return Escaped string safe for XML
      */
     private String escapeXml(String str) {
         if (str == null) return "";
