@@ -8,24 +8,103 @@
 #include "openai_provider.h"
 #include "bedrock_provider.h"
 #include "anthropic_provider.h"
+#include "config.h"
 #include "logger.h"
+#include "arena.h"
 
 #include <stdlib.h>
 #include <string.h>
+#include <bsd/string.h>
 
 // Default Anthropic API URL
 #define DEFAULT_ANTHROPIC_URL "https://api.anthropic.com/v1/messages"
 
 /**
- * Check if Bedrock mode is enabled via environment variable
+ * Duplicate a string using arena allocation
  */
-static int is_bedrock_enabled(void) {
-    const char *use_bedrock = getenv("KLAWED_USE_BEDROCK");
-    return (use_bedrock &&
-           (strcmp(use_bedrock, "1") == 0 ||
-            strcmp(use_bedrock, "true") == 0 ||
-            strcmp(use_bedrock, "TRUE") == 0));
+static char* arena_strdup(Arena *arena, const char *str) {
+    if (!str || !arena) return NULL;
+    size_t len = strlen(str) + 1;
+    char *new_str = arena_alloc(arena, len);
+    if (!new_str) return NULL;
+    strlcpy(new_str, str, len);
+    return new_str;
 }
+
+/**
+ * Get provider configuration from config file or environment variables
+ * Priority: Environment variables override config file
+ * 
+ * @param arena Arena allocator for all allocations
+ * @param config Pointer to config struct to populate
+ * @param model_out Pointer to store model name (arena-allocated, don't free)
+ * @param api_key_out Pointer to store API key (arena-allocated, don't free)
+ * @param api_base_out Pointer to store API base URL (arena-allocated, don't free)
+ * @param use_bedrock_out Pointer to store use_bedrock flag
+ */
+static void get_provider_config(Arena *arena,
+                                KlawedConfig *config,
+                                char **model_out,
+                                char **api_key_out,
+                                char **api_base_out,
+                                int *use_bedrock_out) {
+    // Initialize outputs
+    *model_out = NULL;
+    *api_key_out = NULL;
+    *api_base_out = NULL;
+    *use_bedrock_out = 0;
+    
+    // Load configuration from file
+    KlawedConfig file_config;
+    config_init_defaults(&file_config);
+    int config_loaded = (config_load(&file_config) == 0);
+    
+    // Check environment variables first (they override config file)
+    const char *env_model = getenv("OPENAI_MODEL");
+    const char *env_api_key = getenv("OPENAI_API_KEY");
+    const char *env_api_base = getenv("OPENAI_API_BASE");
+    const char *env_use_bedrock = getenv("KLAWED_USE_BEDROCK");
+    
+    // Get model
+    if (env_model && env_model[0] != '\0') {
+        *model_out = arena_strdup(arena, env_model);
+    } else if (config_loaded && file_config.llm_provider.model[0] != '\0') {
+        *model_out = arena_strdup(arena, file_config.llm_provider.model);
+    }
+    
+    // Get API key (prefer environment variable for security)
+    if (env_api_key && env_api_key[0] != '\0') {
+        *api_key_out = arena_strdup(arena, env_api_key);
+    } else if (config_loaded && file_config.llm_provider.api_key[0] != '\0') {
+        *api_key_out = arena_strdup(arena, file_config.llm_provider.api_key);
+        LOG_WARN("[Provider] Using API key from config file - consider using OPENAI_API_KEY environment variable for better security");
+    }
+    
+    // Get API base
+    if (env_api_base && env_api_base[0] != '\0') {
+        *api_base_out = arena_strdup(arena, env_api_base);
+    } else if (config_loaded && file_config.llm_provider.api_base[0] != '\0') {
+        *api_base_out = arena_strdup(arena, file_config.llm_provider.api_base);
+    }
+    
+    // Get use_bedrock flag
+    if (env_use_bedrock && (strcmp(env_use_bedrock, "1") == 0 ||
+                           strcmp(env_use_bedrock, "true") == 0 ||
+                           strcmp(env_use_bedrock, "TRUE") == 0)) {
+        *use_bedrock_out = 1;
+    } else if (config_loaded) {
+        *use_bedrock_out = file_config.llm_provider.use_bedrock;
+    }
+    
+    // If config was loaded, copy it to output
+    if (config_loaded) {
+        *config = file_config;
+    } else {
+        *config = file_config; // Defaults
+    }
+}
+
+
 
 /**
  * Get API URL from environment, or return default
@@ -65,15 +144,49 @@ void provider_init(const char *model,
 
     LOG_DEBUG("Initializing provider (model: %s)...", model ? model : "(null)");
 
-    // Validate model argument
-    if (!model || model[0] == '\0') {
-        result->error_message = strdup("Model name is required");
+    // Create arena for all allocations in this function
+    Arena *arena = arena_create(4096);
+    if (!arena) {
+        result->error_message = strdup("Failed to create memory arena");
         LOG_ERROR("Provider init failed: %s", result->error_message);
         return;
     }
 
+    // Get configuration from file/env vars
+    KlawedConfig effective_config;
+    char *config_model = NULL;
+    char *config_api_key = NULL;
+    char *config_api_base = NULL;
+    int config_use_bedrock = 0;
+    
+    get_provider_config(arena, &effective_config, &config_model, &config_api_key, &config_api_base, &config_use_bedrock);
+    
+    // Determine which model to use (priority: passed parameter > config file > env var)
+    char *model_to_use = NULL;
+    if (model && model[0] != '\0') {
+        model_to_use = arena_strdup(arena, model);
+    } else if (config_model && config_model[0] != '\0') {
+        model_to_use = config_model;  // Already arena-allocated
+    } else {
+        // Fall back to environment variable
+        const char *env_model = getenv("OPENAI_MODEL");
+        if (env_model && env_model[0] != '\0') {
+            model_to_use = arena_strdup(arena, env_model);
+        }
+    }
+    
+    if (!model_to_use || model_to_use[0] == '\0') {
+        result->error_message = strdup("Model name is required. Set OPENAI_MODEL environment variable or configure in .klawed/config.json");
+        LOG_ERROR("Provider init failed: %s", result->error_message);
+        arena_destroy(arena);
+        return;
+    }
+    
+    LOG_DEBUG("Initializing provider (model: %s, provider_type: %s)...", 
+              model_to_use, config_provider_type_to_string(effective_config.llm_provider.provider_type));
+
     // Bedrock provider selection
-    if (is_bedrock_enabled()) {
+    if (config_use_bedrock || effective_config.llm_provider.provider_type == PROVIDER_BEDROCK) {
         const char *use_bedrock_env = getenv("KLAWED_USE_BEDROCK");
         const char *aws_profile = getenv("AWS_PROFILE");
         const char *aws_region = getenv("AWS_REGION");
@@ -97,11 +210,12 @@ void provider_init(const char *model,
                  aws_secret_key ? "yes" : "no",
                  aws_session_token ? "yes" : "no");
 
-        Provider *prov = bedrock_provider_create(model);
+        Provider *prov = bedrock_provider_create(model_to_use);
         if (!prov) {
             result->error_message = strdup(
                 "Failed to initialize Bedrock provider (check logs for details)");
             LOG_ERROR("Provider init failed: %s", result->error_message);
+            arena_destroy(arena);
             return;
         }
         BedrockConfig *cfg = (BedrockConfig *)prov->config;
@@ -110,77 +224,126 @@ void provider_init(const char *model,
                 "Bedrock provider initialized but endpoint is missing");
             LOG_ERROR("Provider init failed: %s", result->error_message);
             prov->cleanup(prov);
+            arena_destroy(arena);
             return;
         }
         result->provider = prov;
-        result->api_url = strdup(cfg->endpoint);
+        result->api_url = strdup(cfg->endpoint);  // This needs to survive arena destruction
         if (!result->api_url) {
             result->error_message = strdup(
                 "Failed to allocate memory for Bedrock endpoint");
             LOG_ERROR("Provider init failed: %s", result->error_message);
             prov->cleanup(prov);
+            arena_destroy(arena);
             return;
         }
         LOG_INFO("Provider initialization successful: Bedrock (endpoint: %s)",
                  result->api_url);
+        arena_destroy(arena);
         return;
     }
 
-    // Non-Bedrock: pick provider based on API URL
-    if (!api_key || api_key[0] == '\0') {
-        result->error_message = strdup("API key is required for API provider");
+    // Non-Bedrock: pick provider based on configuration
+    // Determine which API key to use (priority: passed parameter > config file > env var)
+    char *api_key_to_use = NULL;
+    if (api_key && api_key[0] != '\0') {
+        api_key_to_use = arena_strdup(arena, api_key);
+    } else if (config_api_key && config_api_key[0] != '\0') {
+        api_key_to_use = config_api_key;  // Already arena-allocated
+    } else {
+        // Fall back to environment variable
+        const char *env_api_key = getenv("OPENAI_API_KEY");
+        if (env_api_key && env_api_key[0] != '\0') {
+            api_key_to_use = arena_strdup(arena, env_api_key);
+        }
+    }
+    
+    if (!api_key_to_use || api_key_to_use[0] == '\0') {
+        result->error_message = strdup("API key is required for API provider. Set OPENAI_API_KEY environment variable or configure in .klawed/config.json");
         LOG_ERROR("Provider init failed: %s", result->error_message);
+        arena_destroy(arena);
         return;
     }
 
-    char *base_url = get_api_url_from_env();
+    // Determine which API base URL to use
+    char *base_url = NULL;
+    if (config_api_base && config_api_base[0] != '\0') {
+        base_url = arena_strdup(arena, config_api_base);
+    } else {
+        base_url = get_api_url_from_env();  // This uses strdup, not arena
+        if (base_url) {
+            // Convert to arena-allocated string
+            char *arena_base_url = arena_strdup(arena, base_url);
+            free(base_url);
+            base_url = arena_base_url;
+        }
+    }
+    
     if (!base_url) {
         result->error_message = strdup("Failed to allocate memory for API URL");
         LOG_ERROR("Provider init failed: %s", result->error_message);
+        arena_destroy(arena);
         return;
     }
 
-    // Determine provider based on environment variables and URL
-    // Priority: Check for OpenAI indicators first, then Anthropic
+    // Determine provider based on configuration, environment variables, and URL
+    // Priority: 1. Explicit provider_type in config, 2. Environment indicators, 3. URL patterns
     int use_anthropic = 0;
+    
+    // Check explicit provider type from configuration
+    if (effective_config.llm_provider.provider_type != PROVIDER_AUTO) {
+        if (effective_config.llm_provider.provider_type == PROVIDER_ANTHROPIC) {
+            use_anthropic = 1;
+            LOG_INFO("Using Anthropic provider (explicitly configured)");
+        } else if (effective_config.llm_provider.provider_type == PROVIDER_OPENAI) {
+            use_anthropic = 0;
+            LOG_INFO("Using OpenAI provider (explicitly configured)");
+        } else if (effective_config.llm_provider.provider_type == PROVIDER_CUSTOM) {
+            // For custom, we need to check URL patterns
+            use_anthropic = 0; // Default to OpenAI-compatible for custom
+            LOG_INFO("Using custom provider (defaulting to OpenAI-compatible)");
+        }
+    } else {
+        // Auto-detect based on environment variables and URL patterns
+        // Check if OpenAI-specific variables are set (indicates OpenAI preference)
+        const char *openai_base = getenv("OPENAI_API_BASE");
 
-    // Check if OpenAI-specific variables are set (indicates OpenAI preference)
-    const char *openai_base = getenv("OPENAI_API_BASE");
+        // Check if Anthropic-specific variables are set
+        const char *anth_env = getenv("ANTHROPIC_API_URL");
+        if (!anth_env || anth_env[0] == '\0') {
+            anth_env = getenv("ANTHROPIC_BASE_URL");
+        }
 
-    // Check if Anthropic-specific variables are set
-    const char *anth_env = getenv("ANTHROPIC_API_URL");
-    if (!anth_env || anth_env[0] == '\0') {
-        anth_env = getenv("ANTHROPIC_BASE_URL");
-    }
-
-    // If OPENAI_API_BASE is explicitly set, prefer OpenAI provider
-    if (openai_base && openai_base[0] != '\0') {
-        use_anthropic = 0;
-        LOG_INFO("OPENAI_API_BASE is set, using OpenAI-compatible provider");
-    }
-    // Only use Anthropic if Anthropic-specific URLs are set and OpenAI base is not
-    else if (anth_env && anth_env[0] != '\0') {
-        use_anthropic = 1;
-        LOG_INFO("Anthropic-specific URL set, using Anthropic provider");
-    }
-    // Check URL patterns as final fallback
-    else if (strstr(base_url, "anthropic.com") != NULL || strstr(base_url, "/anthropic") != NULL) {
-        use_anthropic = 1;
-        LOG_INFO("Anthropic URL detected, using Anthropic provider");
-    }
-    else {
-        // Default to OpenAI if no clear indicators
-        use_anthropic = 0;
-        LOG_INFO("No specific provider indicators, defaulting to OpenAI-compatible provider");
+        // If OPENAI_API_BASE is explicitly set, prefer OpenAI provider
+        if (openai_base && openai_base[0] != '\0') {
+            use_anthropic = 0;
+            LOG_INFO("OPENAI_API_BASE is set, using OpenAI-compatible provider");
+        }
+        // Only use Anthropic if Anthropic-specific URLs are set and OpenAI base is not
+        else if (anth_env && anth_env[0] != '\0') {
+            use_anthropic = 1;
+            LOG_INFO("Anthropic-specific URL set, using Anthropic provider");
+        }
+        // Check URL patterns as final fallback
+        else if (strstr(base_url, "anthropic.com") != NULL || strstr(base_url, "/anthropic") != NULL) {
+            use_anthropic = 1;
+            LOG_INFO("Anthropic URL detected, using Anthropic provider");
+        }
+        else {
+            // Default to OpenAI if no clear indicators
+            use_anthropic = 0;
+            LOG_INFO("No specific provider indicators, defaulting to OpenAI-compatible provider");
+        }
     }
 
     if (use_anthropic) {
         LOG_INFO("Using Anthropic provider (direct API)...");
-        Provider *prov = anthropic_provider_create(api_key, base_url);
-        free(base_url);
+        Provider *prov = anthropic_provider_create(api_key_to_use, base_url);
+        // base_url is arena-allocated, don't free it here
         if (!prov) {
             result->error_message = strdup("Failed to initialize Anthropic provider (check logs for details)");
             LOG_ERROR("Provider init failed: %s", result->error_message);
+            arena_destroy(arena);
             return;
         }
         AnthropicConfig *cfg = (AnthropicConfig *)prov->config;
@@ -188,28 +351,32 @@ void provider_init(const char *model,
             result->error_message = strdup("Anthropic provider initialized but base URL is missing");
             LOG_ERROR("Provider init failed: %s", result->error_message);
             prov->cleanup(prov);
+            arena_destroy(arena);
             return;
         }
         result->provider = prov;
-        result->api_url = strdup(cfg->base_url);
+        result->api_url = strdup(cfg->base_url);  // This needs to survive arena destruction
         if (!result->api_url) {
             result->error_message = strdup("Failed to allocate memory for API URL");
             LOG_ERROR("Provider init failed: %s", result->error_message);
             prov->cleanup(prov);
+            arena_destroy(arena);
             return;
         }
         LOG_INFO("Provider initialization successful: Anthropic (endpoint: %s)", result->api_url);
+        arena_destroy(arena);
         return;
     }
 
     LOG_INFO("Using OpenAI-compatible provider...");
 
-    Provider *prov = openai_provider_create(api_key, base_url);
-    free(base_url);  // openai_provider_create made its own copy
+    Provider *prov = openai_provider_create(api_key_to_use, base_url);
+    // base_url is arena-allocated, openai_provider_create makes its own copy
     if (!prov) {
         result->error_message = strdup(
             "Failed to initialize OpenAI provider (check logs for details)");
         LOG_ERROR("Provider init failed: %s", result->error_message);
+        arena_destroy(arena);
         return;
     }
     OpenAIConfig *cfg = (OpenAIConfig *)prov->config;
@@ -218,17 +385,20 @@ void provider_init(const char *model,
             "OpenAI provider initialized but base URL is missing");
         LOG_ERROR("Provider init failed: %s", result->error_message);
         prov->cleanup(prov);
+        arena_destroy(arena);
         return;
     }
     result->provider = prov;
-    result->api_url = strdup(cfg->base_url);
+    result->api_url = strdup(cfg->base_url);  // This needs to survive arena destruction
     if (!result->api_url) {
         result->error_message = strdup(
             "Failed to allocate memory for API URL");
         LOG_ERROR("Provider init failed: %s", result->error_message);
         prov->cleanup(prov);
+        arena_destroy(arena);
         return;
     }
     LOG_INFO("Provider initialization successful: OpenAI (base URL: %s)",
              result->api_url);
+    arena_destroy(arena);
 }

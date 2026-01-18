@@ -68,9 +68,10 @@ typedef struct {
 /**
  * Initialize the appropriate provider based on environment configuration
  *
- * Checks environment variables to determine which provider to use:
+ * Checks environment variables and configuration file to determine which provider to use:
  * - KLAWED_USE_BEDROCK=1 -> AWS Bedrock
  * - Otherwise -> OpenAI-compatible API
+ * Configuration file (.klawed/config.json) can override provider type and other settings.
  *
  * @param model - Model name (e.g., "claude-sonnet-4-20250514")
  * @param api_key - API key (for OpenAI provider, may be NULL for Bedrock)
