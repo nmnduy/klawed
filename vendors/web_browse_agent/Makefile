@@ -8,7 +8,7 @@ GOMOD=$(GOCMD) mod
 GOINSTALL=$(GOCMD) install
 
 # Binary name
-BINARY_NAME=web-browse-agent
+BINARY_NAME=web_browse_agent
 
 # Main package path
 MAIN_PKG=./cmd/agent
