@@ -2,6 +2,8 @@ package com.filesurf;
 
 import com.filesurf.model.*;
 import com.filesurf.service.BlogService;
+import com.filesurf.service.RssFeedService;
+import com.filesurf.service.SitemapService;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -45,6 +47,12 @@ public class BlogResource {
 
     @Inject
     Template blogSearch;
+
+    @Inject
+    SitemapService sitemapService;
+
+    @Inject
+    RssFeedService rssFeedService;
 
     @ConfigProperty(name = "blog.site.url", defaultValue = "https://filesurf.example.com")
     String siteUrl;
@@ -319,6 +327,50 @@ public class BlogResource {
                     .data("siteName", siteName)
                     .data("pageTitle", "Search Error | " + siteName);
         }
+    }
+
+    /**
+     * XML sitemap for SEO
+     */
+    @GET
+    @Path("/sitemap.xml")
+    @Produces(MediaType.APPLICATION_XML)
+    public String getSitemap() {
+        LOGGER.info("Sitemap requested");
+        return sitemapService.generateSitemap();
+    }
+
+    /**
+     * RSS feed
+     */
+    @GET
+    @Path("/rss.xml")
+    @Produces(MediaType.APPLICATION_XML)
+    public String getRssFeed() {
+        LOGGER.info("RSS feed requested");
+        return rssFeedService.generateRssFeed();
+    }
+
+    /**
+     * Atom feed
+     */
+    @GET
+    @Path("/atom.xml")
+    @Produces(MediaType.APPLICATION_XML)
+    public String getAtomFeed() {
+        LOGGER.info("Atom feed requested");
+        return rssFeedService.generateAtomFeed();
+    }
+
+    /**
+     * Robots.txt
+     */
+    @GET
+    @Path("/robots.txt")
+    @Produces(MediaType.TEXT_PLAIN)
+    public String getRobotsTxt() {
+        LOGGER.info("Robots.txt requested");
+        return sitemapService.generateRobotsTxt();
     }
 
     /**
