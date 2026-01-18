@@ -215,8 +215,28 @@ echo ""
 echo "   ✓ Sync complete"
 echo ""
 
-# Step 6: Deploy on remote server
-echo "Step 6: Deploying on remote server..."
+# Step 6: Create required directories on remote server
+echo "Step 6: Creating required directories on remote server..."
+echo ""
+# Create data directories for chat messages, klawed messages, etc.
+ssh "$REMOTE_HOST" "mkdir -p /var/lib/filesurf/data/chat-messages"
+ssh "$REMOTE_HOST" "mkdir -p /var/lib/filesurf/data/klawed-messages"
+ssh "$REMOTE_HOST" "mkdir -p /var/lib/filesurf/data/persistent"
+ssh "$REMOTE_HOST" "mkdir -p /var/lib/filesurf/demos"
+ssh "$REMOTE_HOST" "mkdir -p /var/log/filesurf"
+ssh "$REMOTE_HOST" "chmod 755 /var/lib/filesurf/data/chat-messages"
+ssh "$REMOTE_HOST" "chmod 755 /var/lib/filesurf/data/klawed-messages"
+ssh "$REMOTE_HOST" "chmod 755 /var/lib/filesurf/data/persistent"
+ssh "$REMOTE_HOST" "chmod 755 /var/lib/filesurf/demos"
+ssh "$REMOTE_HOST" "chmod 755 /var/log/filesurf"
+# Set ownership to root (service runs as root)
+ssh "$REMOTE_HOST" "chown -R root:root /var/lib/filesurf"
+ssh "$REMOTE_HOST" "chown -R root:root /var/log/filesurf"
+echo "   ✓ Directories created and permissions set"
+
+# Step 7: Deploy on remote server
+echo ""
+echo "Step 7: Deploying on remote server..."
 echo ""
 ssh "$REMOTE_HOST" "cd $REMOTE_PATH && ./deployment/deploy-jvm.sh"
 

@@ -102,7 +102,6 @@ logs/                          # Application logs (dev only)
 ```
 /var/lib/filesurf/data/        # SQLite database
 /var/lib/filesurf/persistent/  # Persistent user data
-/var/lib/filesurf/sessions/    # User session files
 /var/lib/filesurf/demos/       # Demo MP4 videos
 /var/log/filesurf/             # Application logs
 ```

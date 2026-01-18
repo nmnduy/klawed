@@ -147,7 +147,6 @@ Production-specific configuration is set via `%prod.` prefixes in `application.p
 - Feedback DB: `/var/lib/filesurf/data/feedback.db`
 - Klawed Messages: `/var/lib/filesurf/data/klawed-messages/`
 - Persistent Storage: `/var/lib/filesurf/persistent/`
-- Session Files: `/var/lib/filesurf/sessions/`
 - Demo Videos: `/var/lib/filesurf/demos/`
 - Application Log: `/var/log/filesurf/application.log`
 - Klawed Agent Log: `/var/log/filesurf/klawed-agents.log`

@@ -29,9 +29,6 @@ public class StartupConfigLogger {
     @ConfigProperty(name = "filesurf.persist.root")
     String persistRoot;
 
-    @ConfigProperty(name = "filesurf.sessions.base-dir")
-    String sessionsBaseDir;
-
     @ConfigProperty(name = "demo.videos.directory")
     String demoVideosDir;
 
@@ -77,7 +74,6 @@ public class StartupConfigLogger {
 
         LOGGER.info("Storage Paths:");
         LOGGER.info("  Persistent Root: " + persistRoot);
-        LOGGER.info("  Sessions Base Dir: " + sessionsBaseDir);
         LOGGER.info("  Demo Videos: " + demoVideosDir);
         LOGGER.info("  Database: " + datasourceUrl);
         LOGGER.info("  Container Tracking DB: " + containerTrackingDbPath);
