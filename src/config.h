@@ -19,6 +19,11 @@
 #define CONFIG_API_BASE_MAX 256
 #define CONFIG_API_KEY_MAX 256
 
+// Maximum number of provider configurations
+#define CONFIG_MAX_PROVIDERS 10
+// Maximum length for provider key/name
+#define CONFIG_PROVIDER_KEY_MAX 64
+
 // LLM Provider types
 typedef enum {
     PROVIDER_AUTO = 0,      // Auto-detect based on URL/model
@@ -38,11 +43,20 @@ typedef struct {
     int use_bedrock;                        // Use AWS Bedrock (legacy flag)
 } LLMProviderConfig;
 
+// Named provider configuration (for multiple providers)
+typedef struct {
+    char key[CONFIG_PROVIDER_KEY_MAX];      // Unique key/name for this provider config
+    LLMProviderConfig config;               // Provider configuration
+} NamedProviderConfig;
+
 // Configuration structure
 typedef struct {
     TUIInputBoxStyle input_box_style;
     char theme[CONFIG_THEME_MAX];
-    LLMProviderConfig llm_provider;         // LLM provider configuration
+    LLMProviderConfig llm_provider;         // LLM provider configuration (legacy single-provider)
+    NamedProviderConfig providers[CONFIG_MAX_PROVIDERS]; // Multiple named providers
+    int provider_count;                     // Number of providers in the array
+    char active_provider[CONFIG_PROVIDER_KEY_MAX]; // Key of active provider
 } KlawedConfig;
 
 /**
@@ -99,5 +113,50 @@ const char* config_provider_type_to_string(LLMProviderType type);
  * @return The provider type enum value, or PROVIDER_AUTO if unknown
  */
 LLMProviderType config_provider_type_from_string(const char *str);
+
+/**
+ * Find a provider configuration by key
+ *
+ * @param config Pointer to config struct
+ * @param key Provider key to find
+ * @return Pointer to provider config if found, NULL otherwise
+ */
+const NamedProviderConfig* config_find_provider(const KlawedConfig *config, const char *key);
+
+/**
+ * Get the active provider configuration
+ *
+ * @param config Pointer to config struct
+ * @return Pointer to active provider config, or NULL if not found
+ */
+const NamedProviderConfig* config_get_active_provider(const KlawedConfig *config);
+
+/**
+ * Add or update a provider configuration
+ *
+ * @param config Pointer to config struct
+ * @param key Provider key
+ * @param provider_config Provider configuration to add/update
+ * @return 0 on success, -1 on failure (e.g., max providers reached)
+ */
+int config_set_provider(KlawedConfig *config, const char *key, const LLMProviderConfig *provider_config);
+
+/**
+ * Remove a provider configuration
+ *
+ * @param config Pointer to config struct
+ * @param key Provider key to remove
+ * @return 0 on success, -1 if not found
+ */
+int config_remove_provider(KlawedConfig *config, const char *key);
+
+/**
+ * Set the active provider
+ *
+ * @param config Pointer to config struct
+ * @param key Provider key to set as active
+ * @return 0 on success, -1 if provider not found
+ */
+int config_set_active_provider(KlawedConfig *config, const char *key);
 
 #endif /* CONFIG_H */

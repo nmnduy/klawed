@@ -22,13 +22,28 @@ void config_init_defaults(KlawedConfig *config) {
     config->input_box_style = INPUT_STYLE_BLAND;
     config->theme[0] = '\0';  // Empty means use default or KLAWED_THEME env var
     
-    // Initialize LLM provider defaults
+    // Initialize LLM provider defaults (legacy single-provider)
     config->llm_provider.provider_type = PROVIDER_AUTO;
     strlcpy(config->llm_provider.provider_name, "auto", CONFIG_PROVIDER_NAME_MAX);
     config->llm_provider.model[0] = '\0';
     config->llm_provider.api_base[0] = '\0';
     config->llm_provider.api_key[0] = '\0';
     config->llm_provider.use_bedrock = 0;
+    
+    // Initialize multiple providers
+    config->provider_count = 0;
+    config->active_provider[0] = '\0';
+    
+    // Clear all provider slots
+    for (int i = 0; i < CONFIG_MAX_PROVIDERS; i++) {
+        config->providers[i].key[0] = '\0';
+        config->providers[i].config.provider_type = PROVIDER_AUTO;
+        config->providers[i].config.provider_name[0] = '\0';
+        config->providers[i].config.model[0] = '\0';
+        config->providers[i].config.api_base[0] = '\0';
+        config->providers[i].config.api_key[0] = '\0';
+        config->providers[i].config.use_bedrock = 0;
+    }
 }
 
 const char* config_input_style_to_string(TUIInputBoxStyle style) {
@@ -178,6 +193,99 @@ int config_load(KlawedConfig *config) {
         }
     }
 
+    // Read multiple provider configurations
+    cJSON *providers_item = cJSON_GetObjectItem(root, "providers");
+    if (providers_item && cJSON_IsObject(providers_item)) {
+        cJSON *provider_item = NULL;
+        cJSON_ArrayForEach(provider_item, providers_item) {
+            if (config->provider_count >= CONFIG_MAX_PROVIDERS) {
+                LOG_WARN("[Config] Maximum number of providers (%d) reached, skipping additional providers", CONFIG_MAX_PROVIDERS);
+                break;
+            }
+            
+            const char *key = provider_item->string;
+            if (!key || key[0] == '\0') {
+                LOG_WARN("[Config] Skipping provider with empty key");
+                continue;
+            }
+            
+            if (!cJSON_IsObject(provider_item)) {
+                LOG_WARN("[Config] Skipping provider '%s': not an object", key);
+                continue;
+            }
+            
+            NamedProviderConfig *named_provider = &config->providers[config->provider_count];
+            strlcpy(named_provider->key, key, CONFIG_PROVIDER_KEY_MAX);
+            
+            // Load provider configuration
+            LLMProviderConfig *provider_config = &named_provider->config;
+            
+            // Read provider type
+            cJSON *provider_type_item = cJSON_GetObjectItem(provider_item, "provider_type");
+            if (provider_type_item && cJSON_IsString(provider_type_item)) {
+                provider_config->provider_type = config_provider_type_from_string(provider_type_item->valuestring);
+                LOG_DEBUG("[Config] Loaded provider_type for '%s': %s", key, provider_type_item->valuestring);
+            } else {
+                provider_config->provider_type = PROVIDER_AUTO;
+            }
+            
+            // Read provider name
+            cJSON *provider_name_item = cJSON_GetObjectItem(provider_item, "provider_name");
+            if (provider_name_item && cJSON_IsString(provider_name_item) && provider_name_item->valuestring) {
+                strlcpy(provider_config->provider_name, provider_name_item->valuestring, CONFIG_PROVIDER_NAME_MAX);
+                LOG_DEBUG("[Config] Loaded provider_name for '%s': %s", key, provider_config->provider_name);
+            }
+            
+            // Read model
+            cJSON *model_item = cJSON_GetObjectItem(provider_item, "model");
+            if (model_item && cJSON_IsString(model_item) && model_item->valuestring) {
+                strlcpy(provider_config->model, model_item->valuestring, CONFIG_MODEL_MAX);
+                LOG_DEBUG("[Config] Loaded model for '%s': %s", key, provider_config->model);
+            }
+            
+            // Read API base
+            cJSON *api_base_item = cJSON_GetObjectItem(provider_item, "api_base");
+            if (api_base_item && cJSON_IsString(api_base_item) && api_base_item->valuestring) {
+                strlcpy(provider_config->api_base, api_base_item->valuestring, CONFIG_API_BASE_MAX);
+                LOG_DEBUG("[Config] Loaded api_base for '%s': %s", key, provider_config->api_base);
+            }
+            
+            // Read API key (with security warning if present)
+            cJSON *api_key_item = cJSON_GetObjectItem(provider_item, "api_key");
+            if (api_key_item && cJSON_IsString(api_key_item) && api_key_item->valuestring) {
+                strlcpy(provider_config->api_key, api_key_item->valuestring, CONFIG_API_KEY_MAX);
+                LOG_WARN("[Config] Loaded API key from config file for provider '%s' - consider using environment variable for better security", key);
+                LOG_DEBUG("[Config] Loaded api_key for '%s': [REDACTED]", key);
+            }
+            
+            // Read use_bedrock (legacy flag) - can be boolean or number
+            cJSON *use_bedrock_item = cJSON_GetObjectItem(provider_item, "use_bedrock");
+            if (use_bedrock_item) {
+                if (cJSON_IsBool(use_bedrock_item)) {
+                    provider_config->use_bedrock = cJSON_IsTrue(use_bedrock_item) ? 1 : 0;
+                } else if (cJSON_IsNumber(use_bedrock_item)) {
+                    double value = cJSON_GetNumberValue(use_bedrock_item);
+                    // Disable float-equal warning for this comparison
+                    #pragma GCC diagnostic push
+                    #pragma GCC diagnostic ignored "-Wfloat-equal"
+                    provider_config->use_bedrock = (value != 0.0) ? 1 : 0;
+                    #pragma GCC diagnostic pop
+                }
+                LOG_DEBUG("[Config] Loaded use_bedrock for '%s': %d", key, provider_config->use_bedrock);
+            }
+            
+            config->provider_count++;
+            LOG_DEBUG("[Config] Loaded provider '%s'", key);
+        }
+    }
+    
+    // Read active provider
+    cJSON *active_provider_item = cJSON_GetObjectItem(root, "active_provider");
+    if (active_provider_item && cJSON_IsString(active_provider_item) && active_provider_item->valuestring) {
+        strlcpy(config->active_provider, active_provider_item->valuestring, CONFIG_PROVIDER_KEY_MAX);
+        LOG_DEBUG("[Config] Loaded active_provider: %s", config->active_provider);
+    }
+
     cJSON_Delete(root);
     LOG_INFO("[Config] Configuration loaded from %s", CONFIG_FILE);
     return 0;
@@ -315,6 +423,71 @@ int config_save(const KlawedConfig *config) {
         }
     }
 
+    // Save multiple provider configurations
+    if (config->provider_count > 0) {
+        cJSON *existing_providers = cJSON_GetObjectItem(root, "providers");
+        cJSON *providers_obj = NULL;
+        
+        if (existing_providers && cJSON_IsObject(existing_providers)) {
+            providers_obj = existing_providers;
+            // Clear existing providers to avoid duplicates
+            cJSON_DeleteItemFromObject(root, "providers");
+            providers_obj = cJSON_AddObjectToObject(root, "providers");
+        } else {
+            providers_obj = cJSON_AddObjectToObject(root, "providers");
+        }
+        
+        if (providers_obj) {
+            for (int i = 0; i < config->provider_count; i++) {
+                const NamedProviderConfig *named_provider = &config->providers[i];
+                const LLMProviderConfig *provider_config = &named_provider->config;
+                
+                cJSON *provider_obj = cJSON_AddObjectToObject(providers_obj, named_provider->key);
+                if (!provider_obj) {
+                    LOG_WARN("[Config] Failed to create provider object for '%s'", named_provider->key);
+                    continue;
+                }
+                
+                // Add provider type
+                cJSON_AddStringToObject(provider_obj, "provider_type", config_provider_type_to_string(provider_config->provider_type));
+                
+                // Add provider name (if non-empty)
+                if (provider_config->provider_name[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "provider_name", provider_config->provider_name);
+                }
+                
+                // Add model (if non-empty)
+                if (provider_config->model[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "model", provider_config->model);
+                }
+                
+                // Add API base (if non-empty)
+                if (provider_config->api_base[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "api_base", provider_config->api_base);
+                }
+                
+                // Add API key (if non-empty, with security warning)
+                if (provider_config->api_key[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "api_key", provider_config->api_key);
+                    LOG_WARN("[Config] Saving API key to config file for provider '%s' - consider using environment variable for better security", named_provider->key);
+                }
+                
+                // Add use_bedrock (legacy flag)
+                cJSON_AddNumberToObject(provider_obj, "use_bedrock", (double)(provider_config->use_bedrock ? 1 : 0));
+            }
+        }
+    }
+    
+    // Save active provider (if set)
+    if (config->active_provider[0] != '\0') {
+        cJSON *existing_active = cJSON_GetObjectItem(root, "active_provider");
+        if (existing_active) {
+            cJSON_SetValuestring(existing_active, config->active_provider);
+        } else {
+            cJSON_AddStringToObject(root, "active_provider", config->active_provider);
+        }
+    }
+
     // Write to file
     char *json_str = cJSON_Print(root);
     cJSON_Delete(root);
@@ -375,4 +548,104 @@ LLMProviderType config_provider_type_from_string(const char *str) {
         return PROVIDER_CUSTOM;
     }
     return PROVIDER_AUTO;  // "auto" or unknown
+}
+
+const NamedProviderConfig* config_find_provider(const KlawedConfig *config, const char *key) {
+    if (!config || !key || key[0] == '\0') {
+        return NULL;
+    }
+    
+    for (int i = 0; i < config->provider_count; i++) {
+        if (strcmp(config->providers[i].key, key) == 0) {
+            return &config->providers[i];
+        }
+    }
+    
+    return NULL;
+}
+
+const NamedProviderConfig* config_get_active_provider(const KlawedConfig *config) {
+    if (!config || config->active_provider[0] == '\0') {
+        return NULL;
+    }
+    
+    return config_find_provider(config, config->active_provider);
+}
+
+int config_set_provider(KlawedConfig *config, const char *key, const LLMProviderConfig *provider_config) {
+    if (!config || !key || key[0] == '\0' || !provider_config) {
+        return -1;
+    }
+    
+    // Check if provider already exists
+    for (int i = 0; i < config->provider_count; i++) {
+        if (strcmp(config->providers[i].key, key) == 0) {
+            // Update existing provider
+            config->providers[i].config = *provider_config;
+            return 0;
+        }
+    }
+    
+    // Add new provider
+    if (config->provider_count >= CONFIG_MAX_PROVIDERS) {
+        LOG_ERROR("[Config] Maximum number of providers (%d) reached", CONFIG_MAX_PROVIDERS);
+        return -1;
+    }
+    
+    NamedProviderConfig *new_provider = &config->providers[config->provider_count];
+    strlcpy(new_provider->key, key, CONFIG_PROVIDER_KEY_MAX);
+    new_provider->config = *provider_config;
+    config->provider_count++;
+    
+    return 0;
+}
+
+int config_remove_provider(KlawedConfig *config, const char *key) {
+    if (!config || !key || key[0] == '\0') {
+        return -1;
+    }
+    
+    for (int i = 0; i < config->provider_count; i++) {
+        if (strcmp(config->providers[i].key, key) == 0) {
+            // Shift remaining providers down
+            for (int j = i; j < config->provider_count - 1; j++) {
+                config->providers[j] = config->providers[j + 1];
+            }
+            
+            // Clear the last slot
+            config->providers[config->provider_count - 1].key[0] = '\0';
+            config->providers[config->provider_count - 1].config.provider_type = PROVIDER_AUTO;
+            config->providers[config->provider_count - 1].config.provider_name[0] = '\0';
+            config->providers[config->provider_count - 1].config.model[0] = '\0';
+            config->providers[config->provider_count - 1].config.api_base[0] = '\0';
+            config->providers[config->provider_count - 1].config.api_key[0] = '\0';
+            config->providers[config->provider_count - 1].config.use_bedrock = 0;
+            
+            config->provider_count--;
+            
+            // If we removed the active provider, clear it
+            if (strcmp(config->active_provider, key) == 0) {
+                config->active_provider[0] = '\0';
+            }
+            
+            return 0;
+        }
+    }
+    
+    return -1;  // Provider not found
+}
+
+int config_set_active_provider(KlawedConfig *config, const char *key) {
+    if (!config || !key || key[0] == '\0') {
+        return -1;
+    }
+    
+    // Check if provider exists
+    if (!config_find_provider(config, key)) {
+        LOG_ERROR("[Config] Provider '%s' not found", key);
+        return -1;
+    }
+    
+    strlcpy(config->active_provider, key, CONFIG_PROVIDER_KEY_MAX);
+    return 0;
 }

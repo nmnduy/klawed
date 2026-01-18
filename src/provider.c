@@ -32,6 +32,39 @@ static char* arena_strdup(Arena *arena, const char *str) {
 }
 
 /**
+ * Get the provider configuration to use based on environment variable or active provider
+ * Returns a pointer to the LLMProviderConfig to use, or NULL if using legacy config
+ */
+static const LLMProviderConfig* get_provider_config_to_use(const KlawedConfig *config) {
+    if (!config) {
+        return NULL;
+    }
+    
+    // Check if a specific provider is requested via environment variable
+    const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
+    if (env_provider && env_provider[0] != '\0') {
+        const NamedProviderConfig *named_provider = config_find_provider(config, env_provider);
+        if (named_provider) {
+            LOG_DEBUG("[Provider] Using provider '%s' from KLAWED_LLM_PROVIDER environment variable", env_provider);
+            return &named_provider->config;
+        } else {
+            LOG_WARN("[Provider] Provider '%s' not found in configuration, falling back to default", env_provider);
+        }
+    }
+    
+    // Check for active provider in config
+    const NamedProviderConfig *active_provider = config_get_active_provider(config);
+    if (active_provider) {
+        LOG_DEBUG("[Provider] Using active provider '%s'", config->active_provider);
+        return &active_provider->config;
+    }
+    
+    // Fall back to legacy llm_provider configuration
+    LOG_DEBUG("[Provider] Using legacy llm_provider configuration");
+    return NULL;
+}
+
+/**
  * Get provider configuration from config file or environment variables
  * Priority: Environment variables override config file
  * 
@@ -59,15 +92,23 @@ static void get_provider_config(Arena *arena,
     config_init_defaults(&file_config);
     int config_loaded = (config_load(&file_config) == 0);
     
+    // Get the provider configuration to use
+    const LLMProviderConfig *provider_config = NULL;
+    if (config_loaded) {
+        provider_config = get_provider_config_to_use(&file_config);
+    }
+    
     // Check environment variables first (they override config file)
     const char *env_model = getenv("OPENAI_MODEL");
     const char *env_api_key = getenv("OPENAI_API_KEY");
     const char *env_api_base = getenv("OPENAI_API_BASE");
     const char *env_use_bedrock = getenv("KLAWED_USE_BEDROCK");
     
-    // Get model
+    // Get model (priority: env var > provider config > legacy config)
     if (env_model && env_model[0] != '\0') {
         *model_out = arena_strdup(arena, env_model);
+    } else if (provider_config && provider_config->model[0] != '\0') {
+        *model_out = arena_strdup(arena, provider_config->model);
     } else if (config_loaded && file_config.llm_provider.model[0] != '\0') {
         *model_out = arena_strdup(arena, file_config.llm_provider.model);
     }
@@ -75,6 +116,9 @@ static void get_provider_config(Arena *arena,
     // Get API key (prefer environment variable for security)
     if (env_api_key && env_api_key[0] != '\0') {
         *api_key_out = arena_strdup(arena, env_api_key);
+    } else if (provider_config && provider_config->api_key[0] != '\0') {
+        *api_key_out = arena_strdup(arena, provider_config->api_key);
+        LOG_WARN("[Provider] Using API key from config file - consider using OPENAI_API_KEY environment variable for better security");
     } else if (config_loaded && file_config.llm_provider.api_key[0] != '\0') {
         *api_key_out = arena_strdup(arena, file_config.llm_provider.api_key);
         LOG_WARN("[Provider] Using API key from config file - consider using OPENAI_API_KEY environment variable for better security");
@@ -83,6 +127,8 @@ static void get_provider_config(Arena *arena,
     // Get API base
     if (env_api_base && env_api_base[0] != '\0') {
         *api_base_out = arena_strdup(arena, env_api_base);
+    } else if (provider_config && provider_config->api_base[0] != '\0') {
+        *api_base_out = arena_strdup(arena, provider_config->api_base);
     } else if (config_loaded && file_config.llm_provider.api_base[0] != '\0') {
         *api_base_out = arena_strdup(arena, file_config.llm_provider.api_base);
     }
@@ -92,6 +138,8 @@ static void get_provider_config(Arena *arena,
                            strcmp(env_use_bedrock, "true") == 0 ||
                            strcmp(env_use_bedrock, "TRUE") == 0)) {
         *use_bedrock_out = 1;
+    } else if (provider_config) {
+        *use_bedrock_out = provider_config->use_bedrock;
     } else if (config_loaded) {
         *use_bedrock_out = file_config.llm_provider.use_bedrock;
     }
@@ -161,6 +209,10 @@ void provider_init(const char *model,
     
     get_provider_config(arena, &effective_config, &config_model, &config_api_key, &config_api_base, &config_use_bedrock);
     
+    // Get the provider configuration to use for provider type
+    const LLMProviderConfig *provider_config = get_provider_config_to_use(&effective_config);
+    LLMProviderType provider_type = provider_config ? provider_config->provider_type : effective_config.llm_provider.provider_type;
+    
     // Determine which model to use (priority: passed parameter > config file > env var)
     char *model_to_use = NULL;
     if (model && model[0] != '\0') {
@@ -183,10 +235,10 @@ void provider_init(const char *model,
     }
     
     LOG_DEBUG("Initializing provider (model: %s, provider_type: %s)...", 
-              model_to_use, config_provider_type_to_string(effective_config.llm_provider.provider_type));
+              model_to_use, config_provider_type_to_string(provider_type));
 
     // Bedrock provider selection
-    if (config_use_bedrock || effective_config.llm_provider.provider_type == PROVIDER_BEDROCK) {
+    if (config_use_bedrock || provider_type == PROVIDER_BEDROCK) {
         const char *use_bedrock_env = getenv("KLAWED_USE_BEDROCK");
         const char *aws_profile = getenv("AWS_PROFILE");
         const char *aws_region = getenv("AWS_REGION");
@@ -291,14 +343,14 @@ void provider_init(const char *model,
     int use_anthropic = 0;
     
     // Check explicit provider type from configuration
-    if (effective_config.llm_provider.provider_type != PROVIDER_AUTO) {
-        if (effective_config.llm_provider.provider_type == PROVIDER_ANTHROPIC) {
+    if (provider_type != PROVIDER_AUTO) {
+        if (provider_type == PROVIDER_ANTHROPIC) {
             use_anthropic = 1;
             LOG_INFO("Using Anthropic provider (explicitly configured)");
-        } else if (effective_config.llm_provider.provider_type == PROVIDER_OPENAI) {
+        } else if (provider_type == PROVIDER_OPENAI) {
             use_anthropic = 0;
             LOG_INFO("Using OpenAI provider (explicitly configured)");
-        } else if (effective_config.llm_provider.provider_type == PROVIDER_CUSTOM) {
+        } else if (provider_type == PROVIDER_CUSTOM) {
             // For custom, we need to check URL patterns
             use_anthropic = 0; // Default to OpenAI-compatible for custom
             LOG_INFO("Using custom provider (defaulting to OpenAI-compatible)");

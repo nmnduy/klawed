@@ -182,6 +182,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_IS_SUBAGENT` - Internal flag set automatically when running as a subagent (1/true/yes=subagent mode). Excludes Subagent, CheckSubagentProgress, and InterruptSubagent tools to prevent recursion
   - `KLAWED_DISABLE_TOOLS` - Comma-separated list of tool names to disable (e.g., "UploadImage,Subagent"). Disabled tools won't appear in tool definitions and will return an error if called
   - `KLAWED_ONESHOT_FORMAT` - Output format for one-shot mode: `human` (clean, human-readable, default) or `json`/`machine` (HTML+JSON for machine parsing)
+  - `KLAWED_LLM_PROVIDER` - Select which named LLM provider to use from configuration (e.g., "sonnet-4.5-bedrock")
 - **API Limits**:
   - `KLAWED_MAX_TOKENS` - Maximum tokens for completion (default: 16384)
 - **Theme**: `KLAWED_THEME` pointing to Kitty .conf file
