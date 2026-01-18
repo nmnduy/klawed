@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FileSurf - AI Pipeline Workflow Automation</title>
+    <meta name="description" content="Build AI pipeline workflows with a secure, sandboxed AI assistant. Privacy-first - your data never trains our models.">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="152x152" href="/assets/filesurf-logo-152x152.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/assets/filesurf-logo-152x152.png">
+    <link rel="stylesheet" href="{cssPath}">
+    <script>
+        (function() {
+            try {
+                document.documentElement.classList.remove('dark');
+            } catch (e) {}
+        })();
+    </script>
+    <style>
+        /* Custom scrollbar for webkit browsers */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #f97316, #f59e0b);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #ea580c, #d97706);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex-shrink-0">
+                    <img src="/assets/filesurf-logo-1500x500.png" alt="FileSurf" class="h-8 w-auto">
+                </div>
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#features" class="text-slate-600 hover:text-orange-500 transition-colors duration-200">Features</a>
+                    <a href="#security" class="text-slate-600 hover:text-orange-500 transition-colors duration-200">Security</a>
+                    <a href="#contact" class="btn btn-primary btn-md">Contact Sales</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-50 to-white">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center max-w-4xl mx-auto">
+                <h1 class="text-h1-headline-xl text-slate-900 mb-6 leading-tight">
+                    AI Pipeline Workflows,<br>
+                    <span class="text-orange-500">Secured and Sandboxed</span>
+                </h1>
+                <p class="text-body-xl text-slate-600 mb-10 max-w-2xl mx-auto">
+                    Deploy AI-powered workflows in a completely isolated environment. Your data never trains our models and stays 100% private.
+                </p>
+                <div class="flex flex-col sm:flex-row justify-center gap-4">
+                    <a href="#contact" class="btn btn-primary btn-lg">Talk to Sales</a>
+                    <a href="/app" class="btn btn-secondary btn-lg">Try the Demo</a>
+                </div>
+            </div>
+
+            <!-- Workflow Illustration -->
+            <div class="mt-16 relative">
+                <div class="bg-white rounded-2xl shadow-xl border border-slate-200 p-8 max-w-4xl mx-auto">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
+                        <!-- Step 1 -->
+                        <div class="text-center">
+                            <div class="w-16 h-16 mx-auto bg-orange-100 rounded-xl flex items-center justify-center mb-3">
+                                <svg class="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-h5-headline-xs font-semibold text-slate-900">Upload</h3>
+                            <p class="text-body-s text-slate-500 mt-1">Data & documents</p>
+                        </div>
+                        <!-- Arrow -->
+                        <div class="hidden md:flex justify-center">
+                            <svg class="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                            </svg>
+                        </div>
+                        <!-- Step 2 -->
+                        <div class="text-center">
+                            <div class="w-16 h-16 mx-auto bg-cyan-100 rounded-xl flex items-center justify-center mb-3">
+                                <svg class="w-8 h-8 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-h5-headline-xs font-semibold text-slate-900">Process</h3>
+                            <p class="text-body-s text-slate-500 mt-1">AI-powered analysis</p>
+                        </div>
+                        <!-- Arrow -->
+                        <div class="hidden md:flex justify-center">
+                            <svg class="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                            </svg>
+                        </div>
+                        <!-- Step 3 -->
+                        <div class="text-center">
+                            <div class="w-16 h-16 mx-auto bg-green-100 rounded-xl flex items-center justify-center mb-3">
+                                <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-h5-headline-xs font-semibold text-slate-900">Export</h3>
+                            <p class="text-body-s text-slate-500 mt-1">Results & insights</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 px-4 sm:px-6 lg:px-8 bg-white">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-h2-headline-l text-slate-900 mb-4">Enterprise-Grade AI Workflows</h2>
+                <p class="text-body-l text-slate-600 max-w-2xl mx-auto">
+                    Built for businesses that need powerful AI automation without compromising on security.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-slate-50 rounded-xl p-6 border border-slate-100">
+                    <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-h4-headline-s font-semibold text-slate-900 mb-2">Complete Isolation</h3>
+                    <p class="text-body-m text-slate-600">
+                        Every workflow runs in a dedicated sandbox. No data leakage, no model training on your content.
+                    </p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="bg-slate-50 rounded-xl p-6 border border-slate-100">
+                    <div class="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-h4-headline-s font-semibold text-slate-900 mb-2">Fast Pipeline Execution</h3>
+                    <p class="text-body-m text-slate-600">
+                        Process documents, analyze data, and automate tasks in seconds, not hours.
+                    </p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="bg-slate-50 rounded-xl p-6 border border-slate-100">
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-h4-headline-s font-semibold text-slate-900 mb-2">Enterprise Ready</h3>
+                    <p class="text-body-m text-slate-600">
+                        SOC2 compliant infrastructure with audit logs and role-based access control.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Security Section -->
+    <section id="security" class="py-20 px-4 sm:px-6 lg:px-8 bg-slate-50">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                <div>
+                    <h2 class="text-h2-headline-l text-slate-900 mb-4">Your Data Stays Yours</h2>
+                    <p class="text-body-l text-slate-600 mb-6">
+                        Unlike other AI platforms, we never use your data to improve our models. Your workflows, your data, your competitive advantage.
+                    </p>
+                    <ul class="space-y-4">
+                        <li class="flex items-start">
+                            <svg class="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span class="text-body-m text-slate-600 ml-3">No training on customer data</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span class="text-body-m text-slate-600 ml-3">End-to-end encryption</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span class="text-body-m text-slate-600 ml-3">GDPR & CCPA compliant</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span class="text-body-m text-slate-600 ml-3">Data deletion on request</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+                    <div class="flex items-center justify-center h-48 bg-slate-100 rounded-xl">
+                        <svg class="w-24 h-24 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact" class="py-20 px-4 sm:px-6 lg:px-8 bg-white">
+        <div class="max-w-3xl mx-auto">
+            <div class="text-center mb-10">
+                <h2 class="text-h2-headline-l text-slate-900 mb-4">Ready to Get Started?</h2>
+                <p class="text-body-l text-slate-600">
+                    Talk to our team about your AI workflow needs.
+                </p>
+            </div>
+
+            <div class="bg-slate-50 rounded-2xl border border-slate-200 p-8">
+                <form id="contact-form" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="email" class="block text-body-m font-medium text-slate-700 mb-2">
+                                Work Email
+                            </label>
+                            <input
+                                type="email"
+                                id="email"
+                                name="email"
+                                class="input w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all"
+                                placeholder="you@company.com"
+                                required
+                            >
+                        </div>
+                        <div>
+                            <label for="company" class="block text-body-m font-medium text-slate-700 mb-2">
+                                Company Name
+                            </label>
+                            <input
+                                type="text"
+                                id="company"
+                                name="company"
+                                class="input w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all"
+                                placeholder="Acme Inc."
+                            >
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="message" class="block text-body-m font-medium text-slate-700 mb-2">
+                            How can we help?
+                        </label>
+                        <textarea
+                            id="message"
+                            name="message"
+                            rows="4"
+                            class="input w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all resize-none"
+                            placeholder="Tell us about your workflow needs..."
+                        ></textarea>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <p class="text-body-s text-slate-500">
+                            We'll get back within 24 hours.
+                        </p>
+                        <button
+                            type="submit"
+                            id="submit-btn"
+                            class="btn btn-primary btn-lg"
+                        >
+                            Send Message
+                        </button>
+                    </div>
+
+                    <!-- Thank you message (hidden by default) -->
+                    <div id="thank-you" class="hidden text-center py-8">
+                        <div class="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-4">
+                            <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-h4-headline-s font-semibold text-slate-900 mb-2">Thank you!</h3>
+                        <p class="text-body-m text-slate-600">We'll be in touch soon.</p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="flex items-center mb-6 md:mb-0">
+                    <img src="/assets/filesurf-logo-1500x500.png" alt="FileSurf" class="h-6 w-auto brightness-0 invert">
+                </div>
+                <p class="text-body-s text-slate-400">
+                    &copy; 2025 FileSurf. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.getElementById('contact-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const form = e.target;
+            const submitBtn = document.getElementById('submit-btn');
+            const thankYou = document.getElementById('thank-you');
+            const formFields = form.querySelectorAll('input, textarea, button');
+
+            // Disable form during submission
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="three-dot-loader"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>';
+
+            try {
+                const formData = {
+                    email: document.getElementById('email').value,
+                    company: document.getElementById('company').value,
+                    message: document.getElementById('message').value
+                };
+
+                const response = await fetch('/http/contact', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    formFields.forEach(field => field.classList.add('hidden'));
+                    thankYou.classList.remove('hidden');
+                } else {
+                    throw new Error('Submission failed');
+                }
+            } catch (error) {
+                console.error('Form submission error:', error);
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Send Message';
+                alert('Something went wrong. Please try again.');
+            }
+        });
+    </script>
+</body>
+</html>

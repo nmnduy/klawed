@@ -47,7 +47,7 @@ public class ApplicationStartupListener {
         LOGGER.info("Application startup completed. Metrics initialized.");
         LOGGER.info("Prometheus metrics available at: /metrics");
         LOGGER.info("Application endpoints:");
-        LOGGER.info("  - Main interface: /file-chat");
+        LOGGER.info("  - Main interface: /app");
         LOGGER.info("  - Metrics: /metrics");
         LOGGER.info("  - Health: /q/health");
         LOGGER.info("  - OpenAPI: /q/openapi");

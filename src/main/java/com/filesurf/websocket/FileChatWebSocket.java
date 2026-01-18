@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.logging.Logger;
 import java.io.IOException;
 
-@WebSocket(path = "/file-chat/ws/{sessionId}")
+@WebSocket(path = "/app/ws/{sessionId}")
 public class FileChatWebSocket {
 
     private static final Logger LOGGER = Logger.getLogger(FileChatWebSocket.class.getName());

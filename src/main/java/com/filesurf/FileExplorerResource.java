@@ -26,7 +26,7 @@ import java.util.logging.Logger;
 /**
  * File Explorer Resource for browsing session directories and files
  */
-@Path("/file-chat/explorer")
+@Path("/app/explorer")
 public class FileExplorerResource {
 
     private static final Logger LOGGER = Logger.getLogger(FileExplorerResource.class.getName());

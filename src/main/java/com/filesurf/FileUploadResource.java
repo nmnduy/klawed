@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
 
-@jakarta.ws.rs.Path("/file-chat/upload")
+@jakarta.ws.rs.Path("/app/upload")
 public class FileUploadResource {
 
     private static final Logger LOGGER = Logger.getLogger(FileUploadResource.class.getName());

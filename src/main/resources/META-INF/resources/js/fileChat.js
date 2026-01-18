@@ -1327,7 +1327,7 @@ export function init(rootEl) {
             setFileExplorerSession();
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = protocol + '//' + window.location.host + '/file-chat/ws/' + encodeURIComponent(sessionId);
+            const wsUrl = protocol + '//' + window.location.host + '/app/ws/' + encodeURIComponent(sessionId);
 
             debug('Connecting to WebSocket', wsUrl);
             ws = new WebSocket(wsUrl);
