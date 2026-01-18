@@ -400,8 +400,8 @@ public class BlogService {
             sb.append("\"author\": {");
             sb.append("\"@type\": \"Person\",");
             sb.append("\"name\": \"").append(escapeJson(post.getAuthor().getName())).append("\"");
-            if (post.getAuthor().getUrl() != null) {
-                sb.append(",\"url\": \"").append(escapeJson(post.getAuthor().getUrl())).append("\"");
+            if (post.getAuthor().getAvatarUrl() != null) {
+                sb.append(",\"url\": \"").append(escapeJson(post.getAuthor().getAvatarUrl())).append("\"");
             }
             sb.append("},");
         }

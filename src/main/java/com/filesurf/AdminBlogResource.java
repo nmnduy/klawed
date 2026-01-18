@@ -2,7 +2,9 @@ package com.filesurf;
 
 import com.filesurf.model.*;
 import com.filesurf.service.BlogService;
+import com.filesurf.service.BlogService.PaginatedResult;
 import com.filesurf.service.UserService;
+import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.annotation.security.RolesAllowed;
@@ -39,18 +41,23 @@ public class AdminBlogResource {
     UserService userService;
 
     @Inject
+    @Location("admin-blog-posts.html")
     Template adminBlogPosts;
 
     @Inject
+    @Location("admin-blog-post-edit.html")
     Template adminBlogPostEdit;
 
     @Inject
+    @Location("admin-blog-categories.html")
     Template adminBlogCategories;
 
     @Inject
+    @Location("admin-blog-tags.html")
     Template adminBlogTags;
 
     @Inject
+    @Location("admin-blog-analytics.html")
     Template adminBlogAnalytics;
 
     @ConfigProperty(name = "blog.site.url", defaultValue = "https://filesurf.example.com")
@@ -74,8 +81,9 @@ public class AdminBlogResource {
         LOGGER.info("Admin: List posts, status: " + status + ", page: " + page);
         
         try {
-            List<BlogPost> allPosts = blogService.getPublishedPosts(postsPerPage * 2, page * postsPerPage);
-            int total = blogService.countPublishedPosts();
+            PaginatedResult<BlogPost> paginatedResult = blogService.getPublishedPosts(page);
+            List<BlogPost> allPosts = paginatedResult.getItems();
+            int total = paginatedResult.getTotal();
             List<BlogAuthor> authors = blogService.listAuthors();
             List<BlogCategory> categories = blogService.listCategories();
             
@@ -395,7 +403,7 @@ public class AdminBlogResource {
         
         try {
             List<BlogCategory> categories = blogService.listCategories();
-            int postCount = blogService.countPublishedPosts();
+            int postCount = 0; // TODO: Implement count method or get from paginated result
             
             return adminBlogCategories.data("categories", categories)
                     .data("totalPosts", postCount)
@@ -478,7 +486,7 @@ public class AdminBlogResource {
         
         try {
             List<BlogTag> tags = blogService.listTags();
-            int postCount = blogService.countPublishedPosts();
+            int postCount = 0; // TODO: Implement count method or get from paginated result
             
             return adminBlogTags.data("tags", tags)
                     .data("totalPosts", postCount)
@@ -613,7 +621,7 @@ public class AdminBlogResource {
         
         try {
             List<BlogPost> popularPosts = blogService.getPopularPosts(10);
-            int totalPosts = blogService.countPublishedPosts();
+            int totalPosts = 0; // TODO: Implement count method or get from paginated result
             List<BlogAuthor> authors = blogService.listAuthors();
             List<BlogCategory> categories = blogService.listCategories();
             

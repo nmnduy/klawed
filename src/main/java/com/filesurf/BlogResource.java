@@ -4,6 +4,7 @@ import com.filesurf.model.*;
 import com.filesurf.service.BlogService;
 import com.filesurf.service.RssFeedService;
 import com.filesurf.service.SitemapService;
+import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
@@ -31,21 +32,27 @@ public class BlogResource {
     BlogService blogService;
 
     @Inject
+    @Location("blog.html")
     Template blog;
 
     @Inject
+    @Location("blog-post.html")
     Template blogPost;
 
     @Inject
+    @Location("blog-category.html")
     Template blogCategory;
 
     @Inject
+    @Location("blog-tag.html")
     Template blogTag;
 
     @Inject
+    @Location("blog-author.html")
     Template blogAuthor;
 
     @Inject
+    @Location("blog-search.html")
     Template blogSearch;
 
     @Inject

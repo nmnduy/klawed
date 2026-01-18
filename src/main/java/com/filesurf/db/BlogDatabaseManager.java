@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.sql.*;
@@ -26,7 +27,7 @@ public class BlogDatabaseManager {
     private final Object lock = new Object();
 
     @PostConstruct
-    void init() throws SQLException {
+    void init() throws SQLException, IOException {
         LOGGER.info("Initializing BlogDatabaseManager with database: " + databasePath);
         
         // Ensure parent directory exists
@@ -56,7 +57,7 @@ public class BlogDatabaseManager {
         LOGGER.info("BlogDatabaseManager initialized successfully");
     }
 
-    private void initializeSchema() throws SQLException {
+    private void initializeSchema() throws SQLException, IOException {
         try (InputStream is = getClass().getResourceAsStream("/db/migration/V1.0.0__create_blog_tables.sql")) {
             if (is == null) {
                 throw new SQLException("Blog schema migration file not found");

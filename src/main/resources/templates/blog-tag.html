@@ -82,7 +82,7 @@
                     <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">All Tags</h3>
                     <div class="flex flex-wrap gap-2">
                         {#for t in tags}
-                        <a href="/blog/tag/{t.slug}" class="blog-tag {if t.slug == tag.slug}bg-orange-500 text-white{/if}">{t.name}</a>
+                        <a href="/blog/tag/{t.slug}" class="blog-tag {t.slug == tag.slug ? 'bg-orange-500 text-white' : ''}">{t.name}</a>
                         {/for}
                     </div>
                 </div>

@@ -86,7 +86,7 @@
                     <ul class="space-y-2">
                         {#for cat in categories}
                         <li>
-                            <a href="/blog/category/{cat.slug}" class="flex items-center justify-between py-1.5 text-body-s {if cat.slug == category.slug}text-orange-500 font-medium{else}text-muted-foreground hover:text-orange-500{/if} transition-colors">
+                            <a href="/blog/category/{cat.slug}" class="flex items-center justify-between py-1.5 text-body-s {cat.slug == category.slug ? 'text-orange-500 font-medium' : 'text-muted-foreground hover:text-orange-500'} transition-colors">
                                 <span>{cat.name}</span>
                             </a>
                         </li>

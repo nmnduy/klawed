@@ -2,6 +2,10 @@
 
 ---
 
+## Bugs
+
+- sqlite viewer. no row seen
+
 ## Distribution
 
 ### SEO
