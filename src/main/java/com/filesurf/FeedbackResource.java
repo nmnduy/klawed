@@ -19,7 +19,7 @@ import java.util.UUID;
  *
  * Feedback is stored in SQLite database for later review by administrators.
  */
-@jakarta.ws.rs.Path("/file-chat/http/feedback")
+@jakarta.ws.rs.Path("/app/http/feedback")
 public class FeedbackResource {
 
     private static final Logger LOGGER = Logger.getLogger(FeedbackResource.class.getName());

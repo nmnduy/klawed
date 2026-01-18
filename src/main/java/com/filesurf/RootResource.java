@@ -2,6 +2,10 @@ package com.filesurf;
 
 import com.filesurf.model.UserRecord;
 import com.filesurf.service.UserService;
+import com.filesurf.util.CssVersionProvider;
+import io.quarkus.qute.Location;
+import io.quarkus.qute.Template;
+import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -16,8 +20,8 @@ import java.net.URI;
 import java.util.logging.Logger;
 
 /**
- * Root endpoint - handles requests to /
- * Redirects to login page if not authenticated, or to file-chat if authenticated.
+ * Root endpoint - serves landing page at /
+ * Redirects authenticated users to /app
  */
 @Path("/")
 public class RootResource {
@@ -28,6 +32,13 @@ public class RootResource {
     @Inject
     UserService userService;
 
+    @Inject
+    @Location("index.html")
+    Template landing;
+
+    @Inject
+    CssVersionProvider cssVersionProvider;
+
     @GET
     @Produces(MediaType.TEXT_HTML)
     public Response root(@Context HttpHeaders headers) {
@@ -37,15 +48,15 @@ public class RootResource {
         if (userId != null && !userId.isBlank()) {
             UserRecord user = userService.getUserByUserId(userId);
             if (user != null && user.isActive()) {
-                // User is authenticated, redirect to main app
-                LOGGER.info("Root accessed by authenticated user: " + user.getEmail() + ", redirecting to /file-chat");
-                return Response.seeOther(URI.create("/file-chat")).build();
+                // User is authenticated, redirect to app
+                LOGGER.info("Root accessed by authenticated user: " + user.getEmail() + ", redirecting to /app");
+                return Response.seeOther(URI.create("/app")).build();
             }
         }
 
-        // User is not authenticated, redirect to login
-        LOGGER.info("Root accessed by unauthenticated user, redirecting to /auth/login");
-        return Response.seeOther(URI.create("/auth/login?redirect=/file-chat")).build();
+        // User is not authenticated, show landing page
+        LOGGER.info("Root accessed, serving landing page");
+        return Response.ok(landing.data("cssPath", cssVersionProvider.getCssPath())).build();
     }
 
     private String extractUserIdFromCookies(HttpHeaders headers) {

@@ -464,7 +464,7 @@ class DBViewer {
         `;
 
         try {
-            const response = await fetch(`/file-chat/explorer/sql/tables?path=${encodeURIComponent(this.currentDbPath)}`, {
+            const response = await fetch(`/app/explorer/sql/tables?path=${encodeURIComponent(this.currentDbPath)}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
@@ -581,7 +581,7 @@ class DBViewer {
         document.getElementById('dbv-schema-chevron').classList.add('rotate-180');
 
         try {
-            const response = await fetch(`/file-chat/explorer/sql/schema/${encodeURIComponent(tableName)}?path=${encodeURIComponent(this.currentDbPath)}`, {
+            const response = await fetch(`/app/explorer/sql/schema/${encodeURIComponent(tableName)}?path=${encodeURIComponent(this.currentDbPath)}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
@@ -674,7 +674,7 @@ class DBViewer {
                 params.append('filters', JSON.stringify(this.columnFilters));
             }
 
-            const response = await fetch(`/file-chat/explorer/sql/data/${encodeURIComponent(this.currentTable)}?${params}`, {
+            const response = await fetch(`/app/explorer/sql/data/${encodeURIComponent(this.currentTable)}?${params}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }
@@ -877,7 +877,7 @@ class DBViewer {
         `;
 
         try {
-            const response = await fetch(`/file-chat/explorer/sql/query?path=${encodeURIComponent(this.currentDbPath)}`, {
+            const response = await fetch(`/app/explorer/sql/query?path=${encodeURIComponent(this.currentDbPath)}`, {
                 method: 'POST',
                 headers: {
                     'X-Session-ID': this.sessionId,
@@ -986,7 +986,7 @@ class DBViewer {
         }
 
         try {
-            const response = await fetch(`/file-chat/explorer/sql/export/${encodeURIComponent(this.currentTable)}?path=${encodeURIComponent(this.currentDbPath)}&format=${format}`, {
+            const response = await fetch(`/app/explorer/sql/export/${encodeURIComponent(this.currentTable)}?path=${encodeURIComponent(this.currentDbPath)}&format=${format}`, {
                 headers: {
                     'X-Session-ID': this.sessionId
                 }

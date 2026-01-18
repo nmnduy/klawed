@@ -28,7 +28,7 @@ import java.util.logging.Logger;
  * Provides REST API for AI agents to interact with the file chat agent
  * via HTTP requests instead of WebSocket.
  */
-@Path("/file-chat/http")
+@Path("/app/http")
 public class FileChatHttpResource {
 
     private static final Logger LOGGER = Logger.getLogger(FileChatHttpResource.class.getName());
