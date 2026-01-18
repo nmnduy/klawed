@@ -178,31 +178,33 @@ void render_status_window(TUIState *tui) {
         scroll_str_len = (int)strlen(scroll_str);
     }
 
-    // Prepare token usage (only in NORMAL mode)
+    // Prepare token usage (show when non-zero, regardless of mode)
     char token_str[128] = {0};
     int token_str_len = 0;
-    if (tui->mode == TUI_MODE_NORMAL) {
-        // Query total prompt/completion tokens and cached tokens for this session
-        int prompt_tokens = 0;
-        int completion_tokens = 0;
-        int cached_tokens = 0;
-        if (tui->persistence_db) {
-            if (persistence_get_session_token_usage(tui->persistence_db,
-                                                    tui->session_id,
-                                                    &prompt_tokens,
-                                                    &completion_tokens,
-                                                    &cached_tokens) == 0) {
-                LOG_DEBUG("[TUI] Retrieved session token totals from DB: prompt=%d completion=%d cached=%d",
-                          prompt_tokens, completion_tokens, cached_tokens);
-            } else {
-                LOG_DEBUG("[TUI] Failed to retrieve session token totals from DB");
-            }
+    
+    // Query total prompt/completion tokens and cached tokens for this session
+    int prompt_tokens = 0;
+    int completion_tokens = 0;
+    int cached_tokens = 0;
+    if (tui->persistence_db) {
+        if (persistence_get_session_token_usage(tui->persistence_db,
+                                                tui->session_id,
+                                                &prompt_tokens,
+                                                &completion_tokens,
+                                                &cached_tokens) == 0) {
+            LOG_DEBUG("[TUI] Retrieved session token totals from DB: prompt=%d completion=%d cached=%d",
+                      prompt_tokens, completion_tokens, cached_tokens);
         } else {
-            LOG_DEBUG("[TUI] No persistence database connection available");
+            LOG_DEBUG("[TUI] Failed to retrieve session token totals from DB");
         }
+    } else {
+        LOG_DEBUG("[TUI] No persistence database connection available");
+    }
 
-        int total_tokens = prompt_tokens + completion_tokens;
+    int total_tokens = prompt_tokens + completion_tokens;
 
+    // Show token count when non-zero, regardless of mode
+    if (total_tokens > 0) {
         // Show total tokens and cached tokens in the format: "Token: X (+Y cached) "
         if (cached_tokens > 0) {
             snprintf(token_str, sizeof(token_str), "Token: %d (+%d cached) ",
@@ -211,12 +213,7 @@ void render_status_window(TUIState *tui) {
             snprintf(token_str, sizeof(token_str), "Token: %d ", total_tokens);
         }
         token_str_len = (int)strlen(token_str);
-        LOG_DEBUG("[TUI] Rendering token display: %s (mode=NORMAL)", token_str);
-
-        // Debug: warn if token counts are 0 in Normal mode (might indicate a bug)
-        if (total_tokens == 0) {
-            LOG_DEBUG("[TUI] Warning: Token count is 0 in NORMAL mode");
-        }
+        LOG_DEBUG("[TUI] Rendering token display: %s (mode=%d)", token_str, tui->mode);
     }
 
     // Layout: keep spinner + status message on the right, float the rest on the left
