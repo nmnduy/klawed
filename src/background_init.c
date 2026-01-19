@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "background_init.h"
 #include "klawed_internal.h"
 #include "logger.h"
@@ -18,7 +19,9 @@
 static void* load_system_prompt_thread(void *arg) {
     ConversationState *state = (ConversationState *)arg;
     BackgroundLoaders *bg = state->bg_loaders;
+    struct timespec start, end;
 
+    clock_gettime(CLOCK_MONOTONIC, &start);
     LOG_DEBUG("[BG] System prompt loading started");
 
     // Build system prompt (this is the slow part: git, KLAWED.md)
@@ -30,7 +33,10 @@ static void* load_system_prompt_thread(void *arg) {
     bg->system_prompt_ready = 1;
     pthread_mutex_unlock(&bg->system_prompt_mutex);
 
-    LOG_DEBUG("[BG] System prompt loading completed");
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                      (end.tv_nsec - start.tv_nsec) / 1000000;
+    LOG_DEBUG("[BG] System prompt loading completed in %ld ms", duration_ms);
     return NULL;
 }
 
@@ -40,7 +46,9 @@ static void* load_system_prompt_thread(void *arg) {
 static void* init_database_thread(void *arg) {
     ConversationState *state = (ConversationState *)arg;
     BackgroundLoaders *bg = state->bg_loaders;
+    struct timespec start, end;
 
+    clock_gettime(CLOCK_MONOTONIC, &start);
     LOG_DEBUG("[BG] Database initialization started");
 
     // Initialize persistence database
@@ -52,10 +60,14 @@ static void* init_database_thread(void *arg) {
     bg->database_ready = 1;
     pthread_mutex_unlock(&bg->database_mutex);
 
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                      (end.tv_nsec - start.tv_nsec) / 1000000;
+
     if (db) {
-        LOG_DEBUG("[BG] Database initialization completed");
+        LOG_DEBUG("[BG] Database initialization completed in %ld ms", duration_ms);
     } else {
-        LOG_WARN("[BG] Database initialization failed");
+        LOG_WARN("[BG] Database initialization failed after %ld ms", duration_ms);
     }
 
     return NULL;
@@ -67,7 +79,9 @@ static void* init_database_thread(void *arg) {
 static void* init_memvid_thread(void *arg) {
     ConversationState *state = (ConversationState *)arg;
     BackgroundLoaders *bg = state->bg_loaders;
+    struct timespec start, end;
 
+    clock_gettime(CLOCK_MONOTONIC, &start);
     LOG_DEBUG("[BG] Memvid initialization started");
 
     // Initialize memvid
@@ -83,10 +97,14 @@ static void* init_memvid_thread(void *arg) {
     bg->memvid_ready = 1;
     pthread_mutex_unlock(&bg->memvid_mutex);
 
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                      (end.tv_nsec - start.tv_nsec) / 1000000;
+
     if (result == 0) {
-        LOG_DEBUG("[BG] Memvid initialization completed");
+        LOG_DEBUG("[BG] Memvid initialization completed in %ld ms", duration_ms);
     } else {
-        LOG_DEBUG("[BG] Memvid initialization failed or not available");
+        LOG_DEBUG("[BG] Memvid initialization failed or not available after %ld ms", duration_ms);
     }
 
     return NULL;
@@ -99,6 +117,9 @@ int start_background_loaders(ConversationState *state) {
     if (!state) {
         return -1;
     }
+
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
 
     // Allocate background loader state
     BackgroundLoaders *bg = calloc(1, sizeof(BackgroundLoaders));
@@ -138,8 +159,13 @@ int start_background_loaders(ConversationState *state) {
         LOG_ERROR("Failed to start memvid background thread");
     }
 
-    LOG_INFO("Background initialization started (system_prompt=%d, database=%d, memvid=%d)",
-             bg->system_prompt_started, bg->database_started, bg->memvid_started);
+    struct timespec end;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                      (end.tv_nsec - start.tv_nsec) / 1000000;
+
+    LOG_INFO("Background initialization started in %ld ms (system_prompt=%d, database=%d, memvid=%d)",
+             duration_ms, bg->system_prompt_started, bg->database_started, bg->memvid_started);
 
     return 0;
 }
@@ -154,6 +180,8 @@ void await_system_prompt_ready(ConversationState *state) {
     }
 
     BackgroundLoaders *bg = state->bg_loaders;
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
 
     // Check if already ready (fast path)
     pthread_mutex_lock(&bg->system_prompt_mutex);
@@ -178,7 +206,12 @@ void await_system_prompt_ready(ConversationState *state) {
         add_system_message(state, bg->system_prompt_result);
         free(bg->system_prompt_result);
         bg->system_prompt_result = NULL;
-        LOG_DEBUG("System prompt added to conversation");
+        
+        struct timespec end;
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                          (end.tv_nsec - start.tv_nsec) / 1000000;
+        LOG_DEBUG("System prompt added to conversation (total wait: %ld ms)", duration_ms);
 
         // Debug: print if requested
         if (getenv("DEBUG_PROMPT")) {
@@ -202,6 +235,8 @@ PersistenceDB* await_database_ready(ConversationState *state) {
     }
 
     BackgroundLoaders *bg = state->bg_loaders;
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
 
     // Check if already ready (fast path)
     pthread_mutex_lock(&bg->database_mutex);
@@ -226,6 +261,12 @@ PersistenceDB* await_database_ready(ConversationState *state) {
     db = bg->database_result;
     pthread_mutex_unlock(&bg->database_mutex);
 
+    struct timespec end;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                      (end.tv_nsec - start.tv_nsec) / 1000000;
+    LOG_DEBUG("Database ready after %ld ms wait", duration_ms);
+
     return db;
 }
 
@@ -239,6 +280,8 @@ int await_memvid_ready(ConversationState *state) {
     }
 
     BackgroundLoaders *bg = state->bg_loaders;
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
 
     // Check if already ready (fast path)
     pthread_mutex_lock(&bg->memvid_mutex);
@@ -262,6 +305,12 @@ int await_memvid_ready(ConversationState *state) {
     pthread_mutex_lock(&bg->memvid_mutex);
     result = bg->memvid_result;
     pthread_mutex_unlock(&bg->memvid_mutex);
+
+    struct timespec end;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                      (end.tv_nsec - start.tv_nsec) / 1000000;
+    LOG_DEBUG("Memvid ready after %ld ms wait", duration_ms);
 
     return result;
 }
