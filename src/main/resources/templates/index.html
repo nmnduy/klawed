@@ -36,6 +36,27 @@
                 color-mix(in srgb, hsl(var(--accent)) 90%, hsl(var(--muted)) 10%)
             );
         }
+
+        /* Override visited link styles to prevent purple color */
+        nav a:visited,
+        a:visited {
+            color: inherit;
+        }
+
+        /* Ensure navbar links maintain their intended colors */
+        nav a {
+            color: hsl(var(--layout-content-medium));
+        }
+
+        nav a:hover {
+            color: hsl(var(--primary));
+        }
+
+        /* Ensure CTA buttons maintain their styling */
+        nav a.inline-flex:visited,
+        section a.inline-flex:visited {
+            color: inherit;
+        }
     </style>
 </head>
 <body class="bg-background text-foreground min-h-screen">
@@ -51,8 +72,11 @@
                 <div class="hidden md:flex items-center space-x-8">
                     <a href="#features" class="text-body-m text-layout-content-medium hover:text-primary transition-colors duration-200">Features</a>
                     <a href="#security" class="text-body-m text-layout-content-medium hover:text-primary transition-colors duration-200">Security</a>
-                    <a href="#contact" class="btn btn-primary btn-md">Contact Sales</a>
-                    <a href="/app" class="text-body-m text-layout-content-medium hover:text-primary transition-colors duration-200 font-semibold">Launch App</a>
+                    <a href="#contact" class="text-body-m text-layout-content-medium hover:text-primary transition-colors duration-200">Contact Sales</a>
+                    <a href="/app" class="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-all duration-200 font-semibold shadow-sm hover:shadow-md transform hover:-translate-y-0.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        Launch App
+                    </a>
                 </div>
             </div>
         </div>
@@ -74,8 +98,14 @@
                         Design customizable AI workflows for your repetitive tasks. With the power of AI, businesses can automate and tailor pipelines exactly how they need—while keeping data private and secure.
                     </p>
                     <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                        <a href="/app" class="btn btn-primary btn-lg">Launch FileSurf</a>
-                        <a href="#contact" class="btn btn-secondary btn-lg">Talk to Sales</a>
+                        <a href="/app" class="inline-flex items-center justify-center gap-2 px-6 py-3 text-body-l font-semibold text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            Launch FileSurf
+                        </a>
+                        <a href="#contact" class="inline-flex items-center justify-center gap-2 px-6 py-3 text-body-l font-semibold text-foreground bg-background border-2 border-border rounded-lg hover:bg-muted hover:border-primary/50 shadow-inner transition-all duration-200">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                            Talk to Sales
+                        </a>
                     </div>
                     <div class="flex flex-wrap gap-6 pt-2">
                         <div class="flex items-center gap-2">
@@ -371,7 +401,7 @@
                         <button
                             type="submit"
                             id="submit-btn"
-                            class="btn btn-primary btn-lg"
+                            class="inline-flex items-center justify-center px-6 py-3 text-body-l font-semibold text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg transition-all duration-200"
                         >
                             Send Message
                         </button>
@@ -402,8 +432,8 @@
                     <p class="text-body-m text-layout-content-medium">Create custom, repeatable workflows that turn hours of manual work into automated pipelines—all while keeping your data private and secure.</p>
                 </div>
                 <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                    <a href="/app" class="btn btn-primary btn-lg">Try FileSurf Now</a>
-                    <a href="#contact" class="btn btn-secondary btn-lg">Book a call</a>
+                    <a href="/app" class="inline-flex items-center justify-center px-6 py-3 text-body-l font-semibold text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg transition-all duration-200">Try FileSurf Now</a>
+                    <a href="#contact" class="inline-flex items-center justify-center px-6 py-3 text-body-l font-semibold text-foreground bg-background border-2 border-border rounded-lg hover:bg-muted hover:border-primary/50 shadow-inner transition-all duration-200">Book a call</a>
                 </div>
             </div>
         </div>
