@@ -17,7 +17,7 @@
         <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <div class="flex items-center gap-4">
                 <a href="/admin/blog/posts" class="flex items-center gap-2 text-h4-headline-s font-bold text-foreground">
-                    <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
                     </svg>
                     <span>Blog Admin</span>
@@ -28,7 +28,7 @@
                 <a href="/admin/blog/categories" class="text-body-m font-medium text-foreground">Categories</a>
                 <a href="/admin/blog/tags" class="text-body-m font-medium text-muted-foreground hover:text-foreground">Tags</a>
                 <a href="/admin/blog/analytics" class="text-body-m font-medium text-muted-foreground hover:text-foreground">Analytics</a>
-                <a href="/blog" class="text-body-m font-medium text-orange-500 hover:text-orange-600">View Blog →</a>
+                <a href="/blog" class="text-body-m font-medium text-semantic-link-unvisited hover:text-semantic-link-hover">View Blog →</a>
             </nav>
         </div>
     </header>
@@ -36,7 +36,7 @@
     <main class="max-w-4xl mx-auto px-4 py-8">
         <div class="flex items-center justify-between mb-8">
             <h1 class="text-h1-headline-l font-bold text-foreground">Categories</h1>
-            <a href="/admin/blog/posts/new" class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium transition-colors">
+            <a href="/admin/blog/posts/new" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium transition-colors">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                 </svg>
@@ -45,7 +45,7 @@
         </div>
 
         {#if error}
-        <div class="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-600 mb-6">
+        <div class="p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive mb-6">
             {error}
         </div>
         {/if}
@@ -71,12 +71,12 @@
             <h2 class="text-h5-headline-xs font-bold text-foreground mb-4">Add New Category</h2>
             <form action="/admin/blog/categories" method="POST" class="flex gap-4">
                 <div class="flex-1">
-                    <input type="text" name="name" placeholder="Category name..." class="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground text-body-s focus:outline-none focus:border-orange-500" required />
+                    <input type="text" name="name" placeholder="Category name..." class="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground text-body-s focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" required />
                 </div>
                 <div class="flex-1">
-                    <input type="text" name="description" placeholder="Description (optional)..." class="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground text-body-s focus:outline-none focus:border-orange-500" />
+                    <input type="text" name="description" placeholder="Description (optional)..." class="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground text-body-s focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" />
                 </div>
-                <button type="submit" class="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium transition-colors">
+                <button type="submit" class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium transition-colors">
                     Add Category
                 </button>
             </form>
@@ -97,8 +97,8 @@
                 {#for category in categories}
                 <div class="category-item">
                     <div class="flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                             </svg>
                         </div>
@@ -119,7 +119,7 @@
                         <form action="/admin/blog/categories/{category.id}" method="POST" onsubmit="return confirm('Are you sure you want to delete this category?');" style="display: inline;">
                             <input type="hidden" name="_method" value="DELETE" />
                             <button type="submit" class="p-2 hover:bg-muted rounded-lg transition-colors" title="Delete">
-                                <svg class="w-4 h-4 text-muted-foreground hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="w-4 h-4 text-muted-foreground hover:text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                             </button>

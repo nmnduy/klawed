@@ -24,29 +24,29 @@
     <div class="fixed inset-0 z-10 overflow-y-auto">
         <div class="flex min-h-full items-center justify-center p-4">
             <div
-                class="relative w-full max-w-lg transform overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-2xl transition-all"
+                class="relative w-full max-w-lg transform overflow-hidden rounded-2xl bg-card shadow-2xl transition-all"
                 data-feedback-panel
             >
                 <!-- Header -->
-                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-border">
                     <div class="flex items-center gap-3">
-                        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                            <svg class="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                             </svg>
                         </div>
                         <div>
-                            <h2 id="feedback-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                            <h2 id="feedback-modal-title" class="text-lg font-semibold text-foreground">
                                 Send Feedback
                             </h2>
-                            <p class="text-sm text-slate-500 dark:text-slate-400">
+                            <p class="text-sm text-muted-foreground">
                                 Help us improve FileSurf
                             </p>
                         </div>
                     </div>
                     <button
                         type="button"
-                        class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                        class="rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                         data-feedback-close
                         aria-label="Close feedback dialog"
                     >
@@ -60,7 +60,7 @@
                 <form id="feedback-form" data-feedback-form class="px-6 py-4 space-y-4">
                     <!-- Feedback Type -->
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        <label class="block text-sm font-medium text-foreground mb-2">
                             What type of feedback is this?
                         </label>
                         <div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Feedback type">
@@ -105,13 +105,13 @@
 
                     <!-- Description -->
                     <div>
-                        <label for="feedback-description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                            Description <span class="text-red-500">*</span>
+                        <label for="feedback-description" class="block text-sm font-medium text-foreground mb-2">
+                            Description <span class="text-destructive">*</span>
                         </label>
                         <textarea
                             id="feedback-description"
                             data-feedback-description
-                            class="w-full px-4 py-3 rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-body-m placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-900/50 resize-none transition-all"
+                            class="w-full px-4 py-3 rounded-lg border-2 border-border bg-card text-foreground text-body-m placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none transition-all"
                             rows="4"
                             placeholder="Please describe the issue, suggestion, or what you liked..."
                             required
@@ -120,17 +120,17 @@
 
                     <!-- Error Details (shown for bug reports) -->
                     <div id="feedback-error-section" data-feedback-error-section class="hidden">
-                        <label for="feedback-error-details" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        <label for="feedback-error-details" class="block text-sm font-medium text-foreground mb-2">
                             Error Details (optional)
                         </label>
                         <textarea
                             id="feedback-error-details"
                             data-feedback-error-details
-                            class="w-full px-4 py-3 rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 text-body-s font-mono placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-orange-500 dark:focus:border-orange-400 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-900/50 resize-none transition-all"
+                            class="w-full px-4 py-3 rounded-lg border-2 border-border bg-muted text-foreground text-body-s font-mono placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-none transition-all"
                             rows="3"
                             placeholder="Paste any error messages, stack traces, or steps to reproduce..."
                         ></textarea>
-                        <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                        <p class="mt-1.5 text-xs text-muted-foreground">
                             Include any relevant screenshots or steps to help us reproduce the issue.
                         </p>
                     </div>
@@ -139,7 +139,7 @@
                     <div class="flex gap-3 pt-2">
                         <button
                             type="submit"
-                            class="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-200/50 hover:shadow-orange-300/60 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                            class="flex-1 px-4 py-3 bg-gradient-to-r from-primary to-primary/90 text-white font-semibold rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                             data-feedback-submit
                         >
                             <span data-feedback-submit-text>Send Feedback</span>
@@ -152,7 +152,7 @@
                         </button>
                         <button
                             type="button"
-                            class="px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                            class="px-4 py-3 bg-muted text-foreground font-medium rounded-xl hover:bg-muted/80 transition-colors"
                             data-feedback-cancel
                         >
                             Cancel
@@ -162,20 +162,20 @@
 
                 <!-- Success State (hidden by default) -->
                 <div id="feedback-success" data-feedback-success class="hidden px-6 py-8 text-center">
-                    <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                        <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-semantic-success/10 flex items-center justify-center">
+                        <svg class="w-8 h-8 text-semantic-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                         </svg>
                     </div>
-                    <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                    <h3 class="text-xl font-semibold text-foreground mb-2">
                         Thank you for your feedback!
                     </h3>
-                    <p class="text-slate-600 dark:text-slate-400 mb-6">
+                    <p class="text-muted-foreground mb-6">
                         We appreciate you taking the time to help us improve FileSurf.
                     </p>
                     <button
                         type="button"
-                        class="px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                        class="px-6 py-3 bg-muted text-foreground font-medium rounded-xl hover:bg-muted/80 transition-colors"
                         data-feedback-done
                     >
                         Done
