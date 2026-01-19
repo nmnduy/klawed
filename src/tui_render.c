@@ -32,6 +32,7 @@
 #include <time.h>
 #include <ncurses.h>
 #include <bsd/string.h>
+#include <stdlib.h>
 
 // ============================================================================
 // Spinner Functions
@@ -98,6 +99,18 @@ void render_status_window(TUIState *tui) {
     getmaxyx(tui->wm.status_win, height, width);
     (void)height;
 
+    // Get narrow screen threshold from environment variable
+    // Default is 80 characters (standard terminal width)
+    const char *narrow_threshold_str = getenv("KLAWED_NARROW_SCREEN_THRESHOLD");
+    int narrow_threshold = 80; // default
+    if (narrow_threshold_str) {
+        char *endptr;
+        long val = strtol(narrow_threshold_str, &endptr, 10);
+        if (endptr != narrow_threshold_str && *endptr == '\0' && val >= 0 && val <= 1000) {
+            narrow_threshold = (int)val;
+        }
+    }
+
     werase(tui->wm.status_win);
 
     int col = 0;
@@ -116,10 +129,21 @@ void render_status_window(TUIState *tui) {
                 frame_count = SPINNER_FRAME_COUNT;
             }
             const char *frame = frames[tui->status_spinner_frame % frame_count];
-            snprintf(status_str, sizeof(status_str), "%s %s ", frame, tui->status_message);
+
+            // When screen is narrow, show only spinner without text
+            // to make space for token count and scroll percentage
+            if (width < narrow_threshold) {
+                snprintf(status_str, sizeof(status_str), "%s ", frame);
+            } else {
+                snprintf(status_str, sizeof(status_str), "%s %s ", frame, tui->status_message);
+            }
             has_spinner = 1;
         } else {
-            snprintf(status_str, sizeof(status_str), "%s ", tui->status_message);
+            // When screen is narrow, hide status text entirely
+            // to make space for token count and scroll percentage
+            if (width >= narrow_threshold) {
+                snprintf(status_str, sizeof(status_str), "%s ", tui->status_message);
+            }
         }
         status_str_len = (int)strlen(status_str);
     }
