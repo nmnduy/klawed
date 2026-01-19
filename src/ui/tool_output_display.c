@@ -203,6 +203,126 @@ void print_human_readable_tool_output(const char *tool_name,
                     }
                 }
             }
+        } else if (strcmp(tool_name, "MemoryStore") == 0) {
+            cJSON *status = cJSON_GetObjectItem(tool_result, "status");
+            cJSON *error = cJSON_GetObjectItem(tool_result, "error");
+            cJSON *entity = cJSON_GetObjectItem(tool_result, "entity");
+            cJSON *slot = cJSON_GetObjectItem(tool_result, "slot");
+            cJSON *kind = cJSON_GetObjectItem(tool_result, "kind");
+
+            if (error && cJSON_IsString(error)) {
+                printf("  Error: %s\n", error->valuestring);
+            } else if (status && cJSON_IsString(status) && strcmp(status->valuestring, "success") == 0) {
+                if (entity && slot && kind && cJSON_IsString(entity) && cJSON_IsString(slot) && cJSON_IsString(kind)) {
+                    printf("  Stored %s memory: %s.%s\n", kind->valuestring, entity->valuestring, slot->valuestring);
+                } else {
+                    printf("  Memory stored successfully\n");
+                }
+            } else {
+                printf("  Memory store completed\n");
+            }
+        } else if (strcmp(tool_name, "MemoryRecall") == 0) {
+            cJSON *status = cJSON_GetObjectItem(tool_result, "status");
+            cJSON *error = cJSON_GetObjectItem(tool_result, "error");
+            cJSON *entity = cJSON_GetObjectItem(tool_result, "entity");
+            cJSON *slot = cJSON_GetObjectItem(tool_result, "slot");
+            cJSON *value = cJSON_GetObjectItem(tool_result, "value");
+            cJSON *kind = cJSON_GetObjectItem(tool_result, "kind");
+
+            if (error && cJSON_IsString(error)) {
+                printf("  Error: %s\n", error->valuestring);
+            } else if (status && cJSON_IsString(status)) {
+                if (strcmp(status->valuestring, "found") == 0) {
+                    if (entity && slot && cJSON_IsString(entity) && cJSON_IsString(slot)) {
+                        printf("  Found: %s.%s", entity->valuestring, slot->valuestring);
+                        if (kind && cJSON_IsString(kind)) {
+                            printf(" (%s)", kind->valuestring);
+                        }
+                        printf("\n");
+
+                        if (value) {
+                            if (cJSON_IsString(value)) {
+                                printf("  Value: %s\n", value->valuestring);
+                            } else if (cJSON_IsNull(value)) {
+                                printf("  Value: (null)\n");
+                            } else {
+                                char *value_str = cJSON_Print(value);
+                                if (value_str) {
+                                    printf("  Value: %s\n", value_str);
+                                    free(value_str);
+                                }
+                            }
+                        }
+                    } else {
+                        printf("  Memory found\n");
+                    }
+                } else if (strcmp(status->valuestring, "not_found") == 0) {
+                    if (entity && slot && cJSON_IsString(entity) && cJSON_IsString(slot)) {
+                        printf("  Not found: %s.%s\n", entity->valuestring, slot->valuestring);
+                    } else {
+                        printf("  Memory not found\n");
+                    }
+                } else {
+                    printf("  Status: %s\n", status->valuestring);
+                }
+            }
+        } else if (strcmp(tool_name, "MemorySearch") == 0) {
+            cJSON *status = cJSON_GetObjectItem(tool_result, "status");
+            cJSON *error = cJSON_GetObjectItem(tool_result, "error");
+            cJSON *query = cJSON_GetObjectItem(tool_result, "query");
+            cJSON *count = cJSON_GetObjectItem(tool_result, "count");
+            cJSON *results = cJSON_GetObjectItem(tool_result, "results");
+
+            if (error && cJSON_IsString(error)) {
+                printf("  Error: %s\n", error->valuestring);
+            } else if (status && cJSON_IsString(status) && strcmp(status->valuestring, "success") == 0) {
+                if (count && cJSON_IsNumber(count)) {
+                    int result_count = count->valueint;
+                    if (query && cJSON_IsString(query)) {
+                        printf("  Found %d result%s for \"%s\"\n",
+                               result_count, result_count == 1 ? "" : "s", query->valuestring);
+                    } else {
+                        printf("  Found %d result%s\n", result_count, result_count == 1 ? "" : "s");
+                    }
+
+                    if (results && cJSON_IsArray(results) && result_count > 0) {
+                        int display_limit = 5;  // Show first 5 results
+                        for (int i = 0; i < result_count && i < display_limit; i++) {
+                            cJSON *result = cJSON_GetArrayItem(results, i);
+                            if (result && cJSON_IsObject(result)) {
+                                cJSON *entity = cJSON_GetObjectItem(result, "entity");
+                                cJSON *slot = cJSON_GetObjectItem(result, "slot");
+                                cJSON *value = cJSON_GetObjectItem(result, "value");
+                                cJSON *kind = cJSON_GetObjectItem(result, "kind");
+
+                                if (entity && slot && cJSON_IsString(entity) && cJSON_IsString(slot)) {
+                                    printf("  %d. %s.%s", i+1, entity->valuestring, slot->valuestring);
+                                    if (kind && cJSON_IsString(kind)) {
+                                        printf(" (%s)", kind->valuestring);
+                                    }
+                                    printf("\n");
+
+                                    if (value && cJSON_IsString(value)) {
+                                        // Truncate long values
+                                        const char *val_str = value->valuestring;
+                                        size_t val_len = strlen(val_str);
+                                        if (val_len > 80) {
+                                            printf("     %.77s...\n", val_str);
+                                        } else {
+                                            printf("     %s\n", val_str);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (result_count > display_limit) {
+                            printf("  ... and %d more\n", result_count - display_limit);
+                        }
+                    }
+                } else {
+                    printf("  Search completed\n");
+                }
+            }
         } else {
             // For other tools, print a simplified version
             char *result_str = cJSON_Print(tool_result);
@@ -379,6 +499,53 @@ char* get_tool_details(const char *tool_name, cJSON *arguments) {
                 snprintf(details, sizeof(details), "%.27s...", uri_str);
             } else {
                 snprintf(details, sizeof(details), "%s", uri_str);
+            }
+        }
+    } else if (strcmp(tool_name, "MemoryStore") == 0) {
+        cJSON *entity = cJSON_GetObjectItem(arguments, "entity");
+        cJSON *slot = cJSON_GetObjectItem(arguments, "slot");
+        cJSON *kind = cJSON_GetObjectItem(arguments, "kind");
+
+        if (cJSON_IsString(entity) && cJSON_IsString(slot)) {
+            if (cJSON_IsString(kind)) {
+                snprintf(details, sizeof(details), "%s.%s (%s)",
+                        entity->valuestring, slot->valuestring, kind->valuestring);
+            } else {
+                snprintf(details, sizeof(details), "%s.%s",
+                        entity->valuestring, slot->valuestring);
+            }
+        }
+    } else if (strcmp(tool_name, "MemoryRecall") == 0) {
+        cJSON *entity = cJSON_GetObjectItem(arguments, "entity");
+        cJSON *slot = cJSON_GetObjectItem(arguments, "slot");
+
+        if (cJSON_IsString(entity) && cJSON_IsString(slot)) {
+            snprintf(details, sizeof(details), "%s.%s",
+                    entity->valuestring, slot->valuestring);
+        }
+    } else if (strcmp(tool_name, "MemorySearch") == 0) {
+        cJSON *query = cJSON_GetObjectItem(arguments, "query");
+        cJSON *top_k = cJSON_GetObjectItem(arguments, "top_k");
+
+        if (cJSON_IsString(query)) {
+            // Truncate query if too long
+            const char *query_str = query->valuestring;
+            size_t query_len = strlen(query_str);
+            if (cJSON_IsNumber(top_k) && top_k->valueint != 10) {
+                // Only show top_k if it's not the default value of 10
+                if (query_len > 40) {
+                    snprintf(details, sizeof(details), "\"%.37s...\" (top %d)",
+                            query_str, top_k->valueint);
+                } else {
+                    snprintf(details, sizeof(details), "\"%s\" (top %d)",
+                            query_str, top_k->valueint);
+                }
+            } else {
+                if (query_len > 50) {
+                    snprintf(details, sizeof(details), "\"%.47s...\"", query_str);
+                } else {
+                    snprintf(details, sizeof(details), "\"%s\"", query_str);
+                }
             }
         }
     } else if (strncmp(tool_name, "mcp_", 4) == 0) {

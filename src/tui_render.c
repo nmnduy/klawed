@@ -181,7 +181,7 @@ void render_status_window(TUIState *tui) {
     // Prepare token usage (show when non-zero, regardless of mode)
     char token_str[128] = {0};
     int token_str_len = 0;
-    
+
     // Query total prompt/completion tokens and cached tokens for this session
     int prompt_tokens = 0;
     int completion_tokens = 0;

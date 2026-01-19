@@ -39,7 +39,7 @@ static const LLMProviderConfig* get_provider_config_to_use(const KlawedConfig *c
     if (!config) {
         return NULL;
     }
-    
+
     // Check if a specific provider is requested via environment variable
     const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
     if (env_provider && env_provider[0] != '\0') {
@@ -51,14 +51,14 @@ static const LLMProviderConfig* get_provider_config_to_use(const KlawedConfig *c
             LOG_WARN("[Provider] Provider '%s' not found in configuration, falling back to default", env_provider);
         }
     }
-    
+
     // Check for active provider in config
     const NamedProviderConfig *active_provider = config_get_active_provider(config);
     if (active_provider) {
         LOG_DEBUG("[Provider] Using active provider '%s'", config->active_provider);
         return &active_provider->config;
     }
-    
+
     // Fall back to legacy llm_provider configuration
     LOG_DEBUG("[Provider] Using legacy llm_provider configuration");
     return NULL;
@@ -67,7 +67,7 @@ static const LLMProviderConfig* get_provider_config_to_use(const KlawedConfig *c
 /**
  * Get provider configuration from config file or environment variables
  * Priority: Environment variables override config file
- * 
+ *
  * @param arena Arena allocator for all allocations
  * @param config Pointer to config struct to populate
  * @param model_out Pointer to store model name (arena-allocated, don't free)
@@ -86,24 +86,24 @@ static void get_provider_config(Arena *arena,
     *api_key_out = NULL;
     *api_base_out = NULL;
     *use_bedrock_out = 0;
-    
+
     // Load configuration from file
     KlawedConfig file_config;
     config_init_defaults(&file_config);
     int config_loaded = (config_load(&file_config) == 0);
-    
+
     // Get the provider configuration to use
     const LLMProviderConfig *provider_config = NULL;
     if (config_loaded) {
         provider_config = get_provider_config_to_use(&file_config);
     }
-    
+
     // Check environment variables first (they override config file)
     const char *env_model = getenv("OPENAI_MODEL");
     const char *env_api_key = getenv("OPENAI_API_KEY");
     const char *env_api_base = getenv("OPENAI_API_BASE");
     const char *env_use_bedrock = getenv("KLAWED_USE_BEDROCK");
-    
+
     // Get model (priority: env var > provider config > legacy config)
     if (env_model && env_model[0] != '\0') {
         *model_out = arena_strdup(arena, env_model);
@@ -112,7 +112,7 @@ static void get_provider_config(Arena *arena,
     } else if (config_loaded && file_config.llm_provider.model[0] != '\0') {
         *model_out = arena_strdup(arena, file_config.llm_provider.model);
     }
-    
+
     // Get API key (prefer environment variable for security)
     if (env_api_key && env_api_key[0] != '\0') {
         *api_key_out = arena_strdup(arena, env_api_key);
@@ -123,7 +123,7 @@ static void get_provider_config(Arena *arena,
         *api_key_out = arena_strdup(arena, file_config.llm_provider.api_key);
         LOG_WARN("[Provider] Using API key from config file - consider using OPENAI_API_KEY environment variable for better security");
     }
-    
+
     // Get API base
     if (env_api_base && env_api_base[0] != '\0') {
         *api_base_out = arena_strdup(arena, env_api_base);
@@ -132,7 +132,7 @@ static void get_provider_config(Arena *arena,
     } else if (config_loaded && file_config.llm_provider.api_base[0] != '\0') {
         *api_base_out = arena_strdup(arena, file_config.llm_provider.api_base);
     }
-    
+
     // Get use_bedrock flag
     if (env_use_bedrock && (strcmp(env_use_bedrock, "1") == 0 ||
                            strcmp(env_use_bedrock, "true") == 0 ||
@@ -143,7 +143,7 @@ static void get_provider_config(Arena *arena,
     } else if (config_loaded) {
         *use_bedrock_out = file_config.llm_provider.use_bedrock;
     }
-    
+
     // If config was loaded, copy it to output
     if (config_loaded) {
         *config = file_config;
@@ -206,13 +206,13 @@ void provider_init(const char *model,
     char *config_api_key = NULL;
     char *config_api_base = NULL;
     int config_use_bedrock = 0;
-    
+
     get_provider_config(arena, &effective_config, &config_model, &config_api_key, &config_api_base, &config_use_bedrock);
-    
+
     // Get the provider configuration to use for provider type
     const LLMProviderConfig *provider_config = get_provider_config_to_use(&effective_config);
     LLMProviderType provider_type = provider_config ? provider_config->provider_type : effective_config.llm_provider.provider_type;
-    
+
     // Determine which model to use (priority: passed parameter > config file > env var)
     char *model_to_use = NULL;
     if (model && model[0] != '\0') {
@@ -226,15 +226,15 @@ void provider_init(const char *model,
             model_to_use = arena_strdup(arena, env_model);
         }
     }
-    
+
     if (!model_to_use || model_to_use[0] == '\0') {
         result->error_message = strdup("Model name is required. Set OPENAI_MODEL environment variable or configure in .klawed/config.json");
         LOG_ERROR("Provider init failed: %s", result->error_message);
         arena_destroy(arena);
         return;
     }
-    
-    LOG_DEBUG("Initializing provider (model: %s, provider_type: %s)...", 
+
+    LOG_DEBUG("Initializing provider (model: %s, provider_type: %s)...",
               model_to_use, config_provider_type_to_string(provider_type));
 
     // Bedrock provider selection
@@ -309,7 +309,7 @@ void provider_init(const char *model,
             api_key_to_use = arena_strdup(arena, env_api_key);
         }
     }
-    
+
     if (!api_key_to_use || api_key_to_use[0] == '\0') {
         result->error_message = strdup("API key is required for API provider. Set OPENAI_API_KEY environment variable or configure in .klawed/config.json");
         LOG_ERROR("Provider init failed: %s", result->error_message);
@@ -330,7 +330,7 @@ void provider_init(const char *model,
             base_url = arena_base_url;
         }
     }
-    
+
     if (!base_url) {
         result->error_message = strdup("Failed to allocate memory for API URL");
         LOG_ERROR("Provider init failed: %s", result->error_message);
@@ -341,7 +341,7 @@ void provider_init(const char *model,
     // Determine provider based on configuration, environment variables, and URL
     // Priority: 1. Explicit provider_type in config, 2. Environment indicators, 3. URL patterns
     int use_anthropic = 0;
-    
+
     // Check explicit provider type from configuration
     if (provider_type != PROVIDER_AUTO) {
         if (provider_type == PROVIDER_ANTHROPIC) {
