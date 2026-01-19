@@ -10,6 +10,8 @@
 #include "../tool_utils.h"
 #include "../logger.h"
 #include "../tools/tool_definitions.h"
+#include "../ui/print_helpers.h"
+#include "../tui.h"
 
 #ifndef TEST_BUILD
 #include "../mcp.h"
@@ -257,6 +259,21 @@ char* build_request_json_from_state(ConversationState *state) {
     // Add tools with cache_control support (including MCP tools if available)
     // In plan mode, exclude Bash, Subagent, Write, and Edit tools
     cJSON *tool_defs = get_tool_definitions(state, enable_caching);
+
+    // Check for duplicate tool names before adding to request
+    const char *duplicate_name = detect_duplicate_tool_names(tool_defs);
+    if (duplicate_name) {
+        LOG_ERROR("Duplicate tool name detected: '%s'", duplicate_name);
+        if (state && state->tui) {
+            char error_msg[512];
+            snprintf(error_msg, sizeof(error_msg),
+                     "ERROR: Duplicate tool definition detected: '%s'. "
+                     "This will cause API errors. Please check your tool configuration.",
+                     duplicate_name);
+            tui_add_conversation_line(state->tui, "[Error]", error_msg, COLOR_PAIR_ERROR);
+        }
+    }
+
     cJSON_AddItemToObject(request, "tools", tool_defs);
 
     conversation_state_unlock(state);

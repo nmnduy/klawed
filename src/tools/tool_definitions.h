@@ -29,4 +29,16 @@ typedef enum {
 void add_memory_tools(cJSON *tool_array, ToolSchemaFormat format);
 cJSON* get_tool_definitions(struct ConversationState *state, int enable_caching);
 
+/**
+ * detect_duplicate_tool_names - Check for duplicate tool names in the tool array
+ * @tool_array: cJSON array of tool definitions
+ *
+ * Returns a pointer to the duplicate tool name if found, NULL otherwise.
+ * The returned pointer references the name field in the JSON and must NOT be freed by caller.
+ *
+ * This function detects when the same tool name appears multiple times in the tool array,
+ * which would cause API errors like "tool is already defined at toolConfig.tools.N".
+ */
+const char* detect_duplicate_tool_names(cJSON *tool_array);
+
 #endif // TOOL_DEFINITIONS_H

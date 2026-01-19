@@ -209,6 +209,7 @@ TEST_JSON_PARSING_TARGET = $(BUILD_DIR)/test_json_parsing
 TEST_MCP_TARGET = $(BUILD_DIR)/test_mcp
 TEST_WM_TARGET = $(BUILD_DIR)/test_window_manager
 TEST_TOOL_RESULTS_REGRESSION_TARGET = $(BUILD_DIR)/test_tool_results_regression
+TEST_DUPLICATE_TOOL_DETECTION_TARGET = $(BUILD_DIR)/test_duplicate_tool_detection
 TEST_ARRAY_RESIZE_TARGET = $(BUILD_DIR)/test_array_resize
 TEST_ARENA_TARGET = $(BUILD_DIR)/test_arena
 TEST_CONFIG_TARGET = $(BUILD_DIR)/test_config
@@ -443,6 +444,7 @@ TEST_MESSAGE_QUEUE_SRC = tests/test_message_queue.c
 TEST_EVENT_LOOP_SRC = tests/test_event_loop.c
 TEST_JSON_PARSING_SRC = tests/test_json_parsing.c
 TEST_STUBS_SRC = tests/test_stubs.c
+TEST_STUBS_OBJ = $(BUILD_DIR)/test_stubs.o
 TEST_MCP_SRC = tests/test_mcp.c
 TEST_MCP_IMAGE_SRC = tests/test_mcp_image.c
 TEST_MCP_IMAGE_TARGET = $(BUILD_DIR)/test_mcp_image
@@ -467,6 +469,7 @@ TEST_HISTORY_FILE_SRC = tests/test_history_file.c
 TEST_TUI_INPUT_BUFFER_SRC = tests/test_tui_input_buffer.c
 TEST_TUI_AUTO_SCROLL_SRC = tests/test_tui_auto_scroll.c
 TEST_TOOL_DETAILS_SRC = tests/test_tool_details_simple.c
+TEST_DUPLICATE_TOOL_DETECTION_SRC = tests/test_duplicate_tool_detection.c
 TEST_ARRAY_RESIZE_SRC = tests/test_array_resize.c
 TEST_ARENA_SRC = tests/test_arena.c
 TEST_MEMVID_SRC = tests/test_memvid.c
@@ -479,7 +482,7 @@ TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search query-tool memvid-repl debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search query-tool memvid-repl debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -712,6 +715,12 @@ test-tool-details: check-deps $(TEST_TOOL_DETAILS_TARGET)
 	@echo "Running Tool Details Display tests..."
 	@echo ""
 	@./$(TEST_TOOL_DETAILS_TARGET)
+
+test-duplicate-tool-detection: check-deps $(TEST_DUPLICATE_TOOL_DETECTION_TARGET)
+	@echo ""
+	@echo "Running Duplicate Tool Detection tests..."
+	@echo ""
+	@./$(TEST_DUPLICATE_TOOL_DETECTION_TARGET)
 
 test-array-resize: check-deps $(TEST_ARRAY_RESIZE_TARGET)
 	@echo ""
@@ -1839,6 +1848,15 @@ $(TEST_TOOL_DETAILS_TARGET): $(TEST_TOOL_DETAILS_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_TOOL_DETAILS_TARGET) $(TEST_TOOL_DETAILS_SRC) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Tool Details test build successful!"
+	@echo ""
+
+# Test target for Duplicate Tool Detection - tests detect_duplicate_tool_names()
+$(TEST_DUPLICATE_TOOL_DETECTION_TARGET): $(TEST_DUPLICATE_TOOL_DETECTION_SRC) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_STUBS_OBJ) $(LOGGER_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Duplicate Tool Detection test suite..."
+	@$(CC) $(CFLAGS) -o $(TEST_DUPLICATE_TOOL_DETECTION_TARGET) $(TEST_DUPLICATE_TOOL_DETECTION_SRC) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_STUBS_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Duplicate Tool Detection test build successful!"
 	@echo ""
 
 # Test target for Array Resize - tests array/buffer resize utilities

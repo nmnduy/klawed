@@ -26,6 +26,70 @@
 #include <stdlib.h>
 
 // ---------------------------------------------------------------------------
+// Tool Duplicate Detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Check for duplicate tool names in the tool array
+ * Returns: Pointer to duplicate tool name if found, NULL otherwise
+ * Note: Returned pointer is to the name field in the JSON, caller must NOT free
+ */
+const char* detect_duplicate_tool_names(cJSON *tool_array) {
+    if (!tool_array || !cJSON_IsArray(tool_array)) {
+        return NULL;
+    }
+
+    cJSON *tool = NULL;
+    // First pass: collect all tool names
+    const char **names = NULL;
+    int count = 0;
+    int capacity = 0;
+
+    cJSON_ArrayForEach(tool, tool_array) {
+        // Get tool name - format is { type: "function", function: { name: "...", ... } }
+        cJSON *func = cJSON_GetObjectItem(tool, "function");
+        cJSON *name_obj = func ? cJSON_GetObjectItem(func, "name") : NULL;
+        
+        // Alternative format (simplified): { type: "function", name: "..." }
+        if (!name_obj) {
+            name_obj = cJSON_GetObjectItem(tool, "name");
+        }
+
+        if (!name_obj || !cJSON_IsString(name_obj)) {
+            continue;
+        }
+
+        const char *tool_name = name_obj->valuestring;
+        
+        // Check against previously seen names
+        for (int i = 0; i < count; i++) {
+            if (strcmp(names[i], tool_name) == 0) {
+                // Found duplicate - clean up and return
+                free(names);
+                return tool_name;
+            }
+        }
+
+        // Add to tracking array
+        if (count >= capacity) {
+            capacity = capacity == 0 ? 16 : capacity * 2;
+            const char **new_names = realloc(names, (size_t)capacity * sizeof(const char*));
+            if (!new_names) {
+                free(names);
+                return NULL;
+            }
+            names = new_names;
+        }
+        
+        // Store pointer to the name string in JSON (we don't own this)
+        names[count++] = tool_name;
+    }
+
+    free(names);
+    return NULL;
+}
+
+// ---------------------------------------------------------------------------
 // Shared memory tool helpers
 // ---------------------------------------------------------------------------
 
@@ -785,15 +849,6 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
 #else
     (void)state;  // Suppress unused parameter warning in test builds
 #endif
-
-    // Add standalone web_browse_agent tool (available whenever binary path is set)
-    if (is_web_agent_available() || getenv("KLAWED_WEB_BROWSE_AGENT_PATH")) {
-        cJSON *web_agent_json = cJSON_Parse(explore_tool_web_browse_agent_schema());
-        if (web_agent_json) {
-            cJSON_AddItemToArray(tool_array, web_agent_json);
-            LOG_INFO("Added web_browse_agent direct tool");
-        }
-    }
 
     // Add standalone web_browse_agent tool (available whenever binary path is set)
     if (is_web_agent_available() || getenv("KLAWED_WEB_BROWSE_AGENT_PATH")) {
