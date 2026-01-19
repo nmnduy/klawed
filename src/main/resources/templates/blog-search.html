@@ -5,19 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{pageTitle}</title>
     <link rel="stylesheet" href="{cssPath}">
+    <!-- Blog-specific styles -->
+    <style>
+        .blog-card { @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-primary/30; }
+        .blog-card:hover { transform: translateY(-2px); }
+        .blog-excerpt { @apply text-muted-foreground line-clamp-3; }
+        .blog-meta { @apply text-caption-s text-muted-foreground flex items-center gap-4; }
+        .blog-tag { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-caption-s font-medium bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary; }
+        .blog-category { @apply inline-flex items-center text-caption-s font-medium text-primary hover:underline; }
+    </style>
 </head>
 <body class="bg-background min-h-screen">
     <header class="border-b border-border/60 bg-card/80 backdrop-blur sticky top-0 z-50">
         <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <a href="/" class="flex items-center gap-2 text-h4-headline-s font-bold text-foreground">
-                <svg class="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
                 </svg>
                 <span>FileSurf Blog</span>
             </a>
             <nav class="flex items-center gap-6">
-                <a href="/blog" class="text-body-m font-medium text-foreground hover:text-orange-500 transition-colors">Home</a>
-                <a href="/blog/search" class="text-body-m font-medium text-muted-foreground hover:text-orange-500 transition-colors">Search</a>
+                <a href="/blog" class="text-body-m font-medium text-foreground hover:text-semantic-link-hover transition-colors">Home</a>
+                <a href="/blog/search" class="text-body-m font-medium text-muted-foreground hover:text-semantic-link-hover transition-colors">Search</a>
             </nav>
         </div>
     </header>
@@ -33,8 +42,8 @@
         <!-- Search Form -->
         <div class="mb-8">
             <form action="/blog/search" method="GET" class="flex gap-2">
-                <input type="text" name="q" value="{query}" placeholder="Search posts..." class="flex-1 px-4 py-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:border-orange-500" />
-                <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium transition-colors">
+                <input type="text" name="q" value="{query}" placeholder="Search posts..." class="flex-1 px-4 py-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:border-primary" />
+                <button type="submit" class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium transition-colors">
                     Search
                 </button>
             </form>
@@ -43,7 +52,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <div class="lg:col-span-3 space-y-8">
                 {#if error}
-                <div class="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-600">
+                <div class="p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive">
                     {error}
                 </div>
                 {:else if posts.isEmpty() && query}
@@ -72,7 +81,7 @@
                                 <span class="blog-meta">{post.readingTimeText}</span>
                             </div>
                             <h2 class="text-h3-headline-m font-bold text-foreground mb-2">
-                                <a href="/blog/{post.slug}" class="hover:text-orange-500 transition-colors">{post.title}</a>
+                                <a href="/blog/{post.slug}" class="hover:text-semantic-link-hover transition-colors">{post.title}</a>
                             </h2>
                             {#if post.excerpt}
                             <p class="blog-excerpt mb-4">{post.excerpt}</p>
@@ -84,7 +93,7 @@
                                     {/if}
                                     <span class="text-caption-m text-muted-foreground">{post.author.name}</span>
                                 </div>
-                                <a href="/blog/{post.slug}" class="text-orange-500 hover:text-orange-600 font-medium text-body-s">Read more →</a>
+                                <a href="/blog/{post.slug}" class="text-semantic-link-unvisited hover:text-semantic-link-hover font-medium text-body-s">Read more →</a>
                             </div>
                         </div>
                     </article>
@@ -100,7 +109,7 @@
                     <ul class="space-y-2">
                         {#for cat in categories}
                         <li>
-                            <a href="/blog/category/{cat.slug}" class="py-1.5 text-body-s text-muted-foreground hover:text-orange-500 transition-colors">{cat.name}</a>
+                            <a href="/blog/category/{cat.slug}" class="py-1.5 text-body-s text-muted-foreground hover:text-semantic-link-hover transition-colors">{cat.name}</a>
                         </li>
                         {/for}
                     </ul>
