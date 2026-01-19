@@ -4,9 +4,13 @@
 
 ## Bugs
 
-- sqlite viewer. no row seen
+- [ ] sqlite viewer. no row seen
 
 ## Distribution
+
+### Sales
+
+- [ ] sales materials
 
 ### SEO
 
