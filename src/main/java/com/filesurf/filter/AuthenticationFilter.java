@@ -86,6 +86,11 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             return true;
         }
 
+        // Skip blog (public SEO content)
+        if (normalizedPath.equals("blog") || normalizedPath.startsWith("blog/")) {
+            return true;
+        }
+
         // Skip landing page
         if (normalizedPath.isEmpty() || normalizedPath.equals("index.html")) {
             return true;

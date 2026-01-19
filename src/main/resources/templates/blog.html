@@ -41,12 +41,6 @@
     </header>
 
     <main class="max-w-6xl mx-auto px-4 py-8">
-        {#if error}
-        <div class="text-center py-12">
-            <h1 class="text-h2-headline-l text-foreground mb-4">Error</h1>
-            <p class="text-body-m text-muted-foreground">{error}</p>
-        </div>
-        {:else}
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <!-- Main Content -->
             <div class="lg:col-span-3 space-y-8">
@@ -135,7 +129,7 @@
                 </div>
 
                 <!-- Categories -->
-                {#if categories.isNotEmpty()}
+                {#if categories.isEmpty()}{:else}
                 <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
                     <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Categories</h3>
                     <ul class="space-y-2">
@@ -151,7 +145,7 @@
                 {/if}
 
                 <!-- Popular Posts -->
-                {#if popularPosts.isNotEmpty()}
+                {#if popularPosts.isEmpty()}{:else}
                 <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
                     <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Popular Posts</h3>
                     <ul class="space-y-3">
@@ -168,7 +162,7 @@
                 {/if}
 
                 <!-- Tags -->
-                {#if tags.isNotEmpty()}
+                {#if tags.isEmpty()}{:else}
                 <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
                     <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Tags</h3>
                     <div class="flex flex-wrap gap-2">
@@ -180,7 +174,6 @@
                 {/if}
             </aside>
         </div>
-        {/if}
     </main>
 
     <!-- Footer -->
