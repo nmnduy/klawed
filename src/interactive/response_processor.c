@@ -516,10 +516,28 @@ void process_response(ConversationState *state,
                 ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
                 : cJSON_CreateObject();
 
-            char *tool_details = get_tool_details(tool->name, input);
-            char prefix_with_tool[128];
-            snprintf(prefix_with_tool, sizeof(prefix_with_tool), "[%s]", tool->name);
-            ui_append_line(tui, queue, prefix_with_tool, tool_details, COLOR_PAIR_TOOL);
+            // Special handling for Subagent tool to show full prompt
+            if (strcmp(tool->name, "Subagent") == 0) {
+                cJSON *prompt = cJSON_GetObjectItem(input, "prompt");
+                if (prompt && cJSON_IsString(prompt)) {
+                    // Show the entire prompt for Subagent tool
+                    char prefix_with_tool[128];
+                    snprintf(prefix_with_tool, sizeof(prefix_with_tool), "[%s]", tool->name);
+                    ui_append_line(tui, queue, prefix_with_tool, prompt->valuestring, COLOR_PAIR_TOOL);
+                } else {
+                    // Fall back to normal handling if no prompt
+                    char *tool_details = get_tool_details(tool->name, input);
+                    char prefix_with_tool[128];
+                    snprintf(prefix_with_tool, sizeof(prefix_with_tool), "[%s]", tool->name);
+                    ui_append_line(tui, queue, prefix_with_tool, tool_details, COLOR_PAIR_TOOL);
+                }
+            } else {
+                // Normal handling for other tools
+                char *tool_details = get_tool_details(tool->name, input);
+                char prefix_with_tool[128];
+                snprintf(prefix_with_tool, sizeof(prefix_with_tool), "[%s]", tool->name);
+                ui_append_line(tui, queue, prefix_with_tool, tool_details, COLOR_PAIR_TOOL);
+            }
 
             if (!tracker_initialized) {
                 cJSON *error = cJSON_CreateObject();

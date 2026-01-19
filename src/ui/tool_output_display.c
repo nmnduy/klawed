@@ -229,7 +229,7 @@ char* get_tool_details(const char *tool_name, cJSON *arguments) {
         return NULL;
     }
 
-    static char details[256] = {0}; // static buffer for thread safety
+    static char details[8192] = {0}; // static buffer for thread safety (increased for subagent prompts)
     details[0] = '\0';
 
     if (strcmp(tool_name, "Bash") == 0) {
@@ -240,13 +240,25 @@ char* get_tool_details(const char *tool_name, cJSON *arguments) {
     } else if (strcmp(tool_name, "Subagent") == 0) {
         cJSON *prompt = cJSON_GetObjectItem(arguments, "prompt");
         if (cJSON_IsString(prompt)) {
-            // Show first 50 chars of the prompt
+            // Show entire prompt without truncation (up to buffer size)
             const char *prompt_str = prompt->valuestring;
-            size_t len = strlen(prompt_str);
-            if (len > 50) {
-                snprintf(details, sizeof(details), "%.47s...", prompt_str);
-            } else {
+            size_t src_len = strlen(prompt_str);
+            if (src_len < sizeof(details)) {
+                // Prompt fits in buffer
                 strlcpy(details, prompt_str, sizeof(details));
+            } else {
+                // Prompt is too long for even 8KB buffer, truncate with "..."
+                if (sizeof(details) > 4) {
+                    size_t copy_len = sizeof(details) - 4; // Leave room for "..." and null terminator
+                    memcpy(details, prompt_str, copy_len);
+                    details[copy_len] = '.';
+                    details[copy_len + 1] = '.';
+                    details[copy_len + 2] = '.';
+                    details[copy_len + 3] = '\0';
+                } else {
+                    // Buffer is too small even for "...", just truncate
+                    strlcpy(details, prompt_str, sizeof(details));
+                }
             }
         }
     } else if (strcmp(tool_name, "Read") == 0) {
