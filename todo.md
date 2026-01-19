@@ -13,3 +13,4 @@
 - [x] search results are not highlihted when using '/' and '?' in normal mode
 - [x] cant clear search?
 - [x] can open vim and when exits go back to the bot
+
