@@ -20,7 +20,7 @@
 
 /**
  * Switch provider for the current session
- * 
+ *
  * @param state Conversation state
  * @param provider_key Provider key to switch to
  * @return 0 on success, -1 on error
@@ -30,37 +30,37 @@ static int switch_provider_for_session(ConversationState *state, const char *pro
         LOG_ERROR("[Provider] Invalid arguments for switch_provider_for_session");
         return -1;
     }
-    
+
     LOG_INFO("[Provider] Switching to provider '%s' for current session", provider_key);
-    
+
     // Load configuration
     KlawedConfig config;
     if (config_load(&config) != 0) {
         config_init_defaults(&config);
     }
-    
+
     // Find the provider configuration
     const NamedProviderConfig *named_provider = config_find_provider(&config, provider_key);
     if (!named_provider) {
         LOG_ERROR("[Provider] Provider '%s' not found in configuration", provider_key);
         return -1;
     }
-    
+
     const LLMProviderConfig *provider_config = &named_provider->config;
-    
+
     // Clean up old provider if it exists
     if (state->provider) {
         state->provider->cleanup(state->provider);
         state->provider = NULL;
         LOG_DEBUG("[Provider] Old provider cleaned up");
     }
-    
+
     // Free old API URL if it exists
     if (state->api_url) {
         free(state->api_url);
         state->api_url = NULL;
     }
-    
+
     // Update model
     if (state->model) {
         free(state->model);
@@ -70,15 +70,15 @@ static int switch_provider_for_session(ConversationState *state, const char *pro
         LOG_ERROR("[Provider] Failed to allocate memory for model");
         return -1;
     }
-    
+
     // Update API key (use from config or keep existing)
     // Note: We don't update state->api_key here as it might be from environment variable
     // The provider_init function will handle getting the right API key
-    
+
     // Initialize new provider
     ProviderInitResult provider_result;
     provider_init(state->model, state->api_key, &provider_result);
-    
+
     if (!provider_result.provider) {
         const char *error_msg = provider_result.error_message ? provider_result.error_message : "unknown error";
         LOG_ERROR("[Provider] Failed to initialize provider '%s': %s", provider_key, error_msg);
@@ -86,15 +86,15 @@ static int switch_provider_for_session(ConversationState *state, const char *pro
         free(provider_result.api_url);
         return -1;
     }
-    
+
     // Update state with new provider and API URL
     state->provider = provider_result.provider;
     state->api_url = provider_result.api_url;
     free(provider_result.error_message);
-    
+
     LOG_INFO("[Provider] Successfully switched to provider '%s' (model: %s, API URL: %s)",
              provider_key, state->model, state->api_url ? state->api_url : "(null)");
-    
+
     return 0;
 }
 
@@ -122,7 +122,7 @@ int cmd_provider(ConversationState *state, const char *args) {
         // Show current provider
         const char *current_provider_name = "default (from environment variables)";
         const LLMProviderConfig *current_provider_config = NULL;
-        
+
         // Check if we have an active provider from config
         if (config.active_provider[0] != '\0') {
             const NamedProviderConfig *named_provider = config_find_provider(&config, config.active_provider);
@@ -153,7 +153,7 @@ int cmd_provider(ConversationState *state, const char *args) {
             snprintf(status_msg, sizeof(status_msg), "Current provider: %s", current_provider_name);
             tui_update_status(state->tui, status_msg);
         }
-        
+
         // Always print to stdout (in TUI mode, this goes to log)
         printf("Current LLM Provider: %s\n", current_provider_name);
         if (current_provider_config) {
@@ -165,12 +165,12 @@ int cmd_provider(ConversationState *state, const char *args) {
                 printf("  API Base: %s\n", current_provider_config->api_base);
             }
         }
-        
+
         printf("\nAvailable providers:\n");
         if (config.provider_count > 0) {
             for (int i = 0; i < config.provider_count; i++) {
                 const NamedProviderConfig *provider = &config.providers[i];
-                printf("  %s - %s (%s)\n", 
+                printf("  %s - %s (%s)\n",
                        provider->key,
                        provider->config.provider_name[0] != '\0' ? provider->config.provider_name : "unnamed",
                        provider->config.model[0] != '\0' ? provider->config.model : "no model");
@@ -180,24 +180,24 @@ int cmd_provider(ConversationState *state, const char *args) {
         } else {
             printf("  No provider configurations found\n");
         }
-        
+
         printf("\nUsage: /provider <name> to switch provider\n");
         printf("       /provider list to show available providers\n");
-        
+
         return 0;
     }
-    
+
     // Handle "list" argument
     if (strcmp(args, "list") == 0) {
         if (state->tui) {
             tui_update_status(state->tui, "Provider list shown");
         }
-        
+
         printf("Available LLM Providers:\n");
         if (config.provider_count > 0) {
             for (int i = 0; i < config.provider_count; i++) {
                 const NamedProviderConfig *provider = &config.providers[i];
-                printf("  %s - %s (%s)\n", 
+                printf("  %s - %s (%s)\n",
                        provider->key,
                        provider->config.provider_name[0] != '\0' ? provider->config.provider_name : "unnamed",
                        provider->config.model[0] != '\0' ? provider->config.model : "no model");
@@ -208,7 +208,7 @@ int cmd_provider(ConversationState *state, const char *args) {
         }
         return 0;
     }
-    
+
     // Handle provider switching
     // Check if the provider exists
     const NamedProviderConfig *provider = config_find_provider(&config, args);
@@ -225,10 +225,10 @@ int cmd_provider(ConversationState *state, const char *args) {
         printf("Use /provider list to see available providers\n");
         return -1;
     }
-    
+
     // Update active provider in config
     strlcpy(config.active_provider, args, sizeof(config.active_provider));
-    
+
     // Save the configuration
     if (config_save(&config) != 0) {
         if (state->tui) {
@@ -237,10 +237,10 @@ int cmd_provider(ConversationState *state, const char *args) {
         fprintf(stderr, "Error: Failed to save provider configuration\n");
         return -1;
     }
-    
+
     // Also switch provider for the current session
     int session_switch_result = switch_provider_for_session(state, args);
-    
+
     // Show success message
     if (state->tui) {
         char success_msg[256];
@@ -254,7 +254,7 @@ int cmd_provider(ConversationState *state, const char *args) {
         }
         tui_update_status(state->tui, success_msg);
     }
-    
+
     printf("Switched to provider '%s'\n", args);
     printf("  Type: %s\n", config_provider_type_to_string(provider->config.provider_type));
     if (provider->config.model[0] != '\0') {
@@ -267,6 +267,6 @@ int cmd_provider(ConversationState *state, const char *args) {
         printf("Note: Provider configuration saved but could not switch for current session\n");
     }
     printf("Note: Environment variable KLAWED_LLM_PROVIDER overrides this setting\n");
-    
+
     return 0;
 }

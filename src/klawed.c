@@ -196,6 +196,9 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 #include "memvid.h"
 #endif
 
+// Background initialization for async resource loading
+#include "background_init.h"
+
 // Utility modules
 #include "util/file_utils.h"
 
@@ -1565,13 +1568,15 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // DISABLED: Blocking initialization moved to background loading
     // Initialize persistence layer
-    PersistenceDB *persistence_db = persistence_init(NULL);  // NULL = use default path
-    if (persistence_db) {
-        LOG_INFO("Persistence layer initialized");
-    } else {
-        LOG_WARN("Failed to initialize persistence layer - API calls will not be logged");
-    }
+    // PersistenceDB *persistence_db = persistence_init(NULL);  // NULL = use default path
+    // if (persistence_db) {
+    //     LOG_INFO("Persistence layer initialized");
+    // } else {
+    //     LOG_WARN("Failed to initialize persistence layer - API calls will not be logged");
+    // }
+    // Note: Will be initialized by background loader and set in state.persistence_db
 
 #ifndef TEST_BUILD
     // Initialize MCP (Model Context Protocol) subsystem
@@ -1583,14 +1588,20 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef HAVE_MEMVID
+    // DISABLED: Blocking initialization moved to background loading
     // Initialize Memvid persistent memory subsystem
     // Memory file is stored in .klawed/memory.mv2 relative to working directory
-    if (memvid_init_global(NULL) == 0) {
-        LOG_INFO("Memvid memory subsystem initialized");
-    } else {
-        LOG_WARN("Failed to initialize Memvid memory subsystem - memory tools will not be available");
-    }
+    // if (memvid_init_global(NULL) == 0) {
+    //     LOG_INFO("Memvid memory subsystem initialized");
+    // } else {
+    //     LOG_WARN("Failed to initialize Memvid memory subsystem - memory tools will not be available");
+    // }
+    // Note: Will be initialized by background loader
 #endif
+
+    // Start background loading of expensive resources (persistence DB, memvid, system prompt)
+    // This allows the TUI to start immediately while these resources load asynchronously
+    LOG_DEBUG("Starting background resource loaders");
 
     // Generate unique session ID for this conversation
     char *session_id = generate_session_id();
@@ -1610,12 +1621,8 @@ int main(int argc, char *argv[]) {
         LOG_ERROR("Failed to initialize conversation state synchronization");
         fprintf(stderr, "Error: Unable to initialize conversation state\n");
         free(session_id);
-        if (persistence_db) {
-            persistence_close(persistence_db);
-        }
-#ifdef HAVE_MEMVID
-        memvid_cleanup_global();
-#endif
+        // Note: persistence_db and memvid are initialized by background loaders
+        // which haven't started yet at this point
         curl_global_cleanup();
         log_shutdown();
         return 1;
@@ -1633,8 +1640,9 @@ int main(int argc, char *argv[]) {
     state.working_dir = cwd ? strdup(cwd) : NULL;
 
     state.session_id = session_id;
-    state.persistence_db = persistence_db;
+    state.persistence_db = NULL;  // Will be set by background loader
     state.max_retry_duration_ms = get_env_int_retry("KLAWED_MAX_RETRY_DURATION_MS", MAX_RETRY_DURATION_MS);
+    state.bg_loaders = NULL;  // Will be set by start_background_loaders()
 
     // Initialize todo list
     state.todo_list = calloc(1, sizeof(TodoList));  // Use calloc to zero-initialize
@@ -1663,39 +1671,65 @@ int main(int argc, char *argv[]) {
         LOG_ERROR("Failed to allocate memory for todo list");
     }
 
+    // Start background loading of expensive resources (persistence DB, memvid, system prompt)
+    // This must happen after state initialization but before session resume or execution modes
+    if (start_background_loaders(&state) != 0) {
+        LOG_WARN("Failed to start background loaders, resources will be loaded synchronously");
+    }
+
 #ifndef TEST_BUILD
-    // Resume session if requested
-    if (resume_session && persistence_db) {
-        LOG_INFO("Attempting to resume session: %s", resume_session_id ? resume_session_id : "most recent");
+    // Resume session if requested - must await database first
+    if (resume_session) {
+        // Wait for database to be ready (required for session resume)
+        state.persistence_db = await_database_ready(&state);
 
-        // Load session from database
-        if (session_load_from_db(persistence_db, resume_session_id, &state) == 0) {
-            LOG_INFO("Successfully resumed session: %s", state.session_id);
+        if (state.persistence_db) {
+            LOG_INFO("Attempting to resume session: %s", resume_session_id ? resume_session_id : "most recent");
 
-            // Update session ID for logging
-            if (state.session_id) {
-                log_set_session_id(state.session_id);
-            }
+            // Load session from database
+            if (session_load_from_db(state.persistence_db, resume_session_id, &state) == 0) {
+                LOG_INFO("Successfully resumed session: %s", state.session_id);
 
-            // Update the local session_id variable to match the loaded session
-            if (session_id && state.session_id && strcmp(session_id, state.session_id) != 0) {
+                // Update session ID for logging
+                if (state.session_id) {
+                    log_set_session_id(state.session_id);
+                }
+
+                // Update the local session_id variable to match the loaded session
+                if (session_id && state.session_id && strcmp(session_id, state.session_id) != 0) {
+                    free(session_id);
+                    session_id = NULL;  // state.session_id is now the active session ID
+                }
+            } else {
+                LOG_ERROR("Failed to resume session");
+                if (resume_session_id) {
+                    fprintf(stderr, "Error: Failed to resume session '%s'. Session may not exist.\n", resume_session_id);
+                } else {
+                    fprintf(stderr, "Error: Failed to resume most recent session. No sessions found in database.\n");
+                }
+
+                // Clean up and exit
+                cleanup_background_loaders(&state);
+                conversation_free(&state);
                 free(session_id);
-                session_id = NULL;  // state.session_id is now the active session ID
+                if (state.persistence_db) {
+                    persistence_close(state.persistence_db);
+                }
+#ifdef HAVE_MEMVID
+                memvid_cleanup_global();
+#endif
+                curl_global_cleanup();
+                log_shutdown();
+                return 1;
             }
         } else {
-            LOG_ERROR("Failed to resume session");
-            if (resume_session_id) {
-                fprintf(stderr, "Error: Failed to resume session '%s'. Session may not exist.\n", resume_session_id);
-            } else {
-                fprintf(stderr, "Error: Failed to resume most recent session. No sessions found in database.\n");
-            }
+            LOG_ERROR("Database not available for session resume");
+            fprintf(stderr, "Error: Database not available. Cannot resume session.\n");
 
             // Clean up and exit
+            cleanup_background_loaders(&state);
             conversation_free(&state);
             free(session_id);
-            if (persistence_db) {
-                persistence_close(persistence_db);
-            }
 #ifdef HAVE_MEMVID
             memvid_cleanup_global();
 #endif
@@ -1799,28 +1833,31 @@ int main(int argc, char *argv[]) {
 
     LOG_INFO("API URL initialized: %s", state.api_url);
 
+    // DISABLED: System prompt building moved to background loading
+    // This expensive operation (scanning git, environment, directories) is now done asynchronously
     // Build and add system prompt with environment context
-    char *system_prompt = build_system_prompt(&state);
-    if (system_prompt) {
-        add_system_message(&state, system_prompt);
-        free(system_prompt);
-        LOG_DEBUG("System prompt added with environment context");
-
-        // Note: Memory context injection is now done before each API call in api_client.c
-        // This ensures the memory context is always fresh and up-to-date
-
-        // Debug: print system prompt if DEBUG_PROMPT environment variable is set
-        if (getenv("DEBUG_PROMPT")) {
-            // Print the final system prompt (may include injected memory context)
-            if (state.count > 0 && state.messages[0].role == MSG_SYSTEM &&
-                state.messages[0].content_count > 0 && state.messages[0].contents[0].text) {
-                printf("\n=== SYSTEM PROMPT (DEBUG) ===\n%s\n=== END SYSTEM PROMPT ===\n\n",
-                       state.messages[0].contents[0].text);
-            }
-        }
-    } else {
-        LOG_WARN("Failed to build system prompt");
-    }
+    // char *system_prompt = build_system_prompt(&state);
+    // if (system_prompt) {
+    //     add_system_message(&state, system_prompt);
+    //     free(system_prompt);
+    //     LOG_DEBUG("System prompt added with environment context");
+    //
+    //     // Note: Memory context injection is now done before each API call in api_client.c
+    //     // This ensures the memory context is always fresh and up-to-date
+    //
+    //     // Debug: print system prompt if DEBUG_PROMPT environment variable is set
+    //     if (getenv("DEBUG_PROMPT")) {
+    //         // Print the final system prompt (may include injected memory context)
+    //         if (state.count > 0 && state.messages[0].role == MSG_SYSTEM &&
+    //             state.messages[0].content_count > 0 && state.messages[0].contents[0].text) {
+    //             printf("\n=== SYSTEM PROMPT (DEBUG) ===\n%s\n=== END SYSTEM PROMPT ===\n\n",
+    //                    state.messages[0].contents[0].text);
+    //         }
+    //     }
+    // } else {
+    //     LOG_WARN("Failed to build system prompt");
+    // }
+    // Note: System prompt will be added by background loader when ready
 
     // Run in appropriate mode
     int exit_code = 0;
@@ -1842,6 +1879,9 @@ int main(int argc, char *argv[]) {
     } else {
         interactive_mode(&state);
     }
+
+    // Cleanup background loaders (wait for threads to complete)
+    cleanup_background_loaders(&state);
 
     // Cleanup conversation messages
     conversation_free(&state);

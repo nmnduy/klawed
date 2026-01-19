@@ -1,6 +1,7 @@
 #include "interactive_loop.h"
 #include "input_handler.h"
 #include "response_processor.h"
+#include "../background_init.h"
 #include "../logger.h"
 #include "../ui/ui_output.h"
 #include "../tui.h"
@@ -12,11 +13,17 @@
 void interactive_mode(ConversationState *state) {
     const char *prompt = ">>> ";
 
-    // Initialize TUI
+    // Initialize TUI first for responsive startup
     TUIState tui = {0};
     if (tui_init(&tui, state) != 0) {
         LOG_ERROR("Failed to initialize TUI");
         return;
+    }
+
+    // Await background-loaded resources
+    // Database is needed for token usage tracking and session persistence
+    if (!state->persistence_db) {
+        state->persistence_db = await_database_ready(state);
     }
 
     // Set up database connection for token usage queries

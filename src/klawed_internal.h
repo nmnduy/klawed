@@ -196,9 +196,34 @@ typedef struct {
 typedef struct SubagentProcess SubagentProcess;
 typedef struct SubagentManager SubagentManager;
 
+// Background loading state for async initialization
+typedef struct {
+    // System prompt loading
+    pthread_t system_prompt_thread;
+    int system_prompt_started;
+    int system_prompt_ready;
+    char *system_prompt_result;
+    pthread_mutex_t system_prompt_mutex;
+
+    // Database loading
+    pthread_t database_thread;
+    int database_started;
+    int database_ready;
+    struct PersistenceDB *database_result;
+    pthread_mutex_t database_mutex;
+
+    // Memvid loading
+    pthread_t memvid_thread;
+    int memvid_started;
+    int memvid_ready;
+    int memvid_result;
+    pthread_mutex_t memvid_mutex;
+} BackgroundLoaders;
+
 typedef struct ConversationState {
     InternalMessage messages[MAX_MESSAGES];  // Vendor-agnostic internal format
     int count;
+    BackgroundLoaders *bg_loaders;  // Background loading state (NULL if not enabled)
     char *api_key;
     char *api_url;
     char *model;

@@ -6,6 +6,7 @@
 
 #include "api_client.h"
 #include "api_response.h"
+#include "../background_init.h"
 #include "../logger.h"
 #include "../provider.h"
 #include "../retry_logic.h"
@@ -204,6 +205,9 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         LOG_ERROR("Invalid conversation state");
         return NULL;
     }
+
+    // Ensure system prompt is ready before API call
+    await_system_prompt_ready(state);
 
     // Log plan mode before API call
     LOG_DEBUG("[API] call_api_with_retries: plan_mode=%d", state->plan_mode);

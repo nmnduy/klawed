@@ -49,7 +49,7 @@ const char* detect_duplicate_tool_names(cJSON *tool_array) {
         // Get tool name - format is { type: "function", function: { name: "...", ... } }
         cJSON *func = cJSON_GetObjectItem(tool, "function");
         cJSON *name_obj = func ? cJSON_GetObjectItem(func, "name") : NULL;
-        
+
         // Alternative format (simplified): { type: "function", name: "..." }
         if (!name_obj) {
             name_obj = cJSON_GetObjectItem(tool, "name");
@@ -60,7 +60,7 @@ const char* detect_duplicate_tool_names(cJSON *tool_array) {
         }
 
         const char *tool_name = name_obj->valuestring;
-        
+
         // Check against previously seen names
         for (int i = 0; i < count; i++) {
             if (strcmp(names[i], tool_name) == 0) {
@@ -80,7 +80,7 @@ const char* detect_duplicate_tool_names(cJSON *tool_array) {
             }
             names = new_names;
         }
-        
+
         // Store pointer to the name string in JSON (we don't own this)
         names[count++] = tool_name;
     }

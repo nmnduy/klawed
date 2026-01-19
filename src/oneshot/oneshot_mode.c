@@ -8,6 +8,7 @@
 #include "oneshot_mode.h"
 #include "oneshot_output.h"
 #include "oneshot_processor.h"
+#include "../background_init.h"
 #include "../logger.h"
 #include "../util/output_utils.h"
 #include "../session/token_usage.h"
@@ -22,6 +23,14 @@ int oneshot_execute(ConversationState *state, const char *prompt) {
     if (!state || !prompt) {
         LOG_ERROR("oneshot_execute: NULL state or prompt");
         return 1;
+    }
+
+    // Wait for background-loaded resources to be ready
+    await_system_prompt_ready(state);
+
+    // Await database for API call logging and token tracking
+    if (!state->persistence_db) {
+        state->persistence_db = await_database_ready(state);
     }
 
     LOG_INFO("Executing single command: %s", prompt);
