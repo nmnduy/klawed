@@ -4,8 +4,10 @@
 
 ## Bugs
 
-- [ ] sqlite viewer. no row seen
+- [ ] no lucides icons
+- [ ] typing indicators shows but not at bottom
 - [ ] mount .klawed folder in /tmp/
+- [x] sqlite viewer. no row seen
 
 ## Distribution
 
@@ -29,6 +31,7 @@
 
 ### Features
 
+- [ ] show storage usage
 - [ ] context7: documentation search mcp
 - [ ] web browsing agent
 - [ ] secrets management
