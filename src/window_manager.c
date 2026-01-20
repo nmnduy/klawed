@@ -20,7 +20,7 @@ const WindowManagerConfig DEFAULT_WINDOW_CONFIG = {
     .status_height = 1,
     // No gap between status and input by default
     .padding = 0,
-    .conv_h_padding = 0,    // No horizontal padding for conversation
+    .conv_h_padding = 1,    // 1 column of horizontal padding for conversation (reserves space for scroll bar)
     .initial_pad_capacity = 1000
 };
 
@@ -537,7 +537,7 @@ void window_manager_refresh_conversation(WindowManager *wm) {
     // Only show when there's content below the visible area (scroll percentage < 95%)
     int total_lines = wm->conv_pad_content_lines;
     int visible_lines = wm->conv_viewport_height;
-    
+
     // Clear scroll bar area first (rightmost column of conversation viewport)
     int scroll_bar_col = wm->screen_width - 1;
     if (scroll_bar_col >= x2) {
@@ -545,6 +545,9 @@ void window_manager_refresh_conversation(WindowManager *wm) {
             mvaddch(row, scroll_bar_col, ' ');
         }
     }
+
+    // Track if we drew the scroll bar (need to refresh if we did)
+    int drew_scroll_bar = 0;
     
     // Show scroll bar when we're not at/near the bottom
     if (total_lines > visible_lines && visible_lines > 0) {
@@ -556,30 +559,30 @@ void window_manager_refresh_conversation(WindowManager *wm) {
             if (percentage < 0) percentage = 0;
             if (percentage > 100) percentage = 100;
         }
-        
-        // Show scroll bar when not near bottom (e.g., < 95%)
-        // This matches the requirement "when the scroll percentage is not near 100%"
-        if (percentage < 95) {
+
+        // Show scroll bar when not at the very bottom (e.g., < 100%)
+        // This gives users visual feedback that there's more content
+        if (percentage < 100) {
             int track_height = visible_lines;
             int thumb_height = (visible_lines * visible_lines) / total_lines;
             if (thumb_height < 1) {
                 thumb_height = 1;
             }
-            
+
             int max_thumb_top = track_height - thumb_height;
             int thumb_top = 0;
             if (scroll_range > 0 && max_thumb_top > 0) {
                 long long num = (long long)wm->conv_scroll_offset * (long long)max_thumb_top;
                 thumb_top = (int)(num / scroll_range);
             }
-            
+
             if (thumb_top < 0) {
                 thumb_top = 0;
             }
             if (thumb_top > max_thumb_top) {
                 thumb_top = max_thumb_top;
             }
-            
+
             // Draw scroll bar at the right edge of the conversation viewport
             // Use the rightmost column of the screen, but ensure it doesn't overlap with content
             int scroll_bar_draw_col = wm->screen_width - 1;  // Rightmost column
@@ -590,22 +593,30 @@ void window_manager_refresh_conversation(WindowManager *wm) {
                 if (has_colors()) {
                     attron(COLOR_PAIR(NCURSES_PAIR_PROMPT));
                 }
-                
+
                 // Draw track
                 for (int row = 0; row < track_height; row++) {
                     mvaddch(row, scroll_bar_draw_col, ACS_VLINE);
                 }
-                
+
                 // Draw thumb
                 for (int row = thumb_top; row < thumb_top + thumb_height; row++) {
                     mvaddch(row, scroll_bar_draw_col, ACS_CKBOARD);
                 }
-                
+
                 if (has_colors()) {
                     attroff(COLOR_PAIR(NCURSES_PAIR_PROMPT));
                 }
+                
+                drew_scroll_bar = 1;
             }
         }
+    }
+    
+    // If we drew the scroll bar, we need to refresh stdscr to make it visible
+    // (prefresh only updates the pad region, not stdscr changes made with mvaddch)
+    if (drew_scroll_bar) {
+        refresh();
     }
 }
 

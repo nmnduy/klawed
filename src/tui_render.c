@@ -45,16 +45,16 @@ static int utf8_display_width(const char *str) {
     if (!str || !*str) {
         return 0;
     }
-    
+
     // Save current locale
     char *old_locale = setlocale(LC_ALL, NULL);
     if (old_locale) {
         old_locale = strdup(old_locale);
     }
-    
+
     // Set to UTF-8 locale for mbstowcs
     setlocale(LC_ALL, "C.UTF-8");
-    
+
     // Convert to wide characters
     size_t len = mbstowcs(NULL, str, 0);
     if (len == (size_t)-1) {
@@ -65,7 +65,7 @@ static int utf8_display_width(const char *str) {
         }
         return (int)strlen(str);
     }
-    
+
     wchar_t *wstr = malloc((len + 1) * sizeof(wchar_t));
     if (!wstr) {
         if (old_locale) {
@@ -74,24 +74,24 @@ static int utf8_display_width(const char *str) {
         }
         return (int)strlen(str);  // Fall back
     }
-    
+
     mbstowcs(wstr, str, len + 1);
-    
+
     // Calculate display width using wcswidth
     int width = wcswidth(wstr, len);
     free(wstr);
-    
+
     // Restore locale
     if (old_locale) {
         setlocale(LC_ALL, old_locale);
         free(old_locale);
     }
-    
+
     // If wcswidth returns -1 (unknown characters), fall back to character count
     if (width < 0) {
         return (int)len;
     }
-    
+
     return width;
 }
 

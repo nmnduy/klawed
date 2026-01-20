@@ -206,7 +206,7 @@ void await_system_prompt_ready(ConversationState *state) {
         add_system_message(state, bg->system_prompt_result);
         free(bg->system_prompt_result);
         bg->system_prompt_result = NULL;
-        
+
         struct timespec end;
         clock_gettime(CLOCK_MONOTONIC, &end);
         long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
