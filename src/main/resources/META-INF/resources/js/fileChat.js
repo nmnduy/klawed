@@ -445,7 +445,7 @@ export function init(rootEl) {
             'MemorySearch': { icon: 'search', label: 'Searching memory', verb: 'Searched memory' },
             'UploadImage': { icon: 'image', label: 'Processing image', verb: 'Processed image' },
             'Sleep': { icon: 'clock', label: 'Waiting', verb: 'Waited' },
-            'CheckSubagentProgress': { icon: 'activity', label: 'Checking progress', verb: 'Checked progress' },
+            'CheckSubagentProgress': { icon: 'RefreshCw', label: 'Checking progress', verb: 'Checked progress' },
             'InterruptSubagent': { icon: 'slash', label: 'Stopping subagent', verb: 'Stopped subagent' }
         };
         return toolMap[toolName] || { icon: 'wrench', label: toolName, verb: toolName };
@@ -710,10 +710,10 @@ export function init(rootEl) {
             const resultEl = element.querySelector('[data-tool-result]');
 
             if (isError) {
-                statusEl.innerHTML = `<i data-lucide="xCircle" class="w-3.5 h-3.5 text-red-500"></i>`;
+                statusEl.innerHTML = `<i data-lucide="XCircle" class="w-3.5 h-3.5 text-red-500"></i>`;
                 element.classList.add('text-red-600', 'dark:text-red-400');
             } else {
-                statusEl.innerHTML = `<i data-lucide="checkCircle" class="w-3.5 h-3.5 text-emerald-500"></i>`;
+                statusEl.innerHTML = `<i data-lucide="CheckCircle" class="w-3.5 h-3.5 text-emerald-500"></i>`;
             }
 
             // Re-initialize Lucide icons for the updated status
