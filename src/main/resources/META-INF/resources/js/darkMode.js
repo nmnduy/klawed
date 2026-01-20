@@ -145,3 +145,56 @@ darkMode.init();
 
 // Export for global access if needed
 window.darkMode = darkMode;
+
+/**
+ * Initialize the theme toggle button
+ * Should be called after DOM is ready
+ */
+export function initThemeToggle() {
+    const toggleButton = document.querySelector('[data-theme-toggle]');
+    if (!toggleButton) {
+        console.warn('[dark-mode] Toggle button not found');
+        return;
+    }
+
+    // Update button state based on current theme
+    updateToggleButtonState(toggleButton, darkMode.getTheme());
+
+    // Listen for theme changes to update button state
+    darkMode.addListener((theme) => {
+        updateToggleButtonState(toggleButton, theme);
+    });
+
+    // Add click handler
+    toggleButton.addEventListener('click', () => {
+        toggleButton.setAttribute('data-transitioning', 'true');
+        darkMode.toggle();
+
+        // Remove transition state after animation
+        setTimeout(() => {
+            toggleButton.removeAttribute('data-transitioning');
+        }, 300);
+    });
+}
+
+/**
+ * Update the toggle button visual state based on current theme
+ * Shows/hides moon or sun icon appropriately
+ */
+function updateToggleButtonState(button, theme) {
+    if (!button) return;
+
+    if (theme === 'dark') {
+        button.classList.add('dark');
+    } else {
+        button.classList.remove('dark');
+    }
+}
+
+// Auto-initialize if DOM is already ready, otherwise wait for DOMContentLoaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initThemeToggle);
+} else {
+    // DOM is already ready, but we need to wait a tick for other scripts
+    setTimeout(initThemeToggle, 0);
+}

@@ -1,7 +1,6 @@
 // Invoice Chat module
 import { TabManager } from './tabManager.js';
 import { handleAuthError, isAuthRequired } from './authUtils.js';
-import { darkMode } from './darkMode.js';
 
 const DEBUG = false;
 const PLACEHOLDER_MESSAGES_ENABLED = false; // demo seed disabled
@@ -37,16 +36,8 @@ export function init(rootEl) {
         // Chat-specific upload components (scoped to avoid conflicts with file explorer)
         chatUploadButton: rootEl.querySelector('[data-chat-upload-button]'),
         chatFileInput: rootEl.querySelector('[data-chat-file-input]'),
-        voiceButton: rootEl.querySelector('[data-voice-button]'),
-        darkModeToggle: document.querySelector('[data-dark-mode-toggle]')
+        voiceButton: rootEl.querySelector('[data-voice-button]')
     };
-
-    // Initialize dark mode toggle
-    if (elements.darkModeToggle) {
-        elements.darkModeToggle.addEventListener('click', () => {
-            darkMode.toggle();
-        });
-    }
 
     const messageParent = elements.chatMessages || elements.chatContainer || rootEl;
     const scrollContainer = elements.chatContainer || elements.chatMessages || rootEl;
