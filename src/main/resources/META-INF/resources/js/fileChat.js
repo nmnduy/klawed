@@ -116,6 +116,7 @@ export function init(rootEl) {
     let fileExplorer = null;
     let currentStreamMessageId = null;
     let currentStreamContent = '';
+    let typingIndicatorEl = rootEl.querySelector('[data-typing-indicator]') || null;
     let hasSeededPlaceholders = false;
     let lastApiCallTime = null;
 
@@ -192,54 +193,10 @@ export function init(rootEl) {
     }
 
 
-    function showAiWorking(show) {
-        if (!aiWorkingIndicatorEl) {
-            aiWorkingIndicatorEl = rootEl.querySelector('[data-ai-working-indicator]');
-        }
-        if (!aiWorkingIndicatorEl) return;
-
-        if (show) {
-            aiWorkingIndicatorEl.style.opacity = '1';
-            aiWorkingIndicatorEl.style.pointerEvents = 'auto';
-            aiWorkingIndicatorEl.style.transform = 'translateY(0)';
-        } else {
-            aiWorkingIndicatorEl.style.opacity = '0';
-            aiWorkingIndicatorEl.style.pointerEvents = 'none';
-            aiWorkingIndicatorEl.style.transform = 'translateY(2px)';
-        }
-    }
-
-    function debouncedShowAiWorking() {
-        // Clear any existing timeout
-        if (aiWorkingTimeout) {
-            clearTimeout(aiWorkingTimeout);
-        }
-        // Show after a short delay to avoid flashing for quick operations
-        aiWorkingTimeout = setTimeout(() => {
-            showAiWorking(true);
-        }, 800);
-    }
-
-    function hideAiWorking() {
-        if (aiWorkingTimeout) {
-            clearTimeout(aiWorkingTimeout);
-            aiWorkingTimeout = null;
-        }
-        showAiWorking(false);
-    }
-
     function hideEmptyState() {
-        const emptyState = rootEl.querySelector('[data-chat-empty-state]');
-        const messagesContainer = rootEl.querySelector('[data-messages-container]');
-        
-        if (emptyState && emptyState.parentElement) {
-            emptyState.parentElement.remove();
+        if (elements.chatEmpty) {
+            elements.chatEmpty.remove();
         }
-        
-        if (messagesContainer) {
-            messagesContainer.classList.remove('hidden');
-        }
-        
         const demoSeed = rootEl.querySelector('[data-chat-demo-seed]');
         if (demoSeed) {
             demoSeed.remove();
@@ -332,12 +289,6 @@ export function init(rootEl) {
 
             hideEmptyState();
 
-            const messagesContainer = rootEl.querySelector('[data-messages-container]');
-            if (!messagesContainer) {
-                console.error('[file-chat] Messages container not found');
-                return null;
-            }
-
             const messageDiv = document.createElement('div');
             if (messageId) {
                 messageDiv.dataset.messageId = messageId;
@@ -382,7 +333,7 @@ export function init(rootEl) {
                 hideEmptyState();
             }
 
-            messagesContainer.appendChild(messageDiv);
+            messageParent.appendChild(messageDiv);
 
             // Handle auto-scroll for first AI response
             if (!isUser && !hasReceivedFirstAiResponse) {
@@ -401,11 +352,8 @@ export function init(rootEl) {
 
     function updateMessage(messageId, content) {
         if (!messageId) return;
-        const messagesContainer = rootEl.querySelector('[data-messages-container]');
-        if (!messagesContainer) return;
-        
         const selector = `[data-message-id="${CSS.escape ? CSS.escape(messageId) : messageId}"]`;
-        const messageDiv = messagesContainer.querySelector(selector);
+        const messageDiv = messageParent.querySelector(selector);
         if (messageDiv) {
             const textElement = messageDiv.querySelector('div.whitespace-pre-wrap, pre');
             if (textElement) {
@@ -443,9 +391,6 @@ export function init(rootEl) {
     }
 
     function addSystemMessage(content, type = 'info') {
-        const messagesContainer = rootEl.querySelector('[data-messages-container]');
-        if (!messagesContainer) return;
-        
         const messageDiv = document.createElement('div');
         messageDiv.className = 'text-center animate-fade-in';
 
@@ -460,8 +405,46 @@ export function init(rootEl) {
         span.textContent = content;
 
         messageDiv.appendChild(span);
-        messagesContainer.appendChild(messageDiv);
+        messageParent.appendChild(messageDiv);
         scrollToBottom();
+    }
+
+    function ensureTypingIndicator() {
+        if (typingIndicatorEl) return typingIndicatorEl;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex justify-start animate-fade-in';
+        wrapper.setAttribute('data-typing-indicator', '');
+
+        const bubble = document.createElement('div');
+        bubble.className = 'inline-flex items-center px-4 py-2.5 rounded-2xl border shadow-sm bg-layout-surface dark:bg-dark-surface border-layout-border dark:border-dark-border text-layout-content-medium dark:text-dark-content-medium';
+
+        const dots = document.createElement('div');
+        dots.className = 'flex gap-1.5 px-0.5';
+        for (let i = 0; i < 3; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'w-1.5 h-1.5 rounded-full bg-current opacity-70';
+            dot.style.animation = `chat-typing 1.15s ease-in-out infinite ${i * 0.12}s`;
+            dots.appendChild(dot);
+        }
+
+        bubble.appendChild(dots);
+        wrapper.appendChild(bubble);
+        typingIndicatorEl = wrapper;
+        return typingIndicatorEl;
+    }
+
+    function addTypingIndicator() {
+        removeTypingIndicator();
+        const indicator = ensureTypingIndicator();
+        messageParent.appendChild(indicator);
+        scrollToBottom();
+    }
+
+    function removeTypingIndicator() {
+        if (typingIndicatorEl && typingIndicatorEl.parentElement) {
+            typingIndicatorEl.remove();
+        }
     }
 
     // ----------------------
@@ -661,8 +644,8 @@ export function init(rootEl) {
      */
     function addToolActivity(toolName, toolId, toolInput) {
         hideEmptyState();
-        // Show AI working indicator
-        debouncedShowAiWorking();
+        // Don't remove typing indicator here - AI is still processing
+        // The typing indicator will be removed by END_AI_TURN message
 
         const container = ensureToolActivityContainer();
         const toolList = container.querySelector('[data-tool-list]');
@@ -718,9 +701,8 @@ export function init(rootEl) {
             : '';
 
         // Ensure container is in DOM
-        const messagesContainer = rootEl.querySelector('[data-messages-container]');
-        if (messagesContainer && !container.parentElement) {
-            messagesContainer.appendChild(container);
+        if (!container.parentElement) {
+            messageParent.appendChild(container);
         }
 
         // Auto-expand details if this is the first tool
@@ -823,9 +805,6 @@ export function init(rootEl) {
         hasSeededPlaceholders = true;
 
         hideEmptyState();
-
-        const messagesContainer = rootEl.querySelector('[data-messages-container]');
-        if (!messagesContainer) return;
 
         const demoScript = [
             { from: 'assistant', text: 'Hi! I can help with file management, document processing, and organization. What do you need?' },
@@ -1399,23 +1378,23 @@ export function init(rootEl) {
                         if (content && content.startsWith('SESSION_ID:')) {
                             updateStatus(true, 'Connected');
                         } else if (content && (/(Klawed is|working|processing|Tool|thinking)/i.test(content))) {
-                            // Show floating AI working indicator
-                            debouncedShowAiWorking();
+                            // Show typing indicator (3-dot bubble) for AI processing
+                            addTypingIndicator();
                             // Don't update connection status - it stays "Connected"
                         } else {
                             updateStatus(true, 'Connected');
-                            // Hide AI working indicator
-                            hideAiWorking();
+                            // Don't remove typing indicator here - wait for END_AI_TURN
                         }
                         break;
                     case 'TEXT':
                         if (content) {
                             handleStreamComplete(content);
                         }
-                        hideAiWorking();
+                        // Don't remove typing indicator here - wait for END_AI_TURN
                         clearToolActivity(); // Clear tool activity tracking for next interaction
                         // Reset API call time when we get a text response
                         lastApiCallTime = null;
+                        // Keep status as "Connected" - typing indicator will be removed by END_AI_TURN
                         break;
                     case 'ERROR':
                         // Check if this is an invalid session error
@@ -1427,14 +1406,15 @@ export function init(rootEl) {
                             return;
                         }
                         addSystemMessage('✗ ' + (content || 'Error occurred'), 'error');
-                        hideAiWorking();
+                        // Don't remove typing indicator here - wait for END_AI_TURN
                         clearToolActivity(); // Clear tool activity tracking
                         // Reset API call time when we get an error
                         lastApiCallTime = null;
+                        // Keep status as "Connected" - typing indicator will be removed by END_AI_TURN
                         break;
                     case 'API_CALL':
-                        // Show floating AI working indicator when AI is processing
-                        debouncedShowAiWorking();
+                        // Show typing indicator (3-dot bubble) when AI is processing
+                        addTypingIndicator();
                         // Connection status stays "Connected" - no need to change it
 
                         // Add a system message for API calls (optional info)
@@ -1496,6 +1476,11 @@ export function init(rootEl) {
                             if (toolName && toolId) {
                                 addToolActivity(toolName, toolId, toolInput);
                                 // Don't update connection status - it stays "Connected"
+                                // The typing indicator and tool activity card show the AI is working
+                            } else {
+                                // Fallback to old behavior
+                                addTypingIndicator();
+                                // Don't update connection status
                             }
                         } else {
                             // TOOL_RESULT
@@ -1525,19 +1510,21 @@ export function init(rootEl) {
                             if (toolName && toolId) {
                                 completeToolActivity(toolName, toolId, isError, result);
                             }
+                            // Don't update connection status - typing indicator will be removed by END_AI_TURN
                         }
                         break;
                     case 'END_AI_TURN':
-                        // AI turn completed - hide AI working indicator
+                        // AI turn completed - remove typing indicator
                         debug('Received END_AI_TURN - AI turn completed');
-                        hideAiWorking();
+                        removeTypingIndicator();
                         // Reset API call time
                         lastApiCallTime = null;
+                        // Connection status stays "Connected"
                         break;
                     default:
                         if (typeof content === 'string') {
                             handleStreamComplete(content);
-                            hideAiWorking();
+                            // Don't remove typing indicator here - wait for END_AI_TURN
                         }
                 }
             } catch (error) {
@@ -1558,11 +1545,11 @@ export function init(rootEl) {
                         console.error('Error in handleStreamComplete:', streamError);
                         addMessage(doneContent, false);
                     }
-                    hideAiWorking();
+                    // Don't remove typing indicator here - wait for END_AI_TURN
                 } else if (event.data.startsWith('ERROR:')) {
                     const errorMessage = event.data.substring(6);
                     addSystemMessage('✗ ' + errorMessage, 'error');
-                    hideAiWorking();
+                    // Don't remove typing indicator here - wait for END_AI_TURN
                 } else {
                     // Check if it's a tool-related message in legacy format
                     if (event.data.includes('[TOOL') || event.data.includes('[TOOL RESULT') ||
@@ -1571,7 +1558,7 @@ export function init(rootEl) {
                         // Don't update connection status - typing indicator shows AI is working
                     } else {
                         addMessage(event.data, false);
-                        hideAiWorking();
+                        // Don't remove typing indicator here - wait for END_AI_TURN
                     }
                 }
             }
@@ -1579,13 +1566,13 @@ export function init(rootEl) {
 
         ws.onerror = (error) => {
             console.error('WebSocket error:', error);
-            hideAiWorking();
+            removeTypingIndicator();
             updateStatus(false, 'Connection error');
         };
 
         ws.onclose = (event) => {
             console.info('WebSocket closed', event.code, event.reason);
-            hideAiWorking();
+            removeTypingIndicator();
             isConnected = false;
 
             // Don't reconnect if this was a manual disconnect
@@ -1613,7 +1600,7 @@ export function init(rootEl) {
         hasReceivedFirstAiResponse = false;
 
         addMessage(message, true);
-        debouncedShowAiWorking();
+        addTypingIndicator();
         ws.send(message);
         if (elements.messageInput) {
             elements.messageInput.value = '';

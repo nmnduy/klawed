@@ -78,28 +78,13 @@
             <!-- Chat Panel -->
             <div id="chat-panel" class="relative flex-1 flex flex-col overflow-hidden lg:border-r-2 lg:border-border" role="tabpanel" aria-labelledby="chat-tab">
                 <!-- Chat Messages Area with improved scrolling -->
-                <div id="chat-container" data-chat-container class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 bg-[hsl(var(--background))] [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,_hsl(var(--primary))_55%,_hsl(var(--muted))_45%)_transparent]" style="
+                <div id="chat-container" data-chat-container class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-5 bg-[hsl(var(--background))] [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,_hsl(var(--primary))_55%,_hsl(var(--muted))_45%)_transparent]" style="
                     --scrollbar-thumb-bg: linear-gradient(180deg, color-mix(in srgb, hsl(var(--primary)) 80%, hsl(var(--muted)) 20%), color-mix(in srgb, hsl(var(--accent)) 80%, hsl(var(--muted)) 20%));
                     --scrollbar-thumb-border: color-mix(in srgb, hsl(var(--background)) 92%, transparent);
                     --scrollbar-thumb-shadow: 0 6px 16px color-mix(in srgb, hsl(var(--primary)) 14%, transparent);
                 " aria-live="polite">
-                    <!-- Welcome message with modern card (shown when no messages) -->
-                    <div class="h-full flex items-center justify-center" data-chat-empty-state>
-                        {#include partials/chatEmptyState.html /}
-                    </div>
-                    <!-- Messages container (hidden when only welcome message) -->
-                    <div class="flex flex-col justify-end min-h-full space-y-5 hidden" data-messages-container>
-                    </div>
-                    <!-- Floating AI working indicator -->
-                    <div class="fixed bottom-32 right-6 z-20 opacity-0 pointer-events-none transition-all duration-300 transform translate-y-2" data-ai-working-indicator>
-                        <div class="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-medium rounded-full shadow-lg">
-                            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span>AI is working</span>
-                        </div>
-                    </div>
+                    <!-- Welcome message with modern card -->
+                    {#include partials/chatEmptyState.html /}
                 </div>
 
                 <!-- Input Area with modern styling -->
