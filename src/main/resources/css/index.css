@@ -9,6 +9,7 @@
 @import './dynamic-latex.css';
 @import './dynamic-file-explorer.css';
 @import './dynamic-feedback.css';
+@import './markdown.css';
 
 @tailwind base;
 @tailwind components;
@@ -48,6 +49,35 @@
     --error-bg: 0 96% 94%; /* Coral 50 */
     --warning: 38 92% 50%; /* Amber 500 - Sophisticated warning */
     --warning-bg: 48 96% 96%; /* Amber 50 */
+
+    /* Syntax Highlighting Colors - For markdown code blocks */
+    --syntax-comment: 215 16% 47%; /* Slate 600 */
+    --syntax-punctuation: 215 16% 47%; /* Slate 600 */
+    --syntax-namespace: 215 16% 47%; /* Slate 600 */
+    --syntax-property: 289 91% 62%; /* Purple 500 */
+    --syntax-tag: 289 91% 62%; /* Purple 500 */
+    --syntax-boolean: 289 91% 62%; /* Purple 500 */
+    --syntax-number: 289 91% 62%; /* Purple 500 */
+    --syntax-constant: 289 91% 62%; /* Purple 500 */
+    --syntax-symbol: 289 91% 62%; /* Purple 500 */
+    --syntax-deleted: 289 91% 62%; /* Purple 500 */
+    --syntax-selector: 142 71% 45%; /* Emerald 500 */
+    --syntax-attr-name: 142 71% 45%; /* Emerald 500 */
+    --syntax-string: 142 71% 45%; /* Emerald 500 */
+    --syntax-char: 142 71% 45%; /* Emerald 500 */
+    --syntax-builtin: 142 71% 45%; /* Emerald 500 */
+    --syntax-inserted: 142 71% 45%; /* Emerald 500 */
+    --syntax-operator: 217 93% 68%; /* Blue 400 */
+    --syntax-entity: 217 93% 68%; /* Blue 400 */
+    --syntax-url: 217 93% 68%; /* Blue 400 */
+    --syntax-atrule: 217 93% 68%; /* Blue 400 */
+    --syntax-attr-value: 217 93% 68%; /* Blue 400 */
+    --syntax-keyword: 217 93% 68%; /* Blue 400 */
+    --syntax-function: 38 92% 50%; /* Amber 500 */
+    --syntax-class-name: 38 92% 50%; /* Amber 500 */
+    --syntax-regex: 0 84% 60%; /* Coral 500 */
+    --syntax-important: 0 84% 60%; /* Coral 500 */
+    --syntax-variable: 0 84% 60%; /* Coral 500 */
 
     /* Spacing Tokens */
     --spacing-xxs: 4px;
@@ -112,6 +142,35 @@
     --error-bg: 0 80% 20%; /* Coral 950 */
     --warning: 38 92% 50%; /* Amber 400 - Brighter */
     --warning-bg: 48 96% 20%; /* Amber 950 */
+
+    /* Syntax Highlighting Colors - For markdown code blocks */
+    --syntax-comment: 215 16% 47%; /* Slate 600 */
+    --syntax-punctuation: 215 16% 47%; /* Slate 600 */
+    --syntax-namespace: 215 16% 47%; /* Slate 600 */
+    --syntax-property: 289 91% 62%; /* Purple 500 */
+    --syntax-tag: 289 91% 62%; /* Purple 500 */
+    --syntax-boolean: 289 91% 62%; /* Purple 500 */
+    --syntax-number: 289 91% 62%; /* Purple 500 */
+    --syntax-constant: 289 91% 62%; /* Purple 500 */
+    --syntax-symbol: 289 91% 62%; /* Purple 500 */
+    --syntax-deleted: 289 91% 62%; /* Purple 500 */
+    --syntax-selector: 142 71% 45%; /* Emerald 500 */
+    --syntax-attr-name: 142 71% 45%; /* Emerald 500 */
+    --syntax-string: 142 71% 45%; /* Emerald 500 */
+    --syntax-char: 142 71% 45%; /* Emerald 500 */
+    --syntax-builtin: 142 71% 45%; /* Emerald 500 */
+    --syntax-inserted: 142 71% 45%; /* Emerald 500 */
+    --syntax-operator: 217 93% 68%; /* Blue 400 */
+    --syntax-entity: 217 93% 68%; /* Blue 400 */
+    --syntax-url: 217 93% 68%; /* Blue 400 */
+    --syntax-atrule: 217 93% 68%; /* Blue 400 */
+    --syntax-attr-value: 217 93% 68%; /* Blue 400 */
+    --syntax-keyword: 217 93% 68%; /* Blue 400 */
+    --syntax-function: 38 92% 50%; /* Amber 500 */
+    --syntax-class-name: 38 92% 50%; /* Amber 500 */
+    --syntax-regex: 0 84% 60%; /* Coral 500 */
+    --syntax-important: 0 84% 60%; /* Coral 500 */
+    --syntax-variable: 0 84% 60%; /* Coral 500 */
   }
 }
 
