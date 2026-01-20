@@ -1,0 +1,4 @@
+- [ ] auto-compaction always on
+- [ ] always use subagents
+- [ ] subagents emit token count to a place that we can track in real time
+- [ ] orchestrator to cut off subagents near the end zone of the context limit
