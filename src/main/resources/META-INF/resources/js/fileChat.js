@@ -628,7 +628,8 @@ export function init(rootEl) {
      */
     function addToolActivity(toolName, toolId, toolInput) {
         hideEmptyState();
-        removeTypingIndicator();
+        // Keep typing indicator visible - don't remove it
+        // removeTypingIndicator();
 
         const container = ensureToolActivityContainer();
         const toolList = container.querySelector('[data-tool-list]');
