@@ -11,7 +11,7 @@ echo ""
 REMOTE_HOST="filesurf-0"
 REMOTE_PATH="/root/filesurf_v2"
 LOCAL_PATH="$(cd "$(dirname "$0")/.." && pwd)"
-LOCAL_TEST_PORT="${LOCAL_TEST_PORT:-8085}"
+LOCAL_TEST_PORT="${LOCAL_TEST_PORT:-9095}"
 LOCAL_TEST_DURATION="${LOCAL_TEST_DURATION:-10}"
 
 echo "Local path:  $LOCAL_PATH"
