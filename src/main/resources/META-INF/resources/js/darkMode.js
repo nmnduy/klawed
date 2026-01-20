@@ -152,23 +152,28 @@ window.darkMode = darkMode;
  */
 export function initThemeToggle() {
     const toggleButton = document.querySelector('[data-theme-toggle]');
+    console.log('[dark-mode] initThemeToggle called, button found:', !!toggleButton);
     if (!toggleButton) {
         console.warn('[dark-mode] Toggle button not found');
         return;
     }
 
     // Update button state based on current theme
+    console.log('[dark-mode] Current theme:', darkMode.getTheme());
     updateToggleButtonState(toggleButton, darkMode.getTheme());
 
     // Listen for theme changes to update button state
     darkMode.addListener((theme) => {
+        console.log('[dark-mode] Theme changed to:', theme);
         updateToggleButtonState(toggleButton, theme);
     });
 
     // Add click handler
     toggleButton.addEventListener('click', () => {
+        console.log('[dark-mode] Toggle button clicked, current theme:', darkMode.getTheme());
         toggleButton.setAttribute('data-transitioning', 'true');
-        darkMode.toggle();
+        const newTheme = darkMode.toggle();
+        console.log('[dark-mode] After toggle, new theme:', newTheme);
 
         // Remove transition state after animation
         setTimeout(() => {
