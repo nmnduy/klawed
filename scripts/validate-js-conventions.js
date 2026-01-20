@@ -28,7 +28,8 @@ const MODULE_FILES = new Set([
     'authUtils.js',      // Imported by fileChat.js
     'darkMode.js',       // Imported by fileChat.js
     'tabManager.js',     // Imported by fileChat.js
-    'loginWaitlist.js'   // Loaded as module in login.html, waitlist.html
+    'loginWaitlist.js',  // Loaded as module in login.html, waitlist.html
+    'markdownUtils.js'   // Imported by fileChat.js, parses markdown
 ]);
 
 // Patterns that indicate ES module syntax

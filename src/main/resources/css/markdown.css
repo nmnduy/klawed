@@ -1,0 +1,405 @@
+/* Markdown Styles */
+/* Styles for rendered markdown content in chat messages */
+/* Uses CSS variables defined in index.css for easy theming */
+
+.markdown-content {
+    line-height: 1.6;
+}
+
+/* Headers */
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    font-weight: 600;
+    line-height: 1.3;
+    color: hsl(var(--foreground));
+}
+
+.markdown-content h1 {
+    font-size: 1.75em;
+    border-bottom: 1px solid hsl(var(--border));
+    padding-bottom: 0.3em;
+}
+
+.markdown-content h2 {
+    font-size: 1.5em;
+    border-bottom: 1px solid hsl(var(--border));
+    padding-bottom: 0.3em;
+}
+
+.markdown-content h3 {
+    font-size: 1.25em;
+}
+
+.markdown-content h4 {
+    font-size: 1.1em;
+}
+
+.markdown-content h5 {
+    font-size: 1em;
+}
+
+.markdown-content h6 {
+    font-size: 0.9em;
+    color: hsl(var(--muted-foreground));
+}
+
+/* Paragraphs */
+.markdown-content p {
+    margin: 0.75em 0;
+    color: hsl(var(--foreground));
+}
+
+/* Links */
+.markdown-link {
+    color: hsl(var(--primary));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color 0.2s ease;
+}
+
+.markdown-link:hover {
+    color: hsl(var(--primary-hover, var(--primary)));
+}
+
+.markdown-link:focus {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* Bold and Italic */
+.markdown-content strong,
+.markdown-content b {
+    font-weight: 600;
+}
+
+.markdown-content em,
+.markdown-content i {
+    font-style: italic;
+}
+
+.markdown-content strong em,
+.markdown-content em strong,
+.markdown-content b i,
+.markdown-content i b {
+    font-weight: 600;
+    font-style: italic;
+}
+
+/* Inline Code */
+.markdown-content :not(pre) > code {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    font-size: 0.875em;
+    padding: 0.2em 0.4em;
+    background-color: hsl(var(--muted));
+    border-radius: 4px;
+    color: hsl(var(--foreground));
+}
+
+/* Code Blocks */
+.markdown-content pre {
+    margin: 1em 0;
+    padding: 1em;
+    background-color: hsl(var(--muted));
+    border-radius: 8px;
+    overflow-x: auto;
+    border: 1px solid hsl(var(--border));
+}
+
+.markdown-content pre code {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    font-size: 0.875em;
+    line-height: 1.6;
+    color: hsl(var(--foreground));
+    display: block;
+    white-space: pre;
+}
+
+/* Syntax Highlighting - Uses CSS variables from index.css */
+.markdown-content pre code .comment,
+.markdown-content pre code .prolog,
+.markdown-content pre code .doctype,
+.markdown-content pre code .cdata {
+    color: hsl(var(--syntax-comment));
+    font-style: italic;
+}
+
+.markdown-content pre code .punctuation {
+    color: hsl(var(--syntax-punctuation));
+}
+
+.markdown-content pre code .namespace {
+    opacity: 0.7;
+    color: hsl(var(--syntax-namespace));
+}
+
+.markdown-content pre code .property,
+.markdown-content pre code .tag,
+.markdown-content pre code .boolean,
+.markdown-content pre code .number,
+.markdown-content pre code .constant,
+.markdown-content pre code .symbol,
+.markdown-content pre code .deleted {
+    color: hsl(var(--syntax-property));
+}
+
+.markdown-content pre code .selector,
+.markdown-content pre code .attr-name,
+.markdown-content pre code .string,
+.markdown-content pre code .char,
+.markdown-content pre code .builtin,
+.markdown-content pre code .inserted {
+    color: hsl(var(--syntax-selector));
+}
+
+.markdown-content pre code .operator,
+.markdown-content pre code .entity,
+.markdown-content pre code .url,
+.markdown-content pre code .atrule,
+.markdown-content pre code .attr-value,
+.markdown-content pre code .keyword {
+    color: hsl(var(--syntax-operator));
+}
+
+.markdown-content pre code .function,
+.markdown-content pre code .class-name {
+    color: hsl(var(--syntax-function));
+}
+
+.markdown-content pre code .regex,
+.markdown-content pre code .important,
+.markdown-content pre code .variable {
+    color: hsl(var(--syntax-regex));
+}
+
+/* Lists */
+.markdown-content ul,
+.markdown-content ol {
+    margin: 0.75em 0;
+    padding-left: 1.5em;
+}
+
+.markdown-content ul {
+    list-style-type: disc;
+}
+
+.markdown-content ul ul {
+    list-style-type: circle;
+    margin: 0.25em 0;
+}
+
+.markdown-content ul ul ul {
+    list-style-type: square;
+}
+
+.markdown-content ol {
+    list-style-type: decimal;
+}
+
+.markdown-content ol ol {
+    list-style-type: lower-alpha;
+    margin: 0.25em 0;
+}
+
+.markdown-content ol ol ol {
+    list-style-type: lower-roman;
+}
+
+.markdown-content li {
+    margin: 0.4em 0;
+    color: hsl(var(--foreground));
+}
+
+.markdown-content li > p {
+    margin: 0.5em 0;
+}
+
+/* Task Lists */
+.markdown-content ul li[type="checkbox"] {
+    list-style-type: none;
+    padding-left: 1.5em;
+    position: relative;
+}
+
+.markdown-content ul li[type="checkbox"] input[type="checkbox"] {
+    position: absolute;
+    left: 0;
+    top: 0.25em;
+    width: 1em;
+    height: 1em;
+    cursor: pointer;
+}
+
+/* Blockquotes */
+.markdown-content blockquote {
+    margin: 1em 0;
+    padding: 0.5em 1em 0.5em 1.25em;
+    border-left: 4px solid hsl(var(--primary));
+    background-color: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    border-radius: 0 8px 8px 0;
+}
+
+.markdown-content blockquote p {
+    margin: 0.5em 0;
+    color: hsl(var(--muted-foreground));
+}
+
+.markdown-content blockquote blockquote {
+    margin-left: 0;
+    border-left-color: hsl(var(--border));
+    background-color: hsl(var(--muted) / 0.5);
+}
+
+/* Tables */
+.markdown-table-wrapper {
+    overflow-x: auto;
+    margin: 1em 0;
+}
+
+.markdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+
+.markdown-table th,
+.markdown-table td {
+    padding: 0.75em 1em;
+    border: 1px solid hsl(var(--border));
+    text-align: left;
+    color: hsl(var(--foreground));
+}
+
+.markdown-table th {
+    background-color: hsl(var(--muted));
+    font-weight: 600;
+}
+
+.markdown-table tbody tr:nth-child(even) {
+    background-color: hsl(var(--muted) / 0.5);
+}
+
+.markdown-table tbody tr:hover {
+    background-color: hsl(var(--muted));
+}
+
+/* Images */
+.markdown-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin: 0.5em 0;
+}
+
+/* Horizontal Rules */
+.markdown-content hr {
+    border: none;
+    border-top: 2px solid hsl(var(--border));
+    margin: 2em 0;
+}
+
+/* Strikethrough */
+.markdown-content del,
+.markdown-content s {
+    text-decoration: line-through;
+    color: hsl(var(--muted-foreground));
+}
+
+/* Subscript and Superscript */
+.markdown-content sub {
+    font-size: 0.75em;
+    vertical-align: sub;
+    color: hsl(var(--muted-foreground));
+}
+
+.markdown-content sup {
+    font-size: 0.75em;
+    vertical-align: super;
+    color: hsl(var(--muted-foreground));
+}
+
+/* Definition Lists */
+.markdown-content dl {
+    margin: 1em 0;
+}
+
+.markdown-content dt {
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin-top: 1em;
+}
+
+.markdown-content dd {
+    margin-left: 1.5em;
+    margin-top: 0.5em;
+    color: hsl(var(--foreground));
+}
+
+/* Abbreviations */
+.markdown-content abbr[title] {
+    text-decoration: underline dotted;
+    cursor: help;
+    color: hsl(var(--muted-foreground));
+}
+
+/* Keybd (keyboard keys styling) */
+.markdown-content kbd {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    font-size: 0.875em;
+    padding: 0.2em 0.4em;
+    background-color: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    border-radius: 4px;
+    box-shadow: 0 1px 2px hsl(var(--border) / 0.5);
+    color: hsl(var(--foreground));
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .markdown-content h1 {
+        font-size: 1.5em;
+    }
+    
+    .markdown-content h2 {
+        font-size: 1.3em;
+    }
+    
+    .markdown-content h3 {
+        font-size: 1.1em;
+    }
+    
+    .markdown-content pre {
+        padding: 0.75em;
+        font-size: 0.875em;
+    }
+    
+    .markdown-table {
+        font-size: 0.8em;
+    }
+    
+    .markdown-table th,
+    .markdown-table td {
+        padding: 0.5em 0.75em;
+    }
+}
+
+/* Print styles */
+@media print {
+    .markdown-content pre,
+    .markdown-content code {
+        background-color: transparent !important;
+        border: 1px solid #ccc !important;
+    }
+    
+    .markdown-link {
+        text-decoration: none;
+        color: #000;
+    }
+}
