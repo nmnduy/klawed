@@ -438,7 +438,7 @@ export function init(rootEl) {
         removeTypingIndicator();
         const indicator = ensureTypingIndicator();
         messageParent.appendChild(indicator);
-        scrollToBottom(true); // Force scroll to show typing indicator
+        scrollToBottom();
     }
 
     function removeTypingIndicator() {
