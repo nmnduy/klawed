@@ -296,8 +296,8 @@ export function init(rootEl) {
 
             const bubble = document.createElement('div');
             bubble.className = 'inline-block max-w-[78%] sm:max-w-2xl px-4 sm:px-5 py-3.5 rounded-2xl border shadow-sm transition-colors ' + (isUser ?
-                'bg-orange-50 dark:bg-orange-950/30 border-orange-100 dark:border-orange-800/60 text-orange-950 dark:text-orange-50 shadow-orange-200/40 dark:shadow-none' :
-                'bg-layout-surface dark:bg-dark-surface border-layout-border dark:border-dark-border text-layout-content-high dark:text-dark-content-high shadow-slate-200/40 dark:shadow-slate-900/20');
+                'bg-orange-50 dark:bg-orange-900/60 border-orange-200 dark:border-orange-700 text-orange-950 dark:text-orange-100 shadow-orange-200/40 dark:shadow-orange-900/20' :
+                'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 shadow-slate-200/40 dark:shadow-slate-900/40');
 
             const textDiv = document.createElement('div');
             textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed text-current';
@@ -305,8 +305,8 @@ export function init(rootEl) {
 
             const timestamp = document.createElement('div');
             timestamp.className = 'text-caption-s mt-2 ' + (isUser ?
-                'text-orange-700/80 dark:text-orange-300/80' :
-                'text-layout-content-low dark:text-dark-content-low');
+                'text-orange-700/80 dark:text-orange-300/70' :
+                'text-slate-500 dark:text-slate-400');
             timestamp.textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
             bubble.appendChild(textDiv);
