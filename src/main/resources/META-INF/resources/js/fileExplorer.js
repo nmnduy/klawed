@@ -258,33 +258,33 @@ class FileExplorer {
             const fallbackDiv = document.createElement('div');
             fallbackDiv.className = 'space-y-4';
             fallbackDiv.innerHTML = `
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div class="bg-[hsl(var(--error-bg))] border border-[hsl(var(--error)_/_0.2)] rounded-lg p-4">
                     <div class="flex items-center gap-3 mb-3">
-                        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-5 h-5 text-[hsl(var(--error))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <div>
-                            <p class="text-caption-m-bold text-red-700">Failed to compile LaTeX</p>
-                            <p class="text-caption-s text-red-600 mt-1">${error.message}</p>
+                            <p class="text-caption-m-bold text-[hsl(var(--error))]">Failed to compile LaTeX</p>
+                            <p class="text-caption-s text-[hsl(var(--error)_/_0.8)] mt-1">${error.message}</p>
                         </div>
                     </div>
                     <div class="flex gap-2">
-                        <button class="latex-retry-btn inline-flex items-center gap-2 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-caption-m-bold transition-all duration-200">
+                        <button class="latex-retry-btn inline-flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--error))] hover:opacity-90 text-[hsl(var(--error-foreground))] rounded-lg text-caption-m-bold transition-all duration-200">
                             Retry Compilation
                         </button>
-                        <button class="latex-show-source-btn inline-flex items-center gap-2 px-3 py-1.5 bg-slate-500 hover:bg-slate-600 text-white rounded-lg text-caption-m-bold transition-all duration-200">
+                        <button class="latex-show-source-btn inline-flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--muted))] hover:bg-[hsl(var(--muted-foreground)_/_0.1)] text-[hsl(var(--foreground))] rounded-lg text-caption-m-bold transition-all duration-200">
                             Show LaTeX Source
                         </button>
                     </div>
                 </div>
-                <div id="latex-source-preview" class="hidden bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <div id="latex-source-preview" class="hidden bg-[hsl(var(--muted))] rounded-lg p-4 border border-[hsl(var(--border))]">
                     <div class="flex items-center justify-between mb-3">
-                        <span class="text-caption-m-bold text-slate-700">LaTeX Source Code</span>
-                        <button class="latex-hide-source-btn inline-flex items-center gap-2 px-3 py-1.5 bg-slate-500 hover:bg-slate-600 text-white rounded-lg text-caption-m-bold transition-all duration-200">
+                        <span class="text-caption-m-bold text-[hsl(var(--foreground))]">LaTeX Source Code</span>
+                        <button class="latex-hide-source-btn inline-flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--muted))] hover:bg-[hsl(var(--muted-foreground)_/_0.1)] text-[hsl(var(--foreground))] rounded-lg text-caption-m-bold transition-all duration-200">
                             Hide Source
                         </button>
                     </div>
-                    <pre class="text-caption-m font-mono whitespace-pre-wrap break-words text-slate-700 latex-highlight max-h-60 overflow-y-auto">${this.highlightLatex(latexContent)}</pre>
+                    <pre class="text-caption-m font-mono whitespace-pre-wrap break-words text-[hsl(var(--foreground))] latex-highlight max-h-60 overflow-y-auto">${this.highlightLatex(latexContent)}</pre>
                 </div>
             `;
 
@@ -534,60 +534,60 @@ class FileExplorer {
         const size = isDirectory ? '' : this.formatFileSize(item.size);
         const date = this.formatDate(item.modified);
         const showDirectory = this.isSearchingWorkspace && item.directory && item.directory !== '/';
-        const directoryDisplay = showDirectory ? `<span class="text-muted-foreground text-caption-s truncate" title="${item.directory}">${item.directory}</span>` : '';
+        const directoryDisplay = showDirectory ? `<span class="text-[hsl(var(--muted-foreground))] text-caption-s truncate" title="${item.directory}">${item.directory}</span>` : '';
 
         // Escape HTML in item properties to prevent XSS
         const escapedName = this._escapeHtml(item.name);
         const escapedPath = this._escapeHtml(item.path);
 
         return `
-            <div class="file-item group px-3 py-2 hover:bg-orange-50/60 dark:hover:bg-orange-950/20 transition cursor-pointer"
+            <div class="file-item group px-3 py-2 hover:bg-[hsl(var(--primary)_/_0.1)] dark:hover:bg-[hsl(var(--primary)_/_0.15)] transition cursor-pointer"
                  data-path="${escapedPath}" data-type="${item.type}" data-name="${escapedName}">
                 <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_112px] items-center gap-3">
                     <div class="flex items-center gap-3 min-w-0">
                         <div class="flex-shrink-0">${icon}</div>
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2 min-w-0">
-                                <span class="truncate text-body-s ${isDirectory ? 'text-foreground font-semibold' : 'text-foreground/80'}" title="${escapedName}">${escapedName}</span>
-                                ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-100 dark:border-amber-800">Folder</span>' : ''}
+                                <span class="truncate text-body-s ${isDirectory ? 'text-[hsl(var(--foreground))] font-semibold' : 'text-[hsl(var(--foreground)_/_0.8)]'}" title="${escapedName}">${escapedName}</span>
+                                ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-[hsl(var(--warning)_/_0.15)] text-[hsl(var(--warning))] border border-[hsl(var(--warning)_/_0.2)]">Folder</span>' : ''}
                             </div>
                             ${directoryDisplay}
-                            <div class="flex items-center gap-3 text-caption-s text-muted-foreground truncate lg:hidden">
+                            <div class="flex items-center gap-3 text-caption-s text-[hsl(var(--muted-foreground))] truncate lg:hidden">
                                 <span class="tabular-nums">${size || ''}</span>
                                 <span class="whitespace-nowrap">${date}</span>
                             </div>
                         </div>
                     </div>
-                    <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-muted-foreground text-right tabular-nums">
+                    <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-[hsl(var(--muted-foreground))] text-right tabular-nums">
                         <span>${size}</span>
                         <div class="relative">
-                            <button type="button" class="inline-flex items-center justify-center w-8 h-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition file-options-btn ${isDirectory ? 'hidden' : ''}" title="File options">
+                            <button type="button" class="file-options-btn inline-flex items-center justify-center w-8 h-8 ${isDirectory ? 'hidden' : ''}" title="File options">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                                 </svg>
                             </button>
-                            <div class="file-options-dropdown hidden absolute right-0 top-full mt-1 w-48 bg-card rounded-lg shadow-lg border border-border z-10 py-1">
-                                <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-foreground hover:bg-muted flex items-center gap-2 open-file-option">
-                                    <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <div class="file-options-dropdown hidden absolute right-0 top-full mt-1 w-48 z-10 py-1">
+                                <button type="button" class="open-file-option w-full text-left px-4 py-2 text-caption-s text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-[hsl(var(--primary))]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h5l2 2h7a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 11l5-5m0 0h-3m3 0v3" />
                                     </svg>
                                     <span>Open file</span>
                                 </button>
-                                <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-foreground hover:bg-muted flex items-center gap-2 download-file-option">
-                                    <svg class="w-4 h-4 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <button type="button" class="download-file-option w-full text-left px-4 py-2 text-caption-s text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-[hsl(var(--secondary))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
                                     <span>Download file</span>
                                 </button>
-                                <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-foreground hover:bg-muted flex items-center gap-2 copy-path-option">
-                                    <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <button type="button" class="copy-path-option w-full text-left px-4 py-2 text-caption-s text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-[hsl(var(--accent))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                                     </svg>
                                     <span>Copy path to input</span>
                                 </button>
-                                <div class="border-t border-border my-1"></div>
-                                <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 delete-file-option">
+                                <div class="border-t border-[hsl(var(--border))] my-1"></div>
+                                <button type="button" class="delete-file-option w-full text-left px-4 py-2 text-caption-s text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)_/_0.1)] flex items-center gap-2">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -710,7 +710,7 @@ class FileExplorer {
 
             // For workspace search, show the directory path
             const showDirectory = this.isSearchingWorkspace && item.directory && item.directory !== '/';
-            const directoryDisplay = showDirectory ? `<span class="text-muted-foreground text-caption-s truncate" title="${item.directory}">${item.directory}</span>` : '';
+            const directoryDisplay = showDirectory ? `<span class="text-[hsl(var(--muted-foreground))] text-caption-s truncate" title="${item.directory}">${item.directory}</span>` : '';
 
             // Check if this item already exists in the DOM
             let itemElement = existingElements.find(el => el.dataset.path === item.path);
@@ -719,7 +719,7 @@ class FileExplorer {
             if (isNewElement) {
                 // Create new element
                 itemElement = document.createElement('div');
-                itemElement.className = 'file-item group px-3 py-2 hover:bg-orange-50/60 transition cursor-pointer';
+                itemElement.className = 'file-item group px-3 py-2 hover:bg-[hsl(var(--primary)_/_0.1)] transition cursor-pointer';
                 itemElement.dataset.path = item.path;
                 itemElement.dataset.type = item.type;
                 itemElement.dataset.name = item.name;
@@ -730,46 +730,46 @@ class FileExplorer {
                             <div class="flex-shrink-0">${icon}</div>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2 min-w-0">
-                                    <span class="truncate text-body-s ${isDirectory ? 'text-slate-900 font-semibold' : 'text-slate-700'}" title="${item.name}">${item.name}</span>
-                                    ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">Folder</span>' : ''}
+                                    <span class="truncate text-body-s ${isDirectory ? 'text-[hsl(var(--foreground))] font-semibold' : 'text-[hsl(var(--foreground)_/_0.8)]'}" title="${item.name}">${item.name}</span>
+                                    ${isDirectory ? '<span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-full bg-[hsl(var(--warning)_/_0.15)] text-[hsl(var(--warning))] border border-[hsl(var(--warning)_/_0.2)]">Folder</span>' : ''}
                                 </div>
                                 ${directoryDisplay}
-                                <div class="flex items-center gap-3 text-caption-s text-slate-500 truncate lg:hidden">
+                                <div class="flex items-center gap-3 text-caption-s text-[hsl(var(--muted-foreground))] truncate lg:hidden">
                                     <span class="tabular-nums">${size || ''}</span>
                                     <span class="whitespace-nowrap">${date}</span>
                                 </div>
                             </div>
                         </div>
-                        <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-slate-500 text-right tabular-nums">
+                        <div class="hidden lg:flex items-center justify-end gap-2 text-caption-s text-[hsl(var(--muted-foreground))] text-right tabular-nums">
                             <span>${size}</span>
                             <div class="relative">
-                                <button type="button" class="inline-flex items-center justify-center w-8 h-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded transition file-options-btn ${isDirectory ? 'hidden' : ''}" title="File options">
+                                <button type="button" class="file-options-btn inline-flex items-center justify-center w-8 h-8 ${isDirectory ? 'hidden' : ''}" title="File options">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                                     </svg>
                                 </button>
-                                <div class="file-options-dropdown hidden absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-10 py-1">
-                                    <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-slate-700 hover:bg-slate-50 flex items-center gap-2 open-file-option">
-                                        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <div class="file-options-dropdown hidden absolute right-0 top-full mt-1 w-48 z-10 py-1">
+                                    <button type="button" class="open-file-option w-full text-left px-4 py-2 text-caption-s text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-[hsl(var(--primary))]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h5l2 2h7a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 11l5-5m0 0h-3m3 0v3" />
                                         </svg>
                                         <span>Open file</span>
                                     </button>
-                                    <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-slate-700 hover:bg-slate-50 flex items-center gap-2 download-file-option">
-                                        <svg class="w-4 h-4 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <button type="button" class="download-file-option w-full text-left px-4 py-2 text-caption-s text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-[hsl(var(--secondary))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
                                         <span>Download file</span>
                                     </button>
-                                    <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-slate-700 hover:bg-slate-50 flex items-center gap-2 copy-path-option">
-                                        <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <button type="button" class="copy-path-option w-full text-left px-4 py-2 text-caption-s text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-[hsl(var(--accent))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                                         </svg>
                                         <span>Copy path to input</span>
                                     </button>
-                                    <div class="border-t border-slate-200 my-1"></div>
-                                    <button type="button" class="w-full text-left px-4 py-2 text-caption-s text-red-600 hover:bg-red-50 flex items-center gap-2 delete-file-option">
+                                    <div class="border-t border-[hsl(var(--border))] my-1"></div>
+                                    <button type="button" class="delete-file-option w-full text-left px-4 py-2 text-caption-s text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)_/_0.1)] flex items-center gap-2">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                         </svg>
@@ -1490,13 +1490,13 @@ class FileExplorer {
                     const loadingDiv = document.createElement('div');
                     loadingDiv.className = 'text-center py-8';
                     loadingDiv.innerHTML = `
-                        <div class="inline-flex flex-col items-center gap-3 px-6 py-4 bg-blue-50 rounded-lg border border-blue-200">
-                            <svg class="w-8 h-8 animate-spin text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="inline-flex flex-col items-center gap-3 px-6 py-4 bg-[hsl(var(--info-bg))] rounded-lg border border-[hsl(var(--info)_/_0.2)]">
+                            <svg class="w-8 h-8 animate-spin text-[hsl(var(--info))]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
                             <div class="text-center">
-                                <p class="text-caption-m-bold text-blue-700">Compiling LaTeX to PDF...</p>
-                                <p class="text-caption-s text-blue-600 mt-1">This may take a few seconds</p>
+                                <p class="text-caption-m-bold text-[hsl(var(--info))]">Compiling LaTeX to PDF...</p>
+                                <p class="text-caption-s text-[hsl(var(--info)_/_0.8)] mt-1">This may take a few seconds</p>
                             </div>
                         </div>
                     `;
@@ -1511,9 +1511,9 @@ class FileExplorer {
                     pre.textContent = content;
                     // For large files, use simpler styling (no syntax highlighting consideration)
                     if (tier === 'large') {
-                        pre.className = 'text-caption-m font-mono whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-3 rounded border border-border';
+                        pre.className = 'text-caption-m font-mono whitespace-pre-wrap break-words text-[hsl(var(--foreground))] bg-[hsl(var(--card))] p-3 rounded border border-[hsl(var(--border))]';
                     } else {
-                        pre.className = 'text-caption-m font-mono whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300';
+                        pre.className = 'text-caption-m font-mono whitespace-pre-wrap break-words text-[hsl(var(--foreground))]';
                     }
                     this.filePreviewText.classList.remove('hidden');
                 }
@@ -1553,9 +1553,9 @@ class FileExplorer {
 
         // Set appropriate styling based on tier
         if (tier === 'large') {
-            warningBanner.className = 'mb-3 px-4 py-2 rounded-lg flex items-center gap-2 text-caption-m bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800';
+            warningBanner.className = 'mb-3 px-4 py-2 rounded-lg flex items-center gap-2 text-caption-m bg-[hsl(var(--primary)_/_0.1)] text-[hsl(var(--primary))] border border-[hsl(var(--primary)_/_0.2)]';
         } else {
-            warningBanner.className = 'mb-3 px-4 py-2 rounded-lg flex items-center gap-2 text-caption-m bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800';
+            warningBanner.className = 'mb-3 px-4 py-2 rounded-lg flex items-center gap-2 text-caption-m bg-[hsl(var(--warning-bg))] text-[hsl(var(--warning))] border border-[hsl(var(--warning)_/_0.2)]';
         }
 
         warningBanner.innerHTML = `
@@ -1667,8 +1667,8 @@ class FileExplorer {
             this.fileExplorerFilterButtons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     this.activeFilter = btn.dataset.filter || 'all';
-                    this.fileExplorerFilterButtons.forEach(b => b.classList.remove('bg-orange-50', 'text-orange-700', 'border', 'border-orange-200'));
-                    btn.classList.add('bg-orange-50', 'text-orange-700', 'border', 'border-orange-200');
+                    this.fileExplorerFilterButtons.forEach(b => b.classList.remove('bg-[hsl(var(--primary)_/_0.1)]', 'text-[hsl(var(--primary))]', 'border', 'border-[hsl(var(--primary)_/_0.2)]'));
+                    btn.classList.add('bg-[hsl(var(--primary)_/_0.1)]', 'text-[hsl(var(--primary))]', 'border', 'border-[hsl(var(--primary)_/_0.2)]');
                     this.applyFiltersAndSort();
                 });
             });
@@ -1679,8 +1679,8 @@ class FileExplorer {
             this.fileExplorerSortButtons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     this.activeSort = btn.dataset.sortField || 'name';
-                    this.fileExplorerSortButtons.forEach(b => b.classList.remove('bg-orange-50', 'text-orange-700', 'border', 'border-orange-200'));
-                    btn.classList.add('bg-orange-50', 'text-orange-700', 'border', 'border-orange-200');
+                    this.fileExplorerSortButtons.forEach(b => b.classList.remove('bg-[hsl(var(--primary)_/_0.1)]', 'text-[hsl(var(--primary))]', 'border', 'border-[hsl(var(--primary)_/_0.2)]'));
+                    btn.classList.add('bg-[hsl(var(--primary)_/_0.1)]', 'text-[hsl(var(--primary))]', 'border', 'border-[hsl(var(--primary)_/_0.2)]');
                     this.applyFiltersAndSort();
                 });
             });
@@ -1766,13 +1766,13 @@ class FileExplorer {
         if (this.fileExplorerFilterButtons && this.fileExplorerFilterButtons.length) {
             const defaultFilter = Array.from(this.fileExplorerFilterButtons).find(btn => btn.dataset.filter === this.activeFilter);
             if (defaultFilter) {
-                defaultFilter.classList.add('bg-orange-50', 'text-orange-700', 'border', 'border-orange-200');
+                defaultFilter.classList.add('bg-[hsl(var(--primary)_/_0.1)]', 'text-[hsl(var(--primary))]', 'border', 'border-[hsl(var(--primary)_/_0.2)]');
             }
         }
         if (this.fileExplorerSortButtons && this.fileExplorerSortButtons.length) {
             const defaultSort = Array.from(this.fileExplorerSortButtons).find(btn => btn.dataset.sortField === this.activeSort);
             if (defaultSort) {
-                defaultSort.classList.add('bg-orange-50', 'text-orange-700', 'border', 'border-orange-200');
+                defaultSort.classList.add('bg-[hsl(var(--primary)_/_0.1)]', 'text-[hsl(var(--primary))]', 'border', 'border-[hsl(var(--primary)_/_0.2)]');
             }
         }
 
@@ -1898,14 +1898,15 @@ class FileExplorer {
 
     // Show toast notification
     showToast(message, type = 'info') {
-        // Create toast element
+        // Create toast element using semantic CSS variables for automatic dark mode support
         const toast = document.createElement('div');
-        toast.className = `fixed top-4 right-4 z-[9999] px-4 py-3 rounded-lg shadow-lg animate-fade-in max-w-md ${
-            type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
-            type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
-            type === 'warning' ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
-            'bg-blue-50 text-blue-800 border border-blue-200'
-        }`;
+        const typeClasses = {
+            success: 'bg-[hsl(var(--success-bg))] text-[hsl(var(--success))] border border-[hsl(var(--success)_/_0.2)]',
+            error: 'bg-[hsl(var(--error-bg))] text-[hsl(var(--error))] border border-[hsl(var(--error)_/_0.2)]',
+            warning: 'bg-[hsl(var(--warning-bg))] text-[hsl(var(--warning))] border border-[hsl(var(--warning)_/_0.2)]',
+            info: 'bg-[hsl(var(--info-bg))] text-[hsl(var(--info))] border border-[hsl(var(--info)_/_0.2)]'
+        };
+        toast.className = `fixed top-4 right-4 z-[9999] px-4 py-3 rounded-lg shadow-lg animate-fade-in max-w-md ${typeClasses[type] || typeClasses.info}`;
 
         toast.innerHTML = `
             <div class="flex items-start gap-2">

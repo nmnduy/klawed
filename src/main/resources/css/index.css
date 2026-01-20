@@ -39,6 +39,16 @@
     --ring: 25 95% 53%; /* Orange 500 */
     --radius: 0.75rem; /* Slightly larger for modern look */
 
+    /* Semantic Colors for Toasts & Status */
+    --info: 199 89% 48%; /* Cyan 500 - Fresh, modern info color */
+    --info-bg: 199 100% 97%; /* Cyan 50 */
+    --success: 150 76% 40%; /* Emerald 500 - Rich success */
+    --success-bg: 150 70% 97%; /* Emerald 50 */
+    --error: 0 72% 51%; /* Coral 500 - Strong but not harsh */
+    --error-bg: 0 96% 94%; /* Coral 50 */
+    --warning: 38 92% 50%; /* Amber 500 - Sophisticated warning */
+    --warning-bg: 48 96% 96%; /* Amber 50 */
+
     /* Spacing Tokens */
     --spacing-xxs: 4px;
     --spacing-xs: 8px;
@@ -71,7 +81,38 @@
     --z-tooltip: 1070;
   }
 
+  /* Dark mode semantic tokens - automatically switch when .dark class is present */
+  .dark {
+    --background: 222 40% 5%; /* Slate 950 - Deep, rich dark */
+    --foreground: 210 40% 98%; /* Slate 50 - Bright text */
+    --card: 222 39% 11%; /* Slate 800 - Elevated dark */
+    --card-foreground: 210 40% 98%;
+    --popover: 222 39% 11%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 25 95% 53%; /* Orange 500 - Keep consistent */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 189 94% 43%; /* Cyan 500 */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 217 33% 17%; /* Slate 800 */
+    --muted-foreground: 215 20% 65%; /* Slate 300 - Medium text */
+    --accent: 25 95% 53%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%; /* Coral 500 - Brighter for dark mode */
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 33% 17%; /* Slate 800 */
+    --input: 217 33% 17%;
+    --ring: 25 95% 53%;
 
+    /* Semantic Colors for Toasts & Status - Dark Mode */
+    --info: 199 89% 48%; /* Cyan 400 - Brighter in dark mode */
+    --info-bg: 199 80% 15%; /* Cyan 950 */
+    --success: 150 76% 40%; /* Emerald 400 - Brighter */
+    --success-bg: 150 70% 15%; /* Emerald 950 */
+    --error: 0 72% 51%; /* Coral 400 - Brighter */
+    --error-bg: 0 80% 20%; /* Coral 950 */
+    --warning: 38 92% 50%; /* Amber 400 - Brighter */
+    --warning-bg: 48 96% 20%; /* Amber 950 */
+  }
 }
 
 /* Base Styles */

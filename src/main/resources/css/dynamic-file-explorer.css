@@ -11,7 +11,7 @@
 @layer components {
   /* File options dropdown menu */
   .file-options-dropdown {
-    @apply shadow-lg border border-slate-200;
+    @apply shadow-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))];
   }
 
   .file-options-dropdown button {
@@ -19,24 +19,24 @@
   }
 
   .file-options-dropdown button:hover {
-    @apply bg-slate-50;
+    @apply bg-[hsl(var(--muted))];
   }
 
   .file-options-dropdown button:active {
-    @apply bg-slate-100;
+    @apply bg-[hsl(var(--muted))]/80;
   }
 
   /* Three-dots button */
   .file-options-btn {
-    @apply transition-all duration-200;
+    @apply transition-all duration-200 text-[hsl(var(--muted-foreground))];
   }
 
   .file-options-btn:hover {
-    @apply bg-slate-100 text-slate-700;
+    @apply bg-[hsl(var(--muted))] text-[hsl(var(--foreground))];
   }
 
   .file-options-btn:focus {
-    @apply outline-none ring-2 ring-slate-300 ring-offset-1;
+    @apply outline-none ring-2 ring-[hsl(var(--ring)_/_0.5)] ring-offset-1;
   }
 
   /* Dropdown animations */

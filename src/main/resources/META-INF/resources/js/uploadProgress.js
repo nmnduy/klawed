@@ -70,13 +70,15 @@ class UploadProgress {
             // Show success state briefly, then remove
             const progressFill = progressBar.querySelector('[data-progress-fill]');
             if (progressFill) {
-                progressFill.classList.remove('bg-orange-500');
-                progressFill.classList.add('bg-green-500');
+                progressFill.classList.remove('bg-[hsl(var(--primary))]');
+                progressFill.classList.add('bg-[hsl(var(--success))]');
             }
 
             const progressText = progressBar.querySelector('[data-progress-text]');
             if (progressText) {
                 progressText.textContent = '✓ Complete';
+                progressText.classList.remove('text-[hsl(var(--primary))]');
+                progressText.classList.add('text-[hsl(var(--success))]');
             }
 
             // Remove after 2 seconds
@@ -87,13 +89,15 @@ class UploadProgress {
             // Show error state
             const progressFill = progressBar.querySelector('[data-progress-fill]');
             if (progressFill) {
-                progressFill.classList.remove('bg-orange-500');
-                progressFill.classList.add('bg-red-500');
+                progressFill.classList.remove('bg-[hsl(var(--primary))]');
+                progressFill.classList.add('bg-[hsl(var(--error))]');
             }
 
             const progressText = progressBar.querySelector('[data-progress-text]');
             if (progressText) {
                 progressText.textContent = '✗ Failed';
+                progressText.classList.remove('text-[hsl(var(--primary))]');
+                progressText.classList.add('text-[hsl(var(--error))]');
             }
 
             // Remove after 4 seconds
@@ -139,7 +143,7 @@ class UploadProgress {
      */
     createProgressBar(uploadId, fileName, totalSize) {
         const div = document.createElement('div');
-        div.className = 'bg-white dark:bg-slate-800 rounded-lg shadow-lg border-2 border-slate-200 dark:border-slate-700 p-4 animate-fade-in';
+        div.className = 'bg-[hsl(var(--card))] dark:bg-[hsl(var(--card))] rounded-lg shadow-lg border-2 border-[hsl(var(--border))] p-4 animate-fade-in';
         div.dataset.uploadId = uploadId;
 
         const truncatedName = fileName.length > 35 ? fileName.substring(0, 32) + '...' : fileName;
@@ -147,21 +151,21 @@ class UploadProgress {
         div.innerHTML = `
             <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <svg class="w-5 h-5 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 text-[hsl(var(--primary))] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                     <div class="flex-1 min-w-0">
-                        <div class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate" title="${fileName}">${truncatedName}</div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400">
+                        <div class="text-sm font-medium text-[hsl(var(--foreground))] truncate" title="${fileName}">${truncatedName}</div>
+                        <div class="text-xs text-[hsl(var(--muted-foreground))]">
                             <span data-progress-size>0 B</span> / ${this.formatBytes(totalSize)}
                         </div>
                     </div>
                 </div>
-                <span class="text-sm font-semibold text-orange-600 dark:text-orange-400 ml-2" data-progress-text>0%</span>
+                <span class="text-sm font-semibold text-[hsl(var(--primary))] ml-2" data-progress-text>0%</span>
             </div>
-            <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+            <div class="w-full bg-[hsl(var(--muted))] rounded-full h-2 overflow-hidden">
                 <div
-                    class="bg-orange-500 h-full transition-all duration-300 ease-out rounded-full"
+                    class="bg-[hsl(var(--primary))] h-full transition-all duration-300 ease-out rounded-full"
                     data-progress-fill
                     style="width: 0%"
                 ></div>
