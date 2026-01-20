@@ -28,7 +28,7 @@ import java.util.logging.Logger;
  * Resource for handling large file uploads via chunking.
  * Supports resumable uploads with chunk-based transfer.
  */
-@Path("/file-chat/upload/chunked")
+@Path("/app/upload/chunked")
 @Produces(MediaType.APPLICATION_JSON)
 public class ChunkedUploadResource {
 

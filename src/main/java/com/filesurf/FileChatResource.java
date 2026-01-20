@@ -13,7 +13,7 @@ import jakarta.ws.rs.core.MediaType;
 
 import java.util.logging.Logger;
 
-@Path("/file-chat")
+@Path("/app")
 public class FileChatResource {
 
     private static final Logger LOGGER = Logger.getLogger(FileChatResource.class.getName());

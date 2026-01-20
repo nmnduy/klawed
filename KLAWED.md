@@ -102,7 +102,6 @@ logs/                          # Application logs (dev only)
 ```
 /var/lib/filesurf/data/        # SQLite database
 /var/lib/filesurf/persistent/  # Persistent user data
-/var/lib/filesurf/sessions/    # User session files
 /var/lib/filesurf/demos/       # Demo MP4 videos
 /var/log/filesurf/             # Application logs
 ```
@@ -113,6 +112,7 @@ logs/                          # Application logs (dev only)
 - REST API: Various endpoints under `/file-chat/http/`
 - **Demo Videos**: `GET /demo/{name}` - Stream demo MP4 videos
 - **Monitoring**: `GET /metrics` - Prometheus metrics endpoint (Tailscale-only access on port 9090)
+- **Sanity Tests**: Automated production health checks run every 8 hours (see `docs/PRODUCTION_SANITY_TEST.md`)
 
 ## REST API Endpoints
 ### Authentication
@@ -304,4 +304,4 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 
 ## Deployment
 
-`deployment/deploy-rsync-jvm.sh`
+`deployment/deploy-rsync.sh`

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{#if isNew}New Post{:else}Edit Post{/if} - Admin</title>
+    <link rel="stylesheet" href="{cssPath}">
+    <style>
+        .form-group { @apply mb-6; }
+        .form-label { @apply block text-caption-s font-medium text-muted-foreground mb-2; }
+        .form-input { @apply w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground text-body-s focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent; }
+        .form-textarea { @apply form-input min-h-[200px] resize-y; }
+        .form-select { @apply form-input; }
+        .form-checkbox { @apply w-4 h-4 rounded border-border bg-background text-primary focus:ring-primary; }
+        .form-error { @apply text-caption-s text-destructive mt-1; }
+        .tag-checkbox { @apply flex items-center gap-2 py-1; }
+        .tab-btn { @apply px-4 py-2 text-body-s font-medium border-b-2 transition-colors; }
+        .tab-btn.active { @apply border-primary text-primary; }
+        .tab-btn.inactive { @apply border-transparent text-muted-foreground hover:text-foreground; }
+    </style>
+</head>
+<body class="bg-background min-h-screen">
+    <header class="border-b border-border/60 bg-card/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <a href="/admin/blog/posts" class="flex items-center gap-2 text-h4-headline-s font-bold text-foreground">
+                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                    </svg>
+                    <span>Blog Admin</span>
+                </a>
+            </div>
+            <nav class="flex items-center gap-4">
+                <a href="/admin/blog/posts" class="text-body-m font-medium text-muted-foreground hover:text-foreground">Posts</a>
+                <a href="/admin/blog/categories" class="text-body-m font-medium text-muted-foreground hover:text-foreground">Categories</a>
+                <a href="/admin/blog/tags" class="text-body-m font-medium text-muted-foreground hover:text-foreground">Tags</a>
+                <a href="/admin/blog/analytics" class="text-body-m font-medium text-muted-foreground hover:text-foreground">Analytics</a>
+                <a href="/blog" class="text-body-m font-medium text-semantic-link-unvisited hover:text-semantic-link-hover">View Blog →</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 py-8">
+        <div class="flex items-center justify-between mb-8">
+            <h1 class="text-h1-headline-l font-bold text-foreground">{#if isNew}New Post{:else}Edit Post{/if}</h1>
+            <a href="/admin/blog/posts" class="text-body-m text-muted-foreground hover:text-foreground">← Back to Posts</a>
+        </div>
+
+        {#if error}
+        <div class="p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive mb-6">
+            {error}
+        </div>
+        {/if}
+
+        <form action="{#if isNew}/admin/blog/posts{:else}/admin/blog/posts/{post.id}{/if}" method="POST" class="space-y-8">
+            <!-- Main Content -->
+            <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
+                <div class="form-group">
+                    <label for="title" class="form-label">Title *</label>
+                    <input type="text" id="title" name="title" value="{post.title ?: ''}" class="form-input" required placeholder="Enter post title..." />
+                </div>
+
+                <div class="form-group">
+                    <label for="content" class="form-label">Content *</label>
+                    <textarea id="content" name="content" class="form-textarea" required placeholder="Write your post content here...">{post.content ?: ''}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="excerpt" class="form-label">Excerpt</label>
+                    <textarea id="excerpt" name="excerpt" class="form-textarea min-h-[100px]" placeholder="Brief summary of the post...">{post.excerpt ?: ''}</textarea>
+                    <p class="text-caption-s text-muted-foreground mt-1">A short summary that appears in post previews and search results.</p>
+                </div>
+            </div>
+
+            <!-- Metadata Tabs -->
+            <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 overflow-hidden">
+                <div class="flex border-b border-border">
+                    <button type="button" class="tab-btn active" onclick="showTab('settings')">Settings</button>
+                    <button type="button" class="tab-btn inactive" onclick="showTab('seo')">SEO</button>
+                    <button type="button" class="tab-btn inactive" onclick="showTab('tags')">Tags</button>
+                </div>
+
+                <!-- Settings Tab -->
+                <div id="tab-settings" class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="form-group">
+                            <label for="authorId" class="form-label">Author *</label>
+                            <select id="authorId" name="authorId" class="form-select" required>
+                                <option value="">Select author...</option>
+                                {#for author in authors}
+                                <option value="{author.id}" {#if post.authorId == author.id}selected{/if}>{author.name}</option>
+                                {/for}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="categoryId" class="form-label">Category</label>
+                            <select id="categoryId" name="categoryId" class="form-select">
+                                <option value="">No category...</option>
+                                {#for cat in categories}
+                                <option value="{cat.id}" {#if post.categoryId == cat.id}selected{/if}>{cat.name}</option>
+                                {/for}
+                            </select>
+                        </div>
+
+                        <div class="form-group md:col-span-2">
+                            <label for="featuredImageUrl" class="form-label">Featured Image URL</label>
+                            <input type="url" id="featuredImageUrl" name="featuredImageUrl" value="{post.featuredImageUrl ?: ''}" class="form-input" placeholder="https://example.com/image.jpg" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="status" class="form-label">Status</label>
+                            <select id="status" name="status" class="form-select">
+                                <option value="draft" {#if post.status == 'draft' || !post.status}selected{/if}>Draft</option>
+                                <option value="published" {#if post.status == 'published'}selected{/if}>Published</option>
+                                <option value="archived" {#if post.status == 'archived'}selected{/if}>Archived</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEO Tab -->
+                <div id="tab-seo" class="p-6 hidden">
+                    <div class="space-y-6">
+                        <div class="form-group">
+                            <label for="metaTitle" class="form-label">Meta Title</label>
+                            <input type="text" id="metaTitle" name="metaTitle" value="{post.metaTitle ?: ''}" class="form-input" placeholder="SEO title (defaults to post title)" />
+                            <p class="text-caption-s text-muted-foreground mt-1">Recommended: 50-60 characters</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="metaDescription" class="form-label">Meta Description</label>
+                            <textarea id="metaDescription" name="metaDescription" class="form-textarea min-h-[100px]" placeholder="SEO description">{post.metaDescription ?: ''}</textarea>
+                            <p class="text-caption-s text-muted-foreground mt-1">Recommended: 150-160 characters</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="metaKeywords" class="form-label">Meta Keywords</label>
+                            <input type="text" id="metaKeywords" name="metaKeywords" value="{post.metaKeywords ?: ''}" class="form-input" placeholder="keyword1, keyword2, keyword3" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="canonicalUrl" class="form-label">Canonical URL</label>
+                            <input type="url" id="canonicalUrl" name="canonicalUrl" value="{post.canonicalUrl ?: ''}" class="form-input" placeholder="Leave empty for auto-generated URL" />
+                            <p class="text-caption-s text-muted-foreground mt-1">Use this if this post content exists elsewhere</p>
+                        </div>
+
+                        <!-- SEO Preview -->
+                        <div class="border border-border rounded-xl p-4">
+                            <h4 class="text-caption-s font-medium text-muted-foreground mb-2">Search Preview</h4>
+                            <div class="space-y-1">
+                                <p class="text-lg text-semantic-link-unvisited hover:text-semantic-link-hover hover:underline cursor-pointer truncate">{#if post.metaTitle}{post.metaTitle}{:else}{post.title ?: 'Post Title'}{/if}</p>
+                                <p class="text-sm text-semantic-success truncate">{siteUrl}/blog/{#if post.slug}{post.slug}{:else}post-slug{/if}</p>
+                                <p class="text-sm text-muted-foreground line-clamp-2">{#if post.metaDescription}{post.metaDescription}{:else}{post.excerpt ?: 'Post excerpt will appear here...'}{/if}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tags Tab -->
+                <div id="tab-tags" class="p-6 hidden">
+                    <div class="form-group">
+                        <label class="form-label">Tags</label>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {#for tag in allTags}
+                            <label class="tag-checkbox">
+                                <input type="checkbox" name="tagIds" value="{tag.id}" class="form-checkbox" {#if selectedTagIds.contains(tag.id)}checked{/if} />
+                                <span class="text-body-s text-foreground">{tag.name}</span>
+                            </label>
+                            {/for}
+                        </div>
+                        {#if allTags.isEmpty()}
+                        <p class="text-caption-s text-muted-foreground">No tags created yet. Create tags from the Tags page.</p>
+                        {/if}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <button type="submit" name="action" value="save" class="px-6 py-3 bg-muted text-foreground rounded-lg hover:bg-muted/80 font-medium transition-colors">
+                        Save Draft
+                    </button>
+                    <button type="submit" name="action" value="publish" class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium transition-colors">
+                        {#if post.status == 'published'}Update{:else}Publish{/if}
+                    </button>
+                </div>
+                {#if !isNew}
+                <a href="/blog/{post.slug}" target="_blank" class="text-body-m text-muted-foreground hover:text-primary transition-colors">
+                    View Post →
+                </a>
+                {/if}
+            </div>
+        </form>
+    </main>
+
+    <footer class="border-t border-border/60 bg-card/80 backdrop-blur mt-12">
+        <div class="max-w-4xl mx-auto px-4 py-8 text-center">
+            <p class="text-caption-m text-muted-foreground">© 2026 FileSurf Blog Admin</p>
+        </div>
+    </footer>
+
+    <script>
+        function showTab(tabName) {
+            // Hide all tabs
+            document.getElementById('tab-settings').classList.add('hidden');
+            document.getElementById('tab-seo').classList.add('hidden');
+            document.getElementById('tab-tags').classList.add('hidden');
+            
+            // Reset all buttons
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons.forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('inactive');
+            });
+            
+            // Show selected tab
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+            
+            // Update button style
+            event.target.classList.remove('inactive');
+            event.target.classList.add('active');
+        }
+
+        // Auto-generate slug from title
+        document.getElementById('title')?.addEventListener('input', function(e) {
+            // Slug generation is handled server-side, but we could add client-side preview
+        });
+    </script>
+</body>
+</html>

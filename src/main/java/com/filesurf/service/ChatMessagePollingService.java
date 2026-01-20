@@ -118,7 +118,7 @@ public class ChatMessagePollingService {
      * Only polls for messages belonging to sessions with active WebSocket connections.
      * Messages for disconnected sessions are ignored - users who drop off don't need those messages.
      */
-    @Scheduled(every = "0.3s")
+    @Scheduled(every = "1s")
     @ActivateRequestContext
     public void pollAndSendUnsentMessages() {
         if (!pollingActive.get()) {
@@ -168,7 +168,7 @@ public class ChatMessagePollingService {
                         connection.sendText(jsonMessage).subscribe().with(
                             success -> {
                                 LOGGER.info("[SESSION:" + sessionId + "] Sent message ID: " + message.getId());
-                                markMessageAsSent(message.getId());
+                                markMessageAsSent(sessionId, message.getId());
                             },
                             failure -> {
                                 LOGGER.warning("[SESSION:" + sessionId + "] Failed to send message ID: " + message.getId() +
@@ -277,9 +277,9 @@ public class ChatMessagePollingService {
      */
     @Transactional
     @ActivateRequestContext
-    public void markMessageAsSent(Long messageId) {
-        fileChatService.markMessageAsSent(messageId);
-        LOGGER.fine("Message " + messageId + " marked as sent in database");
+    public void markMessageAsSent(String sessionId, Long messageId) {
+        fileChatService.markMessageAsSent(sessionId, messageId);
+        LOGGER.fine("[SESSION:" + sessionId + "] Message " + messageId + " marked as sent in database");
     }
 
     /**
@@ -313,7 +313,7 @@ public class ChatMessagePollingService {
                     connection.sendText(jsonMessage).subscribe().with(
                         success -> {
                             LOGGER.info("[SESSION:" + sessionId + "] Sent message ID: " + message.getId());
-                            markMessageAsSent(message.getId());
+                            markMessageAsSent(sessionId, message.getId());
                         },
                         failure -> {
                             LOGGER.warning("[SESSION:" + sessionId + "] Failed to send message ID: " + message.getId() +

@@ -1,6 +1,6 @@
 package com.filesurf.service;
 
-import com.filesurf.repository.ChatRepository;
+import com.filesurf.repository.SessionChatRepository;
 import com.filesurf.model.ChatSessionRecord;
 import com.filesurf.model.ChatMessageRecord;
 import jakarta.annotation.PostConstruct;
@@ -15,72 +15,80 @@ public class FileChatService {
     private static final Logger LOGGER = Logger.getLogger(FileChatService.class.getName());
 
     @Inject
-    ChatRepository chatRepository;
+    SessionChatRepository sessionChatRepository;
 
     @PostConstruct
     void init() {
-        LOGGER.info("Initializing FileChatService and database schema...");
-        chatRepository.initializeSchema();
+        LOGGER.info("Initializing FileChatService with per-session databases...");
+        // Note: Schema is initialized per-session when needed
     }
 
     public ChatSessionRecord createOrUpdateChatSession(String sessionId, String clientIdentity) {
-        LOGGER.info("Creating/updating chat session: " + sessionId + " for client: " + clientIdentity);
-        return chatRepository.createOrUpdateChatSession(sessionId, clientIdentity);
+        LOGGER.info("[SESSION:" + sessionId + "] Creating/updating chat session for client: " + clientIdentity);
+        return sessionChatRepository.createOrUpdateChatSession(sessionId, clientIdentity);
     }
 
     public ChatMessageRecord createChatMessage(String sessionId, String sender, String receiver,
                                          String content, String messageType) {
-        LOGGER.info("Creating chat message for session: " + sessionId + " from " + sender + " to " + receiver);
-        return chatRepository.createChatMessage(sessionId, sender, receiver, content, messageType);
+        LOGGER.info("[SESSION:" + sessionId + "] Creating chat message from " + sender + " to " + receiver);
+        return sessionChatRepository.createChatMessage(sessionId, sender, receiver, content, messageType);
     }
 
     public void deactivateChatSession(String sessionId) {
-        LOGGER.info("Deactivating chat session: " + sessionId);
-        chatRepository.deactivateChatSession(sessionId);
+        LOGGER.info("[SESSION:" + sessionId + "] Deactivating chat session");
+        sessionChatRepository.deactivateChatSession(sessionId);
     }
 
     /**
      * Check if a chat session is still active in the database.
      */
     public boolean isChatSessionActive(String sessionId) {
-        return chatRepository.isChatSessionActive(sessionId);
+        return sessionChatRepository.isChatSessionActive(sessionId);
     }
 
     // Finder methods - read operations
     public ChatSessionRecord findChatSessionBySessionId(String sessionId) {
-        return chatRepository.findChatSessionBySessionId(sessionId);
+        return sessionChatRepository.findChatSessionBySessionId(sessionId);
     }
 
-    public List<ChatMessageRecord> findUnsentMessages() {
-        return chatRepository.findUnsentMessages();
+    public List<ChatMessageRecord> findUnsentMessages(String sessionId) {
+        return sessionChatRepository.findUnsentMessages(sessionId);
     }
 
     public List<ChatMessageRecord> findUnsentMessagesForSession(String sessionId) {
-        return chatRepository.findUnsentMessagesForSession(sessionId);
+        return sessionChatRepository.findUnsentMessagesForSession(sessionId);
     }
 
     public List<ChatMessageRecord> findMessagesBySession(String sessionId) {
-        return chatRepository.findMessagesBySession(sessionId);
+        return sessionChatRepository.findMessagesBySession(sessionId);
     }
 
     public List<ChatMessageRecord> findMessagesBySessionAndSender(String sessionId, String sender) {
-        return chatRepository.findMessagesBySessionAndSender(sessionId, sender);
+        return sessionChatRepository.findMessagesBySessionAndSender(sessionId, sender);
     }
 
     public List<ChatMessageRecord> findMessagesBySessionAndReceiver(String sessionId, String receiver) {
-        return chatRepository.findMessagesBySessionAndReceiver(sessionId, receiver);
+        return sessionChatRepository.findMessagesBySessionAndReceiver(sessionId, receiver);
     }
 
     public List<ChatMessageRecord> findMessagesBySessionAndReceiverSince(String sessionId, String receiver, Long sinceTimestamp) {
-        return chatRepository.findMessagesBySessionAndReceiverSince(sessionId, receiver, sinceTimestamp);
+        return sessionChatRepository.findMessagesBySessionAndReceiverSince(sessionId, receiver, sinceTimestamp);
     }
 
-    public ChatMessageRecord findChatMessageById(Long id) {
-        return chatRepository.findChatMessageById(id);
+    public ChatMessageRecord findChatMessageById(String sessionId, Long id) {
+        return sessionChatRepository.findChatMessageById(sessionId, id);
     }
 
-    public void markMessageAsSent(Long messageId) {
-        LOGGER.info("Marking message as sent: " + messageId);
-        chatRepository.markMessageAsSent(messageId);
+    public void markMessageAsSent(String sessionId, Long messageId) {
+        LOGGER.info("[SESSION:" + sessionId + "] Marking message as sent: " + messageId);
+        sessionChatRepository.markMessageAsSent(sessionId, messageId);
+    }
+
+    /**
+     * Close the session database connection.
+     */
+    public void closeSession(String sessionId) {
+        LOGGER.info("[SESSION:" + sessionId + "] Closing session database connection");
+        sessionChatRepository.closeSession(sessionId);
     }
 }

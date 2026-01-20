@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Pipeline Platform | FileSurf - Secure & Customizable</title>
+    <meta name="description" content="Build customizable AI pipeline workflows that save hours on repeatable tasks. Privacy-first platform - your data never trains our models. Design your own automation.">
+    <meta name="keywords" content="ai pipeline workflow, ai workflow automation, customizable ai pipelines, repeatable ai workflows, secure ai platform">
+    <link rel="icon" type="image/svg+xml" href="/assets/filesurf-logo.svg">
+    <link rel="apple-touch-icon" href="/assets/filesurf-logo.svg">
+    <link rel="stylesheet" href="{cssPath}">
+    <script>
+        (function() {
+            try {
+                document.documentElement.classList.remove('dark');
+            } catch (e) {}
+        })();
+    </script>
+    <style>
+        /* Custom scrollbar for webkit browsers using design tokens */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(
+                180deg,
+                color-mix(in srgb, hsl(var(--primary)) 86%, hsl(var(--muted)) 14%),
+                color-mix(in srgb, hsl(var(--accent)) 86%, hsl(var(--muted)) 14%)
+            );
+            border-radius: 9999px;
+            border: 1px solid color-mix(in srgb, hsl(var(--background)) 92%, transparent);
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(
+                180deg,
+                color-mix(in srgb, hsl(var(--primary)) 90%, hsl(var(--muted)) 10%),
+                color-mix(in srgb, hsl(var(--accent)) 90%, hsl(var(--muted)) 10%)
+            );
+        }
+
+        /* Override visited link styles to prevent purple color */
+        nav a:visited,
+        a:visited {
+            color: inherit;
+        }
+
+        /* Ensure navbar links maintain their intended colors */
+        nav a {
+            color: hsl(var(--layout-content-medium));
+        }
+
+        nav a:hover {
+            color: hsl(var(--primary));
+        }
+
+        /* Ensure CTA buttons maintain their styling */
+        nav a.inline-flex:visited,
+        section a.inline-flex:visited {
+            color: inherit;
+        }
+    </style>
+</head>
+<body class="bg-background text-foreground min-h-screen">
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-md border-b border-border">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-3">
+                    <img src="/assets/filesurf-logo.svg" alt="FileSurf" class="h-8 w-auto">
+                    <span class="text-h4-headline-s text-layout-emphasis-high">FileSurf</span>
+                    <span class="hidden sm:inline text-body-m text-layout-content-medium">AI Pipeline Platform</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#features" class="text-body-m text-layout-content-medium hover:text-primary transition-colors duration-200">Features</a>
+                    <a href="#security" class="text-body-m text-layout-content-medium hover:text-primary transition-colors duration-200">Security</a>
+                    <a href="#contact" class="text-body-m text-layout-content-medium hover:text-primary transition-colors duration-200">Contact Sales</a>
+                    <a href="/app" class="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-all duration-200 font-semibold shadow-sm hover:shadow-md transform hover:-translate-y-0.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        Launch App
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="pt-28 pb-16 sm:pt-32 sm:pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-background via-layout-surface to-background">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid lg:grid-cols-2 gap-10 items-center">
+                <div class="space-y-6">
+                    <div class="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-2 shadow-sm">
+                        <span class="inline-flex h-2 w-2 rounded-full bg-primary animate-pulse"></span>
+                        <span class="text-body-s text-layout-content-medium">Customizable AI pipeline workflows</span>
+                    </div>
+                    <h1 class="text-display-m sm:text-display-l text-layout-emphasis-high leading-tight">
+                        FileSurf: Build Repeatable AI Pipeline Workflows That Save Hours
+                    </h1>
+                    <p class="text-body-xl text-layout-content-medium max-w-2xl">
+                        Design customizable AI workflows for your repetitive tasks. With the power of AI, businesses can automate and tailor pipelines exactly how they need—while keeping data private and secure.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        <a href="/app" class="inline-flex items-center justify-center gap-2 px-6 py-3 text-body-l font-semibold text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            Launch FileSurf
+                        </a>
+                        <a href="#contact" class="inline-flex items-center justify-center gap-2 px-6 py-3 text-body-l font-semibold text-foreground bg-background border-2 border-border rounded-lg hover:bg-muted hover:border-primary/50 shadow-inner transition-all duration-200">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                            Talk to Sales
+                        </a>
+                    </div>
+                    <div class="flex flex-wrap gap-6 pt-2">
+                        <div class="flex items-center gap-2">
+                            <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                            </div>
+                            <div class="text-body-m text-layout-content-medium">Privacy-first architecture</div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            </div>
+                            <div class="text-body-m text-layout-content-medium">Repeatable workflows</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="relative">
+                    <div class="absolute -inset-6 rounded-[28px] bg-gradient-to-br from-primary/20 via-primary/5 to-transparent blur-2xl"></div>
+                    <div class="relative bg-card border border-border rounded-[24px] shadow-xl p-6 sm:p-8">
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <p class="text-body-s text-layout-content-low">AI Pipeline Workflow</p>
+                                <p class="text-h4-headline-s text-layout-emphasis-high">Customizable & Secure</p>
+                            </div>
+                            <span class="px-3 py-1 rounded-full bg-primary/10 text-primary text-body-s">Live</span>
+                        </div>
+                        <div class="grid sm:grid-cols-3 gap-4 mb-6">
+                            <div class="rounded-2xl border border-border bg-layout-surface-raised p-4">
+                                <p class="text-body-s text-layout-content-low">Time Saved</p>
+                                <p class="text-display-s text-layout-emphasis-high">Hours</p>
+                                <p class="text-caption-m text-layout-content-low">per workflow</p>
+                            </div>
+                            <div class="rounded-2xl border border-border bg-layout-surface-raised p-4">
+                                <p class="text-body-s text-layout-content-low">Data Egress</p>
+                                <p class="text-display-s text-semantic-success">0%</p>
+                                <p class="text-caption-m text-layout-content-low">exfiltration</p>
+                            </div>
+                            <div class="rounded-2xl border border-border bg-layout-surface-raised p-4">
+                                <p class="text-body-s text-layout-content-low">Customization</p>
+                                <p class="text-display-s text-layout-emphasis-high">100%</p>
+                                <p class="text-caption-m text-layout-content-low">your way</p>
+                            </div>
+                        </div>
+                        <div class="rounded-2xl border border-border bg-layout-surface p-5 space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-semibold">AI</div>
+                                    <div>
+                                        <p class="text-body-m-bold text-layout-emphasis-high">Contract review</p>
+                                        <p class="text-caption-m text-layout-content-low">Legal workflow</p>
+                                    </div>
+                                </div>
+                                <span class="text-caption-m text-layout-content-medium">Running</span>
+                            </div>
+                            <div class="w-full bg-layout-surface-raised rounded-full h-2">
+                                <div class="h-2 rounded-full bg-primary" style="width: 78%"></div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 text-caption-m text-layout-content-medium">
+                                <div class="rounded-xl bg-card/70 border border-border px-3 py-2 text-center">
+                                    <p class="text-caption-m-bold text-layout-emphasis-high">PII Guard</p>
+                                    <p class="text-caption-m text-semantic-success">On</p>
+                                </div>
+                                <div class="rounded-xl bg-card/70 border border-border px-3 py-2 text-center">
+                                    <p class="text-caption-m-bold text-layout-emphasis-high">Audit Log</p>
+                                    <p class="text-caption-m text-layout-content-medium">Enabled</p>
+                                </div>
+                                <div class="rounded-xl bg-card/70 border border-border px-3 py-2 text-center">
+                                    <p class="text-caption-m-bold text-layout-emphasis-high">Outbound</p>
+                                    <p class="text-caption-m text-semantic-success">Zero</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Social proof -->
+            <div class="mt-14 border border-border rounded-2xl bg-card/70 p-4 sm:p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <p class="text-body-m text-layout-content-medium">Trusted by teams automating repetitive workflows with AI</p>
+                    <div class="flex flex-wrap items-center gap-4 sm:gap-6 text-body-s text-layout-content-low uppercase tracking-wide">
+                        <span class="px-3 py-1 rounded-full bg-layout-surface">FinTech</span>
+                        <span class="px-3 py-1 rounded-full bg-layout-surface">Healthcare</span>
+                        <span class="px-3 py-1 rounded-full bg-layout-surface">Legal</span>
+                        <span class="px-3 py-1 rounded-full bg-layout-surface">Research</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Feature Highlights -->
+    <section id="features" class="py-16 sm:py-20 px-4 sm:px-6 lg:px-8 bg-background">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center max-w-3xl mx-auto mb-12">
+                <p class="text-body-s text-layout-content-medium uppercase tracking-wide">Why FileSurf</p>
+                <h2 class="text-display-s text-layout-emphasis-high mt-3 mb-4">AI pipeline workflows built for business</h2>
+                <p class="text-body-l text-layout-content-medium">Repeatable automation, privacy-first controls, and fully customizable pipelines that adapt to your needs.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="h-full rounded-2xl border border-border bg-card p-6 shadow-sm">
+                    <div class="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                    </div>
+                    <h3 class="text-h4-headline-s text-layout-emphasis-high mb-2">Complete Isolation</h3>
+                    <p class="text-body-m text-layout-content-medium mb-4">Each pipeline runs in its own sandbox with outbound controls, PII redaction, and zero training on your data.</p>
+                    <ul class="space-y-2 text-body-s text-layout-content-medium">
+                        <li class="flex gap-2"><span class="text-semantic-success">•</span> Tenant-level keys and storage</li>
+                        <li class="flex gap-2"><span class="text-semantic-success">•</span> Signed audit trails</li>
+                        <li class="flex gap-2"><span class="text-semantic-success">•</span> Granular RBAC</li>
+                    </ul>
+                </div>
+                <div class="h-full rounded-2xl border border-border bg-card p-6 shadow-sm">
+                    <div class="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </div>
+                    <h3 class="text-h4-headline-s text-layout-emphasis-high mb-2">Save Hours on Repetitive Tasks</h3>
+                    <p class="text-body-m text-layout-content-medium mb-4">Turn manual processes into repeatable AI pipeline workflows. What used to take hours can run automatically with consistent results.</p>
+                    <ul class="space-y-2 text-body-s text-layout-content-medium">
+                        <li class="flex gap-2"><span class="text-semantic-success">•</span> Automate document processing</li>
+                        <li class="flex gap-2"><span class="text-semantic-success">•</span> Batch operations at scale</li>
+                        <li class="flex gap-2"><span class="text-semantic-success">•</span> Consistent, reproducible outputs</li>
+                    </ul>
+                </div>
+                <div class="h-full rounded-2xl border border-border bg-card p-6 shadow-sm">
+                    <div class="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/></svg>
+                    </div>
+                    <h3 class="text-h4-headline-s text-layout-emphasis-high mb-2">Fully Customizable Pipelines</h3>
+                    <p class="text-body-m text-layout-content-medium mb-4">With AI, businesses can tailor every workflow to their exact needs. No rigid templates—build pipelines that work the way you do.</p>
+                    <ul class="space-y-2 text-body-s text-layout-content-medium">
+                        <li class="flex gap-2"><span class="text-semantic-success">•</span> Chain AI steps your way</li>
+                        <li class="flex gap-2"><span class="text-semantic-success">•</span> Custom output formats</li>
+                        <li class="flex gap-2"><span class="text-semantic-success">•</span> Adapt to any business process</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="py-16 px-4 sm:px-6 lg:px-8 bg-layout-surface">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8 mb-10">
+                <div class="space-y-3 max-w-2xl">
+                    <p class="text-body-s text-layout-content-medium uppercase tracking-wide">AI pipeline workflow in minutes</p>
+                    <h2 class="text-display-s text-layout-emphasis-high">Build once, run forever—customize as needed</h2>
+                    <p class="text-body-l text-layout-content-medium">Create repeatable AI workflows that save your team hours. Upload files, run your custom pipeline, and get consistent results every time.</p>
+                </div>
+                <div class="rounded-full bg-card border border-border px-4 py-3 text-body-s text-layout-content-medium shadow-sm">
+                    <span class="text-primary font-semibold">New</span> Fully customizable AI pipeline workflows
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="rounded-2xl bg-card border border-border p-5 shadow-sm space-y-3">
+                    <div class="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">1</div>
+                    <h3 class="text-h4-headline-s text-layout-emphasis-high">Upload securely</h3>
+                    <p class="text-body-m text-layout-content-medium">Whitelisted file types, virus scanning, and encryption by default.</p>
+                </div>
+                <div class="rounded-2xl bg-card border border-border p-5 shadow-sm space-y-3">
+                    <div class="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">2</div>
+                    <h3 class="text-h4-headline-s text-layout-emphasis-high">Define your workflow</h3>
+                    <p class="text-body-m text-layout-content-medium">Chain AI steps exactly how your business needs. Extraction, summarization, classification—your rules.</p>
+                </div>
+                <div class="rounded-2xl bg-card border border-border p-5 shadow-sm space-y-3">
+                    <div class="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">3</div>
+                    <h3 class="text-h4-headline-s text-layout-emphasis-high">Reuse & iterate</h3>
+                    <p class="text-body-m text-layout-content-medium">Run the same workflow on new files. Customize anytime as your needs evolve.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Security Section -->
+    <section id="security" class="py-16 px-4 sm:px-6 lg:px-8 bg-background">
+        <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+            <div class="space-y-5">
+                <p class="text-body-s text-layout-content-medium uppercase tracking-wide">Security & Governance</p>
+                <h2 class="text-display-s text-layout-emphasis-high">Your data never leaves the sandbox</h2>
+                <p class="text-body-l text-layout-content-medium">Every tenant gets isolated storage, outbound controls, and verifiable audit trails. Compliance is built in—not bolted on.</p>
+                <ul class="space-y-3">
+                    <li class="flex items-start gap-3">
+                        <svg class="w-6 h-6 text-semantic-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span class="text-body-m text-layout-content-medium">No training on customer data—ever.</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-6 h-6 text-semantic-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span class="text-body-m text-layout-content-medium">End-to-end encryption with per-tenant keys.</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-6 h-6 text-semantic-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span class="text-body-m text-layout-content-medium">GDPR/CCPA-ready with one-click data deletion.</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-6 h-6 text-semantic-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span class="text-body-m text-layout-content-medium">Detailed audit logs and access policies by role.</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="rounded-2xl border border-border bg-card shadow-lg p-8">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <p class="text-body-s text-layout-content-low">Security posture</p>
+                        <p class="text-h4-headline-s text-layout-emphasis-high">Locked & monitored</p>
+                    </div>
+                    <span class="px-3 py-1 rounded-full bg-semantic-success/10 text-semantic-success text-body-s">Active</span>
+                </div>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between rounded-xl border border-border bg-layout-surface px-4 py-3">
+                        <div>
+                            <p class="text-body-m-bold text-layout-emphasis-high">Data residency</p>
+                            <p class="text-caption-m text-layout-content-low">Region-pinned storage</p>
+                        </div>
+                        <span class="text-body-m text-layout-content-medium">US & EU</span>
+                    </div>
+                    <div class="flex items-center justify-between rounded-xl border border-border bg-layout-surface px-4 py-3">
+                        <div>
+                            <p class="text-body-m-bold text-layout-emphasis-high">Access control</p>
+                            <p class="text-caption-m text-layout-content-low">RBAC + SSO/SAML</p>
+                        </div>
+                        <span class="text-body-m text-layout-content-medium">Enforced</span>
+                    </div>
+                    <div class="flex items-center justify-between rounded-xl border border-border bg-layout-surface px-4 py-3">
+                        <div>
+                            <p class="text-body-m-bold text-layout-emphasis-high">PII safeguards</p>
+                            <p class="text-caption-m text-layout-content-low">Redaction + masking</p>
+                        </div>
+                        <span class="text-body-m text-semantic-success">On</span>
+                    </div>
+                    <div class="flex items-center justify-between rounded-xl border border-border bg-layout-surface px-4 py-3">
+                        <div>
+                            <p class="text-body-m-bold text-layout-emphasis-high">Audit evidence</p>
+                            <p class="text-caption-m text-layout-content-low">Exportable trails</p>
+                        </div>
+                        <span class="text-body-m text-layout-content-medium">Download</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact" class="py-16 px-4 sm:px-6 lg:px-8 bg-layout-surface">
+        <div class="max-w-3xl mx-auto">
+            <div class="text-center mb-10">
+                <p class="text-body-s text-layout-content-medium uppercase tracking-wide">Get started with AI pipeline workflows</p>
+                <h2 class="text-display-s text-layout-emphasis-high mb-3">Ready to automate your workflows?</h2>
+                <p class="text-body-l text-layout-content-medium">Tell us about the repetitive tasks eating up your team's time—we'll show you how to turn them into customizable AI pipelines.</p>
+            </div>
+
+            <div class="bg-card rounded-2xl border border-border p-8 shadow-md">
+                <form id="contact-form" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="email" class="block text-body-m font-medium text-layout-emphasis-high mb-2">Work Email</label>
+                            <input
+                                type="email"
+                                id="email"
+                                name="email"
+                                class="input w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                placeholder="you@company.com"
+                                required
+                            >
+                        </div>
+                        <div>
+                            <label for="company" class="block text-body-m font-medium text-layout-emphasis-high mb-2">Company Name</label>
+                            <input
+                                type="text"
+                                id="company"
+                                name="company"
+                                class="input w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                placeholder="Acme Inc."
+                            >
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="message" class="block text-body-m font-medium text-layout-emphasis-high mb-2">What repetitive tasks would you like to automate?</label>
+                        <textarea
+                            id="message"
+                            name="message"
+                            rows="4"
+                            class="input w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+                            placeholder="Tell us about the workflows you'd like to automate..."
+                        ></textarea>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <p class="text-body-s text-layout-content-medium">We'll get back within 24 hours.</p>
+                        <button
+                            type="submit"
+                            id="submit-btn"
+                            class="inline-flex items-center justify-center px-6 py-3 text-body-l font-semibold text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg transition-all duration-200"
+                        >
+                            Send Message
+                        </button>
+                    </div>
+
+                    <!-- Thank you message (hidden by default) -->
+                    <div id="thank-you" class="hidden text-center py-8">
+                        <div class="w-16 h-16 mx-auto bg-semantic-success/10 rounded-full flex items-center justify-center mb-4">
+                            <svg class="w-8 h-8 text-semantic-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-h4-headline-s font-semibold text-layout-emphasis-high mb-2">Thank you!</h3>
+                        <p class="text-body-m text-layout-content-medium">We'll be in touch soon.</p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer CTA -->
+    <section class="bg-background px-4 sm:px-6 lg:px-8 pb-16">
+        <div class="max-w-7xl mx-auto">
+            <div class="rounded-3xl border border-border bg-card shadow-lg px-6 py-10 sm:px-10 sm:py-12 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                <div class="space-y-3 max-w-2xl">
+                    <p class="text-body-s text-layout-content-medium uppercase tracking-wide">Start saving time</p>
+                    <h3 class="text-display-s text-layout-emphasis-high">Build your first AI pipeline workflow today</h3>
+                    <p class="text-body-m text-layout-content-medium">Create custom, repeatable workflows that turn hours of manual work into automated pipelines—all while keeping your data private and secure.</p>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                    <a href="/app" class="inline-flex items-center justify-center px-6 py-3 text-body-l font-semibold text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg transition-all duration-200">Try FileSurf Now</a>
+                    <a href="#contact" class="inline-flex items-center justify-center px-6 py-3 text-body-l font-semibold text-foreground bg-background border-2 border-border rounded-lg hover:bg-muted hover:border-primary/50 shadow-inner transition-all duration-200">Book a call</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-layout-surface py-10 px-4 sm:px-6 lg:px-8 border-t border-border">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <img src="/assets/filesurf-logo.svg" alt="FileSurf" class="h-6 w-auto">
+                    <span class="text-body-s text-layout-content-medium">AI pipeline workflow platform</span>
+                </div>
+                <p class="text-body-s text-layout-content-medium">&copy; {now().year} FileSurf. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.getElementById('contact-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const form = e.target;
+            const submitBtn = document.getElementById('submit-btn');
+            const thankYou = document.getElementById('thank-you');
+            const formFields = form.querySelectorAll('input, textarea, button');
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="three-dot-loader"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>';
+
+            try {
+                const formData = {
+                    email: document.getElementById('email').value,
+                    company: document.getElementById('company').value,
+                    message: document.getElementById('message').value
+                };
+
+                const response = await fetch('/http/contact', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    formFields.forEach(field => field.classList.add('hidden'));
+                    thankYou.classList.remove('hidden');
+                } else {
+                    throw new Error('Submission failed');
+                }
+            } catch (error) {
+                console.error('Form submission error:', error);
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Send Message';
+                alert('Something went wrong. Please try again.');
+            }
+        });
+    </script>
+</body>
+</html>

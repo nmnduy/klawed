@@ -27,7 +27,7 @@ public class AuthenticationFilter implements ContainerRequestFilter {
 
     private static final Logger LOGGER = Logger.getLogger(AuthenticationFilter.class.getName());
     private static final String USER_COOKIE_NAME = "filesurf_userId";
-    private static final String DEFAULT_REDIRECT_PATH = "/file-chat";
+    private static final String DEFAULT_REDIRECT_PATH = "/app";
 
     @Inject
     UserService userService;
@@ -37,8 +37,11 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         String path = requestContext.getUriInfo().getPath();
         String method = requestContext.getMethod();
 
+        LOGGER.fine("AuthenticationFilter checking path: " + path);
+        
         // Skip authentication for certain paths
         if (shouldSkipAuthentication(path)) {
+            LOGGER.fine("Skipping authentication for path: " + path);
             return;
         }
 
@@ -86,13 +89,19 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             return true;
         }
 
-        // Skip waitlist page
-        if (normalizedPath.equals("waitlist") || normalizedPath.startsWith("waitlist/")) {
+        // Skip blog (public SEO content)
+        if (normalizedPath.equals("blog") || normalizedPath.startsWith("blog/")) {
+            LOGGER.fine("Skipping authentication for blog path: " + path);
             return true;
         }
 
-        // Skip demo videos page
-        if (normalizedPath.equals("demo") || normalizedPath.startsWith("demo/")) {
+        // Skip landing page
+        if (normalizedPath.isEmpty() || normalizedPath.equals("index.html")) {
+            return true;
+        }
+
+        // Skip http endpoints (public API)
+        if (normalizedPath.startsWith("http/")) {
             return true;
         }
 
@@ -162,10 +171,10 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         }
 
         String normalizedPath = path.startsWith("/") ? path.substring(1) : path;
-        return normalizedPath.startsWith("file-chat/http/") ||
+        return normalizedPath.startsWith("app/http/") ||
                normalizedPath.startsWith("session/") ||
-               normalizedPath.startsWith("file-chat/upload") ||
-               normalizedPath.startsWith("file-chat/explorer/");
+               normalizedPath.startsWith("app/upload") ||
+               normalizedPath.startsWith("app/explorer/");
     }
 
     /**

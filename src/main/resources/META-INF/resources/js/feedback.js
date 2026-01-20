@@ -119,7 +119,7 @@ async function submitFeedback(data) {
     };
 
     try {
-        const response = await fetch('/file-chat/http/feedback', {
+        const response = await fetch('/app/http/feedback', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

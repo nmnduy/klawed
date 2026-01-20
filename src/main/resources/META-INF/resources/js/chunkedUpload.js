@@ -11,7 +11,7 @@ class ChunkedUploader {
         this.onProgress = options.onProgress || (() => {});
         this.onComplete = options.onComplete || (() => {});
         this.onError = options.onError || ((error) => console.error(error));
-        this.baseUrl = options.baseUrl || '/file-chat/upload/chunked';
+        this.baseUrl = options.baseUrl || '/app/upload/chunked';
         this.useProgressUI = options.useProgressUI !== false; // Enable by default
         this.uploadId = null; // Will be set during upload
     }

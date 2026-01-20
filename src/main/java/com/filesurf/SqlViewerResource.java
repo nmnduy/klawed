@@ -21,7 +21,7 @@ import java.util.logging.Logger;
  * SQLite Database Viewer Resource for browsing and querying SQLite databases
  * that users have uploaded to their session directories.
  */
-@Path("/file-chat/explorer/sql")
+@Path("/app/explorer/sql")
 public class SqlViewerResource {
 
     private static final Logger LOGGER = Logger.getLogger(SqlViewerResource.class.getName());

@@ -206,13 +206,13 @@ public class UserAuthResource {
             UserRecord user = userService.getUserByUserId(userId);
             if (user != null) {
                 // Already authenticated, redirect to main app (sanitized)
-                String redirectUrl = sanitizeRedirect((redirect != null && !redirect.isEmpty()) ? redirect : "/file-chat");
+                String redirectUrl = sanitizeRedirect((redirect != null && !redirect.isEmpty()) ? redirect : "/app");
                 return login.data("authenticated", true).data("redirectUrl", redirectUrl);
             }
         }
 
         // Return login page template with sanitized redirect
-        String redirectPath = sanitizeRedirect((redirect != null && !redirect.isEmpty()) ? redirect : "/file-chat");
+        String redirectPath = sanitizeRedirect((redirect != null && !redirect.isEmpty()) ? redirect : "/app");
         return login.data("authenticated", false).data("redirect", redirectPath);
     }
 
@@ -223,7 +223,7 @@ public class UserAuthResource {
      */
     private String sanitizeRedirect(String redirect) {
         if (redirect == null || redirect.isEmpty()) {
-            return "/file-chat";
+            return "/app";
         }
 
         // Block dangerous URL schemes
@@ -234,13 +234,13 @@ public class UserAuthResource {
             lower.startsWith("file:") ||
             lower.startsWith("about:")) {
             LOGGER.warning("Blocked dangerous redirect URL scheme: " + redirect);
-            return "/file-chat";
+            return "/app";
         }
 
         // Block protocol-relative URLs
         if (lower.startsWith("//")) {
             LOGGER.warning("Blocked protocol-relative redirect: " + redirect);
-            return "/file-chat";
+            return "/app";
         }
 
         // Only allow relative paths starting with /

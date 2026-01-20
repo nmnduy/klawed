@@ -107,7 +107,7 @@ class StandardUploader {
             }
 
             // Send request
-            xhr.open('POST', '/file-chat/upload');
+            xhr.open('POST', '/app/upload');
             xhr.setRequestHeader('X-Session-ID', sessionId);
             xhr.send(formData);
         });

@@ -4,13 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FileSurf - AI Assistant</title>
-    <!-- Force light mode only -->
+    <!-- Apply saved or system theme early to prevent flash -->
     <script>
-        (function() {
+        (() => {
+            const STORAGE_KEY = 'filesurf-theme';
+            const DARK_CLASS = 'dark';
             try {
-                // Remove dark class if it exists
-                document.documentElement.classList.remove('dark');
-            } catch (e) {}
+                const stored = localStorage.getItem(STORAGE_KEY);
+                const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const theme = stored === 'dark' || (!stored && prefersDark) ? 'dark' : 'light';
+                if (theme === 'dark') {
+                    document.documentElement.classList.add(DARK_CLASS);
+                } else {
+                    document.documentElement.classList.remove(DARK_CLASS);
+                }
+            } catch (error) {
+                // Fallback to system preference if storage is unavailable
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.classList.add(DARK_CLASS);
+                }
+            }
         })();
     </script>
     <link rel="stylesheet" href="{cssPath}">
@@ -60,7 +73,7 @@
         <!-- Main Content Area with Chat and File Explorer -->
         <div class="flex flex-1 overflow-hidden">
             <!-- Chat Panel -->
-            <div id="chat-panel" class="relative flex-1 flex flex-col overflow-hidden lg:border-r-2 lg:border-slate-200 dark:lg:border-slate-700" role="tabpanel" aria-labelledby="chat-tab">
+            <div id="chat-panel" class="relative flex-1 flex flex-col overflow-hidden lg:border-r-2 lg:border-border" role="tabpanel" aria-labelledby="chat-tab">
                 <!-- Chat Messages Area with improved scrolling -->
                 <div id="chat-container" data-chat-container class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-5 bg-[hsl(var(--background))] [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,_hsl(var(--primary))_55%,_hsl(var(--muted))_45%)_transparent]" style="
                     --scrollbar-thumb-bg: linear-gradient(180deg, color-mix(in srgb, hsl(var(--primary)) 80%, hsl(var(--muted)) 20%), color-mix(in srgb, hsl(var(--accent)) 80%, hsl(var(--muted)) 20%));

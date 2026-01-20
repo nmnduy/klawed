@@ -52,7 +52,8 @@ public class SQLiteQueueClientPool {
                 .withReceiverName(senderName)  // receiver="client" (messages TO client)
                 .withSessionId(sid)
                 .withFileChatService(fileChatService)
-                .withPollTimeoutMs(100);
+                .withPollIntervalMs(1000)
+                .withPollTimeoutMs(1000);
 
             SQLiteQueueClient client = new SQLiteQueueClient(config);
 

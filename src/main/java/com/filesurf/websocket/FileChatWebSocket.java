@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.logging.Logger;
 import java.io.IOException;
 
-@WebSocket(path = "/file-chat/ws/{sessionId}")
+@WebSocket(path = "/app/ws/{sessionId}")
 public class FileChatWebSocket {
 
     private static final Logger LOGGER = Logger.getLogger(FileChatWebSocket.class.getName());
@@ -246,7 +246,7 @@ public class FileChatWebSocket {
             ChatMessageRecord clientMessage = fileChatService.createChatMessage(sessionId, ChatConstants.CLIENT, ChatConstants.AGENT, message, ChatConstants.DB_MESSAGE_TYPE_TEXT);
             LOGGER.info("[SESSION:" + sessionId + "] Incoming message saved to database with ID: " + clientMessage.getId());
             // Mark client message as sent immediately since it was successfully received by server
-            fileChatService.markMessageAsSent(clientMessage.getId());
+            fileChatService.markMessageAsSent(sessionId, clientMessage.getId());
             LOGGER.info("[SESSION:" + sessionId + "] Client message marked as sent");
         } catch (Exception dbEx) {
             LOGGER.warning("[SESSION:" + sessionId + "] Failed to save incoming message to database: " + dbEx.getMessage());
