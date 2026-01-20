@@ -456,24 +456,24 @@ export function init(rootEl) {
      */
     function getToolDisplayInfo(toolName) {
         const toolMap = {
-            'Read': { icon: '📄', label: 'Reading file', verb: 'Read' },
-            'Write': { icon: '✏️', label: 'Writing file', verb: 'Wrote' },
-            'Edit': { icon: '🔧', label: 'Editing file', verb: 'Edited' },
-            'MultiEdit': { icon: '🔧', label: 'Editing file', verb: 'Edited' },
-            'Grep': { icon: '🔍', label: 'Searching', verb: 'Searched' },
-            'Glob': { icon: '📁', label: 'Finding files', verb: 'Found files' },
-            'Bash': { icon: '💻', label: 'Running command', verb: 'Ran command' },
-            'Subagent': { icon: '🤖', label: 'Running subagent', verb: 'Subagent completed' },
-            'TodoWrite': { icon: '📝', label: 'Updating tasks', verb: 'Updated tasks' },
-            'MemoryStore': { icon: '💾', label: 'Storing memory', verb: 'Stored memory' },
-            'MemoryRecall': { icon: '🧠', label: 'Recalling memory', verb: 'Recalled memory' },
-            'MemorySearch': { icon: '🔎', label: 'Searching memory', verb: 'Searched memory' },
-            'UploadImage': { icon: '🖼️', label: 'Processing image', verb: 'Processed image' },
-            'Sleep': { icon: '⏳', label: 'Waiting', verb: 'Waited' },
-            'CheckSubagentProgress': { icon: '📊', label: 'Checking progress', verb: 'Checked progress' },
-            'InterruptSubagent': { icon: '🛑', label: 'Stopping subagent', verb: 'Stopped subagent' }
+            'Read': { icon: 'fileText', label: 'Reading file', verb: 'Read' },
+            'Write': { icon: 'penLine', label: 'Writing file', verb: 'Wrote' },
+            'Edit': { icon: 'wrench', label: 'Editing file', verb: 'Edited' },
+            'MultiEdit': { icon: 'wrench', label: 'Editing file', verb: 'Edited' },
+            'Grep': { icon: 'search', label: 'Searching', verb: 'Searched' },
+            'Glob': { icon: 'folder', label: 'Finding files', verb: 'Found files' },
+            'Bash': { icon: 'terminal', label: 'Running command', verb: 'Ran command' },
+            'Subagent': { icon: 'bot', label: 'Running subagent', verb: 'Subagent completed' },
+            'TodoWrite': { icon: 'checkSquare', label: 'Updating tasks', verb: 'Updated tasks' },
+            'MemoryStore': { icon: 'database', label: 'Storing memory', verb: 'Stored memory' },
+            'MemoryRecall': { icon: 'brain', label: 'Recalling memory', verb: 'Recalled memory' },
+            'MemorySearch': { icon: 'search', label: 'Searching memory', verb: 'Searched memory' },
+            'UploadImage': { icon: 'image', label: 'Processing image', verb: 'Processed image' },
+            'Sleep': { icon: 'clock', label: 'Waiting', verb: 'Waited' },
+            'CheckSubagentProgress': { icon: 'activity', label: 'Checking progress', verb: 'Checked progress' },
+            'InterruptSubagent': { icon: 'slash', label: 'Stopping subagent', verb: 'Stopped subagent' }
         };
-        return toolMap[toolName] || { icon: '🔧', label: toolName, verb: toolName };
+        return toolMap[toolName] || { icon: 'wrench', label: toolName, verb: toolName };
     }
 
     /**
@@ -670,13 +670,18 @@ export function init(rootEl) {
 
         toolItem.innerHTML = `
             <span class="flex-shrink-0" data-tool-status>${spinner}</span>
-            <span class="text-slate-600 dark:text-slate-400">${displayInfo.icon}</span>
+            <i data-lucide="${displayInfo.icon}" class="w-4 h-4 text-slate-600 dark:text-slate-400"></i>
             <span class="text-slate-700 dark:text-slate-300">${displayInfo.label}</span>
             ${inputSummary ? `<span class="text-slate-500 dark:text-slate-400 truncate max-w-[200px]" title="${inputSummary}">${inputSummary}</span>` : ''}
             <span class="ml-auto text-xs text-slate-400 dark:text-slate-500" data-tool-result></span>
         `;
 
         toolList.appendChild(toolItem);
+
+        // Initialize Lucide icons for the new tool item
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons({ root: toolItem });
+        }
 
         // Track pending tool
         pendingTools.set(toolId, {
@@ -730,10 +735,15 @@ export function init(rootEl) {
             const resultEl = element.querySelector('[data-tool-result]');
 
             if (isError) {
-                statusEl.innerHTML = `<span class="text-red-500">✗</span>`;
+                statusEl.innerHTML = `<i data-lucide="xCircle" class="w-3.5 h-3.5 text-red-500"></i>`;
                 element.classList.add('text-red-600', 'dark:text-red-400');
             } else {
-                statusEl.innerHTML = `<span class="text-emerald-500">✓</span>`;
+                statusEl.innerHTML = `<i data-lucide="checkCircle" class="w-3.5 h-3.5 text-emerald-500"></i>`;
+            }
+
+            // Re-initialize Lucide icons for the updated status
+            if (typeof lucide !== 'undefined' && lucide.createIcons && statusEl) {
+                lucide.createIcons({ root: statusEl });
             }
 
             resultEl.textContent = resultSummary + (duration > 1000 ? ` (${(duration/1000).toFixed(1)}s)` : '');
