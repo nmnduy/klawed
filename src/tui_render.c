@@ -33,6 +33,67 @@
 #include <ncurses.h>
 #include <bsd/string.h>
 #include <stdlib.h>
+#include <wchar.h>
+#include <locale.h>
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+// Calculate display width of a UTF-8 string
+static int utf8_display_width(const char *str) {
+    if (!str || !*str) {
+        return 0;
+    }
+    
+    // Save current locale
+    char *old_locale = setlocale(LC_ALL, NULL);
+    if (old_locale) {
+        old_locale = strdup(old_locale);
+    }
+    
+    // Set to UTF-8 locale for mbstowcs
+    setlocale(LC_ALL, "C.UTF-8");
+    
+    // Convert to wide characters
+    size_t len = mbstowcs(NULL, str, 0);
+    if (len == (size_t)-1) {
+        // Conversion failed, fall back to strlen (assume ASCII)
+        if (old_locale) {
+            setlocale(LC_ALL, old_locale);
+            free(old_locale);
+        }
+        return (int)strlen(str);
+    }
+    
+    wchar_t *wstr = malloc((len + 1) * sizeof(wchar_t));
+    if (!wstr) {
+        if (old_locale) {
+            setlocale(LC_ALL, old_locale);
+            free(old_locale);
+        }
+        return (int)strlen(str);  // Fall back
+    }
+    
+    mbstowcs(wstr, str, len + 1);
+    
+    // Calculate display width using wcswidth
+    int width = wcswidth(wstr, len);
+    free(wstr);
+    
+    // Restore locale
+    if (old_locale) {
+        setlocale(LC_ALL, old_locale);
+        free(old_locale);
+    }
+    
+    // If wcswidth returns -1 (unknown characters), fall back to character count
+    if (width < 0) {
+        return (int)len;
+    }
+    
+    return width;
+}
 
 // ============================================================================
 // Spinner Functions
@@ -117,7 +178,8 @@ void render_status_window(TUIState *tui) {
 
     // Prepare status message string (agent status - rightmost)
     char status_str[256] = {0};
-    int status_str_len = 0;
+    int status_str_len = 0;  // Byte length for mvwaddnstr
+    int status_display_width = 0;  // Display width for positioning
     int has_spinner = 0;
     if (tui->status_visible && tui->status_message && tui->status_message[0] != '\0') {
         if (tui->status_spinner_active) {
@@ -133,7 +195,7 @@ void render_status_window(TUIState *tui) {
             // When screen is narrow, show only spinner without text
             // to make space for token count and scroll percentage
             if (width < narrow_threshold) {
-                snprintf(status_str, sizeof(status_str), "%s ", frame);
+                snprintf(status_str, sizeof(status_str), "%s", frame);
             } else {
                 snprintf(status_str, sizeof(status_str), "%s %s ", frame, tui->status_message);
             }
@@ -146,6 +208,7 @@ void render_status_window(TUIState *tui) {
             }
         }
         status_str_len = (int)strlen(status_str);
+        status_display_width = utf8_display_width(status_str);
     }
 
     // Prepare plan mode indicator (if enabled) - always visible regardless of mode
@@ -166,15 +229,18 @@ void render_status_window(TUIState *tui) {
         LOG_WARN("[TUI] No conversation state for plan_mode read");
     }
 
+    int plan_display_width = 0;
     if (plan_mode) {
         snprintf(plan_str, sizeof(plan_str), " ● Plan ");
         plan_str_len = (int)strlen(plan_str);
-        LOG_DEBUG("[TUI] Plan mode indicator: '%s' (len=%d)", plan_str, plan_str_len);
+        plan_display_width = utf8_display_width(plan_str);
+        LOG_DEBUG("[TUI] Plan mode indicator: '%s' (len=%d, display_width=%d)", plan_str, plan_str_len, plan_display_width);
     }
 
     // Prepare scroll percentage in NORMAL mode
     char scroll_str[32] = {0};
     int scroll_str_len = 0;
+    int scroll_display_width = 0;
     if (tui->mode == TUI_MODE_NORMAL) {
         int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
         int max_scroll = window_manager_get_max_scroll(&tui->wm);
@@ -200,11 +266,13 @@ void render_status_window(TUIState *tui) {
 
         snprintf(scroll_str, sizeof(scroll_str), " %d%% ", percentage);
         scroll_str_len = (int)strlen(scroll_str);
+        scroll_display_width = utf8_display_width(scroll_str);
     }
 
     // Prepare token usage (show when non-zero, regardless of mode)
     char token_str[128] = {0};
     int token_str_len = 0;
+    int token_display_width = 0;
 
     // Query total prompt/completion tokens and cached tokens for this session
     int prompt_tokens = 0;
@@ -237,6 +305,7 @@ void render_status_window(TUIState *tui) {
             snprintf(token_str, sizeof(token_str), "Token: %d ", total_tokens);
         }
         token_str_len = (int)strlen(token_str);
+        token_display_width = utf8_display_width(token_str);
         LOG_DEBUG("[TUI] Rendering token display: %s (mode=%d)", token_str, tui->mode);
     }
 
@@ -244,7 +313,7 @@ void render_status_window(TUIState *tui) {
     // Left side (in order): plan mode, scroll %, token usage
     // Right side: spinner + LLM status message
 
-    int status_col = width - status_str_len;
+    int status_col = width - status_display_width;
     if (status_col < 0) status_col = 0;
 
     // Render status message on the right (rightmost position)
@@ -267,9 +336,9 @@ void render_status_window(TUIState *tui) {
     int left_limit = status_col;
 
     // Plan mode indicator (always visible when enabled)
-    if (plan_str_len > 0 && plan_str_len < width && left_col + plan_str_len < left_limit) {
-        LOG_DEBUG("[TUI] Rendering plan mode at col=%d, width=%d, plan_str_len=%d, mode=%d",
-                  left_col, width, plan_str_len, tui->mode);
+    if (plan_str_len > 0 && plan_display_width < width && left_col + plan_display_width < left_limit) {
+        LOG_DEBUG("[TUI] Rendering plan mode at col=%d, width=%d, plan_display_width=%d, mode=%d",
+                  left_col, width, plan_display_width, tui->mode);
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         } else {
@@ -281,14 +350,14 @@ void render_status_window(TUIState *tui) {
         } else {
             wattroff(tui->wm.status_win, A_BOLD);
         }
-        left_col += plan_str_len;
+        left_col += plan_display_width;
     } else if (plan_str_len > 0) {
-        LOG_DEBUG("[TUI] Plan mode indicator not rendered: plan_str_len=%d, width=%d, condition=%d",
-                  plan_str_len, width, (plan_str_len > 0 && plan_str_len < width));
+        LOG_DEBUG("[TUI] Plan mode indicator not rendered: plan_display_width=%d, width=%d, condition=%d",
+                  plan_display_width, width, (plan_str_len > 0 && plan_display_width < width));
     }
 
     // Scroll percentage (NORMAL mode only)
-    if (scroll_str_len > 0 && scroll_str_len < width && left_col + scroll_str_len < left_limit) {
+    if (scroll_str_len > 0 && scroll_display_width < width && left_col + scroll_display_width < left_limit) {
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
@@ -296,11 +365,11 @@ void render_status_window(TUIState *tui) {
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
-        left_col += scroll_str_len;
+        left_col += scroll_display_width;
     }
 
     // Token usage (NORMAL mode only)
-    if (token_str_len > 0 && token_str_len < width && left_col + token_str_len < left_limit) {
+    if (token_str_len > 0 && token_display_width < width && left_col + token_display_width < left_limit) {
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
         }
@@ -308,7 +377,7 @@ void render_status_window(TUIState *tui) {
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
         }
-        left_col += token_str_len;
+        left_col += token_display_width;
     }
 
     (void)col;  // Suppress unused variable warning
