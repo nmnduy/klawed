@@ -311,7 +311,7 @@ public class SqlViewerResource {
                 Map<String, Object> response = new HashMap<>();
                 response.put("success", true);
                 response.put("columns", columnNames);
-                response.put("data", data);
+                response.put("rows", data);
                 response.put("totalRows", totalRows);
                 response.put("page", page);
                 response.put("pageSize", pageSize);
@@ -966,7 +966,7 @@ public class SqlViewerResource {
 
                     result.put("type", "query");
                     result.put("columns", columns);
-                    result.put("data", data);
+                    result.put("rows", data);
                     result.put("rowCount", data.size());
                 }
             }
