@@ -121,12 +121,24 @@ echo ""
 # Create temporary data directory for local test
 LOCAL_TEST_DIR=$(mktemp -d)
 mkdir -p "$LOCAL_TEST_DIR/data"
+mkdir -p "$LOCAL_TEST_DIR/persistent"
+mkdir -p "$LOCAL_TEST_DIR/demos"
+mkdir -p "$LOCAL_TEST_DIR/klawed-messages"
+mkdir -p "$LOCAL_TEST_DIR/chat-messages"
 
 # Start the application in background
 cd "$LOCAL_PATH/target/quarkus-app"
 java \
     -Dquarkus.http.port="$LOCAL_TEST_PORT" \
     -Dquarkus.datasource.jdbc.url="jdbc:sqlite:$LOCAL_TEST_DIR/data/test.db?journal_mode=WAL" \
+    -Dfilesurf.persist.root="$LOCAL_TEST_DIR/persistent" \
+    -Ddemo.videos.directory="$LOCAL_TEST_DIR/demos" \
+    -Dcontainer.tracking.db.path="$LOCAL_TEST_DIR/data/containers.db" \
+    -Dfeedback.db.path="$LOCAL_TEST_DIR/data/feedback.db" \
+    -Dklawed.sqlite-queue.db-dir="$LOCAL_TEST_DIR/klawed-messages" \
+    -Dchat.messages.db-dir="$LOCAL_TEST_DIR/chat-messages" \
+    -Dklawed.sessions.db.path="$LOCAL_TEST_DIR/data/sessions.db" \
+    -Dblog.db.path="$LOCAL_TEST_DIR/data/blog.db" \
     -jar quarkus-run.jar &
 LOCAL_PID=$!
 
