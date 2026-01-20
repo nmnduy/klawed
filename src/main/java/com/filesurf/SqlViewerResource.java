@@ -291,15 +291,15 @@ public class SqlViewerResource {
                 params.add(pageSize);
                 params.add(page * pageSize);
 
-                List<List<Object>> data = new ArrayList<>();
+                List<Map<String, Object>> data = new ArrayList<>();
                 try (PreparedStatement stmt = conn.prepareStatement(dataSql.toString())) {
                     setParameters(stmt, params);
                     try (ResultSet rs = stmt.executeQuery()) {
                         int colCount = rs.getMetaData().getColumnCount();
                         while (rs.next()) {
-                            List<Object> row = new ArrayList<>();
+                            Map<String, Object> row = new LinkedHashMap<>();
                             for (int i = 1; i <= colCount; i++) {
-                                row.add(rs.getObject(i));
+                                row.put(columnNames.get(i - 1), rs.getObject(i));
                             }
                             data.add(row);
                         }
