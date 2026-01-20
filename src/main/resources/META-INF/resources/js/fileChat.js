@@ -116,8 +116,7 @@ export function init(rootEl) {
     let fileExplorer = null;
     let currentStreamMessageId = null;
     let currentStreamContent = '';
-    let typingIndicatorEl = rootEl.querySelector('[data-typing-indicator]') || null;
-    let hasSeededPlaceholders = false;
+    function addSystemMessage(content, type = 'info') {
     let lastApiCallTime = null;
 
     // Tool activity tracking
@@ -409,41 +408,17 @@ export function init(rootEl) {
         scrollToBottom();
     }
 
-    function ensureTypingIndicator() {
-        if (typingIndicatorEl) return typingIndicatorEl;
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'flex justify-start animate-fade-in';
-        wrapper.setAttribute('data-typing-indicator', '');
-
-        const bubble = document.createElement('div');
-        bubble.className = 'inline-flex items-center px-4 py-2.5 rounded-2xl border shadow-sm bg-layout-surface dark:bg-dark-surface border-layout-border dark:border-dark-border text-layout-content-medium dark:text-dark-content-medium';
-
-        const dots = document.createElement('div');
-        dots.className = 'flex gap-1.5 px-0.5';
-        for (let i = 0; i < 3; i++) {
-            const dot = document.createElement('div');
-            dot.className = 'w-1.5 h-1.5 rounded-full bg-current opacity-70';
-            dot.style.animation = `chat-typing 1.15s ease-in-out infinite ${i * 0.12}s`;
-            dots.appendChild(dot);
+    function showAiWorkingIndicator() {
+        const indicator = document.getElementById('ai-working-indicator');
+        if (indicator) {
+            indicator.classList.remove('hidden');
         }
-
-        bubble.appendChild(dots);
-        wrapper.appendChild(bubble);
-        typingIndicatorEl = wrapper;
-        return typingIndicatorEl;
     }
 
-    function addTypingIndicator() {
-        removeTypingIndicator();
-        const indicator = ensureTypingIndicator();
-        messageParent.appendChild(indicator);
-        scrollToBottom();
-    }
-
-    function removeTypingIndicator() {
-        if (typingIndicatorEl && typingIndicatorEl.parentElement) {
-            typingIndicatorEl.remove();
+    function hideAiWorkingIndicator() {
+        const indicator = document.getElementById('ai-working-indicator');
+        if (indicator) {
+            indicator.classList.add('hidden');
         }
     }
 
@@ -1379,7 +1354,7 @@ export function init(rootEl) {
                             updateStatus(true, 'Connected');
                         } else if (content && (/(Klawed is|working|processing|Tool|thinking)/i.test(content))) {
                             // Show typing indicator (3-dot bubble) for AI processing
-                            addTypingIndicator();
+                            showAiWorkingIndicator();
                             // Don't update connection status - it stays "Connected"
                         } else {
                             updateStatus(true, 'Connected');
@@ -1414,7 +1389,7 @@ export function init(rootEl) {
                         break;
                     case 'API_CALL':
                         // Show typing indicator (3-dot bubble) when AI is processing
-                        addTypingIndicator();
+                        showAiWorkingIndicator();
                         // Connection status stays "Connected" - no need to change it
 
                         // Add a system message for API calls (optional info)
@@ -1479,7 +1454,7 @@ export function init(rootEl) {
                                 // The typing indicator and tool activity card show the AI is working
                             } else {
                                 // Fallback to old behavior
-                                addTypingIndicator();
+                                showAiWorkingIndicator();
                                 // Don't update connection status
                             }
                         } else {
@@ -1516,7 +1491,7 @@ export function init(rootEl) {
                     case 'END_AI_TURN':
                         // AI turn completed - remove typing indicator
                         debug('Received END_AI_TURN - AI turn completed');
-                        removeTypingIndicator();
+                        hideAiWorkingIndicator();
                         // Reset API call time
                         lastApiCallTime = null;
                         // Connection status stays "Connected"
@@ -1566,13 +1541,13 @@ export function init(rootEl) {
 
         ws.onerror = (error) => {
             console.error('WebSocket error:', error);
-            removeTypingIndicator();
+            hideAiWorkingIndicator();
             updateStatus(false, 'Connection error');
         };
 
         ws.onclose = (event) => {
             console.info('WebSocket closed', event.code, event.reason);
-            removeTypingIndicator();
+            hideAiWorkingIndicator();
             isConnected = false;
 
             // Don't reconnect if this was a manual disconnect
@@ -1600,7 +1575,7 @@ export function init(rootEl) {
         hasReceivedFirstAiResponse = false;
 
         addMessage(message, true);
-        addTypingIndicator();
+        showAiWorkingIndicator();
         ws.send(message);
         if (elements.messageInput) {
             elements.messageInput.value = '';

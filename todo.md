@@ -5,7 +5,7 @@
 ## Bugs
 
 - [ ] no lucides icons
-- [ ] typing indicators shows but not at bottom
+- [x] typing indicators shows but not at bottom
 - [ ] mount .klawed folder in /tmp/
 - [x] sqlite viewer. no row seen
 

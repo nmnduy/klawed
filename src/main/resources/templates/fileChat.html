@@ -77,6 +77,16 @@
         <div class="flex flex-1 overflow-hidden">
             <!-- Chat Panel -->
             <div id="chat-panel" class="relative flex-1 flex flex-col overflow-hidden lg:border-r-2 lg:border-border" role="tabpanel" aria-labelledby="chat-tab">
+                <!-- Floating AI Working Indicator -->
+                <div id="ai-working-indicator" data-ai-working-indicator class="hidden fixed bottom-28 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 py-2.5 rounded-full bg-primary/90 text-white shadow-lg backdrop-blur-sm animate-fade-in">
+                    <span class="flex gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-white/90 animate-[chat-typing_1.15s_ease-in-out_infinite_0s]"></span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-white/90 animate-[chat-typing_1.15s_ease-in-out_infinite_0.12s]"></span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-white/90 animate-[chat-typing_1.15s_ease-in-out_infinite_0.24s]"></span>
+                    </span>
+                    <span class="text-body-s font-medium">AI is thinking...</span>
+                </div>
+
                 <!-- Chat Messages Area with improved scrolling -->
                 <div id="chat-container" data-chat-container class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-5 bg-[hsl(var(--background))] [scrollbar-width:thin] [scrollbar-color:color-mix(in_srgb,_hsl(var(--primary))_55%,_hsl(var(--muted))_45%)_transparent]" style="
                     --scrollbar-thumb-bg: linear-gradient(180deg, color-mix(in srgb, hsl(var(--primary)) 80%, hsl(var(--muted)) 20%), color-mix(in srgb, hsl(var(--accent)) 80%, hsl(var(--muted)) 20%));
