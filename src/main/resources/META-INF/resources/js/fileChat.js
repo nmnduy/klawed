@@ -1,6 +1,7 @@
 // Invoice Chat module
 import { TabManager } from './tabManager.js';
 import { handleAuthError, isAuthRequired } from './authUtils.js';
+import { parseMarkdown, containsMarkdown } from './markdownUtils.js';
 
 const DEBUG = false;
 const PLACEHOLDER_MESSAGES_ENABLED = false; // demo seed disabled
@@ -301,7 +302,22 @@ export function init(rootEl) {
 
             const textDiv = document.createElement('div');
             textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed text-current';
-            textDiv.textContent = String(content);
+            
+            // For user messages, display as plain text
+            // For AI messages, parse and render markdown
+            if (isUser) {
+                textDiv.textContent = String(content);
+            } else {
+                // Check if content contains markdown formatting
+                const markdownContent = String(content);
+                if (containsMarkdown(markdownContent)) {
+                    // Apply markdown rendering
+                    textDiv.innerHTML = parseMarkdown(markdownContent);
+                } else {
+                    // Display as plain text if no markdown detected
+                    textDiv.textContent = markdownContent;
+                }
+            }
 
             const timestamp = document.createElement('div');
             timestamp.className = 'text-caption-s mt-2 ' + (isUser ?
@@ -628,7 +644,8 @@ export function init(rootEl) {
      */
     function addToolActivity(toolName, toolId, toolInput) {
         hideEmptyState();
-        removeTypingIndicator();
+        // Don't remove typing indicator here - AI is still processing
+        // The typing indicator will be removed by END_AI_TURN message
 
         const container = ensureToolActivityContainer();
         const toolList = container.querySelector('[data-tool-list]');
