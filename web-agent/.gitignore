@@ -1,0 +1,41 @@
+# Binaries
+bin/
+web-agent
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Session files (user data)
+.sessions/
+*.sock
+
+# Build artifacts
+*.exe
+*.test
+*.prof
+coverage.html
+coverage.out
+
+# Go modules
+vendor/
+
+# Temporary files
+tmp/
+*.tmp
+*.temp
+
+# Log files
+*.log
+logs/
+
+# Configuration (user-specific)
+.config.json
+.env
+.env.local
