@@ -5,6 +5,7 @@
 ## Bugs
 
 - [ ] sqlite viewer. no row seen
+- [ ] mount .klawed folder in /tmp/
 
 ## Distribution
 
