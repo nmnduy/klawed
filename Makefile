@@ -46,7 +46,7 @@ build-dist: css
 	@echo "Production build complete! JAR file available in $(TARGET_DIR)/"
 
 # Start Quarkus development server
-dev: css-dev
+dev: css
 	@echo "Starting Quarkus development server..."
 	@$(MAVEN) quarkus:dev
 
