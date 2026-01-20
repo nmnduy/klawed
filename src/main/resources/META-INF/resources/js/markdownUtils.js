@@ -7,10 +7,12 @@ import { marked } from '/js/vendor/marked.esm.js';
 
 /**
  * Configure marked options for security and consistency
+ * Note: breaks is set to false - CSS whitespace-pre-wrap handles line breaks
+ * to avoid duplicate line breaks when combined with marked's <br> injection
  */
 marked.setOptions({
     gfm: true,           // Enable GitHub Flavored Markdown
-    breaks: true,        // Convert \n to <br>
+    breaks: false,       // Don't convert \n to <br> (CSS handles this to prevent duplicates)
     headerIds: false,    // Don't add IDs to headers
     mangle: false,       // Don't mangle header IDs
 });
