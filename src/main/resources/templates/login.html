@@ -4,15 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FileSurf - Login</title>
-    <!-- Force light mode only -->
-    <script>
-        (function() {
-            try {
-                // Remove dark class if it exists
-                document.documentElement.classList.remove('dark');
-            } catch (e) {}
-        })();
-    </script>
+    {#include partials/head.html /}
     <link rel="stylesheet" href="{cssPath}">
     {#if authenticated is true}
     <meta http-equiv="refresh" content="0; url={redirectUrl}">
