@@ -37,8 +37,11 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         String path = requestContext.getUriInfo().getPath();
         String method = requestContext.getMethod();
 
+        LOGGER.fine("AuthenticationFilter checking path: " + path);
+        
         // Skip authentication for certain paths
         if (shouldSkipAuthentication(path)) {
+            LOGGER.fine("Skipping authentication for path: " + path);
             return;
         }
 
@@ -88,6 +91,7 @@ public class AuthenticationFilter implements ContainerRequestFilter {
 
         // Skip blog (public SEO content)
         if (normalizedPath.equals("blog") || normalizedPath.startsWith("blog/")) {
+            LOGGER.fine("Skipping authentication for blog path: " + path);
             return true;
         }
 

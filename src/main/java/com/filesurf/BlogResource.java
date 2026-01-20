@@ -4,6 +4,7 @@ import com.filesurf.model.*;
 import com.filesurf.service.BlogService;
 import com.filesurf.service.RssFeedService;
 import com.filesurf.service.SitemapService;
+import com.filesurf.util.CssVersionProvider;
 import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
@@ -32,27 +33,30 @@ public class BlogResource {
     BlogService blogService;
 
     @Inject
-    @Location("blog.html")
+    CssVersionProvider cssVersionProvider;
+
+    @Inject
+    @Location("blog")
     Template blog;
 
     @Inject
-    @Location("blog-post.html")
+    @Location("blog-post")
     Template blogPost;
 
     @Inject
-    @Location("blog-category.html")
+    @Location("blog-category")
     Template blogCategory;
 
     @Inject
-    @Location("blog-tag.html")
+    @Location("blog-tag")
     Template blogTag;
 
     @Inject
-    @Location("blog-author.html")
+    @Location("blog-author")
     Template blogAuthor;
 
     @Inject
-    @Location("blog-search.html")
+    @Location("blog-search")
     Template blogSearch;
 
     @Inject
@@ -95,12 +99,14 @@ public class BlogResource {
                     .data("tags", tags)
                     .data("popularPosts", popularPosts)
                     .data("siteName", siteName)
-                    .data("pageTitle", siteName);
+                    .data("pageTitle", siteName)
+                    .data("cssPath", cssVersionProvider.getCssPath());
         } catch (Exception e) {
             LOGGER.severe("Error loading blog: " + e.getMessage());
             return blog.data("error", e.getMessage())
                     .data("siteName", siteName)
-                    .data("pageTitle", "Error");
+                    .data("pageTitle", "Error")
+                    .data("cssPath", cssVersionProvider.getCssPath());
         }
     }
 
@@ -154,7 +160,8 @@ public class BlogResource {
                     .data("relatedPosts", relatedPosts)
                     .data("siteName", siteName)
                     .data("siteUrl", siteUrl)
-                    .data("pageTitle", post.getTitle())).build();
+                    .data("pageTitle", post.getTitle())
+                    .data("cssPath", cssVersionProvider.getCssPath())).build();
                     
         } catch (Exception e) {
             LOGGER.severe("Error loading post: " + e.getMessage());
@@ -181,7 +188,8 @@ public class BlogResource {
             if (category == null) {
                 return blog.data("error", "Category not found: " + slug)
                         .data("siteName", siteName)
-                        .data("pageTitle", "Category Not Found");
+                        .data("pageTitle", "Category Not Found")
+                        .data("cssPath", cssVersionProvider.getCssPath());
             }
             
             BlogService.PaginatedResult<BlogPost> result = blogService.getPostsByCategory(slug, page);
@@ -197,13 +205,15 @@ public class BlogResource {
                     .data("categories", categories)
                     .data("tags", tags)
                     .data("siteName", siteName)
-                    .data("pageTitle", category.getName() + " | " + siteName);
+                    .data("pageTitle", category.getName() + " | " + siteName)
+                    .data("cssPath", cssVersionProvider.getCssPath());
                     
         } catch (Exception e) {
             LOGGER.severe("Error loading category: " + e.getMessage());
             return blog.data("error", e.getMessage())
                     .data("siteName", siteName)
-                    .data("pageTitle", "Error");
+                    .data("pageTitle", "Error")
+                    .data("cssPath", cssVersionProvider.getCssPath());
         }
     }
 
@@ -224,7 +234,8 @@ public class BlogResource {
             if (tag == null) {
                 return blog.data("error", "Tag not found: " + slug)
                         .data("siteName", siteName)
-                        .data("pageTitle", "Tag Not Found");
+                        .data("pageTitle", "Tag Not Found")
+                        .data("cssPath", cssVersionProvider.getCssPath());
             }
             
             BlogService.PaginatedResult<BlogPost> result = blogService.getPostsByTag(slug, page);
@@ -239,13 +250,15 @@ public class BlogResource {
                     .data("categories", categories)
                     .data("tags", tags)
                     .data("siteName", siteName)
-                    .data("pageTitle", "#" + tag.getName() + " | " + siteName);
+                    .data("pageTitle", "#" + tag.getName() + " | " + siteName)
+                    .data("cssPath", cssVersionProvider.getCssPath());
                     
         } catch (Exception e) {
             LOGGER.severe("Error loading tag: " + e.getMessage());
             return blog.data("error", e.getMessage())
                     .data("siteName", siteName)
-                    .data("pageTitle", "Error");
+                    .data("pageTitle", "Error")
+                    .data("cssPath", cssVersionProvider.getCssPath());
         }
     }
 
@@ -266,7 +279,8 @@ public class BlogResource {
             if (author == null) {
                 return blog.data("error", "Author not found: " + authorId)
                         .data("siteName", siteName)
-                        .data("pageTitle", "Author Not Found");
+                        .data("pageTitle", "Author Not Found")
+                        .data("cssPath", cssVersionProvider.getCssPath());
             }
             
             BlogService.PaginatedResult<BlogPost> result = blogService.getPostsByAuthor(authorId, page);
@@ -281,13 +295,15 @@ public class BlogResource {
                     .data("categories", categories)
                     .data("tags", tags)
                     .data("siteName", siteName)
-                    .data("pageTitle", author.getName() + " | " + siteName);
+                    .data("pageTitle", author.getName() + " | " + siteName)
+                    .data("cssPath", cssVersionProvider.getCssPath());
                     
         } catch (Exception e) {
             LOGGER.severe("Error loading author: " + e.getMessage());
             return blog.data("error", e.getMessage())
                     .data("siteName", siteName)
-                    .data("pageTitle", "Error");
+                    .data("pageTitle", "Error")
+                    .data("cssPath", cssVersionProvider.getCssPath());
         }
     }
 
@@ -308,7 +324,8 @@ public class BlogResource {
                     .data("categories", List.of())
                     .data("tags", List.of())
                     .data("siteName", siteName)
-                    .data("pageTitle", "Search | " + siteName);
+                    .data("pageTitle", "Search | " + siteName)
+                    .data("cssPath", cssVersionProvider.getCssPath());
         }
         
         try {
@@ -325,14 +342,16 @@ public class BlogResource {
                     .data("categories", categories)
                     .data("tags", tags)
                     .data("siteName", siteName)
-                    .data("pageTitle", "Search: " + query + " | " + siteName);
+                    .data("pageTitle", "Search: " + query + " | " + siteName)
+                    .data("cssPath", cssVersionProvider.getCssPath());
                     
         } catch (Exception e) {
             LOGGER.severe("Error searching: " + e.getMessage());
             return blogSearch.data("query", query)
                     .data("error", e.getMessage())
                     .data("siteName", siteName)
-                    .data("pageTitle", "Search Error | " + siteName);
+                    .data("pageTitle", "Search Error | " + siteName)
+                    .data("cssPath", cssVersionProvider.getCssPath());
         }
     }
 

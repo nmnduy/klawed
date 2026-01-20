@@ -41,23 +41,23 @@ public class AdminBlogResource {
     UserService userService;
 
     @Inject
-    @Location("admin-blog-posts.html")
+    @Location("admin-blog-posts")
     Template adminBlogPosts;
 
     @Inject
-    @Location("admin-blog-post-edit.html")
+    @Location("admin-blog-post-edit")
     Template adminBlogPostEdit;
 
     @Inject
-    @Location("admin-blog-categories.html")
+    @Location("admin-blog-categories")
     Template adminBlogCategories;
 
     @Inject
-    @Location("admin-blog-tags.html")
+    @Location("admin-blog-tags")
     Template adminBlogTags;
 
     @Inject
-    @Location("admin-blog-analytics.html")
+    @Location("admin-blog-analytics")
     Template adminBlogAnalytics;
 
     @ConfigProperty(name = "blog.site.url", defaultValue = "https://filesurf.example.com")
