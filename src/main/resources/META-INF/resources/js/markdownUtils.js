@@ -3,7 +3,7 @@
  * Parses and sanitizes markdown content for safe rendering in chat messages
  */
 
-import { marked } from '../dist/marked.esm.js';
+import { marked } from '/js/vendor/marked.esm.js';
 
 /**
  * Configure marked options for security and consistency

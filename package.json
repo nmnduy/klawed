@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css --watch",
-    "prebuild": "bash scripts/check-hardcoded-colors.sh || true && node scripts/validate-dynamic-css.js && node scripts/validate-js-conventions.js && node -e \"const fs = require('fs'); const path = require('path'); const distDir = path.join(__dirname, 'src/main/resources/META-INF/resources/dist'); try { fs.rmSync(distDir, { recursive: true, force: true }); } catch(e) {}\"",
+    "prebuild": "bash scripts/check-hardcoded-colors.sh || true && node scripts/validate-dynamic-css.js && node scripts/validate-js-conventions.js && node scripts/copy-vendor.js && node -e \"const fs = require('fs'); const path = require('path'); const distDir = path.join(__dirname, 'src/main/resources/META-INF/resources/dist'); try { fs.rmSync(distDir, { recursive: true, force: true }); } catch(e) {}\"",
     "build": "NODE_ENV=production npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css && NODE_ENV=production node scripts/hash-css.js && NODE_ENV=production node scripts/hash-js.js",
-    "build:dev": "node scripts/validate-js-conventions.js && NODE_ENV=development npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css && NODE_ENV=development node scripts/hash-css.js && NODE_ENV=development node scripts/hash-js.js",
+    "build:dev": "node scripts/copy-vendor.js && node scripts/validate-js-conventions.js && NODE_ENV=development npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css && NODE_ENV=development node scripts/hash-css.js && NODE_ENV=development node scripts/hash-js.js",
     "check:colors": "bash scripts/check-hardcoded-colors.sh",
     "check:colors:strict": "bash scripts/check-hardcoded-colors.sh --strict",
     "watch": "npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css --watch",
@@ -23,7 +23,6 @@
     "vite": "^5.0.8"
   },
   "dependencies": {
-    "fuse.js": "^7.1.0",
-    "marked": "^17.0.1"
+    "fuse.js": "^7.1.0"
   }
 }
