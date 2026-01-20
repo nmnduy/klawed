@@ -35,6 +35,11 @@ function main() {
     if (isDev) {
         console.log('🔧 Development mode: Skipping JS hashing');
 
+        // Ensure dist directory exists
+        if (!existsSync(JS_DIST_DIR)) {
+            mkdirSync(JS_DIST_DIR, { recursive: true });
+        }
+
         // Get all JS files in dev mode
         if (!existsSync(JS_SOURCE_DIR)) {
             console.error(`❌ Error: JS directory not found at ${JS_SOURCE_DIR}`);
@@ -43,6 +48,15 @@ function main() {
 
         const jsFiles = readdirSync(JS_SOURCE_DIR)
             .filter(f => f.endsWith('.js') && !f.match(/\.[a-f0-9]{8}\.js$/)); // Exclude already hashed files
+
+        // Copy JS files to dist directory without hashing
+        jsFiles.forEach(filename => {
+            const sourcePath = join(JS_SOURCE_DIR, filename);
+            const destPath = join(JS_DIST_DIR, filename);
+            copyFileSync(sourcePath, destPath);
+        });
+
+        console.log(`   Copied ${jsFiles.length} JS files to dist`);
 
         // Create a simple properties file pointing to non-hashed files
         let devPropertiesContent = `# JS version file for development (no cache busting)\n`;
