@@ -296,8 +296,8 @@ export function init(rootEl) {
 
             const bubble = document.createElement('div');
             bubble.className = 'inline-block max-w-[78%] sm:max-w-2xl px-4 sm:px-5 py-3.5 rounded-2xl border shadow-sm transition-colors ' + (isUser ?
-                'bg-orange-50 dark:bg-orange-950/30 border-orange-100 dark:border-orange-800/60 text-orange-950 dark:text-orange-50 shadow-orange-200/40 dark:shadow-none' :
-                'bg-layout-surface dark:bg-dark-surface border-layout-border dark:border-dark-border text-layout-content-high dark:text-dark-content-high shadow-slate-200/40 dark:shadow-slate-900/20');
+                'bg-orange-50 dark:bg-orange-900/60 border-orange-200 dark:border-orange-700 text-orange-950 dark:text-orange-100 shadow-orange-200/40 dark:shadow-orange-900/20' :
+                'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 shadow-slate-200/40 dark:shadow-slate-900/40');
 
             const textDiv = document.createElement('div');
             textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed text-current';
@@ -305,8 +305,8 @@ export function init(rootEl) {
 
             const timestamp = document.createElement('div');
             timestamp.className = 'text-caption-s mt-2 ' + (isUser ?
-                'text-orange-700/80 dark:text-orange-300/80' :
-                'text-layout-content-low dark:text-dark-content-low');
+                'text-orange-700/80 dark:text-orange-300/70' :
+                'text-slate-500 dark:text-slate-400');
             timestamp.textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
             bubble.appendChild(textDiv);
@@ -436,28 +436,47 @@ export function init(rootEl) {
     // ----------------------
 
     /**
+     * Create an SVG element from a Lucide icon name
+     */
+    function createIconSvg(iconName, className = 'w-4 h-4') {
+        // Fallback to generic tool icon if lucide isn't loaded or icon doesn't exist
+        if (typeof lucide === 'undefined' || !lucide.icons[iconName]) {
+            return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${className}"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>`;
+        }
+        const icon = lucide.icons[iconName];
+        // Extract SVG attributes from icon data
+        const attrs = icon.attrs || {};
+        const body = icon.body || '';
+        return `<svg ${Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(' ')} class="${className}">${body}</svg>`;
+    }
+
+    /**
      * Get a friendly display name and icon for a tool
      */
     function getToolDisplayInfo(toolName) {
         const toolMap = {
-            'Read': { icon: '📄', label: 'Reading file', verb: 'Read' },
-            'Write': { icon: '✏️', label: 'Writing file', verb: 'Wrote' },
-            'Edit': { icon: '🔧', label: 'Editing file', verb: 'Edited' },
-            'MultiEdit': { icon: '🔧', label: 'Editing file', verb: 'Edited' },
-            'Grep': { icon: '🔍', label: 'Searching', verb: 'Searched' },
-            'Glob': { icon: '📁', label: 'Finding files', verb: 'Found files' },
-            'Bash': { icon: '💻', label: 'Running command', verb: 'Ran command' },
-            'Subagent': { icon: '🤖', label: 'Running subagent', verb: 'Subagent completed' },
-            'TodoWrite': { icon: '📝', label: 'Updating tasks', verb: 'Updated tasks' },
-            'MemoryStore': { icon: '💾', label: 'Storing memory', verb: 'Stored memory' },
-            'MemoryRecall': { icon: '🧠', label: 'Recalling memory', verb: 'Recalled memory' },
-            'MemorySearch': { icon: '🔎', label: 'Searching memory', verb: 'Searched memory' },
-            'UploadImage': { icon: '🖼️', label: 'Processing image', verb: 'Processed image' },
-            'Sleep': { icon: '⏳', label: 'Waiting', verb: 'Waited' },
-            'CheckSubagentProgress': { icon: '📊', label: 'Checking progress', verb: 'Checked progress' },
-            'InterruptSubagent': { icon: '🛑', label: 'Stopping subagent', verb: 'Stopped subagent' }
+            'Read': { icon: 'FileText', label: 'Reading file', verb: 'Read' },
+            'Write': { icon: 'FilePenLine', label: 'Writing file', verb: 'Wrote' },
+            'Edit': { icon: 'Hammer', label: 'Editing file', verb: 'Edited' },
+            'MultiEdit': { icon: 'Hammer', label: 'Editing file', verb: 'Edited' },
+            'Grep': { icon: 'Search', label: 'Searching', verb: 'Searched' },
+            'Glob': { icon: 'FolderSearch', label: 'Finding files', verb: 'Found files' },
+            'Bash': { icon: 'Terminal', label: 'Running command', verb: 'Ran command' },
+            'Subagent': { icon: 'Bot', label: 'Running subagent', verb: 'Subagent completed' },
+            'TodoWrite': { icon: 'CheckSquare', label: 'Updating tasks', verb: 'Updated tasks' },
+            'MemoryStore': { icon: 'Database', label: 'Storing memory', verb: 'Stored memory' },
+            'MemoryRecall': { icon: 'Brain', label: 'Recalling memory', verb: 'Recalled memory' },
+            'MemorySearch': { icon: 'BrainCircuit', label: 'Searching memory', verb: 'Searched memory' },
+            'UploadImage': { icon: 'Image', label: 'Processing image', verb: 'Processed image' },
+            'Sleep': { icon: 'Clock', label: 'Waiting', verb: 'Waited' },
+            'CheckSubagentProgress': { icon: 'BarChart', label: 'Checking progress', verb: 'Checked progress' },
+            'InterruptSubagent': { icon: 'CircleStop', label: 'Stopping subagent', verb: 'Stopped subagent' }
         };
-        return toolMap[toolName] || { icon: '🔧', label: toolName, verb: toolName };
+        const info = toolMap[toolName] || { icon: 'Wrench', label: toolName, verb: toolName };
+        return {
+            ...info,
+            icon: createIconSvg(info.icon)
+        };
     }
 
     /**
@@ -714,10 +733,10 @@ export function init(rootEl) {
             const resultEl = element.querySelector('[data-tool-result]');
 
             if (isError) {
-                statusEl.innerHTML = `<span class="text-red-500">✗</span>`;
+                statusEl.innerHTML = `<span class="text-red-500">${createIconSvg('X', 'w-3.5 h-3.5')}</span>`;
                 element.classList.add('text-red-600', 'dark:text-red-400');
             } else {
-                statusEl.innerHTML = `<span class="text-emerald-500">✓</span>`;
+                statusEl.innerHTML = `<span class="text-emerald-500">${createIconSvg('Check', 'w-3.5 h-3.5')}</span>`;
             }
 
             resultEl.textContent = resultSummary + (duration > 1000 ? ` (${(duration/1000).toFixed(1)}s)` : '');
