@@ -358,14 +358,14 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->mode = TUI_MODE_INSERT;
     tui->normal_mode_last_key = 0;
 
-    // Load config and apply input box style (default to bland if not found)
+    // Load config and apply input box style (default to horizontal if not found)
     KlawedConfig loaded_config;
     if (config_load(&loaded_config) == 0) {
         tui->input_box_style = loaded_config.input_box_style;
         LOG_DEBUG("[TUI] Loaded input_box_style from config: %s",
                   config_input_style_to_string(tui->input_box_style));
     } else {
-        tui->input_box_style = INPUT_STYLE_BLAND;
+        tui->input_box_style = INPUT_STYLE_HORIZONTAL;
     }
 
     // Initialize command mode buffer

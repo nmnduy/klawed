@@ -19,7 +19,7 @@
 
 void config_init_defaults(KlawedConfig *config) {
     if (!config) return;
-    config->input_box_style = INPUT_STYLE_BLAND;
+    config->input_box_style = INPUT_STYLE_HORIZONTAL;
     config->theme[0] = '\0';  // Empty means use default or KLAWED_THEME env var
 
     // Initialize LLM provider defaults (legacy single-provider)
