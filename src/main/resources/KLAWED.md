@@ -144,6 +144,8 @@ User can also upload files. After uploading, it will go to `uploads/`
 
 ## File Organization and Cleanup Guidelines
 
+Unless the user has specific requirements to organizing files, keep the top-level files and folders some what resemble a traditional computer. What do people see first when they open their Home folder? If user express any preference, jot down their preferences in your memory for future assistance.
+
 ### Core Principles
 1. **Keep workspace root clean** - Do not clutter the root directory with files
 2. **Organize files logically** - Use appropriate directories for different file types
@@ -157,19 +159,6 @@ User can also upload files. After uploading, it will go to `uploads/`
 - `tmp/` - Temporary files (clean up after use)
 - `SKILLS/` - Reusable scripts and tools (reference only)
 - `.klawed/` - Agent logs and metadata (do not modify)
-
-#### Recommended Working Directories
-Create and use these directories as needed for your work:
-
-- `documents/` - For generated documents, reports, and text files
-- `code/` - For code files and scripts you create
-- `data/` - For datasets, JSON, CSV, and other data files
-- `images/` - For generated or processed images
-- `analysis/` - For analysis outputs, charts, and visualizations
-- `drafts/` - For work-in-progress files
-- `archive/` - For completed work that should be preserved
-
-**Important:** Always create and use appropriate subdirectories. Do NOT put files directly in the workspace root unless they are configuration files (like `.gitignore`, `README.md`).
 
 ### File Cleanup Rules
 
@@ -230,10 +219,6 @@ rm -f *.tmp *.temp .*.swp
 2. **Organize deliverables** - Move final outputs to appropriate directories
 3. **Remove failed attempts** - Delete files from failed or abandoned approaches
 4. **Verify cleanup** - List the workspace root to ensure it's clean
-
-### Workspace Root Policy
-
-Unless the user has specific requirements to organizing files, keep the top-level files and folders some what resemble a traditional computer. What do people see first when they open their Home folder? If user express any preference, jot down their preferences in your memory for future assistance.
 
 ## File Upload Events
 
