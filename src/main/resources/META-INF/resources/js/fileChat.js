@@ -119,6 +119,10 @@ export function init(rootEl) {
     let hasSeededPlaceholders = false;
     let lastApiCallTime = null;
 
+    // AI working indicator
+    let aiWorkingIndicatorEl = null;
+    let aiWorkingTimeout = null;
+
     // Tool activity tracking
     let toolActivityEl = null;
     let pendingTools = new Map(); // Map<toolId, {toolName, startTime, element}>
