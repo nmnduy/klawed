@@ -203,6 +203,59 @@ void print_human_readable_tool_output(const char *tool_name,
                     }
                 }
             }
+        } else if (strcmp(tool_name, "CheckSubagentProgress") == 0) {
+            cJSON *is_running = cJSON_GetObjectItem(tool_result, "is_running");
+            cJSON *exit_code = cJSON_GetObjectItem(tool_result, "exit_code");
+            cJSON *log_file = cJSON_GetObjectItem(tool_result, "log_file");
+            cJSON *total_lines = cJSON_GetObjectItem(tool_result, "total_lines");
+            cJSON *tail_lines_returned = cJSON_GetObjectItem(tool_result, "tail_lines_returned");
+            cJSON *tail_output = cJSON_GetObjectItem(tool_result, "tail_output");
+            cJSON *truncation_warning = cJSON_GetObjectItem(tool_result, "truncation_warning");
+            cJSON *summary = cJSON_GetObjectItem(tool_result, "summary");
+
+            // Print status summary
+            if (summary && cJSON_IsString(summary)) {
+                printf("  %s\\n", summary->valuestring);
+            }
+
+            // Print running status
+            if (is_running && cJSON_IsBool(is_running)) {
+                printf("  Status: %s\\n", is_running->valueint ? "running" : "not running");
+            }
+
+            // Print exit code if available
+            if (exit_code && cJSON_IsNumber(exit_code)) {
+                printf("  Exit code: %d\\n", exit_code->valueint);
+            }
+
+            // Print log file info
+            if (log_file && cJSON_IsString(log_file)) {
+                printf("  Log file: %s\\n", log_file->valuestring);
+            }
+
+            // Print line counts
+            if (total_lines && cJSON_IsNumber(total_lines) && tail_lines_returned && cJSON_IsNumber(tail_lines_returned)) {
+                printf("  Lines: showing last %d of %d\\n", tail_lines_returned->valueint, total_lines->valueint);
+            }
+
+            // Print truncation warning if present
+            if (truncation_warning && cJSON_IsString(truncation_warning)) {
+                printf("  Note: %s\\n", truncation_warning->valuestring);
+            }
+
+            // Print the actual tail output (what the orchestrator will see)
+            if (tail_output && cJSON_IsString(tail_output)) {
+                const char *output_str = tail_output->valuestring;
+                if (output_str && strlen(output_str) > 0) {
+                    printf("\\n  --- Subagent Output ---\\n");
+                    printf("%s", output_str);
+                    // Ensure newline at end if not present
+                    if (output_str[strlen(output_str)-1] != '\n') {
+                        printf("\\n");
+                    }
+                    printf("  --- End Subagent Output ---\\n");
+                }
+            }
         } else if (strcmp(tool_name, "MemoryStore") == 0) {
             cJSON *status = cJSON_GetObjectItem(tool_result, "status");
             cJSON *error = cJSON_GetObjectItem(tool_result, "error");
