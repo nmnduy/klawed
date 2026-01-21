@@ -217,6 +217,7 @@ TEST_MEMVID_TARGET = $(BUILD_DIR)/test_memvid
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 TEST_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_sqlite_queue
+TEST_PROVIDER_INIT_FROM_CONFIG_TARGET = $(BUILD_DIR)/test_provider_init_from_config
 QUERY_TOOL = $(BUILD_DIR)/query_logs
 MEMVID_REPL = $(BUILD_DIR)/memvid_repl
 MEMVID_REPL_SRC = tools/memvid_repl.c
@@ -484,7 +485,7 @@ TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search query-tool memvid-repl debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config query-tool memvid-repl debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace memvid-ffi memvid-ffi-clean check-memvid test-memvid docker-sandbox docker-push docker-rotate
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -501,7 +502,7 @@ query-tool: check-deps $(QUERY_TOOL)
 
 memvid-repl: check-deps $(MEMVID_REPL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-file-search
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-file-search test-provider-init-from-config
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -742,6 +743,12 @@ test-config: check-deps $(TEST_CONFIG_TARGET)
 	@echo ""
 	@./$(TEST_CONFIG_TARGET)
 	@rm -f .klawed/config.json
+
+test-provider-init-from-config: check-deps $(TEST_PROVIDER_INIT_FROM_CONFIG_TARGET)
+	@echo ""
+	@echo "Running provider_init_from_config tests..."
+	@echo ""
+	@./$(TEST_PROVIDER_INIT_FROM_CONFIG_TARGET)
 
 test-memvid: check-deps $(TEST_MEMVID_TARGET)
 	@echo ""
@@ -1889,6 +1896,21 @@ $(TEST_CONFIG_TARGET): tests/test_config.c $(CONFIG_OBJ) $(LOGGER_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_CONFIG_TARGET) tests/test_config.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Config test build successful!"
+	@echo ""
+
+# Test target for provider_init_from_config - tests provider initialization from LLMProviderConfig
+$(TEST_PROVIDER_INIT_FROM_CONFIG_TARGET): $(SRC) tests/test_provider_init_from_config.c $(TEST_COMMON_OBJS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling klawed.c for provider_init_from_config testing (renaming main)..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/claude_provider_test.o $(SRC)
+	@echo "Compiling provider_init_from_config test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_provider_init_from_config.o tests/test_provider_init_from_config.c
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_PROVIDER_INIT_FROM_CONFIG_TARGET) $(BUILD_DIR)/claude_provider_test.o $(BUILD_DIR)/test_provider_init_from_config.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@echo ""
+	@echo "✓ provider_init_from_config test build successful!"
 	@echo ""
 
 # Test target for Memvid Memory Tools - tests parameter validation and availability

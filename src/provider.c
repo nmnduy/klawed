@@ -665,3 +665,205 @@ void provider_init(const char *model,
              result->api_url);
     arena_destroy(arena);
 }
+
+/**
+ * Initialize a provider directly from a LLMProviderConfig
+ *
+ * This bypasses the normal env var > config file priority logic and creates
+ * a provider directly from the given configuration. Used for runtime provider
+ * switching via /provider command.
+ */
+void provider_init_from_config(const char *provider_key,
+                               const LLMProviderConfig *config,
+                               ProviderInitResult *result) {
+    // Initialize output
+    result->provider = NULL;
+    result->api_url = NULL;
+    result->error_message = NULL;
+
+    if (!config) {
+        result->error_message = strdup("Provider configuration is required");
+        LOG_ERROR("Provider init from config failed: %s", result->error_message);
+        return;
+    }
+
+    LOG_DEBUG("Initializing provider from config (provider_key: %s, model: %s)...",
+              provider_key ? provider_key : "(null)",
+              config->model[0] != '\0' ? config->model : "(null)");
+
+    // Get model from config
+    const char *model = config->model[0] != '\0' ? config->model : NULL;
+    if (!model) {
+        result->error_message = strdup("Model name is required in provider configuration");
+        LOG_ERROR("Provider init from config failed: %s", result->error_message);
+        return;
+    }
+
+    // Get API key: try api_key_env first, then api_key, then fall back to OPENAI_API_KEY
+    const char *api_key = NULL;
+    const char *api_key_source = NULL;
+
+    if (config->api_key_env[0] != '\0') {
+        api_key = getenv(config->api_key_env);
+        if (api_key && api_key[0] != '\0') {
+            api_key_source = config->api_key_env;
+            LOG_DEBUG("[Provider] Using API key from environment variable: %s", config->api_key_env);
+        } else {
+            LOG_WARN("[Provider] api_key_env specified (%s) but environment variable is not set or empty",
+                     config->api_key_env);
+        }
+    }
+    if (!api_key && config->api_key[0] != '\0') {
+        api_key = config->api_key;
+        api_key_source = "config file";
+        LOG_WARN("[Provider] Using API key from config file - consider using environment variable for better security");
+    }
+    if (!api_key) {
+        api_key = getenv("OPENAI_API_KEY");
+        if (api_key && api_key[0] != '\0') {
+            api_key_source = "OPENAI_API_KEY";
+        }
+    }
+
+    // Get API base URL from config
+    const char *api_base = config->api_base[0] != '\0' ? config->api_base : NULL;
+
+    // Determine provider type
+    LLMProviderType provider_type = config->provider_type;
+
+    // Log the configuration
+    provider_log_config("Provider Switch",
+                        provider_key,
+                        config_provider_type_to_string(provider_type),
+                        model,
+                        api_base,
+                        api_key,
+                        api_key_source,
+                        config->use_bedrock);
+
+    // Handle Bedrock provider
+    if (config->use_bedrock || provider_type == PROVIDER_BEDROCK) {
+        LOG_INFO("Creating Bedrock provider from config...");
+
+        Provider *prov = bedrock_provider_create(model);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize Bedrock provider (check logs for details)");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        BedrockConfig *cfg = (BedrockConfig *)prov->config;
+        if (!cfg || !cfg->endpoint) {
+            result->error_message = strdup(
+                "Bedrock provider initialized but endpoint is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(cfg->endpoint);
+        if (!result->api_url) {
+            result->error_message = strdup(
+                "Failed to allocate memory for Bedrock endpoint");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: Bedrock (endpoint: %s)", result->api_url);
+        return;
+    }
+
+    // Non-Bedrock providers require API key
+    if (!api_key || api_key[0] == '\0') {
+        result->error_message = strdup(
+            "API key is required. Set api_key_env in provider config or OPENAI_API_KEY environment variable");
+        LOG_ERROR("Provider init from config failed: %s", result->error_message);
+        return;
+    }
+
+    // Determine base URL - use config or fall back to defaults
+    char *base_url = NULL;
+    if (api_base) {
+        base_url = strdup(api_base);
+    } else if (provider_type == PROVIDER_ANTHROPIC) {
+        base_url = strdup(DEFAULT_ANTHROPIC_URL);
+    } else {
+        // Fall back to environment or default OpenAI URL
+        base_url = get_api_url_from_env();
+    }
+
+    if (!base_url) {
+        result->error_message = strdup("Failed to determine API base URL");
+        LOG_ERROR("Provider init from config failed: %s", result->error_message);
+        return;
+    }
+
+    // Create provider based on type
+    int use_anthropic = 0;
+    if (provider_type == PROVIDER_ANTHROPIC) {
+        use_anthropic = 1;
+    } else if (provider_type == PROVIDER_AUTO) {
+        // Auto-detect based on URL
+        if (strstr(base_url, "anthropic.com") != NULL || strstr(base_url, "/anthropic") != NULL) {
+            use_anthropic = 1;
+        }
+    }
+
+    if (use_anthropic) {
+        LOG_INFO("Creating Anthropic provider from config...");
+        Provider *prov = anthropic_provider_create(api_key, base_url);
+        free(base_url);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize Anthropic provider (check logs for details)");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        AnthropicConfig *cfg = (AnthropicConfig *)prov->config;
+        if (!cfg || !cfg->base_url) {
+            result->error_message = strdup(
+                "Anthropic provider initialized but base URL is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(cfg->base_url);
+        if (!result->api_url) {
+            result->error_message = strdup("Failed to allocate memory for API URL");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: Anthropic (endpoint: %s)", result->api_url);
+        return;
+    }
+
+    // Default to OpenAI-compatible provider
+    LOG_INFO("Creating OpenAI-compatible provider from config...");
+    Provider *prov = openai_provider_create(api_key, base_url);
+    free(base_url);
+    if (!prov) {
+        result->error_message = strdup(
+            "Failed to initialize OpenAI provider (check logs for details)");
+        LOG_ERROR("Provider init from config failed: %s", result->error_message);
+        return;
+    }
+    OpenAIConfig *cfg = (OpenAIConfig *)prov->config;
+    if (!cfg || !cfg->base_url) {
+        result->error_message = strdup(
+            "OpenAI provider initialized but base URL is missing");
+        LOG_ERROR("Provider init from config failed: %s", result->error_message);
+        prov->cleanup(prov);
+        return;
+    }
+    result->provider = prov;
+    result->api_url = strdup(cfg->base_url);
+    if (!result->api_url) {
+        result->error_message = strdup("Failed to allocate memory for API URL");
+        LOG_ERROR("Provider init from config failed: %s", result->error_message);
+        prov->cleanup(prov);
+        return;
+    }
+    LOG_INFO("Provider initialization successful: OpenAI (base URL: %s)", result->api_url);
+}
