@@ -1,82 +1,93 @@
 /**
  * Blog-specific styles using semantic color tokens
  * These styles work with both light and dark modes
+ * Modern, clean design with vibrant accents
  */
 
 @layer components {
-  /* Blog Card Component */
+  /* Blog Card Component - Modern card with hover effects */
   .blog-card {
-    @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 overflow-hidden;
-    @apply transition-all duration-300 hover:shadow-lg hover:border-primary/30;
+    @apply bg-card/90 backdrop-blur-sm rounded-2xl border border-border/50 overflow-hidden;
+    @apply transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/40;
+    @apply hover:-translate-y-1;
   }
   
   .blog-card:hover {
-    transform: translateY(-2px);
+    transform: translateY(-4px);
   }
 
-  /* Blog Typography */
+  /* Blog Typography - Enhanced readability */
   .blog-excerpt {
-    @apply text-muted-foreground line-clamp-3;
+    @apply text-muted-foreground line-clamp-3 leading-relaxed;
   }
 
   .blog-meta {
-    @apply text-caption-s text-muted-foreground flex items-center gap-4;
+    @apply text-caption-s text-muted-foreground flex items-center gap-3;
   }
 
-  /* Blog Tags */
+  /* Blog Tags - Colorful and modern */
   .blog-tag {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full;
-    @apply text-caption-s font-medium;
-    @apply bg-primary/10 text-primary;
+    @apply inline-flex items-center px-3 py-1 rounded-full;
+    @apply text-caption-s font-semibold;
+    @apply bg-gradient-to-r from-primary/15 to-secondary/15 text-primary;
+    @apply border border-primary/20;
+    @apply transition-all duration-200 hover:scale-105 hover:shadow-md hover:shadow-primary/20;
   }
 
   .dark .blog-tag {
-    @apply bg-primary/20;
+    @apply from-primary/25 to-secondary/25 border-primary/30;
   }
 
-  /* Blog Category Links */
+  /* Blog Category Links - More prominent */
   .blog-category {
-    @apply inline-flex items-center text-caption-s font-medium;
-    @apply text-primary hover:underline transition-colors;
+    @apply inline-flex items-center text-caption-m font-semibold;
+    @apply text-secondary hover:text-primary transition-colors duration-200;
+    @apply hover:underline decoration-2 underline-offset-4;
   }
 
-  /* Pagination Buttons */
+  /* Pagination Buttons - Modern pill style */
   .pagination-btn {
-    @apply inline-flex items-center px-4 py-2 rounded-lg;
-    @apply border border-border bg-card hover:bg-muted;
-    @apply transition-colors duration-200;
+    @apply inline-flex items-center px-5 py-2.5 rounded-full;
+    @apply border-2 border-border bg-card hover:bg-primary/5 hover:border-primary/50;
+    @apply transition-all duration-200 font-medium;
   }
 
   .pagination-btn.active,
   .pagination-btn--active {
-    @apply bg-primary text-primary-foreground border-primary;
+    @apply bg-gradient-to-r from-primary to-secondary text-primary-foreground border-transparent;
+    @apply shadow-lg shadow-primary/30;
   }
 
-  /* Blog Header/Footer */
+  /* Blog Header/Footer - Elevated design */
   .blog-header {
-    @apply border-b border-border/60 bg-card/80 backdrop-blur sticky top-0 z-50;
+    @apply border-b border-border/60 bg-card/95 backdrop-blur-md sticky top-0 z-50;
+    @apply shadow-sm shadow-primary/5;
   }
 
   .blog-footer {
-    @apply border-t border-border/60 bg-card/80 backdrop-blur;
+    @apply border-t border-border/60 bg-card/95 backdrop-blur-md;
+    @apply shadow-inner shadow-primary/5;
   }
 
-  /* Blog Sidebar Widgets */
+  /* Blog Sidebar Widgets - Enhanced cards */
   .blog-sidebar-widget {
-    @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6;
+    @apply bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-sm rounded-2xl border border-border/50 p-6;
+    @apply shadow-lg shadow-primary/5 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300;
   }
 
   .blog-sidebar-title {
     @apply text-h5-headline-xs font-bold text-foreground mb-4;
+    @apply border-b-2 border-primary/20 pb-2;
   }
 
   /* Blog Post Content */
   .blog-post-header {
-    @apply mb-8 pb-8 border-b border-border/60;
+    @apply mb-8 pb-8 border-b-2 border-primary/20;
   }
 
   .blog-post-title {
     @apply text-h2-headline-l font-bold text-foreground mb-4;
+    @apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
   }
 
   .blog-post-meta {
@@ -94,10 +105,12 @@
   
   .blog-post-content h2 {
     @apply text-h3-headline-m font-bold text-foreground mt-8 mb-4;
+    @apply border-l-4 border-primary pl-4;
   }
   
   .blog-post-content h3 {
     @apply text-h4-headline-s font-bold text-foreground mt-6 mb-3;
+    @apply border-l-4 border-secondary pl-4;
   }
   
   .blog-post-content p {
@@ -106,18 +119,22 @@
   
   .blog-post-content a {
     @apply text-semantic-link-unvisited hover:text-semantic-link-hover;
+    @apply underline decoration-2 underline-offset-4 decoration-primary/30 hover:decoration-primary;
+    @apply transition-all duration-200;
   }
   
   .blog-post-content code {
-    @apply px-1.5 py-0.5 rounded bg-muted text-foreground text-caption-m font-mono;
+    @apply px-2 py-1 rounded-md bg-muted/80 text-primary text-caption-m font-mono;
+    @apply border border-border/50;
   }
   
   .blog-post-content pre {
-    @apply bg-muted p-4 rounded-lg overflow-x-auto;
+    @apply bg-muted/80 p-6 rounded-xl overflow-x-auto;
+    @apply border-2 border-border/50 shadow-inner;
   }
   
   .blog-post-content pre code {
-    @apply p-0 bg-transparent;
+    @apply p-0 bg-transparent border-0;
   }
   
   .blog-post-content ul,
@@ -126,32 +143,37 @@
   }
   
   .blog-post-content ul {
-    @apply list-disc;
+    @apply list-disc marker:text-primary;
   }
   
   .blog-post-content ol {
-    @apply list-decimal;
+    @apply list-decimal marker:text-secondary marker:font-semibold;
   }
   
   .blog-post-content blockquote {
-    @apply border-l-4 border-primary pl-4 italic text-muted-foreground;
+    @apply border-l-4 border-primary pl-6 py-2 italic text-muted-foreground;
+    @apply bg-primary/5 rounded-r-lg;
   }
   
   .blog-post-content img {
-    @apply rounded-lg max-w-full h-auto;
+    @apply rounded-xl max-w-full h-auto shadow-lg;
+    @apply border-2 border-border/30;
   }
   
   .blog-post-content hr {
-    @apply border-border my-8;
+    @apply border-border/60 my-8;
+    @apply bg-gradient-to-r from-transparent via-primary/20 to-transparent h-px border-0;
   }
 
-  /* Blog Author Card */
+  /* Blog Author Card - Enhanced design */
   .blog-author-card {
-    @apply bg-muted/50 rounded-lg p-6 flex items-start gap-4;
+    @apply bg-gradient-to-br from-muted/60 to-muted/40 rounded-xl p-6 flex items-start gap-4;
+    @apply border border-border/50 shadow-md;
   }
 
   .blog-author-avatar {
     @apply w-16 h-16 rounded-full object-cover;
+    @apply ring-4 ring-primary/20 shadow-lg;
   }
 
   .blog-author-name {
@@ -159,7 +181,7 @@
   }
 
   .blog-author-bio {
-    @apply text-body-s text-muted-foreground mt-2;
+    @apply text-body-s text-muted-foreground mt-2 leading-relaxed;
   }
 
   /* Related Posts */
@@ -167,104 +189,126 @@
     @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
   }
 
-  /* Blog Search Form */
+  /* Blog Search Form - Modern search design */
   .blog-search-input {
-    @apply flex-1 px-3 py-2 rounded-lg border border-border;
+    @apply flex-1 px-4 py-2.5 rounded-xl border-2 border-border/50;
     @apply bg-background text-foreground text-body-s;
-    @apply focus:outline-none focus:border-primary transition-colors;
+    @apply focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all;
+    @apply placeholder:text-muted-foreground/60;
   }
 
   .blog-search-button {
-    @apply px-4 py-2 bg-primary text-primary-foreground rounded-lg;
-    @apply hover:bg-primary/90 transition-colors;
+    @apply px-5 py-2.5 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl;
+    @apply hover:shadow-lg hover:shadow-primary/30 transition-all duration-200;
+    @apply font-semibold hover:scale-105;
   }
 
-  /* Blog Navigation Links */
+  /* Blog Navigation Links - Enhanced navigation */
   .blog-nav-link {
-    @apply text-body-m font-medium transition-colors;
-    @apply text-foreground hover:text-semantic-link-hover;
+    @apply text-body-m font-semibold transition-all duration-200;
+    @apply text-foreground hover:text-primary;
+    @apply relative;
+  }
+
+  .blog-nav-link::after {
+    @apply content-[''] absolute left-0 bottom-0 w-0 h-0.5 bg-primary transition-all duration-200;
+  }
+
+  .blog-nav-link:hover::after {
+    @apply w-full;
   }
 
   .blog-nav-link.active {
-    @apply text-foreground;
+    @apply text-primary;
+  }
+
+  .blog-nav-link.active::after {
+    @apply w-full;
   }
 
   .blog-nav-link:not(.active) {
     @apply text-muted-foreground;
   }
 
-  /* Blog Empty State */
+  /* Blog Empty State - Friendly empty state */
   .blog-empty-state {
-    @apply text-center py-12;
+    @apply text-center py-16 px-4;
   }
 
   .blog-empty-icon {
-    @apply w-16 h-16 mx-auto text-muted-foreground/50 mb-4;
+    @apply w-20 h-20 mx-auto text-muted-foreground/30 mb-6;
   }
 
   .blog-empty-title {
-    @apply text-h3-headline-m text-foreground mb-2;
+    @apply text-h3-headline-m font-bold text-foreground mb-3;
   }
 
   .blog-empty-description {
-    @apply text-body-m text-muted-foreground;
+    @apply text-body-m text-muted-foreground leading-relaxed max-w-md mx-auto;
   }
 
-  /* Admin-specific components */
+  /* Admin-specific components - Modern dashboard style */
   .stat-card {
-    @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6;
+    @apply bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-sm rounded-2xl border border-border/50 p-6;
+    @apply shadow-lg shadow-primary/5 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300;
   }
 
   .stat-value {
-    @apply text-h2-headline-l font-bold text-foreground;
+    @apply text-h2-headline-l font-bold;
+    @apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
   }
 
   .stat-label {
-    @apply text-caption-s text-muted-foreground;
+    @apply text-caption-m text-muted-foreground font-medium uppercase tracking-wide;
   }
 
   .popular-item {
-    @apply flex items-center gap-4 p-4 bg-card/50 rounded-lg;
-    @apply border border-border/40 hover:bg-muted/50 transition-colors;
+    @apply flex items-center gap-4 p-4 bg-card/60 rounded-xl;
+    @apply border border-border/40 hover:bg-primary/5 hover:border-primary/40 transition-all;
+    @apply hover:shadow-md hover:shadow-primary/10;
   }
 
   .chart-container {
-    @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6;
+    @apply bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-sm rounded-2xl border border-border/50 p-6;
+    @apply shadow-lg shadow-primary/5;
   }
 
   .category-item,
   .tag-item {
-    @apply flex items-center justify-between p-4 bg-card/50 rounded-lg;
-    @apply border border-border/40 hover:bg-muted/50 transition-colors;
+    @apply flex items-center justify-between p-4 bg-card/60 rounded-xl;
+    @apply border border-border/40 hover:bg-primary/5 hover:border-primary/40 transition-all;
+    @apply hover:shadow-md hover:shadow-primary/10;
   }
 
   .category-name {
-    @apply text-body-m font-medium text-foreground;
+    @apply text-body-m font-semibold text-foreground;
   }
 
   .tag-chip {
-    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-lg;
-    @apply bg-primary/10 text-primary;
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-full;
+    @apply bg-gradient-to-r from-primary/15 to-secondary/15 text-primary;
+    @apply border border-primary/20 font-semibold;
+    @apply hover:scale-105 transition-transform duration-200;
   }
 
   .empty-state {
-    @apply text-center py-12;
+    @apply text-center py-16 px-4;
   }
 
-  /* Admin Forms */
+  /* Admin Forms - Modern form styling */
   .form-group {
     @apply mb-6;
   }
 
   .form-label {
-    @apply block text-caption-s font-medium text-muted-foreground mb-2;
+    @apply block text-caption-m font-semibold text-foreground mb-2;
   }
 
   .form-input {
-    @apply w-full px-4 py-2 rounded-lg border border-border;
+    @apply w-full px-4 py-3 rounded-xl border-2 border-border/50;
     @apply bg-background text-foreground text-body-s;
-    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
-    @apply transition-colors;
+    @apply focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary;
+    @apply transition-all duration-200;
   }
 
   .form-textarea {
@@ -272,25 +316,26 @@
   }
 
   .form-select {
-    @apply form-input;
+    @apply form-input cursor-pointer;
   }
 
   .form-checkbox {
-    @apply w-4 h-4 rounded border-border bg-background;
-    @apply text-primary focus:ring-primary;
+    @apply w-5 h-5 rounded-md border-2 border-border bg-background;
+    @apply text-primary focus:ring-4 focus:ring-primary/20;
+    @apply transition-all duration-200;
   }
 
   .form-error {
-    @apply text-caption-s text-destructive mt-1;
+    @apply text-caption-s text-destructive mt-2 font-medium;
   }
 
   .tag-checkbox {
-    @apply flex items-center gap-2 py-1;
+    @apply flex items-center gap-3 py-2;
   }
 
-  /* Admin Tab Buttons */
+  /* Admin Tab Buttons - Sleek tabs */
   .tab-btn {
-    @apply px-4 py-2 text-body-s font-medium border-b-2 transition-colors;
+    @apply px-6 py-3 text-body-s font-semibold border-b-2 transition-all duration-200;
   }
 
   .tab-btn.active {
@@ -298,10 +343,10 @@
   }
 
   .tab-btn.inactive {
-    @apply border-transparent text-muted-foreground hover:text-foreground;
+    @apply border-transparent text-muted-foreground hover:text-foreground hover:border-border;
   }
 
-  /* Theme Toggle Icons */
+  /* Theme Toggle Icons - Smooth transitions */
   [data-theme-toggle] .sun-icon {
     @apply hidden;
   }
@@ -318,12 +363,79 @@
     @apply hidden;
   }
 
-  /* Smooth icon transitions */
+  /* Smooth icon transitions with bounce */
   [data-theme-toggle] svg {
-    @apply transition-transform duration-200;
+    @apply transition-all duration-300;
   }
 
   [data-theme-toggle]:hover svg {
     @apply rotate-12 scale-110;
+  }
+
+  [data-theme-toggle]:active svg {
+    @apply rotate-180 scale-95;
+  }
+
+  /* Feature: Gradient text for headings */
+  .gradient-heading {
+    @apply bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent;
+    background-size: 200% auto;
+    animation: gradient-flow 3s ease infinite;
+  }
+
+  @keyframes gradient-flow {
+    0%, 100% { background-position: 0% center; }
+    50% { background-position: 100% center; }
+  }
+
+  /* Feature: Animated underlines */
+  .animated-underline {
+    @apply relative;
+  }
+
+  .animated-underline::after {
+    @apply content-[''] absolute left-0 bottom-0 w-0 h-0.5;
+    @apply bg-gradient-to-r from-primary to-secondary;
+    @apply transition-all duration-300;
+  }
+
+  .animated-underline:hover::after {
+    @apply w-full;
+  }
+
+  /* Feature: Glass morphism effects */
+  .glass {
+    @apply bg-card/60 backdrop-blur-xl border border-border/30;
+    @apply shadow-2xl shadow-primary/10;
+  }
+
+  .glass-strong {
+    @apply bg-card/80 backdrop-blur-2xl border border-border/50;
+    @apply shadow-2xl shadow-primary/20;
+  }
+
+  /* Feature: Elevated cards on hover */
+  .elevate-on-hover {
+    @apply transition-all duration-300;
+  }
+
+  .elevate-on-hover:hover {
+    @apply -translate-y-2 shadow-2xl shadow-primary/20;
+  }
+
+  /* Feature: Shimmer effect for loading states */
+  .shimmer {
+    @apply relative overflow-hidden;
+  }
+
+  .shimmer::after {
+    @apply content-[''] absolute inset-0;
+    @apply bg-gradient-to-r from-transparent via-primary/10 to-transparent;
+    animation: shimmer-animation 2s infinite;
+  }
+
+  @keyframes shimmer-animation {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
   }
 }
