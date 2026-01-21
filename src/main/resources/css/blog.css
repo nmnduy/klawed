@@ -300,4 +300,30 @@
   .tab-btn.inactive {
     @apply border-transparent text-muted-foreground hover:text-foreground;
   }
+
+  /* Theme Toggle Icons */
+  [data-theme-toggle] .sun-icon {
+    @apply hidden;
+  }
+
+  [data-theme-toggle] .moon-icon {
+    @apply block;
+  }
+
+  [data-theme-toggle].dark .sun-icon {
+    @apply block;
+  }
+
+  [data-theme-toggle].dark .moon-icon {
+    @apply hidden;
+  }
+
+  /* Smooth icon transitions */
+  [data-theme-toggle] svg {
+    @apply transition-transform duration-200;
+  }
+
+  [data-theme-toggle]:hover svg {
+    @apply rotate-12 scale-110;
+  }
 }
