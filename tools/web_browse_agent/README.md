@@ -1,6 +1,6 @@
 # Web Browse Agent
 
-Version: `1.0.0`
+Version: `1.0.1`
 
 A sessionful browser automation CLI for persistent web browsing sessions. This tool provides a REPL-style interface where you start a browser session and send commands one at a time while maintaining session state.
 
