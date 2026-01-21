@@ -33,7 +33,7 @@ Project instructions for Klawed when working with this codebase.
 - **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management with API token tracking)
 
 **Vendors:**
-- **web_browse_agent**: `vendors/web_browse_agent/` - Go-based web browser agent with Playwright
+- **web_browse_agent**: `tools/web_browse_agent/` - Go-based web browser agent with Playwright
 - **context7**: `vendors/context7/` - Context7 MCP server (reference for API)
 
 **Data & State:**
@@ -202,7 +202,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_CONTEXT_LIMIT` - Override model token limit (default: 125000)
 - **Explore Mode**: `KLAWED_EXPLORE_MODE` - Enable explore subagent mode (1/true/yes)
   - `KLAWED_EXPLORE_HEADLESS` - Run browser in headless mode (default: 1)
-  - `KLAWED_WEB_BROWSE_AGENT_PATH` - Path to web_browse_agent binary (default: vendors/web_browse_agent/web_browse_agent)
+  - `KLAWED_WEB_BROWSE_AGENT_PATH` - Path to web_browse_agent binary (default: tools/web_browse_agent/web_browse_agent)
   - `CONTEXT7_API_KEY` - API key for Context7 (optional, for higher rate limits)
 
 **Defaults:**
