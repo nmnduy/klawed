@@ -2150,6 +2150,7 @@ $(TEST_MCP_IMAGE_TARGET): $(TEST_MCP_IMAGE_SRC) $(BASE64_OBJ)
 install: $(TARGET)
 	@echo "Installing klawed to $(INSTALL_PREFIX)/bin..."
 	@mkdir -p $(INSTALL_PREFIX)/bin
+	@rm -f $(INSTALL_PREFIX)/bin/klawed
 	@cp $(TARGET) $(INSTALL_PREFIX)/bin/klawed
 ifeq ($(UNAME_S),Darwin)
 ifndef GITHUB_ACTIONS
