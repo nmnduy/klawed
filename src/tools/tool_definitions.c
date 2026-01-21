@@ -856,15 +856,6 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     (void)state;  // Suppress unused parameter warning in test builds
 #endif
 
-    // Add standalone web_browse_agent tool (available whenever binary path is set)
-    if (is_web_agent_available() || getenv("KLAWED_WEB_BROWSE_AGENT_PATH")) {
-        cJSON *web_agent_json = cJSON_Parse(explore_tool_web_browse_agent_schema());
-        if (web_agent_json) {
-            cJSON_AddItemToArray(tool_array, web_agent_json);
-            LOG_INFO("Added web_browse_agent direct tool");
-        }
-    }
-
     // Add Explore tools if explore mode is enabled
     if (is_explore_mode_enabled()) {
         LOG_INFO("Explore mode enabled - adding explore tools");
