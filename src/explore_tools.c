@@ -24,10 +24,15 @@
 #include "explore_tools.h"
 #include "logger.h"
 #include "http_client.h"
+#include "message_queue.h"
+#include "util/string_utils.h"
 
 #define CONTEXT7_API_BASE "https://context7.com/api"
 #define MAX_WEB_OUTPUT 100000  // 100KB max output from web_browse_agent
 #define WEB_AGENT_TIMEOUT 120  // 2 minute timeout for web operations
+
+// External reference to the thread-local TUI message queue for TUI protection
+extern _Thread_local TUIMessageQueue *g_active_tool_queue;
 
 // Get the path to web_browse_agent binary, preferring env override, then tools copy, then PATH
 static const char* get_web_agent_path(void) {
@@ -129,8 +134,8 @@ static char* execute_web_agent(const char *prompt, int *exit_code) {
     const char *agent_path = get_web_agent_path();
     int headless = is_headless_mode();
 
-    // Build command with proper escaping
-    size_t cmd_size = strlen(agent_path) + strlen(prompt) * 2 + 256;
+    // Build command with proper escaping (extra space for redirections)
+    size_t cmd_size = strlen(agent_path) + strlen(prompt) * 2 + 300;
     char *command = malloc(cmd_size);
     if (!command) {
         return NULL;
@@ -153,7 +158,8 @@ static char* execute_web_agent(const char *prompt, int *exit_code) {
     }
     escaped_prompt[j] = '\0';
 
-    snprintf(command, cmd_size, "timeout %d %s %s --no-browser \"%s\" 2>&1",
+    // Add </dev/null to prevent stdin interaction
+    snprintf(command, cmd_size, "timeout %d %s %s --no-browser \"%s\" </dev/null 2>&1",
              WEB_AGENT_TIMEOUT,
              agent_path,
              headless ? "--headless" : "",
@@ -163,11 +169,33 @@ static char* execute_web_agent(const char *prompt, int *exit_code) {
 
     LOG_INFO("Executing web_browse_agent: %s", command);
 
+    // Temporarily redirect stderr to prevent direct terminal output in TUI mode
+    int saved_stderr = -1;
+    FILE *stderr_redirect = NULL;
+
+    if (g_active_tool_queue) {
+        saved_stderr = dup(STDERR_FILENO);
+        stderr_redirect = freopen("/dev/null", "w", stderr);
+        if (!stderr_redirect) {
+            LOG_WARN("Failed to redirect stderr, continuing without redirection");
+            if (saved_stderr != -1) {
+                close(saved_stderr);
+                saved_stderr = -1;
+            }
+        }
+    }
+
     FILE *fp = popen(command, "r");
     free(command);
 
     if (!fp) {
         LOG_ERROR("Failed to execute web_browse_agent: %s", strerror(errno));
+        // Restore stderr before returning
+        if (saved_stderr != -1) {
+            dup2(saved_stderr, STDERR_FILENO);
+            close(saved_stderr);
+            fflush(stderr);
+        }
         return NULL;
     }
 
@@ -175,6 +203,12 @@ static char* execute_web_agent(const char *prompt, int *exit_code) {
     char *output = malloc(MAX_WEB_OUTPUT);
     if (!output) {
         pclose(fp);
+        // Restore stderr before returning
+        if (saved_stderr != -1) {
+            dup2(saved_stderr, STDERR_FILENO);
+            close(saved_stderr);
+            fflush(stderr);
+        }
         return NULL;
     }
 
@@ -191,6 +225,20 @@ static char* execute_web_agent(const char *prompt, int *exit_code) {
     int status = pclose(fp);
     if (exit_code) {
         *exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    }
+
+    // Restore stderr after command execution
+    if (saved_stderr != -1) {
+        dup2(saved_stderr, STDERR_FILENO);
+        close(saved_stderr);
+        fflush(stderr);
+    }
+
+    // Strip ANSI escape sequences to prevent terminal corruption
+    char *clean_output = strip_ansi_escapes(output);
+    if (clean_output) {
+        free(output);
+        return clean_output;
     }
 
     return output;
@@ -468,6 +516,7 @@ cJSON* tool_web_read(cJSON *params, void *state) {
 //
 
 // Execute web_browse_agent with session-based command
+// Handles TUI protection by temporarily redirecting stderr when in interactive mode
 static char* execute_web_agent_session(const char *session_id, const char *command,
                                        const char *const *args, int nargs,
                                        int *exit_code) {
@@ -478,8 +527,8 @@ static char* execute_web_agent_session(const char *session_id, const char *comma
     const char *agent_path = get_web_agent_path();
     int headless = is_headless_mode();
 
-    // Calculate command buffer size
-    size_t cmd_size = strlen(agent_path) + strlen(session_id) + strlen(command) + 256;
+    // Calculate command buffer size (extra space for </dev/null 2>&1 suffix)
+    size_t cmd_size = strlen(agent_path) + strlen(session_id) + strlen(command) + 300;
     for (int i = 0; i < nargs; i++) {
         if (args[i]) {
             cmd_size += strlen(args[i]) * 2 + 4; // extra space for quoting
@@ -492,6 +541,7 @@ static char* execute_web_agent_session(const char *session_id, const char *comma
     }
 
     // Build command: web_browse_agent --session <id> [--headless] <command> [args...]
+    // Add </dev/null to prevent stdin interaction, 2>&1 to capture stderr
     int written = snprintf(cmd_buf, cmd_size, "timeout %d %s --session %s %s --json %s",
                            WEB_AGENT_TIMEOUT,
                            agent_path,
@@ -506,19 +556,52 @@ static char* execute_web_agent_session(const char *session_id, const char *comma
         written += snprintf(cmd_buf + written, remaining, " '%s'", args[i]);
     }
 
+    // Append stdin/stderr redirections
+    size_t remaining = cmd_size - (size_t)written;
+    snprintf(cmd_buf + written, remaining, " </dev/null 2>&1");
+
     LOG_INFO("Executing web_browse_agent: %s", cmd_buf);
+
+    // Temporarily redirect stderr to prevent direct terminal output in TUI mode
+    // This prevents corrupting the ncurses display if the subprocess writes to stderr
+    int saved_stderr = -1;
+    FILE *stderr_redirect = NULL;
+
+    if (g_active_tool_queue) {
+        saved_stderr = dup(STDERR_FILENO);
+        stderr_redirect = freopen("/dev/null", "w", stderr);
+        if (!stderr_redirect) {
+            LOG_WARN("Failed to redirect stderr, continuing without redirection");
+            if (saved_stderr != -1) {
+                close(saved_stderr);
+                saved_stderr = -1;
+            }
+        }
+    }
 
     FILE *fp = popen(cmd_buf, "r");
     free(cmd_buf);
 
     if (!fp) {
         LOG_ERROR("Failed to execute web_browse_agent: %s", strerror(errno));
+        // Restore stderr before returning
+        if (saved_stderr != -1) {
+            dup2(saved_stderr, STDERR_FILENO);
+            close(saved_stderr);
+            fflush(stderr);
+        }
         return NULL;
     }
 
     char *output = malloc(MAX_WEB_OUTPUT);
     if (!output) {
         pclose(fp);
+        // Restore stderr before returning
+        if (saved_stderr != -1) {
+            dup2(saved_stderr, STDERR_FILENO);
+            close(saved_stderr);
+            fflush(stderr);
+        }
         return NULL;
     }
 
@@ -535,6 +618,20 @@ static char* execute_web_agent_session(const char *session_id, const char *comma
     int status = pclose(fp);
     if (exit_code) {
         *exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    }
+
+    // Restore stderr after command execution
+    if (saved_stderr != -1) {
+        dup2(saved_stderr, STDERR_FILENO);
+        close(saved_stderr);
+        fflush(stderr);
+    }
+
+    // Strip ANSI escape sequences to prevent terminal corruption
+    char *clean_output = strip_ansi_escapes(output);
+    if (clean_output) {
+        free(output);
+        return clean_output;
     }
 
     return output;
