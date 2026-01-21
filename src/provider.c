@@ -113,12 +113,30 @@ static void get_provider_config(Arena *arena,
         *model_out = arena_strdup(arena, file_config.llm_provider.model);
     }
 
-    // Get API key (prefer environment variable for security)
+    // Get API key (priority: OPENAI_API_KEY env > api_key_env from config > api_key from config)
     if (env_api_key && env_api_key[0] != '\0') {
         *api_key_out = arena_strdup(arena, env_api_key);
+    } else if (provider_config && provider_config->api_key_env[0] != '\0') {
+        // Try to get API key from the environment variable specified in config
+        const char *env_key_from_config = getenv(provider_config->api_key_env);
+        if (env_key_from_config && env_key_from_config[0] != '\0') {
+            *api_key_out = arena_strdup(arena, env_key_from_config);
+            LOG_DEBUG("[Provider] Using API key from environment variable: %s", provider_config->api_key_env);
+        } else {
+            LOG_WARN("[Provider] api_key_env specified (%s) but environment variable is not set or empty", provider_config->api_key_env);
+        }
     } else if (provider_config && provider_config->api_key[0] != '\0') {
         *api_key_out = arena_strdup(arena, provider_config->api_key);
         LOG_WARN("[Provider] Using API key from config file - consider using OPENAI_API_KEY environment variable for better security");
+    } else if (config_loaded && file_config.llm_provider.api_key_env[0] != '\0') {
+        // Try to get API key from the environment variable specified in legacy config
+        const char *env_key_from_config = getenv(file_config.llm_provider.api_key_env);
+        if (env_key_from_config && env_key_from_config[0] != '\0') {
+            *api_key_out = arena_strdup(arena, env_key_from_config);
+            LOG_DEBUG("[Provider] Using API key from environment variable: %s", file_config.llm_provider.api_key_env);
+        } else {
+            LOG_WARN("[Provider] api_key_env specified (%s) but environment variable is not set or empty", file_config.llm_provider.api_key_env);
+        }
     } else if (config_loaded && file_config.llm_provider.api_key[0] != '\0') {
         *api_key_out = arena_strdup(arena, file_config.llm_provider.api_key);
         LOG_WARN("[Provider] Using API key from config file - consider using OPENAI_API_KEY environment variable for better security");

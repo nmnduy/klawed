@@ -30,6 +30,7 @@ void config_init_defaults(KlawedConfig *config) {
     config->llm_provider.model[0] = '\0';
     config->llm_provider.api_base[0] = '\0';
     config->llm_provider.api_key[0] = '\0';
+    config->llm_provider.api_key_env[0] = '\0';
     config->llm_provider.use_bedrock = 0;
 
     // Initialize multiple providers
@@ -44,6 +45,7 @@ void config_init_defaults(KlawedConfig *config) {
         config->providers[i].config.model[0] = '\0';
         config->providers[i].config.api_base[0] = '\0';
         config->providers[i].config.api_key[0] = '\0';
+        config->providers[i].config.api_key_env[0] = '\0';
         config->providers[i].config.use_bedrock = 0;
     }
 }
@@ -219,6 +221,13 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
             LOG_DEBUG("[Config] Loaded api_key from %s: [REDACTED]", label);
         }
 
+        // Read API key environment variable name
+        cJSON *api_key_env_item = cJSON_GetObjectItem(llm_item, "api_key_env");
+        if (api_key_env_item && cJSON_IsString(api_key_env_item) && api_key_env_item->valuestring) {
+            strlcpy(config->llm_provider.api_key_env, api_key_env_item->valuestring, CONFIG_API_KEY_ENV_MAX);
+            LOG_DEBUG("[Config] Loaded api_key_env from %s: %s", label, config->llm_provider.api_key_env);
+        }
+
         // Read use_bedrock (legacy flag) - can be boolean or number
         cJSON *use_bedrock_item = cJSON_GetObjectItem(llm_item, "use_bedrock");
         if (use_bedrock_item) {
@@ -316,6 +325,13 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
                 strlcpy(provider_config->api_key, api_key_item->valuestring, CONFIG_API_KEY_MAX);
                 LOG_WARN("[Config] Loaded API key from %s config file for provider '%s' - consider using environment variable for better security", label, key);
                 LOG_DEBUG("[Config] Loaded api_key for '%s' from %s: [REDACTED]", key, label);
+            }
+
+            // Read API key environment variable name
+            cJSON *api_key_env_item = cJSON_GetObjectItem(provider_item, "api_key_env");
+            if (api_key_env_item && cJSON_IsString(api_key_env_item) && api_key_env_item->valuestring) {
+                strlcpy(provider_config->api_key_env, api_key_env_item->valuestring, CONFIG_API_KEY_ENV_MAX);
+                LOG_DEBUG("[Config] Loaded api_key_env for '%s' from %s: %s", key, label, provider_config->api_key_env);
             }
 
             // Read use_bedrock (legacy flag) - can be boolean or number
@@ -498,6 +514,16 @@ int config_save(const KlawedConfig *config) {
             LOG_WARN("[Config] Saving API key to config file - consider using environment variable for better security");
         }
 
+        // Update API key environment variable name (if non-empty)
+        if (config->llm_provider.api_key_env[0] != '\0') {
+            cJSON *existing_api_key_env = cJSON_GetObjectItem(llm_obj, "api_key_env");
+            if (existing_api_key_env) {
+                cJSON_SetValuestring(existing_api_key_env, config->llm_provider.api_key_env);
+            } else {
+                cJSON_AddStringToObject(llm_obj, "api_key_env", config->llm_provider.api_key_env);
+            }
+        }
+
         // Update use_bedrock (legacy flag) - store as integer for compatibility
         cJSON *existing_use_bedrock = cJSON_GetObjectItem(llm_obj, "use_bedrock");
         if (existing_use_bedrock) {
@@ -556,6 +582,11 @@ int config_save(const KlawedConfig *config) {
                 if (provider_config->api_key[0] != '\0') {
                     cJSON_AddStringToObject(provider_obj, "api_key", provider_config->api_key);
                     LOG_WARN("[Config] Saving API key to config file for provider '%s' - consider using environment variable for better security", named_provider->key);
+                }
+
+                // Add API key environment variable name (if non-empty)
+                if (provider_config->api_key_env[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "api_key_env", provider_config->api_key_env);
                 }
 
                 // Add use_bedrock (legacy flag)

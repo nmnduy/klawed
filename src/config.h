@@ -18,6 +18,7 @@
 #define CONFIG_MODEL_MAX 128
 #define CONFIG_API_BASE_MAX 256
 #define CONFIG_API_KEY_MAX 256
+#define CONFIG_API_KEY_ENV_MAX 128
 
 // Maximum number of provider configurations
 #define CONFIG_MAX_PROVIDERS 10
@@ -40,6 +41,7 @@ typedef struct {
     char model[CONFIG_MODEL_MAX];           // Model name
     char api_base[CONFIG_API_BASE_MAX];     // API base URL
     char api_key[CONFIG_API_KEY_MAX];       // API key (optional, prefer env var)
+    char api_key_env[CONFIG_API_KEY_ENV_MAX]; // Environment variable name for API key
     int use_bedrock;                        // Use AWS Bedrock (legacy flag)
 } LLMProviderConfig;
 
