@@ -573,7 +573,7 @@ static Command exit_cmd = {
     .usage = "/exit",
     .description = "Exit interactive mode",
     .handler = cmd_exit,
-    .completer = commands_tab_completer,
+    .completer = NULL,
     .needs_terminal = 0
 };
 
@@ -582,7 +582,7 @@ static Command quit_cmd = {
     .usage = "/quit",
     .description = "Exit interactive mode",
     .handler = cmd_quit,
-    .completer = commands_tab_completer,
+    .completer = NULL,
     .needs_terminal = 0
 };
 
@@ -591,7 +591,7 @@ static Command clear_cmd = {
     .usage = "/clear",
     .description = "Clear conversation history",
     .handler = cmd_clear,
-    .completer = commands_tab_completer,
+    .completer = NULL,
     .needs_terminal = 0
 };
 
@@ -609,7 +609,7 @@ static Command help_cmd = {
     .usage = "/help",
     .description = "Show this help",
     .handler = cmd_help,
-    .completer = commands_tab_completer,
+    .completer = NULL,
     .needs_terminal = 0
 };
 
@@ -618,7 +618,7 @@ static Command voice_cmd = {
     .usage = "/voice",
     .description = "Record voice input and transcribe to text",
     .handler = cmd_voice,
-    .completer = commands_tab_completer,
+    .completer = NULL,
     .needs_terminal = 1
 };
 
@@ -627,7 +627,7 @@ static Command themes_cmd = {
     .usage = "/themes",
     .description = "Browse and preview available color themes",
     .handler = cmd_themes,
-    .completer = commands_tab_completer,
+    .completer = NULL,
     .needs_terminal = 1
 };
 
@@ -636,7 +636,7 @@ static Command vim_cmd = {
     .usage = "/vim",
     .description = "Open vim editor in current directory",
     .handler = cmd_vim,
-    .completer = commands_tab_completer,
+    .completer = NULL,
     .needs_terminal = 1
 };
 
@@ -645,7 +645,7 @@ static Command dump_cmd = {
     .usage = "/dump [file-path]",
     .description = "Dump conversation to file (default: conversation-<session_id>.md)",
     .handler = cmd_dump,
-    .completer = commands_tab_completer,
+    .completer = NULL,
     .needs_terminal = 0
 };
 
@@ -654,7 +654,7 @@ static Command provider_cmd = {
     .usage = "/provider [name|list]",
     .description = "View or switch LLM providers (use /provider list to see available)",
     .handler = cmd_provider,
-    .completer = commands_tab_completer,
+    .completer = provider_completer,
     .needs_terminal = 0
 };
 
@@ -663,7 +663,7 @@ static Command config_cmd = {
     .usage = "/config <setting> <value>",
     .description = "Modify configuration settings (e.g., /config llm_provider <name>)",
     .handler = cmd_config,
-    .completer = commands_tab_completer,
+    .completer = NULL,
     .needs_terminal = 0
 };
 

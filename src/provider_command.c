@@ -99,6 +99,99 @@ static int switch_provider_for_session(ConversationState *state, const char *pro
 }
 
 /**
+ * Tab completion for /provider command arguments
+ */
+CompletionResult* provider_completer(const char *line, int cursor_pos, void *ctx) {
+    (void)ctx;  // Unused
+
+    if (!line || line[0] != '/') {
+        return NULL;
+    }
+
+    // Find the space after the command name
+    const char *space = strchr(line, ' ');
+    if (!space) {
+        return NULL;  // No space yet, nothing to complete
+    }
+
+    // Extract the argument prefix (from space to cursor)
+    int arg_start = (int)(space - line) + 1;
+    if (cursor_pos < arg_start) {
+        return NULL;  // Cursor is before the argument
+    }
+
+    int prefix_len = cursor_pos - arg_start;
+    if (prefix_len < 0) {
+        prefix_len = 0;
+    }
+
+    char prefix[256];
+    if (prefix_len >= (int)sizeof(prefix)) {
+        prefix_len = sizeof(prefix) - 1;
+    }
+    if (prefix_len > 0) {
+        memcpy(prefix, line + arg_start, (size_t)prefix_len);
+    }
+    prefix[prefix_len] = '\0';
+
+    // Load configuration to get available providers
+    KlawedConfig config;
+    if (config_load(&config) != 0) {
+        config_init_defaults(&config);
+    }
+
+    // Count matches
+    int match_count = 0;
+
+    // Always offer "list" as an option
+    if (strncmp("list", prefix, (size_t)prefix_len) == 0) {
+        match_count++;
+    }
+
+    // Check configured providers
+    for (int i = 0; i < config.provider_count; i++) {
+        const char *key = config.providers[i].key;
+        if (strncmp(key, prefix, (size_t)prefix_len) == 0) {
+            match_count++;
+        }
+    }
+
+    if (match_count == 0) {
+        return NULL;
+    }
+
+    // Allocate result structure
+    CompletionResult *res = malloc(sizeof(CompletionResult));
+    if (!res) {
+        return NULL;
+    }
+
+    res->options = reallocarray(NULL, (size_t)match_count, sizeof(char*));
+    if (!res->options) {
+        free(res);
+        return NULL;
+    }
+
+    res->count = 0;
+    res->selected = 0;
+
+    // Add "list" if it matches
+    if (strncmp("list", prefix, (size_t)prefix_len) == 0) {
+        res->options[res->count++] = strdup("list");
+    }
+
+    // Add matching provider names
+    for (int i = 0; i < config.provider_count; i++) {
+        const char *key = config.providers[i].key;
+        if (strncmp(key, prefix, (size_t)prefix_len) == 0) {
+            res->options[res->count++] = strdup(key);
+        }
+    }
+
+    return res;
+}
+
+/**
  * Handle /provider command
  */
 int cmd_provider(ConversationState *state, const char *args) {

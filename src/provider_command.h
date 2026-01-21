@@ -8,6 +8,7 @@
 #define PROVIDER_COMMAND_H
 
 #include "klawed_internal.h"
+#include "ncurses_input.h"
 
 /**
  * Handle /provider command
@@ -17,5 +18,15 @@
  * @return       0 on success, -1 on error
  */
 int cmd_provider(ConversationState *state, const char *args);
+
+/**
+ * Tab completion for /provider command arguments
+ *
+ * @param line        Full input line
+ * @param cursor_pos  Cursor position in line
+ * @param ctx         Context (unused)
+ * @return            CompletionResult* or NULL
+ */
+CompletionResult* provider_completer(const char *line, int cursor_pos, void *ctx);
 
 #endif // PROVIDER_COMMAND_H
