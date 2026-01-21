@@ -1897,6 +1897,114 @@ class FileExplorer {
     }
 
     // Show toast notification
+    /**
+     * Navigate to a specific file and highlight it in the file explorer.
+     * This method:
+     * 1. Extracts the directory path from the file path
+     * 2. Navigates to that directory
+     * 3. Scrolls to and highlights the file item
+     * @param {string} filePath - Full path to the file (e.g., '/reports/output.pdf')
+     * @returns {Promise<boolean>} - True if file was found and highlighted
+     */
+    async navigateToFile(filePath) {
+        if (!filePath) {
+            console.warn('[file-explorer] navigateToFile called with empty path');
+            return false;
+        }
+
+        // Normalize path - remove leading slash if present, handle both formats
+        let normalizedPath = filePath.replace(/^\/+/, '');
+        
+        // Extract directory and filename
+        const lastSlash = normalizedPath.lastIndexOf('/');
+        let directory = '/';
+        let fileName = normalizedPath;
+        
+        if (lastSlash > 0) {
+            directory = normalizedPath.substring(0, lastSlash);
+            fileName = normalizedPath.substring(lastSlash + 1);
+        } else if (lastSlash === 0) {
+            directory = '/';
+            fileName = normalizedPath.substring(1);
+        }
+
+        console.log('[file-explorer] navigateToFile:', { filePath, directory, fileName });
+
+        // Clear any active search first
+        this.searchTerm = '';
+        this.isSearchingWorkspace = false;
+        this.lastSearchResults = null;
+        if (this.fileExplorerSearch) {
+            this.fileExplorerSearch.value = '';
+        }
+        if (this.fileExplorerSearchClear) {
+            this.fileExplorerSearchClear.classList.add('hidden');
+        }
+
+        // Load the directory
+        await this.loadDirectory(directory || '/');
+
+        // Wait for DOM to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Find and highlight the file
+        return this.highlightFile(fileName, normalizedPath);
+    }
+
+    /**
+     * Find and highlight a file in the current file list.
+     * @param {string} fileName - Name of the file to highlight
+     * @param {string} fullPath - Full path for matching (optional, used as fallback)
+     * @returns {boolean} - True if file was found and highlighted
+     */
+    highlightFile(fileName, fullPath = null) {
+        if (!this.fileExplorerTree) return false;
+
+        // Find the file item by name or path
+        const fileItems = this.fileExplorerTree.querySelectorAll('.file-item');
+        let targetItem = null;
+
+        for (const item of fileItems) {
+            const itemName = item.dataset.name;
+            const itemPath = item.dataset.path;
+            
+            if (itemName === fileName || (fullPath && itemPath === fullPath)) {
+                targetItem = item;
+                break;
+            }
+        }
+
+        if (!targetItem) {
+            console.warn('[file-explorer] File not found for highlighting:', fileName);
+            this.showToast(`File "${fileName}" not found`, 'warning');
+            return false;
+        }
+
+        // Scroll the item into view
+        targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Add highlight animation
+        targetItem.classList.add('file-item--highlighted');
+        
+        // Add a pulsing glow effect
+        targetItem.style.animation = 'file-highlight-pulse 0.6s ease-in-out 3';
+        targetItem.style.boxShadow = '0 0 0 3px rgba(249, 115, 22, 0.5)';
+        targetItem.style.borderRadius = '0.5rem';
+        targetItem.style.backgroundColor = 'rgba(249, 115, 22, 0.1)';
+
+        // Remove highlight after animation
+        setTimeout(() => {
+            targetItem.classList.remove('file-item--highlighted');
+            targetItem.style.animation = '';
+            targetItem.style.boxShadow = '';
+            targetItem.style.borderRadius = '';
+            targetItem.style.backgroundColor = '';
+        }, 2500);
+
+        console.log('[file-explorer] Highlighted file:', fileName);
+        return true;
+    }
+
     showToast(message, type = 'info') {
         // Create toast element using semantic CSS variables for automatic dark mode support
         const toast = document.createElement('div');
