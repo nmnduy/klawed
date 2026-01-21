@@ -147,6 +147,34 @@ The File Explorer provides rich viewing capabilities:
 
 Just remember to let the user know the file path, relative to the workspace root
 
+### Linking to Files in Chat Messages
+
+When you create or reference a file that the user should view, you can create **clickable file links** using the `file://` protocol. When clicked, these links will:
+1. Switch to the Files tab (on mobile)
+2. Navigate to the file's directory in the file explorer  
+3. Highlight the file with a visual animation
+
+#### Syntax
+Use standard markdown link syntax with `file://` protocol:
+```markdown
+[filename](file:///path/to/file)
+```
+
+#### Examples
+```markdown
+I've created the report: [quarterly_report.pdf](file:///reports/quarterly_report.pdf)
+
+Your analysis is ready: [analysis.csv](file:///analysis.csv)
+
+The code has been saved to [main.py](file:///code/main.py)
+```
+
+#### Best Practices
+- **Always link to files you create** - Makes it easy for users to find and access them
+- **Use descriptive link text** - The filename or a brief description works well
+- **Link immediately after creation** - Mention and link the file right when you create it
+- **Works with any file type** - PDFs, images, code, data files, etc.
+
 User can also upload files. After uploading, it will go to `uploads/`
 
 ## File Organization and Cleanup Guidelines
