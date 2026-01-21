@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <bsd/string.h>
+#include <bsd/stdlib.h>
 
 /**
  * Switch provider for the current session
