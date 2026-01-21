@@ -688,7 +688,12 @@ cJSON* tool_web_browse_agent(cJSON *params, void *state) {
         snprintf(cmd_info, sizeof(cmd_info), "[web_browse_agent] session=%s command=%s",
                  session_id, command);
     }
-    tool_emit_line("", cmd_info);
+    LOG_INFO("web_browse_agent: command=%s, g_active_tool_queue=%p", command, (void*)g_active_tool_queue);
+    if (g_active_tool_queue) {
+        tool_emit_line("", cmd_info);
+    } else {
+        LOG_WARN("web_browse_agent: g_active_tool_queue is NULL, TUI output will not be displayed");
+    }
 
     // Execute command
     int exit_code = -1;
@@ -696,13 +701,23 @@ cJSON* tool_web_browse_agent(cJSON *params, void *state) {
 
     cJSON *result = cJSON_CreateObject();
     if (!output) {
+        LOG_ERROR("web_browse_agent: execute_web_agent_session returned NULL");
         tool_emit_line("", "[web_browse_agent] Error: Failed to execute");
         cJSON_AddStringToObject(result, "error", "Failed to execute web_browse_agent");
         return result;
     }
 
+    LOG_DEBUG("web_browse_agent: received output length=%zu, exit_code=%d",
+              strlen(output), exit_code);
+
     // Emit output to TUI (show first portion if output is large)
     if (output[0] != '\0') {
+        LOG_DEBUG("web_browse_agent: emitting output to TUI (g_active_tool_queue=%p)",
+                  (void*)g_active_tool_queue);
+        
+        // Add a visual separator before the output
+        tool_emit_line("", "[web_browse_agent] Output:");
+        
         // Show output line by line, up to a reasonable limit
         char *line_start = output;
         char *line_end;
@@ -712,6 +727,7 @@ cJSON* tool_web_browse_agent(cJSON *params, void *state) {
         while ((line_end = strchr(line_start, '\n')) != NULL && line_count < max_lines) {
             *line_end = '\0';
             if (line_start[0] != '\0') {  // Skip empty lines
+                LOG_DEBUG("web_browse_agent: emitting line %d: %.80s", line_count + 1, line_start);
                 tool_emit_line(" ", line_start);
             }
             *line_end = '\n';  // Restore newline
@@ -721,14 +737,20 @@ cJSON* tool_web_browse_agent(cJSON *params, void *state) {
 
         // Show last line if no trailing newline
         if (*line_start != '\0' && line_count < max_lines) {
+            LOG_DEBUG("web_browse_agent: emitting last line (no trailing newline): %.80s", line_start);
             tool_emit_line(" ", line_start);
             line_count++;
         }
 
         // Indicate if output was truncated
         if (line_count >= max_lines && *line_start != '\0') {
+            LOG_DEBUG("web_browse_agent: output truncated at %d lines", max_lines);
             tool_emit_line(" ", "[... output truncated ...]");
         }
+
+        LOG_DEBUG("web_browse_agent: emitted %d lines to TUI", line_count);
+    } else {
+        LOG_DEBUG("web_browse_agent: output is empty");
     }
 
     // Show exit code if non-zero
