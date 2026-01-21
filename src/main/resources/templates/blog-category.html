@@ -6,14 +6,6 @@
     <title>{pageTitle}</title>
     {#include partials/head.html /}
     <link rel="stylesheet" href="{cssPath}">
-    <!-- Blog-specific styles -->
-    <style>
-        .blog-card { @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-primary/30; }
-        .blog-card:hover { transform: translateY(-2px); }
-        .blog-excerpt { @apply text-muted-foreground line-clamp-3; }
-        .blog-meta { @apply text-caption-s text-muted-foreground flex items-center gap-4; }
-        .blog-tag { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-caption-s font-medium bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary; }
-    </style>
 </head>
 <body class="bg-background min-h-screen">
     <!-- Header -->

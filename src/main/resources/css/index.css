@@ -10,6 +10,7 @@
 @import './dynamic-file-explorer.css';
 @import './dynamic-feedback.css';
 @import './markdown.css';
+@import './blog.css';
 
 @tailwind base;
 @tailwind components;
