@@ -5,23 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{pageTitle}</title>
     {#include partials/head.html /}
+    <!-- Apply saved or system theme early to prevent flash -->
+    <script>
+        (() => {
+            const STORAGE_KEY = 'filesurf-theme';
+            const DARK_CLASS = 'dark';
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const theme = stored === 'dark' || (!stored && prefersDark) ? 'dark' : 'light';
+                if (theme === 'dark') {
+                    document.documentElement.classList.add(DARK_CLASS);
+                } else {
+                    document.documentElement.classList.remove(DARK_CLASS);
+                }
+            } catch (error) {
+                // Fallback to system preference if storage is unavailable
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.classList.add(DARK_CLASS);
+                }
+            }
+        })();
+    </script>
     <link rel="stylesheet" href="{cssPath}">
+    <script type="module" src="{inject:jsHelper.path('darkMode')}"></script>
 </head>
 <body class="bg-background min-h-screen">
-    <header class="border-b border-border/60 bg-card/80 backdrop-blur sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-            <a href="/" class="flex items-center gap-2 text-h4-headline-s font-bold text-foreground">
-                <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-                </svg>
-                <span>FileSurf Blog</span>
-            </a>
-            <nav class="flex items-center gap-6">
-                <a href="/blog" class="text-body-m font-medium text-foreground hover:text-semantic-link-hover transition-colors">Home</a>
-                <a href="/blog/search" class="text-body-m font-medium text-muted-foreground hover:text-semantic-link-hover transition-colors">Search</a>
-            </nav>
-        </div>
-    </header>
+    {#include partials/blogHeader.html /}
 
     <main class="max-w-6xl mx-auto px-4 py-8">
         <nav class="flex items-center gap-2 text-caption-s text-muted-foreground mb-6">
