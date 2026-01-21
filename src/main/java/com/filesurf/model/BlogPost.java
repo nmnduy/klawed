@@ -213,6 +213,17 @@ public class BlogPost {
         this.tags = tags;
     }
     
+    // Transient field for HTML content (not stored in DB, generated on the fly)
+    private String htmlContent;
+    
+    public String getHtmlContent() {
+        return htmlContent;
+    }
+    
+    public void setHtmlContent(String htmlContent) {
+        this.htmlContent = htmlContent;
+    }
+    
     // Helper methods
     public boolean isPublished() {
         return "published".equals(status) && publishedAt != null && publishedAt.isBefore(LocalDateTime.now());

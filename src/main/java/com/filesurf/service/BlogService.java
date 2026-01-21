@@ -18,6 +18,9 @@ public class BlogService {
 
     @Inject
     BlogDatabaseManager db;
+    
+    @Inject
+    MarkdownService markdownService;
 
     @ConfigProperty(name = "blog.posts.per-page", defaultValue = "10")
     int postsPerPage;
@@ -220,11 +223,38 @@ public class BlogService {
     }
 
     public BlogPost getPost(int id) throws Exception {
-        return db.getPostById(id);
+        BlogPost post = db.getPostById(id);
+        if (post != null) {
+            processMarkdown(post);
+        }
+        return post;
     }
 
     public BlogPost getPost(String slug) throws Exception {
-        return db.getPostBySlug(slug);
+        BlogPost post = db.getPostBySlug(slug);
+        if (post != null) {
+            processMarkdown(post);
+        }
+        return post;
+    }
+    
+    /**
+     * Process markdown content and convert it to HTML
+     */
+    private void processMarkdown(BlogPost post) {
+        if (post != null && post.getContent() != null) {
+            String htmlContent = markdownService.toHtml(post.getContent());
+            post.setHtmlContent(htmlContent);
+        }
+    }
+    
+    /**
+     * Process markdown for a list of posts
+     */
+    private void processMarkdownForPosts(List<BlogPost> posts) {
+        if (posts != null) {
+            posts.forEach(this::processMarkdown);
+        }
     }
 
     /**
@@ -237,6 +267,7 @@ public class BlogService {
         if (hasMore) {
             posts = posts.subList(0, postsPerPage);
         }
+        processMarkdownForPosts(posts);
         int total = db.countPublishedPosts();
         return new PaginatedResult<>(posts, page, postsPerPage, total, hasMore);
     }
@@ -255,6 +286,7 @@ public class BlogService {
         if (hasMore) {
             posts = posts.subList(0, postsPerPage);
         }
+        processMarkdownForPosts(posts);
         return new PaginatedResult<>(posts, page, postsPerPage, posts.size(), hasMore);
     }
 
@@ -272,6 +304,7 @@ public class BlogService {
         if (hasMore) {
             posts = posts.subList(0, postsPerPage);
         }
+        processMarkdownForPosts(posts);
         return new PaginatedResult<>(posts, page, postsPerPage, posts.size(), hasMore);
     }
 
@@ -285,6 +318,7 @@ public class BlogService {
         if (hasMore) {
             posts = posts.subList(0, postsPerPage);
         }
+        processMarkdownForPosts(posts);
         return new PaginatedResult<>(posts, page, postsPerPage, posts.size(), hasMore);
     }
 
@@ -298,6 +332,7 @@ public class BlogService {
         if (hasMore) {
             posts = posts.subList(0, postsPerPage);
         }
+        processMarkdownForPosts(posts);
         return new PaginatedResult<>(posts, page, postsPerPage, posts.size(), hasMore);
     }
 
@@ -352,7 +387,9 @@ public class BlogService {
      * Get popular posts
      */
     public List<BlogPost> getPopularPosts(int limit) throws Exception {
-        return db.getPopularPosts(limit);
+        List<BlogPost> posts = db.getPopularPosts(limit);
+        processMarkdownForPosts(posts);
+        return posts;
     }
 
     /**
