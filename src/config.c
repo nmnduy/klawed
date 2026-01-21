@@ -6,6 +6,7 @@
 
 #include "config.h"
 #include "logger.h"
+#include "data_dir.h"
 #include <cjson/cJSON.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,8 +15,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-#define CONFIG_DIR ".klawed"
-#define CONFIG_FILE ".klawed/config.json"
+#define CONFIG_FILE_NAME "config.json"
 #define GLOBAL_CONFIG_DIR_NAME ".klawed"
 #define GLOBAL_CONFIG_FILE_NAME "config.json"
 
@@ -381,8 +381,11 @@ int config_load(KlawedConfig *config) {
         global_loaded = config_load_from_file(config, global_path, "global");
     }
 
-    // Then, load local config from .klawed/config.json (overrides global)
-    local_loaded = config_load_from_file(config, CONFIG_FILE, "local");
+    // Then, load local config from data_dir/config.json (overrides global)
+    char local_path[1024];
+    if (data_dir_build_path(local_path, sizeof(local_path), CONFIG_FILE_NAME) == 0) {
+        local_loaded = config_load_from_file(config, local_path, "local");
+    }
 
     // Return 0 if at least one config was loaded successfully
     if (global_loaded == 0 || local_loaded == 0) {
@@ -396,18 +399,22 @@ int config_load(KlawedConfig *config) {
 int config_save(const KlawedConfig *config) {
     if (!config) return -1;
 
-    // Ensure .klawed directory exists
-    struct stat st;
-    if (stat(CONFIG_DIR, &st) != 0) {
-        if (mkdir(CONFIG_DIR, 0755) != 0 && errno != EEXIST) {
-            LOG_ERROR("[Config] Failed to create directory %s: %s", CONFIG_DIR, strerror(errno));
-            return -1;
-        }
+    // Ensure data directory exists
+    if (data_dir_ensure(NULL) != 0) {
+        LOG_ERROR("[Config] Failed to create data directory");
+        return -1;
+    }
+
+    // Build config file path
+    char config_path[1024];
+    if (data_dir_build_path(config_path, sizeof(config_path), CONFIG_FILE_NAME) != 0) {
+        LOG_ERROR("[Config] Failed to build config path");
+        return -1;
     }
 
     // Try to read existing config to preserve other fields
     cJSON *root = NULL;
-    FILE *fp = fopen(CONFIG_FILE, "r");
+    FILE *fp = fopen(config_path, "r");
     if (fp) {
         fseek(fp, 0, SEEK_END);
         long file_size = ftell(fp);
@@ -614,9 +621,9 @@ int config_save(const KlawedConfig *config) {
         return -1;
     }
 
-    fp = fopen(CONFIG_FILE, "w");
+    fp = fopen(config_path, "w");
     if (!fp) {
-        LOG_ERROR("[Config] Failed to open %s for writing: %s", CONFIG_FILE, strerror(errno));
+        LOG_ERROR("[Config] Failed to open %s for writing: %s", config_path, strerror(errno));
         free(json_str);
         return -1;
     }
@@ -631,7 +638,7 @@ int config_save(const KlawedConfig *config) {
         return -1;
     }
 
-    LOG_DEBUG("[Config] Configuration saved to %s", CONFIG_FILE);
+    LOG_DEBUG("[Config] Configuration saved to %s", config_path);
     return 0;
 }
 

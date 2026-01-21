@@ -25,6 +25,7 @@
 #include <bsd/string.h>
 #include "mcp.h"
 #include "base64.h"
+#include "data_dir.h"
 
 #ifndef TEST_BUILD
 #include "logger.h"
@@ -50,12 +51,10 @@ static int is_complete_json(const char *buf, size_t len);
 
 /*
  * Create directory recursively (like mkdir -p)
+ * Only used for test builds - production uses data_dir_ensure()
  */
 #ifdef TEST_BUILD
 int mcp_mkdir_p(const char *path) {
-#else
-static int mkdir_p(const char *path) {
-#endif
     char tmp[512];
     char *p = NULL;
     size_t len;
@@ -86,6 +85,7 @@ static int mkdir_p(const char *path) {
 
     return 0;
 }
+#endif /* TEST_BUILD */
 
 /*
  * Initialize MCP subsystem
@@ -611,17 +611,21 @@ int mcp_connect_server(MCPServer *server) {
     }
 
     // Open log file for stderr output
-    // Use ./.klawed/mcp/<server-name>.log
+    // Use data_dir/mcp/<server-name>.log
     char log_path[512];
-    snprintf(log_path, sizeof(log_path), ".klawed/mcp/%s.log", server->name);
+    char mcp_subpath[256];
+    snprintf(mcp_subpath, sizeof(mcp_subpath), "mcp/%s.log", server->name);
+    if (data_dir_build_path(log_path, sizeof(log_path), mcp_subpath) != 0) {
+        snprintf(log_path, sizeof(log_path), ".klawed/mcp/%s.log", server->name);
+    }
 
     // Create directory if it doesn't exist
 #ifdef TEST_BUILD
     if (mcp_mkdir_p(".klawed/mcp") != 0) {
 #else
-    if (mkdir_p(".klawed/mcp") != 0) {
+    if (data_dir_ensure("mcp") != 0) {
 #endif
-        LOG_WARN("MCP: Failed to create directory .klawed/mcp: %s", strerror(errno));
+        LOG_WARN("MCP: Failed to create mcp log directory: %s", strerror(errno));
     }
 
     server->stderr_log = fopen(log_path, "w");

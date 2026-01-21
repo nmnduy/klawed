@@ -7,6 +7,7 @@
 
 #include "memvid.h"
 #include "logger.h"
+#include "data_dir.h"
 
 #include <bsd/string.h>
 #include <errno.h>
@@ -18,9 +19,8 @@
 
 #ifdef HAVE_MEMVID
 
-/* Default memory file path (project-local) */
-#define MEMVID_DEFAULT_DIR ".klawed"
-#define MEMVID_DEFAULT_FILE ".klawed/memory.mv2"
+/* Default memory file subpath within data directory */
+#define MEMVID_DEFAULT_SUBPATH "memory.mv2"
 #define MEMVID_MAX_PATH 4096
 
 /* Global instance management */
@@ -127,10 +127,17 @@ static int ensure_parent_dir_exists(const char *file_path) {
  */
 static void memvid_do_init(void) {
     const char *path = g_memvid_path;
+    static char default_path[MEMVID_MAX_PATH];
 
     /* Use default path if none provided */
     if (path == NULL) {
-        path = MEMVID_DEFAULT_FILE;
+        if (data_dir_build_path(default_path, sizeof(default_path), MEMVID_DEFAULT_SUBPATH) == 0) {
+            path = default_path;
+        } else {
+            LOG_ERROR("Memvid: Failed to build default path");
+            g_memvid_init_result = -1;
+            return;
+        }
     }
 
     if (ensure_parent_dir_exists(path) != 0) {

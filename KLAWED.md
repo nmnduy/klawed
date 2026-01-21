@@ -169,6 +169,7 @@ export OPENAI_API_KEY="your-api-key"
 - **OpenAI Authentication**: `OPENAI_AUTH_HEADER` - Custom auth header template (e.g., "x-api-key: %s" or "Authorization: Bearer %s")
 - **Extra Headers**: `OPENAI_EXTRA_HEADERS` - Comma-separated list of additional headers (e.g., "anthropic-version: 2023-06-01, User-Agent: my-app")
 - **Caching**: `DISABLE_PROMPT_CACHING=1` to disable
+- **Data Directory**: `KLAWED_DATA_DIR` - Base directory for all klawed data files (default: `.klawed`). Individual paths can still be overridden by their specific env vars.
 - **Logging**: `KLAWED_LOG_LEVEL` (DEBUG/INFO/WARN/ERROR), `KLAWED_LOG_PATH`
 - **Database**: `KLAWED_DB_PATH` for API call history (SQLite)
 - **Database Rotation**:
