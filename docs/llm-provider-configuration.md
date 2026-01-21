@@ -74,6 +74,8 @@ You can define multiple named provider configurations and switch between them:
 
 - **api_key**: API key (optional, prefer environment variable for security)
 
+- **api_key_env**: Name of environment variable to read API key from (e.g., "DEEPSEEK_API_KEY"). This allows specifying which environment variable to use without hardcoding the key itself. Priority: `OPENAI_API_KEY` env var > `api_key_env` > `api_key`
+
 - **use_bedrock**: Legacy flag for AWS Bedrock (0 or 1)
 
 #### Multiple Provider Fields
@@ -82,17 +84,87 @@ You can define multiple named provider configurations and switch between them:
 
 - **providers**: An object containing named provider configurations. Each key is a provider name, and the value is a provider configuration object with the fields above.
 
+## Configuration File Locations
+
+Klawed supports two configuration file locations that are merged together:
+
+1. **Global configuration**: `~/.klawed/config.json` - User-wide settings shared across all projects
+2. **Local configuration**: `.klawed/config.json` - Project-specific settings that override global settings
+
+### Merging Behavior
+
+When both files exist, they are merged with the following rules:
+
+- **Simple values** (theme, input_box_style, active_provider, llm_provider): Local values override global values
+- **Named providers**: Providers from both files are combined. If a provider with the same key exists in both files, the local version completely overrides the global one
+
+### Example Usage
+
+**Global config** (`~/.klawed/config.json`) - Define commonly used providers:
+```json
+{
+  "theme": "tender",
+  "providers": {
+    "sonnet-4.5-bedrock": {
+      "provider_type": "bedrock",
+      "model": "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+    },
+    "gpt-4-turbo": {
+      "provider_type": "openai",
+      "model": "gpt-4-turbo"
+    }
+  }
+}
+```
+
+**Local config** (`.klawed/config.json`) - Set project-specific settings:
+```json
+{
+  "active_provider": "sonnet-4.5-bedrock"
+}
+```
+
+The result: All providers from global are available, with `sonnet-4.5-bedrock` selected as active.
+
 ## Priority Order
 
 Configuration values are resolved in this priority order (highest to lowest):
 
 1. Command-line arguments (if supported)
 2. Environment variables
-3. Configuration file (`.klawed/config.json`)
-   - If `KLAWED_LLM_PROVIDER` environment variable is set, use that named provider
-   - Otherwise, if `active_provider` is set in config, use that named provider
-   - Otherwise, use the legacy `llm_provider` configuration
-4. Default values
+3. Local configuration file (`.klawed/config.json`)
+4. Global configuration file (`~/.klawed/config.json`)
+5. Default values
+
+### API Key Priority
+
+API keys have a specific priority order to support multiple authentication methods:
+
+1. `OPENAI_API_KEY` environment variable (highest priority, always checked first)
+2. `api_key_env` from config file (reads from the specified environment variable)
+3. `api_key` from config file (lowest priority, not recommended for security)
+
+**Example:**
+```json
+{
+  "providers": {
+    "my-provider": {
+      "api_key_env": "MY_API_KEY",
+      "api_key": "hardcoded-fallback"
+    }
+  }
+}
+```
+
+The system will:
+1. First check if `OPENAI_API_KEY` is set (uses it if found)
+2. Then check if `MY_API_KEY` is set (uses it if found)
+3. Finally fall back to `hardcoded-fallback` (not recommended)
+
+Within configuration files:
+- If `KLAWED_LLM_PROVIDER` environment variable is set, use that named provider
+- Otherwise, if `active_provider` is set in config, use that named provider
+- Otherwise, use the legacy `llm_provider` configuration
 
 ### Environment Variables That Override Config
 
@@ -149,6 +221,36 @@ Configuration values are resolved in this priority order (highest to lowest):
 }
 ```
 
+#### Using api_key_env for Multiple API Keys
+```json
+{
+  "providers": {
+    "deepseek": {
+      "provider_type": "openai",
+      "model": "deepseek-chat",
+      "api_base": "https://api.deepseek.com",
+      "api_key_env": "DEEPSEEK_API_KEY"
+    },
+    "openrouter-gemini": {
+      "provider_type": "openai",
+      "model": "google/gemini-3-pro-preview",
+      "api_base": "https://openrouter.ai/api",
+      "api_key_env": "OPENROUTER_API_KEY"
+    }
+  }
+}
+```
+
+With this configuration, you can set different API keys in your environment:
+```bash
+export DEEPSEEK_API_KEY="your-deepseek-key"
+export OPENROUTER_API_KEY="your-openrouter-key"
+
+# Switch between providers without changing environment variables
+KLAWED_LLM_PROVIDER=deepseek klawed "Hello"
+KLAWED_LLM_PROVIDER=openrouter-gemini klawed "Hello"
+```
+
 ### Multiple Provider Examples
 
 #### Switching Between Providers
@@ -191,11 +293,13 @@ export KLAWED_LLM_PROVIDER="gpt-4-turbo"
 
 ## Security Considerations
 
-1. **API Keys**: It's recommended to use environment variables (`OPENAI_API_KEY`) for API keys rather than storing them in the config file. The config file will warn if an API key is stored in it.
+1. **API Keys**: It's recommended to use environment variables (`OPENAI_API_KEY`) or `api_key_env` for API keys rather than storing them directly in the config file. The config file will warn if an API key is stored in it.
 
-2. **File Permissions**: Ensure the `.klawed/config.json` file has appropriate permissions (e.g., `chmod 600 .klawed/config.json`).
+2. **api_key_env field**: Use this to specify which environment variable contains your API key, allowing you to keep keys out of config files while being explicit about which variable to use for each provider.
 
-3. **Git Ignore**: The `.klawed/` directory should be in your `.gitignore` file to prevent accidentally committing configuration files.
+3. **File Permissions**: Ensure the `.klawed/config.json` file has appropriate permissions (e.g., `chmod 600 .klawed/config.json`).
+
+4. **Git Ignore**: The `.klawed/` directory should be in your `.gitignore` file to prevent accidentally committing configuration files.
 
 ## Migration from Single to Multiple Providers
 
