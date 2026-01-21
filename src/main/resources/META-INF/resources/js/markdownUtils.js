@@ -7,12 +7,13 @@ import { marked } from '/js/vendor/marked.esm.js';
 
 /**
  * Configure marked options for security and consistency
- * Note: breaks is set to false - CSS whitespace-pre-wrap handles line breaks
- * to avoid duplicate line breaks when combined with marked's <br> injection
+ * Note: breaks is set to false - single newlines should NOT become <br> tags.
+ * Paragraphs are properly wrapped in <p> tags. The chat bubble does NOT use
+ * whitespace-pre-wrap for markdown content, so HTML structure handles all formatting.
  */
 marked.setOptions({
     gfm: true,           // Enable GitHub Flavored Markdown
-    breaks: false,        // Let CSS whitespace-pre-wrap handle line breaks (avoid double breaks)
+    breaks: false,       // Don't convert single newlines to <br> (use <p> for paragraphs)
     headerIds: false,    // Don't add IDs to headers
     mangle: false,       // Don't mangle header IDs
 });

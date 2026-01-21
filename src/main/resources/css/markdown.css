@@ -6,6 +6,16 @@
     line-height: 1.6;
 }
 
+/* Remove top margin from first child and bottom margin from last child
+   to prevent extra spacing at the edges of chat bubbles */
+.markdown-content > :first-child {
+    margin-top: 0;
+}
+
+.markdown-content > :last-child {
+    margin-bottom: 0;
+}
+
 /* Headers */
 .markdown-content h1,
 .markdown-content h2,

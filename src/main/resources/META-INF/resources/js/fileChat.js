@@ -303,20 +303,24 @@ export function init(rootEl) {
                 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-200 shadow-slate-200/40 dark:shadow-slate-900/40');
 
             const textDiv = document.createElement('div');
-            textDiv.className = 'whitespace-pre-wrap break-words font-sans text-body-m leading-relaxed text-current';
+            // Base classes - whitespace-pre-wrap is only for plain text, not markdown
+            const baseClasses = 'break-words font-sans text-body-m leading-relaxed text-current';
             
             // For user messages, display as plain text
             // For AI messages, parse and render markdown
             if (isUser) {
+                textDiv.className = baseClasses + ' whitespace-pre-wrap';
                 textDiv.textContent = String(content);
             } else {
                 // Check if content contains markdown formatting
                 const markdownContent = String(content);
                 if (containsMarkdown(markdownContent)) {
-                    // Apply markdown rendering
+                    // Apply markdown rendering - no whitespace-pre-wrap since HTML handles formatting
+                    textDiv.className = baseClasses;
                     textDiv.innerHTML = parseMarkdown(markdownContent);
                 } else {
-                    // Display as plain text if no markdown detected
+                    // Display as plain text if no markdown detected - use whitespace-pre-wrap
+                    textDiv.className = baseClasses + ' whitespace-pre-wrap';
                     textDiv.textContent = markdownContent;
                 }
             }
