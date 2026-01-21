@@ -6,7 +6,7 @@
 
 - [x] no lucides icons
 - [x] typing indicators shows but not at bottom
-- [ ] mount .klawed folder in /tmp/
+- [x] mount .klawed folder in /tmp/
 - [x] sqlite viewer. no row seen
 
 ## Distribution
@@ -33,7 +33,7 @@
 
 - [ ] show storage usage
 - [ ] context7: documentation search mcp
-- [ ] web browsing agent
+- [x] web browsing agent
 - [ ] secrets management
 - [ ] cronjobs
 - [ ] background services for notifications and scheduled tasks
