@@ -209,19 +209,20 @@
     @apply text-body-m;
   }
 
-  a {
+  /* Link styles - but not for buttons */
+  a:not(.inline-flex) {
     @apply text-semantic-link-unvisited transition-colors duration-200;
   }
 
-  a:hover {
+  a:not(.inline-flex):hover {
     @apply text-semantic-link-hover;
   }
 
-  a:active {
+  a:not(.inline-flex):active {
     @apply text-semantic-link-pressed;
   }
 
-  a:visited {
+  a:not(.inline-flex):visited {
     @apply text-semantic-link-visited;
   }
 }

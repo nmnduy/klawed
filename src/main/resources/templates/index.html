@@ -44,9 +44,9 @@
             color: hsl(var(--primary));
         }
 
-        /* Ensure CTA buttons maintain their styling */
-        nav a.inline-flex:visited,
-        section a.inline-flex:visited {
+        /* Ensure CTA buttons maintain their styling (but not primary buttons) */
+        nav a.inline-flex:not(.bg-primary):visited,
+        section a.inline-flex:not(.bg-primary):visited {
             color: inherit;
         }
     </style>
