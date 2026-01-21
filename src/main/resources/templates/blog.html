@@ -29,6 +29,7 @@
     </script>
     <link rel="stylesheet" href="{cssPath}">
     <script type="module" src="{inject:jsHelper.path('darkMode')}"></script>
+    <script defer src="{inject:jsHelper.path('blog')}"></script>
 </head>
 <body class="bg-background min-h-screen">
     <!-- Header -->
@@ -38,77 +39,14 @@
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <!-- Main Content -->
             <div class="lg:col-span-3 space-y-8">
-                {#if error.orEmpty}
-                <div class="bg-destructive/10 border border-destructive/30 rounded-lg p-6 text-center">
-                    <h2 class="text-h4-headline-s text-destructive mb-2">Error Loading Blog</h2>
-                    <p class="text-body-m text-muted-foreground">{error}</p>
+                <!-- Loading indicator -->
+                <div id="loading-indicator" class="text-center py-12">
+                    <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                    <p class="mt-4 text-body-m text-muted-foreground">Loading posts...</p>
                 </div>
-                {:else if posts.isEmpty()}
-                <div class="text-center py-12">
-                    <svg class="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-                    </svg>
-                    <h2 class="text-h3-headline-m text-foreground mb-2">No posts yet</h2>
-                    <p class="text-body-m text-muted-foreground">Check back soon for new content!</p>
-                </div>
-                {:else}
-                <!-- Posts Grid -->
-                <div class="grid gap-6">
-                    {#for post in posts}
-                    <article class="bg-card/80 backdrop-blur rounded-xl border border-border/60 overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5">
-                        {#if post.featuredImageUrl}
-                        <a href="/blog/{post.slug}" class="block">
-                            <img src="{post.featuredImageUrl}" alt="{post.title}" class="w-full h-48 object-cover" />
-                        </a>
-                        {/if}
-                        <div class="p-6">
-                            <div class="flex items-center gap-2 mb-3">
-                                {#if post.category}
-                                <a href="/blog/category/{post.category.slug}" class="inline-flex items-center text-caption-s font-medium text-primary hover:underline">{post.category.name}</a>
-                                {/if}
-                                <span class="text-muted-foreground">•</span>
-                                <span class="text-caption-s text-muted-foreground flex items-center gap-4">{post.readingTimeText}</span>
-                                <span class="text-muted-foreground">•</span>
-                                <span class="text-caption-s text-muted-foreground flex items-center gap-4">{post.views} views</span>
-                            </div>
-                            <h2 class="text-h3-headline-m font-bold text-foreground mb-2">
-                                <a href="/blog/{post.slug}" class="hover:text-semantic-link-hover transition-colors">{post.title}</a>
-                            </h2>
-                            {#if post.excerpt}
-                            <p class="text-muted-foreground line-clamp-3 mb-4">{post.excerpt}</p>
-                            {/if}
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    {#if post.author.avatarUrl}
-                                    <img src="{post.author.avatarUrl}" alt="{post.author.name}" class="w-8 h-8 rounded-full" />
-                                    {/if}
-                                    <span class="text-caption-m text-muted-foreground">{post.author.name}</span>
-                                </div>
-                                <a href="/blog/{post.slug}" class="text-semantic-link-unvisited hover:text-semantic-link-hover font-medium text-body-s">Read more →</a>
-                            </div>
-                        </div>
-                    </article>
-                    {/for}
-                </div>
-
-                {#if hasPrevious || hasMore}
-                <div class="flex items-center justify-center gap-2 pt-8">
-                    {#if hasPrevious}
-                    <a href="/blog?page={previousPage}" class="inline-flex items-center px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted transition-colors">
-                        ← Previous
-                    </a>
-                    {/if}
-                    <span class="px-4 py-2 text-body-s text-muted-foreground">
-                        Page {page + 1} of {total / perPage + 1}
-                    </span>
-                    {#if hasMore}
-                    <a href="/blog?page={nextPage}" class="inline-flex items-center px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted transition-colors">
-                        Next →
-                    </a>
-                    {/if}
-                </div>
-                {/if}
-                {/if}
+                
+                <!-- Content will be rendered here by blog.js -->
+                <div id="main-content" style="display: none;"></div>
             </div>
 
             <!-- Sidebar -->
@@ -127,49 +65,28 @@
                 </div>
 
                 <!-- Categories -->
-                {#if categories.isEmpty()}{:else}
-                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
+                <div id="categories-widget" class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
                     <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Categories</h3>
-                    <ul class="space-y-2">
-                        {#for cat in categories}
-                        <li>
-                            <a href="/blog/category/{cat.slug}" class="flex items-center justify-between py-1.5 text-body-s text-muted-foreground hover:text-semantic-link-hover transition-colors">
-                                <span>{cat.name}</span>
-                            </a>
-                        </li>
-                        {/for}
+                    <ul id="categories-list" class="space-y-2">
+                        <!-- Categories will be rendered here by blog.js -->
                     </ul>
                 </div>
-                {/if}
 
                 <!-- Popular Posts -->
-                {#if popularPosts.isEmpty()}{:else}
-                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
+                <div id="popular-posts-widget" class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
                     <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Popular Posts</h3>
-                    <ul class="space-y-3">
-                        {#for pop in popularPosts}
-                        <li>
-                            <a href="/blog/{pop.slug}" class="block py-1.5">
-                                <h4 class="text-body-s font-medium text-foreground hover:text-semantic-link-hover transition-colors line-clamp-2">{pop.title}</h4>
-                                <span class="text-caption-s text-muted-foreground">{pop.views} views</span>
-                            </a>
-                        </li>
-                        {/for}
+                    <ul id="popular-posts-list" class="space-y-3">
+                        <!-- Popular posts will be rendered here by blog.js -->
                     </ul>
                 </div>
-                {/if}
 
                 <!-- Tags -->
-                {#if tags.isEmpty()}{:else}
-                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
+                <div id="tags-widget" class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
                     <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Tags</h3>
-                    <div class="flex flex-wrap gap-2">
-                        {#for tag in tags}
-                        <a href="/blog/tag/{tag.slug}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-caption-s font-medium bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary">{tag.name}</a>
-                        {/for}
+                    <div id="tags-list" class="flex flex-wrap gap-2">
+                        <!-- Tags will be rendered here by blog.js -->
                     </div>
                 </div>
-                {/if}
             </aside>
         </div>
     </main>

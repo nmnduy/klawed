@@ -81,32 +81,46 @@ public class BlogResource {
             @Context HttpHeaders headers) {
         LOGGER.info("Blog home page requested, page: " + page);
         
+        return blog.data("siteName", siteName)
+                .data("pageTitle", siteName)
+                .data("cssPath", cssVersionProvider.getCssPath());
+    }
+
+    /**
+     * JSON API: Get blog data for homepage
+     */
+    @GET
+    @Path("/api/home")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getBlogHomeData(
+            @QueryParam("page") @DefaultValue("0") int page) {
+        LOGGER.info("Blog home data API requested, page: " + page);
+        
         try {
             BlogService.PaginatedResult<BlogPost> result = blogService.getPublishedPosts(page);
             List<BlogCategory> categories = blogService.listCategories();
             List<BlogTag> tags = blogService.listTags();
             List<BlogPost> popularPosts = blogService.getPopularPosts(5);
             
-            return blog.data("posts", result.getItems())
-                    .data("page", page)
-                    .data("perPage", result.getPerPage())
-                    .data("total", result.getTotal())
-                    .data("hasMore", result.hasMore())
-                    .data("hasPrevious", result.hasPrevious())
-                    .data("previousPage", result.getPreviousPage())
-                    .data("nextPage", result.getNextPage())
-                    .data("categories", categories)
-                    .data("tags", tags)
-                    .data("popularPosts", popularPosts)
-                    .data("siteName", siteName)
-                    .data("pageTitle", siteName)
-                    .data("cssPath", cssVersionProvider.getCssPath());
+            var data = new java.util.HashMap<String, Object>();
+            data.put("posts", result.getItems());
+            data.put("page", page);
+            data.put("perPage", result.getPerPage());
+            data.put("total", result.getTotal());
+            data.put("hasMore", result.hasMore());
+            data.put("hasPrevious", result.hasPrevious());
+            data.put("previousPage", result.getPreviousPage());
+            data.put("nextPage", result.getNextPage());
+            data.put("categories", categories);
+            data.put("tags", tags);
+            data.put("popularPosts", popularPosts);
+            
+            return Response.ok(data).build();
         } catch (Exception e) {
-            LOGGER.severe("Error loading blog: " + e.getMessage());
-            return blog.data("error", e.getMessage())
-                    .data("siteName", siteName)
-                    .data("pageTitle", "Error")
-                    .data("cssPath", cssVersionProvider.getCssPath());
+            LOGGER.severe("Error loading blog data: " + e.getMessage());
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(java.util.Map.of("error", e.getMessage()))
+                    .build();
         }
     }
 
