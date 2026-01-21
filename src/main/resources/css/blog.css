@@ -1,0 +1,303 @@
+/**
+ * Blog-specific styles using semantic color tokens
+ * These styles work with both light and dark modes
+ */
+
+@layer components {
+  /* Blog Card Component */
+  .blog-card {
+    @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 overflow-hidden;
+    @apply transition-all duration-300 hover:shadow-lg hover:border-primary/30;
+  }
+  
+  .blog-card:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Blog Typography */
+  .blog-excerpt {
+    @apply text-muted-foreground line-clamp-3;
+  }
+
+  .blog-meta {
+    @apply text-caption-s text-muted-foreground flex items-center gap-4;
+  }
+
+  /* Blog Tags */
+  .blog-tag {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full;
+    @apply text-caption-s font-medium;
+    @apply bg-primary/10 text-primary;
+  }
+
+  .dark .blog-tag {
+    @apply bg-primary/20;
+  }
+
+  /* Blog Category Links */
+  .blog-category {
+    @apply inline-flex items-center text-caption-s font-medium;
+    @apply text-primary hover:underline transition-colors;
+  }
+
+  /* Pagination Buttons */
+  .pagination-btn {
+    @apply inline-flex items-center px-4 py-2 rounded-lg;
+    @apply border border-border bg-card hover:bg-muted;
+    @apply transition-colors duration-200;
+  }
+
+  .pagination-btn.active,
+  .pagination-btn--active {
+    @apply bg-primary text-primary-foreground border-primary;
+  }
+
+  /* Blog Header/Footer */
+  .blog-header {
+    @apply border-b border-border/60 bg-card/80 backdrop-blur sticky top-0 z-50;
+  }
+
+  .blog-footer {
+    @apply border-t border-border/60 bg-card/80 backdrop-blur;
+  }
+
+  /* Blog Sidebar Widgets */
+  .blog-sidebar-widget {
+    @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6;
+  }
+
+  .blog-sidebar-title {
+    @apply text-h5-headline-xs font-bold text-foreground mb-4;
+  }
+
+  /* Blog Post Content */
+  .blog-post-header {
+    @apply mb-8 pb-8 border-b border-border/60;
+  }
+
+  .blog-post-title {
+    @apply text-h2-headline-l font-bold text-foreground mb-4;
+  }
+
+  .blog-post-meta {
+    @apply flex flex-wrap items-center gap-4 text-caption-m text-muted-foreground;
+  }
+
+  .blog-post-content {
+    @apply max-w-none text-foreground;
+  }
+  
+  /* Basic prose-like styling for blog content */
+  .blog-post-content > * + * {
+    @apply mt-4;
+  }
+  
+  .blog-post-content h2 {
+    @apply text-h3-headline-m font-bold text-foreground mt-8 mb-4;
+  }
+  
+  .blog-post-content h3 {
+    @apply text-h4-headline-s font-bold text-foreground mt-6 mb-3;
+  }
+  
+  .blog-post-content p {
+    @apply text-body-m text-foreground leading-relaxed;
+  }
+  
+  .blog-post-content a {
+    @apply text-semantic-link-unvisited hover:text-semantic-link-hover;
+  }
+  
+  .blog-post-content code {
+    @apply px-1.5 py-0.5 rounded bg-muted text-foreground text-caption-m font-mono;
+  }
+  
+  .blog-post-content pre {
+    @apply bg-muted p-4 rounded-lg overflow-x-auto;
+  }
+  
+  .blog-post-content pre code {
+    @apply p-0 bg-transparent;
+  }
+  
+  .blog-post-content ul,
+  .blog-post-content ol {
+    @apply pl-6 space-y-2;
+  }
+  
+  .blog-post-content ul {
+    @apply list-disc;
+  }
+  
+  .blog-post-content ol {
+    @apply list-decimal;
+  }
+  
+  .blog-post-content blockquote {
+    @apply border-l-4 border-primary pl-4 italic text-muted-foreground;
+  }
+  
+  .blog-post-content img {
+    @apply rounded-lg max-w-full h-auto;
+  }
+  
+  .blog-post-content hr {
+    @apply border-border my-8;
+  }
+
+  /* Blog Author Card */
+  .blog-author-card {
+    @apply bg-muted/50 rounded-lg p-6 flex items-start gap-4;
+  }
+
+  .blog-author-avatar {
+    @apply w-16 h-16 rounded-full object-cover;
+  }
+
+  .blog-author-name {
+    @apply text-h5-headline-xs font-bold text-foreground;
+  }
+
+  .blog-author-bio {
+    @apply text-body-s text-muted-foreground mt-2;
+  }
+
+  /* Related Posts */
+  .related-posts-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+  }
+
+  /* Blog Search Form */
+  .blog-search-input {
+    @apply flex-1 px-3 py-2 rounded-lg border border-border;
+    @apply bg-background text-foreground text-body-s;
+    @apply focus:outline-none focus:border-primary transition-colors;
+  }
+
+  .blog-search-button {
+    @apply px-4 py-2 bg-primary text-primary-foreground rounded-lg;
+    @apply hover:bg-primary/90 transition-colors;
+  }
+
+  /* Blog Navigation Links */
+  .blog-nav-link {
+    @apply text-body-m font-medium transition-colors;
+    @apply text-foreground hover:text-semantic-link-hover;
+  }
+
+  .blog-nav-link.active {
+    @apply text-foreground;
+  }
+
+  .blog-nav-link:not(.active) {
+    @apply text-muted-foreground;
+  }
+
+  /* Blog Empty State */
+  .blog-empty-state {
+    @apply text-center py-12;
+  }
+
+  .blog-empty-icon {
+    @apply w-16 h-16 mx-auto text-muted-foreground/50 mb-4;
+  }
+
+  .blog-empty-title {
+    @apply text-h3-headline-m text-foreground mb-2;
+  }
+
+  .blog-empty-description {
+    @apply text-body-m text-muted-foreground;
+  }
+
+  /* Admin-specific components */
+  .stat-card {
+    @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6;
+  }
+
+  .stat-value {
+    @apply text-h2-headline-l font-bold text-foreground;
+  }
+
+  .stat-label {
+    @apply text-caption-s text-muted-foreground;
+  }
+
+  .popular-item {
+    @apply flex items-center gap-4 p-4 bg-card/50 rounded-lg;
+    @apply border border-border/40 hover:bg-muted/50 transition-colors;
+  }
+
+  .chart-container {
+    @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6;
+  }
+
+  .category-item,
+  .tag-item {
+    @apply flex items-center justify-between p-4 bg-card/50 rounded-lg;
+    @apply border border-border/40 hover:bg-muted/50 transition-colors;
+  }
+
+  .category-name {
+    @apply text-body-m font-medium text-foreground;
+  }
+
+  .tag-chip {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-lg;
+    @apply bg-primary/10 text-primary;
+  }
+
+  .empty-state {
+    @apply text-center py-12;
+  }
+
+  /* Admin Forms */
+  .form-group {
+    @apply mb-6;
+  }
+
+  .form-label {
+    @apply block text-caption-s font-medium text-muted-foreground mb-2;
+  }
+
+  .form-input {
+    @apply w-full px-4 py-2 rounded-lg border border-border;
+    @apply bg-background text-foreground text-body-s;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+    @apply transition-colors;
+  }
+
+  .form-textarea {
+    @apply form-input min-h-[200px] resize-y;
+  }
+
+  .form-select {
+    @apply form-input;
+  }
+
+  .form-checkbox {
+    @apply w-4 h-4 rounded border-border bg-background;
+    @apply text-primary focus:ring-primary;
+  }
+
+  .form-error {
+    @apply text-caption-s text-destructive mt-1;
+  }
+
+  .tag-checkbox {
+    @apply flex items-center gap-2 py-1;
+  }
+
+  /* Admin Tab Buttons */
+  .tab-btn {
+    @apply px-4 py-2 text-body-s font-medium border-b-2 transition-colors;
+  }
+
+  .tab-btn.active {
+    @apply border-primary text-primary;
+  }
+
+  .tab-btn.inactive {
+    @apply border-transparent text-muted-foreground hover:text-foreground;
+  }
+}

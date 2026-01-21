@@ -6,17 +6,6 @@
     <title>{pageTitle}</title>
     {#include partials/head.html /}
     <link rel="stylesheet" href="{cssPath}">
-    <!-- Blog-specific styles -->
-    <style>
-        .blog-card { @apply bg-card/80 backdrop-blur rounded-xl border border-border/60 overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-primary/30; }
-        .blog-card:hover { transform: translateY(-2px); }
-        .blog-excerpt { @apply text-muted-foreground line-clamp-3; }
-        .blog-meta { @apply text-caption-s text-muted-foreground flex items-center gap-4; }
-        .blog-tag { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-caption-s font-medium bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary; }
-        .blog-category { @apply inline-flex items-center text-caption-s font-medium text-primary hover:underline; }
-        .pagination-btn { @apply inline-flex items-center px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted transition-colors; }
-        .pagination-btn.active { @apply bg-primary text-white border-primary; }
-    </style>
 </head>
 <body class="bg-background min-h-screen">
     <!-- Header -->
@@ -57,7 +46,7 @@
                 <!-- Posts Grid -->
                 <div class="grid gap-6">
                     {#for post in posts}
-                    <article class="blog-card">
+                    <article class="bg-card/80 backdrop-blur rounded-xl border border-border/60 overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5">
                         {#if post.featuredImageUrl}
                         <a href="/blog/{post.slug}" class="block">
                             <img src="{post.featuredImageUrl}" alt="{post.title}" class="w-full h-48 object-cover" />
@@ -66,18 +55,18 @@
                         <div class="p-6">
                             <div class="flex items-center gap-2 mb-3">
                                 {#if post.category}
-                                <a href="/blog/category/{post.category.slug}" class="blog-category">{post.category.name}</a>
+                                <a href="/blog/category/{post.category.slug}" class="inline-flex items-center text-caption-s font-medium text-primary hover:underline">{post.category.name}</a>
                                 {/if}
                                 <span class="text-muted-foreground">•</span>
-                                <span class="blog-meta">{post.readingTimeText}</span>
+                                <span class="text-caption-s text-muted-foreground flex items-center gap-4">{post.readingTimeText}</span>
                                 <span class="text-muted-foreground">•</span>
-                                <span class="blog-meta">{post.views} views</span>
+                                <span class="text-caption-s text-muted-foreground flex items-center gap-4">{post.views} views</span>
                             </div>
                             <h2 class="text-h3-headline-m font-bold text-foreground mb-2">
                                 <a href="/blog/{post.slug}" class="hover:text-semantic-link-hover transition-colors">{post.title}</a>
                             </h2>
                             {#if post.excerpt}
-                            <p class="blog-excerpt mb-4">{post.excerpt}</p>
+                            <p class="text-muted-foreground line-clamp-3 mb-4">{post.excerpt}</p>
                             {/if}
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-2">
@@ -93,11 +82,10 @@
                     {/for}
                 </div>
 
-                <!-- Pagination -->
-                {#if hasMore || hasPrevious}
+                {#if hasPrevious || hasMore}
                 <div class="flex items-center justify-center gap-2 pt-8">
                     {#if hasPrevious}
-                    <a href="/blog?page={previousPage}" class="pagination-btn">
+                    <a href="/blog?page={previousPage}" class="inline-flex items-center px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted transition-colors">
                         ← Previous
                     </a>
                     {/if}
@@ -105,7 +93,7 @@
                         Page {page + 1} of {total / perPage + 1}
                     </span>
                     {#if hasMore}
-                    <a href="/blog?page={nextPage}" class="pagination-btn">
+                    <a href="/blog?page={nextPage}" class="inline-flex items-center px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted transition-colors">
                         Next →
                     </a>
                     {/if}
@@ -168,7 +156,7 @@
                     <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Tags</h3>
                     <div class="flex flex-wrap gap-2">
                         {#for tag in tags}
-                        <a href="/blog/tag/{tag.slug}" class="blog-tag">{tag.name}</a>
+                        <a href="/blog/tag/{tag.slug}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-caption-s font-medium bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary">{tag.name}</a>
                         {/for}
                     </div>
                 </div>
