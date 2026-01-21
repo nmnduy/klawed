@@ -79,7 +79,7 @@ RUN make clean && \
     ldd build/klawed | grep -q memvid || echo "WARNING: memvid not dynamically linked (may be static)"
 
 # Build web_browse_agent
-RUN cd vendors/web_browse_agent && \
+RUN cd tools/web_browse_agent && \
     go mod download && \
     go build -ldflags "-s -w" -o web_browse_agent ./cmd/agent && \
     ls -lh web_browse_agent && \
@@ -160,7 +160,7 @@ COPY --from=builder /build/build/klawed /usr/local/bin/klawed
 COPY --from=builder /build/vendors/memvid-ffi/target/release/libmemvid_ffi.so /usr/local/lib/libmemvid_ffi.so
 
 # Copy web_browse_agent binary from builder
-COPY --from=builder /build/vendors/web_browse_agent/web_browse_agent /usr/local/bin/web_browse_agent
+COPY --from=builder /build/tools/web_browse_agent/web_browse_agent /usr/local/bin/web_browse_agent
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
