@@ -101,6 +101,11 @@ func (s *Server) Stop() error {
 	return nil
 }
 
+// Done returns a channel that is closed when the server is shutting down
+func (s *Server) Done() <-chan struct{} {
+	return s.shutdown
+}
+
 // RegisterHandler registers a handler for a command type
 func (s *Server) RegisterHandler(command CommandType, handler CommandHandler) {
 	s.mu.Lock()

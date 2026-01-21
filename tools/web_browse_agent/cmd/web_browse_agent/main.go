@@ -162,14 +162,17 @@ func ensureDriverRunning(sess *session.Session) error {
 	// Update session with driver info
 	sess.SetDriverInfo(pid, socketPath)
 
-	// Save session
+	// Save session with driver info
 	registry, err := session.GetRegistry()
 	if err != nil {
 		return fmt.Errorf("failed to get registry: %w", err)
 	}
 
-	// The session is already in memory, just update last used
+	// Save the session with driver info to disk
 	sess.UpdateLastUsed()
+	if err := registry.Save(sess); err != nil {
+		return fmt.Errorf("failed to save session: %w", err)
+	}
 
 	if verbose {
 		fmt.Printf("Started driver (PID: %d, Socket: %s)\n", pid, socketPath)

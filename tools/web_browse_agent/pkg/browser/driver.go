@@ -23,12 +23,13 @@ type Driver struct {
 	parentPID   int // Parent process to monitor for cleanup
 
 	// Process management
-	cmd        *exec.Cmd
-	pid        int
-	ipcServer  *ipc.Server
-	shutdown   chan struct{}
-	stopOnce   sync.Once
-	wg         sync.WaitGroup
+	cmd          *exec.Cmd
+	pid          int
+	ipcServer    *ipc.Server
+	shutdown     chan struct{}
+	stopOnce     sync.Once
+	shutdownOnce sync.Once // For closing shutdown channel only once
+	wg           sync.WaitGroup
 
 	// Browser state
 	context    *BrowserContext
@@ -101,11 +102,18 @@ func (d *Driver) Start() error {
 	d.wg.Add(1)
 	go d.cleanupMonitor()
 
-	// Start parent process monitor if parent PID is set
-	if d.parentPID > 0 {
-		d.wg.Add(1)
-		go d.parentProcessMonitor()
-	}
+	// Monitor IPC server for shutdown (e.g., from end-session command)
+	d.wg.Add(1)
+	go d.ipcShutdownMonitor()
+
+	// NOTE: Parent process monitoring is disabled for now.
+	// The driver will run until explicitly stopped via end-session command
+	// or when the process receives SIGINT/SIGTERM.
+	// TODO: Implement a better cleanup strategy (e.g., idle timeout, session expiry)
+	// if d.parentPID > 0 {
+	// 	d.wg.Add(1)
+	// 	go d.parentProcessMonitor()
+	// }
 
 	fmt.Printf("Driver started for session %s (PID: %d, Socket: %s)\n",
 		d.sessionID, os.Getpid(), d.socketPath)
@@ -116,7 +124,10 @@ func (d *Driver) Start() error {
 // Stop stops the driver process gracefully
 func (d *Driver) Stop() error {
 	d.stopOnce.Do(func() {
-		close(d.shutdown)
+		// Close shutdown channel to signal all goroutines
+		d.shutdownOnce.Do(func() {
+			close(d.shutdown)
+		})
 
 		// Stop IPC server
 		if d.ipcServer != nil {
@@ -193,6 +204,23 @@ func (d *Driver) cleanupMonitor() {
 
 	<-d.shutdown
 	// Additional cleanup if needed
+}
+
+// ipcShutdownMonitor monitors for IPC server shutdown and triggers driver shutdown
+func (d *Driver) ipcShutdownMonitor() {
+	defer d.wg.Done()
+
+	select {
+	case <-d.shutdown:
+		// Already shutting down from another source
+		return
+	case <-d.ipcServer.Done():
+		// IPC server shut down (e.g., from end-session command)
+		// Signal shutdown by closing the channel (only if not already closed)
+		d.shutdownOnce.Do(func() {
+			close(d.shutdown)
+		})
+	}
 }
 
 // parentProcessMonitor checks if the parent process is still alive

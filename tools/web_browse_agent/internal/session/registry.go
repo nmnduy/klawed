@@ -222,7 +222,14 @@ func (r *Registry) loadFromFile(path string) (*Session, error) {
 	return &sess, nil
 }
 
-// save saves a session to disk
+// Save saves a session to disk (exported)
+func (r *Registry) Save(sess *Session) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.save(sess)
+}
+
+// save saves a session to disk (internal, caller must hold lock)
 func (r *Registry) save(sess *Session) error {
 	sess.mu.RLock()
 	defer sess.mu.RUnlock()
