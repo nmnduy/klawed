@@ -20,6 +20,7 @@ type Server struct {
 	wg         sync.WaitGroup
 	handlers   map[CommandType]CommandHandler
 	mu         sync.RWMutex
+	stopOnce   sync.Once
 }
 
 // CommandHandler is a function that handles a command request
@@ -80,20 +81,22 @@ func (s *Server) Start() error {
 
 // Stop stops the IPC server gracefully
 func (s *Server) Stop() error {
-	close(s.shutdown)
+	s.stopOnce.Do(func() {
+		close(s.shutdown)
 
-	// Stop accepting new connections
-	if s.listener != nil {
-		s.listener.Close()
-	}
+		// Stop accepting new connections
+		if s.listener != nil {
+			s.listener.Close()
+		}
 
-	// Wait for all connections to finish
-	s.wg.Wait()
+		// Wait for all connections to finish
+		s.wg.Wait()
 
-	// Remove socket file
-	if _, err := os.Stat(s.socketPath); err == nil {
-		os.Remove(s.socketPath)
-	}
+		// Remove socket file
+		if _, err := os.Stat(s.socketPath); err == nil {
+			os.Remove(s.socketPath)
+		}
+	})
 
 	return nil
 }

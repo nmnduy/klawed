@@ -1534,6 +1534,14 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Export KLAWED_PID for child processes (e.g., web_browse_agent driver)
+    // This allows browser sessions to monitor klawed's lifetime and clean up when it exits
+    {
+        char pid_str[32];
+        snprintf(pid_str, sizeof(pid_str), "%d", getpid());
+        setenv("KLAWED_PID", pid_str, 1);
+    }
+
     LOG_INFO("Application started");
     LOG_INFO("API URL: %s", api_base);
     LOG_INFO("Model: %s", model);

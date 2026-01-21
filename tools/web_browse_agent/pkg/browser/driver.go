@@ -198,6 +198,11 @@ func (d *Driver) cleanupMonitor() {
 // parentProcessMonitor checks if the parent process is still alive
 // and triggers shutdown if it's not. This ensures the driver doesn't
 // become orphaned when klawed is killed.
+//
+// NOTE: The parent PID should be klawed's PID (from KLAWED_PID env var),
+// not the CLI process PID. The CLI is ephemeral - it spawns the driver
+// and exits after each command. The driver should persist across CLI
+// invocations until klawed itself exits or end-session is called.
 func (d *Driver) parentProcessMonitor() {
 	defer d.wg.Done()
 
@@ -229,10 +234,18 @@ func isProcessAlive(pid int) bool {
 		return false
 	}
 	// On Unix, sending signal 0 checks if process exists
+	// EPERM means the process exists but we don't have permission to signal it
+	// ESRCH means the process doesn't exist
 	err = process.Signal(syscall.Signal(0))
-	return err == nil
+	if err == nil {
+		return true
+	}
+	// Check if it's a permission error (process exists but we can't signal it)
+	if err == syscall.EPERM {
+		return true
+	}
+	return false
 }
-
 // RunDriverMain is the main entry point for the driver process
 func RunDriverMain() error {
 	// Parse command line arguments
@@ -309,9 +322,21 @@ func waitForInterrupt() chan os.Signal {
 
 // StartDriverProcess starts the driver as a separate process
 // The driver will monitor the parent process and exit if it dies.
+//
+// Parent PID resolution order:
+// 1. KLAWED_PID env var (set by klawed itself)
+// 2. Parent PID of this process (works when CLI is run via popen from klawed)
+// 3. 0 (disables parent monitoring if neither available)
 func StartDriverProcess(sessionID, socketPath string, headless bool) (int, error) {
-	// Get current process PID to pass to driver for orphan detection
-	parentPID := os.Getpid()
+	// Get parent PID for orphan detection
+	// Prefer KLAWED_PID env var, then fall back to our parent PID
+	var parentPID int
+	if klawedPID := os.Getenv("KLAWED_PID"); klawedPID != "" {
+		fmt.Sscanf(klawedPID, "%d", &parentPID)
+	} else {
+		// Use parent PID of this CLI process (should be klawed when run via popen)
+		parentPID = os.Getppid()
+	}
 
 	// Build command
 	cmd := exec.Command(os.Args[0], "driver",
