@@ -27,6 +27,7 @@ type Driver struct {
 	pid        int
 	ipcServer  *ipc.Server
 	shutdown   chan struct{}
+	stopOnce   sync.Once
 	wg         sync.WaitGroup
 
 	// Browser state
@@ -114,25 +115,27 @@ func (d *Driver) Start() error {
 
 // Stop stops the driver process gracefully
 func (d *Driver) Stop() error {
-	close(d.shutdown)
+	d.stopOnce.Do(func() {
+		close(d.shutdown)
 
-	// Stop IPC server
-	if d.ipcServer != nil {
-		d.ipcServer.Stop()
-	}
+		// Stop IPC server
+		if d.ipcServer != nil {
+			d.ipcServer.Stop()
+		}
 
-	// Close browser context
-	if d.context != nil {
-		d.context.Close()
-	}
+		// Close browser context
+		if d.context != nil {
+			d.context.Close()
+		}
 
-	// Wait for cleanup
-	d.wg.Wait()
+		// Wait for cleanup
+		d.wg.Wait()
 
-	// Remove socket file
-	if _, err := os.Stat(d.socketPath); err == nil {
-		os.Remove(d.socketPath)
-	}
+		// Remove socket file
+		if _, err := os.Stat(d.socketPath); err == nil {
+			os.Remove(d.socketPath)
+		}
+	})
 
 	return nil
 }
