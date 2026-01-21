@@ -6,6 +6,7 @@
  * Validates that JavaScript files follow the project conventions:
  * - Classic scripts (non-module) should NOT have export/import statements
  * - Module scripts MAY have export/import statements
+ * - All JavaScript files must have valid syntax (no syntax errors)
  * 
  * See docs/JS_CONVENTIONS.md for full details.
  */
@@ -13,6 +14,7 @@
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { parseModule, parseScript } from 'meriyah';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,8 +39,58 @@ const MODULE_FILES = new Set([
 const EXPORT_PATTERN = /^\s*export\s+(default\s+)?(function|class|const|let|var|async|\{)/m;
 const IMPORT_PATTERN = /^\s*import\s+/m;
 
+/**
+ * Validate JavaScript syntax using meriyah parser
+ * @param {string} filename - Name of the file being validated
+ * @param {string} content - File content
+ * @returns {Array} Array of syntax error objects
+ */
+function validateSyntax(filename, content) {
+    const errors = [];
+    const isModule = MODULE_FILES.has(filename);
+    
+    try {
+        if (isModule) {
+            // Parse as ES module
+            parseModule(content, { 
+                next: true,
+                webcompat: true,
+                loc: true,
+                ranges: true
+            });
+        } else {
+            // Parse as script
+            parseScript(content, {
+                next: true,
+                webcompat: true,
+                loc: true,
+                ranges: true
+            });
+        }
+    } catch (error) {
+        errors.push({
+            file: filename,
+            line: error.line || 0,
+            column: error.column || 0,
+            type: 'syntax',
+            message: `Syntax error: ${error.message}`
+        });
+    }
+    
+    return errors;
+}
+
 function validateFile(filename, content) {
     const errors = [];
+    
+    // First, validate syntax (important!)
+    const syntaxErrors = validateSyntax(filename, content);
+    errors.push(...syntaxErrors);
+    
+    // If there are syntax errors, don't bother with convention checks
+    if (syntaxErrors.length > 0) {
+        return errors;
+    }
     
     // Skip module files - they can use import/export
     if (MODULE_FILES.has(filename)) {
@@ -109,21 +161,44 @@ function main() {
     
     if (allErrors.length > 0) {
         console.log('');
-        console.log('⚠️  JS Convention Warnings:');
+        console.log('❌ JS Validation Errors:');
         console.log('');
         
-        allErrors.forEach(err => {
-            console.log(`   ${err.file}:${err.line}`);
-            console.log(`   └─ ${err.message}`);
+        // Separate syntax errors from convention warnings
+        const syntaxErrors = allErrors.filter(e => e.type === 'syntax');
+        const conventionWarnings = allErrors.filter(e => e.type !== 'syntax');
+        
+        if (syntaxErrors.length > 0) {
+            console.log('   SYNTAX ERRORS (must be fixed):');
             console.log('');
-        });
+            syntaxErrors.forEach(err => {
+                console.log(`   ${err.file}:${err.line}:${err.column}`);
+                console.log(`   └─ ${err.message}`);
+                console.log('');
+            });
+        }
         
-        console.log(`   Found ${allErrors.length} issue(s). See docs/JS_CONVENTIONS.md for details.`);
+        if (conventionWarnings.length > 0) {
+            console.log('   CONVENTION WARNINGS:');
+            console.log('');
+            conventionWarnings.forEach(err => {
+                console.log(`   ${err.file}:${err.line}`);
+                console.log(`   └─ ${err.message}`);
+                console.log('');
+            });
+        }
+        
+        console.log(`   Found ${syntaxErrors.length} syntax error(s) and ${conventionWarnings.length} convention warning(s).`);
         console.log('');
         
-        // Exit with error code to fail the build
-        // Change to process.exit(1) if you want to enforce strictly
-        // For now, just warn
+        // Exit with error code if there are syntax errors
+        if (syntaxErrors.length > 0) {
+            console.log('   ❌ Build failed due to syntax errors. Please fix and try again.');
+            process.exit(1);
+        }
+        
+        // For convention warnings, just warn (don't fail the build)
+        // Uncomment the line below to enforce strictly:
         // process.exit(1);
     } else {
         console.log('   ✅ All JS files follow conventions.');

@@ -1823,6 +1823,8 @@ export function init(rootEl) {
     connectWebSocket();
 }
 
+}
+
 const autoRoot = document.querySelector('[data-chat-root]');
 if (autoRoot) {
     init(autoRoot);

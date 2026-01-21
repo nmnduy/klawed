@@ -61,6 +61,8 @@ You're encoureaged to create commits when finish a task, fix a bug or adding a n
 See `docs/JS_CONVENTIONS.md` for full details. Key points:
 - Classic scripts use `<script defer>` with **NO** `export`/`import`
 - ES modules use `<script type="module">` and MAY use `export`/`import`
+- All JavaScript files are automatically validated for syntax errors during build
+- Run `npm run check:js` to validate JavaScript files manually
 - Run `npm run build` to validate conventions automatically
 
 ### Klawed Communication Mode

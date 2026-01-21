@@ -9,12 +9,14 @@
     "build:dev": "node scripts/copy-vendor.js && node scripts/validate-js-conventions.js && NODE_ENV=development npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css && NODE_ENV=development node scripts/hash-css.js && NODE_ENV=development node scripts/hash-js.js",
     "check:colors": "bash scripts/check-hardcoded-colors.sh",
     "check:colors:strict": "bash scripts/check-hardcoded-colors.sh --strict",
+    "check:js": "node scripts/validate-js-conventions.js",
     "watch": "npx postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css --watch",
     "preview": "echo 'Preview not configured for CSS-only build'"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",
     "cssnano": "^7.1.2",
+    "meriyah": "^7.0.0",
     "postcss": "^8.4.32",
     "postcss-cli": "^11.0.1",
     "postcss-import": "^16.1.1",
