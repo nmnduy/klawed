@@ -12,7 +12,7 @@ import { marked } from '/js/vendor/marked.esm.js';
  */
 marked.setOptions({
     gfm: true,           // Enable GitHub Flavored Markdown
-    breaks: true,        // Convert \n to <br> to preserve line breaks
+    breaks: false,        // Let CSS whitespace-pre-wrap handle line breaks (avoid double breaks)
     headerIds: false,    // Don't add IDs to headers
     mangle: false,       // Don't mangle header IDs
 });
