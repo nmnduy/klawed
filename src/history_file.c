@@ -12,6 +12,7 @@
 
 #include "history_file.h"
 #include "logger.h"
+#include "data_dir.h"
 
 struct HistoryFile {
     char *path;
@@ -43,12 +44,12 @@ char* history_file_default_path(void) {
     const char *env = getenv("KLAWED_HISTORY_FILE_PATH");
     if (env && *env) return strdup(env);
 
-    struct stat st;
-    if (stat("./.klawed", &st) == 0 && S_ISDIR(st.st_mode)) {
-        return strdup("./.klawed/input_history.txt");
-    }
-    if (mkdir("./.klawed", 0755) == 0 || errno == EEXIST) {
-        return strdup("./.klawed/input_history.txt");
+    // Try project-local data directory (respects KLAWED_DATA_DIR)
+    if (data_dir_ensure(NULL) == 0) {
+        char hist_path[PATH_MAX];
+        if (data_dir_build_path(hist_path, sizeof(hist_path), "input_history.txt") == 0) {
+            return strdup(hist_path);
+        }
     }
 
     const char *xdg = getenv("XDG_DATA_HOME");

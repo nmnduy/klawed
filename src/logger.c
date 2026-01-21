@@ -3,6 +3,7 @@
  */
 
 #include "logger.h"
+#include "data_dir.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -109,10 +110,11 @@ static int get_default_log_path(char *buffer, size_t buffer_size) {
         }
     }
 
-    // Try project-local .klawed directory first
-    if (mkdir_p("./.klawed/logs") == 0) {
-        snprintf(buffer, buffer_size, "./.klawed/logs/klawed.log");
-        return 0;
+    // Try project-local data directory
+    if (data_dir_ensure("logs") == 0) {
+        if (data_dir_build_path(buffer, buffer_size, "logs/klawed.log") == 0) {
+            return 0;
+        }
     }
 
     const char *home = getenv("HOME");
