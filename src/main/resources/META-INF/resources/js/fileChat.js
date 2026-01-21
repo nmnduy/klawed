@@ -116,7 +116,7 @@ export function init(rootEl) {
     let fileExplorer = null;
     let currentStreamMessageId = null;
     let currentStreamContent = '';
-    function addSystemMessage(content, type = 'info') {
+    let hasSeededPlaceholders = false;
     let lastApiCallTime = null;
 
     // Tool activity tracking
@@ -1825,8 +1825,6 @@ export function init(rootEl) {
     seedPlaceholderMessages();
     runTour();
     connectWebSocket();
-}
-
 }
 
 const autoRoot = document.querySelector('[data-chat-root]');
