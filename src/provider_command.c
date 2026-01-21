@@ -49,6 +49,30 @@ static int switch_provider_for_session(ConversationState *state, const char *pro
 
     const LLMProviderConfig *provider_config = &named_provider->config;
 
+    // Log the provider configuration we're switching to
+    // Determine API key source for logging
+    const char *api_key_source = NULL;
+    const char *api_key_for_log = NULL;
+    if (provider_config->api_key_env[0] != '\0') {
+        api_key_source = provider_config->api_key_env;
+        api_key_for_log = getenv(provider_config->api_key_env);
+    } else if (provider_config->api_key[0] != '\0') {
+        api_key_source = "config file";
+        api_key_for_log = provider_config->api_key;
+    } else {
+        api_key_source = "OPENAI_API_KEY";
+        api_key_for_log = getenv("OPENAI_API_KEY");
+    }
+
+    provider_log_config("Provider Switch",
+                        provider_key,
+                        config_provider_type_to_string(provider_config->provider_type),
+                        provider_config->model,
+                        provider_config->api_base,
+                        api_key_for_log,
+                        api_key_source,
+                        provider_config->use_bedrock);
+
     // Clean up old provider if it exists
     if (state->provider) {
         state->provider->cleanup(state->provider);
@@ -360,7 +384,7 @@ int cmd_provider(ConversationState *state, const char *args) {
     } else {
         printf("Note: Provider configuration saved but could not switch for current session\n");
     }
-    printf("Note: Environment variable KLAWED_LLM_PROVIDER overrides this setting\n");
+    printf("Note: KLAWED_LLM_PROVIDER env var will override this at next startup\n");
 
     return 0;
 }

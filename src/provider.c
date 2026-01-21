@@ -34,6 +34,54 @@ static char* arena_strdup(Arena *arena, const char *str) {
 }
 
 /**
+ * Create a redacted version of an API key for logging
+ * Shows first 4 and last 4 characters, rest is asterisks
+ * Returns a static buffer - not thread safe but fine for logging
+ */
+static const char* redact_api_key(const char *api_key) {
+    static char redacted[64];
+
+    if (!api_key || api_key[0] == '\0') {
+        return "(not set)";
+    }
+
+    size_t len = strlen(api_key);
+    if (len <= 8) {
+        // Too short to show any characters safely
+        return "****";
+    }
+
+    // Show first 4 and last 4 characters
+    snprintf(redacted, sizeof(redacted), "%.4s...%s", api_key, api_key + len - 4);
+    return redacted;
+}
+
+/**
+ * Log the effective provider configuration
+ * Called at startup and when switching providers
+ */
+void provider_log_config(const char *context,
+                         const char *provider_name,
+                         const char *provider_type,
+                         const char *model,
+                         const char *api_base,
+                         const char *api_key,
+                         const char *api_key_source,
+                         int use_bedrock) {
+    LOG_INFO("[Provider] === %s ===", context ? context : "Provider Configuration");
+    LOG_INFO("[Provider]   Provider: %s", provider_name ? provider_name : "(default)");
+    LOG_INFO("[Provider]   Type: %s", provider_type ? provider_type : "auto");
+    LOG_INFO("[Provider]   Model: %s", model ? model : "(not set)");
+    LOG_INFO("[Provider]   API Base: %s", api_base ? api_base : "(not set)");
+    LOG_INFO("[Provider]   API Key: %s (source: %s)",
+             redact_api_key(api_key),
+             api_key_source ? api_key_source : "unknown");
+    if (use_bedrock) {
+        LOG_INFO("[Provider]   Bedrock: enabled");
+    }
+}
+
+/**
  * Get the provider configuration to use based on environment variable or active provider
  * Returns a pointer to the LLMProviderConfig to use, or NULL if using legacy config
  */
@@ -131,7 +179,14 @@ char *provider_validate_env(void) {
 
 /**
  * Get provider configuration from config file or environment variables
- * Priority: Environment variables override config file
+ *
+ * Priority when a named provider is selected (via active_provider or KLAWED_LLM_PROVIDER):
+ *   - Provider config takes precedence for model, api_base, api_key
+ *   - Environment variables are used as fallbacks
+ *
+ * Priority when no named provider is selected (legacy mode):
+ *   - Environment variables (OPENAI_MODEL, OPENAI_API_BASE, OPENAI_API_KEY) take precedence
+ *   - Legacy llm_provider config is used as fallback
  *
  * @param arena Arena allocator for all allocations
  * @param config Pointer to config struct to populate
@@ -139,92 +194,146 @@ char *provider_validate_env(void) {
  * @param api_key_out Pointer to store API key (arena-allocated, don't free)
  * @param api_base_out Pointer to store API base URL (arena-allocated, don't free)
  * @param use_bedrock_out Pointer to store use_bedrock flag
+ * @param api_key_source_out Pointer to store API key source description (static string, don't free)
+ * @param provider_name_out Pointer to store provider name (static string from config, don't free)
  */
 static void get_provider_config(Arena *arena,
                                 KlawedConfig *config,
                                 char **model_out,
                                 char **api_key_out,
                                 char **api_base_out,
-                                int *use_bedrock_out) {
+                                int *use_bedrock_out,
+                                const char **api_key_source_out,
+                                const char **provider_name_out) {
     // Initialize outputs
     *model_out = NULL;
     *api_key_out = NULL;
     *api_base_out = NULL;
     *use_bedrock_out = 0;
+    *api_key_source_out = NULL;
+    *provider_name_out = NULL;
 
     // Load configuration from file
     KlawedConfig file_config;
     config_init_defaults(&file_config);
     int config_loaded = (config_load(&file_config) == 0);
 
-    // Get the provider configuration to use
+    // Get the provider configuration to use (checks KLAWED_LLM_PROVIDER env and active_provider)
     const LLMProviderConfig *provider_config = NULL;
+    const char *active_provider_key = NULL;
     if (config_loaded) {
         provider_config = get_provider_config_to_use(&file_config);
+        // Determine which provider key is active
+        const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
+        if (env_provider && env_provider[0] != '\0') {
+            active_provider_key = env_provider;
+        } else if (file_config.active_provider[0] != '\0') {
+            active_provider_key = file_config.active_provider;
+        }
     }
 
-    // Check environment variables first (they override config file)
+    // Check environment variables (used as fallback when provider is selected, or primary when not)
     const char *env_model = getenv("OPENAI_MODEL");
     const char *env_api_key = getenv("OPENAI_API_KEY");
     const char *env_api_base = getenv("OPENAI_API_BASE");
     const char *env_use_bedrock = getenv("KLAWED_USE_BEDROCK");
 
-    // Get model (priority: env var > provider config > legacy config)
-    if (env_model && env_model[0] != '\0') {
-        *model_out = arena_strdup(arena, env_model);
-    } else if (provider_config && provider_config->model[0] != '\0') {
-        *model_out = arena_strdup(arena, provider_config->model);
-    } else if (config_loaded && file_config.llm_provider.model[0] != '\0') {
-        *model_out = arena_strdup(arena, file_config.llm_provider.model);
-    }
+    // When a named provider is explicitly selected, its config takes precedence
+    // Environment variables serve as fallbacks only
+    if (provider_config) {
+        LOG_DEBUG("[Provider] Named provider selected, using provider config (env vars as fallback)");
+        *provider_name_out = active_provider_key;
 
-    // Get API key (priority: OPENAI_API_KEY env > api_key_env from config > api_key from config)
-    if (env_api_key && env_api_key[0] != '\0') {
-        *api_key_out = arena_strdup(arena, env_api_key);
-    } else if (provider_config && provider_config->api_key_env[0] != '\0') {
-        // Try to get API key from the environment variable specified in config
-        const char *env_key_from_config = getenv(provider_config->api_key_env);
-        if (env_key_from_config && env_key_from_config[0] != '\0') {
-            *api_key_out = arena_strdup(arena, env_key_from_config);
-            LOG_DEBUG("[Provider] Using API key from environment variable: %s", provider_config->api_key_env);
-        } else {
-            LOG_WARN("[Provider] api_key_env specified (%s) but environment variable is not set or empty", provider_config->api_key_env);
+        // Get model (priority: provider config > env var)
+        if (provider_config->model[0] != '\0') {
+            *model_out = arena_strdup(arena, provider_config->model);
+        } else if (env_model && env_model[0] != '\0') {
+            *model_out = arena_strdup(arena, env_model);
         }
-    } else if (provider_config && provider_config->api_key[0] != '\0') {
-        *api_key_out = arena_strdup(arena, provider_config->api_key);
-        LOG_WARN("[Provider] Using API key from config file - consider using OPENAI_API_KEY environment variable for better security");
-    } else if (config_loaded && file_config.llm_provider.api_key_env[0] != '\0') {
-        // Try to get API key from the environment variable specified in legacy config
-        const char *env_key_from_config = getenv(file_config.llm_provider.api_key_env);
-        if (env_key_from_config && env_key_from_config[0] != '\0') {
-            *api_key_out = arena_strdup(arena, env_key_from_config);
-            LOG_DEBUG("[Provider] Using API key from environment variable: %s", file_config.llm_provider.api_key_env);
-        } else {
-            LOG_WARN("[Provider] api_key_env specified (%s) but environment variable is not set or empty", file_config.llm_provider.api_key_env);
+
+        // Get API base (priority: provider config > env var)
+        if (provider_config->api_base[0] != '\0') {
+            *api_base_out = arena_strdup(arena, provider_config->api_base);
+        } else if (env_api_base && env_api_base[0] != '\0') {
+            *api_base_out = arena_strdup(arena, env_api_base);
         }
-    } else if (config_loaded && file_config.llm_provider.api_key[0] != '\0') {
-        *api_key_out = arena_strdup(arena, file_config.llm_provider.api_key);
-        LOG_WARN("[Provider] Using API key from config file - consider using OPENAI_API_KEY environment variable for better security");
-    }
 
-    // Get API base
-    if (env_api_base && env_api_base[0] != '\0') {
-        *api_base_out = arena_strdup(arena, env_api_base);
-    } else if (provider_config && provider_config->api_base[0] != '\0') {
-        *api_base_out = arena_strdup(arena, provider_config->api_base);
-    } else if (config_loaded && file_config.llm_provider.api_base[0] != '\0') {
-        *api_base_out = arena_strdup(arena, file_config.llm_provider.api_base);
-    }
+        // Get API key (priority: api_key_env from config > api_key from config > OPENAI_API_KEY env)
+        if (provider_config->api_key_env[0] != '\0') {
+            const char *env_key_from_config = getenv(provider_config->api_key_env);
+            if (env_key_from_config && env_key_from_config[0] != '\0') {
+                *api_key_out = arena_strdup(arena, env_key_from_config);
+                *api_key_source_out = provider_config->api_key_env;
+                LOG_DEBUG("[Provider] Using API key from environment variable: %s", provider_config->api_key_env);
+            } else {
+                LOG_WARN("[Provider] api_key_env specified (%s) but environment variable is not set or empty", provider_config->api_key_env);
+            }
+        }
+        if (!*api_key_out && provider_config->api_key[0] != '\0') {
+            *api_key_out = arena_strdup(arena, provider_config->api_key);
+            *api_key_source_out = "config file";
+            LOG_WARN("[Provider] Using API key from config file - consider using environment variable for better security");
+        }
+        if (!*api_key_out && env_api_key && env_api_key[0] != '\0') {
+            *api_key_out = arena_strdup(arena, env_api_key);
+            *api_key_source_out = "OPENAI_API_KEY";
+        }
 
-    // Get use_bedrock flag
-    if (env_use_bedrock && (strcmp(env_use_bedrock, "1") == 0 ||
-                           strcmp(env_use_bedrock, "true") == 0 ||
-                           strcmp(env_use_bedrock, "TRUE") == 0)) {
-        *use_bedrock_out = 1;
-    } else if (provider_config) {
-        *use_bedrock_out = provider_config->use_bedrock;
-    } else if (config_loaded) {
-        *use_bedrock_out = file_config.llm_provider.use_bedrock;
+        // Get use_bedrock flag (priority: env var > provider config for explicit override)
+        if (env_use_bedrock && (strcmp(env_use_bedrock, "1") == 0 ||
+                               strcmp(env_use_bedrock, "true") == 0 ||
+                               strcmp(env_use_bedrock, "TRUE") == 0)) {
+            *use_bedrock_out = 1;
+        } else {
+            *use_bedrock_out = provider_config->use_bedrock;
+        }
+    } else {
+        // Legacy mode: no named provider selected
+        // Environment variables take precedence over legacy llm_provider config
+        LOG_DEBUG("[Provider] No named provider, using legacy mode (env vars take precedence)");
+        *provider_name_out = "(legacy)";
+
+        // Get model (priority: env var > legacy config)
+        if (env_model && env_model[0] != '\0') {
+            *model_out = arena_strdup(arena, env_model);
+        } else if (config_loaded && file_config.llm_provider.model[0] != '\0') {
+            *model_out = arena_strdup(arena, file_config.llm_provider.model);
+        }
+
+        // Get API base (priority: env var > legacy config)
+        if (env_api_base && env_api_base[0] != '\0') {
+            *api_base_out = arena_strdup(arena, env_api_base);
+        } else if (config_loaded && file_config.llm_provider.api_base[0] != '\0') {
+            *api_base_out = arena_strdup(arena, file_config.llm_provider.api_base);
+        }
+
+        // Get API key (priority: OPENAI_API_KEY env > api_key_env from legacy config > api_key from legacy config)
+        if (env_api_key && env_api_key[0] != '\0') {
+            *api_key_out = arena_strdup(arena, env_api_key);
+            *api_key_source_out = "OPENAI_API_KEY";
+        } else if (config_loaded && file_config.llm_provider.api_key_env[0] != '\0') {
+            const char *env_key_from_config = getenv(file_config.llm_provider.api_key_env);
+            if (env_key_from_config && env_key_from_config[0] != '\0') {
+                *api_key_out = arena_strdup(arena, env_key_from_config);
+                *api_key_source_out = file_config.llm_provider.api_key_env;
+                LOG_DEBUG("[Provider] Using API key from environment variable: %s", file_config.llm_provider.api_key_env);
+            } else {
+                LOG_WARN("[Provider] api_key_env specified (%s) but environment variable is not set or empty", file_config.llm_provider.api_key_env);
+            }
+        } else if (config_loaded && file_config.llm_provider.api_key[0] != '\0') {
+            *api_key_out = arena_strdup(arena, file_config.llm_provider.api_key);
+            *api_key_source_out = "config file";
+            LOG_WARN("[Provider] Using API key from config file - consider using OPENAI_API_KEY environment variable for better security");
+        }
+
+        // Get use_bedrock flag
+        if (env_use_bedrock && (strcmp(env_use_bedrock, "1") == 0 ||
+                               strcmp(env_use_bedrock, "true") == 0 ||
+                               strcmp(env_use_bedrock, "TRUE") == 0)) {
+            *use_bedrock_out = 1;
+        } else if (config_loaded) {
+            *use_bedrock_out = file_config.llm_provider.use_bedrock;
+        }
     }
 
     // If config was loaded, copy it to output
@@ -289,8 +398,11 @@ void provider_init(const char *model,
     char *config_api_key = NULL;
     char *config_api_base = NULL;
     int config_use_bedrock = 0;
+    const char *api_key_source = NULL;
+    const char *provider_name = NULL;
 
-    get_provider_config(arena, &effective_config, &config_model, &config_api_key, &config_api_base, &config_use_bedrock);
+    get_provider_config(arena, &effective_config, &config_model, &config_api_key,
+                        &config_api_base, &config_use_bedrock, &api_key_source, &provider_name);
 
     // Get the provider configuration to use for provider type
     const LLMProviderConfig *provider_config = get_provider_config_to_use(&effective_config);
@@ -316,6 +428,22 @@ void provider_init(const char *model,
         arena_destroy(arena);
         return;
     }
+
+    // Determine which API key to use for logging (priority: passed parameter > config)
+    const char *api_key_for_log = (api_key && api_key[0] != '\0') ? api_key : config_api_key;
+    if (api_key && api_key[0] != '\0') {
+        api_key_source = "parameter";
+    }
+
+    // Log the effective provider configuration at startup
+    provider_log_config("Startup",
+                        provider_name,
+                        config_provider_type_to_string(provider_type),
+                        model_to_use,
+                        config_api_base,
+                        api_key_for_log,
+                        api_key_source,
+                        config_use_bedrock);
 
     LOG_DEBUG("Initializing provider (model: %s, provider_type: %s)...",
               model_to_use, config_provider_type_to_string(provider_type));

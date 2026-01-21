@@ -91,4 +91,28 @@ void provider_init(const char *model, const char *api_key, ProviderInitResult *r
  */
 char *provider_validate_env(void);
 
+/**
+ * Log the effective provider configuration
+ *
+ * Logs provider configuration details to the log file with API key redacted.
+ * Called at startup and when switching providers via /provider command.
+ *
+ * @param context Description of when this is being logged (e.g., "Startup", "Provider Switch")
+ * @param provider_name Name of the provider (e.g., "sonnet-4.5-bedrock")
+ * @param provider_type Type string (e.g., "bedrock", "anthropic", "openai")
+ * @param model Model name
+ * @param api_base API base URL
+ * @param api_key API key (will be redacted in log)
+ * @param api_key_source Where the API key came from (e.g., "OPENAI_API_KEY", "config file")
+ * @param use_bedrock Whether bedrock mode is enabled
+ */
+void provider_log_config(const char *context,
+                         const char *provider_name,
+                         const char *provider_type,
+                         const char *model,
+                         const char *api_base,
+                         const char *api_key,
+                         const char *api_key_source,
+                         int use_bedrock);
+
 #endif // PROVIDER_H

@@ -128,21 +128,41 @@ The result: All providers from global are available, with `sonnet-4.5-bedrock` s
 
 ## Priority Order
 
-Configuration values are resolved in this priority order (highest to lowest):
+Configuration priority depends on whether a **named provider is explicitly selected** (via `active_provider` or `KLAWED_LLM_PROVIDER`).
 
-1. Command-line arguments (if supported)
-2. Environment variables
-3. Local configuration file (`.klawed/config.json`)
-4. Global configuration file (`~/.klawed/config.json`)
-5. Default values
+### Named Provider Mode (Recommended)
 
-### API Key Priority
+When a named provider is selected, the provider's configuration takes precedence:
 
-API keys have a specific priority order to support multiple authentication methods:
+1. **Model**: provider config `model` > `OPENAI_MODEL` environment variable
+2. **API Base**: provider config `api_base` > `OPENAI_API_BASE` environment variable
+3. **API Key**: provider config `api_key_env` > provider config `api_key` > `OPENAI_API_KEY` environment variable
 
-1. `OPENAI_API_KEY` environment variable (highest priority, always checked first)
-2. `api_key_env` from config file (reads from the specified environment variable)
-3. `api_key` from config file (lowest priority, not recommended for security)
+This allows you to switch providers with `/provider` command or `KLAWED_LLM_PROVIDER` without environment variables interfering.
+
+### Legacy Mode (No Named Provider)
+
+When no named provider is selected, environment variables take precedence for backward compatibility:
+
+1. **Model**: `OPENAI_MODEL` environment variable > legacy config `model`
+2. **API Base**: `OPENAI_API_BASE` environment variable > legacy config `api_base`
+3. **API Key**: `OPENAI_API_KEY` environment variable > legacy config `api_key_env` > legacy config `api_key`
+
+### Provider Selection Priority
+
+Which provider configuration to use is determined by:
+
+1. `KLAWED_LLM_PROVIDER` environment variable (highest priority)
+2. `active_provider` in config file
+3. Legacy `llm_provider` configuration (if no named providers)
+
+### API Key Priority (Named Provider Mode)
+
+When using named providers, API keys are resolved in this order:
+
+1. `api_key_env` from provider config (reads from the specified environment variable)
+2. `api_key` from provider config (not recommended for security)
+3. `OPENAI_API_KEY` environment variable (fallback)
 
 **Example:**
 ```json
@@ -157,22 +177,17 @@ API keys have a specific priority order to support multiple authentication metho
 ```
 
 The system will:
-1. First check if `OPENAI_API_KEY` is set (uses it if found)
-2. Then check if `MY_API_KEY` is set (uses it if found)
-3. Finally fall back to `hardcoded-fallback` (not recommended)
+1. First check if `MY_API_KEY` environment variable is set (uses it if found)
+2. Then fall back to `hardcoded-fallback` (not recommended)
+3. Finally check `OPENAI_API_KEY` as a last resort
 
-Within configuration files:
-- If `KLAWED_LLM_PROVIDER` environment variable is set, use that named provider
-- Otherwise, if `active_provider` is set in config, use that named provider
-- Otherwise, use the legacy `llm_provider` configuration
+### Environment Variables
 
-### Environment Variables That Override Config
-
-- `OPENAI_MODEL` - Overrides `model`
-- `OPENAI_API_KEY` - Overrides `api_key` (recommended for security)
-- `OPENAI_API_BASE` - Overrides `api_base`
-- `KLAWED_USE_BEDROCK` - Overrides `use_bedrock`
 - `KLAWED_LLM_PROVIDER` - Selects which named provider to use (e.g., "sonnet-4.5-bedrock")
+- `KLAWED_USE_BEDROCK` - Overrides `use_bedrock` (always respected)
+- `OPENAI_MODEL` - Model fallback (only used if provider config has no model)
+- `OPENAI_API_KEY` - API key fallback (only used if provider config has no key)
+- `OPENAI_API_BASE` - API base fallback (only used if provider config has no api_base)
 
 ## Examples
 
@@ -340,4 +355,4 @@ The multiple provider configuration system is fully backward compatible:
 2. If only the legacy `llm_provider` field exists, it will be used
 3. If both `llm_provider` and named providers exist, named providers take precedence when selected
 4. The legacy `KLAWED_USE_BEDROCK` environment variable is still supported and will override the config file's `use_bedrock` setting
-5. Environment variables (`OPENAI_MODEL`, `OPENAI_API_KEY`, etc.) still override configuration file values
+5. **Important change**: When a named provider is selected, the provider's configuration takes precedence over environment variables (`OPENAI_MODEL`, `OPENAI_API_BASE`). This allows the `/provider` command to work correctly without environment variable interference. Environment variables are only used as fallbacks when the provider config doesn't specify a value.
