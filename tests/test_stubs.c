@@ -42,11 +42,6 @@ int is_explore_mode_enabled(void) {
     return 0;
 }
 
-const char* explore_tool_web_browse_agent_schema(void) {
-    static const char *empty_schema = "{}";
-    return empty_schema;
-}
-
 const char* explore_tool_web_search_schema(void) {
     static const char *empty_schema = "{}";
     return empty_schema;
