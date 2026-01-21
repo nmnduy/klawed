@@ -65,4 +65,28 @@
       @apply w-40;
     }
   }
+
+  /* File highlight animation (for navigateToFile) */
+  @keyframes file-highlight-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.3);
+      background-color: rgba(249, 115, 22, 0.05);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(249, 115, 22, 0.5);
+      background-color: rgba(249, 115, 22, 0.15);
+    }
+  }
+
+  .file-item--highlighted {
+    @apply rounded-lg transition-all duration-300;
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.5);
+    background-color: rgba(249, 115, 22, 0.1);
+  }
+
+  /* Dark mode adjustments for highlight */
+  .dark .file-item--highlighted {
+    box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.5);
+    background-color: rgba(251, 146, 60, 0.15);
+  }
 }

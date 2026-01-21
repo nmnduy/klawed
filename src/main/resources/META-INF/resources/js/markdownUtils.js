@@ -108,9 +108,20 @@ export function parseMarkdown(markdown) {
             return `<pre class="${langClass}"><code>${sanitizedCode}</code></pre>`;
         };
         
-        // Override link rendering for security
+        // Override link rendering for security and file:// protocol support
         renderer.link = function(href, title, text) {
-            // Only allow safe protocols
+            // Check for file:// protocol - this is our custom scheme for file explorer links
+            if (href && href.startsWith('file://')) {
+                // Extract the file path (remove file:// prefix)
+                // Support both file:///path and file://path formats
+                const filePath = href.replace(/^file:\/\/\/?/, '/');
+                const escapedPath = escapeHtml(filePath);
+                const titleAttr = title ? ` title="${escapeHtml(title)}"` : ` title="Click to view in file explorer"`;
+                // Use data-file-path attribute for the click handler
+                return `<a href="#" data-file-path="${escapedPath}"${titleAttr} class="markdown-link file-link">📄 ${text}</a>`;
+            }
+            
+            // Only allow safe protocols for external links
             const safeProtocols = ['http:', 'https:', 'mailto:'];
             let safeHref = href;
             

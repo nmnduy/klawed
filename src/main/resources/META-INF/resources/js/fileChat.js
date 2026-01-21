@@ -205,6 +205,72 @@ export function init(rootEl) {
         }
     }
 
+    /**
+     * Set up click handlers for file links (file:// protocol) within a message.
+     * When clicked, these links will:
+     * 1. Switch to the Files tab (on mobile)
+     * 2. Navigate to the file's directory in the file explorer
+     * 3. Highlight the file briefly
+     * @param {HTMLElement} messageEl - The message element to search for file links
+     */
+    function setupFileLinkHandlers(messageEl) {
+        if (!messageEl) return;
+        
+        const fileLinks = messageEl.querySelectorAll('a.file-link[data-file-path]');
+        
+        fileLinks.forEach(link => {
+            link.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const filePath = link.dataset.filePath;
+                if (!filePath) {
+                    console.warn('[file-chat] File link missing data-file-path');
+                    return;
+                }
+                
+                console.log('[file-chat] File link clicked:', filePath);
+                
+                // Ensure file explorer is available
+                ensureFileExplorer();
+                
+                if (!fileExplorer) {
+                    console.error('[file-chat] FileExplorer not available');
+                    addSystemMessage('✗ File explorer not available', 'error');
+                    return;
+                }
+                
+                // Set session if needed
+                if (sessionId && typeof fileExplorer.setSession === 'function') {
+                    fileExplorer.setSession(sessionId, null);
+                }
+                
+                // Switch to Files tab on mobile
+                const isDesktop = window.innerWidth >= 1024;
+                if (!isDesktop && tabManager) {
+                    // Use the public switchTab method
+                    const fileTab = rootEl.querySelector('[data-tab="file"]');
+                    if (fileTab) {
+                        fileTab.click();
+                    }
+                }
+                
+                // Navigate to the file and highlight it
+                try {
+                    const found = await fileExplorer.navigateToFile(filePath);
+                    if (found) {
+                        console.log('[file-chat] Successfully navigated to file:', filePath);
+                    } else {
+                        console.warn('[file-chat] File not found:', filePath);
+                    }
+                } catch (error) {
+                    console.error('[file-chat] Error navigating to file:', error);
+                    addSystemMessage(`✗ Could not find file: ${filePath}`, 'error');
+                }
+            });
+        });
+    }
+
     function scrollToBottom(force = false) {
         if (!scrollContainer || typeof scrollContainer.scrollTo !== 'function') return;
 
@@ -340,6 +406,11 @@ export function init(rootEl) {
             }
 
             messageParent.appendChild(messageDiv);
+
+            // Add click handler for file links (file:// protocol)
+            if (!isUser) {
+                setupFileLinkHandlers(messageDiv);
+            }
 
             // Handle auto-scroll for first AI response
             if (!isUser && !hasReceivedFirstAiResponse) {

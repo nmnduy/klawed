@@ -83,6 +83,30 @@
     border-radius: 2px;
 }
 
+/* File Links - Links to files in the file explorer */
+.markdown-link.file-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    padding: 0.15em 0.5em;
+    background-color: hsl(var(--primary) / 0.1);
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 500;
+    border: 1px solid hsl(var(--primary) / 0.2);
+    transition: all 0.2s ease;
+}
+
+.markdown-link.file-link:hover {
+    background-color: hsl(var(--primary) / 0.2);
+    border-color: hsl(var(--primary) / 0.4);
+    text-decoration: none;
+}
+
+.markdown-link.file-link:active {
+    transform: scale(0.98);
+}
+
 /* Bold and Italic */
 .markdown-content strong,
 .markdown-content b {
