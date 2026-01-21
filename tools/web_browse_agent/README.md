@@ -53,6 +53,16 @@ web_browse_agent commands
 web_browse_agent --session my-session end-session
 ```
 
+### Async Navigation
+
+The `open` command is async by design - it returns immediately after the browser commits the navigation (receives HTTP response headers) but doesn't wait for all resources to load. This enables REPL-style usage without blocking.
+
+To wait for the page to fully load after opening:
+```bash
+web_browse_agent --session my-session open https://example.com
+web_browse_agent --session my-session wait-for --wait-type navigation
+```
+
 ### Global Flags
 
 - `--session <id>` or `-s <id>`: Session ID (required for most commands)
@@ -64,7 +74,7 @@ web_browse_agent --session my-session end-session
 ## Available Commands
 
 ### Browser Control
-- `open <url>` - Navigate to URL
+- `open <url>` - Navigate to URL (async - returns immediately after navigation starts)
 - `list-tabs` - List all tabs
 - `switch-tab <id>` - Switch to tab by ID
 - `close-tab <id>` - Close tab by ID
@@ -73,7 +83,7 @@ web_browse_agent --session my-session end-session
 - `eval <js>` - Evaluate JavaScript
 - `click <selector>` - Click element (CSS/Playwright selectors)
 - `type <selector> <text>` - Type text into element
-- `wait-for <selector>` - Wait for element to appear
+- `wait-for <selector>` - Wait for element to appear (also supports `wait_type=navigation` to wait for page load after `open`)
 
 ### Page Inspection
 - `screenshot` - Take screenshot (returns base64)
