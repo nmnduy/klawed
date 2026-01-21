@@ -10,6 +10,8 @@ import (
 )
 
 // handleOpen navigates to a URL
+// This is async by default - it starts navigation and returns immediately.
+// Use wait-for with type=navigation to wait for the page to fully load.
 func (d *Driver) handleOpen(req *ipc.Request) (*ipc.Response, error) {
 	args, err := req.ParseArguments()
 	if err != nil {
@@ -30,22 +32,30 @@ func (d *Driver) handleOpen(req *ipc.Request) (*ipc.Response, error) {
 		}
 	}
 
-	// Navigate to URL
+	// Navigate to URL - use WaitUntilStateCommit for fast return
+	// This returns as soon as the navigation is committed (response received)
+	// but doesn't wait for page resources to load
 	_, err = tab.Page.Goto(args.URL, playwright.PageGotoOptions{
-		WaitUntil: playwright.WaitUntilStateNetworkidle,
+		WaitUntil: playwright.WaitUntilStateCommit,
 	})
 	if err != nil {
 		return ipc.NewResponse(req.ID, false, nil, fmt.Sprintf("failed to navigate: %v", err))
 	}
 
-	// Update tab info
+	// Update tab info with URL immediately, title may not be available yet
+	d.context.UpdateTabInfo(tab.ID, args.URL, "")
+
+	// Try to get title but don't fail if not available
 	title, _ := tab.Page.Title()
-	d.context.UpdateTabInfo(tab.ID, args.URL, title)
+	if title != "" {
+		d.context.UpdateTabInfo(tab.ID, args.URL, title)
+	}
 
 	return ipc.NewResponse(req.ID, true, map[string]interface{}{
 		"url":    args.URL,
 		"title":  title,
 		"tab_id": tab.ID,
+		"note":   "Navigation started. Use 'wait-for' with type=navigation if you need to wait for page load.",
 	}, "")
 }
 
