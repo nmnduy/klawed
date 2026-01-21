@@ -29,7 +29,7 @@
 #define MAX_WEB_OUTPUT 100000  // 100KB max output from web_browse_agent
 #define WEB_AGENT_TIMEOUT 120  // 2 minute timeout for web operations
 
-// Get the path to web_browse_agent binary, preferring env override, then vendor copy, then PATH
+// Get the path to web_browse_agent binary, preferring env override, then tools copy, then PATH
 static const char* get_web_agent_path(void) {
     static char resolved_path[PATH_MAX];
 
@@ -38,21 +38,21 @@ static const char* get_web_agent_path(void) {
         return env_path;
     }
 
-    const char *vendor_path = "vendors/web_browse_agent/web_browse_agent";
-    if (access(vendor_path, X_OK) == 0) {
-        if (strlcpy(resolved_path, vendor_path, sizeof(resolved_path)) < sizeof(resolved_path)) {
+    const char *tools_path = "tools/web_browse_agent/bin/web_browse_agent";
+    if (access(tools_path, X_OK) == 0) {
+        if (strlcpy(resolved_path, tools_path, sizeof(resolved_path)) < sizeof(resolved_path)) {
             return resolved_path;
         }
     }
 
     const char *path_env = getenv("PATH");
     if (!path_env || path_env[0] == '\0') {
-        return env_path && env_path[0] != '\0' ? env_path : vendor_path;
+        return env_path && env_path[0] != '\0' ? env_path : tools_path;
     }
 
     char *path_copy = strdup(path_env);
     if (!path_copy) {
-        return env_path && env_path[0] != '\0' ? env_path : vendor_path;
+        return env_path && env_path[0] != '\0' ? env_path : tools_path;
     }
 
     const char *found_path = NULL;
@@ -83,7 +83,7 @@ static const char* get_web_agent_path(void) {
         return found_path;
     }
 
-    return env_path && env_path[0] != '\0' ? env_path : vendor_path;
+    return env_path && env_path[0] != '\0' ? env_path : tools_path;
 }
 
 // Check if explore mode is enabled
@@ -172,61 +172,6 @@ static char* execute_web_agent(const char *prompt, int *exit_code) {
     }
 
     // Read output
-    char *output = malloc(MAX_WEB_OUTPUT);
-    if (!output) {
-        pclose(fp);
-        return NULL;
-    }
-
-    size_t total = 0;
-    size_t n;
-    while ((n = fread(output + total, 1, MAX_WEB_OUTPUT - total - 1, fp)) > 0) {
-        total += n;
-        if (total >= MAX_WEB_OUTPUT - 1) {
-            break;
-        }
-    }
-    output[total] = '\0';
-
-    int status = pclose(fp);
-    if (exit_code) {
-        *exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-    }
-
-    return output;
-}
-
-// Execute web_browse_agent with a raw command string (no prompt wrapping)
-static char* execute_web_agent_raw(const char *args, int *exit_code) {
-    if (!args) {
-        return NULL;
-    }
-
-    const char *agent_path = get_web_agent_path();
-    int headless = is_headless_mode();
-
-    size_t cmd_size = strlen(agent_path) + strlen(args) + 256;
-    char *command = malloc(cmd_size);
-    if (!command) {
-        return NULL;
-    }
-
-    snprintf(command, cmd_size, "timeout %d %s %s %s 2>&1",
-             WEB_AGENT_TIMEOUT,
-             agent_path,
-             headless ? "--headless" : "",
-             args);
-
-    LOG_INFO("Executing web_browse_agent (raw): %s", command);
-
-    FILE *fp = popen(command, "r");
-    free(command);
-
-    if (!fp) {
-        LOG_ERROR("Failed to execute web_browse_agent: %s", strerror(errno));
-        return NULL;
-    }
-
     char *output = malloc(MAX_WEB_OUTPUT);
     if (!output) {
         pclose(fp);
@@ -368,7 +313,7 @@ cJSON* tool_web_search(cJSON *params, void *state) {
     if (!is_web_agent_available()) {
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error",
-            "web_browse_agent binary not found. Build it with: cd vendors/web_browse_agent && make");
+            "web_browse_agent binary not found. Build it with: cd tools/web_browse_agent && make");
         return error;
     }
 
@@ -460,7 +405,7 @@ cJSON* tool_web_read(cJSON *params, void *state) {
     if (!is_web_agent_available()) {
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error",
-            "web_browse_agent binary not found. Build it with: cd vendors/web_browse_agent && make");
+            "web_browse_agent binary not found. Build it with: cd tools/web_browse_agent && make");
         return error;
     }
 
@@ -512,8 +457,88 @@ cJSON* tool_web_read(cJSON *params, void *state) {
 }
 
 // ============================================================================
-// Tool: web_browse_agent - direct access to binary (no explore mode gate)
+// Tool: web_browse_agent - sessionful browser automation
 // ============================================================================
+//
+// New REPL-style API (v1.0.0):
+// - Uses persistent sessions with --session flag
+// - Commands are sent one at a time to a running browser instance
+// - Driver process auto-terminates when klawed exits (parent PID monitoring)
+// - Use 'commands' subcommand to list available browser commands
+//
+
+// Execute web_browse_agent with session-based command
+static char* execute_web_agent_session(const char *session_id, const char *command,
+                                       const char *const *args, int nargs,
+                                       int *exit_code) {
+    if (!session_id || !command) {
+        return NULL;
+    }
+
+    const char *agent_path = get_web_agent_path();
+    int headless = is_headless_mode();
+
+    // Calculate command buffer size
+    size_t cmd_size = strlen(agent_path) + strlen(session_id) + strlen(command) + 256;
+    for (int i = 0; i < nargs; i++) {
+        if (args[i]) {
+            cmd_size += strlen(args[i]) * 2 + 4; // extra space for quoting
+        }
+    }
+
+    char *cmd_buf = malloc(cmd_size);
+    if (!cmd_buf) {
+        return NULL;
+    }
+
+    // Build command: web_browse_agent --session <id> [--headless] <command> [args...]
+    int written = snprintf(cmd_buf, cmd_size, "timeout %d %s --session %s %s --json %s",
+                           WEB_AGENT_TIMEOUT,
+                           agent_path,
+                           session_id,
+                           headless ? "--headless" : "",
+                           command);
+
+    // Append arguments
+    for (int i = 0; i < nargs && args[i]; i++) {
+        size_t remaining = cmd_size - (size_t)written;
+        // Simple shell quoting - wrap in single quotes, escape existing single quotes
+        written += snprintf(cmd_buf + written, remaining, " '%s'", args[i]);
+    }
+
+    LOG_INFO("Executing web_browse_agent: %s", cmd_buf);
+
+    FILE *fp = popen(cmd_buf, "r");
+    free(cmd_buf);
+
+    if (!fp) {
+        LOG_ERROR("Failed to execute web_browse_agent: %s", strerror(errno));
+        return NULL;
+    }
+
+    char *output = malloc(MAX_WEB_OUTPUT);
+    if (!output) {
+        pclose(fp);
+        return NULL;
+    }
+
+    size_t total = 0;
+    size_t n;
+    while ((n = fread(output + total, 1, MAX_WEB_OUTPUT - total - 1, fp)) > 0) {
+        total += n;
+        if (total >= MAX_WEB_OUTPUT - 1) {
+            break;
+        }
+    }
+    output[total] = '\0';
+
+    int status = pclose(fp);
+    if (exit_code) {
+        *exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    }
+
+    return output;
+}
 
 cJSON* tool_web_browse_agent(cJSON *params, void *state) {
     (void)state;
@@ -521,38 +546,44 @@ cJSON* tool_web_browse_agent(cJSON *params, void *state) {
     if (!is_web_agent_configured_only()) {
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error",
-            "web_browse_agent path not set. Set KLAWED_WEB_BROWSE_AGENT_PATH or place the binary at vendors/web_browse_agent/web_browse_agent");
+            "web_browse_agent binary not found. Build it with: cd tools/web_browse_agent && make");
         return error;
     }
 
-    cJSON *args_json = cJSON_GetObjectItem(params, "args");
-    cJSON *prompt_json = cJSON_GetObjectItem(params, "prompt");
-    const char *prompt = NULL;
-    const char *args = NULL;
-
-    if (prompt_json && cJSON_IsString(prompt_json)) {
-        prompt = prompt_json->valuestring;
-    }
-    if (args_json && cJSON_IsString(args_json)) {
-        args = args_json->valuestring;
+    // Get session ID - default to "klawed" for simplicity
+    const char *session_id = "klawed";
+    cJSON *session_json = cJSON_GetObjectItem(params, "session");
+    if (session_json && cJSON_IsString(session_json) && session_json->valuestring[0] != '\0') {
+        session_id = session_json->valuestring;
     }
 
-    if (!prompt && !args) {
+    // Get command
+    cJSON *command_json = cJSON_GetObjectItem(params, "command");
+    if (!command_json || !cJSON_IsString(command_json)) {
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error",
-            "Provide either prompt (for wrapped mode) or args (raw arguments) for web_browse_agent");
+            "command parameter is required. Use 'commands' to list available commands.");
         return error;
     }
+    const char *command = command_json->valuestring;
 
-    int exit_code = -1;
-    char *output = NULL;
-    if (prompt && args) {
-        output = execute_web_agent_raw(args, &exit_code);
-    } else if (prompt) {
-        output = execute_web_agent(prompt, &exit_code);
-    } else {
-        output = execute_web_agent_raw(args, &exit_code);
+    // Get arguments array (optional)
+    cJSON *args_json = cJSON_GetObjectItem(params, "args");
+    const char *args[32] = {NULL};
+    int nargs = 0;
+
+    if (args_json && cJSON_IsArray(args_json)) {
+        cJSON *arg;
+        cJSON_ArrayForEach(arg, args_json) {
+            if (cJSON_IsString(arg) && nargs < 31) {
+                args[nargs++] = arg->valuestring;
+            }
+        }
     }
+
+    // Execute command
+    int exit_code = -1;
+    char *output = execute_web_agent_session(session_id, command, args, nargs, &exit_code);
 
     cJSON *result = cJSON_CreateObject();
     if (!output) {
@@ -560,8 +591,17 @@ cJSON* tool_web_browse_agent(cJSON *params, void *state) {
         return result;
     }
 
+    // Try to parse JSON output
+    cJSON *json_output = cJSON_Parse(output);
+    if (json_output) {
+        cJSON_AddItemToObject(result, "result", json_output);
+    } else {
+        cJSON_AddStringToObject(result, "output", output);
+    }
+
     cJSON_AddNumberToObject(result, "exit_code", exit_code);
-    cJSON_AddStringToObject(result, "output", output);
+    cJSON_AddStringToObject(result, "session", session_id);
+    cJSON_AddStringToObject(result, "command", command);
 
     free(output);
     return result;
@@ -701,13 +741,28 @@ const char* explore_tool_web_browse_agent_schema(void) {
         "\"type\": \"function\","
         "\"function\": {"
             "\"name\": \"web_browse_agent\","
-            "\"description\": \"Directly run the web_browse_agent binary. Provide either a full argument string (args) or a prompt to wrap. Headless mode follows KLAWED_EXPLORE_HEADLESS (default: on).\","
+            "\"description\": \"Control a persistent browser session for web automation. "
+                "Sessions maintain state (tabs, cookies, history) across commands. "
+                "The browser driver auto-terminates when klawed exits. "
+                "Use command='commands' to list available browser commands.\","
             "\"parameters\": {"
                 "\"type\": \"object\","
                 "\"properties\": {"
-                    "\"args\": {\"type\": \"string\", \"description\": \"Raw arguments to pass to web_browse_agent (e.g., 'browser_navigate https://example.com')\"},"
-                    "\"prompt\": {\"type\": \"string\", \"description\": \"Optional prompt; if provided, prompt mode is used instead of raw args\"}"
-                "}"
+                    "\"command\": {"
+                        "\"type\": \"string\","
+                        "\"description\": \"Browser command to execute. Available: open, list-tabs, switch-tab, close-tab, eval, click, type, wait-for, screenshot, html, set-viewport, cookies, session-info, describe-commands, end-session, ping, commands\""
+                    "},"
+                    "\"args\": {"
+                        "\"type\": \"array\","
+                        "\"items\": {\"type\": \"string\"},"
+                        "\"description\": \"Arguments for the command (e.g., ['https://example.com'] for open, ['#button'] for click)\""
+                    "},"
+                    "\"session\": {"
+                        "\"type\": \"string\","
+                        "\"description\": \"Session ID (default: 'klawed'). Use different sessions for parallel browser instances\""
+                    "}"
+                "},"
+                "\"required\": [\"command\"]"
             "}"
         "}"
     "}";

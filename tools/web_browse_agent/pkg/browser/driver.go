@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/klawed/web-agent/pkg/ipc"
+	"github.com/klawed/tools/web_browse_agent/pkg/ipc"
 )
 
 // Driver represents a browser driver process
@@ -20,6 +20,7 @@ type Driver struct {
 	socketPath  string
 	headless    bool
 	timeout     time.Duration
+	parentPID   int // Parent process to monitor for cleanup
 
 	// Process management
 	cmd        *exec.Cmd
@@ -39,6 +40,7 @@ type DriverConfig struct {
 	SocketPath string
 	Headless   bool
 	Timeout    time.Duration
+	ParentPID  int // Parent process to monitor - driver exits if parent dies
 }
 
 // NewDriver creates a new browser driver
@@ -62,6 +64,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		socketPath: config.SocketPath,
 		headless:   config.Headless,
 		timeout:    config.Timeout,
+		parentPID:  config.ParentPID,
 		shutdown:   make(chan struct{}),
 	}, nil
 }
@@ -96,6 +99,12 @@ func (d *Driver) Start() error {
 	// Start cleanup goroutine
 	d.wg.Add(1)
 	go d.cleanupMonitor()
+
+	// Start parent process monitor if parent PID is set
+	if d.parentPID > 0 {
+		d.wg.Add(1)
+		go d.parentProcessMonitor()
+	}
 
 	fmt.Printf("Driver started for session %s (PID: %d, Socket: %s)\n",
 		d.sessionID, os.Getpid(), d.socketPath)
@@ -183,14 +192,53 @@ func (d *Driver) cleanupMonitor() {
 	// Additional cleanup if needed
 }
 
+// parentProcessMonitor checks if the parent process is still alive
+// and triggers shutdown if it's not. This ensures the driver doesn't
+// become orphaned when klawed is killed.
+func (d *Driver) parentProcessMonitor() {
+	defer d.wg.Done()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-d.shutdown:
+			return
+		case <-ticker.C:
+			if !isProcessAlive(d.parentPID) {
+				fmt.Printf("Parent process %d died, shutting down driver\n", d.parentPID)
+				// Trigger shutdown - use a goroutine to avoid deadlock
+				go d.Stop()
+				return
+			}
+		}
+	}
+}
+
+// isProcessAlive checks if a process with the given PID is still running
+func isProcessAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	// On Unix, sending signal 0 checks if process exists
+	err = process.Signal(syscall.Signal(0))
+	return err == nil
+}
+
 // RunDriverMain is the main entry point for the driver process
 func RunDriverMain() error {
 	// Parse command line arguments
 	if len(os.Args) < 4 {
-		return fmt.Errorf("usage: %s --driver <session-id> <socket-path> [--headless]", os.Args[0])
+		return fmt.Errorf("usage: %s --driver <session-id> --socket <socket-path> [--parent-pid <pid>] [--no-headless]", os.Args[0])
 	}
 
 	var sessionID, socketPath string
+	var parentPID int
 	headless := true
 
 	for i := 1; i < len(os.Args); i++ {
@@ -203,6 +251,11 @@ func RunDriverMain() error {
 		case "--socket":
 			if i+1 < len(os.Args) {
 				socketPath = os.Args[i+1]
+				i++
+			}
+		case "--parent-pid":
+			if i+1 < len(os.Args) {
+				fmt.Sscanf(os.Args[i+1], "%d", &parentPID)
 				i++
 			}
 		case "--no-headless":
@@ -220,6 +273,7 @@ func RunDriverMain() error {
 		SocketPath: socketPath,
 		Headless:   headless,
 		Timeout:    30 * time.Second,
+		ParentPID:  parentPID,
 	}
 
 	driver, err := NewDriver(config)
@@ -251,9 +305,16 @@ func waitForInterrupt() chan os.Signal {
 }
 
 // StartDriverProcess starts the driver as a separate process
+// The driver will monitor the parent process and exit if it dies.
 func StartDriverProcess(sessionID, socketPath string, headless bool) (int, error) {
+	// Get current process PID to pass to driver for orphan detection
+	parentPID := os.Getpid()
+
 	// Build command
-	cmd := exec.Command(os.Args[0], "--driver", sessionID, "--socket", socketPath)
+	cmd := exec.Command(os.Args[0], "driver",
+		"--driver", sessionID,
+		"--socket", socketPath,
+		"--parent-pid", fmt.Sprintf("%d", parentPID))
 	if !headless {
 		cmd.Args = append(cmd.Args, "--no-headless")
 	}

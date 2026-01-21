@@ -1,4 +1,4 @@
-module github.com/klawed/web-agent
+module github.com/klawed/tools/web_browse_agent
 
 go 1.22
 

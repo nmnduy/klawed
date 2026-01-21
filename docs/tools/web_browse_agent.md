@@ -9,7 +9,7 @@ Direct access to the Playwright-based `web_browse_agent` binary without enabling
 
 ## Prerequisites
 - Build or provide the binary:
-  - Default path: `vendors/web_browse_agent/web_browse_agent`
+  - Default path: `tools/web_browse_agent/bin/web_browse_agent`
   - Or set `KLAWED_WEB_BROWSE_AGENT_PATH=/absolute/path/to/web_browse_agent`
 - Optional: ensure Playwright dependencies are installed for the binary (see vendor docs).
 

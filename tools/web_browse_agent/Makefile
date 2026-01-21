@@ -1,4 +1,4 @@
-# Makefile for web-agent
+# Makefile for web_browse_agent
 
 .PHONY: all build clean test fmt vet lint install-deps help
 
@@ -10,7 +10,7 @@ GOTEST=$(GOCMD) test
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 GOVET=$(GOCMD) vet
-BINARY_NAME=web-agent
+BINARY_NAME=web_browse_agent
 BINARY_DIR=bin
 BINARY_PATH=$(BINARY_DIR)/$(BINARY_NAME)
 
@@ -21,7 +21,7 @@ all: build
 build:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BINARY_DIR)
-	$(GOBUILD) -o $(BINARY_PATH) ./cmd/web-agent
+	$(GOBUILD) -o $(BINARY_PATH) ./cmd/web_browse_agent
 	@echo "Build complete: $(BINARY_PATH)"
 
 # Clean build files

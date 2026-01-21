@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/klawed/web-agent/internal/session"
-	"github.com/klawed/web-agent/pkg/ipc"
+	"github.com/klawed/tools/web_browse_agent/internal/session"
+	"github.com/klawed/tools/web_browse_agent/pkg/ipc"
 )
 
 // Execute executes a command for a session

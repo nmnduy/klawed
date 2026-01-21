@@ -18,7 +18,7 @@ When `KLAWED_EXPLORE_MODE=1` is set, klawed operates in Explore mode with:
 |----------|---------|-------------|
 | `KLAWED_EXPLORE_MODE` | `0` | Enable Explore subagent mode |
 | `KLAWED_EXPLORE_HEADLESS` | `1` | Run browser in headless mode |
-| `KLAWED_WEB_BROWSE_AGENT_PATH` | `vendors/web_browse_agent/web_browse_agent` | Path to web_browse_agent binary |
+| `KLAWED_WEB_BROWSE_AGENT_PATH` | `tools/web_browse_agent/bin/web_browse_agent` | Path to web_browse_agent binary |
 | `CONTEXT7_API_KEY` | - | API key for Context7 (optional, for higher rate limits) |
 
 ## Tools Available in Explore Mode
@@ -107,7 +107,7 @@ make
 ### Build web_browse_agent
 
 ```bash
-cd vendors/web_browse_agent
+cd tools/web_browse_agent
 go build -o web_browse_agent ./cmd/agent
 ```
 
@@ -138,5 +138,5 @@ go run github.com/playwright-community/playwright-go/cmd/playwright@latest insta
 
 - `src/explore_tools.c` - C implementation of explore tools
 - `src/explore_tools.h` - Header file
-- `vendors/web_browse_agent/` - Go web browser agent
+- `tools/web_browse_agent/` - Go web browser agent
 - `vendors/context7/` - Context7 MCP server (reference)
