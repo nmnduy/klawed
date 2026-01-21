@@ -12,6 +12,7 @@
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
 #include "klawed_internal.h"  // For ApiResponse typedef
+#include "config.h"          // For LLMProviderConfig
 
 // Forward declarations
 struct Provider;
@@ -80,6 +81,23 @@ typedef struct {
  *         On failure: result->error_message is set (caller must free)
  */
 void provider_init(const char *model, const char *api_key, ProviderInitResult *result);
+
+/**
+ * Initialize a provider directly from a LLMProviderConfig
+ *
+ * Use this for runtime provider switching (e.g., /provider command) where you want
+ * to bypass the normal env var > config file priority logic and use a specific
+ * provider configuration directly.
+ *
+ * @param provider_key - Name/key of the provider (for logging)
+ * @param config - Provider configuration to use
+ * @param[out] result - Pointer to ProviderInitResult to populate
+ *         On success: result->provider and result->api_url are set (caller owns both)
+ *         On failure: result->error_message is set (caller must free)
+ */
+void provider_init_from_config(const char *provider_key,
+                               const LLMProviderConfig *config,
+                               ProviderInitResult *result);
 
 /**
  * Validate KLAWED_LLM_PROVIDER environment variable if set

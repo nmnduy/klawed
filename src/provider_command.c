@@ -49,30 +49,6 @@ static int switch_provider_for_session(ConversationState *state, const char *pro
 
     const LLMProviderConfig *provider_config = &named_provider->config;
 
-    // Log the provider configuration we're switching to
-    // Determine API key source for logging
-    const char *api_key_source = NULL;
-    const char *api_key_for_log = NULL;
-    if (provider_config->api_key_env[0] != '\0') {
-        api_key_source = provider_config->api_key_env;
-        api_key_for_log = getenv(provider_config->api_key_env);
-    } else if (provider_config->api_key[0] != '\0') {
-        api_key_source = "config file";
-        api_key_for_log = provider_config->api_key;
-    } else {
-        api_key_source = "OPENAI_API_KEY";
-        api_key_for_log = getenv("OPENAI_API_KEY");
-    }
-
-    provider_log_config("Provider Switch",
-                        provider_key,
-                        config_provider_type_to_string(provider_config->provider_type),
-                        provider_config->model,
-                        provider_config->api_base,
-                        api_key_for_log,
-                        api_key_source,
-                        provider_config->use_bedrock);
-
     // Clean up old provider if it exists
     if (state->provider) {
         state->provider->cleanup(state->provider);
@@ -86,7 +62,7 @@ static int switch_provider_for_session(ConversationState *state, const char *pro
         state->api_url = NULL;
     }
 
-    // Update model
+    // Update model from provider config
     if (state->model) {
         free(state->model);
     }
@@ -96,13 +72,9 @@ static int switch_provider_for_session(ConversationState *state, const char *pro
         return -1;
     }
 
-    // Update API key (use from config or keep existing)
-    // Note: We don't update state->api_key here as it might be from environment variable
-    // The provider_init function will handle getting the right API key
-
-    // Initialize new provider
+    // Initialize new provider directly from config (bypasses env var priority)
     ProviderInitResult provider_result;
-    provider_init(state->model, state->api_key, &provider_result);
+    provider_init_from_config(provider_key, provider_config, &provider_result);
 
     if (!provider_result.provider) {
         const char *error_msg = provider_result.error_message ? provider_result.error_message : "unknown error";

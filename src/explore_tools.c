@@ -714,10 +714,10 @@ cJSON* tool_web_browse_agent(cJSON *params, void *state) {
     if (output[0] != '\0') {
         LOG_DEBUG("web_browse_agent: emitting output to TUI (g_active_tool_queue=%p)",
                   (void*)g_active_tool_queue);
-        
+
         // Add a visual separator before the output
         tool_emit_line("", "[web_browse_agent] Output:");
-        
+
         // Show output line by line, up to a reasonable limit
         char *line_start = output;
         char *line_end;
