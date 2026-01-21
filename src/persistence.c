@@ -14,6 +14,7 @@
 #include "persistence.h"
 #include "migrations.h"
 #include "logger.h"
+#include "data_dir.h"
 
 /**
  * Extract token usage statistics from API response JSON
@@ -409,7 +410,7 @@ static const char *INDEX_SQL =
     "CREATE INDEX IF NOT EXISTS idx_token_usage_session_id ON token_usage(session_id);";
 
 // Get default database path
-// Priority: $KLAWED_DB_PATH > ./.klawed/api_calls.db > $XDG_DATA_HOME/klawed/api_calls.db > ~/.local/share/klawed/api_calls.db
+// Priority: $KLAWED_DB_PATH > $KLAWED_DATA_DIR/api_calls.db > ./.klawed/api_calls.db > $XDG_DATA_HOME/klawed/api_calls.db > ~/.local/share/klawed/api_calls.db
 char* persistence_get_default_path(void) {
     char *path = NULL;
 
@@ -420,16 +421,12 @@ char* persistence_get_default_path(void) {
         return path;
     }
 
-    // Try project-local .klawed directory first
-    struct stat st;
-    if (stat("./.klawed", &st) == 0 && S_ISDIR(st.st_mode)) {
-        // .klawed exists, use it
-        return strdup("./.klawed/api_calls.db");
-    }
-
-    // Try to create .klawed directory
-    if (mkdir("./.klawed", 0755) == 0 || errno == EEXIST) {
-        return strdup("./.klawed/api_calls.db");
+    // Try project-local data directory (respects KLAWED_DATA_DIR)
+    if (data_dir_ensure(NULL) == 0) {
+        char db_path[PATH_MAX];
+        if (data_dir_build_path(db_path, sizeof(db_path), "api_calls.db") == 0) {
+            return strdup(db_path);
+        }
     }
 
     // Try XDG_DATA_HOME

@@ -7,6 +7,7 @@
 #include "../logger.h"
 #include "../message_queue.h"
 #include "../subagent_manager.h"
+#include "../data_dir.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -98,14 +99,28 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         }
     }
 
-    // Create unique log file in .klawed/subagent/ directory
+    // Create unique log file in data_dir/subagent/ directory
     if (!state) {
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error", "Internal error: null state");
         return error;
     }
+
+    // Build log directory path using data_dir
     char log_dir[PATH_MAX];
-    snprintf(log_dir, sizeof(log_dir), "%s/.klawed/subagent", state->working_dir);
+
+    // If working_dir is set and different from cwd, build absolute path
+    // Otherwise use data_dir directly
+    if (state->working_dir && state->working_dir[0] != '\0') {
+        // Build path: working_dir/data_dir/subagent
+        const char *base = data_dir_get_base();
+        snprintf(log_dir, sizeof(log_dir), "%s/%s/subagent", state->working_dir, base);
+    } else {
+        // Use data_dir_build_path for current directory
+        if (data_dir_build_path(log_dir, sizeof(log_dir), "subagent") != 0) {
+            snprintf(log_dir, sizeof(log_dir), ".klawed/subagent");
+        }
+    }
 
     // Create directory if it doesn't exist
     if (mkdir(log_dir, 0755) != 0 && errno != EEXIST) {
