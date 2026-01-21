@@ -16,6 +16,8 @@
 
 #define CONFIG_DIR ".klawed"
 #define CONFIG_FILE ".klawed/config.json"
+#define GLOBAL_CONFIG_DIR_NAME ".klawed"
+#define GLOBAL_CONFIG_FILE_NAME "config.json"
 
 void config_init_defaults(KlawedConfig *config) {
     if (!config) return;
@@ -73,16 +75,57 @@ TUIInputBoxStyle config_input_style_from_string(const char *str) {
     return INPUT_STYLE_BLAND;
 }
 
-int config_load(KlawedConfig *config) {
-    if (!config) return -1;
+/**
+ * Get the path to the global config file (~/.klawed/config.json)
+ *
+ * @param buf Buffer to store the path
+ * @param buf_size Size of the buffer
+ * @return 0 on success, -1 on failure
+ */
+static int config_get_global_path(char *buf, size_t buf_size) {
+    if (!buf || buf_size == 0) return -1;
 
-    // Initialize with defaults first
-    config_init_defaults(config);
+    const char *home = getenv("HOME");
+    if (!home || home[0] == '\0') {
+        LOG_DEBUG("[Config] HOME environment variable not set");
+        return -1;
+    }
+
+    // Build path: $HOME/.klawed/config.json
+    size_t needed = strlcpy(buf, home, buf_size);
+    if (needed >= buf_size) return -1;
+
+    needed = strlcat(buf, "/", buf_size);
+    if (needed >= buf_size) return -1;
+
+    needed = strlcat(buf, GLOBAL_CONFIG_DIR_NAME, buf_size);
+    if (needed >= buf_size) return -1;
+
+    needed = strlcat(buf, "/", buf_size);
+    if (needed >= buf_size) return -1;
+
+    needed = strlcat(buf, GLOBAL_CONFIG_FILE_NAME, buf_size);
+    if (needed >= buf_size) return -1;
+
+    return 0;
+}
+
+/**
+ * Load configuration from a specific file path into a config struct
+ * This is a helper function that doesn't initialize defaults - caller should do that first.
+ *
+ * @param config Pointer to config struct to populate (should already be initialized)
+ * @param file_path Path to the config file
+ * @param label Label for logging (e.g., "global", "local")
+ * @return 0 on success, -1 on failure
+ */
+static int config_load_from_file(KlawedConfig *config, const char *file_path, const char *label) {
+    if (!config || !file_path) return -1;
 
     // Try to open config file
-    FILE *fp = fopen(CONFIG_FILE, "r");
+    FILE *fp = fopen(file_path, "r");
     if (!fp) {
-        LOG_DEBUG("[Config] No config file found at %s, using defaults", CONFIG_FILE);
+        LOG_DEBUG("[Config] No %s config file found at %s", label, file_path);
         return -1;
     }
 
@@ -92,14 +135,14 @@ int config_load(KlawedConfig *config) {
     fseek(fp, 0, SEEK_SET);
 
     if (file_size <= 0 || file_size > 1024 * 1024) {  // Max 1MB
-        LOG_WARN("[Config] Invalid config file size: %ld", file_size);
+        LOG_WARN("[Config] Invalid %s config file size: %ld", label, file_size);
         fclose(fp);
         return -1;
     }
 
     char *json_str = malloc((size_t)file_size + 1);
     if (!json_str) {
-        LOG_ERROR("[Config] Failed to allocate memory for config file");
+        LOG_ERROR("[Config] Failed to allocate memory for %s config file", label);
         fclose(fp);
         return -1;
     }
@@ -108,7 +151,7 @@ int config_load(KlawedConfig *config) {
     fclose(fp);
 
     if (bytes_read != (size_t)file_size) {
-        LOG_WARN("[Config] Failed to read config file completely");
+        LOG_WARN("[Config] Failed to read %s config file completely", label);
         free(json_str);
         return -1;
     }
@@ -119,7 +162,7 @@ int config_load(KlawedConfig *config) {
     free(json_str);
 
     if (!root) {
-        LOG_WARN("[Config] Failed to parse config file as JSON");
+        LOG_WARN("[Config] Failed to parse %s config file as JSON", label);
         return -1;
     }
 
@@ -127,14 +170,14 @@ int config_load(KlawedConfig *config) {
     cJSON *style_item = cJSON_GetObjectItem(root, "input_box_style");
     if (style_item && cJSON_IsString(style_item)) {
         config->input_box_style = config_input_style_from_string(style_item->valuestring);
-        LOG_DEBUG("[Config] Loaded input_box_style: %s", style_item->valuestring);
+        LOG_DEBUG("[Config] Loaded input_box_style from %s: %s", label, style_item->valuestring);
     }
 
     // Read theme
     cJSON *theme_item = cJSON_GetObjectItem(root, "theme");
     if (theme_item && cJSON_IsString(theme_item) && theme_item->valuestring) {
         strlcpy(config->theme, theme_item->valuestring, sizeof(config->theme));
-        LOG_DEBUG("[Config] Loaded theme: %s", config->theme);
+        LOG_DEBUG("[Config] Loaded theme from %s: %s", label, config->theme);
     }
 
     // Read LLM provider configuration
@@ -144,36 +187,36 @@ int config_load(KlawedConfig *config) {
         cJSON *provider_type_item = cJSON_GetObjectItem(llm_item, "provider_type");
         if (provider_type_item && cJSON_IsString(provider_type_item)) {
             config->llm_provider.provider_type = config_provider_type_from_string(provider_type_item->valuestring);
-            LOG_DEBUG("[Config] Loaded provider_type: %s", provider_type_item->valuestring);
+            LOG_DEBUG("[Config] Loaded provider_type from %s: %s", label, provider_type_item->valuestring);
         }
 
         // Read provider name
         cJSON *provider_name_item = cJSON_GetObjectItem(llm_item, "provider_name");
         if (provider_name_item && cJSON_IsString(provider_name_item) && provider_name_item->valuestring) {
             strlcpy(config->llm_provider.provider_name, provider_name_item->valuestring, CONFIG_PROVIDER_NAME_MAX);
-            LOG_DEBUG("[Config] Loaded provider_name: %s", config->llm_provider.provider_name);
+            LOG_DEBUG("[Config] Loaded provider_name from %s: %s", label, config->llm_provider.provider_name);
         }
 
         // Read model
         cJSON *model_item = cJSON_GetObjectItem(llm_item, "model");
         if (model_item && cJSON_IsString(model_item) && model_item->valuestring) {
             strlcpy(config->llm_provider.model, model_item->valuestring, CONFIG_MODEL_MAX);
-            LOG_DEBUG("[Config] Loaded model: %s", config->llm_provider.model);
+            LOG_DEBUG("[Config] Loaded model from %s: %s", label, config->llm_provider.model);
         }
 
         // Read API base
         cJSON *api_base_item = cJSON_GetObjectItem(llm_item, "api_base");
         if (api_base_item && cJSON_IsString(api_base_item) && api_base_item->valuestring) {
             strlcpy(config->llm_provider.api_base, api_base_item->valuestring, CONFIG_API_BASE_MAX);
-            LOG_DEBUG("[Config] Loaded api_base: %s", config->llm_provider.api_base);
+            LOG_DEBUG("[Config] Loaded api_base from %s: %s", label, config->llm_provider.api_base);
         }
 
         // Read API key (with security warning if present)
         cJSON *api_key_item = cJSON_GetObjectItem(llm_item, "api_key");
         if (api_key_item && cJSON_IsString(api_key_item) && api_key_item->valuestring) {
             strlcpy(config->llm_provider.api_key, api_key_item->valuestring, CONFIG_API_KEY_MAX);
-            LOG_WARN("[Config] Loaded API key from config file - consider using environment variable for better security");
-            LOG_DEBUG("[Config] Loaded api_key: [REDACTED]");
+            LOG_WARN("[Config] Loaded API key from %s config file - consider using environment variable for better security", label);
+            LOG_DEBUG("[Config] Loaded api_key from %s: [REDACTED]", label);
         }
 
         // Read use_bedrock (legacy flag) - can be boolean or number
@@ -189,7 +232,7 @@ int config_load(KlawedConfig *config) {
                 config->llm_provider.use_bedrock = (value != 0.0) ? 1 : 0;
                 #pragma GCC diagnostic pop
             }
-            LOG_DEBUG("[Config] Loaded use_bedrock: %d", config->llm_provider.use_bedrock);
+            LOG_DEBUG("[Config] Loaded use_bedrock from %s: %d", label, config->llm_provider.use_bedrock);
         }
     }
 
@@ -198,24 +241,41 @@ int config_load(KlawedConfig *config) {
     if (providers_item && cJSON_IsObject(providers_item)) {
         cJSON *provider_item = NULL;
         cJSON_ArrayForEach(provider_item, providers_item) {
-            if (config->provider_count >= CONFIG_MAX_PROVIDERS) {
-                LOG_WARN("[Config] Maximum number of providers (%d) reached, skipping additional providers", CONFIG_MAX_PROVIDERS);
-                break;
-            }
-
             const char *key = provider_item->string;
             if (!key || key[0] == '\0') {
-                LOG_WARN("[Config] Skipping provider with empty key");
+                LOG_WARN("[Config] Skipping provider with empty key in %s", label);
                 continue;
             }
 
             if (!cJSON_IsObject(provider_item)) {
-                LOG_WARN("[Config] Skipping provider '%s': not an object", key);
+                LOG_WARN("[Config] Skipping provider '%s' in %s: not an object", key, label);
                 continue;
             }
 
-            NamedProviderConfig *named_provider = &config->providers[config->provider_count];
-            strlcpy(named_provider->key, key, CONFIG_PROVIDER_KEY_MAX);
+            // Check if provider with this key already exists (from global config)
+            int existing_idx = -1;
+            for (int i = 0; i < config->provider_count; i++) {
+                if (strcmp(config->providers[i].key, key) == 0) {
+                    existing_idx = i;
+                    break;
+                }
+            }
+
+            NamedProviderConfig *named_provider = NULL;
+            if (existing_idx >= 0) {
+                // Update existing provider (local overrides global)
+                named_provider = &config->providers[existing_idx];
+                LOG_DEBUG("[Config] Overriding provider '%s' with %s config", key, label);
+            } else {
+                // Add new provider
+                if (config->provider_count >= CONFIG_MAX_PROVIDERS) {
+                    LOG_WARN("[Config] Maximum number of providers (%d) reached, skipping '%s' from %s", CONFIG_MAX_PROVIDERS, key, label);
+                    continue;
+                }
+                named_provider = &config->providers[config->provider_count];
+                strlcpy(named_provider->key, key, CONFIG_PROVIDER_KEY_MAX);
+                config->provider_count++;
+            }
 
             // Load provider configuration
             LLMProviderConfig *provider_config = &named_provider->config;
@@ -224,8 +284,8 @@ int config_load(KlawedConfig *config) {
             cJSON *provider_type_item = cJSON_GetObjectItem(provider_item, "provider_type");
             if (provider_type_item && cJSON_IsString(provider_type_item)) {
                 provider_config->provider_type = config_provider_type_from_string(provider_type_item->valuestring);
-                LOG_DEBUG("[Config] Loaded provider_type for '%s': %s", key, provider_type_item->valuestring);
-            } else {
+                LOG_DEBUG("[Config] Loaded provider_type for '%s' from %s: %s", key, label, provider_type_item->valuestring);
+            } else if (existing_idx < 0) {
                 provider_config->provider_type = PROVIDER_AUTO;
             }
 
@@ -233,29 +293,29 @@ int config_load(KlawedConfig *config) {
             cJSON *provider_name_item = cJSON_GetObjectItem(provider_item, "provider_name");
             if (provider_name_item && cJSON_IsString(provider_name_item) && provider_name_item->valuestring) {
                 strlcpy(provider_config->provider_name, provider_name_item->valuestring, CONFIG_PROVIDER_NAME_MAX);
-                LOG_DEBUG("[Config] Loaded provider_name for '%s': %s", key, provider_config->provider_name);
+                LOG_DEBUG("[Config] Loaded provider_name for '%s' from %s: %s", key, label, provider_config->provider_name);
             }
 
             // Read model
             cJSON *model_item = cJSON_GetObjectItem(provider_item, "model");
             if (model_item && cJSON_IsString(model_item) && model_item->valuestring) {
                 strlcpy(provider_config->model, model_item->valuestring, CONFIG_MODEL_MAX);
-                LOG_DEBUG("[Config] Loaded model for '%s': %s", key, provider_config->model);
+                LOG_DEBUG("[Config] Loaded model for '%s' from %s: %s", key, label, provider_config->model);
             }
 
             // Read API base
             cJSON *api_base_item = cJSON_GetObjectItem(provider_item, "api_base");
             if (api_base_item && cJSON_IsString(api_base_item) && api_base_item->valuestring) {
                 strlcpy(provider_config->api_base, api_base_item->valuestring, CONFIG_API_BASE_MAX);
-                LOG_DEBUG("[Config] Loaded api_base for '%s': %s", key, provider_config->api_base);
+                LOG_DEBUG("[Config] Loaded api_base for '%s' from %s: %s", key, label, provider_config->api_base);
             }
 
             // Read API key (with security warning if present)
             cJSON *api_key_item = cJSON_GetObjectItem(provider_item, "api_key");
             if (api_key_item && cJSON_IsString(api_key_item) && api_key_item->valuestring) {
                 strlcpy(provider_config->api_key, api_key_item->valuestring, CONFIG_API_KEY_MAX);
-                LOG_WARN("[Config] Loaded API key from config file for provider '%s' - consider using environment variable for better security", key);
-                LOG_DEBUG("[Config] Loaded api_key for '%s': [REDACTED]", key);
+                LOG_WARN("[Config] Loaded API key from %s config file for provider '%s' - consider using environment variable for better security", label, key);
+                LOG_DEBUG("[Config] Loaded api_key for '%s' from %s: [REDACTED]", key, label);
             }
 
             // Read use_bedrock (legacy flag) - can be boolean or number
@@ -271,11 +331,10 @@ int config_load(KlawedConfig *config) {
                     provider_config->use_bedrock = (value != 0.0) ? 1 : 0;
                     #pragma GCC diagnostic pop
                 }
-                LOG_DEBUG("[Config] Loaded use_bedrock for '%s': %d", key, provider_config->use_bedrock);
+                LOG_DEBUG("[Config] Loaded use_bedrock for '%s' from %s: %d", key, label, provider_config->use_bedrock);
             }
 
-            config->provider_count++;
-            LOG_DEBUG("[Config] Loaded provider '%s'", key);
+            LOG_DEBUG("[Config] Loaded provider '%s' from %s", key, label);
         }
     }
 
@@ -283,12 +342,39 @@ int config_load(KlawedConfig *config) {
     cJSON *active_provider_item = cJSON_GetObjectItem(root, "active_provider");
     if (active_provider_item && cJSON_IsString(active_provider_item) && active_provider_item->valuestring) {
         strlcpy(config->active_provider, active_provider_item->valuestring, CONFIG_PROVIDER_KEY_MAX);
-        LOG_DEBUG("[Config] Loaded active_provider: %s", config->active_provider);
+        LOG_DEBUG("[Config] Loaded active_provider from %s: %s", label, config->active_provider);
     }
 
     cJSON_Delete(root);
-    LOG_INFO("[Config] Configuration loaded from %s", CONFIG_FILE);
+    LOG_INFO("[Config] Configuration loaded from %s (%s)", file_path, label);
     return 0;
+}
+
+int config_load(KlawedConfig *config) {
+    if (!config) return -1;
+
+    // Initialize with defaults first
+    config_init_defaults(config);
+
+    int global_loaded = -1;
+    int local_loaded = -1;
+
+    // First, try to load global config from ~/.klawed/config.json
+    char global_path[1024];
+    if (config_get_global_path(global_path, sizeof(global_path)) == 0) {
+        global_loaded = config_load_from_file(config, global_path, "global");
+    }
+
+    // Then, load local config from .klawed/config.json (overrides global)
+    local_loaded = config_load_from_file(config, CONFIG_FILE, "local");
+
+    // Return 0 if at least one config was loaded successfully
+    if (global_loaded == 0 || local_loaded == 0) {
+        return 0;
+    }
+
+    LOG_DEBUG("[Config] No config files found, using defaults");
+    return -1;
 }
 
 int config_save(const KlawedConfig *config) {
