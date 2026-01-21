@@ -533,23 +533,23 @@ void window_manager_refresh_conversation(WindowManager *wm) {
              0, x1,                       // screen top-left (with horizontal offset)
              y2, x2);                     // screen bottom-right (with horizontal offset)
 
-    // Draw vertical scroll bar on the right edge when not at/near bottom
-    // Only show when there's content below the visible area (scroll percentage < 95%)
+    // Draw vertical scroll bar on the right edge when not fully scrolled to bottom.
+    // The scroll bar is drawn on stdscr (not the pad) in the rightmost column.
+    // conv_h_padding reserves space so content doesn't overlap with the scroll bar.
     int total_lines = wm->conv_pad_content_lines;
     int visible_lines = wm->conv_viewport_height;
-
-    // Clear scroll bar area first (rightmost column of conversation viewport)
     int scroll_bar_col = wm->screen_width - 1;
-    if (scroll_bar_col >= x2) {
-        for (int row = 0; row < visible_lines; row++) {
-            mvaddch(row, scroll_bar_col, ' ');
-        }
+
+    // Clear scroll bar area first, then conditionally draw the scroll bar.
+    // This ensures the scroll bar disappears when scrolled to bottom.
+    for (int row = 0; row < visible_lines; row++) {
+        mvaddch(row, scroll_bar_col, ' ');
     }
 
-    // Track if we drew the scroll bar (need to refresh if we did)
+    // Track if we drew the scroll bar (need to refresh stdscr if we did)
     int drew_scroll_bar = 0;
-    
-    // Show scroll bar when we're not at/near the bottom
+
+    // Show scroll bar when there's content below the visible area
     if (total_lines > visible_lines && visible_lines > 0) {
         // Calculate scroll percentage
         int scroll_range = total_lines - visible_lines;
@@ -583,36 +583,30 @@ void window_manager_refresh_conversation(WindowManager *wm) {
                 thumb_top = max_thumb_top;
             }
 
-            // Draw scroll bar at the right edge of the conversation viewport
-            // Use the rightmost column of the screen, but ensure it doesn't overlap with content
-            int scroll_bar_draw_col = wm->screen_width - 1;  // Rightmost column
-            
-            // Only draw if the column is within the usable area (including last column)
-            if (scroll_bar_draw_col >= x2) {
-                // Use prompt color for scroll bar (same as input box scroll bar)
-                if (has_colors()) {
-                    attron(COLOR_PAIR(NCURSES_PAIR_PROMPT));
-                }
-
-                // Draw track
-                for (int row = 0; row < track_height; row++) {
-                    mvaddch(row, scroll_bar_draw_col, ACS_VLINE);
-                }
-
-                // Draw thumb
-                for (int row = thumb_top; row < thumb_top + thumb_height; row++) {
-                    mvaddch(row, scroll_bar_draw_col, ACS_CKBOARD);
-                }
-
-                if (has_colors()) {
-                    attroff(COLOR_PAIR(NCURSES_PAIR_PROMPT));
-                }
-                
-                drew_scroll_bar = 1;
+            // Draw scroll bar at the rightmost column (space reserved by conv_h_padding)
+            // Use prompt color for scroll bar (same as input box scroll bar)
+            if (has_colors()) {
+                attron(COLOR_PAIR(NCURSES_PAIR_PROMPT));
             }
+
+            // Draw track
+            for (int row = 0; row < track_height; row++) {
+                mvaddch(row, scroll_bar_col, ACS_VLINE);
+            }
+
+            // Draw thumb
+            for (int row = thumb_top; row < thumb_top + thumb_height; row++) {
+                mvaddch(row, scroll_bar_col, ACS_CKBOARD);
+            }
+
+            if (has_colors()) {
+                attroff(COLOR_PAIR(NCURSES_PAIR_PROMPT));
+            }
+
+            drew_scroll_bar = 1;
         }
     }
-    
+
     // If we drew the scroll bar, we need to refresh stdscr to make it visible
     // (prefresh only updates the pad region, not stdscr changes made with mvaddch)
     if (drew_scroll_bar) {
