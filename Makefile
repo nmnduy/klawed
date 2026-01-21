@@ -2216,6 +2216,8 @@ install-web-browse-agent:
 	@cd $(WEB_BROWSE_AGENT_DIR) && GO111MODULE=on go build -ldflags "-s -w" -o web_browse_agent ./cmd/web_browse_agent
 	@echo "Installing web_browse_agent to $(INSTALL_PREFIX)/bin..."
 	@mkdir -p $(INSTALL_PREFIX)/bin
+	@# Remove old binary first to avoid "Text file busy" error
+	@rm -f $(INSTALL_PREFIX)/bin/web_browse_agent
 	@cp $(WEB_BROWSE_AGENT_BIN) $(INSTALL_PREFIX)/bin/web_browse_agent
 	@echo "$(WEB_BROWSE_AGENT_VERSION)" > $(INSTALL_PREFIX)/bin/web_browse_agent.version
 	@echo "✓ web_browse_agent installed (version: $(WEB_BROWSE_AGENT_VERSION)). Ensure $(INSTALL_PREFIX)/bin is in your PATH."

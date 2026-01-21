@@ -20,7 +20,8 @@ type Driver struct {
 	socketPath  string
 	headless    bool
 	timeout     time.Duration
-	parentPID   int // Parent process to monitor for cleanup
+	idleTimeout time.Duration // Auto-shutdown after this duration of inactivity (0 = disabled)
+	parentPID   int           // Parent process to monitor for cleanup
 
 	// Process management
 	cmd          *exec.Cmd
@@ -31,6 +32,10 @@ type Driver struct {
 	shutdownOnce sync.Once // For closing shutdown channel only once
 	wg           sync.WaitGroup
 
+	// Activity tracking for idle timeout
+	lastActivity time.Time
+	activityMu   sync.RWMutex
+
 	// Browser state
 	context    *BrowserContext
 	mu         sync.RWMutex
@@ -38,11 +43,12 @@ type Driver struct {
 
 // DriverConfig holds configuration for creating a new driver
 type DriverConfig struct {
-	SessionID  string
-	SocketPath string
-	Headless   bool
-	Timeout    time.Duration
-	ParentPID  int // Parent process to monitor - driver exits if parent dies
+	SessionID   string
+	SocketPath  string
+	Headless    bool
+	Timeout     time.Duration
+	IdleTimeout time.Duration // Auto-shutdown after this duration of inactivity (0 = disabled)
+	ParentPID   int           // Parent process to monitor - driver exits if parent dies
 }
 
 // NewDriver creates a new browser driver
@@ -62,20 +68,23 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 	}
 
 	return &Driver{
-		sessionID:  config.SessionID,
-		socketPath: config.SocketPath,
-		headless:   config.Headless,
-		timeout:    config.Timeout,
-		parentPID:  config.ParentPID,
-		shutdown:   make(chan struct{}),
+		sessionID:    config.SessionID,
+		socketPath:   config.SocketPath,
+		headless:     config.Headless,
+		timeout:      config.Timeout,
+		idleTimeout:  config.IdleTimeout,
+		parentPID:    config.ParentPID,
+		shutdown:     make(chan struct{}),
+		lastActivity: time.Now(),
 	}, nil
 }
 
 // Start starts the driver process and IPC server
 func (d *Driver) Start() error {
-	// Create IPC server
+	// Create IPC server with activity tracking for idle timeout
 	ipcConfig := ipc.ServerConfig{
 		SocketPath: d.socketPath,
+		OnActivity: d.TouchActivity,
 	}
 	server, err := ipc.NewServer(ipcConfig)
 	if err != nil {
@@ -106,17 +115,26 @@ func (d *Driver) Start() error {
 	d.wg.Add(1)
 	go d.ipcShutdownMonitor()
 
+	// Start idle timeout monitor if configured
+	if d.idleTimeout > 0 {
+		d.wg.Add(1)
+		go d.idleTimeoutMonitor()
+	}
+
 	// NOTE: Parent process monitoring is disabled for now.
-	// The driver will run until explicitly stopped via end-session command
-	// or when the process receives SIGINT/SIGTERM.
-	// TODO: Implement a better cleanup strategy (e.g., idle timeout, session expiry)
+	// The driver will run until explicitly stopped via end-session command,
+	// idle timeout, or when the process receives SIGINT/SIGTERM.
 	// if d.parentPID > 0 {
 	// 	d.wg.Add(1)
 	// 	go d.parentProcessMonitor()
 	// }
 
-	fmt.Printf("Driver started for session %s (PID: %d, Socket: %s)\n",
-		d.sessionID, os.Getpid(), d.socketPath)
+	idleInfo := ""
+	if d.idleTimeout > 0 {
+		idleInfo = fmt.Sprintf(", IdleTimeout: %s", d.idleTimeout)
+	}
+	fmt.Printf("Driver started for session %s (PID: %d, Socket: %s%s)\n",
+		d.sessionID, os.Getpid(), d.socketPath, idleInfo)
 
 	return nil
 }
@@ -223,6 +241,57 @@ func (d *Driver) ipcShutdownMonitor() {
 	}
 }
 
+// idleTimeoutMonitor monitors for inactivity and shuts down the driver
+// after the configured idle timeout period
+func (d *Driver) idleTimeoutMonitor() {
+	defer d.wg.Done()
+
+	// Check every 30 seconds or 1/4 of idle timeout, whichever is smaller
+	checkInterval := 30 * time.Second
+	if d.idleTimeout/4 < checkInterval {
+		checkInterval = d.idleTimeout / 4
+	}
+	if checkInterval < time.Second {
+		checkInterval = time.Second
+	}
+
+	ticker := time.NewTicker(checkInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-d.shutdown:
+			return
+		case <-ticker.C:
+			d.activityMu.RLock()
+			idleDuration := time.Since(d.lastActivity)
+			d.activityMu.RUnlock()
+
+			if idleDuration >= d.idleTimeout {
+				fmt.Printf("Session %s idle for %s (timeout: %s), shutting down driver\n",
+					d.sessionID, idleDuration.Round(time.Second), d.idleTimeout)
+				// Trigger shutdown - use a goroutine to avoid deadlock
+				go d.Stop()
+				return
+			}
+		}
+	}
+}
+
+// TouchActivity updates the last activity timestamp to prevent idle timeout
+func (d *Driver) TouchActivity() {
+	d.activityMu.Lock()
+	d.lastActivity = time.Now()
+	d.activityMu.Unlock()
+}
+
+// LastActivity returns the time of the last activity
+func (d *Driver) LastActivity() time.Time {
+	d.activityMu.RLock()
+	defer d.activityMu.RUnlock()
+	return d.lastActivity
+}
+
 // parentProcessMonitor checks if the parent process is still alive
 // and triggers shutdown if it's not. This ensures the driver doesn't
 // become orphaned when klawed is killed.
@@ -274,15 +343,20 @@ func isProcessAlive(pid int) bool {
 	}
 	return false
 }
+
+// DefaultIdleTimeout is the default idle timeout for browser sessions (5 minutes)
+const DefaultIdleTimeout = 5 * time.Minute
+
 // RunDriverMain is the main entry point for the driver process
 func RunDriverMain() error {
 	// Parse command line arguments
 	if len(os.Args) < 4 {
-		return fmt.Errorf("usage: %s --driver <session-id> --socket <socket-path> [--parent-pid <pid>] [--no-headless]", os.Args[0])
+		return fmt.Errorf("usage: %s --driver <session-id> --socket <socket-path> [--parent-pid <pid>] [--idle-timeout <seconds>] [--no-headless]", os.Args[0])
 	}
 
 	var sessionID, socketPath string
 	var parentPID int
+	var idleTimeoutSec int
 	headless := true
 
 	for i := 1; i < len(os.Args); i++ {
@@ -302,6 +376,11 @@ func RunDriverMain() error {
 				fmt.Sscanf(os.Args[i+1], "%d", &parentPID)
 				i++
 			}
+		case "--idle-timeout":
+			if i+1 < len(os.Args) {
+				fmt.Sscanf(os.Args[i+1], "%d", &idleTimeoutSec)
+				i++
+			}
 		case "--no-headless":
 			headless = false
 		}
@@ -311,13 +390,27 @@ func RunDriverMain() error {
 		return fmt.Errorf("session ID is required")
 	}
 
+	// Determine idle timeout: CLI arg > env var > default
+	idleTimeout := DefaultIdleTimeout
+	if idleTimeoutSec > 0 {
+		idleTimeout = time.Duration(idleTimeoutSec) * time.Second
+	} else if envTimeout := os.Getenv("WEB_AGENT_IDLE_TIMEOUT"); envTimeout != "" {
+		var envSec int
+		if _, err := fmt.Sscanf(envTimeout, "%d", &envSec); err == nil && envSec > 0 {
+			idleTimeout = time.Duration(envSec) * time.Second
+		} else if envTimeout == "0" {
+			idleTimeout = 0 // Disable idle timeout
+		}
+	}
+
 	// Create and start driver
 	config := DriverConfig{
-		SessionID:  sessionID,
-		SocketPath: socketPath,
-		Headless:   headless,
-		Timeout:    30 * time.Second,
-		ParentPID:  parentPID,
+		SessionID:   sessionID,
+		SocketPath:  socketPath,
+		Headless:    headless,
+		Timeout:     30 * time.Second,
+		IdleTimeout: idleTimeout,
+		ParentPID:   parentPID,
 	}
 
 	driver, err := NewDriver(config)
@@ -355,6 +448,9 @@ func waitForInterrupt() chan os.Signal {
 // 1. KLAWED_PID env var (set by klawed itself)
 // 2. Parent PID of this process (works when CLI is run via popen from klawed)
 // 3. 0 (disables parent monitoring if neither available)
+//
+// Idle timeout is inherited from WEB_AGENT_IDLE_TIMEOUT env var if set,
+// otherwise defaults to DefaultIdleTimeout (5 minutes).
 func StartDriverProcess(sessionID, socketPath string, headless bool) (int, error) {
 	// Get parent PID for orphan detection
 	// Prefer KLAWED_PID env var, then fall back to our parent PID
@@ -373,6 +469,16 @@ func StartDriverProcess(sessionID, socketPath string, headless bool) (int, error
 		"--parent-pid", fmt.Sprintf("%d", parentPID))
 	if !headless {
 		cmd.Args = append(cmd.Args, "--no-headless")
+	}
+
+	// Pass idle timeout from environment if set
+	// The driver will use WEB_AGENT_IDLE_TIMEOUT env var directly,
+	// but we can also pass it as a CLI arg for explicit control
+	if envTimeout := os.Getenv("WEB_AGENT_IDLE_TIMEOUT"); envTimeout != "" {
+		var idleTimeoutSec int
+		if _, err := fmt.Sscanf(envTimeout, "%d", &idleTimeoutSec); err == nil {
+			cmd.Args = append(cmd.Args, "--idle-timeout", fmt.Sprintf("%d", idleTimeoutSec))
+		}
 	}
 
 	// Redirect driver's stdout/stderr to /dev/null

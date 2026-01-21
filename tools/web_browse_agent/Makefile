@@ -1,6 +1,6 @@
 # Makefile for web_browse_agent
 
-.PHONY: all build clean test fmt vet lint install-deps help
+.PHONY: all build clean test fmt vet lint install install-deps help
 
 # Go parameters
 GOCMD=go
@@ -58,6 +58,15 @@ install-deps:
 	@echo "Installing Playwright browsers..."
 	$(GOCMD) run github.com/playwright-community/playwright-go/cmd/playwright@latest install
 
+# Install to ~/.local/bin
+install: build
+	@echo "Installing $(BINARY_NAME) to ~/.local/bin..."
+	@mkdir -p ~/.local/bin
+	@# Remove old binary first to avoid "Text file busy" error
+	@rm -f ~/.local/bin/$(BINARY_NAME)
+	@cp $(BINARY_PATH) ~/.local/bin/$(BINARY_NAME)
+	@echo "Install complete: ~/.local/bin/$(BINARY_NAME)"
+
 # Install development tools
 install-dev-tools:
 	@echo "Installing development tools..."
@@ -85,6 +94,7 @@ help:
 	@echo "  fmt           - Format code"
 	@echo "  vet           - Vet code"
 	@echo "  lint          - Lint code (requires golangci-lint)"
+	@echo "  install       - Install binary to ~/.local/bin"
 	@echo "  install-deps  - Install dependencies including Playwright"
 	@echo "  install-dev-tools - Install development tools"
 	@echo "  run           - Build and run with --help"

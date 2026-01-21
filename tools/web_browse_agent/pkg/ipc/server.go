@@ -14,13 +14,14 @@ import (
 
 // Server represents an IPC server that listens on a Unix domain socket
 type Server struct {
-	socketPath string
-	listener   net.Listener
-	shutdown   chan struct{}
-	wg         sync.WaitGroup
-	handlers   map[CommandType]CommandHandler
-	mu         sync.RWMutex
-	stopOnce   sync.Once
+	socketPath       string
+	listener         net.Listener
+	shutdown         chan struct{}
+	wg               sync.WaitGroup
+	handlers         map[CommandType]CommandHandler
+	mu               sync.RWMutex
+	stopOnce         sync.Once
+	onActivityFunc   func() // Called on each request to track activity
 }
 
 // CommandHandler is a function that handles a command request
@@ -29,6 +30,7 @@ type CommandHandler func(*Request) (*Response, error)
 // ServerConfig holds configuration for creating a new server
 type ServerConfig struct {
 	SocketPath string
+	OnActivity func() // Optional callback called on each request (for idle timeout tracking)
 }
 
 // NewServer creates a new IPC server
@@ -45,9 +47,10 @@ func NewServer(config ServerConfig) (*Server, error) {
 	}
 
 	return &Server{
-		socketPath: config.SocketPath,
-		shutdown:   make(chan struct{}),
-		handlers:   make(map[CommandType]CommandHandler),
+		socketPath:     config.SocketPath,
+		shutdown:       make(chan struct{}),
+		handlers:       make(map[CommandType]CommandHandler),
+		onActivityFunc: config.OnActivity,
 	}, nil
 }
 
@@ -196,6 +199,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 // handleRequest handles a single request
 func (s *Server) handleRequest(req *Request) *Response {
+	// Track activity for idle timeout
+	if s.onActivityFunc != nil {
+		s.onActivityFunc()
+	}
+
 	// Get handler for command
 	handler, ok := s.GetHandler(req.Command)
 	if !ok {
