@@ -114,6 +114,7 @@ You have the following rights regarding your data:
 - `connectors/github/` - Browse and analyze n8n connectors from GitHub without downloading entire repository, generate new connector templates
 - `ocr/` - Optical Character Recognition for extracting text from images
 - `pdf/typst/` - PDF generation using the Typst typesetting system
+- `web_browse_agent.md` - Web browsing agent for visiting websites, extracting content, and interacting with web pages
 
 ## SKILLS Organization Guidance
 - Organize `src/main/resources/SKILLS` by **goal/outcome**, not by tool name.
