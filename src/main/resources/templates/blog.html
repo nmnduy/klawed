@@ -52,21 +52,33 @@
             <!-- Sidebar -->
             <aside class="space-y-6">
                 <!-- Search -->
-                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
-                    <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Search</h3>
-                    <form action="/blog/search" method="GET" class="flex gap-2">
-                        <input type="text" name="q" placeholder="Search posts..." class="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-body-s focus:outline-none focus:border-primary" />
-                        <button type="submit" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M10 18a8 8 0 100-16 8 8 0 000 16z" />
-                            </svg>
-                        </button>
+                <div class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6 shadow-sm">
+                    <h3 class="text-h5-headline-xs font-bold text-semantic-info mb-4">Search</h3>
+                    <form action="/blog/search" method="GET" class="space-y-0">
+                        <div class="flex gap-2">
+                            <input 
+                                type="text" 
+                                name="q" 
+                                placeholder="Search posts..." 
+                                class="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-body-s focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary" 
+                                required
+                            />
+                            <button 
+                                type="submit" 
+                                class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center"
+                                aria-label="Search"
+                            >
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </button>
+                        </div>
                     </form>
                 </div>
 
                 <!-- Categories -->
                 <div id="categories-widget" class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
-                    <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Categories</h3>
+                    <h3 class="text-h5-headline-xs font-bold text-semantic-info mb-4">Categories</h3>
                     <ul id="categories-list" class="space-y-2">
                         <!-- Categories will be rendered here by blog.js -->
                     </ul>
@@ -74,7 +86,7 @@
 
                 <!-- Popular Posts -->
                 <div id="popular-posts-widget" class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
-                    <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Popular Posts</h3>
+                    <h3 class="text-h5-headline-xs font-bold text-semantic-info mb-4">Popular Posts</h3>
                     <ul id="popular-posts-list" class="space-y-3">
                         <!-- Popular posts will be rendered here by blog.js -->
                     </ul>
@@ -82,7 +94,7 @@
 
                 <!-- Tags -->
                 <div id="tags-widget" class="bg-card/80 backdrop-blur rounded-xl border border-border/60 p-6">
-                    <h3 class="text-h5-headline-xs font-bold text-foreground mb-4">Tags</h3>
+                    <h3 class="text-h5-headline-xs font-bold text-semantic-info mb-4">Tags</h3>
                     <div id="tags-list" class="flex flex-wrap gap-2">
                         <!-- Tags will be rendered here by blog.js -->
                     </div>
