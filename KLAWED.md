@@ -251,12 +251,12 @@ CREATE TABLE users (
 ## Building for Development
 ```bash
 # Build CSS and JS without cache busting (faster for development)
-npm run build:dev      # Creates main.css and *.js (no hashes)
+bun run build:dev      # Creates main.css and *.js (no hashes)
 # OR
 make css-dev           # Same as above
 
 # Build CSS and JS with cache busting (production mode)
-npm run build          # Creates main.[hash].css and *.[hash].js
+bun run build          # Creates main.[hash].css and *.[hash].js
 # OR
 make css               # Same as above
 ```

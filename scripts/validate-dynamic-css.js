@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Validates that all dynamic-*.css classes are referenced in class-reference.html
- * Run: node scripts/validate-dynamic-css.js
+ * Run: bun scripts/validate-dynamic-css.js
  *
  * This ensures Tailwind will detect and include all dynamic classes.
  */

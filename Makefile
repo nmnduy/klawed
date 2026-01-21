@@ -6,10 +6,10 @@
 #   css         - Build Tailwind CSS output
 
 # Variables
-NPM := npm
+BUN := bun
 MAVEN := mvn
 NODE_MODULES := node_modules
-VITE := $(NPM) run
+VITE := $(BUN) run
 TAILWIND_CONFIG := tailwind.config.js
 CSS_SOURCE := src/main/resources/css/index.css
 CSS_OUTPUT := src/main/resources/META-INF/resources/dist/main.css
@@ -26,17 +26,17 @@ help:
 	@echo "  css                 - Build Tailwind CSS output (production with cache busting)"
 	@echo "  css-dev             - Build Tailwind CSS output (development, no cache busting)"
 	@echo "  check-colors        - Check templates for hardcoded color values (warning only)"
-	@echo "  install-deps        - Install npm dependencies"
+	@echo "  install-deps        - Install bun dependencies"
 	@echo "  install-search-tools - Install fd and ripgrep for fast file search"
 	@echo "  check-search-tools  - Check if fast search tools are installed"
 	@echo "  clean               - Clean build artifacts"
 
-# Install npm dependencies if node_modules doesn't exist
+# Install bun dependencies if node_modules doesn't exist
 install-deps: $(NODE_MODULES)
 
 $(NODE_MODULES): package.json
-	@echo "Installing npm dependencies..."
-	@$(NPM) install
+	@echo "Installing bun dependencies..."
+	@$(BUN) install
 	@touch $(NODE_MODULES)
 
 # Build production distribution (CSS + Quarkus JAR)
@@ -54,14 +54,14 @@ dev: css-dev
 css: install-deps
 	@echo "Building Tailwind CSS with cache busting (production)..."
 	@mkdir -p $(DIST_DIR)
-	@$(NPM) run build
+	@$(BUN) run build
 	@echo "CSS built with hash to $(DIST_DIR)"
 
 # Build Tailwind CSS output (development, no hashing)
 css-dev: install-deps
 	@echo "Building Tailwind CSS (development, no cache busting)..."
 	@mkdir -p $(DIST_DIR)
-	@$(NPM) run build:dev
+	@$(BUN) run build:dev
 	@echo "CSS built to $(DIST_DIR)/main.css"
 
 # Clean build artifacts

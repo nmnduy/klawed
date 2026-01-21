@@ -71,7 +71,7 @@ function main() {
         console.log(`✅ Created dev version file: ${VERSION_FILE}`);
         console.log(`   JS files: ${jsFiles.join(', ')} (no hashes)`);
         console.log('');
-        console.log('💡 Tip: Run "npm run build" for production build with cache busting');
+        console.log('💡 Tip: Run "bun run build" for production build with cache busting');
         return;
     }
 

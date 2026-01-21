@@ -8,6 +8,6 @@ set -e
 cd "$(dirname "$0")/.."
 
 echo "🔍 Checking JavaScript syntax..."
-node scripts/validate-js-conventions.js
+bun scripts/validate-js-conventions.js
 
 exit $?
