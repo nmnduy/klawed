@@ -1,8 +1,5 @@
 package com.filesurf;
 
-import io.quarkus.qute.Template;
-import io.quarkus.qute.CheckedTemplate;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -10,11 +7,6 @@ import jakarta.ws.rs.core.MediaType;
 
 @Path("/markdown-debug")
 public class MarkdownDebugResource {
-
-    @CheckedTemplate
-    public static class Templates {
-        public static native Template markdownDebug();
-    }
 
     @GET
     @Produces(MediaType.TEXT_HTML)
