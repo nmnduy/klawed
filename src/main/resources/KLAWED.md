@@ -109,6 +109,12 @@ You have the following rights regarding your data:
 - Each session runs in an isolated container environment
 - Files are stored in session-specific directories with proper permissions
 
+## Available SKILLS
+
+- `connectors/github/` - Browse and analyze n8n connectors from GitHub without downloading entire repository, generate new connector templates
+- `ocr/` - Optical Character Recognition for extracting text from images
+- `pdf/typst/` - PDF generation using the Typst typesetting system
+
 ## SKILLS Organization Guidance
 - Organize `src/main/resources/SKILLS` by **goal/outcome**, not by tool name.
 - Example: place Typst (PDF generation) under a `pdf/` goal folder, not a `typst/` tool folder.
