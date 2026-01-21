@@ -33,7 +33,7 @@ export function init(rootEl) {
         chatEmpty: rootEl.querySelector('[data-chat-empty]'),
         messageForm: rootEl.querySelector('[data-message-form]'),
         messageInput: rootEl.querySelector('[data-message-input]'),
-        sendButton: rootEl.querySelector('[data-send-button]'),
+        sendButtons: rootEl.querySelectorAll('[data-send-button]'), // Changed to querySelectorAll to get both mobile and desktop buttons
         // Chat-specific upload components (scoped to avoid conflicts with file explorer)
         chatUploadButton: rootEl.querySelector('[data-chat-upload-button]'),
         chatFileInput: rootEl.querySelector('[data-chat-file-input]'),
@@ -144,7 +144,10 @@ export function init(rootEl) {
 
     function setDisabledState(disabled) {
         if (elements.messageInput) elements.messageInput.disabled = disabled;
-        if (elements.sendButton) elements.sendButton.disabled = disabled;
+        // Enable/disable all send buttons (both mobile and desktop)
+        if (elements.sendButtons) {
+            elements.sendButtons.forEach(btn => btn.disabled = disabled);
+        }
         if (elements.chatUploadButton) elements.chatUploadButton.disabled = disabled;
         if (elements.voiceButton) elements.voiceButton.disabled = disabled;
     }
@@ -839,7 +842,7 @@ export function init(rootEl) {
     function getPrimaryActions() {
         return {
             chatInput: elements.messageInput,
-            sendButton: elements.sendButton,
+            sendButton: elements.sendButtons ? elements.sendButtons[0] : null, // Use first send button for tour highlighting
             filesTab: rootEl.querySelector('#file-tab'),
             chatTab: rootEl.querySelector('#chat-tab'),
             uploadButton: elements.chatUploadButton,
