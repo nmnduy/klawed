@@ -691,18 +691,8 @@
    Smooth icon transitions with rotation animation.
    ========================================================================== */
 
-[data-theme-toggle] {
-  position: relative;
-  overflow: hidden;
-}
-
 [data-theme-toggle] .moon-icon,
 [data-theme-toggle] .sun-icon {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  margin-left: -0.5rem; /* Half of w-4 (1rem) */
-  margin-top: -0.5rem; /* Half of h-4 (1rem) */
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
               opacity 0.2s ease-in-out;
 }
@@ -716,14 +706,12 @@
 [data-theme-toggle]:not(.dark) .sun-icon {
   transform: rotate(90deg) scale(0.5);
   opacity: 0;
-  position: absolute; /* Ensure it stays absolute when hidden */
 }
 
 /* Dark mode: hide moon, show sun */
 [data-theme-toggle].dark .moon-icon {
   transform: rotate(-90deg) scale(0.5);
   opacity: 0;
-  position: absolute; /* Ensure it stays absolute when hidden */
 }
 
 [data-theme-toggle].dark .sun-icon {
