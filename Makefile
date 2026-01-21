@@ -47,7 +47,7 @@ endif
 
 # Installation prefix (can be overridden via command line)
 INSTALL_PREFIX ?= $(HOME)/.local
-WEB_BROWSE_AGENT_DIR := vendors/web_browse_agent
+WEB_BROWSE_AGENT_DIR := tools/web_browse_agent
 WEB_BROWSE_AGENT_BIN := $(WEB_BROWSE_AGENT_DIR)/web_browse_agent
 # Get web_browse_agent version from its own version.go file (not klawed's git tags)
 # The version.go file contains: const Version = "X.Y.Z"
@@ -2167,7 +2167,7 @@ endif
 install-web-browse-agent:
 	@echo "Building web_browse_agent (version: $(WEB_BROWSE_AGENT_VERSION))..."
 	@command -v go >/dev/null 2>&1 || { echo "Error: go not found. Install Go to build web_browse_agent."; exit 1; }
-	@cd $(WEB_BROWSE_AGENT_DIR) && GO111MODULE=on go build -ldflags "-s -w" -o web_browse_agent ./cmd/agent
+	@cd $(WEB_BROWSE_AGENT_DIR) && GO111MODULE=on go build -ldflags "-s -w" -o web_browse_agent ./cmd/web_browse_agent
 	@echo "Installing web_browse_agent to $(INSTALL_PREFIX)/bin..."
 	@mkdir -p $(INSTALL_PREFIX)/bin
 	@cp $(WEB_BROWSE_AGENT_BIN) $(INSTALL_PREFIX)/bin/web_browse_agent
