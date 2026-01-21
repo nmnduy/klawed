@@ -38,7 +38,12 @@
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <!-- Main Content -->
             <div class="lg:col-span-3 space-y-8">
-                {#if posts.isEmpty()}
+                {#if error.orEmpty}
+                <div class="bg-destructive/10 border border-destructive/30 rounded-lg p-6 text-center">
+                    <h2 class="text-h4-headline-s text-destructive mb-2">Error Loading Blog</h2>
+                    <p class="text-body-m text-muted-foreground">{error}</p>
+                </div>
+                {:else if posts.isEmpty()}
                 <div class="text-center py-12">
                     <svg class="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
