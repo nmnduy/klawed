@@ -16,13 +16,18 @@ The Subagent tool allows klawed to spawn a new instance of itself with a fresh c
 ```json
 {
   "prompt": "Your task description here",
-  "timeout": 300
+  "timeout": 300,
+  "provider": "gpt-4-turbo"
 }
 ```
 
 **Parameters:**
 - `prompt` (required, string) - The task description for the subagent
 - `timeout` (optional, integer) - Timeout in seconds (default: 300, 0 = no timeout)
+- `provider` (optional, string) - LLM provider name to use for this subagent (e.g., 'gpt-4-turbo', 'sonnet-4.5-bedrock')
+  - If not specified, subagent inherits the parent's provider configuration
+  - Provider name must exist in your configuration file (.klawed/config.json or ~/.klawed/config.json)
+  - Useful for using different models for different subtasks (e.g., fast model for simple tasks, powerful model for complex analysis)
 
 ### Monitoring Subagent Progress
 
@@ -212,6 +217,52 @@ Master: Receives tail showing "Report created with 42 files analyzed"
 ```bash
 # Remove logs older than 7 days
 find .klawed/subagent/ -name "*.log" -mtime +7 -delete
+```
+
+## Provider Configuration
+
+### Per-Subagent Provider Selection
+
+You can specify different LLM providers for different subagents using the `provider` parameter:
+
+```json
+{
+  "prompt": "Analyze this code for security issues",
+  "provider": "gpt-4-turbo"
+}
+```
+
+This is useful for:
+- **Cost optimization** - Use cheaper models for simple tasks
+- **Quality control** - Use more capable models for critical analysis
+- **API rate limits** - Distribute load across multiple providers
+- **Testing** - Compare outputs from different models
+
+### Provider Validation
+
+At startup, klawed validates the `KLAWED_LLM_PROVIDER` environment variable if set:
+- **One-shot mode**: Shows error and exits if provider not found
+- **Interactive mode**: Shows error and prompts user to continue or exit
+
+Available providers are loaded from your configuration file (`.klawed/config.json` or `~/.klawed/config.json`).
+
+### Example: Using Different Models
+
+```python
+# Master agent (using default provider)
+# Spawns subagent with faster model for quick scan
+{
+  "prompt": "Scan all Python files for obvious syntax errors",
+  "provider": "deepseek-chat",  # Fast, cheap model
+  "timeout": 60
+}
+
+# Spawns another subagent with powerful model for deep analysis
+{
+  "prompt": "Perform detailed security audit on authentication module",
+  "provider": "opus-4.5",  # Powerful model for complex analysis
+  "timeout": 600
+}
 ```
 
 ## Limitations

@@ -22,7 +22,7 @@ Project instructions for Klawed when working with this codebase.
 **Core Systems:**
 - **API providers**: `src/openai_provider.c`, `src/anthropic_provider.c`, `src/bedrock_provider.c`, `src/aws_bedrock.c`
 - **Tools**: Built-in tools in `src/klawed.c`, common utilities in `src/tool_utils.c`
-- **Subagent**: `src/subagent_manager.c`, `docs/subagent.md` (task delegation with fresh context)
+- **Subagent**: `src/subagent_manager.c`, `docs/subagent.md` (task delegation with fresh context, supports per-subagent provider selection)
 - **Explore Subagent**: `src/explore_tools.c`, `docs/explore-subagent.md` (web research mode with Context7 + web_browse_agent)
 - **MCP**: `src/mcp.c`, `src/mcp.h`, `docs/mcp.md` (external tool servers)
 - **TODO system**: `src/todo.c`, `src/todo.h`
@@ -159,7 +159,10 @@ export OPENAI_API_KEY="your-api-key"
 
 ## Configuration
 
-**Configuration file:** `.klawed/config.json` - Stores user preferences including LLM provider configurations. See `docs/llm-provider-configuration.md` for detailed documentation and examples.
+**Configuration files:** 
+- Global: `~/.klawed/config.json` - User-wide settings shared across all projects
+- Local: `.klawed/config.json` - Project-specific settings (overrides global)
+- See `docs/llm-provider-configuration.md` for detailed documentation and examples.
 
 **Environment variables:**
 - **API**: `OPENAI_API_KEY` (required), `OPENAI_MODEL`, `OPENAI_API_BASE`

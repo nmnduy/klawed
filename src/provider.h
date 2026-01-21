@@ -81,4 +81,14 @@ typedef struct {
  */
 void provider_init(const char *model, const char *api_key, ProviderInitResult *result);
 
+/**
+ * Validate KLAWED_LLM_PROVIDER environment variable if set
+ *
+ * Checks if KLAWED_LLM_PROVIDER points to a valid provider configuration.
+ * Returns an error message if the provider is not found, or NULL if valid.
+ *
+ * @return Error message (caller must free) or NULL if valid or not set
+ */
+char *provider_validate_env(void);
+
 #endif // PROVIDER_H

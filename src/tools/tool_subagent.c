@@ -87,6 +87,17 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         }
     }
 
+    // Get optional provider parameter
+    const char *provider = NULL;
+    const cJSON *provider_json = cJSON_GetObjectItem(params, "provider");
+    if (provider_json && cJSON_IsString(provider_json)) {
+        provider = provider_json->valuestring;
+        // Validate that provider string is not empty
+        if (provider && strlen(provider) == 0) {
+            provider = NULL;
+        }
+    }
+
     // Create unique log file in .klawed/subagent/ directory
     if (!state) {
         cJSON *error = cJSON_CreateObject();
@@ -200,6 +211,13 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         // Set environment variable to indicate this is a subagent
         if (setenv("KLAWED_IS_SUBAGENT", "1", 1) != 0) {
             fprintf(stderr, "Warning: Failed to set KLAWED_IS_SUBAGENT environment variable: %s\n", strerror(errno));
+        }
+
+        // Set LLM provider if specified in parameters
+        if (provider && provider[0] != '\0') {
+            if (setenv("KLAWED_LLM_PROVIDER", provider, 1) != 0) {
+                fprintf(stderr, "Warning: Failed to set KLAWED_LLM_PROVIDER environment variable: %s\n", strerror(errno));
+            }
         }
 
         // Set custom environment variables from KLAWED_SUBAGENT_ENV_VARS

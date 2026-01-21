@@ -1538,6 +1538,25 @@ int main(int argc, char *argv[]) {
     LOG_INFO("API URL: %s", api_base);
     LOG_INFO("Model: %s", model);
 
+    // Validate KLAWED_LLM_PROVIDER if set
+    char *provider_error = provider_validate_env();
+    if (provider_error) {
+        // Error message format depends on run mode
+        if (is_single_command_mode) {
+            // One-shot mode: print to stderr and exit
+            fprintf(stderr, "%s\n", provider_error);
+            free(provider_error);
+            return 1;
+        } else {
+            // Interactive mode: will show error in TUI
+            // For now, print to stderr before TUI starts
+            fprintf(stderr, "%s\n", provider_error);
+            fprintf(stderr, "Press Enter to continue anyway or Ctrl+C to exit...\n");
+            getchar();  // Wait for user acknowledgment
+            free(provider_error);
+        }
+    }
+
     // Initialize colorscheme EARLY (before any colored output/spinners)
     // Priority: KLAWED_THEME env var > config file theme > default "tender"
     const char *theme = getenv("KLAWED_THEME");

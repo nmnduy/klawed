@@ -2,6 +2,7 @@
  * provider.c - API Provider initialization and selection
  */
 
+#define _GNU_SOURCE         // For asprintf
 #define _POSIX_C_SOURCE 200809L
 
 #include "provider.h"
@@ -12,6 +13,7 @@
 #include "logger.h"
 #include "arena.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <bsd/string.h>
@@ -49,6 +51,8 @@ static const LLMProviderConfig* get_provider_config_to_use(const KlawedConfig *c
             return &named_provider->config;
         } else {
             LOG_WARN("[Provider] Provider '%s' not found in configuration, falling back to default", env_provider);
+            // Note: This warning also appears in provider_validate_env() as an error
+            // The warning is kept here for backwards compatibility in case provider_validate_env() is not called
         }
     }
 
@@ -61,6 +65,67 @@ static const LLMProviderConfig* get_provider_config_to_use(const KlawedConfig *c
 
     // Fall back to legacy llm_provider configuration
     LOG_DEBUG("[Provider] Using legacy llm_provider configuration");
+    return NULL;
+}
+
+/**
+ * Validate KLAWED_LLM_PROVIDER environment variable if set
+ * Returns an error message if invalid, or NULL if valid/not set
+ */
+char *provider_validate_env(void) {
+    const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
+    if (!env_provider || env_provider[0] == '\0') {
+        // Not set, nothing to validate
+        return NULL;
+    }
+
+    // Load configuration to check if provider exists
+    KlawedConfig config;
+    config_init_defaults(&config);
+    if (config_load(&config) != 0) {
+        // Config load failed, but we can't validate
+        // Return NULL since we don't know if the provider is valid or not
+        LOG_WARN("[Provider] Could not load configuration to validate KLAWED_LLM_PROVIDER");
+        return NULL;
+    }
+
+    // Check if the provider exists in configuration
+    const NamedProviderConfig *named_provider = config_find_provider(&config, env_provider);
+    if (!named_provider) {
+        // Provider not found - return error message
+        char *error_msg = NULL;
+        if (asprintf(&error_msg,
+                     "Error: Provider '%s' specified in KLAWED_LLM_PROVIDER not found in configuration.\n"
+                     "Available providers:",
+                     env_provider) < 0) {
+            return strdup("Error: Invalid KLAWED_LLM_PROVIDER (and failed to format error message)");
+        }
+
+        // Build list of available providers
+        for (int i = 0; i < config.provider_count; i++) {
+            char *new_msg = NULL;
+            if (asprintf(&new_msg, "%s\n  - %s", error_msg, config.providers[i].key) < 0) {
+                free(error_msg);
+                return strdup("Error: Invalid KLAWED_LLM_PROVIDER (and failed to format error message)");
+            }
+            free(error_msg);
+            error_msg = new_msg;
+        }
+
+        // Add suggestion to check configuration file
+        char *final_msg = NULL;
+        if (asprintf(&final_msg,
+                     "%s\n\nPlease check your configuration file (.klawed/config.json or ~/.klawed/config.json)\n"
+                     "or unset KLAWED_LLM_PROVIDER to use the default provider.",
+                     error_msg) < 0) {
+            free(error_msg);
+            return strdup("Error: Invalid KLAWED_LLM_PROVIDER (and failed to format error message)");
+        }
+        free(error_msg);
+        return final_msg;
+    }
+
+    // Provider found, validation passed
     return NULL;
 }
 
