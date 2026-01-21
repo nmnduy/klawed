@@ -2312,7 +2312,7 @@ help:
 	@echo ""
 	@echo "Podman:"
 	@echo "  make docker-sandbox - Build Podman sandbox image for isolated execution"
-	@echo "  make docker-push - Push Podman image to filesurf-0 podman registry"
+	@echo "  make docker-push - Transfer Podman image to filesurf-0 via save/load"
 	@echo "  make docker-rotate - Rotate images on filesurf-0 (keep only last 3)"
 	@echo ""
 	@echo "Dependencies:"
@@ -2864,11 +2864,11 @@ docker-sandbox:
 	@echo "See docs/docker-sandbox-deployment.md for deployment guide"
 	@echo ""
 
-# Push the Podman sandbox image to filesurf-0 host podman registry
+# Transfer the Podman sandbox image to filesurf-0 host via podman save/load
 .PHONY: docker-push
 docker-push:
 	@echo ""
-	@echo "Pushing Podman sandbox image to filesurf-0..."
+	@echo "Transferring Podman sandbox image to filesurf-0..."
 	@echo "Version: $(VERSION)"
 	@echo ""
 	@if ! command -v podman >/dev/null 2>&1; then \
@@ -2892,17 +2892,17 @@ docker-push:
 		echo "✓ Image klawed-sandbox:$(VERSION) exists locally"; \
 	fi
 	@echo ""
-	@echo "Saving image klawed-sandbox:$(VERSION) and loading to filesurf-0 podman..."
+	@echo "Transferring image klawed-sandbox:$(VERSION) to filesurf-0..."
 	@podman save klawed-sandbox:$(VERSION) | ssh filesurf-0 'podman load'
 	@echo ""
-	@echo "✓ Podman sandbox image pushed successfully to filesurf-0 podman registry"
+	@echo "✓ Image transferred successfully to filesurf-0"
 	@echo "  Image: klawed-sandbox:$(VERSION)"
 	@echo ""
 	@echo "The image is now available on filesurf-0 and can be used with:"
 	@echo "  podman run -it --rm klawed-sandbox:$(VERSION)"
 	@echo ""
 
-# Rotate klawed images on filesurf-0 registry (keep only last 3)
+# Rotate klawed images on filesurf-0 (keep only last 3)
 # Lists all klawed-sandbox images, sorts by creation date, and removes all but the 3 most recent
 .PHONY: docker-rotate
 docker-rotate:
