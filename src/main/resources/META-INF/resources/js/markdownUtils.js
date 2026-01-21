@@ -12,7 +12,7 @@ import { marked } from '/js/vendor/marked.esm.js';
  */
 marked.setOptions({
     gfm: true,           // Enable GitHub Flavored Markdown
-    breaks: false,       // Don't convert \n to <br> (CSS handles this to prevent duplicates)
+    breaks: true,        // Convert \n to <br> to preserve line breaks
     headerIds: false,    // Don't add IDs to headers
     mangle: false,       // Don't mangle header IDs
 });
@@ -159,6 +159,12 @@ export function parseMarkdown(markdown) {
         
         // Sanitize the resulting HTML
         html = sanitizeHtml(html);
+        
+        // Wrap in markdown-content container for proper styling
+        // Only wrap if there's actual content and it's not already wrapped
+        if (html && !html.includes('class="markdown-content"')) {
+            html = `<div class="markdown-content">${html}</div>`;
+        }
         
         return html;
     } catch (error) {

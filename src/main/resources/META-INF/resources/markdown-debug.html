@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown Parsing Debugger</title>
+    <script type="module" src="/js/markdown-debug.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8fafc;
+            color: #334155;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            color: #1e293b;
+            margin-bottom: 10px;
+        }
+        
+        .description {
+            color: #64748b;
+            max-width: 800px;
+            margin: 0 auto 20px;
+            line-height: 1.6;
+        }
+        
+        .instructions {
+            background: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .instructions h3 {
+            margin-top: 0;
+            color: #475569;
+        }
+        
+        .instructions ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin: 5px 0;
+        }
+        
+        .debugger-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .test-cases {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+        }
+        
+        .test-case {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+        
+        .test-case h4 {
+            margin-top: 0;
+            color: #475569;
+        }
+        
+        .test-input {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            background: #f8fafc;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .test-output {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border: 1px solid #cbd5e1;
+        }
+        
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        button:hover {
+            background: #2563eb;
+        }
+        
+        button.secondary {
+            background: #64748b;
+        }
+        
+        button.secondary:hover {
+            background: #475569;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .comparison > div {
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .expected {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+        }
+        
+        .actual {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+        
+        .comparison h5 {
+            margin-top: 0;
+            color: #166534;
+        }
+        
+        .actual h5 {
+            color: #991b1b;
+        }
+        
+        .spacing-issue {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .spacing-issue h6 {
+            margin: 0 0 5px 0;
+            color: #92400e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Markdown Parsing Debugger</h1>
+            <p class="description">
+                This tool helps debug markdown parsing issues, particularly extra spacing between lines.
+                Use the interactive debugger below or examine the test cases to identify problems.
+            </p>
+        </header>
+        
+        <div class="instructions">
+            <h3>How to Use</h3>
+            <ul>
+                <li>Enter markdown in the input area to see how it gets parsed</li>
+                <li>Check the "Contains markdown" indicator to see if markdown formatting is detected</li>
+                <li>Examine the raw HTML output to see exactly what's generated</li>
+                <li>Use the test cases below to identify specific spacing issues</li>
+                <li>Add <code>?markdown-debug</code> to any FileSurf page to enable the debugger</li>
+            </ul>
+        </div>
+        
+        <div class="debugger-container">
+            <h2>Interactive Debugger</h2>
+            <p>Enter markdown below to test parsing in real-time:</p>
+            <div id="markdown-debugger-root"></div>
+        </div>
+        
+        <div class="test-cases">
+            <h2>Test Cases for Spacing Issues</h2>
+            
+            <div class="test-case">
+                <h4>Test 1: Simple line breaks</h4>
+                <div class="test-input">Line 1
+Line 2
+Line 3</div>
+                <div class="comparison">
+                    <div class="expected">
+                        <h5>Expected:</h5>
+                        <p>Line 1<br>Line 2<br>Line 3</p>
+                    </div>
+                    <div class="actual">
+                        <h5>Actual:</h5>
+                        <div id="test1-output"></div>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button onclick="runTest(1)">Run Test</button>
+                    <button class="secondary" onclick="loadTest(1)">Load into Debugger</button>
+                </div>
+            </div>
+            
+            <div class="test-case">
+                <h4>Test 2: Paragraphs with double line breaks</h4>
+                <div class="test-input">Paragraph 1.
+
+Paragraph 2.
+
+Paragraph 3.</div>
+                <div class="comparison">
+                    <div class="expected">
+                        <h5>Expected:</h5>
+                        <p>Paragraph 1.</p>
+                        <p>Paragraph 2.</p>
+                        <p>Paragraph 3.</p>
+                    </div>
+                    <div class="actual">
+                        <h5>Actual:</h5>
+                        <div id="test2-output"></div>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button onclick="runTest(2)">Run Test</button>
+                    <button class="secondary" onclick="loadTest(2)">Load into Debugger</button>
+                </div>
+            </div>
+            
+            <div class="test-case">
+                <h4>Test 3: Mixed content with markdown</h4>
+                <div class="test-input"># Header
+
+Some **bold** text here.
+
+- List item 1
+- List item 2
+
+`code snippet`</div>
+                <div class="comparison">
+                    <div class="expected">
+                        <h5>Expected:</h5>
+                        <h1>Header</h1>
+                        <p>Some <strong>bold</strong> text here.</p>
+                        <ul>
+                            <li>List item 1</li>
+                            <li>List item 2</li>
+                        </ul>
+                        <p><code>code snippet</code></p>
+                    </div>
+                    <div class="actual">
+                        <h5>Actual:</h5>
+                        <div id="test3-output"></div>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button onclick="runTest(3)">Run Test</button>
+                    <button class="secondary" onclick="loadTest(3)">Load into Debugger</button>
+                </div>
+            </div>
+            
+            <div class="test-case">
+                <h4>Test 4: Code blocks with line breaks</h4>
+                <div class="test-input">```javascript
+function test() {
+    console.log('Hello');
+    console.log('World');
+}
+```</div>
+                <div class="comparison">
+                    <div class="expected">
+                        <h5>Expected:</h5>
+                        <pre><code class="language-javascript">function test() {
+    console.log('Hello');
+    console.log('World');
+}</code></pre>
+                    </div>
+                    <div class="actual">
+                        <h5>Actual:</h5>
+                        <div id="test4-output"></div>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button onclick="runTest(4)">Run Test</button>
+                    <button class="secondary" onclick="loadTest(4)">Load into Debugger</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { parseMarkdown } from '/js/markdownUtils.js';
+        
+        const tests = {
+            1: "Line 1\nLine 2\nLine 3",
+            2: "Paragraph 1.\n\nParagraph 2.\n\nParagraph 3.",
+            3: "# Header\n\nSome **bold** text here.\n\n- List item 1\n- List item 2\n\n`code snippet`",
+            4: "```javascript\nfunction test() {\n    console.log('Hello');\n    console.log('World');\n}\n```"
+        };
+        
+        window.runTest = function(testNum) {
+            const markdown = tests[testNum];
+            const html = parseMarkdown(markdown);
+            const outputEl = document.getElementById(`test${testNum}-output`);
+            outputEl.innerHTML = html;
+            
+            // Check for spacing issues
+            const lineCount = markdown.split('\n').length;
+            const pTags = (html.match(/<p>/g) || []).length;
+            const brTags = (html.match(/<br>/g) || []).length;
+            
+            let issueHtml = '';
+            if (lineCount > 1 && pTags === 0 && brTags === 0) {
+                issueHtml = `
+                    <div class="spacing-issue">
+                        <h6>⚠️ Potential Spacing Issue Detected</h6>
+                        <p>Input has ${lineCount} lines but output has no &lt;p&gt; or &lt;br&gt; tags.</p>
+                        <p>This may cause lines to run together without proper spacing.</p>
+                    </div>
+                `;
+            } else if (brTags > lineCount * 2) {
+                issueHtml = `
+                    <div class="spacing-issue">
+                        <h6>⚠️ Potential Spacing Issue Detected</h6>
+                        <p>Input has ${lineCount} lines but output has ${brTags} &lt;br&gt; tags.</p>
+                        <p>This may cause excessive spacing between lines.</p>
+                    </div>
+                `;
+            }
+            
+            outputEl.innerHTML += issueHtml;
+        };
+        
+        window.loadTest = function(testNum) {
+            const markdown = tests[testNum];
+            const inputTextarea = document.querySelector('#markdown-input');
+            if (inputTextarea) {
+                inputTextarea.value = markdown;
+                inputTextarea.dispatchEvent(new Event('input'));
+            }
+        };
+        
+        // Run all tests on load
+        document.addEventListener('DOMContentLoaded', () => {
+            [1, 2, 3, 4].forEach(runTest);
+        });
+    </script>
+</body>
+</html>
