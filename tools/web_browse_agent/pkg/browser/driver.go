@@ -347,9 +347,19 @@ func StartDriverProcess(sessionID, socketPath string, headless bool) (int, error
 		cmd.Args = append(cmd.Args, "--no-headless")
 	}
 
-	// Set up process attributes
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// Redirect driver's stdout/stderr to /dev/null
+	// This is critical: if the driver inherits the parent's stdout/stderr,
+	// the parent process won't fully exit (from the perspective of 'timeout'
+	// and popen) until the driver closes those file descriptors.
+	// This causes blocking even though the CLI process itself has exited.
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err == nil {
+		cmd.Stdout = devNull
+		cmd.Stderr = devNull
+		// Note: devNull will be closed when cmd exits
+	}
+	// If we can't open /dev/null, leave stdout/stderr unset (inherit nil = closed)
+	
 	cmd.SysProcAttr = getSysProcAttr()
 
 	// Start process
