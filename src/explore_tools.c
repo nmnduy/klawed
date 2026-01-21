@@ -26,6 +26,7 @@
 #include "http_client.h"
 #include "message_queue.h"
 #include "util/string_utils.h"
+#include "util/output_utils.h"
 
 #define CONTEXT7_API_BASE "https://context7.com/api"
 #define MAX_WEB_OUTPUT 100000  // 100KB max output from web_browse_agent
@@ -678,14 +679,63 @@ cJSON* tool_web_browse_agent(cJSON *params, void *state) {
         }
     }
 
+    // Emit command info to TUI
+    char cmd_info[512];
+    if (nargs > 0) {
+        snprintf(cmd_info, sizeof(cmd_info), "[web_browse_agent] session=%s command=%s args[0]=%s",
+                 session_id, command, args[0]);
+    } else {
+        snprintf(cmd_info, sizeof(cmd_info), "[web_browse_agent] session=%s command=%s",
+                 session_id, command);
+    }
+    tool_emit_line("", cmd_info);
+
     // Execute command
     int exit_code = -1;
     char *output = execute_web_agent_session(session_id, command, args, nargs, &exit_code);
 
     cJSON *result = cJSON_CreateObject();
     if (!output) {
+        tool_emit_line("", "[web_browse_agent] Error: Failed to execute");
         cJSON_AddStringToObject(result, "error", "Failed to execute web_browse_agent");
         return result;
+    }
+
+    // Emit output to TUI (show first portion if output is large)
+    if (output[0] != '\0') {
+        // Show output line by line, up to a reasonable limit
+        char *line_start = output;
+        char *line_end;
+        int line_count = 0;
+        const int max_lines = 50;  // Limit output lines shown in TUI
+
+        while ((line_end = strchr(line_start, '\n')) != NULL && line_count < max_lines) {
+            *line_end = '\0';
+            if (line_start[0] != '\0') {  // Skip empty lines
+                tool_emit_line(" ", line_start);
+            }
+            *line_end = '\n';  // Restore newline
+            line_start = line_end + 1;
+            line_count++;
+        }
+
+        // Show last line if no trailing newline
+        if (*line_start != '\0' && line_count < max_lines) {
+            tool_emit_line(" ", line_start);
+            line_count++;
+        }
+
+        // Indicate if output was truncated
+        if (line_count >= max_lines && *line_start != '\0') {
+            tool_emit_line(" ", "[... output truncated ...]");
+        }
+    }
+
+    // Show exit code if non-zero
+    if (exit_code != 0) {
+        char exit_info[64];
+        snprintf(exit_info, sizeof(exit_info), "[web_browse_agent] exit_code=%d", exit_code);
+        tool_emit_line("", exit_info);
     }
 
     // Try to parse JSON output
