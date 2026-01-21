@@ -76,12 +76,9 @@ public class SessionManager {
             Files.createDirectories(tmpDir);
             LOGGER.info("[SESSION:" + sessionId + "] Created tmp directory: " + tmpDir);
 
-            // Ensure SKILLS folder exists in workspace
-            Path skillsDir = workspace.resolve("SKILLS");
-            if (!Files.exists(skillsDir) || isEmptyDirectory(skillsDir)) {
-                LOGGER.info("[SESSION:" + sessionId + "] SKILLS folder missing or empty, copying default SKILLS");
-                copySkillsToWorkspace(workspace);
-            }
+            // Sync SKILLS folder to workspace (always sync to ensure updates)
+            LOGGER.info("[SESSION:" + sessionId + "] Syncing SKILLS to workspace");
+            syncSkillsToWorkspace(workspace);
 
             // Copy KLAWED.md to workspace so agent gets proper instructions
             copyKlawedMdToWorkspace(workspace);
@@ -127,6 +124,88 @@ public class SessionManager {
         }
 
         return uploadsDir;
+    }
+
+    /**
+     * Sync SKILLS folder to workspace using rsync (fast incremental) with fallback to Java copy.
+     * This ensures users always have the latest SKILLS files.
+     */
+    private void syncSkillsToWorkspace(Path workspace) {
+        // Try rsync first (development mode, fast incremental updates)
+        if (tryRsyncSkills(workspace)) {
+            LOGGER.info("SKILLS synchronized via rsync");
+            return;
+        }
+        
+        // Fallback to Java copy (works in JAR, handles missing rsync)
+        LOGGER.info("Rsync unavailable, using Java copy");
+        copySkillsToWorkspace(workspace);
+    }
+
+    /**
+     * Attempt to sync SKILLS using rsync for fast incremental updates.
+     * Returns true if successful, false if rsync is unavailable or fails.
+     */
+    private boolean tryRsyncSkills(Path workspace) {
+        try {
+            Path sourceSkillsDir = Path.of("src/main/resources/SKILLS").toAbsolutePath();
+            Path targetSkillsDir = workspace.resolve("SKILLS").toAbsolutePath();
+            
+            if (!Files.exists(sourceSkillsDir)) {
+                LOGGER.fine("Source SKILLS directory not found for rsync: " + sourceSkillsDir);
+                return false; // Can't rsync if source doesn't exist
+            }
+            
+            // Create target directory if needed
+            Files.createDirectories(targetSkillsDir);
+            
+            // Build rsync command
+            // -a: archive mode (preserve permissions, timestamps, recursive)
+            // --delete: remove files in destination that don't exist in source
+            // Trailing slashes: source/ copies contents, not the directory itself
+            ProcessBuilder pb = new ProcessBuilder(
+                "rsync",
+                "-a",
+                "--delete",
+                sourceSkillsDir.toString() + "/",
+                targetSkillsDir.toString() + "/"
+            );
+            
+            // Redirect error stream for better logging
+            pb.redirectErrorStream(true);
+            
+            Process process = pb.start();
+            
+            // Read output for logging (in case of errors)
+            StringBuilder output = new StringBuilder();
+            try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+            
+            int exitCode = process.waitFor();
+            
+            if (exitCode == 0) {
+                LOGGER.fine("Successfully synced SKILLS via rsync to: " + targetSkillsDir);
+                return true;
+            } else {
+                LOGGER.warning("Rsync failed with exit code " + exitCode + ": " + output.toString());
+                return false;
+            }
+            
+        } catch (IOException e) {
+            LOGGER.fine("Rsync not available (IOException): " + e.getMessage());
+            return false;
+        } catch (InterruptedException e) {
+            LOGGER.warning("Rsync interrupted: " + e.getMessage());
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (Exception e) {
+            LOGGER.fine("Rsync failed: " + e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -256,6 +335,15 @@ public class SessionManager {
 
         // List of known SKILLS resources to extract
         String[] skillsResources = {
+            // Web browser automation skill
+            "SKILLS/web_browse_agent.md",
+            // GitHub connectors
+            "SKILLS/connectors/github/README.md",
+            "SKILLS/connectors/github/analyze_connector_pattern.sh",
+            "SKILLS/connectors/github/cache_connector.sh",
+            "SKILLS/connectors/github/generate_connector_template.sh",
+            "SKILLS/connectors/github/github_browse_connector.sh",
+            "SKILLS/connectors/github/github_search_connectors.sh",
             // OCR scripts
             "SKILLS/ocr/README.md",
             "SKILLS/ocr/ocr_tesseract.sh",
@@ -263,16 +351,17 @@ public class SessionManager {
             "SKILLS/ocr/ocr_combined.sh",
             "SKILLS/ocr/ocr_to_json.sh",
             "SKILLS/ocr/preprocess_image.sh",
-            // LaTeX recipe notes (packaged mode support)
-            "SKILLS/latex-recipes/minimal-invoice-skeleton.txt",
-            "SKILLS/latex-recipes/branded-header-footer.txt",
-            "SKILLS/latex-recipes/typography.txt",
-            "SKILLS/latex-recipes/items-and-totals.txt",
-            "SKILLS/latex-recipes/layout-variants.txt",
-            "SKILLS/latex-recipes/localization.txt",
-            "SKILLS/latex-recipes/compile-tips.txt",
-            // Invoice recipe index
-            "SKILLS/invoice-recipes/README.txt"
+            // PDF/LaTeX recipe notes
+            "SKILLS/pdf/latex-recipes/minimal-invoice-skeleton.txt",
+            "SKILLS/pdf/latex-recipes/branded-header-footer.txt",
+            "SKILLS/pdf/latex-recipes/typography.txt",
+            "SKILLS/pdf/latex-recipes/items-and-totals.txt",
+            "SKILLS/pdf/latex-recipes/layout-variants.txt",
+            "SKILLS/pdf/latex-recipes/localization.txt",
+            "SKILLS/pdf/latex-recipes/compile-tips.txt",
+            // Typst (PDF generation)
+            "SKILLS/pdf/typst/README.md",
+            "SKILLS/pdf/typst/lib/invoice.typ"
         };
 
         var classLoader = Thread.currentThread().getContextClassLoader();
