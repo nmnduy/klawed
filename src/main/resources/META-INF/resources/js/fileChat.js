@@ -576,7 +576,9 @@ export function init(rootEl) {
         const header = document.createElement('div');
         header.className = 'flex items-center gap-2 px-4 py-2.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors';
         header.innerHTML = `
-            <span class="text-slate-500 dark:text-slate-400">🔧</span>
+            <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
             <span class="text-sm font-medium text-slate-700 dark:text-slate-300" data-tool-summary>Working...</span>
             <span class="ml-auto text-xs text-slate-400 dark:text-slate-500" data-tool-count></span>
             <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform" data-tool-chevron fill="none" stroke="currentColor" viewBox="0 0 24 24">
