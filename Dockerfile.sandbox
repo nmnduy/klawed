@@ -81,7 +81,7 @@ RUN make clean && \
 # Build web_browse_agent
 RUN cd tools/web_browse_agent && \
     go mod download && \
-    go build -ldflags "-s -w" -o web_browse_agent ./cmd/agent && \
+    go build -ldflags "-s -w" -o web_browse_agent ./cmd/web_browse_agent && \
     ls -lh web_browse_agent && \
     chmod +x web_browse_agent
 
