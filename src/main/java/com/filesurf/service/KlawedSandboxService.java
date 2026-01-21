@@ -609,6 +609,11 @@ public class KlawedSandboxService {
         // Set HOME so klawed can create .klawed directory for logs
         command.add("-e");
         command.add("HOME=/workspace");
+
+        // Set KLAWED_DATA_DIR to /tmp/.klawed so klawed files don't persist in workspace
+        // This keeps .klawed directory in the container's tmpfs mount (requires klawed >= 0.19.2)
+        command.add("-e");
+        command.add("KLAWED_DATA_DIR=/tmp/.klawed");
     }
 
     /**
