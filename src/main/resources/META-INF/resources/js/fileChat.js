@@ -1746,11 +1746,15 @@ export function init(rootEl) {
         });
 
         elements.messageInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            // Only submit on Enter for desktop (lg breakpoint: 1024px and above)
+            // On mobile, Enter creates a new line
+            const isDesktop = window.innerWidth >= 1024;
+            
+            if (e.key === 'Enter' && !e.shiftKey && isDesktop) {
                 e.preventDefault();
                 elements.messageForm.dispatchEvent(new Event('submit'));
             }
-            // Shift+Enter will insert new line (textarea handles this automatically)
+            // On mobile or with Shift+Enter, textarea handles new line automatically
         });
 
         // Auto-resize textarea as user types
