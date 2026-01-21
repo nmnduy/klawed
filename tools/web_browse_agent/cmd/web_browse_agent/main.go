@@ -60,9 +60,11 @@ Examples:
 	// Don't mark session as required globally - check in runCommand instead
 
 	// Add driver subcommand (hidden, used internally)
+	// DisableFlagParsing allows RunDriverMain() to do its own arg parsing
 	driverCmd := &cobra.Command{
-		Use:    "driver",
-		Hidden: true,
+		Use:                "driver",
+		Hidden:             true,
+		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return browser.RunDriverMain()
 		},

@@ -648,8 +648,10 @@ cJSON* tool_web_browse_agent(cJSON *params, void *state) {
         return error;
     }
 
-    // Get session ID - default to "klawed" for simplicity
-    const char *session_id = "klawed";
+    // Get session ID - default to "klawed-<pid>" to avoid collisions between instances
+    char default_session[32];
+    snprintf(default_session, sizeof(default_session), "klawed-%d", (int)getpid());
+    const char *session_id = default_session;
     cJSON *session_json = cJSON_GetObjectItem(params, "session");
     if (session_json && cJSON_IsString(session_json) && session_json->valuestring[0] != '\0') {
         session_id = session_json->valuestring;
