@@ -190,6 +190,9 @@ export default {
           "error-bg": "#FFF1F2", // Coral 50
           "critical": "#DC2626", // Coral 700 - Critical actions
           "critical-bg": "#FEE2E2", // Coral 100
+          // Blog-specific semantic colors
+          "blog-heading": "#F97316", // Orange 500 - Primary brand color
+          "blog-accent": "#0F172A", // Slate 900 - Strong contrast
         },
         // Dark Theme - Layout Colors (Deep, rich, modern)
         "dark": {

@@ -50,6 +50,10 @@
     --error-bg: 0 96% 94%; /* Coral 50 */
     --warning: 38 92% 50%; /* Amber 500 - Sophisticated warning */
     --warning-bg: 48 96% 96%; /* Amber 50 */
+    
+    /* Blog-specific semantic colors */
+    --blog-heading: 25 95% 53%; /* Orange 500 - Matches primary brand */
+    --blog-accent: 222 47% 11%; /* Slate 900 - Strong contrast for emphasis */
 
     /* Syntax Highlighting Colors - For markdown code blocks */
     --syntax-comment: 215 16% 47%; /* Slate 600 */
@@ -143,6 +147,10 @@
     --error-bg: 0 80% 20%; /* Coral 950 */
     --warning: 38 92% 50%; /* Amber 400 - Brighter */
     --warning-bg: 48 96% 20%; /* Amber 950 */
+    
+    /* Blog-specific semantic colors - Dark Mode */
+    --blog-heading: 25 95% 53%; /* Orange 500 - Keep consistent */
+    --blog-accent: 210 40% 98%; /* Slate 50 - High contrast for dark mode */
 
     /* Syntax Highlighting Colors - For markdown code blocks */
     --syntax-comment: 215 16% 47%; /* Slate 600 */

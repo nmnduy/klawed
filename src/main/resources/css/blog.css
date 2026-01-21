@@ -76,7 +76,7 @@
   }
 
   .blog-sidebar-title {
-    @apply text-h5-headline-xs font-bold text-foreground mb-4;
+    @apply text-h5-headline-xs font-bold text-semantic-blog-heading mb-4;
     @apply border-b-2 border-primary/20 pb-2;
   }
 
