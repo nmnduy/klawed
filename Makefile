@@ -2866,7 +2866,7 @@ docker-sandbox:
 
 # Push the Podman sandbox image to filesurf-0 host podman registry
 .PHONY: docker-push
-docker-push: docker-sandbox
+docker-push:
 	@echo ""
 	@echo "Pushing Podman sandbox image to filesurf-0..."
 	@echo "Version: $(VERSION)"
@@ -2881,6 +2881,15 @@ docker-push: docker-sandbox
 		echo "❌ Error: podman not found on filesurf-0"; \
 		echo "Install podman on the remote host: https://podman.io/getting-started/installation"; \
 		exit 1; \
+	fi
+	@echo ""
+	@echo "Checking if image klawed-sandbox:$(VERSION) exists locally..."
+	@if ! podman image exists klawed-sandbox:$(VERSION); then \
+		echo "Image not found locally, building..."; \
+		echo ""; \
+		$(MAKE) docker-sandbox; \
+	else \
+		echo "✓ Image klawed-sandbox:$(VERSION) exists locally"; \
 	fi
 	@echo ""
 	@echo "Saving image klawed-sandbox:$(VERSION) and loading to filesurf-0 podman..."

@@ -116,17 +116,35 @@ The tool will:
 1. Start a browser driver process if not already running
 2. Send the command to the session
 3. Return JSON results
-4. Auto-cleanup when klawed exits
+4. Auto-cleanup when idle or when klawed exits
 
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `WEB_AGENT_IDLE_TIMEOUT` | Idle timeout in seconds (0 to disable) | `300` (5 min) |
 | `BROWSER_HEADLESS` | Run browser without UI | `true` |
 | `BROWSER_VIEWPORT_WIDTH` | Browser viewport width | `1280` |
 | `BROWSER_VIEWPORT_HEIGHT` | Browser viewport height | `720` |
 | `BROWSER_ACTION_TIMEOUT` | Timeout for actions (ms) | `5000` |
 | `BROWSER_NAVIGATION_TIMEOUT` | Timeout for navigation (ms) | `30000` |
+
+## Idle Timeout
+
+Browser sessions automatically shut down after a period of inactivity to clean up resources. The default idle timeout is 5 minutes.
+
+- Sessions are kept alive by any command (open, eval, click, ping, etc.)
+- After the idle timeout expires with no commands, the driver process exits
+- The next command will automatically start a new driver
+
+To configure:
+```bash
+# Set idle timeout to 10 minutes
+WEB_AGENT_IDLE_TIMEOUT=600 web_browse_agent --session my-session open https://example.com
+
+# Disable idle timeout (session runs until end-session or process killed)
+WEB_AGENT_IDLE_TIMEOUT=0 web_browse_agent --session my-session open https://example.com
+```
 
 ## Architecture
 
