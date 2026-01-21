@@ -144,6 +144,28 @@
     @apply transition-all duration-200;
   }
   
+  /* Override visited link styles for blog post cards - keep them consistent */
+  .blog-card a:visited,
+  .blog-card a[href^="/blog/"]:visited,
+  #main-content article a:visited,
+  #popular-posts-list a:visited,
+  #categories-list a:visited,
+  #tags-list a:visited {
+    color: inherit !important; /* Force inherit the original color, not the visited color */
+  }
+  
+  /* Specifically target title links in blog cards to prevent visited state */
+  .blog-card h2 a:visited,
+  .blog-card h3 a:visited,
+  .blog-card h4 a:visited {
+    color: hsl(var(--foreground)) !important;
+  }
+  
+  /* Read more links should stay in their original link color when visited */
+  .blog-card a[href^="/blog/"]:visited.text-semantic-link-unvisited {
+    color: theme('colors.semantic.link-unvisited') !important;
+  }
+  
   .prose strong {
     @apply font-bold text-foreground;
   }
