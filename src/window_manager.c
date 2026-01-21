@@ -20,7 +20,7 @@ const WindowManagerConfig DEFAULT_WINDOW_CONFIG = {
     .status_height = 1,
     // No gap between status and input by default
     .padding = 0,
-    .conv_h_padding = 1,    // 1 column of horizontal padding for conversation (reserves space for scroll bar)
+    .conv_h_padding = 1,    // Right padding for scrollbar (no left padding)
     .initial_pad_capacity = 1000
 };
 
@@ -156,9 +156,9 @@ int window_manager_init(WindowManager *wm, const WindowManagerConfig *config) {
     LOG_INFO("[WM] Initializing window manager (screen=%dx%d)",
              wm->screen_width, wm->screen_height);
 
-    // Create conversation pad with horizontal padding
+    // Create conversation pad with horizontal padding (only right padding for scrollbar)
     wm->conv_pad_capacity = wm->config.initial_pad_capacity;
-    int conv_pad_width = wm->screen_width - (2 * wm->config.conv_h_padding);
+    int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;  // Only subtract right padding
     if (conv_pad_width < 1) conv_pad_width = 1; // Safety check
     wm->conv_pad = newpad(wm->conv_pad_capacity, conv_pad_width);
     if (!wm->conv_pad) {
@@ -169,7 +169,7 @@ int window_manager_init(WindowManager *wm, const WindowManagerConfig *config) {
     wm->conv_pad_content_lines = 0;
     wm->conv_scroll_offset = 0;
 
-    LOG_DEBUG("[WM] Created conversation pad (capacity=%d, width=%d, h_padding=%d)",
+    LOG_DEBUG("[WM] Created conversation pad (capacity=%d, width=%d, right_padding=%d)",
               wm->conv_pad_capacity, conv_pad_width, wm->config.conv_h_padding);
 
     // Create input window (above status)
@@ -277,9 +277,9 @@ int window_manager_resize_screen(WindowManager *wm) {
     int old_scroll_offset = wm->conv_scroll_offset;
     int old_capacity = wm->conv_pad_capacity;
 
-    // Recreate conversation pad with new width (accounting for horizontal padding)
+    // Recreate conversation pad with new width (only right padding for scrollbar)
     WINDOW *old_pad = wm->conv_pad;
-    int conv_pad_width = wm->screen_width - (2 * wm->config.conv_h_padding);
+    int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;  // Only subtract right padding
     if (conv_pad_width < 1) conv_pad_width = 1; // Safety check
     wm->conv_pad = newpad(wm->conv_pad_capacity, conv_pad_width);
     if (!wm->conv_pad) {
@@ -296,7 +296,7 @@ int window_manager_resize_screen(WindowManager *wm) {
     if (lines_to_copy > old_capacity) lines_to_copy = old_capacity;
     if (lines_to_copy > wm->conv_pad_capacity) lines_to_copy = wm->conv_pad_capacity;
 
-    int old_conv_width = old_width - (2 * wm->config.conv_h_padding);
+    int old_conv_width = old_width - wm->config.conv_h_padding;  // Old pad also had only right padding
     if (old_conv_width < 1) old_conv_width = 1;
     int width_to_copy = old_conv_width < conv_pad_width ? old_conv_width : conv_pad_width;
 
@@ -311,7 +311,7 @@ int window_manager_resize_screen(WindowManager *wm) {
         old_pad = NULL;
     }
 
-    LOG_DEBUG("[WM] Recreated conversation pad (capacity=%d, width=%d, h_padding=%d)",
+    LOG_DEBUG("[WM] Recreated conversation pad (capacity=%d, width=%d, right_padding=%d)",
               wm->conv_pad_capacity, conv_pad_width, wm->config.conv_h_padding);
 
     // Recreate input window
@@ -399,8 +399,8 @@ int window_manager_ensure_pad_capacity(WindowManager *wm, int needed_lines) {
     LOG_INFO("[WM] Expanding pad capacity from %d to %d lines",
              wm->conv_pad_capacity, new_capacity);
 
-    // Create new larger pad (with horizontal padding)
-    int conv_pad_width = wm->screen_width - (2 * wm->config.conv_h_padding);
+    // Create new larger pad (only right padding for scrollbar)
+    int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;  // Only subtract right padding
     if (conv_pad_width < 1) conv_pad_width = 1; // Safety check
     WINDOW *new_pad = newpad(new_capacity, conv_pad_width);
     if (!new_pad) {
@@ -522,9 +522,9 @@ void window_manager_refresh_conversation(WindowManager *wm) {
 
     // Refresh pad viewport with horizontal padding offset
     // prefresh(pad, pad_y, pad_x, screen_y1, screen_x1, screen_y2, screen_x2)
-    int x1 = wm->config.conv_h_padding;
+    int x1 = 0;  // No left padding
     int y2 = wm->conv_viewport_height - 1;
-    int x2 = wm->screen_width - 1 - wm->config.conv_h_padding;
+    int x2 = wm->screen_width - 1 - wm->config.conv_h_padding;  // Right padding for scrollbar
     if (y2 < 0) y2 = 0;
     if (x1 < 0) x1 = 0;
     if (x2 < x1) x2 = x1;
@@ -535,7 +535,7 @@ void window_manager_refresh_conversation(WindowManager *wm) {
 
     // Draw vertical scroll bar on the right edge when not fully scrolled to bottom.
     // The scroll bar is drawn on stdscr (not the pad) in the rightmost column.
-    // conv_h_padding reserves space so content doesn't overlap with the scroll bar.
+    // conv_h_padding reserves space on the right so content doesn't overlap with the scroll bar.
     int total_lines = wm->conv_pad_content_lines;
     int visible_lines = wm->conv_viewport_height;
     int scroll_bar_col = wm->screen_width - 1;
