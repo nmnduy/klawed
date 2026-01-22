@@ -16,6 +16,9 @@ public class ContactFormService {
     @Inject
     ContactFormRepository contactFormRepository;
 
+    @Inject
+    MetricsService metricsService;
+
     @PostConstruct
     void init() {
         LOGGER.info("Initializing ContactFormService and contact forms table schema...");
@@ -26,7 +29,10 @@ public class ContactFormService {
         if (email == null || email.trim().isEmpty()) {
             throw new IllegalArgumentException("Email is required");
         }
-        return contactFormRepository.insert(email, company, message);
+        ContactFormEntry entry = contactFormRepository.insert(email, company, message);
+        metricsService.incrementContactFormSubmissions();
+        LOGGER.info("Contact form submission recorded: " + email);
+        return entry;
     }
 
     public List<ContactFormEntry> getAllSubmissions() {

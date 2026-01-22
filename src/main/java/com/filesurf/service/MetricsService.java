@@ -37,6 +37,9 @@ public class MetricsService {
     private Counter errors;
     private Counter apiCalls;
     private Counter containerStartFailures;
+    private Counter waitlistSubmissions;
+    private Counter contactFormSubmissions;
+    private Counter feedbackSubmissions;
 
     // Gauges for current state
     private AtomicInteger activeWebSocketConnections = new AtomicInteger(0);
@@ -85,6 +88,21 @@ public class MetricsService {
 
         containerStartFailures = Counter.builder("filesurf_container_start_failures")
                 .description("Total number of container start failures")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        waitlistSubmissions = Counter.builder("filesurf_waitlist_submissions")
+                .description("Total number of waitlist submissions")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        contactFormSubmissions = Counter.builder("filesurf_contact_form_submissions")
+                .description("Total number of contact form submissions")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        feedbackSubmissions = Counter.builder("filesurf_feedback_submissions")
+                .description("Total number of feedback submissions (bugs, suggestions, praise)")
                 .tag("application", "filesurf")
                 .register(meterRegistry);
 
@@ -357,5 +375,33 @@ public class MetricsService {
 
     public long getTotalApiCalls() {
         return (long) apiCalls.count();
+    }
+
+    // Waitlist and contact form tracking
+    public void incrementWaitlistSubmissions() {
+        waitlistSubmissions.increment();
+        LOGGER.fine("Waitlist submission counter incremented");
+    }
+
+    public void incrementContactFormSubmissions() {
+        contactFormSubmissions.increment();
+        LOGGER.fine("Contact form submission counter incremented");
+    }
+
+    public void incrementFeedbackSubmissions() {
+        feedbackSubmissions.increment();
+        LOGGER.fine("Feedback submission counter incremented");
+    }
+
+    public long getTotalWaitlistSubmissions() {
+        return (long) waitlistSubmissions.count();
+    }
+
+    public long getTotalContactFormSubmissions() {
+        return (long) contactFormSubmissions.count();
+    }
+
+    public long getTotalFeedbackSubmissions() {
+        return (long) feedbackSubmissions.count();
     }
 }

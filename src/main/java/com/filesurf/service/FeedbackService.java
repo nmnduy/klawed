@@ -19,6 +19,24 @@ public class FeedbackService {
     @Inject
     FeedbackRepository feedbackRepository;
 
+    @Inject
+    MetricsService metricsService;
+
+    /**
+     * Create a new feedback entry
+     */
+    public FeedbackRecord createFeedback(String feedbackId, String type, String description,
+                                         String userId, String userEmail, String errorDetails,
+                                         String environmentJson) {
+        FeedbackRecord record = feedbackRepository.create(feedbackId, type, description,
+                userId, userEmail, errorDetails, environmentJson);
+        if (record != null) {
+            metricsService.incrementFeedbackSubmissions();
+            LOGGER.info("Feedback submission recorded: " + feedbackId);
+        }
+        return record;
+    }
+
     /**
      * Get all feedback with pagination
      */
