@@ -29,24 +29,25 @@
             );
         }
 
-        /* Override visited link styles to prevent purple color - but exclude buttons */
+        /* Override visited link styles to prevent purple color - scoped to text links only */
         nav a:visited:not(.inline-flex),
         a:visited:not(.inline-flex) {
             color: inherit;
         }
 
         /* Ensure navbar links maintain their intended colors */
-        nav a {
+        nav a:not(.inline-flex) {
             color: hsl(var(--layout-content-medium));
         }
 
-        nav a:hover {
+        nav a:not(.inline-flex):hover {
             color: hsl(var(--primary));
         }
 
-        /* Primary buttons should always use their foreground color */
-        a.bg-primary {
-            color: hsl(var(--primary-foreground)) !important;
+        /* Primary button links - explicit visited state handling */
+        a.inline-flex.bg-primary,
+        a.inline-flex.bg-primary:visited {
+            color: hsl(var(--primary-foreground));
         }
     </style>
 </head>
