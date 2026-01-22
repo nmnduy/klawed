@@ -297,8 +297,8 @@ void process_response(ConversationState *state,
     struct timespec proc_start, proc_end;
     clock_gettime(CLOCK_MONOTONIC, &proc_start);
 
-    // Check for error response first - these are already displayed by call_api_with_retries
-    // and don't have raw_response populated, so we exit early to avoid NULL pointer access
+    // Check for error response first - callers should display errors before calling process_response
+    // but we check here as defense in depth. Error responses don't have raw_response populated.
     if (response->error_message) {
         LOG_DEBUG("process_response: Error response encountered, exiting early: %s", response->error_message);
         return;
@@ -859,8 +859,14 @@ void process_response(ConversationState *state,
         }
 
         if (next_response) {
-            process_response(state, next_response, tui, queue, worker_ctx);
-            api_response_free(next_response);
+            // Check if response contains an error message
+            if (next_response->error_message) {
+                ui_show_error(tui, queue, next_response->error_message);
+                api_response_free(next_response);
+            } else {
+                process_response(state, next_response, tui, queue, worker_ctx);
+                api_response_free(next_response);
+            }
         } else if (state->interrupt_requested) {
             // User interrupted the tool results processing
             LOG_INFO("Tool results processing interrupted by user");
@@ -907,6 +913,13 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
         } else {
             ui_show_error(NULL, ctx->tui_queue, "Failed to get response from API");
         }
+        return;
+    }
+
+    // Check if response contains an error message (e.g., context length exceeded)
+    if (response->error_message) {
+        ui_show_error(NULL, ctx->tui_queue, response->error_message);
+        api_response_free(response);
         return;
     }
 
