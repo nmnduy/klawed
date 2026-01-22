@@ -412,27 +412,80 @@ char* get_tool_details(const char *tool_name, cJSON *arguments) {
         }
     } else if (strcmp(tool_name, "Subagent") == 0) {
         cJSON *prompt = cJSON_GetObjectItem(arguments, "prompt");
+        cJSON *provider = cJSON_GetObjectItem(arguments, "provider");
+        cJSON *timeout = cJSON_GetObjectItem(arguments, "timeout");
+        cJSON *tail_lines = cJSON_GetObjectItem(arguments, "tail_lines");
+
+        // Build parameter summary line first (provider, timeout, tail_lines)
+        char params_line[256] = {0};
+        size_t params_offset = 0;
+
+        if (cJSON_IsString(provider) && provider->valuestring && provider->valuestring[0]) {
+            params_offset += (size_t)snprintf(params_line + params_offset,
+                sizeof(params_line) - params_offset, "provider=%s", provider->valuestring);
+        }
+        if (cJSON_IsNumber(timeout)) {
+            if (params_offset > 0) {
+                params_offset += (size_t)snprintf(params_line + params_offset,
+                    sizeof(params_line) - params_offset, ", ");
+            }
+            params_offset += (size_t)snprintf(params_line + params_offset,
+                sizeof(params_line) - params_offset, "timeout=%ds", timeout->valueint);
+        }
+        if (cJSON_IsNumber(tail_lines)) {
+            if (params_offset > 0) {
+                params_offset += (size_t)snprintf(params_line + params_offset,
+                    sizeof(params_line) - params_offset, ", ");
+            }
+            params_offset += (size_t)snprintf(params_line + params_offset,
+                sizeof(params_line) - params_offset, "tail_lines=%d", tail_lines->valueint);
+        }
+
         if (cJSON_IsString(prompt)) {
-            // Show entire prompt without truncation (up to buffer size)
             const char *prompt_str = prompt->valuestring;
             size_t src_len = strlen(prompt_str);
-            if (src_len < sizeof(details)) {
-                // Prompt fits in buffer
-                strlcpy(details, prompt_str, sizeof(details));
-            } else {
-                // Prompt is too long for even 8KB buffer, truncate with "..."
-                if (sizeof(details) > 4) {
-                    size_t copy_len = sizeof(details) - 4; // Leave room for "..." and null terminator
-                    memcpy(details, prompt_str, copy_len);
-                    details[copy_len] = '.';
-                    details[copy_len + 1] = '.';
-                    details[copy_len + 2] = '.';
-                    details[copy_len + 3] = '\0';
+
+            if (params_offset > 0) {
+                // Format: "[params]\nprompt_text"
+                size_t header_len = (size_t)snprintf(details, sizeof(details), "[%s]\n", params_line);
+                size_t remaining = sizeof(details) - header_len;
+
+                if (src_len < remaining) {
+                    strlcpy(details + header_len, prompt_str, remaining);
                 } else {
-                    // Buffer is too small even for "...", just truncate
+                    // Truncate prompt with "..."
+                    if (remaining > 4) {
+                        size_t copy_len = remaining - 4;
+                        memcpy(details + header_len, prompt_str, copy_len);
+                        details[header_len + copy_len] = '.';
+                        details[header_len + copy_len + 1] = '.';
+                        details[header_len + copy_len + 2] = '.';
+                        details[header_len + copy_len + 3] = '\0';
+                    } else {
+                        strlcpy(details + header_len, prompt_str, remaining);
+                    }
+                }
+            } else {
+                // No extra params, just show prompt
+                if (src_len < sizeof(details)) {
                     strlcpy(details, prompt_str, sizeof(details));
+                } else {
+                    // Prompt is too long for buffer, truncate with "..."
+                    if (sizeof(details) > 4) {
+                        size_t copy_len = sizeof(details) - 4;
+                        memcpy(details, prompt_str, copy_len);
+                        details[copy_len] = '.';
+                        details[copy_len + 1] = '.';
+                        details[copy_len + 2] = '.';
+                        details[copy_len + 3] = '\0';
+                    } else {
+                        strlcpy(details, prompt_str, sizeof(details));
+                    }
                 }
             }
+        } else if (params_offset > 0) {
+            // No prompt but has other params
+            snprintf(details, sizeof(details), "[%s]", params_line);
         }
     } else if (strcmp(tool_name, "Read") == 0) {
         cJSON *file_path = cJSON_GetObjectItem(arguments, "file_path");

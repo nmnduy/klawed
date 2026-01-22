@@ -104,24 +104,9 @@ int oneshot_process_response(ConversationState *state,
                     ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
                     : cJSON_CreateObject();
 
-                // Get tool details for display
-                char *tool_details = NULL;
-                int tool_details_needs_free = 0;
-                // Special handling for Subagent tool to show full prompt
-                if (strcmp(tool->name, "Subagent") == 0) {
-                    cJSON *prompt = cJSON_GetObjectItem(input, "prompt");
-                    if (prompt && cJSON_IsString(prompt)) {
-                        // Use the prompt directly (dynamically allocated)
-                        tool_details = strdup(prompt->valuestring);
-                        tool_details_needs_free = 1;
-                    }
-                }
-                if (!tool_details) {
-                    // Normal handling for other tools or if Subagent has no prompt
-                    tool_details = get_tool_details(tool->name, input);
-                    // get_tool_details returns pointer to static buffer, don't free it
-                    tool_details_needs_free = 0;
-                }
+                // Get tool details for display (includes special handling for Subagent params)
+                char *tool_details = get_tool_details(tool->name, input);
+                // get_tool_details returns pointer to static buffer, don't free it
 
                 // Execute tool synchronously
                 cJSON *tool_result = execute_tool(tool->name, input, state);
@@ -139,11 +124,6 @@ int oneshot_process_response(ConversationState *state,
                 results[i].tool_name = strdup(tool->name);
                 results[i].tool_output = tool_result;
                 results[i].is_error = tool_result ? cJSON_HasObjectItem(tool_result, "error") : 1;
-
-                // Free tool_details if it was dynamically allocated
-                if (tool_details_needs_free && tool_details) {
-                    free(tool_details);
-                }
 
                 cJSON_Delete(input);
             }
