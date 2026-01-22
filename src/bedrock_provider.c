@@ -87,7 +87,7 @@ typedef struct {
     size_t tool_input_capacity;
     cJSON *message_start_data;       // Message metadata from message_start
     char *stop_reason;               // Stop reason from message_delta
-    Arena *arena;                    // Arena for all allocations (optional, NULL for heap allocation)
+    Arena *arena;                    // Arena for all string allocations (freed together at end)
 } BedrockStreamingContext;
 
 static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, ConversationState *state) {
@@ -97,29 +97,22 @@ static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, Convers
     ctx->accumulated_capacity = 4096;
 
     // Create arena for streaming context allocations
+    // All string allocations use arena - freed together when arena is destroyed
     ctx->arena = arena_create(65536);  // 64KB arena for streaming context
-    if (ctx->arena) {
-        // Use arena allocation
-        ctx->accumulated_text = arena_alloc(ctx->arena, ctx->accumulated_capacity);
-        if (ctx->accumulated_text) {
-            ctx->accumulated_text[0] = '\0';
-        }
-        ctx->tool_input_capacity = 4096;
-        ctx->tool_input_json = arena_alloc(ctx->arena, ctx->tool_input_capacity);
-        if (ctx->tool_input_json) {
-            ctx->tool_input_json[0] = '\0';
-        }
-    } else {
-        // Fallback to heap allocation
-        ctx->accumulated_text = malloc(ctx->accumulated_capacity);
-        if (ctx->accumulated_text) {
-            ctx->accumulated_text[0] = '\0';
-        }
-        ctx->tool_input_capacity = 4096;
-        ctx->tool_input_json = malloc(ctx->tool_input_capacity);
-        if (ctx->tool_input_json) {
-            ctx->tool_input_json[0] = '\0';
-        }
+    if (!ctx->arena) {
+        LOG_ERROR("Failed to create arena for streaming context");
+        return;
+    }
+
+    ctx->accumulated_text = arena_alloc(ctx->arena, ctx->accumulated_capacity);
+    if (ctx->accumulated_text) {
+        ctx->accumulated_text[0] = '\0';
+    }
+
+    ctx->tool_input_capacity = 4096;
+    ctx->tool_input_json = arena_alloc(ctx->arena, ctx->tool_input_capacity);
+    if (ctx->tool_input_json) {
+        ctx->tool_input_json[0] = '\0';
     }
 }
 
@@ -129,22 +122,18 @@ static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, Convers
 static void bedrock_streaming_context_free(BedrockStreamingContext *ctx) {
     if (!ctx) return;
 
-    // If arena is present, destroy it (frees all arena-allocated memory)
+    // Destroy arena - frees ALL string allocations at once
+    // (accumulated_text, content_block_type, tool_use_id, tool_use_name,
+    //  tool_input_json, stop_reason are all arena-allocated)
     if (ctx->arena) {
         arena_destroy(ctx->arena);
-    } else {
-        // Fallback to individual free calls
-        free(ctx->accumulated_text);
-        free(ctx->content_block_type);
-        free(ctx->tool_use_id);
-        free(ctx->tool_use_name);
-        free(ctx->tool_input_json);
-        free(ctx->stop_reason);
+        ctx->arena = NULL;
     }
 
-    // cJSON objects still use heap allocation
+    // cJSON objects use heap allocation (cJSON manages its own memory)
     if (ctx->message_start_data) {
         cJSON_Delete(ctx->message_start_data);
+        ctx->message_start_data = NULL;
     }
 }
 
@@ -191,18 +180,19 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
             if (content_block) {
                 cJSON *type = cJSON_GetObjectItem(content_block, "type");
                 if (type && cJSON_IsString(type)) {
-                    free(ctx->content_block_type);
+                    // Arena allocation - no need to free previous value
+                    // (arena memory is freed all at once when streaming ends)
                     ctx->content_block_type = arena_strdup(ctx->arena, type->valuestring);
 
                     if (strcmp(type->valuestring, "tool_use") == 0) {
                         cJSON *id = cJSON_GetObjectItem(content_block, "id");
                         cJSON *name = cJSON_GetObjectItem(content_block, "name");
                         if (id && cJSON_IsString(id)) {
-                            free(ctx->tool_use_id);
+                            // Arena allocation - old value left for arena cleanup
                             ctx->tool_use_id = arena_strdup(ctx->arena, id->valuestring);
                         }
                         if (name && cJSON_IsString(name)) {
-                            free(ctx->tool_use_name);
+                            // Arena allocation - old value left for arena cleanup
                             ctx->tool_use_name = arena_strdup(ctx->arena, name->valuestring);
                         }
                         ctx->tool_input_size = 0;
@@ -323,7 +313,7 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
             if (delta) {
                 cJSON *stop_reason = cJSON_GetObjectItem(delta, "stop_reason");
                 if (stop_reason && cJSON_IsString(stop_reason)) {
-                    free(ctx->stop_reason);
+                    // Arena allocation - old value left for arena cleanup
                     ctx->stop_reason = arena_strdup(ctx->arena, stop_reason->valuestring);
                     LOG_DEBUG("Bedrock stream: stop_reason=%s", ctx->stop_reason);
                 }
