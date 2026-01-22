@@ -65,7 +65,11 @@ int is_context_length_error(const char *error_message, const char *error_type) {
     // Check for context length/token limit patterns in error message
     if (strstr(error_message, "maximum context length") != NULL ||
         (strstr(error_message, "context length") != NULL && strstr(error_message, "tokens") != NULL) ||
-        strstr(error_message, "too many tokens") != NULL) {
+        strstr(error_message, "too many tokens") != NULL ||
+        // LiteLLM / Bedrock patterns
+        strstr(error_message, "ContextWindowExceededError") != NULL ||
+        strstr(error_message, "Context Window Error") != NULL ||
+        strstr(error_message, "Input is too long") != NULL) {
         return 1;
     }
 
