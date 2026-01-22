@@ -215,12 +215,12 @@ int persistence_get_session_token_usage(
         *completion_tokens = sqlite3_column_int(stmt, 1);
         *cached_tokens = sqlite3_column_int(stmt, 2);
 
-        LOG_DEBUG("Retrieved token usage for session %s: prompt=%d, completion=%d, cached=%d",
+        LOG_FINE("Retrieved token usage for session %s: prompt=%d, completion=%d, cached=%d",
                  session_id ? session_id : "all",
                  *prompt_tokens, *completion_tokens, *cached_tokens);
     } else if (rc == SQLITE_DONE) {
         // No records found - this is OK for a new session
-        LOG_DEBUG("No token usage records found for session %s",
+        LOG_FINE("No token usage records found for session %s",
                  session_id ? session_id : "all");
     } else {
         LOG_ERROR("Failed to execute token usage query: %s", sqlite3_errmsg(db->db));

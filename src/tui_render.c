@@ -221,7 +221,7 @@ void render_status_window(TUIState *tui) {
         if (conversation_state_lock(tui->conversation_state) == 0) {
             plan_mode = tui->conversation_state->plan_mode;
             conversation_state_unlock(tui->conversation_state);
-            LOG_DEBUG("[TUI] render_status_window: plan_mode=%d, width=%d", plan_mode, width);
+            LOG_FINE("[TUI] render_status_window: plan_mode=%d, width=%d", plan_mode, width);
         } else {
             LOG_WARN("[TUI] Failed to lock conversation state for plan_mode read");
         }
@@ -234,7 +234,7 @@ void render_status_window(TUIState *tui) {
         snprintf(plan_str, sizeof(plan_str), " ● Plan ");
         plan_str_len = (int)strlen(plan_str);
         plan_display_width = utf8_display_width(plan_str);
-        LOG_DEBUG("[TUI] Plan mode indicator: '%s' (len=%d, display_width=%d)", plan_str, plan_str_len, plan_display_width);
+        LOG_FINE("[TUI] Plan mode indicator: '%s' (len=%d, display_width=%d)", plan_str, plan_str_len, plan_display_width);
     }
 
     // Prepare scroll percentage in NORMAL mode
@@ -284,13 +284,13 @@ void render_status_window(TUIState *tui) {
                                                 &prompt_tokens,
                                                 &completion_tokens,
                                                 &cached_tokens) == 0) {
-            LOG_DEBUG("[TUI] Retrieved session token totals from DB: prompt=%d completion=%d cached=%d",
-                      prompt_tokens, completion_tokens, cached_tokens);
+            LOG_FINE("[TUI] Retrieved session token totals from DB: prompt=%d completion=%d cached=%d",
+                     prompt_tokens, completion_tokens, cached_tokens);
         } else {
-            LOG_DEBUG("[TUI] Failed to retrieve session token totals from DB");
+            LOG_FINE("[TUI] Failed to retrieve session token totals from DB");
         }
     } else {
-        LOG_DEBUG("[TUI] No persistence database connection available");
+        LOG_FINE("[TUI] No persistence database connection available");
     }
 
     int total_tokens = prompt_tokens + completion_tokens;
@@ -306,7 +306,7 @@ void render_status_window(TUIState *tui) {
         }
         token_str_len = (int)strlen(token_str);
         token_display_width = utf8_display_width(token_str);
-        LOG_DEBUG("[TUI] Rendering token display: %s (mode=%d)", token_str, tui->mode);
+        LOG_FINE("[TUI] Rendering token display: %s (mode=%d)", token_str, tui->mode);
     }
 
     // Layout: keep spinner + status message on the right, float the rest on the left
@@ -337,7 +337,7 @@ void render_status_window(TUIState *tui) {
 
     // Plan mode indicator (always visible when enabled)
     if (plan_str_len > 0 && plan_display_width < width && left_col + plan_display_width < left_limit) {
-        LOG_DEBUG("[TUI] Rendering plan mode at col=%d, width=%d, plan_display_width=%d, mode=%d",
+        LOG_FINE("[TUI] Rendering plan mode at col=%d, width=%d, plan_display_width=%d, mode=%d",
                   left_col, width, plan_display_width, tui->mode);
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
@@ -352,7 +352,7 @@ void render_status_window(TUIState *tui) {
         }
         left_col += plan_display_width;
     } else if (plan_str_len > 0) {
-        LOG_DEBUG("[TUI] Plan mode indicator not rendered: plan_display_width=%d, width=%d, condition=%d",
+        LOG_FINE("[TUI] Plan mode indicator not rendered: plan_display_width=%d, width=%d, condition=%d",
                   plan_display_width, width, (plan_str_len > 0 && plan_display_width < width));
     }
 
@@ -1100,7 +1100,7 @@ void tui_update_status(TUIState *tui, const char *status_text) {
     if (!tui || !tui->is_initialized) return;
 
     const char *message = status_text ? status_text : "";
-    LOG_DEBUG("[TUI] Status update requested: '%s'", message[0] ? message : "(clear)");
+    LOG_FINE("[TUI] Status update requested: '%s'", message[0] ? message : "(clear)");
 
     if (message[0] == '\0') {
         status_spinner_stop(tui);

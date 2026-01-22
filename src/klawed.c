@@ -1278,7 +1278,7 @@ int main(int argc, char *argv[]) {
         printf("  Logging and Persistence:\n");
         printf("    KLAWED_LOG_PATH    Optional: Full path to log file\n");
         printf("    KLAWED_LOG_DIR     Optional: Directory for logs (uses klawed.log filename)\n");
-        printf("    KLAWED_LOG_LEVEL     Optional: Log level (DEBUG, INFO, WARN, ERROR)\n");
+        printf("    KLAWED_LOG_LEVEL     Optional: Log level (FINE, DEBUG, INFO, WARN, ERROR)\n");
         printf("    KLAWED_DB_PATH     Optional: Path to SQLite database for API history\n");
         printf("                         Default: ~/.local/share/klawed/api_calls.db\n");
         printf("    KLAWED_MAX_RETRY_DURATION_MS  Optional: Maximum retry duration in milliseconds\n");
@@ -1525,7 +1525,9 @@ int main(int argc, char *argv[]) {
     // Set log level from environment or default to INFO
     const char *log_level_env = getenv("KLAWED_LOG_LEVEL");
     if (log_level_env) {
-        if (strcmp(log_level_env, "DEBUG") == 0) {
+        if (strcmp(log_level_env, "FINE") == 0) {
+            log_set_level(LOG_LEVEL_FINE);
+        } else if (strcmp(log_level_env, "DEBUG") == 0) {
             log_set_level(LOG_LEVEL_DEBUG);
         } else if (strcmp(log_level_env, "WARN") == 0) {
             log_set_level(LOG_LEVEL_WARN);

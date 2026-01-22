@@ -28,6 +28,7 @@ static int g_always_flush = 0;  // Default to buffered for better performance
 
 // Level names for output
 static const char *level_names[] = {
+    "FINE",
     "DEBUG",
     "INFO",
     "WARN",

@@ -84,7 +84,7 @@ static const HelpLine help_content[] = {
     // Environment section
     {" ENVIRONMENT VARIABLES", NULL, NULL},
     {NULL, "KLAWED_THEME", "Color theme name or path to .conf"},
-    {NULL, "KLAWED_LOG_LEVEL", "DEBUG, INFO, WARN, ERROR"},
+    {NULL, "KLAWED_LOG_LEVEL", "FINE, DEBUG, INFO, WARN, ERROR"},
     {NULL, "KLAWED_BASH_TIMEOUT", "Bash command timeout (default: 30s)"},
     {NULL, "KLAWED_MCP_ENABLED", "Enable MCP tool servers (1/0)"},
     {NULL, "OPENAI_MODEL", "Model name override"},

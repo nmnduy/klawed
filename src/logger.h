@@ -10,7 +10,7 @@
  * Environment Variables:
  *   KLAWED_LOG_PATH - Full path to log file (e.g., /tmp/myapp.log)
  *   KLAWED_LOG_DIR  - Directory for logs (uses klawed.log as filename)
- *   KLAWED_LOG_LEVEL  - Minimum log level: DEBUG, INFO, WARN, ERROR
+ *   KLAWED_LOG_LEVEL  - Minimum log level: FINE, DEBUG, INFO, WARN, ERROR
  *   KLAWED_LOG_FLUSH  - Flush mode: "buffered" (default) or "always"
  *                       "buffered" = better performance, "always" = immediate visibility
  *
@@ -29,7 +29,8 @@
 
 // Log levels
 typedef enum {
-    LOG_LEVEL_DEBUG = 0,
+    LOG_LEVEL_FINE = 0,
+    LOG_LEVEL_DEBUG,
     LOG_LEVEL_INFO,
     LOG_LEVEL_WARN,
     LOG_LEVEL_ERROR
@@ -91,6 +92,7 @@ void log_flush(void);
 void log_shutdown(void);
 
 // Convenience macros that automatically include file/line/function info
+#define LOG_FINE(...)  log_message(LOG_LEVEL_FINE,  __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define LOG_DEBUG(...) log_message(LOG_LEVEL_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define LOG_INFO(...)  log_message(LOG_LEVEL_INFO,  __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define LOG_WARN(...)  log_message(LOG_LEVEL_WARN,  __FILE__, __LINE__, __func__, __VA_ARGS__)
