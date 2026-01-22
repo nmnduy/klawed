@@ -46,6 +46,12 @@ web_browse_agent --session my-session eval "document.title"
 # Take a screenshot
 web_browse_agent --session my-session screenshot
 
+# Upload a file to a file input
+web_browse_agent --session my-session upload-file "input[type=file]" /path/to/file.pdf
+
+# Upload multiple files
+web_browse_agent --session my-session upload-file "#file-input" /path/to/file1.pdf /path/to/file2.jpg
+
 # Get available commands
 web_browse_agent commands
 
@@ -83,6 +89,7 @@ web_browse_agent --session my-session wait-for --wait-type navigation
 - `eval <js>` - Evaluate JavaScript
 - `click <selector>` - Click element (CSS/Playwright selectors)
 - `type <selector> <text>` - Type text into element
+- `upload-file <selector> <file_path...>` - Upload file(s) to a file input element
 - `wait-for <selector>` - Wait for element to appear (also supports `wait_type=navigation` to wait for page load after `open`)
 
 ### Page Inspection
