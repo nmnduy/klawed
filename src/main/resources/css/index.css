@@ -231,8 +231,9 @@
     @apply text-semantic-link-pressed;
   }
 
+  /* Keep visited links the same color as unvisited - no purple */
   a:not(.inline-flex):visited {
-    @apply text-semantic-link-visited;
+    @apply text-semantic-link-unvisited;
   }
 }
 
