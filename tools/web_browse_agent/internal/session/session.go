@@ -12,16 +12,16 @@ import (
 // Session represents a persistent browser session
 type Session struct {
 	// Metadata
-	ID           string    `json:"session_id"`
-	CreatedAt    time.Time `json:"created_at"`
-	LastUsed     time.Time `json:"last_used"`
-	Headless     bool      `json:"headless"`
-	ActiveTabID  string    `json:"active_tab_id,omitempty"`
-	
+	ID          string    `json:"session_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	LastUsed    time.Time `json:"last_used"`
+	Headless    bool      `json:"headless"`
+	ActiveTabID string    `json:"active_tab_id,omitempty"`
+
 	// Driver process info
 	DriverPID        int    `json:"driver_pid,omitempty"`
 	DriverSocketPath string `json:"driver_socket_path,omitempty"`
-	
+
 	// Internal state
 	mu       sync.RWMutex
 	filePath string
@@ -35,15 +35,15 @@ type SessionConfig struct {
 
 // SessionInfo is a simplified view of session metadata for display
 type SessionInfo struct {
-	ID           string    `json:"session_id"`
-	CreatedAt    time.Time `json:"created_at"`
-	LastUsed     time.Time `json:"last_used"`
-	Headless     bool      `json:"headless"`
-	ActiveTabID  string    `json:"active_tab_id,omitempty"`
-	DriverPID    int       `json:"driver_pid,omitempty"`
-	IsAlive      bool      `json:"is_alive"`
-	Age          string    `json:"age"`
-	LastUsedAgo  string    `json:"last_used_ago"`
+	ID          string    `json:"session_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	LastUsed    time.Time `json:"last_used"`
+	Headless    bool      `json:"headless"`
+	ActiveTabID string    `json:"active_tab_id,omitempty"`
+	DriverPID   int       `json:"driver_pid,omitempty"`
+	IsAlive     bool      `json:"is_alive"`
+	Age         string    `json:"age"`
+	LastUsedAgo string    `json:"last_used_ago"`
 }
 
 // New creates a new session with the given ID and configuration
@@ -123,13 +123,13 @@ func (s *Session) isDriverAlive() bool {
 	if s.DriverPID == 0 {
 		return false
 	}
-	
+
 	// Check if process exists
 	process, err := os.FindProcess(s.DriverPID)
 	if err != nil {
 		return false
 	}
-	
+
 	// Send signal 0 to check if process exists
 	err = process.Signal(os.Signal(nil))
 	return err == nil

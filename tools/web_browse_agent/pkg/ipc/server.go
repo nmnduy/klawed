@@ -14,14 +14,14 @@ import (
 
 // Server represents an IPC server that listens on a Unix domain socket
 type Server struct {
-	socketPath       string
-	listener         net.Listener
-	shutdown         chan struct{}
-	wg               sync.WaitGroup
-	handlers         map[CommandType]CommandHandler
-	mu               sync.RWMutex
-	stopOnce         sync.Once
-	onActivityFunc   func() // Called on each request to track activity
+	socketPath     string
+	listener       net.Listener
+	shutdown       chan struct{}
+	wg             sync.WaitGroup
+	handlers       map[CommandType]CommandHandler
+	mu             sync.RWMutex
+	stopOnce       sync.Once
+	onActivityFunc func() // Called on each request to track activity
 }
 
 // CommandHandler is a function that handles a command request

@@ -20,19 +20,19 @@ type Registry struct {
 
 // Config holds registry configuration
 type Config struct {
-	SessionsDir      string
-	IdleTTL          time.Duration // Time to live for idle sessions
-	CleanupInterval  time.Duration // How often to run cleanup
-	MaxSessions      int           // Maximum number of sessions to keep
+	SessionsDir     string
+	IdleTTL         time.Duration // Time to live for idle sessions
+	CleanupInterval time.Duration // How often to run cleanup
+	MaxSessions     int           // Maximum number of sessions to keep
 }
 
 // DefaultConfig returns the default registry configuration
 func DefaultConfig() Config {
 	return Config{
-		SessionsDir:      filepath.Join(os.Getenv("HOME"), ".web-agent", "sessions"),
-		IdleTTL:          7 * 24 * time.Hour, // 7 days
-		CleanupInterval:  1 * time.Hour,      // Cleanup every hour
-		MaxSessions:      100,                // Maximum 100 sessions
+		SessionsDir:     filepath.Join(os.Getenv("HOME"), ".web-agent", "sessions"),
+		IdleTTL:         7 * 24 * time.Hour, // 7 days
+		CleanupInterval: 1 * time.Hour,      // Cleanup every hour
+		MaxSessions:     100,                // Maximum 100 sessions
 	}
 }
 
@@ -291,7 +291,7 @@ func GetRegistry() (*Registry, error) {
 	var err error
 	registryOnce.Do(func() {
 		config := DefaultConfig()
-		
+
 		// Override with viper config if available
 		if viper.IsSet("sessions.dir") {
 			config.SessionsDir = viper.GetString("sessions.dir")
