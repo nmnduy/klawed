@@ -37,8 +37,8 @@ type Driver struct {
 	activityMu   sync.RWMutex
 
 	// Browser state
-	context    *BrowserContext
-	mu         sync.RWMutex
+	context *BrowserContext
+	mu      sync.RWMutex
 }
 
 // DriverConfig holds configuration for creating a new driver
@@ -202,6 +202,7 @@ func (d *Driver) registerHandlers(server *ipc.Server) {
 	server.RegisterHandler(ipc.CommandClick, d.handleClick)
 	server.RegisterHandler(ipc.CommandTypeText, d.handleType)
 	server.RegisterHandler(ipc.CommandWaitFor, d.handleWaitFor)
+	server.RegisterHandler(ipc.CommandUploadFile, d.handleUploadFile)
 
 	// Page inspection commands
 	server.RegisterHandler(ipc.CommandScreenshot, d.handleScreenshot)
@@ -493,7 +494,7 @@ func StartDriverProcess(sessionID, socketPath string, headless bool) (int, error
 		// Note: devNull will be closed when cmd exits
 	}
 	// If we can't open /dev/null, leave stdout/stderr unset (inherit nil = closed)
-	
+
 	cmd.SysProcAttr = getSysProcAttr()
 
 	// Start process

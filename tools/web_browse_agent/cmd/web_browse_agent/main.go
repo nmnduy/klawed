@@ -16,11 +16,11 @@ import (
 )
 
 var (
-	sessionID   string
-	jsonOutput  bool
-	timeout     int
-	headless    bool
-	verbose     bool
+	sessionID  string
+	jsonOutput bool
+	timeout    int
+	headless   bool
+	verbose    bool
 )
 
 func main() {
@@ -297,6 +297,15 @@ func parseCommand(commandName string, args []string) (ipc.CommandType, interface
 			Text:     strings.Join(args[1:], " "),
 		}, nil
 
+	case "upload-file":
+		if len(args) < 2 {
+			return "", nil, fmt.Errorf("upload-file requires selector and at least one file path")
+		}
+		return ipc.CommandUploadFile, ipc.CommandArguments{
+			Selector:  args[0],
+			FilePaths: args[1:],
+		}, nil
+
 	case "wait-for":
 		if len(args) < 1 {
 			return "", nil, fmt.Errorf("wait-for requires selector argument")
@@ -495,6 +504,8 @@ func showHelp() error {
   eval <javascript>       Execute JavaScript in the browser
   click <selector>        Click on an element
   type <selector> <text>  Type text into an input element
+  upload-file <selector> <file_path...>
+                          Upload file(s) to a file input element
   wait-for <selector>     Wait for an element to appear
   screenshot              Take a screenshot of the current page
   html                    Get the HTML content of the page

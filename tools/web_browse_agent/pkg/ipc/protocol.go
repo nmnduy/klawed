@@ -11,32 +11,33 @@ type CommandType string
 
 const (
 	// Browser control commands
-	CommandOpen        CommandType = "open"
-	CommandListTabs    CommandType = "list-tabs"
-	CommandSwitchTab   CommandType = "switch-tab"
-	CommandCloseTab    CommandType = "close-tab"
-	
+	CommandOpen      CommandType = "open"
+	CommandListTabs  CommandType = "list-tabs"
+	CommandSwitchTab CommandType = "switch-tab"
+	CommandCloseTab  CommandType = "close-tab"
+
 	// Page interaction commands
-	CommandEval        CommandType = "eval"
-	CommandClick       CommandType = "click"
-	CommandTypeText    CommandType = "type"
-	CommandWaitFor     CommandType = "wait-for"
-	
+	CommandEval       CommandType = "eval"
+	CommandClick      CommandType = "click"
+	CommandTypeText   CommandType = "type"
+	CommandWaitFor    CommandType = "wait-for"
+	CommandUploadFile CommandType = "upload-file"
+
 	// Page inspection commands
-	CommandScreenshot  CommandType = "screenshot"
-	CommandHTML        CommandType = "html"
-	
+	CommandScreenshot CommandType = "screenshot"
+	CommandHTML       CommandType = "html"
+
 	// Browser configuration commands
 	CommandSetViewport CommandType = "set-viewport"
 	CommandCookies     CommandType = "cookies"
-	
+
 	// Session management commands
 	CommandSessionInfo CommandType = "session-info"
 	CommandDescribe    CommandType = "describe-commands"
-	
+
 	// System commands
-	CommandPing        CommandType = "ping"
-	CommandShutdown    CommandType = "shutdown"
+	CommandPing     CommandType = "ping"
+	CommandShutdown CommandType = "shutdown"
 )
 
 // Request represents an IPC request from client to server
@@ -60,18 +61,21 @@ type Response struct {
 type CommandArguments struct {
 	// Common fields
 	TabID string `json:"tab_id,omitempty"`
-	
+
 	// Command-specific fields
-	URL      string `json:"url,omitempty"`
-	Selector string `json:"selector,omitempty"`
-	Text     string `json:"text,omitempty"`
+	URL        string `json:"url,omitempty"`
+	Selector   string `json:"selector,omitempty"`
+	Text       string `json:"text,omitempty"`
 	JavaScript string `json:"javascript,omitempty"`
-	Width    int    `json:"width,omitempty"`
-	Height   int    `json:"height,omitempty"`
-	
+	Width      int    `json:"width,omitempty"`
+	Height     int    `json:"height,omitempty"`
+
 	// WaitFor specific
 	WaitType string `json:"wait_type,omitempty"` // "selector", "timeout", "navigation"
 	Timeout  int    `json:"timeout,omitempty"`   // milliseconds
+
+	// Upload specific
+	FilePaths []string `json:"file_paths,omitempty"` // Paths to files to upload
 }
 
 // TabInfo represents information about a browser tab
@@ -137,7 +141,7 @@ type DescribeCommandsResult struct {
 // NewRequest creates a new request with the given command and arguments
 func NewRequest(command CommandType, args interface{}) (*Request, error) {
 	id := fmt.Sprintf("req_%d", time.Now().UnixNano())
-	
+
 	var argsJSON json.RawMessage
 	if args != nil {
 		bytes, err := json.Marshal(args)
@@ -146,7 +150,7 @@ func NewRequest(command CommandType, args interface{}) (*Request, error) {
 		}
 		argsJSON = json.RawMessage(bytes)
 	}
-	
+
 	return &Request{
 		ID:        id,
 		Command:   command,
@@ -165,7 +169,7 @@ func NewResponse(requestID string, success bool, data interface{}, errMsg string
 		}
 		dataJSON = json.RawMessage(bytes)
 	}
-	
+
 	return &Response{
 		ID:        requestID,
 		Success:   success,
@@ -180,12 +184,12 @@ func (r *Request) ParseArguments() (*CommandArguments, error) {
 	if len(r.Arguments) == 0 {
 		return &CommandArguments{}, nil
 	}
-	
+
 	var args CommandArguments
 	if err := json.Unmarshal(r.Arguments, &args); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal arguments: %w", err)
 	}
-	
+
 	return &args, nil
 }
 
@@ -194,10 +198,10 @@ func (r *Response) ParseData(target interface{}) error {
 	if len(r.Data) == 0 {
 		return nil
 	}
-	
+
 	if err := json.Unmarshal(r.Data, target); err != nil {
 		return fmt.Errorf("failed to unmarshal data: %w", err)
 	}
-	
+
 	return nil
 }

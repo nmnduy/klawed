@@ -184,6 +184,42 @@ func (d *Driver) handleType(req *ipc.Request) (*ipc.Response, error) {
 	}, "")
 }
 
+// handleUploadFile uploads files to a file input element
+func (d *Driver) handleUploadFile(req *ipc.Request) (*ipc.Response, error) {
+	args, err := req.ParseArguments()
+	if err != nil {
+		return ipc.NewResponse(req.ID, false, nil, fmt.Sprintf("failed to parse arguments: %v", err))
+	}
+
+	if args.Selector == "" {
+		return ipc.NewResponse(req.ID, false, nil, "selector is required")
+	}
+
+	if len(args.FilePaths) == 0 {
+		return ipc.NewResponse(req.ID, false, nil, "at least one file path is required")
+	}
+
+	tab, ok := d.context.GetActiveTab()
+	if !ok {
+		return ipc.NewResponse(req.ID, false, nil, "no active tab")
+	}
+
+	// Locate the file input element
+	locator := tab.Page.Locator(args.Selector)
+
+	// Set the input files
+	err = locator.SetInputFiles(args.FilePaths)
+	if err != nil {
+		return ipc.NewResponse(req.ID, false, nil, fmt.Sprintf("failed to upload files: %v", err))
+	}
+
+	return ipc.NewResponse(req.ID, true, map[string]interface{}{
+		"selector":    args.Selector,
+		"files_count": len(args.FilePaths),
+		"files":       args.FilePaths,
+	}, "")
+}
+
 // handleWaitFor waits for an element or condition
 func (d *Driver) handleWaitFor(req *ipc.Request) (*ipc.Response, error) {
 	args, err := req.ParseArguments()
@@ -392,6 +428,12 @@ func (d *Driver) handleDescribeCommands(req *ipc.Request) (*ipc.Response, error)
 			"description": "Type text into an input element",
 			"arguments":   []string{"selector", "text"},
 			"example":     "type input#email user@example.com",
+		},
+		{
+			"name":        "upload-file",
+			"description": "Upload file(s) to a file input element",
+			"arguments":   []string{"selector", "file_path..."},
+			"example":     "upload-file input[type=file] /path/to/file.pdf",
 		},
 		{
 			"name":        "wait-for",

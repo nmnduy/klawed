@@ -121,6 +121,15 @@ func parseCommand(commandName string, args []string) (ipc.CommandType, interface
 			Text:     strings.Join(args[1:], " "),
 		}, nil
 
+	case "upload-file":
+		if len(args) < 2 {
+			return "", nil, fmt.Errorf("upload-file requires selector and at least one file path")
+		}
+		return ipc.CommandUploadFile, ipc.CommandArguments{
+			Selector:  args[0],
+			FilePaths: args[1:],
+		}, nil
+
 	case "wait-for":
 		if len(args) < 1 {
 			return "", nil, fmt.Errorf("wait-for requires selector argument")
