@@ -29,9 +29,9 @@
             );
         }
 
-        /* Override visited link styles to prevent purple color */
-        nav a:visited,
-        a:visited {
+        /* Override visited link styles to prevent purple color - but exclude buttons */
+        nav a:visited:not(.inline-flex),
+        a:visited:not(.inline-flex) {
             color: inherit;
         }
 
@@ -44,10 +44,9 @@
             color: hsl(var(--primary));
         }
 
-        /* Ensure CTA buttons maintain their styling (but not primary buttons) */
-        nav a.inline-flex:not(.bg-primary):visited,
-        section a.inline-flex:not(.bg-primary):visited {
-            color: inherit;
+        /* Primary buttons should always use their foreground color */
+        a.bg-primary {
+            color: hsl(var(--primary-foreground)) !important;
         }
     </style>
 </head>
