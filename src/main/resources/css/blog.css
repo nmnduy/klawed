@@ -29,19 +29,19 @@
   .blog-tag {
     @apply inline-flex items-center px-3 py-1 rounded-full;
     @apply text-caption-s font-semibold;
-    @apply bg-gradient-to-r from-primary/15 to-secondary/15 text-primary;
-    @apply border border-primary/20;
-    @apply transition-all duration-200 hover:scale-105 hover:shadow-md hover:shadow-primary/20;
+    @apply bg-primary/10 text-layout-emphasis-high;
+    @apply border border-border;
+    @apply transition-all duration-200 hover:scale-105 hover:bg-primary/20;
   }
 
   .dark .blog-tag {
-    @apply from-primary/25 to-secondary/25 border-primary/30;
+    @apply bg-primary/15 border-border/50;
   }
 
   /* Blog Category Links - More prominent */
   .blog-category {
     @apply inline-flex items-center text-caption-m font-semibold;
-    @apply text-secondary hover:text-primary transition-colors duration-200;
+    @apply text-layout-content-medium hover:text-primary transition-colors duration-200;
     @apply hover:underline decoration-2 underline-offset-4;
   }
 
@@ -54,8 +54,8 @@
 
   .pagination-btn.active,
   .pagination-btn--active {
-    @apply bg-gradient-to-r from-primary to-secondary text-primary-foreground border-transparent;
-    @apply shadow-lg shadow-primary/30;
+    @apply bg-primary text-primary-foreground border-primary;
+    @apply shadow-md;
   }
 
   /* Blog Header/Footer - Elevated design */
@@ -71,13 +71,13 @@
 
   /* Blog Sidebar Widgets - Enhanced cards */
   .blog-sidebar-widget {
-    @apply bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-sm rounded-2xl border border-border/50 p-6;
-    @apply shadow-lg shadow-primary/5 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300;
+    @apply bg-card/90 backdrop-blur-sm rounded-2xl border border-border/50 p-6;
+    @apply shadow-sm hover:shadow-md transition-all duration-300;
   }
 
   .blog-sidebar-title {
-    @apply text-h5-headline-xs font-bold text-semantic-blog-heading mb-4;
-    @apply border-b-2 border-primary/20 pb-2;
+    @apply text-h5-headline-xs font-bold text-layout-emphasis-high mb-4;
+    @apply border-b border-border pb-2;
   }
 
   /* Blog Post Content */
@@ -86,12 +86,11 @@
   }
 
   .blog-post-title {
-    @apply text-h2-headline-l font-bold text-foreground mb-4;
-    @apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
+    @apply text-h2-headline-l font-bold text-layout-emphasis-high mb-4;
   }
 
   .blog-post-meta {
-    @apply flex flex-wrap items-center gap-4 text-caption-m text-muted-foreground;
+    @apply flex flex-wrap items-center gap-4 text-caption-m text-layout-content-medium;
   }
 
   .blog-post-content {
@@ -108,34 +107,34 @@
   }
   
   .prose h1 {
-    @apply text-h1-headline-xl font-bold text-foreground mt-10 mb-6;
-    @apply border-l-4 border-primary pl-4;
+    @apply text-h1-headline-xl font-bold text-layout-emphasis-high mt-10 mb-6;
+    @apply border-l-4 border-border pl-4;
   }
   
   .prose h2 {
-    @apply text-h2-headline-l font-bold text-foreground mt-8 mb-4;
-    @apply border-l-4 border-primary pl-4;
+    @apply text-h2-headline-l font-bold text-layout-emphasis-high mt-8 mb-4;
+    @apply border-l-4 border-border pl-4;
   }
   
   .prose h3 {
-    @apply text-h3-headline-m font-bold text-foreground mt-6 mb-3;
-    @apply border-l-4 border-secondary pl-4;
+    @apply text-h3-headline-m font-bold text-layout-emphasis-high mt-6 mb-3;
+    @apply border-l-4 border-border pl-4;
   }
   
   .prose h4 {
-    @apply text-h4-headline-s font-bold text-foreground mt-5 mb-2;
+    @apply text-h4-headline-s font-bold text-layout-emphasis-high mt-5 mb-2;
   }
   
   .prose h5 {
-    @apply text-h5-headline-xs font-semibold text-foreground mt-4 mb-2;
+    @apply text-h5-headline-xs font-semibold text-layout-emphasis-high mt-4 mb-2;
   }
   
   .prose h6 {
-    @apply text-body-l-bold text-foreground mt-4 mb-2;
+    @apply text-body-l-bold text-layout-emphasis-high mt-4 mb-2;
   }
   
   .prose p {
-    @apply text-body-m text-foreground leading-relaxed mb-4;
+    @apply text-body-m text-layout-content-medium leading-relaxed mb-4;
   }
   
   .prose a {
@@ -167,7 +166,7 @@
   }
   
   .prose strong {
-    @apply font-bold text-foreground;
+    @apply font-bold text-layout-emphasis-high;
   }
   
   .prose em {
@@ -175,7 +174,7 @@
   }
   
   .prose code {
-    @apply px-2 py-1 rounded-md bg-muted/80 text-primary text-caption-m font-mono;
+    @apply px-2 py-1 rounded-md bg-muted/80 text-foreground text-caption-m font-mono;
     @apply border border-border/50;
   }
   
@@ -194,15 +193,15 @@
   }
   
   .prose ul {
-    @apply list-disc marker:text-primary;
+    @apply list-disc marker:text-layout-content-medium;
   }
   
   .prose ol {
-    @apply list-decimal marker:text-secondary marker:font-semibold;
+    @apply list-decimal marker:text-layout-content-medium marker:font-semibold;
   }
   
   .prose li {
-    @apply text-body-m text-foreground leading-relaxed;
+    @apply text-body-m text-layout-content-medium leading-relaxed;
   }
   
   .prose li > p {
@@ -210,8 +209,8 @@
   }
   
   .prose blockquote {
-    @apply border-l-4 border-primary pl-6 py-2 italic text-muted-foreground my-6;
-    @apply bg-primary/5 rounded-r-lg;
+    @apply border-l-4 border-border pl-6 py-2 italic text-layout-content-medium my-6;
+    @apply bg-muted/30 rounded-r-lg;
   }
   
   .prose img {
@@ -220,8 +219,7 @@
   }
   
   .prose hr {
-    @apply border-border/60 my-8;
-    @apply bg-gradient-to-r from-transparent via-primary/20 to-transparent h-px border-0;
+    @apply border-border my-8;
   }
   
   .prose table {
@@ -230,12 +228,12 @@
   }
   
   .prose th {
-    @apply bg-muted/80 text-foreground font-semibold text-body-s;
+    @apply bg-muted/80 text-layout-emphasis-high font-semibold text-body-s;
     @apply px-4 py-3 text-left border-b-2 border-border;
   }
   
   .prose td {
-    @apply px-4 py-3 text-body-m text-foreground;
+    @apply px-4 py-3 text-body-m text-layout-content-medium;
     @apply border-b border-border/30;
   }
   
@@ -249,11 +247,11 @@
   
   /* Dark mode adjustments for prose */
   .dark .prose {
-    @apply text-foreground;
+    @apply text-layout-content-medium;
   }
   
   .dark .prose code {
-    @apply bg-muted/60 text-primary;
+    @apply bg-muted/60 text-foreground;
   }
   
   .dark .prose pre {
@@ -261,7 +259,7 @@
   }
   
   .dark .prose blockquote {
-    @apply bg-primary/10;
+    @apply bg-muted/20;
   }
   
   .dark .prose table {
@@ -286,17 +284,17 @@
   }
   
   .blog-post-content h2 {
-    @apply text-h3-headline-m font-bold text-foreground mt-8 mb-4;
-    @apply border-l-4 border-primary pl-4;
+    @apply text-h3-headline-m font-bold text-layout-emphasis-high mt-8 mb-4;
+    @apply border-l-4 border-border pl-4;
   }
   
   .blog-post-content h3 {
-    @apply text-h4-headline-s font-bold text-foreground mt-6 mb-3;
-    @apply border-l-4 border-secondary pl-4;
+    @apply text-h4-headline-s font-bold text-layout-emphasis-high mt-6 mb-3;
+    @apply border-l-4 border-border pl-4;
   }
   
   .blog-post-content p {
-    @apply text-body-m text-foreground leading-relaxed;
+    @apply text-body-m text-layout-content-medium leading-relaxed;
   }
   
   .blog-post-content a {
@@ -306,7 +304,7 @@
   }
   
   .blog-post-content code {
-    @apply px-2 py-1 rounded-md bg-muted/80 text-primary text-caption-m font-mono;
+    @apply px-2 py-1 rounded-md bg-muted/80 text-foreground text-caption-m font-mono;
     @apply border border-border/50;
   }
   
@@ -325,16 +323,16 @@
   }
   
   .blog-post-content ul {
-    @apply list-disc marker:text-primary;
+    @apply list-disc marker:text-layout-content-medium;
   }
   
   .blog-post-content ol {
-    @apply list-decimal marker:text-secondary marker:font-semibold;
+    @apply list-decimal marker:text-layout-content-medium marker:font-semibold;
   }
   
   .blog-post-content blockquote {
-    @apply border-l-4 border-primary pl-6 py-2 italic text-muted-foreground;
-    @apply bg-primary/5 rounded-r-lg;
+    @apply border-l-4 border-border pl-6 py-2 italic text-layout-content-medium;
+    @apply bg-muted/30 rounded-r-lg;
   }
   
   .blog-post-content img {
@@ -343,8 +341,7 @@
   }
   
   .blog-post-content hr {
-    @apply border-border/60 my-8;
-    @apply bg-gradient-to-r from-transparent via-primary/20 to-transparent h-px border-0;
+    @apply border-border my-8;
   }
 
   /* Blog Author Card - Enhanced design */
@@ -359,11 +356,11 @@
   }
 
   .blog-author-name {
-    @apply text-h5-headline-xs font-bold text-foreground;
+    @apply text-h5-headline-xs font-bold text-layout-emphasis-high;
   }
 
   .blog-author-bio {
-    @apply text-body-s text-muted-foreground mt-2 leading-relaxed;
+    @apply text-body-s text-layout-content-medium mt-2 leading-relaxed;
   }
 
   /* Related Posts */
@@ -376,19 +373,19 @@
     @apply flex-1 px-4 py-2.5 rounded-xl border-2 border-border/50;
     @apply bg-background text-foreground text-body-s;
     @apply focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all;
-    @apply placeholder:text-muted-foreground/60;
+    @apply placeholder:text-layout-content-low;
   }
 
   .blog-search-button {
-    @apply px-5 py-2.5 bg-gradient-to-r from-primary to-secondary text-primary-foreground rounded-xl;
-    @apply hover:shadow-lg hover:shadow-primary/30 transition-all duration-200;
-    @apply font-semibold hover:scale-105;
+    @apply px-5 py-2.5 bg-primary text-primary-foreground rounded-xl;
+    @apply hover:shadow-lg transition-all duration-200;
+    @apply font-semibold hover:bg-primary/90;
   }
 
   /* Blog Navigation Links - Enhanced navigation */
   .blog-nav-link {
     @apply text-body-m font-semibold transition-all duration-200;
-    @apply text-foreground hover:text-primary;
+    @apply text-layout-content-medium hover:text-primary;
     @apply relative;
   }
 
@@ -409,7 +406,7 @@
   }
 
   .blog-nav-link:not(.active) {
-    @apply text-muted-foreground;
+    @apply text-layout-content-medium;
   }
 
   /* Blog Empty State - Friendly empty state */
@@ -422,54 +419,53 @@
   }
 
   .blog-empty-title {
-    @apply text-h3-headline-m font-bold text-foreground mb-3;
+    @apply text-h3-headline-m font-bold text-layout-emphasis-high mb-3;
   }
 
   .blog-empty-description {
-    @apply text-body-m text-muted-foreground leading-relaxed max-w-md mx-auto;
+    @apply text-body-m text-layout-content-medium leading-relaxed max-w-md mx-auto;
   }
 
   /* Admin-specific components - Modern dashboard style */
   .stat-card {
-    @apply bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-sm rounded-2xl border border-border/50 p-6;
-    @apply shadow-lg shadow-primary/5 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300;
+    @apply bg-card/90 backdrop-blur-sm rounded-2xl border border-border/50 p-6;
+    @apply shadow-sm hover:shadow-md transition-all duration-300;
   }
 
   .stat-value {
-    @apply text-h2-headline-l font-bold;
-    @apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent;
+    @apply text-h2-headline-l font-bold text-layout-emphasis-high;
   }
 
   .stat-label {
-    @apply text-caption-m text-muted-foreground font-medium uppercase tracking-wide;
+    @apply text-caption-m text-layout-content-medium font-medium uppercase tracking-wide;
   }
 
   .popular-item {
     @apply flex items-center gap-4 p-4 bg-card/60 rounded-xl;
-    @apply border border-border/40 hover:bg-primary/5 hover:border-primary/40 transition-all;
-    @apply hover:shadow-md hover:shadow-primary/10;
+    @apply border border-border/40 hover:bg-muted/30 hover:border-border transition-all;
+    @apply hover:shadow-sm;
   }
 
   .chart-container {
-    @apply bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-sm rounded-2xl border border-border/50 p-6;
-    @apply shadow-lg shadow-primary/5;
+    @apply bg-card/90 backdrop-blur-sm rounded-2xl border border-border/50 p-6;
+    @apply shadow-sm;
   }
 
   .category-item,
   .tag-item {
     @apply flex items-center justify-between p-4 bg-card/60 rounded-xl;
-    @apply border border-border/40 hover:bg-primary/5 hover:border-primary/40 transition-all;
-    @apply hover:shadow-md hover:shadow-primary/10;
+    @apply border border-border/40 hover:bg-muted/30 hover:border-border transition-all;
+    @apply hover:shadow-sm;
   }
 
   .category-name {
-    @apply text-body-m font-semibold text-foreground;
+    @apply text-body-m font-semibold text-layout-emphasis-high;
   }
 
   .tag-chip {
     @apply inline-flex items-center gap-2 px-4 py-2 rounded-full;
-    @apply bg-gradient-to-r from-primary/15 to-secondary/15 text-primary;
-    @apply border border-primary/20 font-semibold;
+    @apply bg-primary/10 text-layout-emphasis-high;
+    @apply border border-border font-semibold;
     @apply hover:scale-105 transition-transform duration-200;
   }
 
@@ -483,7 +479,7 @@
   }
 
   .form-label {
-    @apply block text-caption-m font-semibold text-foreground mb-2;
+    @apply block text-caption-m font-semibold text-layout-emphasis-high mb-2;
   }
 
   .form-input {
@@ -525,7 +521,7 @@
   }
 
   .tab-btn.inactive {
-    @apply border-transparent text-muted-foreground hover:text-foreground hover:border-border;
+    @apply border-transparent text-layout-content-medium hover:text-layout-emphasis-high hover:border-border;
   }
 
   /* Theme Toggle Icons - Smooth transitions */
@@ -558,17 +554,7 @@
     @apply rotate-180 scale-95;
   }
 
-  /* Feature: Gradient text for headings */
-  .gradient-heading {
-    @apply bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent;
-    background-size: 200% auto;
-    animation: gradient-flow 3s ease infinite;
-  }
-
-  @keyframes gradient-flow {
-    0%, 100% { background-position: 0% center; }
-    50% { background-position: 100% center; }
-  }
+  /* Feature: Gradient text for headings - removed aggressive gradients */
 
   /* Feature: Animated underlines */
   .animated-underline {

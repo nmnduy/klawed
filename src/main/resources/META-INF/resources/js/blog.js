@@ -29,7 +29,7 @@ function renderError(message) {
     mainContent.innerHTML = `
         <div class="bg-destructive/10 border border-destructive/30 rounded-lg p-6 text-center">
             <h2 class="text-h4-headline-s text-destructive mb-2">Error Loading Blog</h2>
-            <p class="text-body-m text-muted-foreground">${escapeHtml(message)}</p>
+            <p class="text-body-m text-layout-content-medium">${escapeHtml(message)}</p>
         </div>
     `;
 }
@@ -39,11 +39,11 @@ function renderEmpty() {
     const mainContent = document.getElementById('main-content');
     mainContent.innerHTML = `
         <div class="text-center py-12">
-            <svg class="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-16 h-16 mx-auto text-layout-content-low mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
             </svg>
-            <h2 class="text-h3-headline-m text-foreground mb-2">No posts yet</h2>
-            <p class="text-body-m text-muted-foreground">Check back soon for new content!</p>
+            <h2 class="text-h3-headline-m text-layout-emphasis-high mb-2">No posts yet</h2>
+            <p class="text-body-m text-layout-content-medium">Check back soon for new content!</p>
         </div>
     `;
 }
@@ -57,8 +57,8 @@ function renderPostCard(post) {
         : '';
     
     const categoryHtml = post.category 
-        ? `<a href="/blog/category/${post.category.slug}" class="inline-flex items-center text-caption-s font-medium text-primary hover:underline">${escapeHtml(post.category.name)}</a>
-           <span class="text-muted-foreground">•</span>`
+        ? `<a href="/blog/category/${post.category.slug}" class="inline-flex items-center text-caption-s font-medium text-layout-content-medium hover:text-primary hover:underline">${escapeHtml(post.category.name)}</a>
+           <span class="text-layout-content-low">•</span>`
         : '';
     
     const avatarHtml = post.author?.avatarUrl 
@@ -66,7 +66,7 @@ function renderPostCard(post) {
         : '';
     
     const excerptHtml = post.excerpt 
-        ? `<p class="text-muted-foreground line-clamp-3 mb-4">${escapeHtml(post.excerpt)}</p>`
+        ? `<p class="text-layout-content-medium line-clamp-3 mb-4">${escapeHtml(post.excerpt)}</p>`
         : '';
     
     return `
@@ -75,18 +75,18 @@ function renderPostCard(post) {
             <div class="p-6">
                 <div class="flex items-center gap-2 mb-3">
                     ${categoryHtml}
-                    <span class="text-caption-s text-muted-foreground flex items-center gap-4">${escapeHtml(post.readingTimeText || '')}</span>
-                    <span class="text-muted-foreground">•</span>
-                    <span class="text-caption-s text-muted-foreground flex items-center gap-4">${post.views || 0} views</span>
+                    <span class="text-caption-s text-layout-content-medium flex items-center gap-4">${escapeHtml(post.readingTimeText || '')}</span>
+                    <span class="text-layout-content-low">•</span>
+                    <span class="text-caption-s text-layout-content-medium flex items-center gap-4">${post.views || 0} views</span>
                 </div>
-                <h2 class="text-h3-headline-m font-bold text-foreground mb-2">
-                    <a href="/blog/${post.slug}" class="hover:text-semantic-link-hover transition-colors">${escapeHtml(post.title)}</a>
+                <h2 class="text-h3-headline-m font-bold text-layout-emphasis-high mb-2">
+                    <a href="/blog/${post.slug}" class="hover:text-primary transition-colors">${escapeHtml(post.title)}</a>
                 </h2>
                 ${excerptHtml}
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         ${avatarHtml}
-                        <span class="text-caption-m text-muted-foreground">${escapeHtml(post.author?.name || 'Unknown')}</span>
+                        <span class="text-caption-m text-layout-content-medium">${escapeHtml(post.author?.name || 'Unknown')}</span>
                     </div>
                     <a href="/blog/${post.slug}" class="text-semantic-link-unvisited hover:text-semantic-link-hover font-medium text-body-s">Read more →</a>
                 </div>
@@ -120,7 +120,7 @@ function renderPagination(data) {
     return `
         <div class="flex items-center justify-center gap-2 pt-8">
             ${prevButton}
-            <span class="px-4 py-2 text-body-s text-muted-foreground">
+            <span class="px-4 py-2 text-body-s text-layout-content-medium">
                 Page ${page + 1} of ${totalPages}
             </span>
             ${nextButton}
@@ -164,7 +164,7 @@ function renderCategories(categories) {
     
     const html = categories.map(cat => `
         <li>
-            <a href="/blog/category/${cat.slug}" class="flex items-center justify-between py-1.5 text-body-s text-muted-foreground hover:text-semantic-link-hover transition-colors">
+            <a href="/blog/category/${cat.slug}" class="flex items-center justify-between py-1.5 text-body-s text-layout-content-medium hover:text-primary transition-colors">
                 <span>${escapeHtml(cat.name)}</span>
             </a>
         </li>
@@ -185,8 +185,8 @@ function renderPopularPosts(posts) {
     const html = posts.map(post => `
         <li>
             <a href="/blog/${post.slug}" class="block py-1.5">
-                <h4 class="text-body-s font-medium text-foreground hover:text-semantic-link-hover transition-colors line-clamp-2">${escapeHtml(post.title)}</h4>
-                <span class="text-caption-s text-muted-foreground">${post.views || 0} views</span>
+                <h4 class="text-body-s font-medium text-layout-emphasis-high hover:text-primary transition-colors line-clamp-2">${escapeHtml(post.title)}</h4>
+                <span class="text-caption-s text-layout-content-medium">${post.views || 0} views</span>
             </a>
         </li>
     `).join('');
@@ -204,7 +204,7 @@ function renderTags(tags) {
     }
     
     const html = tags.map(tag => `
-        <a href="/blog/tag/${tag.slug}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-caption-s font-medium bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary">${escapeHtml(tag.name)}</a>
+        <a href="/blog/tag/${tag.slug}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-caption-s font-medium bg-primary/10 text-layout-emphasis-high border border-border hover:bg-primary/20">${escapeHtml(tag.name)}</a>
     `).join('');
     
     container.innerHTML = html;
