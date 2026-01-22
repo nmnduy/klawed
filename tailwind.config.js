@@ -212,6 +212,14 @@ export default {
           "selected": "#FB923C", // Orange 400 - Bright in dark mode
           "hover": "#FDBA74", // Orange 300 - Lighter on dark hover
         },
+        // Text color utilities that use CSS custom properties (auto dark mode support)
+        "layout-emphasis-high": "hsl(var(--layout-emphasis-high))",
+        "layout-emphasis-medium": "hsl(var(--layout-emphasis-medium))",
+        "layout-emphasis-low": "hsl(var(--layout-emphasis-low))",
+        "layout-content-high": "hsl(var(--layout-content-high))",
+        "layout-content-medium": "hsl(var(--layout-content-medium))",
+        "layout-content-low": "hsl(var(--layout-content-low))",
+        "layout-disabled": "hsl(var(--layout-disabled))",
         // Legacy/Compatibility colors (keep for existing components)
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
