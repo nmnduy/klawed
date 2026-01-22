@@ -2,8 +2,8 @@ package com.filesurf;
 
 import com.filesurf.model.FeedbackRecord;
 import com.filesurf.model.UserRecord;
-import com.filesurf.repository.FeedbackRepository;
 import com.filesurf.repository.UserRepository;
+import com.filesurf.service.FeedbackService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.inject.Inject;
@@ -28,7 +28,7 @@ public class FeedbackResource {
     UserRepository userRepository;
 
     @Inject
-    FeedbackRepository feedbackRepository;
+    FeedbackService feedbackService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -133,7 +133,7 @@ public class FeedbackResource {
             }
 
             // Save feedback to database
-            FeedbackRecord record = feedbackRepository.create(
+            FeedbackRecord record = feedbackService.createFeedback(
                     feedbackId,
                     request.type,
                     request.description,

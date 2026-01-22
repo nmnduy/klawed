@@ -15,6 +15,9 @@ public class WaitlistService {
     @Inject
     WaitlistRepository waitlistRepository;
 
+    @Inject
+    MetricsService metricsService;
+
     @PostConstruct
     void init() {
         LOGGER.info("Initializing WaitlistService and waitlist table schema...");
@@ -25,6 +28,9 @@ public class WaitlistService {
         if (email == null || email.trim().isEmpty()) {
             throw new IllegalArgumentException("Email cannot be null or empty");
         }
-        return waitlistRepository.insert(email, name, useCase);
+        WaitlistEntry entry = waitlistRepository.insert(email, name, useCase);
+        metricsService.incrementWaitlistSubmissions();
+        LOGGER.info("Waitlist submission recorded: " + email);
+        return entry;
     }
 }
