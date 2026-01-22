@@ -55,6 +55,15 @@
     --blog-heading: 25 95% 53%; /* Orange 500 - Matches primary brand */
     --blog-accent: 222 47% 11%; /* Slate 900 - Strong contrast for emphasis */
 
+    /* Layout text color tokens - Light mode defaults */
+    --layout-emphasis-high: 15 20% 9%; /* #0F172A - Slate 900 */
+    --layout-emphasis-medium: 215 25% 27%; /* #334155 - Slate 700 */
+    --layout-emphasis-low: 215 20% 46%; /* #64748B - Slate 500 */
+    --layout-content-high: 15 20% 9%; /* #0F172A - Slate 900 */
+    --layout-content-medium: 215 19% 35%; /* #475569 - Slate 600 */
+    --layout-content-low: 215 20% 46%; /* #64748B - Slate 500 */
+    --layout-disabled: 214 14% 62%; /* #94A3B8 - Slate 400 */
+
     /* Syntax Highlighting Colors - For markdown code blocks */
     --syntax-comment: 215 16% 47%; /* Slate 600 */
     --syntax-punctuation: 215 16% 47%; /* Slate 600 */
@@ -137,6 +146,15 @@
     --border: 217 33% 17%; /* Slate 800 */
     --input: 217 33% 17%;
     --ring: 25 95% 53%;
+
+    /* Layout text color tokens - Dark mode overrides */
+    --layout-emphasis-high: 210 40% 97%; /* #F8FAFC - Slate 50 - Bright text */
+    --layout-emphasis-medium: 214 32% 82%; /* #CBD5E1 - Slate 300 - Medium text */
+    --layout-emphasis-low: 214 14% 62%; /* #94A3B8 - Slate 400 - Subtle text */
+    --layout-content-high: 210 40% 97%; /* #F8FAFC - Slate 50 */
+    --layout-content-medium: 214 32% 91%; /* #E2E8F0 - Slate 200 */
+    --layout-content-low: 214 14% 62%; /* #94A3B8 - Slate 400 */
+    --layout-disabled: 215 20% 46%; /* #64748B - Slate 500 */
 
     /* Semantic Colors for Toasts & Status - Dark Mode */
     --info: 199 89% 48%; /* Cyan 400 - Brighter in dark mode */
