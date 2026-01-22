@@ -7,6 +7,7 @@ import com.filesurf.service.FileChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.websockets.next.WebSocketConnection;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
@@ -36,6 +37,17 @@ public class ChatMessagePollingService {
 
     // Control flag for polling loop
     private final AtomicBoolean pollingActive = new AtomicBoolean(true);
+
+    /**
+     * Shutdown hook to stop polling on application shutdown
+     */
+    @PreDestroy
+    public void shutdown() {
+        LOGGER.info("ChatMessagePollingService shutting down");
+        stopPolling();
+        activeConnections.clear();
+        LOGGER.info("ChatMessagePollingService shutdown complete");
+    }
 
     /**
      * Register a WebSocket connection for a session
