@@ -307,3 +307,7 @@ mvn quarkus:dev -Dquarkus.http.port=8082
 ## Deployment
 
 `deployment/deploy-rsync.sh`
+
+## Background Services
+
+docs/background_services.md
