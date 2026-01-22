@@ -11,6 +11,7 @@
 
 #include <sqlite3.h>
 #include <time.h>
+#include <pthread.h>
 
 // Database schema for api_calls table:
 //
@@ -51,6 +52,7 @@
 typedef struct PersistenceDB {
     sqlite3 *db;
     char *db_path;
+    pthread_mutex_t mutex;  // Mutex for thread-safe SQLite access
 } PersistenceDB;
 
 // Initialize persistence layer

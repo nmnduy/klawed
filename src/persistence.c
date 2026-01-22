@@ -171,6 +171,9 @@ int persistence_get_session_token_usage(
     *completion_tokens = 0;
     *cached_tokens = 0;
 
+    // Lock mutex for thread-safe SQLite access
+    pthread_mutex_lock(&db->mutex);
+
     const char *sql;
     sqlite3_stmt *stmt;
     int rc;
@@ -198,6 +201,7 @@ int persistence_get_session_token_usage(
     rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Failed to prepare token usage query: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 
@@ -221,10 +225,12 @@ int persistence_get_session_token_usage(
     } else {
         LOG_ERROR("Failed to execute token usage query: %s", sqlite3_errmsg(db->db));
         sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 
     sqlite3_finalize(stmt);
+    pthread_mutex_unlock(&db->mutex);
     return 0;
 }
 
@@ -241,6 +247,9 @@ int persistence_get_last_prompt_tokens(
 
     // Initialize output parameter
     *prompt_tokens = 0;
+
+    // Lock mutex for thread-safe SQLite access
+    pthread_mutex_lock(&db->mutex);
 
     const char *sql;
     sqlite3_stmt *stmt;
@@ -264,6 +273,7 @@ int persistence_get_last_prompt_tokens(
     rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Failed to prepare token usage query: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 
@@ -277,16 +287,19 @@ int persistence_get_last_prompt_tokens(
         LOG_DEBUG("Retrieved last prompt tokens for session %s: %d",
                  session_id ? session_id : "all", *prompt_tokens);
         sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
         return 0;
     } else if (rc == SQLITE_DONE) {
         // No records found - this is not an error, just no data yet
         LOG_DEBUG("No token usage records found for session %s",
                  session_id ? session_id : "all");
         sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
         return 0;
     } else {
         LOG_ERROR("Failed to execute token usage query: %s", sqlite3_errmsg(db->db));
         sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 }
@@ -313,6 +326,9 @@ int persistence_get_last_cached_tokens(
     // Initialize output parameter
     *cached_tokens = 0;
 
+    // Lock mutex for thread-safe SQLite access
+    pthread_mutex_lock(&db->mutex);
+
     const char *sql;
     sqlite3_stmt *stmt;
     int rc;
@@ -335,6 +351,7 @@ int persistence_get_last_cached_tokens(
     rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Failed to prepare cached tokens query: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 
@@ -355,16 +372,19 @@ int persistence_get_last_cached_tokens(
         LOG_DEBUG("Retrieved last cached tokens for session %s: %d",
                  session_id ? session_id : "all", *cached_tokens);
         sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
         return 0;
     } else if (rc == SQLITE_DONE) {
         // No records found - this is not an error, just no data yet
         LOG_DEBUG("No token usage records found for session %s",
                  session_id ? session_id : "all");
         sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
         return 0;
     } else {
         LOG_ERROR("Failed to execute cached tokens query: %s", sqlite3_errmsg(db->db));
         sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 }
@@ -494,6 +514,13 @@ PersistenceDB* persistence_init(const char *db_path) {
         return NULL;
     }
 
+    // Initialize mutex for thread-safe access
+    if (pthread_mutex_init(&pdb->mutex, NULL) != 0) {
+        LOG_ERROR("Failed to initialize PersistenceDB mutex");
+        free(pdb);
+        return NULL;
+    }
+
     // Determine database path
     if (db_path && db_path[0] != '\0') {
         pdb->db_path = strdup(db_path);
@@ -618,12 +645,15 @@ int persistence_log_api_call(
         return -1;
     }
 
-    // Get timestamp
+    // Get timestamp (before locking, as it doesn't use the DB)
     char *timestamp = get_iso_timestamp();
     if (!timestamp) {
         LOG_ERROR("Failed to get timestamp");
         return -1;
     }
+
+    // Lock mutex for thread-safe SQLite access
+    pthread_mutex_lock(&db->mutex);
 
     // Prepare SQL statement
     const char *sql =
@@ -636,6 +666,7 @@ int persistence_log_api_call(
     int rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Failed to prepare statement: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
         free(timestamp);
         return -1;
     }
@@ -684,6 +715,7 @@ int persistence_log_api_call(
     if (rc != SQLITE_DONE) {
         LOG_ERROR("Failed to insert record: %s", sqlite3_errmsg(db->db));
         sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
         free(timestamp);
         return -1;
     }
@@ -775,12 +807,16 @@ int persistence_log_api_call(
                  status, response_json ? "present" : "NULL");
     }
 
+    pthread_mutex_unlock(&db->mutex);
     return 0;
 }
 
 // Close persistence layer
 void persistence_close(PersistenceDB *db) {
     if (!db) return;
+
+    // Destroy mutex
+    pthread_mutex_destroy(&db->mutex);
 
     if (db->db) {
         sqlite3_close(db->db);
@@ -807,6 +843,9 @@ int persistence_rotate_by_age(PersistenceDB *db, int days) {
         return 0;
     }
 
+    // Lock mutex for thread-safe SQLite access
+    pthread_mutex_lock(&db->mutex);
+
     // Calculate cutoff timestamp (current time - days * 86400 seconds)
     time_t now = time(NULL);
     time_t cutoff = now - (days * 86400);
@@ -816,6 +855,7 @@ int persistence_rotate_by_age(PersistenceDB *db, int days) {
     int rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Failed to prepare delete statement: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 
@@ -825,11 +865,14 @@ int persistence_rotate_by_age(PersistenceDB *db, int days) {
     if (rc != SQLITE_DONE) {
         LOG_ERROR("Failed to delete old records: %s", sqlite3_errmsg(db->db));
         sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 
     int deleted = sqlite3_changes(db->db);
     sqlite3_finalize(stmt);
+
+    pthread_mutex_unlock(&db->mutex);
 
     if (deleted > 0) {
         LOG_INFO("Rotated database: deleted %d records older than %d days", deleted, days);
@@ -850,12 +893,16 @@ int persistence_rotate_by_count(PersistenceDB *db, int max_records) {
         return 0;
     }
 
+    // Lock mutex for thread-safe SQLite access
+    pthread_mutex_lock(&db->mutex);
+
     // First, get the total count
     const char *count_sql = "SELECT COUNT(*) FROM api_calls;";
     sqlite3_stmt *stmt;
     int rc = sqlite3_prepare_v2(db->db, count_sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Failed to prepare count statement: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 
@@ -867,6 +914,7 @@ int persistence_rotate_by_count(PersistenceDB *db, int max_records) {
 
     if (total_records <= max_records) {
         // Nothing to delete
+        pthread_mutex_unlock(&db->mutex);
         return 0;
     }
 
@@ -879,6 +927,7 @@ int persistence_rotate_by_count(PersistenceDB *db, int max_records) {
     rc = sqlite3_prepare_v2(db->db, delete_sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Failed to prepare delete statement: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 
@@ -888,11 +937,14 @@ int persistence_rotate_by_count(PersistenceDB *db, int max_records) {
     if (rc != SQLITE_DONE) {
         LOG_ERROR("Failed to delete excess records: %s", sqlite3_errmsg(db->db));
         sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
 
     int deleted = sqlite3_changes(db->db);
     sqlite3_finalize(stmt);
+
+    pthread_mutex_unlock(&db->mutex);
 
     if (deleted > 0) {
         LOG_INFO("Rotated database: deleted %d records, keeping %d most recent", deleted, max_records);
@@ -924,13 +976,19 @@ int persistence_vacuum(PersistenceDB *db) {
         return -1;
     }
 
+    // Lock mutex for thread-safe SQLite access
+    pthread_mutex_lock(&db->mutex);
+
     char *err_msg = NULL;
     int rc = sqlite3_exec(db->db, "VACUUM;", NULL, NULL, &err_msg);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Failed to vacuum database: %s", err_msg);
         sqlite3_free(err_msg);
+        pthread_mutex_unlock(&db->mutex);
         return -1;
     }
+
+    pthread_mutex_unlock(&db->mutex);
 
     LOG_INFO("Database vacuum completed successfully");
     return 0;
@@ -1008,21 +1066,25 @@ int persistence_auto_rotate(PersistenceDB *db) {
             // Delete oldest 25% of records
             const char *count_sql = "SELECT COUNT(*) FROM api_calls;";
             sqlite3_stmt *stmt;
-            int rc = sqlite3_prepare_v2(db->db, count_sql, -1, &stmt, NULL);
-            if (rc == SQLITE_OK && sqlite3_step(stmt) == SQLITE_ROW) {
-                int current_count = sqlite3_column_int(stmt, 0);
-                int target_count = (current_count * 3) / 4; // Keep 75%
-                sqlite3_finalize(stmt);
 
-                if (target_count > 0) {
-                    int deleted = persistence_rotate_by_count(db, target_count);
-                    if (deleted > 0) {
-                        total_deleted += deleted;
-                        need_vacuum = 1;
-                    }
+            // Lock mutex for thread-safe SQLite access
+            pthread_mutex_lock(&db->mutex);
+            int rc = sqlite3_prepare_v2(db->db, count_sql, -1, &stmt, NULL);
+            int current_count = 0;
+            if (rc == SQLITE_OK && sqlite3_step(stmt) == SQLITE_ROW) {
+                current_count = sqlite3_column_int(stmt, 0);
+            }
+            sqlite3_finalize(stmt);
+            pthread_mutex_unlock(&db->mutex);
+
+            int target_count = (current_count * 3) / 4; // Keep 75%
+
+            if (target_count > 0) {
+                int deleted = persistence_rotate_by_count(db, target_count);
+                if (deleted > 0) {
+                    total_deleted += deleted;
+                    need_vacuum = 1;
                 }
-            } else {
-                sqlite3_finalize(stmt);
             }
         }
     }
