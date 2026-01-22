@@ -1,5 +1,6 @@
 package com.filesurf.service;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -101,6 +102,15 @@ public class SQLiteQueueClientPool {
                 LOGGER.warning("[SESSION:" + sessionId + "] Error shutting down client: " + e.getMessage());
             }
         }
+    }
+
+    /**
+     * Shutdown all clients on application shutdown
+     */
+    @PreDestroy
+    public void shutdown() {
+        LOGGER.info("SQLiteQueueClientPool shutting down");
+        shutdownAll();
     }
 
     /**

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -78,6 +79,9 @@ public class KlawedSandboxService {
 
     // Idle timeout: 30 minutes = 1800 seconds (for active but idle sessions)
     private static final long IDLE_TIMEOUT_SECONDS = 1800;
+
+    // Shutdown flag to stop scheduled tasks from running during shutdown
+    private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
     /**
      * Initialize on startup
@@ -331,6 +335,12 @@ public class KlawedSandboxService {
     @ActivateRequestContext
     public void manageContainerLifecycle() {
         if (!podmanEnabled) {
+            return;
+        }
+
+        // Skip if shutdown is in progress
+        if (shuttingDown.get()) {
+            LOGGER.fine("Skipping container lifecycle management - shutdown in progress");
             return;
         }
 
@@ -751,6 +761,9 @@ public class KlawedSandboxService {
     @PreDestroy
     public void shutdown() {
         LOGGER.info("KlawedSandboxService shutting down");
+
+        // Set shutdown flag first to prevent scheduled task from interfering
+        shuttingDown.set(true);
 
         if (podmanEnabled) {
             try {

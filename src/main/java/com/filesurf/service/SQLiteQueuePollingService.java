@@ -1,6 +1,7 @@
 package com.filesurf.service;
 
 import io.quarkus.scheduler.Scheduled;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
@@ -9,6 +10,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
 /**
@@ -35,6 +37,20 @@ public class SQLiteQueuePollingService {
     // Map: sessionId -> userId
     private final Map<String, String> activeSessions = new ConcurrentHashMap<>();
 
+    // Shutdown flag to stop polling during shutdown
+    private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
+
+    /**
+     * Shutdown hook to stop polling on application shutdown
+     */
+    @PreDestroy
+    public void shutdown() {
+        LOGGER.info("SQLiteQueuePollingService shutting down");
+        shuttingDown.set(true);
+        activeSessions.clear();
+        LOGGER.info("SQLiteQueuePollingService shutdown complete");
+    }
+
     /**
      * Register a session for SQLite queue polling
      */
@@ -59,6 +75,11 @@ public class SQLiteQueuePollingService {
     @Scheduled(every = "1s")
     @ActivateRequestContext
     public void pollSQLiteQueues() {
+        // Skip if shutdown is in progress
+        if (shuttingDown.get()) {
+            return;
+        }
+
         if (activeSessions.isEmpty()) {
             return; // Silent - no logging when there are no active sessions
         }
