@@ -613,15 +613,23 @@ int mcp_connect_server(MCPServer *server) {
     // Open log file for stderr output
     // Use data_dir/mcp/<server-name>.log
     char log_path[512];
+    char mcp_dir[512];
     char mcp_subpath[256];
     snprintf(mcp_subpath, sizeof(mcp_subpath), "mcp/%s.log", server->name);
     if (data_dir_build_path(log_path, sizeof(log_path), mcp_subpath) != 0) {
-        snprintf(log_path, sizeof(log_path), ".klawed/mcp/%s.log", server->name);
+        // Fallback: build path with default base directory
+        const char *base_dir = data_dir_get_base();
+        snprintf(log_path, sizeof(log_path), "%s/mcp/%s.log", base_dir, server->name);
     }
 
     // Create directory if it doesn't exist
+    if (data_dir_build_path(mcp_dir, sizeof(mcp_dir), "mcp") != 0) {
+        // Fallback for directory creation
+        const char *base_dir = data_dir_get_base();
+        snprintf(mcp_dir, sizeof(mcp_dir), "%s/mcp", base_dir);
+    }
 #ifdef TEST_BUILD
-    if (mcp_mkdir_p(".klawed/mcp") != 0) {
+    if (mcp_mkdir_p(mcp_dir) != 0) {
 #else
     if (data_dir_ensure("mcp") != 0) {
 #endif

@@ -2177,10 +2177,10 @@ $(TEST_TEXT_WRAP_TARGET): tests/test_text_wrap.c
 	@echo "✓ Text Wrapping test build successful!"
 	@echo ""
 
-$(TEST_MCP_TARGET): $(TEST_MCP_SRC) $(MCP_TEST_OBJ) $(BASE64_OBJ)
+$(TEST_MCP_TARGET): $(TEST_MCP_SRC) $(MCP_TEST_OBJ) $(BASE64_OBJ) $(DATA_DIR_OBJ) $(LOGGER_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling MCP integration tests..."
-	@$(CC) $(CFLAGS) -DTEST_BUILD -o $(TEST_MCP_TARGET) $(TEST_MCP_SRC) $(MCP_TEST_OBJ) $(BASE64_OBJ) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -DTEST_BUILD -o $(TEST_MCP_TARGET) $(TEST_MCP_SRC) $(MCP_TEST_OBJ) $(BASE64_OBJ) $(DATA_DIR_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ MCP test build successful!"
 	@echo ""
