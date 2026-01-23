@@ -1793,12 +1793,7 @@ export function init(rootEl) {
     }
 
     if (elements.voiceButton) {
-        // Hide voice button completely for now (feature not ready for production)
-        // TODO: Re-enable when HTTPS is set up in production
-        elements.voiceButton.style.display = 'none';
-
-        // Original implementation (commented out until HTTPS is ready):
-        /*
+        // Only hide on non-HTTPS (except localhost)
         if (requiresHTTPS()) {
             elements.voiceButton.style.display = 'none';
         } else if (!supportsSpeech()) {
@@ -1813,7 +1808,6 @@ export function init(rootEl) {
                 }
             });
         }
-        */
     }
 
     if (elements.messageForm && elements.messageInput) {
