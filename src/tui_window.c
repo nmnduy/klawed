@@ -17,66 +17,9 @@
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
-#include <wchar.h>
-#include <locale.h>
 
 #define INPUT_WIN_MIN_HEIGHT 2  // Min height for input window (content lines, no borders)
 #define INPUT_WIN_MAX_HEIGHT_PERCENT 20  // Max height as percentage of viewport
-
-// Calculate display width of a UTF-8 string
-static int utf8_display_width(const char *str) {
-    if (!str || !*str) {
-        return 0;
-    }
-
-    // Save current locale
-    char *old_locale = setlocale(LC_ALL, NULL);
-    if (old_locale) {
-        old_locale = strdup(old_locale);
-    }
-
-    // Set to UTF-8 locale for mbstowcs
-    setlocale(LC_ALL, "C.UTF-8");
-
-    // Convert to wide characters
-    size_t len = mbstowcs(NULL, str, 0);
-    if (len == (size_t)-1) {
-        // Conversion failed, fall back to strlen (assume ASCII)
-        if (old_locale) {
-            setlocale(LC_ALL, old_locale);
-            free(old_locale);
-        }
-        return (int)strlen(str);
-    }
-
-    wchar_t *wstr = malloc((len + 1) * sizeof(wchar_t));
-    if (!wstr) {
-        if (old_locale) {
-            setlocale(LC_ALL, old_locale);
-            free(old_locale);
-        }
-        return (int)strlen(str);  // Fall back
-    }
-
-    mbstowcs(wstr, str, len + 1);
-
-    // Calculate display width using wcswidth
-    int width = wcswidth(wstr, len);
-    if (width < 0) {
-        // wcswidth returns -1 if string contains non-printable wide chars
-        width = (int)len;  // Fall back to character count
-    }
-
-    free(wstr);
-
-    // Restore locale
-    if (old_locale) {
-        setlocale(LC_ALL, old_locale);
-        free(old_locale);
-    }
-
-    return width;
-}
 
 // Global flag to detect terminal resize
 static volatile sig_atomic_t g_resize_flag = 0;
@@ -314,45 +257,7 @@ void tui_handle_resize(TUIState *tui) {
             }
         } else if (is_assistant_message) {
             // Assistant message: use left border decoration (│) on each line
-            // Render text with left border and background color filling the box
-
-            // Get pad width for background fill
-            int local_pad_height, local_pad_width;
-            getmaxyx(tui->wm.conv_pad, local_pad_height, local_pad_width);
-            (void)local_pad_height;
-
-            // Border display width (│ = 1 char + space = 2)
-            int border_display_width = utf8_display_width("│ ");
-
-            // Helper macro to render a padding line (border + background fill)
-            #define RENDER_PADDING_LINE() do { \
-                if (has_colors()) { \
-                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD); \
-                } \
-                waddstr(tui->wm.conv_pad, "│ "); \
-                if (has_colors()) { \
-                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD); \
-                    wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BG)); \
-                } \
-                int pad_remaining = local_pad_width - border_display_width; \
-                for (int pi = 0; pi < pad_remaining; pi++) { \
-                    waddch(tui->wm.conv_pad, ' '); \
-                } \
-                if (has_colors()) { \
-                    wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BG)); \
-                } \
-                { \
-                    int pad_y, pad_x; \
-                    getyx(tui->wm.conv_pad, pad_y, pad_x); \
-                    (void)pad_y; \
-                    if (pad_x > 0) { \
-                        waddch(tui->wm.conv_pad, '\n'); \
-                    } \
-                } \
-            } while(0)
-
-            // Add top padding line
-            RENDER_PADDING_LINE();
+            // No background fill - just border and text
 
             if (entry->text && entry->text[0] != '\0') {
                 const char *line_start = entry->text;
@@ -376,59 +281,16 @@ void tui_handle_resize(TUIState *tui) {
                         wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
                     }
 
-                    // Calculate text display width
-                    int text_display_width = 0;
-                    if (line_len > 0) {
-                        char *tmp = malloc(line_len + 1);
-                        if (tmp) {
-                            memcpy(tmp, line_start, line_len);
-                            tmp[line_len] = '\0';
-                            text_display_width = utf8_display_width(tmp);
-                            free(tmp);
-                        } else {
-                            text_display_width = (int)line_len;  // Fallback
-                        }
-                    }
-
-                    // Render text content with background
-                    if (has_colors()) {
-                        wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BG));
-                    }
+                    // Render text content (no background)
                     waddnstr(tui->wm.conv_pad, line_start, (int)line_len);
 
-                    // Fill remaining line width with background color
-                    int used_width = border_display_width + text_display_width;
-                    int remaining = local_pad_width - used_width;
-                    if (remaining > 0) {
-                        for (int j = 0; j < remaining; j++) {
-                            waddch(tui->wm.conv_pad, ' ');
-                        }
-                    }
-
-                    if (has_colors()) {
-                        wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BG));
-                    }
-
                     if (*p == '\n') {
-                        // Check if cursor has already wrapped to next line after filling
-                        // If we filled to the right edge, ncurses auto-wraps and cursor is at x=0
-                        int wrap_y, wrap_x;
-                        getyx(tui->wm.conv_pad, wrap_y, wrap_x);
-                        (void)wrap_y;
-                        if (wrap_x > 0) {
-                            // Cursor hasn't wrapped yet, need explicit newline
-                            waddch(tui->wm.conv_pad, '\n');
-                        }
+                        waddch(tui->wm.conv_pad, '\n');
                         p++;
                         line_start = p;
                     }
                 }
             }
-
-            // Add bottom padding line
-            RENDER_PADDING_LINE();
-
-            #undef RENDER_PADDING_LINE
 
             continue;  // Skip regular text/newline handling below
         } else {
