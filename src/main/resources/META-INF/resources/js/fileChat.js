@@ -1809,6 +1809,11 @@ export function init(rootEl) {
     }
 
     if (elements.voiceButton) {
+        // Voice input disabled - requires network/cloud service
+        elements.voiceButton.style.display = 'none';
+        
+        // Legacy code kept for reference (disabled)
+        /*
         // Only hide on non-HTTPS (except localhost)
         if (requiresHTTPS()) {
             elements.voiceButton.style.display = 'none';
@@ -1824,6 +1829,7 @@ export function init(rootEl) {
                 }
             });
         }
+        */
     }
 
     if (elements.messageForm && elements.messageInput) {
