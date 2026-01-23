@@ -128,6 +128,8 @@ export function init(rootEl) {
     let hasReceivedFirstAiResponse = false;
     let isUserScrolledUp = false;
     let scrollToBottomButton = null;
+    let scrollUpdateTimeout = null; // For debouncing scroll events
+    let pendingScrollFrame = null; // Track pending scroll animation frame
 
     // Reconnection logic with exponential backoff
     let reconnectAttempts = 0;
@@ -271,7 +273,7 @@ export function init(rootEl) {
         });
     }
 
-    function scrollToBottom(force = false) {
+    function scrollToBottom(force = false, smooth = true) {
         if (!scrollContainer || typeof scrollContainer.scrollTo !== 'function') return;
 
         // Only auto-scroll if:
@@ -279,7 +281,23 @@ export function init(rootEl) {
         // 2. We haven't received first AI response yet (welcome flow), OR
         // 3. User hasn't scrolled up
         if (force || !hasReceivedFirstAiResponse || !isUserScrolledUp) {
-            scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
+            // Cancel any pending scroll to avoid stacking animations
+            if (pendingScrollFrame) {
+                cancelAnimationFrame(pendingScrollFrame);
+                pendingScrollFrame = null;
+            }
+
+            // Use requestAnimationFrame to ensure content is fully laid out
+            // Double RAF ensures layout is complete (one for paint, one for scroll)
+            pendingScrollFrame = requestAnimationFrame(() => {
+                pendingScrollFrame = requestAnimationFrame(() => {
+                    scrollContainer.scrollTo({ 
+                        top: scrollContainer.scrollHeight, 
+                        behavior: smooth ? 'smooth' : 'instant' 
+                    });
+                    pendingScrollFrame = null;
+                });
+            });
         }
     }
 
@@ -294,8 +312,19 @@ export function init(rootEl) {
 
     function updateScrollState() {
         if (!scrollContainer) return;
-        isUserScrolledUp = !isScrolledToBottom();
-        updateScrollToBottomButton();
+        
+        // Cancel pending update to debounce rapid scroll events
+        if (scrollUpdateTimeout) {
+            clearTimeout(scrollUpdateTimeout);
+        }
+        
+        // Debounce: only update after scrolling pauses for 50ms
+        // This prevents excessive recalculations during smooth scrolling
+        scrollUpdateTimeout = setTimeout(() => {
+            isUserScrolledUp = !isScrolledToBottom();
+            updateScrollToBottomButton();
+            scrollUpdateTimeout = null;
+        }, 50);
     }
 
     function createScrollToBottomButton() {
@@ -312,10 +341,10 @@ export function init(rootEl) {
 
         button.addEventListener('click', () => {
             if (scrollContainer) {
-                scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
-                // Reset scroll state immediately
+                // User explicitly clicked - force scroll with smooth animation
                 isUserScrolledUp = false;
                 updateScrollToBottomButton();
+                scrollToBottom(true, true); // force=true, smooth=true
             }
         });
 
@@ -436,7 +465,8 @@ export function init(rootEl) {
             if (textElement) {
                 textElement.textContent = content ?? '';
             }
-            scrollToBottom();
+            // Use instant scroll during streaming to avoid animation conflicts
+            scrollToBottom(false, false); // force=false, smooth=false
         }
     }
 
