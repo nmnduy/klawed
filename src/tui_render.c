@@ -471,6 +471,12 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
 static void render_bordered_segment(TUIState *tui, const char *segment, size_t len,
                                     int border_pair, const char *border_str, bool add_newline) {
     WINDOW *pad = tui->wm.conv_pad;
+    int pad_width, pad_height;
+    getmaxyx(pad, pad_height, pad_width);
+    (void)pad_height;
+
+    // Calculate border display width
+    int border_display_width = utf8_display_width(border_str);
 
     // Render border (with border color)
     if (has_colors()) {
@@ -479,6 +485,20 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
     waddstr(pad, border_str);
     if (has_colors()) {
         wattroff(pad, COLOR_PAIR(border_pair) | A_BOLD);
+    }
+
+    // Calculate text display width
+    int text_display_width = 0;
+    if (len > 0) {
+        char *tmp = malloc(len + 1);
+        if (tmp) {
+            memcpy(tmp, segment, len);
+            tmp[len] = '\0';
+            text_display_width = utf8_display_width(tmp);
+            free(tmp);
+        } else {
+            text_display_width = (int)len;  // Fallback
+        }
     }
 
     // Render text content with background
@@ -499,6 +519,16 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
         }
     } else {
         waddnstr(pad, segment, (int)len);
+    }
+
+    // Fill remaining line width with background color
+    int used_width = border_display_width + text_display_width;
+    int remaining = pad_width - used_width;
+    if (remaining > 0) {
+        // Fill with spaces to extend background to right edge
+        for (int i = 0; i < remaining; i++) {
+            waddch(pad, ' ');
+        }
     }
 
     if (has_colors()) {
