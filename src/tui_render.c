@@ -753,17 +753,17 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         if (tui->response_style == RESPONSE_STYLE_BORDER) {
             // Border style: use left border decoration (│ ) on each line
             int text_pair = NCURSES_PAIR_FOREGROUND;
-            render_text_with_left_border(tui, text, text_pair, mapped_pair, "│ ");
+            const char *border_str = "│ ";
 
-            // Add final newline after bordered content (only if cursor hasn't wrapped)
-            {
-                int cur_y, cur_x;
-                getyx(tui->wm.conv_pad, cur_y, cur_x);
-                (void)cur_y;
-                if (cur_x > 0) {
-                    waddch(tui->wm.conv_pad, '\n');
-                }
-            }
+            // Add top padding line (empty line with border and background)
+            render_bordered_segment(tui, "", 0, mapped_pair, border_str, true);
+
+            // Render the actual text content
+            render_text_with_left_border(tui, text, text_pair, mapped_pair, border_str);
+
+            // Add bottom padding line (empty line with border and background)
+            render_bordered_segment(tui, "", 0, mapped_pair, border_str, true);
+
             goto skip_newline;
         } else {
             // Caret style: leading '>>> ' prefix with no border
