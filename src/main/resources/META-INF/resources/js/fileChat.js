@@ -470,6 +470,43 @@ export function init(rootEl) {
         }
     }
 
+    /**
+     * Finalize a streamed message by re-rendering it with markdown
+     * This should be called after streaming completes to properly format the content
+     */
+    function finalizeMessage(messageId, content) {
+        if (!messageId) return;
+        const selector = `[data-message-id="${CSS.escape ? CSS.escape(messageId) : messageId}"]`;
+        const messageDiv = messageParent.querySelector(selector);
+        if (!messageDiv) return;
+
+        // Find the text container (first div inside the bubble)
+        const bubble = messageDiv.querySelector('.rounded-2xl, .rounded-lg');
+        if (!bubble) return;
+
+        const textElement = bubble.querySelector('div.whitespace-pre-wrap, div.break-words');
+        if (!textElement) return;
+
+        const markdownContent = String(content ?? '');
+        const baseClasses = 'break-words font-sans text-body-m leading-relaxed text-current';
+
+        // Re-render with markdown if content contains markdown formatting
+        if (containsMarkdown(markdownContent)) {
+            textElement.className = baseClasses;
+            textElement.innerHTML = parseMarkdown(markdownContent);
+        } else {
+            // Keep as plain text with whitespace-pre-wrap
+            textElement.className = baseClasses + ' whitespace-pre-wrap';
+            textElement.textContent = markdownContent;
+        }
+
+        // Set up file link handlers for any file:// links in the rendered markdown
+        setupFileLinkHandlers(messageDiv);
+
+        // Final scroll after rendering complete
+        scrollToBottom();
+    }
+
     function handleStreamChunk(content) {
         if (!currentStreamMessageId) {
             currentStreamMessageId = 'stream-' + Date.now();
@@ -483,7 +520,10 @@ export function init(rootEl) {
 
     function handleStreamComplete(content) {
         if (currentStreamMessageId) {
+            // First update with final content as plain text
             updateMessage(currentStreamMessageId, content ?? '');
+            // Then re-render with markdown formatting
+            finalizeMessage(currentStreamMessageId, content ?? '');
             currentStreamMessageId = null;
             currentStreamContent = '';
 
@@ -1473,7 +1513,10 @@ export function init(rootEl) {
                         break;
                     case 'TEXT':
                         if (content) {
-                            handleStreamComplete(content);
+                            // Ensure content is a string - if it's an object, stringify it
+                            const textContent = typeof content === 'string' ? content :
+                                (typeof content === 'object' ? JSON.stringify(content, null, 2) : String(content));
+                            handleStreamComplete(textContent);
                         }
                         // Don't remove typing indicator here - wait for END_AI_TURN
                         clearToolActivity(); // Clear tool activity tracking for next interaction
