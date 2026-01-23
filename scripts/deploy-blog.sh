@@ -108,7 +108,7 @@ backup_local() {
 
 # Export blog data
 export_blog() {
-    log_info "Exporting blog data..."
+    log_info "Exporting blog data..." >&2
     
     mkdir -p "$EXPORT_DIR"
     local export_file="$EXPORT_DIR/blog_export_$TIMESTAMP.sql"
@@ -117,11 +117,11 @@ export_blog() {
     sqlite3 "$LOCAL_DB" .dump > "$export_file"
     
     if [ $? -eq 0 ]; then
-        log_success "Export created: $export_file"
-        log_info "Export size: $(wc -l < "$export_file") lines"
+        log_success "Export created: $export_file" >&2
+        log_info "Export size: $(wc -l < "$export_file") lines" >&2
         echo "$export_file"
     else
-        log_error "Failed to export blog data"
+        log_error "Failed to export blog data" >&2
         exit 1
     fi
 }
@@ -147,6 +147,54 @@ check_production() {
     fi
 }
 
+# Download production database backup
+download_prod_backup() {
+    log_info "Downloading production database backup..."
+    
+    # Check if production database exists
+    if ! ssh "$PROD_HOST" "sudo test -f '$PROD_DB'"; then
+        log_warn "No production database found to backup"
+        return 0
+    fi
+    
+    # Create backup on production and download it
+    local prod_backup="/tmp/blog_prod_backup_$TIMESTAMP.db"
+    local local_backup="$BACKUP_DIR/blog_prod_$TIMESTAMP.db"
+    
+    mkdir -p "$BACKUP_DIR"
+    
+    # Copy to temp location on production (so we can scp it)
+    if ! ssh "$PROD_HOST" "sudo cp '$PROD_DB' '$prod_backup' && sudo chmod 644 '$prod_backup'"; then
+        log_error "Failed to create production backup"
+        exit 1
+    fi
+    
+    # Download backup
+    if ! scp -q "$PROD_HOST:$prod_backup" "$local_backup" 2>&1; then
+        log_error "Failed to download production backup"
+        ssh "$PROD_HOST" "rm -f '$prod_backup'" || true
+        exit 1
+    fi
+    
+    # Cleanup temp file on production
+    ssh "$PROD_HOST" "rm -f '$prod_backup'" || true
+    
+    log_success "Production backup downloaded: $local_backup"
+    log_info "Backup size: $(du -h "$local_backup" | cut -f1)"
+    
+    # Show production statistics
+    log_info "Current production blog statistics:"
+    ssh "$PROD_HOST" "sudo sqlite3 '$PROD_DB'" << 'STATS_SQL' 2>/dev/null || log_warn "Could not read production statistics"
+SELECT '  📝 Posts: ' || COUNT(*) || ' (' || 
+  (SELECT COUNT(*) FROM blog_posts WHERE status = 'published') || ' published, ' ||
+  (SELECT COUNT(*) FROM blog_posts WHERE status = 'draft') || ' drafts)'
+FROM blog_posts;
+SELECT '  👤 Authors: ' || COUNT(*) FROM authors;
+SELECT '  📂 Categories: ' || COUNT(*) FROM categories;
+SELECT '  🏷️  Tags: ' || COUNT(*) FROM tags;
+STATS_SQL
+}
+
 # Deploy to production
 deploy_to_production() {
     local export_file="$1"
@@ -155,9 +203,24 @@ deploy_to_production() {
     
     # Transfer export file
     log_info "Transferring export file to production..."
-    if ! scp "$export_file" "$PROD_HOST:/tmp/blog_import.sql" >/dev/null 2>&1; then
+    local scp_output
+    if ! scp_output=$(scp -q "$export_file" "$PROD_HOST:/tmp/blog_import.sql" 2>&1); then
         log_error "Failed to transfer export file to production"
+        [ -n "$scp_output" ] && echo "$scp_output" >&2
         exit 1
+    fi
+    log_success "Export file transferred successfully"
+    
+    # Confirmation before replacing database
+    echo ""
+    log_warn "⚠️  This will REPLACE the production blog database with local data"
+    echo ""
+    read -p "Type 'yes' to confirm deployment: " -r
+    echo
+    if [[ ! $REPLY == "yes" ]]; then
+        log_warn "Deployment cancelled by user"
+        ssh "$PROD_HOST" "rm -f /tmp/blog_import.sql" || true
+        exit 0
     fi
     
     # Execute deployment on production
@@ -178,6 +241,11 @@ if sudo test -f "$PROD_DB"; then
     sudo cp "$PROD_DB" "$BACKUP_FILE"
     echo "Backup created: $BACKUP_FILE"
     echo "Backup size: $(sudo du -h "$BACKUP_FILE" | cut -f1)"
+    
+    # Remove old database to avoid conflicts
+    echo "Removing old database..."
+    sudo rm -f "$PROD_DB"
+    sudo rm -f "${PROD_DB}-shm" "${PROD_DB}-wal"
 else
     echo "No existing production database found (will create new)"
 fi
@@ -186,7 +254,7 @@ fi
 echo "Ensuring database directory exists..."
 sudo mkdir -p "$(dirname "$PROD_DB")"
 
-# Import data
+# Import data (fresh database)
 echo "Importing blog data..."
 sudo sqlite3 "$PROD_DB" < "$IMPORT_FILE"
 
@@ -290,6 +358,9 @@ main() {
     # Check production
     check_production
     
+    # Download production backup FIRST
+    download_prod_backup
+    
     # Deploy to production
     deploy_to_production "$export_file"
     
@@ -310,6 +381,7 @@ main() {
     echo ""
     echo -e "${BLUE}Files created:${NC}"
     echo "  • Local backup: ${BACKUP_DIR}/blog_local_${TIMESTAMP}.db"
+    echo "  • Production backup: ${BACKUP_DIR}/blog_prod_${TIMESTAMP}.db"
     echo "  • Export file: ${export_file}"
     echo ""
 }
