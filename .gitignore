@@ -65,6 +65,7 @@ tags
 -e 
 # Git worktrees
 worktree_*/
+wt-*/
 
 # Klawed environment files with secrets
 klawed.env
