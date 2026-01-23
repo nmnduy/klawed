@@ -12,14 +12,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-// Stub logger functions for testing
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-prototypes"
-void log_message(int level, const char *file, int line, const char *fmt, ...) {
-    (void)level; (void)file; (void)line; (void)fmt;
-}
-#pragma GCC diagnostic pop
-
 #include "../src/mcp.h"
 
 // Test helper: Create a temporary config file
