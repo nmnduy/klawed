@@ -336,13 +336,14 @@ void tui_handle_resize(TUIState *tui) {
                     // Calculate line length
                     size_t line_len = (size_t)(p - line_start);
 
-                    // Render border (with border color)
+                    // Render border with assistant color on assistant background
+                    // This ensures the entire assistant message region has consistent background
                     if (has_colors()) {
-                        wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                        wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
                     }
                     waddstr(tui->wm.conv_pad, "│ ");
                     if (has_colors()) {
-                        wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                        wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
                     }
 
                     // Calculate text display width

@@ -61,6 +61,7 @@ typedef enum {
 #define NCURSES_PAIR_INPUT_BORDER 13
 #define NCURSES_PAIR_USER_MSG_BG 14
 #define NCURSES_PAIR_ASSISTANT_BG 15
+#define NCURSES_PAIR_ASSISTANT_BORDER_BG 16  // Assistant border color on assistant background
 
 // Conversation message entry
 typedef struct {

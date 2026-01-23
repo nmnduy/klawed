@@ -474,17 +474,19 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
     int pad_width, pad_height;
     getmaxyx(pad, pad_height, pad_width);
     (void)pad_height;
+    (void)border_pair;  // Unused, kept for API compatibility
 
     // Calculate border display width
     int border_display_width = utf8_display_width(border_str);
 
-    // Render border (with border color)
+    // Render border with assistant color on assistant background
+    // This ensures the entire assistant message region has consistent background
     if (has_colors()) {
-        wattron(pad, COLOR_PAIR(border_pair) | A_BOLD);
+        wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
     }
     waddstr(pad, border_str);
     if (has_colors()) {
-        wattroff(pad, COLOR_PAIR(border_pair) | A_BOLD);
+        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
     }
 
     // Calculate text display width
