@@ -40,6 +40,7 @@ public class MetricsService {
     private Counter waitlistSubmissions;
     private Counter contactFormSubmissions;
     private Counter feedbackSubmissions;
+    private Counter autoCompactionEvents;
 
     // Gauges for current state
     private AtomicInteger activeWebSocketConnections = new AtomicInteger(0);
@@ -103,6 +104,11 @@ public class MetricsService {
 
         feedbackSubmissions = Counter.builder("filesurf_feedback_submissions")
                 .description("Total number of feedback submissions (bugs, suggestions, praise)")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        autoCompactionEvents = Counter.builder("filesurf_auto_compaction_events")
+                .description("Total number of auto compaction events")
                 .tag("application", "filesurf")
                 .register(meterRegistry);
 
@@ -403,5 +409,25 @@ public class MetricsService {
 
     public long getTotalFeedbackSubmissions() {
         return (long) feedbackSubmissions.count();
+    }
+
+    // Auto compaction tracking
+    public void incrementAutoCompactionEvents(String userId) {
+        // Increment global counter
+        autoCompactionEvents.increment();
+        
+        // Also create a user-specific counter with tag
+        Counter.builder("filesurf_auto_compaction_events_by_user")
+                .description("Auto compaction events per user")
+                .tag("application", "filesurf")
+                .tag("user_id", userId != null ? userId : "unknown")
+                .register(meterRegistry)
+                .increment();
+        
+        LOGGER.fine("Auto compaction event recorded for user: " + (userId != null ? userId : "unknown"));
+    }
+
+    public long getTotalAutoCompactionEvents() {
+        return (long) autoCompactionEvents.count();
     }
 }

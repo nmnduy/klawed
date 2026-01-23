@@ -22,6 +22,9 @@ public class SQLiteQueueClientPool {
     @Inject
     FileChatService fileChatService;
 
+    @Inject
+    MetricsService metricsService;
+
     @ConfigProperty(name = "klawed.sqlite-queue.sender-name", defaultValue = "client")
     String senderName;
 
@@ -42,7 +45,7 @@ public class SQLiteQueueClientPool {
      * Configured for receiving messages FROM klawed (sender=klawed, receiver=client).
      * Each session has its own dedicated SQLite DB file, so only one connection needed.
      */
-    public SQLiteQueueClient getOrCreateClient(String sessionId) {
+    public SQLiteQueueClient getOrCreateClient(String sessionId, String userId) {
         return clientPool.computeIfAbsent(sessionId, sid -> {
             String dbFileName = "klawed_messages_" + sid + ".db";
             Path sqliteDbPath = Path.of(sqliteQueueDbDir).resolve(dbFileName);
@@ -52,7 +55,9 @@ public class SQLiteQueueClientPool {
                 .withSenderName(receiverName)  // sender="klawed" (we receive FROM klawed)
                 .withReceiverName(senderName)  // receiver="client" (messages TO client)
                 .withSessionId(sid)
+                .withUserId(userId)
                 .withFileChatService(fileChatService)
+                .withMetricsService(metricsService)
                 .withPollIntervalMs(1000)
                 .withPollTimeoutMs(1000);
 
@@ -68,6 +73,14 @@ public class SQLiteQueueClientPool {
 
             return client;
         });
+    }
+
+    /**
+     * Get or create a single SQLiteQueueClient for a session.
+     * Backward compatibility - calls getOrCreateClient(sessionId, null)
+     */
+    public SQLiteQueueClient getOrCreateClient(String sessionId) {
+        return getOrCreateClient(sessionId, null);
     }
 
     /**

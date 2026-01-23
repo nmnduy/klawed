@@ -19,6 +19,7 @@ public class ChatConstants {
     public static final String MESSAGE_TYPE_TOOL_RESULT = "TOOL_RESULT";
     public static final String MESSAGE_TYPE_API_CALL = "API_CALL";
     public static final String MESSAGE_TYPE_END_AI_TURN = "END_AI_TURN";
+    public static final String MESSAGE_TYPE_AUTO_COMPACTION = "AUTO_COMPACTION";
     public static final String MESSAGE_TYPE_AGENT_STATUS = "AGENT_STATUS";
     public static final String MESSAGE_TYPE_FILE_UPLOAD = "FILE_UPLOAD";
 
@@ -30,6 +31,7 @@ public class ChatConstants {
     public static final String DB_MESSAGE_TYPE_TOOL = "tool";
     public static final String DB_MESSAGE_TYPE_TOOL_RESULT = "tool_result";
     public static final String DB_MESSAGE_TYPE_FILE_UPLOAD = "file_upload";
+    public static final String DB_MESSAGE_TYPE_AUTO_COMPACTION = "auto_compaction";
 
     private ChatConstants() {
         // Utility class, prevent instantiation

@@ -14,6 +14,7 @@ public class SQLiteQueueConstants {
     public static final String MESSAGE_TYPE_ERROR = "ERROR";
     public static final String MESSAGE_TYPE_API_CALL = "API_CALL";
     public static final String MESSAGE_TYPE_END_AI_TURN = "END_AI_TURN";
+    public static final String MESSAGE_TYPE_AUTO_COMPACTION = "AUTO_COMPACTION";
 
     // Default sender and receiver names
     public static final String DEFAULT_SENDER_NAME = "client";

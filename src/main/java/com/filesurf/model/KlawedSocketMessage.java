@@ -210,6 +210,19 @@ public class KlawedSocketMessage {
             return "[END AI TURN]";
         }
 
+        // Handle AUTO_COMPACTION message
+        if (ChatConstants.MESSAGE_TYPE_AUTO_COMPACTION.equals(messageType)) {
+            // Extract content field if available for human-readable summary
+            if (content instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> contentMap = (Map<String, Object>) content;
+                if (contentMap.containsKey("content")) {
+                    return (String) contentMap.get("content");
+                }
+            }
+            return "[AUTO COMPACTION]";
+        }
+
         // For STATUS responses, return status message
         if (ChatConstants.MESSAGE_TYPE_STATUS.equals(messageType) && content instanceof String) {
             return (String) content;

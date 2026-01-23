@@ -103,7 +103,7 @@ public class SQLiteQueuePollingService {
     private void pollSessionQueue(String sessionId, String userId) {
         try {
             // Get or create the singleton client for this session
-            SQLiteQueueClient queueClient = clientPool.getOrCreateClient(sessionId);
+            SQLiteQueueClient queueClient = clientPool.getOrCreateClient(sessionId, userId);
 
             // receiveMessages() will automatically save messages to the main database
             // via FileChatService (see SQLiteQueueClient.receiveMessages() implementation)
