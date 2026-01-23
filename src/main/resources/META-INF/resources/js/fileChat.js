@@ -475,25 +475,41 @@ export function init(rootEl) {
      * This should be called after streaming completes to properly format the content
      */
     function finalizeMessage(messageId, content) {
-        if (!messageId) return;
+        if (!messageId) {
+            console.warn('[finalizeMessage] No messageId provided');
+            return;
+        }
         const selector = `[data-message-id="${CSS.escape ? CSS.escape(messageId) : messageId}"]`;
         const messageDiv = messageParent.querySelector(selector);
-        if (!messageDiv) return;
+        if (!messageDiv) {
+            console.warn('[finalizeMessage] Message div not found for:', messageId);
+            return;
+        }
 
         // Find the text container (first div inside the bubble)
         const bubble = messageDiv.querySelector('.rounded-2xl, .rounded-lg');
-        if (!bubble) return;
+        if (!bubble) {
+            console.warn('[finalizeMessage] Bubble not found in message:', messageId);
+            return;
+        }
 
         const textElement = bubble.querySelector('div.whitespace-pre-wrap, div.break-words');
-        if (!textElement) return;
+        if (!textElement) {
+            console.warn('[finalizeMessage] Text element not found in bubble:', messageId);
+            return;
+        }
 
         const markdownContent = String(content ?? '');
         const baseClasses = 'break-words font-sans text-body-m leading-relaxed text-current';
 
+        console.log('[finalizeMessage] Processing message:', messageId, 'containsMarkdown:', containsMarkdown(markdownContent));
+
         // Re-render with markdown if content contains markdown formatting
         if (containsMarkdown(markdownContent)) {
             textElement.className = baseClasses;
-            textElement.innerHTML = parseMarkdown(markdownContent);
+            const parsedHtml = parseMarkdown(markdownContent);
+            console.log('[finalizeMessage] Parsed markdown, HTML length:', parsedHtml?.length);
+            textElement.innerHTML = parsedHtml;
         } else {
             // Keep as plain text with whitespace-pre-wrap
             textElement.className = baseClasses + ' whitespace-pre-wrap';
@@ -519,10 +535,12 @@ export function init(rootEl) {
     }
 
     function handleStreamComplete(content) {
+        console.log('[handleStreamComplete] Called with currentStreamMessageId:', currentStreamMessageId, 'content length:', content?.length);
         if (currentStreamMessageId) {
             // First update with final content as plain text
             updateMessage(currentStreamMessageId, content ?? '');
             // Then re-render with markdown formatting
+            console.log('[handleStreamComplete] Calling finalizeMessage for:', currentStreamMessageId);
             finalizeMessage(currentStreamMessageId, content ?? '');
             currentStreamMessageId = null;
             currentStreamContent = '';
