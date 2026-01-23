@@ -792,6 +792,31 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
             input_redraw(tui, prompt);
             break;
 
+        case 'r':  // Toggle response style
+            // Toggle between border and caret style
+            if (tui->response_style == RESPONSE_STYLE_BORDER) {
+                tui->response_style = RESPONSE_STYLE_CARET;
+                tui_update_status(tui, "Response style: caret");
+            } else {
+                tui->response_style = RESPONSE_STYLE_BORDER;
+                tui_update_status(tui, "Response style: border");
+            }
+            // Save the new style to config
+            {
+                KlawedConfig cfg;
+                config_init_defaults(&cfg);
+                cfg.response_style = tui->response_style;
+                config_save(&cfg);
+            }
+            // Re-render conversation to show the style change
+            redraw_conversation(tui);
+            refresh_conversation_viewport(tui);
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            break;
+
         default:
             /* Unhandled key in normal mode */
             break;

@@ -71,6 +71,7 @@ static const HelpLine help_content[] = {
     {NULL, "( / )", "Jump between text blocks"},
     {NULL, "n / N", "Next/previous search match"},
     {NULL, "b", "Toggle input box style"},
+    {NULL, "r", "Toggle response style (border/caret)"},
 
     // Command mode section
     {" COMMAND MODE (:)", NULL, NULL},
