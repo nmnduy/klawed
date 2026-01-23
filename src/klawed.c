@@ -1282,7 +1282,9 @@ int main(int argc, char *argv[]) {
         printf("    KLAWED_DB_PATH     Optional: Path to SQLite database for API history\n");
         printf("                         Default: ~/.local/share/klawed/api_calls.db\n");
         printf("    KLAWED_MAX_RETRY_DURATION_MS  Optional: Maximum retry duration in milliseconds\n");
-        printf("                                     Default: 600000 (10 minutes)\n\n");
+        printf("                                     Default: 600000 (10 minutes)\n");
+        printf("    KLAWED_NO_STORAGE  Optional: Set to 1 to disable SQLite and history file\n");
+        printf("                         Diagnostic mode for debugging TUI hangs\n\n");
         printf("  UI Customization:\n");
         printf("    KLAWED_THEME       Optional: Path to Kitty theme file\n\n");
         printf("  Tools and Output:\n");

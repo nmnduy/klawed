@@ -12,6 +12,7 @@
 #include "context/system_prompt.h"
 #include "persistence.h"
 #include "memvid.h"
+#include "data_dir.h"
 
 /*
  * Background thread: Load system prompt
@@ -49,10 +50,17 @@ static void* init_database_thread(void *arg) {
     struct timespec start, end;
 
     clock_gettime(CLOCK_MONOTONIC, &start);
-    LOG_DEBUG("[BG] Database initialization started");
 
-    // Initialize persistence database
-    PersistenceDB *db = persistence_init(NULL);
+    PersistenceDB *db = NULL;
+
+    // Skip database initialization in no-storage mode
+    if (data_dir_is_no_storage_mode()) {
+        LOG_INFO("[BG] Database initialization skipped (KLAWED_NO_STORAGE=1)");
+    } else {
+        LOG_DEBUG("[BG] Database initialization started");
+        // Initialize persistence database
+        db = persistence_init(NULL);
+    }
 
     // Store result
     pthread_mutex_lock(&bg->database_mutex);
@@ -64,10 +72,12 @@ static void* init_database_thread(void *arg) {
     long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
                       (end.tv_nsec - start.tv_nsec) / 1000000;
 
-    if (db) {
-        LOG_DEBUG("[BG] Database initialization completed in %ld ms", duration_ms);
-    } else {
-        LOG_WARN("[BG] Database initialization failed after %ld ms", duration_ms);
+    if (!data_dir_is_no_storage_mode()) {
+        if (db) {
+            LOG_DEBUG("[BG] Database initialization completed in %ld ms", duration_ms);
+        } else {
+            LOG_WARN("[BG] Database initialization failed after %ld ms", duration_ms);
+        }
     }
 
     return NULL;

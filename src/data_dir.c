@@ -96,3 +96,12 @@ int data_dir_ensure(const char *subpath) {
 
     return mkdir_recursive(path);
 }
+
+int data_dir_is_no_storage_mode(void) {
+    const char *env = getenv("KLAWED_NO_STORAGE");
+    if (env && (strcmp(env, "1") == 0 || strcasecmp(env, "true") == 0 ||
+                strcasecmp(env, "yes") == 0)) {
+        return 1;
+    }
+    return 0;
+}

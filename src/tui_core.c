@@ -25,6 +25,7 @@
 #include "history_file.h"
 #include "subagent_manager.h"
 #include "config.h"
+#include "data_dir.h"
 #include <stdlib.h>
 #include <bsd/stdlib.h>
 #include <string.h>
@@ -407,20 +408,27 @@ int tui_init(TUIState *tui, ConversationState *state) {
     } else {
         LOG_DEBUG("[TUI] History search initialized successfully");
     }
-    tui->history_file = history_file_open(NULL);
-    if (tui->history_file) {
-        int limit = 100;  // default history size in memory
-        const char *env_limit = getenv("KLAWED_HISTORY_MAX");
-        if (env_limit && *env_limit) {
-            long v = strtol(env_limit, NULL, 10);
-            if (v > 0 && v < 100000) limit = (int)v;
-        }
-        int loaded = 0;
-        char **entries = history_file_load_recent(tui->history_file, limit, &loaded);
-        if (entries && loaded > 0) {
-            tui->input_history = entries;
-            tui->input_history_count = loaded;
-            tui->input_history_capacity = loaded;
+
+    // Skip history file in no-storage mode (diagnostic for TUI hangs)
+    if (data_dir_is_no_storage_mode()) {
+        LOG_INFO("[TUI] History file skipped (KLAWED_NO_STORAGE=1)");
+        tui->history_file = NULL;
+    } else {
+        tui->history_file = history_file_open(NULL);
+        if (tui->history_file) {
+            int limit = 100;  // default history size in memory
+            const char *env_limit = getenv("KLAWED_HISTORY_MAX");
+            if (env_limit && *env_limit) {
+                long v = strtol(env_limit, NULL, 10);
+                if (v > 0 && v < 100000) limit = (int)v;
+            }
+            int loaded = 0;
+            char **entries = history_file_load_recent(tui->history_file, limit, &loaded);
+            if (entries && loaded > 0) {
+                tui->input_history = entries;
+                tui->input_history_count = loaded;
+                tui->input_history_capacity = loaded;
+            }
         }
     }
 
