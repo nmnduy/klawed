@@ -551,18 +551,11 @@ void window_manager_refresh_conversation(WindowManager *wm) {
 
     // Show scroll bar when there's content below the visible area
     if (total_lines > visible_lines && visible_lines > 0) {
-        // Calculate scroll percentage
         int scroll_range = total_lines - visible_lines;
-        int percentage = 0;
-        if (scroll_range > 0) {
-            percentage = (wm->conv_scroll_offset * 100 + scroll_range / 2) / scroll_range;
-            if (percentage < 0) percentage = 0;
-            if (percentage > 100) percentage = 100;
-        }
 
-        // Show scroll bar when not at the very bottom (e.g., < 100%)
-        // This gives users visual feedback that there's more content
-        if (percentage < 100) {
+        // Show scroll bar when not at the very bottom
+        // Use direct comparison instead of percentage to match status bar logic
+        if (scroll_range > 0 && wm->conv_scroll_offset < scroll_range) {
             int track_height = visible_lines;
             int thumb_height = (visible_lines * visible_lines) / total_lines;
             if (thumb_height < 1) {
@@ -572,8 +565,9 @@ void window_manager_refresh_conversation(WindowManager *wm) {
             int max_thumb_top = track_height - thumb_height;
             int thumb_top = 0;
             if (scroll_range > 0 && max_thumb_top > 0) {
+                // Use rounding to ensure thumb reaches bottom smoothly
                 long long num = (long long)wm->conv_scroll_offset * (long long)max_thumb_top;
-                thumb_top = (int)(num / scroll_range);
+                thumb_top = (int)((num + scroll_range / 2) / scroll_range);
             }
 
             if (thumb_top < 0) {
