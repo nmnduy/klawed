@@ -93,7 +93,7 @@ public class ChatMessagePollingService {
 
         try {
             // Get the pooled client
-            SQLiteQueueClient queueClient = clientPool.getOrCreateClient(sessionId);
+            SQLiteQueueClient queueClient = clientPool.getOrCreateClient(sessionId, userId);
 
             // Client is configured for RECEIVING (sender=klawed, receiver=client)
             // For SENDING, we need sender=client, receiver=klawed
@@ -175,6 +175,13 @@ public class ChatMessagePollingService {
                     try {
                         // Create appropriate message based on message type
                         String jsonMessage = createJsonMessage(message);
+
+                        // Skip messages that should not be forwarded (e.g., AUTO_COMPACTION)
+                        if (jsonMessage == null) {
+                            LOGGER.fine("[SESSION:" + sessionId + "] Skipping non-forwardable message ID: " + message.getId());
+                            markMessageAsSent(sessionId, message.getId());
+                            continue;
+                        }
 
                         // Send the message asynchronously
                         connection.sendText(jsonMessage).subscribe().with(
@@ -276,6 +283,10 @@ public class ChatMessagePollingService {
                     KlawedSocketMessage.createStatus("Files uploaded to workspace")
                 );
             }
+        } else if (ChatConstants.DB_MESSAGE_TYPE_AUTO_COMPACTION.equals(messageType)) {
+            // Auto compaction event - don't forward to client, just log
+            // Logging already handled in SQLiteQueueClient
+            return null;
         } else {
             // Default to text message
             return objectMapper.writeValueAsString(

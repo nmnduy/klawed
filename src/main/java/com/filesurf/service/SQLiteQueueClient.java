@@ -44,7 +44,9 @@ public class SQLiteQueueClient {
         private String senderName = SQLiteQueueConstants.DEFAULT_SENDER_NAME;
         private String receiverName = SQLiteQueueConstants.DEFAULT_RECEIVER_NAME;
         private String sessionId;
+        private String userId;
         private FileChatService fileChatService;
+        private MetricsService metricsService;
 
         // Client configuration
         private int pollIntervalMs = SQLiteQueueConstants.DEFAULT_POLL_INTERVAL_MS;
@@ -78,6 +80,16 @@ public class SQLiteQueueClient {
             return this;
         }
 
+        public Config withMetricsService(MetricsService metricsService) {
+            this.metricsService = metricsService;
+            return this;
+        }
+
+        public Config withUserId(String userId) {
+            this.userId = userId;
+            return this;
+        }
+
         public Config withPollIntervalMs(int pollIntervalMs) {
             this.pollIntervalMs = pollIntervalMs;
             return this;
@@ -108,7 +120,9 @@ public class SQLiteQueueClient {
         public String getSenderName() { return senderName; }
         public String getReceiverName() { return receiverName; }
         public String getSessionId() { return sessionId; }
+        public String getUserId() { return userId; }
         public FileChatService getFileChatService() { return fileChatService; }
+        public MetricsService getMetricsService() { return metricsService; }
         public int getPollIntervalMs() { return pollIntervalMs; }
         public int getPollTimeoutMs() { return pollTimeoutMs; }
         public int getMaxRetries() { return maxRetries; }
@@ -576,6 +590,45 @@ public class SQLiteQueueClient {
                                         LOGGER.info("Forwarded END_AI_TURN message to main database for WebSocket delivery");
                                     } catch (Exception dbEx) {
                                         LOGGER.warning("Failed to save END_AI_TURN message to main database: " + dbEx.getMessage());
+                                    }
+                                }
+                            } else if (ChatConstants.MESSAGE_TYPE_AUTO_COMPACTION.equals(messageType)) {
+                                // Handle auto compaction event - log the event with session info
+                                int messagesCompacted = json.has("messagesCompacted") ? json.get("messagesCompacted").asInt() : 0;
+                                long tokensBefore = json.has("tokensBefore") ? json.get("tokensBefore").asLong() : 0;
+                                long tokensAfter = json.has("tokensAfter") ? json.get("tokensAfter").asLong() : 0;
+                                long tokensFreed = json.has("tokensFreed") ? json.get("tokensFreed").asLong() : 0;
+                                double usageBeforePct = json.has("usageBeforePct") ? json.get("usageBeforePct").asDouble() : 0;
+                                double usageAfterPct = json.has("usageAfterPct") ? json.get("usageAfterPct").asDouble() : 0;
+                                
+                                String sessionId = config.getSessionId() != null ? config.getSessionId() : "unknown";
+                                String userId = config.getUserId() != null ? config.getUserId() : "unknown";
+                                
+                                LOGGER.info(String.format(
+                                    "AUTO_COMPACTION event for session %s (user %s): %d messages compacted, tokens: %d → %d (freed ~%d), usage: %.1f%% → %.1f%%",
+                                    sessionId, userId, messagesCompacted, tokensBefore, tokensAfter, tokensFreed, usageBeforePct, usageAfterPct
+                                ));
+
+                                // Record metrics
+                                if (config.getMetricsService() != null) {
+                                    config.getMetricsService().incrementAutoCompactionEvents(userId);
+                                }
+
+                                // Forward to WebSocket via message to main database
+                                if (config.getFileChatService() != null && config.getSessionId() != null) {
+                                    try {
+                                        // Forward the entire AUTO_COMPACTION message
+                                        String autoCompactionJson = objectMapper.writeValueAsString(json);
+                                        config.getFileChatService().createChatMessage(
+                                            config.getSessionId(),
+                                            ChatConstants.AGENT,  // sender
+                                            ChatConstants.CLIENT, // receiver
+                                            autoCompactionJson,
+                                            ChatConstants.DB_MESSAGE_TYPE_AUTO_COMPACTION
+                                        );
+                                        LOGGER.fine("Forwarded AUTO_COMPACTION message to main database for WebSocket delivery");
+                                    } catch (Exception dbEx) {
+                                        LOGGER.warning("Failed to save AUTO_COMPACTION message to main database: " + dbEx.getMessage());
                                     }
                                 }
                             } else {
