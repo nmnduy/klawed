@@ -743,29 +743,35 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     int is_user_message = (prefix && strcmp(prefix, "[User]") == 0);
     int is_assistant_message = (prefix && strcmp(prefix, "[Assistant]") == 0);
 
-    // For user messages, add padding line before
+    // For user messages, add padding line before and caret prefix
     if (is_user_message) {
         // Add one blank line for top padding
         waddch(tui->wm.conv_pad, '\n');
 
-        // Render prefix '❯❯❯' with bold user color (3 carets for visibility)
-        // User message prefix removed for cleaner look
+        // Render prefix '❯ ' with bold user color (matches input box caret)
+        if (has_colors()) {
+            wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
+        }
+        waddstr(tui->wm.conv_pad, "❯ ");
+        if (has_colors()) {
+            wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
+        }
     } else if (is_assistant_message) {
         // Assistant message: check response style
         if (tui->response_style == RESPONSE_STYLE_BORDER) {
             // Border style: use left border decoration (│ ) on each line
             int text_pair = NCURSES_PAIR_FOREGROUND;
-            render_text_with_left_border(tui, text, text_pair, mapped_pair, "│ ");
+            const char *border_str = "│ ";
 
-            // Add final newline after bordered content (only if cursor hasn't wrapped)
-            {
-                int cur_y, cur_x;
-                getyx(tui->wm.conv_pad, cur_y, cur_x);
-                (void)cur_y;
-                if (cur_x > 0) {
-                    waddch(tui->wm.conv_pad, '\n');
-                }
-            }
+            // Add top padding line (empty line with border and background)
+            render_bordered_segment(tui, "", 0, mapped_pair, border_str, true);
+
+            // Render the actual text content
+            render_text_with_left_border(tui, text, text_pair, mapped_pair, border_str);
+
+            // Add bottom padding line (empty line with border and background)
+            render_bordered_segment(tui, "", 0, mapped_pair, border_str, true);
+
             goto skip_newline;
         } else {
             // Caret style: leading '>>> ' prefix with no border

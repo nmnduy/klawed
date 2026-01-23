@@ -299,33 +299,64 @@ void tui_handle_resize(TUIState *tui) {
         int is_user_message = (entry->prefix && strcmp(entry->prefix, "[User]") == 0);
         int is_assistant_message = (entry->prefix && strcmp(entry->prefix, "[Assistant]") == 0);
 
-        // For user messages, add padding line before
+        // For user messages, add padding line before and caret prefix
         if (is_user_message) {
             // Add one blank line for top padding
             waddch(tui->wm.conv_pad, '\n');
 
-            // Render prefix '❯❯❯' with bold user color (3 carets for visibility)
+            // Render prefix '❯ ' with bold user color (matches input box caret)
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
             }
-            waddstr(tui->wm.conv_pad, "❯❯❯ ");
+            waddstr(tui->wm.conv_pad, "❯ ");
             if (has_colors()) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
             }
         } else if (is_assistant_message) {
             // Assistant message: use left border decoration (│) on each line
             // Render text with left border and background color filling the box
+
+            // Get pad width for background fill
+            int local_pad_height, local_pad_width;
+            getmaxyx(tui->wm.conv_pad, local_pad_height, local_pad_width);
+            (void)local_pad_height;
+
+            // Border display width (│ = 1 char + space = 2)
+            int border_display_width = utf8_display_width("│ ");
+
+            // Helper macro to render a padding line (border + background fill)
+            #define RENDER_PADDING_LINE() do { \
+                if (has_colors()) { \
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD); \
+                } \
+                waddstr(tui->wm.conv_pad, "│ "); \
+                if (has_colors()) { \
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD); \
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BG)); \
+                } \
+                int pad_remaining = local_pad_width - border_display_width; \
+                for (int pi = 0; pi < pad_remaining; pi++) { \
+                    waddch(tui->wm.conv_pad, ' '); \
+                } \
+                if (has_colors()) { \
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BG)); \
+                } \
+                { \
+                    int pad_y, pad_x; \
+                    getyx(tui->wm.conv_pad, pad_y, pad_x); \
+                    (void)pad_y; \
+                    if (pad_x > 0) { \
+                        waddch(tui->wm.conv_pad, '\n'); \
+                    } \
+                } \
+            } while(0)
+
+            // Add top padding line
+            RENDER_PADDING_LINE();
+
             if (entry->text && entry->text[0] != '\0') {
                 const char *line_start = entry->text;
                 const char *p = entry->text;
-
-                // Get pad width for background fill
-                int local_pad_height, local_pad_width;
-                getmaxyx(tui->wm.conv_pad, local_pad_height, local_pad_width);
-                (void)local_pad_height;
-
-                // Border display width (│ = 1 char + space = 2)
-                int border_display_width = utf8_display_width("│ ");
 
                 while (*p) {
                     // Find end of current line
@@ -395,15 +426,11 @@ void tui_handle_resize(TUIState *tui) {
                 }
             }
 
-            // Add final newline after bordered content (only if cursor hasn't wrapped)
-            {
-                int final_y, final_x;
-                getyx(tui->wm.conv_pad, final_y, final_x);
-                (void)final_y;
-                if (final_x > 0) {
-                    waddch(tui->wm.conv_pad, '\n');
-                }
-            }
+            // Add bottom padding line
+            RENDER_PADDING_LINE();
+
+            #undef RENDER_PADDING_LINE
+
             continue;  // Skip regular text/newline handling below
         } else {
             // Write prefix for other (non-user, non-assistant) messages
