@@ -21,7 +21,7 @@
 #define SQLITE_QUEUE_BUFFER_SIZE 65536
 
 // Default configuration values
-#define DEFAULT_POLL_INTERVAL 100      // 100ms
+#define DEFAULT_POLL_INTERVAL 300      // 300ms
 #define DEFAULT_POLL_TIMEOUT 30000     // 30 seconds
 #define DEFAULT_MAX_RETRIES 3
 #define DEFAULT_MAX_MESSAGE_SIZE (1024 * 1024)  // 1MB
