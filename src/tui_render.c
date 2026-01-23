@@ -450,6 +450,77 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
     return rendered;
 }
 
+// Helper to render text with a left border for assistant messages
+// Handles line wrapping by adding border at start of each new line
+static void render_text_with_left_border(TUIState *tui, const char *text, int text_pair,
+                                         int border_pair, const char *border_str) {
+    if (!text || !text[0]) return;
+
+    WINDOW *pad = tui->wm.conv_pad;
+    int pad_width;
+    int pad_height;
+    getmaxyx(pad, pad_height, pad_width);
+    (void)pad_height;
+
+    // Calculate border display width (for UTF-8 characters like │)
+    int border_width = (int)strlen(border_str);  // Approximation, works for "│ "
+
+    const char *line_start = text;
+    const char *p = text;
+
+    while (*p) {
+        // Find end of current line (newline or end of string)
+        while (*p && *p != '\n') {
+            p++;
+        }
+
+        // Render border at start of line
+        if (has_colors()) {
+            wattron(pad, COLOR_PAIR(border_pair) | A_BOLD);
+        }
+        waddstr(pad, border_str);
+        if (has_colors()) {
+            wattroff(pad, COLOR_PAIR(border_pair) | A_BOLD);
+        }
+
+        // Render text content for this line
+        if (has_colors()) {
+            wattron(pad, COLOR_PAIR(text_pair));
+        }
+
+        // Check if we have search highlighting to apply
+        if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
+            // Render with search highlighting (need to extract just this line)
+            size_t line_len = (size_t)(p - line_start);
+            char *line_buf = malloc(line_len + 1);
+            if (line_buf) {
+                memcpy(line_buf, line_start, line_len);
+                line_buf[line_len] = '\0';
+                render_text_with_search_highlight(pad, line_buf, text_pair, tui->last_search_pattern);
+                free(line_buf);
+            } else {
+                // Fallback if malloc fails
+                waddnstr(pad, line_start, (int)(p - line_start));
+            }
+        } else {
+            waddnstr(pad, line_start, (int)(p - line_start));
+        }
+
+        if (has_colors()) {
+            wattroff(pad, COLOR_PAIR(text_pair));
+        }
+
+        // Handle newline
+        if (*p == '\n') {
+            waddch(pad, '\n');
+            p++;
+            line_start = p;
+        }
+    }
+
+    (void)border_width;  // Suppress unused warning
+}
+
 int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
     if (!tui || !tui->wm.conv_pad) {
         return -1;
@@ -510,42 +581,38 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         // Add one blank line for top padding
         waddch(tui->wm.conv_pad, '\n');
 
-        // Render prefix '❯' with bold user color
+        // Render prefix '❯❯❯' with bold user color (3 carets for visibility)
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
         }
-        waddstr(tui->wm.conv_pad, "❯ ");
+        waddstr(tui->wm.conv_pad, "❯❯❯ ");
         if (has_colors()) {
             wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
         }
+    } else if (is_assistant_message) {
+        // Assistant message: use left border decoration
+        // Render text with left border (│ ) on each line
+        int text_pair = NCURSES_PAIR_FOREGROUND;
+        render_text_with_left_border(tui, text, text_pair, mapped_pair, "│ ");
+
+        // Add final newline after bordered content
+        waddch(tui->wm.conv_pad, '\n');
+        goto skip_newline;
     } else {
-        // Write prefix with special handling for Assistant and other messages
+        // Write prefix for other (non-user, non-assistant) messages
         if (prefix && prefix[0] != '\0') {
-            if (is_assistant_message) {
-                // Assistant message: '>>>' without background
-                if (has_colors()) {
-                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-                }
-                waddstr(tui->wm.conv_pad, ">>>");
-                waddch(tui->wm.conv_pad, ' ');
-                if (has_colors()) {
-                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-                }
-            } else {
-                // Other messages: keep original behavior
-                if (has_colors()) {
-                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-                }
-                waddstr(tui->wm.conv_pad, prefix);
-                waddch(tui->wm.conv_pad, ' ');
-                if (has_colors()) {
-                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-                }
+            if (has_colors()) {
+                wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
+            waddstr(tui->wm.conv_pad, prefix);
+            waddch(tui->wm.conv_pad, ' ');
+            if (has_colors()) {
+                wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
         }
     }
 
-    // Write text
+    // Write text (for user and other non-assistant messages)
     if (text && text[0] != '\0') {
         int text_pair;
         if (is_user_message) {
@@ -584,7 +651,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         }
     }
 
-    // Add newline for non-user messages
+    // Add newline for non-user, non-assistant messages
     waddch(tui->wm.conv_pad, '\n');
 
 skip_newline:
