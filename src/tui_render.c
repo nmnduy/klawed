@@ -741,13 +741,19 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     int is_user_message = (prefix && strcmp(prefix, "[User]") == 0);
     int is_assistant_message = (prefix && strcmp(prefix, "[Assistant]") == 0);
 
-    // For user messages, add padding line before
+    // For user messages, add padding line before and caret prefix
     if (is_user_message) {
         // Add one blank line for top padding
         waddch(tui->wm.conv_pad, '\n');
 
-        // Render prefix '❯❯❯' with bold user color (3 carets for visibility)
-        // User message prefix removed for cleaner look
+        // Render prefix '❯ ' with bold user color (matches input box caret)
+        if (has_colors()) {
+            wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
+        }
+        waddstr(tui->wm.conv_pad, "❯ ");
+        if (has_colors()) {
+            wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
+        }
     } else if (is_assistant_message) {
         // Assistant message: check response style
         if (tui->response_style == RESPONSE_STYLE_BORDER) {
