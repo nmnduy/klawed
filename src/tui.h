@@ -60,6 +60,7 @@ typedef enum {
 #define NCURSES_PAIR_INPUT_BG 12
 #define NCURSES_PAIR_INPUT_BORDER 13
 #define NCURSES_PAIR_USER_MSG_BG 14
+#define NCURSES_PAIR_ASSISTANT_BG 15
 
 // Conversation message entry
 typedef struct {
@@ -85,6 +86,12 @@ typedef enum {
     INPUT_STYLE_HORIZONTAL,  // Top and bottom border only, no left/right borders
     INPUT_STYLE_BLAND        // Just caret '>>>' with text on general background, no padding (default)
 } TUIInputBoxStyle;
+
+// Response style (visual appearance of assistant responses)
+typedef enum {
+    RESPONSE_STYLE_BORDER,   // Left border '│ ' on each line (default)
+    RESPONSE_STYLE_CARET     // Leading '>>> ' caret, no wrapping borders
+} TUIResponseStyle;
 
 // TUI State
 typedef struct TUIStateStruct {
@@ -118,6 +125,7 @@ typedef struct TUIStateStruct {
     // Modes
     TUIMode mode;            // Current input mode (NORMAL, INSERT, or COMMAND)
     TUIInputBoxStyle input_box_style; // Current input box visual style
+    TUIResponseStyle response_style;  // Current response visual style
     int normal_mode_last_key; // Previous key in normal mode (for gg, G combos)
     char *command_buffer;    // Buffer for command mode input (starts with ':')
     int command_buffer_len;  // Length of command buffer

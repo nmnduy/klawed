@@ -22,6 +22,7 @@
 void config_init_defaults(KlawedConfig *config) {
     if (!config) return;
     config->input_box_style = INPUT_STYLE_HORIZONTAL;
+    config->response_style = RESPONSE_STYLE_BORDER;
     config->theme[0] = '\0';  // Empty means use default or KLAWED_THEME env var
 
     // Initialize LLM provider defaults (legacy single-provider)
@@ -75,6 +76,25 @@ TUIInputBoxStyle config_input_style_from_string(const char *str) {
         return INPUT_STYLE_HORIZONTAL;
     }
     return INPUT_STYLE_BLAND;
+}
+
+const char* config_response_style_to_string(TUIResponseStyle style) {
+    switch (style) {
+        case RESPONSE_STYLE_CARET:
+            return "caret";
+        case RESPONSE_STYLE_BORDER:
+        default:
+            return "border";
+    }
+}
+
+TUIResponseStyle config_response_style_from_string(const char *str) {
+    if (!str) return RESPONSE_STYLE_BORDER;
+
+    if (strcmp(str, "caret") == 0) {
+        return RESPONSE_STYLE_CARET;
+    }
+    return RESPONSE_STYLE_BORDER;
 }
 
 /**
@@ -173,6 +193,13 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
     if (style_item && cJSON_IsString(style_item)) {
         config->input_box_style = config_input_style_from_string(style_item->valuestring);
         LOG_DEBUG("[Config] Loaded input_box_style from %s: %s", label, style_item->valuestring);
+    }
+
+    // Read response_style
+    cJSON *resp_style_item = cJSON_GetObjectItem(root, "response_style");
+    if (resp_style_item && cJSON_IsString(resp_style_item)) {
+        config->response_style = config_response_style_from_string(resp_style_item->valuestring);
+        LOG_DEBUG("[Config] Loaded response_style from %s: %s", label, resp_style_item->valuestring);
     }
 
     // Read theme
@@ -449,6 +476,14 @@ int config_save(const KlawedConfig *config) {
         cJSON_SetValuestring(existing_style, config_input_style_to_string(config->input_box_style));
     } else {
         cJSON_AddStringToObject(root, "input_box_style", config_input_style_to_string(config->input_box_style));
+    }
+
+    // Update response_style
+    cJSON *existing_resp_style = cJSON_GetObjectItem(root, "response_style");
+    if (existing_resp_style) {
+        cJSON_SetValuestring(existing_resp_style, config_response_style_to_string(config->response_style));
+    } else {
+        cJSON_AddStringToObject(root, "response_style", config_response_style_to_string(config->response_style));
     }
 
     // Update theme (only if non-empty)

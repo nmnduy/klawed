@@ -2172,7 +2172,7 @@ $(TEST_EVENT_LOOP_TARGET): $(SRC) $(TEST_EVENT_LOOP_SRC) $(TEST_STUBS_SRC) $(TES
 $(TEST_TEXT_WRAP_TARGET): tests/test_text_wrap.c
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Text Wrapping test..."
-	@$(CC) -Wall -Wextra -O0 -g -o $(TEST_TEXT_WRAP_TARGET) tests/test_text_wrap.c -I./src
+	@$(CC) $(CFLAGS) -o $(TEST_TEXT_WRAP_TARGET) tests/test_text_wrap.c -I./src
 	@echo ""
 	@echo "✓ Text Wrapping test build successful!"
 	@echo ""

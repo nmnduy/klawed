@@ -126,6 +126,16 @@ static void init_ncurses_colors(void) {
                 rgb_to_ncurses(g_theme.user_rgb.g),
                 rgb_to_ncurses(g_theme.user_rgb.b));
 
+            // Assistant message background color (theme background with subtle assistant color tint)
+            // Blend 3% of assistant color into background for very subtle highlight
+            int asst_bg_r = (g_theme.background_rgb.r * 97 + g_theme.assistant_rgb.r * 3) / 100;
+            int asst_bg_g = (g_theme.background_rgb.g * 97 + g_theme.assistant_rgb.g * 3) / 100;
+            int asst_bg_b = (g_theme.background_rgb.b * 97 + g_theme.assistant_rgb.b * 3) / 100;
+            init_color(25,
+                rgb_to_ncurses(asst_bg_r),
+                rgb_to_ncurses(asst_bg_g),
+                rgb_to_ncurses(asst_bg_b));
+
             // Initialize color pairs with custom colors
             init_pair(NCURSES_PAIR_FOREGROUND, 16, -1);  // -1 = default background
             init_pair(NCURSES_PAIR_USER, 17, -1);
@@ -144,6 +154,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_INPUT_BG, 16, 23);          // Foreground on subtle background
             init_pair(NCURSES_PAIR_INPUT_BORDER, 24, -1);      // Border/accent color
             init_pair(NCURSES_PAIR_USER_MSG_BG, 16, 23);       // User message background (same as input bg)
+            init_pair(NCURSES_PAIR_ASSISTANT_BG, 16, 25);      // Foreground on subtle assistant background
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -171,6 +182,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_INPUT_BG, (short)fg_idx, (short)236);   // Foreground on dark gray (236 in 256 palette)
             init_pair(NCURSES_PAIR_INPUT_BORDER, (short)user_idx, (short)-1);  // Border color (user/green)
             init_pair(NCURSES_PAIR_USER_MSG_BG, (short)fg_idx, (short)236);   // User message background (same as input bg)
+            init_pair(NCURSES_PAIR_ASSISTANT_BG, (short)fg_idx, (short)235);  // Foreground on very dark gray (235)
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -193,6 +205,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
             init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, -1);  // Fallback: green border (user color)
             init_pair(NCURSES_PAIR_USER_MSG_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: user message background
+            init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, -1);  // Fallback: no background (use default)
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -214,6 +227,7 @@ static void init_ncurses_colors(void) {
         init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
         init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, -1);  // Fallback: green border (user color)
         init_pair(NCURSES_PAIR_USER_MSG_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: user message background
+        init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, -1);  // Fallback: no background (use default)
     }
 }
 
@@ -363,10 +377,14 @@ int tui_init(TUIState *tui, ConversationState *state) {
     KlawedConfig loaded_config;
     if (config_load(&loaded_config) == 0) {
         tui->input_box_style = loaded_config.input_box_style;
+        tui->response_style = loaded_config.response_style;
         LOG_DEBUG("[TUI] Loaded input_box_style from config: %s",
                   config_input_style_to_string(tui->input_box_style));
+        LOG_DEBUG("[TUI] Loaded response_style from config: %s",
+                  config_response_style_to_string(tui->response_style));
     } else {
         tui->input_box_style = INPUT_STYLE_HORIZONTAL;
+        tui->response_style = RESPONSE_STYLE_BORDER;
     }
 
     // Initialize command mode buffer

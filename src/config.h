@@ -54,6 +54,7 @@ typedef struct {
 // Configuration structure
 typedef struct {
     TUIInputBoxStyle input_box_style;
+    TUIResponseStyle response_style;
     char theme[CONFIG_THEME_MAX];
     LLMProviderConfig llm_provider;         // LLM provider configuration (legacy single-provider)
     NamedProviderConfig providers[CONFIG_MAX_PROVIDERS]; // Multiple named providers
@@ -99,6 +100,22 @@ const char* config_input_style_to_string(TUIInputBoxStyle style);
  * @return The style enum value, or INPUT_STYLE_BLAND if unknown
  */
 TUIInputBoxStyle config_input_style_from_string(const char *str);
+
+/**
+ * Get response style name as string
+ *
+ * @param style The response style enum value
+ * @return String name of the style
+ */
+const char* config_response_style_to_string(TUIResponseStyle style);
+
+/**
+ * Parse response style from string
+ *
+ * @param str String name of the style
+ * @return The style enum value, or RESPONSE_STYLE_BORDER if unknown
+ */
+TUIResponseStyle config_response_style_from_string(const char *str);
 
 /**
  * Get provider type name as string

@@ -397,20 +397,31 @@ void refresh_conversation_viewport(TUIState *tui) {
 
 static int render_text_with_search_highlight(WINDOW *win, const char *text,
                                            int text_pair __attribute__((unused)),
-                                           const char *search_pattern) {
+                                           const char *search_pattern, int bg_pair) {
     if (!text || !text[0]) {
         return 0;
     }
 
     if (!search_pattern || !search_pattern[0]) {
-        // No search pattern, render normally
+        // No search pattern, render normally with background if provided
+        if (bg_pair > 0 && has_colors()) {
+            wattron(win, COLOR_PAIR(bg_pair));
+        }
         waddstr(win, text);
+        if (bg_pair > 0 && has_colors()) {
+            wattroff(win, COLOR_PAIR(bg_pair));
+        }
         return (int)strlen(text);
     }
 
     int rendered = 0;
     const char *current = text;
     size_t pattern_len = strlen(search_pattern);
+
+    // Apply background color if provided
+    if (bg_pair > 0 && has_colors()) {
+        wattron(win, COLOR_PAIR(bg_pair));
+    }
 
     while (*current) {
         // Check if pattern matches at current position (case-insensitive)
@@ -447,11 +458,114 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
         rendered += (int)strlen(text);
     }
 
+    // Turn off background color if it was applied
+    if (bg_pair > 0 && has_colors()) {
+        wattroff(win, COLOR_PAIR(bg_pair));
+    }
+
     return rendered;
+}
+
+// Helper to render a single visual line segment with border
+// Returns bytes consumed from segment
+static void render_bordered_segment(TUIState *tui, const char *segment, size_t len,
+                                    int border_pair, const char *border_str, bool add_newline) {
+    WINDOW *pad = tui->wm.conv_pad;
+
+    // Render border (with border color)
+    if (has_colors()) {
+        wattron(pad, COLOR_PAIR(border_pair) | A_BOLD);
+    }
+    waddstr(pad, border_str);
+    if (has_colors()) {
+        wattroff(pad, COLOR_PAIR(border_pair) | A_BOLD);
+    }
+
+    // Render text content with background
+    if (has_colors()) {
+        wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BG));
+    }
+
+    // Render with search highlighting if active
+    if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
+        char *seg_buf = malloc(len + 1);
+        if (seg_buf) {
+            memcpy(seg_buf, segment, len);
+            seg_buf[len] = '\0';
+            render_text_with_search_highlight(pad, seg_buf, 0, tui->last_search_pattern, NCURSES_PAIR_ASSISTANT_BG);
+            free(seg_buf);
+        } else {
+            waddnstr(pad, segment, (int)len);
+        }
+    } else {
+        waddnstr(pad, segment, (int)len);
+    }
+
+    if (has_colors()) {
+        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BG));
+    }
+
+    if (add_newline) {
+        waddch(pad, '\n');
+    }
+}
+
+// Helper to find byte position that fits within a display width
+// Returns number of bytes that fit within max_display_width
+static size_t find_wrap_point(const char *text, size_t text_len, int max_display_width) {
+    if (max_display_width <= 0) {
+        return 1;  // At least one byte to make progress
+    }
+
+    // Save current locale
+    char *old_locale = setlocale(LC_ALL, NULL);
+    if (old_locale) {
+        old_locale = strdup(old_locale);
+    }
+    setlocale(LC_ALL, "C.UTF-8");
+
+    size_t bytes_used = 0;
+    int display_width = 0;
+    mbstate_t state;
+    memset(&state, 0, sizeof(state));
+
+    while (bytes_used < text_len && display_width < max_display_width) {
+        wchar_t wc;
+        size_t char_bytes = mbrtowc(&wc, text + bytes_used, text_len - bytes_used, &state);
+
+        if (char_bytes == 0) {
+            // Null character
+            break;
+        } else if (char_bytes == (size_t)-1 || char_bytes == (size_t)-2) {
+            // Invalid sequence or incomplete - treat as single byte
+            bytes_used++;
+            display_width++;
+        } else {
+            int char_width = wcwidth(wc);
+            if (char_width < 0) char_width = 1;  // Unknown character
+
+            if (display_width + char_width > max_display_width) {
+                // This character would exceed the limit
+                break;
+            }
+            bytes_used += char_bytes;
+            display_width += char_width;
+        }
+    }
+
+    // Restore locale
+    if (old_locale) {
+        setlocale(LC_ALL, old_locale);
+        free(old_locale);
+    }
+
+    // Ensure we make progress (at least 1 byte)
+    return bytes_used > 0 ? bytes_used : 1;
 }
 
 // Helper to render text with a left border for assistant messages
 // Handles line wrapping by adding border at start of each new line
+// Uses NCURSES_PAIR_ASSISTANT_BG for subtle background highlighting
 static void render_text_with_left_border(TUIState *tui, const char *text, int text_pair,
                                          int border_pair, const char *border_str) {
     if (!text || !text[0]) return;
@@ -463,62 +577,74 @@ static void render_text_with_left_border(TUIState *tui, const char *text, int te
     (void)pad_height;
 
     // Calculate border display width (for UTF-8 characters like │)
-    int border_width = (int)strlen(border_str);  // Approximation, works for "│ "
+    int border_display_width = utf8_display_width(border_str);
+
+    // Available width for text content (after border)
+    int content_width = pad_width - border_display_width;
+    if (content_width < 1) content_width = 1;
 
     const char *line_start = text;
     const char *p = text;
 
     while (*p) {
-        // Find end of current line (newline or end of string)
+        // Find end of current logical line (newline or end of string)
         while (*p && *p != '\n') {
             p++;
         }
 
-        // Render border at start of line
-        if (has_colors()) {
-            wattron(pad, COLOR_PAIR(border_pair) | A_BOLD);
-        }
-        waddstr(pad, border_str);
-        if (has_colors()) {
-            wattroff(pad, COLOR_PAIR(border_pair) | A_BOLD);
-        }
+        size_t line_len = (size_t)(p - line_start);
 
-        // Render text content for this line
-        if (has_colors()) {
-            wattron(pad, COLOR_PAIR(text_pair));
-        }
-
-        // Check if we have search highlighting to apply
-        if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
-            // Render with search highlighting (need to extract just this line)
-            size_t line_len = (size_t)(p - line_start);
-            char *line_buf = malloc(line_len + 1);
-            if (line_buf) {
-                memcpy(line_buf, line_start, line_len);
-                line_buf[line_len] = '\0';
-                render_text_with_search_highlight(pad, line_buf, text_pair, tui->last_search_pattern);
-                free(line_buf);
-            } else {
-                // Fallback if malloc fails
-                waddnstr(pad, line_start, (int)(p - line_start));
-            }
+        if (line_len == 0) {
+            // Empty line - just render border and newline
+            render_bordered_segment(tui, "", 0, border_pair, border_str, (*p == '\n'));
         } else {
-            waddnstr(pad, line_start, (int)(p - line_start));
+            // Check if the line needs wrapping
+            int line_display_width = 0;
+            {
+                char *tmp = malloc(line_len + 1);
+                if (tmp) {
+                    memcpy(tmp, line_start, line_len);
+                    tmp[line_len] = '\0';
+                    line_display_width = utf8_display_width(tmp);
+                    free(tmp);
+                } else {
+                    line_display_width = (int)line_len;  // Fallback
+                }
+            }
+
+            if (line_display_width <= content_width) {
+                // Line fits - render normally
+                render_bordered_segment(tui, line_start, line_len, border_pair, border_str, (*p == '\n'));
+            } else {
+                // Line needs wrapping - break into chunks
+                const char *chunk_start = line_start;
+                size_t remaining = line_len;
+
+                while (remaining > 0) {
+                    size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
+                    bool is_last_chunk = (chunk_bytes >= remaining);
+                    bool add_nl = is_last_chunk && (*p == '\n');
+
+                    render_bordered_segment(tui, chunk_start, chunk_bytes, border_pair, border_str, true);
+
+                    chunk_start += chunk_bytes;
+                    remaining -= chunk_bytes;
+
+                    // Suppress unused - add_nl used for clarity but last chunk newline
+                    // is handled by adding newline to all wrapped segments
+                    (void)add_nl;
+                }
+            }
         }
 
-        if (has_colors()) {
-            wattroff(pad, COLOR_PAIR(text_pair));
-        }
-
-        // Handle newline
+        // Move past newline if present
         if (*p == '\n') {
-            waddch(pad, '\n');
             p++;
             line_start = p;
         }
     }
 
-    (void)border_width;  // Suppress unused warning
+    (void)text_pair;  // Suppress unused warning (background pair used instead)
 }
 
 int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
@@ -582,22 +708,28 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         waddch(tui->wm.conv_pad, '\n');
 
         // Render prefix '❯❯❯' with bold user color (3 carets for visibility)
-        if (has_colors()) {
-            wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
-        }
-        waddstr(tui->wm.conv_pad, "❯❯❯ ");
-        if (has_colors()) {
-            wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
-        }
+        // User message prefix removed for cleaner look
     } else if (is_assistant_message) {
-        // Assistant message: use left border decoration
-        // Render text with left border (│ ) on each line
-        int text_pair = NCURSES_PAIR_FOREGROUND;
-        render_text_with_left_border(tui, text, text_pair, mapped_pair, "│ ");
+        // Assistant message: check response style
+        if (tui->response_style == RESPONSE_STYLE_BORDER) {
+            // Border style: use left border decoration (│ ) on each line
+            int text_pair = NCURSES_PAIR_FOREGROUND;
+            render_text_with_left_border(tui, text, text_pair, mapped_pair, "│ ");
 
-        // Add final newline after bordered content
-        waddch(tui->wm.conv_pad, '\n');
-        goto skip_newline;
+            // Add final newline after bordered content
+            waddch(tui->wm.conv_pad, '\n');
+            goto skip_newline;
+        } else {
+            // Caret style: leading '>>> ' prefix with no border
+            if (has_colors()) {
+                wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
+            waddstr(tui->wm.conv_pad, ">>> ");
+            if (has_colors()) {
+                wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
+            // Fall through to write text normally
+        }
     } else {
         // Write prefix for other (non-user, non-assistant) messages
         if (prefix && prefix[0] != '\0') {
@@ -612,11 +744,14 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         }
     }
 
-    // Write text (for user and other non-assistant messages)
+    // Write text (for user messages, caret-style assistant, and other messages)
     if (text && text[0] != '\0') {
         int text_pair;
         if (is_user_message) {
             // User message: use foreground color (no background)
+            text_pair = NCURSES_PAIR_FOREGROUND;
+        } else if (is_assistant_message && tui->response_style == RESPONSE_STYLE_CARET) {
+            // Caret-style assistant: use foreground color
             text_pair = NCURSES_PAIR_FOREGROUND;
         } else if (prefix && prefix[0] != '\0') {
             // Other messages with prefix use foreground
@@ -632,7 +767,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
 
         // Check if we have an active search pattern to highlight
         if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
-            render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern);
+            render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern, 0);
         } else {
             waddstr(tui->wm.conv_pad, text);
         }
@@ -651,7 +786,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         }
     }
 
-    // Add newline for non-user, non-assistant messages
+    // Add newline (for messages that didn't use goto skip_newline)
     waddch(tui->wm.conv_pad, '\n');
 
 skip_newline:
