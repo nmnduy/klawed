@@ -154,7 +154,7 @@ func ensureDriverRunning(sess *session.Session) error {
 
 	// Start new driver
 	socketPath := filepath.Join(os.TempDir(), fmt.Sprintf("web-agent-%s.sock", sess.ID))
-	pid, err := browser.StartDriverProcess(sess.ID, socketPath, headless)
+	pid, err := browser.StartDriverProcess(sess.ID, socketPath, headless, sess.UserDataDir)
 	if err != nil {
 		return fmt.Errorf("failed to start driver: %w", err)
 	}

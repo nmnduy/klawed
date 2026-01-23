@@ -13,6 +13,7 @@ type BrowserContext struct {
 	// Playwright instances
 	browser playwright.Browser
 	context playwright.BrowserContext
+	pw      *playwright.Playwright // Keep reference to stop it on cleanup
 
 	// Tab management
 	tabs      map[string]*Tab
@@ -20,7 +21,8 @@ type BrowserContext struct {
 	tabMu     sync.RWMutex
 
 	// Configuration
-	headless bool
+	headless    bool
+	userDataDir string
 }
 
 // Tab represents a browser tab/page
@@ -31,43 +33,69 @@ type Tab struct {
 	Title string
 }
 
+// BrowserContextConfig holds configuration for creating a new browser context
+type BrowserContextConfig struct {
+	Headless    bool
+	UserDataDir string // Path to persistent user data directory (empty = no persistence)
+}
+
 // NewBrowserContext creates a new browser context
 func NewBrowserContext(headless bool) (*BrowserContext, error) {
+	return NewBrowserContextWithConfig(BrowserContextConfig{
+		Headless: headless,
+	})
+}
+
+// NewBrowserContextWithConfig creates a new browser context with full configuration
+func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, error) {
 	// Initialize Playwright
 	pw, err := playwright.Run()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start Playwright: %w", err)
 	}
 
-	// Launch browser
 	var browser playwright.Browser
-	if headless {
-		browser, err = pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-			Headless: playwright.Bool(true),
-		})
-	} else {
-		browser, err = pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-			Headless: playwright.Bool(false),
-		})
-	}
-	if err != nil {
-		pw.Stop()
-		return nil, fmt.Errorf("failed to launch browser: %w", err)
-	}
+	var context playwright.BrowserContext
 
-	// Create browser context
-	context, err := browser.NewContext()
-	if err != nil {
-		browser.Close()
-		pw.Stop()
-		return nil, fmt.Errorf("failed to create browser context: %w", err)
+	// Use launchPersistentContext if userDataDir is specified for persistent storage
+	if config.UserDataDir != "" {
+		// LaunchPersistentContext launches browser with persistent storage
+		context, err = pw.Chromium.LaunchPersistentContext(config.UserDataDir,
+			playwright.BrowserTypeLaunchPersistentContextOptions{
+				Headless: playwright.Bool(config.Headless),
+			})
+		if err != nil {
+			pw.Stop()
+			return nil, fmt.Errorf("failed to launch persistent context: %w", err)
+		}
+		// Note: browser is nil when using persistent context
+		browser = nil
+	} else {
+		// Regular launch without persistent storage
+		browser, err = pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
+			Headless: playwright.Bool(config.Headless),
+		})
+		if err != nil {
+			pw.Stop()
+			return nil, fmt.Errorf("failed to launch browser: %w", err)
+		}
+
+		// Create browser context
+		context, err = browser.NewContext()
+		if err != nil {
+			browser.Close()
+			pw.Stop()
+			return nil, fmt.Errorf("failed to create browser context: %w", err)
+		}
 	}
 
 	return &BrowserContext{
-		browser:  browser,
-		context:  context,
-		tabs:     make(map[string]*Tab),
-		headless: headless,
+		browser:     browser,
+		context:     context,
+		pw:          pw,
+		tabs:        make(map[string]*Tab),
+		headless:    config.Headless,
+		userDataDir: config.UserDataDir,
 	}, nil
 }
 
@@ -89,9 +117,16 @@ func (bc *BrowserContext) Close() error {
 		bc.context.Close()
 	}
 
-	// Close browser
+	// Close browser (may be nil if using persistent context)
 	if bc.browser != nil {
 		bc.browser.Close()
+	}
+
+	// Stop Playwright
+	if bc.pw != nil {
+		if err := bc.pw.Stop(); err != nil {
+			return fmt.Errorf("failed to stop Playwright: %w", err)
+		}
 	}
 
 	return nil

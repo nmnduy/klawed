@@ -80,7 +80,20 @@ func (r *Registry) GetOrCreate(sessionID string, headless bool) (*Session, error
 
 	// Create new session if not found
 	if os.IsNotExist(err) {
-		sess, err = New(sessionID, SessionConfig{Headless: headless})
+		// Check if persistent storage is enabled
+		var userDataDir string
+		if isPersistentStorageEnabled() {
+			// Create session-specific user data directory
+			userDataDir = filepath.Join(r.sessionsDir, sessionID, "user-data")
+			if err := os.MkdirAll(userDataDir, 0755); err != nil {
+				return nil, fmt.Errorf("failed to create user data directory: %w", err)
+			}
+		}
+
+		sess, err = New(sessionID, SessionConfig{
+			Headless:    headless,
+			UserDataDir: userDataDir,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create session: %w", err)
 		}
@@ -95,6 +108,24 @@ func (r *Registry) GetOrCreate(sessionID string, headless bool) (*Session, error
 
 	// Return other errors
 	return nil, fmt.Errorf("failed to load session: %w", err)
+}
+
+// isPersistentStorageEnabled checks if persistent storage is enabled via environment variable
+func isPersistentStorageEnabled() bool {
+	// Check WEB_AGENT_PERSISTENT_STORAGE env var
+	persistentStorage := os.Getenv("WEB_AGENT_PERSISTENT_STORAGE")
+	if persistentStorage == "" {
+		// Check viper config as fallback
+		persistentStorage = viper.GetString("persistent_storage")
+	}
+	
+	// Enable if set to "true", "1", "yes", or "on" (case-insensitive)
+	switch persistentStorage {
+	case "true", "1", "yes", "on", "True", "TRUE", "YES", "ON":
+		return true
+	default:
+		return false
+	}
 }
 
 // Get retrieves a session by ID

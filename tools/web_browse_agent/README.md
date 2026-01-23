@@ -1,12 +1,13 @@
 # Web Browse Agent
 
-Version: `1.0.1`
+Version: `1.3.0`
 
 A sessionful browser automation CLI for persistent web browsing sessions. This tool provides a REPL-style interface where you start a browser session and send commands one at a time while maintaining session state.
 
 ## Features
 
 - **Persistent Sessions** - Browser sessions maintain state (tabs, cookies, navigation history) across commands
+- **Persistent Storage** - Optional persistent browser data (cookies, localStorage, sessionStorage) via `WEB_AGENT_PERSISTENT_STORAGE` env var
 - **One Command at a Time** - Stateless CLI that connects to session state
 - **Auto-Cleanup** - Driver process monitors parent PID and auto-terminates when klawed exits
 - **Full Browser Automation** - Powered by Playwright with support for all major browsers
@@ -129,12 +130,34 @@ The tool will:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `WEB_AGENT_PERSISTENT_STORAGE` | Enable persistent browser storage (cookies, localStorage, etc.) | `false` |
 | `WEB_AGENT_IDLE_TIMEOUT` | Idle timeout in seconds (0 to disable) | `300` (5 min) |
 | `BROWSER_HEADLESS` | Run browser without UI | `true` |
 | `BROWSER_VIEWPORT_WIDTH` | Browser viewport width | `1280` |
 | `BROWSER_VIEWPORT_HEIGHT` | Browser viewport height | `720` |
 | `BROWSER_ACTION_TIMEOUT` | Timeout for actions (ms) | `5000` |
 | `BROWSER_NAVIGATION_TIMEOUT` | Timeout for navigation (ms) | `30000` |
+
+## Persistent Browser Storage
+
+By default, browser sessions use ephemeral storage - cookies, localStorage, sessionStorage, and other browser data are lost when the driver shuts down. To enable persistent storage across sessions:
+
+```bash
+# Enable persistent storage for a session
+WEB_AGENT_PERSISTENT_STORAGE=true web_browse_agent --session my-session open https://example.com
+
+# Browser data (cookies, localStorage, etc.) is stored in ~/.web-agent/sessions/<session-id>/user-data/
+# Data persists even after the driver shuts down due to idle timeout
+
+# When you restart the session, all stored data is restored
+WEB_AGENT_PERSISTENT_STORAGE=true web_browse_agent --session my-session open https://example.com
+```
+
+**Note**: When persistent storage is enabled:
+- Browser data is stored in `~/.web-agent/sessions/<session-id>/user-data/`
+- Cookies, localStorage, sessionStorage, IndexedDB, and other browser data persist across driver restarts
+- Each session has its own isolated user data directory
+- To clear persistent data, delete the session directory or use a new session ID
 
 ## Idle Timeout
 

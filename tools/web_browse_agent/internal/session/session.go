@@ -16,6 +16,7 @@ type Session struct {
 	CreatedAt   time.Time `json:"created_at"`
 	LastUsed    time.Time `json:"last_used"`
 	Headless    bool      `json:"headless"`
+	UserDataDir string    `json:"user_data_dir,omitempty"` // Path to persistent browser data
 	ActiveTabID string    `json:"active_tab_id,omitempty"`
 
 	// Driver process info
@@ -30,7 +31,8 @@ type Session struct {
 
 // SessionConfig holds configuration for creating a new session
 type SessionConfig struct {
-	Headless bool
+	Headless    bool
+	UserDataDir string // Path to persistent browser data directory (empty = no persistence)
 }
 
 // SessionInfo is a simplified view of session metadata for display
@@ -53,10 +55,11 @@ func New(id string, config SessionConfig) (*Session, error) {
 	}
 
 	sess := &Session{
-		ID:        id,
-		CreatedAt: time.Now(),
-		LastUsed:  time.Now(),
-		Headless:  config.Headless,
+		ID:          id,
+		CreatedAt:   time.Now(),
+		LastUsed:    time.Now(),
+		Headless:    config.Headless,
+		UserDataDir: config.UserDataDir,
 	}
 
 	return sess, nil
