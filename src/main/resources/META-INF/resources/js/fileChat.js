@@ -1706,13 +1706,23 @@ export function init(rootEl) {
             if (event.error === 'network') {
                 if (requiresHTTPS()) {
                     errorMsg = '✗ Voice input requires HTTPS. Please access via https:// or localhost';
+                } else if (!navigator.onLine) {
+                    errorMsg = '✗ No internet connection. Check your network and try again.';
                 } else {
-                    errorMsg = '✗ Network error: Cannot reach speech recognition service';
+                    errorMsg = '✗ Cannot reach speech service. Check your internet connection and try again.';
                 }
             } else if (event.error === 'not-allowed') {
                 errorMsg = '✗ Microphone access denied. Check browser permissions.';
             } else if (event.error === 'no-speech') {
-                errorMsg = '✗ No speech detected. Please try again.';
+                errorMsg = '✗ No speech detected. Click the microphone to try again.';
+            } else if (event.error === 'aborted') {
+                // Don't show error for user-initiated aborts
+                stopListening();
+                return;
+            } else if (event.error === 'audio-capture') {
+                errorMsg = '✗ Microphone not available. Check your audio settings.';
+            } else if (event.error === 'service-not-allowed') {
+                errorMsg = '✗ Speech service unavailable. Try again later.';
             }
 
             addSystemMessage(errorMsg, 'error');
@@ -1779,6 +1789,12 @@ export function init(rootEl) {
             return;
         }
 
+        // Check network connectivity
+        if (!navigator.onLine) {
+            addSystemMessage('✗ No internet connection. Voice input requires network access.', 'error');
+            return;
+        }
+
         const rec = getRecognition();
         if (!rec) {
             addSystemMessage('✗ Voice input not supported in this browser', 'error');
@@ -1790,11 +1806,16 @@ export function init(rootEl) {
             stopListenTimeout = setTimeout(() => stopListening(), 30000);
         } catch (err) {
             console.error('Failed to start recognition', err);
-            addSystemMessage('✗ Could not start voice input', 'error');
+            addSystemMessage('✗ Could not start voice input: ' + err.message, 'error');
         }
     }
 
     if (elements.voiceButton) {
+        // Voice input disabled - requires network/cloud service
+        elements.voiceButton.style.display = 'none';
+        
+        // Legacy code kept for reference (disabled)
+        /*
         // Only hide on non-HTTPS (except localhost)
         if (requiresHTTPS()) {
             elements.voiceButton.style.display = 'none';
@@ -1810,6 +1831,7 @@ export function init(rootEl) {
                 }
             });
         }
+        */
     }
 
     if (elements.messageForm && elements.messageInput) {
