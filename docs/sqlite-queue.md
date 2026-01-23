@@ -55,6 +55,7 @@ All messages in the `message` field are JSON objects with a `messageType` field.
 | `API_CALL` | API call in progress (waiting for AI response) | Klawed → Client |
 | `END_AI_TURN` | AI turn completed, waiting for further instruction | Klawed → Client |
 | `ERROR` | Error message | Klawed → Client |
+| `AUTO_COMPACTION` | Context compaction event notification | Klawed → Client |
 
 ### Completion Detection
 
@@ -279,6 +280,43 @@ Clients can use this event to:
 - Hide loading/processing indicators
 - Enable input controls
 - Trigger any post-processing logic
+
+#### AUTO_COMPACTION Message
+
+Indicates that automatic context compaction has occurred (when `--auto-compact` is enabled):
+
+```json
+{
+  "messageType": "AUTO_COMPACTION",
+  "messagesCompacted": 45,
+  "tokensBefore": 92450,
+  "tokensAfter": 28760,
+  "tokensFreed": 63690,
+  "usageBeforePct": 73.9,
+  "usageAfterPct": 23.0,
+  "content": "Context compaction: 45 messages stored to memory. Tokens: 92450 → 28760 (freed ~63690 tokens). Usage: 73.9% → 23.0%."
+}
+```
+
+**Fields:**
+- `messagesCompacted`: Number of older messages moved to long-term memory
+- `tokensBefore`: Token count before compaction
+- `tokensAfter`: Token count after compaction
+- `tokensFreed`: Number of tokens freed by compaction
+- `usageBeforePct`: Context usage percentage before compaction
+- `usageAfterPct`: Context usage percentage after compaction
+- `content`: Human-readable summary of the compaction event
+
+This message is sent:
+- When auto-compaction is enabled (`--auto-compact` flag or `KLAWED_AUTO_COMPACT=1`)
+- Before an API call when the token threshold is reached
+- After messages have been successfully stored in long-term memory (memvid)
+
+Clients can use this event to:
+- Display a notification that context has been compacted
+- Update UI to show reduced token usage
+- Log compaction events for debugging
+- Track conversation memory management
 
 ## Client Code Examples
 
@@ -514,6 +552,10 @@ class KlawedSQLiteClient:
                     print(f"AI turn completed")
                     self.acknowledge(msg_id)
                     return True
+                elif msg_type == "AUTO_COMPACTION":
+                    messages_compacted = message.get("messagesCompacted", 0)
+                    tokens_freed = message.get("tokensFreed", 0)
+                    print(f"[COMPACTION] {messages_compacted} messages compacted, {tokens_freed} tokens freed")
                 elif msg_type == "ERROR":
                     print(f"Error: {content}")
                     self.acknowledge(msg_id)
@@ -623,6 +665,16 @@ class KlawedSQLiteClient:
             elif msg_type == "API_CALL":
                 model = message.get("model", "unknown")
                 print(f"[API_CALL] Waiting for AI response (model: {model})")
+                
+            elif msg_type == "AUTO_COMPACTION":
+                messages_compacted = message.get("messagesCompacted", 0)
+                tokens_before = message.get("tokensBefore", 0)
+                tokens_after = message.get("tokensAfter", 0)
+                usage_before = message.get("usageBeforePct", 0)
+                usage_after = message.get("usageAfterPct", 0)
+                print(f"[AUTO_COMPACTION] {messages_compacted} messages stored to memory")
+                print(f"  Tokens: {tokens_before:.0f} → {tokens_after:.0f} (freed ~{tokens_before - tokens_after:.0f})")
+                print(f"  Usage: {usage_before:.1f}% → {usage_after:.1f}%")
                 
             elif msg_type == "END_AI_TURN":
                 print(f"[END_AI_TURN] AI turn completed, ready for next instruction")

@@ -171,4 +171,20 @@ int sqlite_queue_get_stats(SQLiteQueueContext *ctx,
  */
 int sqlite_queue_init_schema(SQLiteQueueContext *ctx);
 
+/**
+ * Send auto-compaction notice to queue reader
+ * @param ctx SQLite queue context
+ * @param receiver Receiver name
+ * @param messages_compacted Number of messages compacted
+ * @param tokens_before Token count before compaction
+ * @param tokens_after Token count after compaction
+ * @param usage_before_pct Context usage percentage before
+ * @param usage_after_pct Context usage percentage after
+ * @return 0 on success, -1 on failure
+ */
+int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *receiver,
+                                       int messages_compacted, size_t tokens_before,
+                                        size_t tokens_after, double usage_before_pct,
+                                        double usage_after_pct);
+
 #endif // SQLITE_QUEUE_H
