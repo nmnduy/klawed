@@ -471,12 +471,6 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
 static void render_bordered_segment(TUIState *tui, const char *segment, size_t len,
                                     int border_pair, const char *border_str, bool add_newline) {
     WINDOW *pad = tui->wm.conv_pad;
-    int pad_width, pad_height;
-    getmaxyx(pad, pad_height, pad_width);
-    (void)pad_height;
-
-    // Calculate border display width
-    int border_display_width = utf8_display_width(border_str);
 
     // Render border (with border color)
     if (has_colors()) {
@@ -487,52 +481,19 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
         wattroff(pad, COLOR_PAIR(border_pair) | A_BOLD);
     }
 
-    // Calculate text display width
-    int text_display_width = 0;
-    if (len > 0) {
-        char *tmp = malloc(len + 1);
-        if (tmp) {
-            memcpy(tmp, segment, len);
-            tmp[len] = '\0';
-            text_display_width = utf8_display_width(tmp);
-            free(tmp);
-        } else {
-            text_display_width = (int)len;  // Fallback
-        }
-    }
-
-    // Render text content with background
-    if (has_colors()) {
-        wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BG));
-    }
-
-    // Render with search highlighting if active
+    // Render text content with search highlighting if active
     if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
         char *seg_buf = malloc(len + 1);
         if (seg_buf) {
             memcpy(seg_buf, segment, len);
             seg_buf[len] = '\0';
-            render_text_with_search_highlight(pad, seg_buf, 0, tui->last_search_pattern, NCURSES_PAIR_ASSISTANT_BG);
+            render_text_with_search_highlight(pad, seg_buf, 0, tui->last_search_pattern, 0);
             free(seg_buf);
         } else {
             waddnstr(pad, segment, (int)len);
         }
     } else {
         waddnstr(pad, segment, (int)len);
-    }
-
-    // Fill remaining line width with background color
-    int used_width = border_display_width + text_display_width;
-    int remaining = pad_width - used_width;
-    if (remaining > 0) {
-        // Fill with spaces to extend background to right edge
-        for (int i = 0; i < remaining; i++) {
-            waddch(pad, ' ');
-        }
-    }
-
-    if (has_colors()) {
-        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BG));
     }
 
     if (add_newline) {
@@ -761,14 +722,8 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             int text_pair = NCURSES_PAIR_FOREGROUND;
             const char *border_str = "│ ";
 
-            // Add top padding line (empty line with border and background)
-            render_bordered_segment(tui, "", 0, mapped_pair, border_str, true);
-
-            // Render the actual text content
+            // Render the text content with left border
             render_text_with_left_border(tui, text, text_pair, mapped_pair, border_str);
-
-            // Add bottom padding line (empty line with border and background)
-            render_bordered_segment(tui, "", 0, mapped_pair, border_str, true);
 
             goto skip_newline;
         } else {
