@@ -172,6 +172,7 @@ export OPENAI_API_KEY="your-api-key"
 - **Data Directory**: `KLAWED_DATA_DIR` - Base directory for all klawed data files (default: `.klawed`). Individual paths can still be overridden by their specific env vars.
 - **Logging**: `KLAWED_LOG_LEVEL` (DEBUG/INFO/WARN/ERROR), `KLAWED_LOG_PATH`
 - **Database**: `KLAWED_DB_PATH` for API call history (SQLite)
+- **Diagnostics**: `KLAWED_NO_STORAGE` - Set to 1 to disable SQLite database and history file. Useful for debugging TUI hangs on certain platforms (e.g., Mac Apple Silicon).
 - **Database Rotation**:
   - `KLAWED_DB_MAX_DAYS` - Keep records for N days (default: 30, 0=unlimited)
   - `KLAWED_DB_MAX_RECORDS` - Keep last N records (default: 1000, 0=unlimited)

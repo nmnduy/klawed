@@ -246,37 +246,66 @@ void tui_handle_resize(TUIState *tui) {
             // Add one blank line for top padding
             waddch(tui->wm.conv_pad, '\n');
 
-            // Render prefix '>' with bold user color
+            // Render prefix '❯❯❯' with bold user color (3 carets for visibility)
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
             }
-            waddstr(tui->wm.conv_pad, "> ");
+            waddstr(tui->wm.conv_pad, "❯❯❯ ");
             if (has_colors()) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
             }
+        } else if (is_assistant_message) {
+            // Assistant message: use left border decoration (│) on each line
+            // Render text with left border
+            if (entry->text && entry->text[0] != '\0') {
+                const char *line_start = entry->text;
+                const char *p = entry->text;
+
+                while (*p) {
+                    // Find end of current line
+                    while (*p && *p != '\n') {
+                        p++;
+                    }
+
+                    // Render border
+                    if (has_colors()) {
+                        wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                    }
+                    waddstr(tui->wm.conv_pad, "│ ");
+                    if (has_colors()) {
+                        wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                    }
+
+                    // Render text content
+                    if (has_colors()) {
+                        wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+                    }
+                    waddnstr(tui->wm.conv_pad, line_start, (int)(p - line_start));
+                    if (has_colors()) {
+                        wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+                    }
+
+                    if (*p == '\n') {
+                        waddch(tui->wm.conv_pad, '\n');
+                        p++;
+                        line_start = p;
+                    }
+                }
+            }
+
+            // Add final newline after bordered content
+            waddch(tui->wm.conv_pad, '\n');
+            continue;  // Skip regular text/newline handling below
         } else {
-            // Write prefix with special handling for Assistant and other messages
+            // Write prefix for other (non-user, non-assistant) messages
             if (entry->prefix && entry->prefix[0] != '\0') {
-                if (is_assistant_message) {
-                    // Assistant message: '>>>' without background
-                    if (has_colors()) {
-                        wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-                    }
-                    waddstr(tui->wm.conv_pad, ">>>");
-                    waddch(tui->wm.conv_pad, ' ');
-                    if (has_colors()) {
-                        wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-                    }
-                } else {
-                    // Other messages: keep original behavior
-                    if (has_colors()) {
-                        wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-                    }
-                    waddstr(tui->wm.conv_pad, entry->prefix);
-                    waddch(tui->wm.conv_pad, ' ');
-                    if (has_colors()) {
-                        wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-                    }
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+                waddstr(tui->wm.conv_pad, entry->prefix);
+                waddch(tui->wm.conv_pad, ' ');
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
                 }
             }
         }
