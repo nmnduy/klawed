@@ -12,19 +12,7 @@
 #include "context/system_prompt.h"
 #include "persistence.h"
 #include "memvid.h"
-
-/*
- * Check if no-storage mode is enabled (KLAWED_NO_STORAGE=1)
- * When enabled, skips SQLite database initialization to help diagnose hangs.
- */
-static int is_no_storage_mode(void) {
-    const char *env = getenv("KLAWED_NO_STORAGE");
-    if (env && (strcmp(env, "1") == 0 || strcasecmp(env, "true") == 0 ||
-                strcasecmp(env, "yes") == 0)) {
-        return 1;
-    }
-    return 0;
-}
+#include "data_dir.h"
 
 /*
  * Background thread: Load system prompt
@@ -66,7 +54,7 @@ static void* init_database_thread(void *arg) {
     PersistenceDB *db = NULL;
 
     // Skip database initialization in no-storage mode
-    if (is_no_storage_mode()) {
+    if (data_dir_is_no_storage_mode()) {
         LOG_INFO("[BG] Database initialization skipped (KLAWED_NO_STORAGE=1)");
     } else {
         LOG_DEBUG("[BG] Database initialization started");
@@ -84,7 +72,7 @@ static void* init_database_thread(void *arg) {
     long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
                       (end.tv_nsec - start.tv_nsec) / 1000000;
 
-    if (!is_no_storage_mode()) {
+    if (!data_dir_is_no_storage_mode()) {
         if (db) {
             LOG_DEBUG("[BG] Database initialization completed in %ld ms", duration_ms);
         } else {

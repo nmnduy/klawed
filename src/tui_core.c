@@ -25,6 +25,7 @@
 #include "history_file.h"
 #include "subagent_manager.h"
 #include "config.h"
+#include "data_dir.h"
 #include <stdlib.h>
 #include <bsd/stdlib.h>
 #include <string.h>
@@ -42,19 +43,6 @@
 #define INPUT_WIN_MAX_HEIGHT_PERCENT 20
 #define CONV_WIN_PADDING 0
 #define STATUS_WIN_HEIGHT 1
-
-/*
- * Check if no-storage mode is enabled (KLAWED_NO_STORAGE=1)
- * When enabled, skips history file to help diagnose hangs.
- */
-static int is_no_storage_mode(void) {
-    const char *env = getenv("KLAWED_NO_STORAGE");
-    if (env && (strcmp(env, "1") == 0 || strcasecmp(env, "true") == 0 ||
-                strcasecmp(env, "yes") == 0)) {
-        return 1;
-    }
-    return 0;
-}
 
 // Convert RGB (0-255) to ncurses color (0-1000)
 static short rgb_to_ncurses(int value) {
@@ -422,7 +410,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
     }
 
     // Skip history file in no-storage mode (diagnostic for TUI hangs)
-    if (is_no_storage_mode()) {
+    if (data_dir_is_no_storage_mode()) {
         LOG_INFO("[TUI] History file skipped (KLAWED_NO_STORAGE=1)");
         tui->history_file = NULL;
     } else {

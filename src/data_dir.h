@@ -46,4 +46,13 @@ int data_dir_build_path(char *buf, size_t buf_size, const char *subpath);
  */
 int data_dir_ensure(const char *subpath);
 
+/*
+ * Check if no-storage diagnostic mode is enabled (KLAWED_NO_STORAGE=1).
+ * When enabled, SQLite database and history file operations are skipped.
+ * This helps diagnose TUI hangs on certain platforms (e.g., Mac Apple Silicon).
+ *
+ * @return 1 if no-storage mode is enabled, 0 otherwise
+ */
+int data_dir_is_no_storage_mode(void);
+
 #endif /* DATA_DIR_H */

@@ -452,6 +452,116 @@ static void test_integration_full_workflow(void) {
 }
 
 /* ============================================================================
+ * Tests for data_dir_is_no_storage_mode()
+ * ============================================================================ */
+
+static void test_no_storage_mode_not_set(void) {
+    const char *test_name = "data_dir_is_no_storage_mode returns 0 when env not set";
+
+    unsetenv("KLAWED_NO_STORAGE");
+
+    int result = data_dir_is_no_storage_mode();
+
+    print_test_result(test_name, result == 0);
+}
+
+static void test_no_storage_mode_set_1(void) {
+    const char *test_name = "data_dir_is_no_storage_mode returns 1 when env is '1'";
+
+    setenv("KLAWED_NO_STORAGE", "1", 1);
+
+    int result = data_dir_is_no_storage_mode();
+
+    unsetenv("KLAWED_NO_STORAGE");
+
+    print_test_result(test_name, result == 1);
+}
+
+static void test_no_storage_mode_set_true(void) {
+    const char *test_name = "data_dir_is_no_storage_mode returns 1 when env is 'true'";
+
+    setenv("KLAWED_NO_STORAGE", "true", 1);
+
+    int result = data_dir_is_no_storage_mode();
+
+    unsetenv("KLAWED_NO_STORAGE");
+
+    print_test_result(test_name, result == 1);
+}
+
+static void test_no_storage_mode_set_TRUE(void) {
+    const char *test_name = "data_dir_is_no_storage_mode returns 1 when env is 'TRUE'";
+
+    setenv("KLAWED_NO_STORAGE", "TRUE", 1);
+
+    int result = data_dir_is_no_storage_mode();
+
+    unsetenv("KLAWED_NO_STORAGE");
+
+    print_test_result(test_name, result == 1);
+}
+
+static void test_no_storage_mode_set_yes(void) {
+    const char *test_name = "data_dir_is_no_storage_mode returns 1 when env is 'yes'";
+
+    setenv("KLAWED_NO_STORAGE", "yes", 1);
+
+    int result = data_dir_is_no_storage_mode();
+
+    unsetenv("KLAWED_NO_STORAGE");
+
+    print_test_result(test_name, result == 1);
+}
+
+static void test_no_storage_mode_set_YES(void) {
+    const char *test_name = "data_dir_is_no_storage_mode returns 1 when env is 'YES'";
+
+    setenv("KLAWED_NO_STORAGE", "YES", 1);
+
+    int result = data_dir_is_no_storage_mode();
+
+    unsetenv("KLAWED_NO_STORAGE");
+
+    print_test_result(test_name, result == 1);
+}
+
+static void test_no_storage_mode_set_0(void) {
+    const char *test_name = "data_dir_is_no_storage_mode returns 0 when env is '0'";
+
+    setenv("KLAWED_NO_STORAGE", "0", 1);
+
+    int result = data_dir_is_no_storage_mode();
+
+    unsetenv("KLAWED_NO_STORAGE");
+
+    print_test_result(test_name, result == 0);
+}
+
+static void test_no_storage_mode_set_empty(void) {
+    const char *test_name = "data_dir_is_no_storage_mode returns 0 when env is empty";
+
+    setenv("KLAWED_NO_STORAGE", "", 1);
+
+    int result = data_dir_is_no_storage_mode();
+
+    unsetenv("KLAWED_NO_STORAGE");
+
+    print_test_result(test_name, result == 0);
+}
+
+static void test_no_storage_mode_set_invalid(void) {
+    const char *test_name = "data_dir_is_no_storage_mode returns 0 when env is invalid";
+
+    setenv("KLAWED_NO_STORAGE", "enabled", 1);
+
+    int result = data_dir_is_no_storage_mode();
+
+    unsetenv("KLAWED_NO_STORAGE");
+
+    print_test_result(test_name, result == 0);
+}
+
+/* ============================================================================
  * Main test runner
  * ============================================================================ */
 
@@ -482,6 +592,17 @@ int main(void) {
     test_ensure_nested_subdirectory();
     test_ensure_existing_directory();
     test_ensure_with_empty_subpath();
+
+    printf("\n" COLOR_YELLOW "data_dir_is_no_storage_mode() tests:\n" COLOR_RESET);
+    test_no_storage_mode_not_set();
+    test_no_storage_mode_set_1();
+    test_no_storage_mode_set_true();
+    test_no_storage_mode_set_TRUE();
+    test_no_storage_mode_set_yes();
+    test_no_storage_mode_set_YES();
+    test_no_storage_mode_set_0();
+    test_no_storage_mode_set_empty();
+    test_no_storage_mode_set_invalid();
 
     printf("\n" COLOR_YELLOW "Integration tests:\n" COLOR_RESET);
     test_integration_full_workflow();
