@@ -380,15 +380,30 @@ void tui_handle_resize(TUIState *tui) {
                     }
 
                     if (*p == '\n') {
-                        waddch(tui->wm.conv_pad, '\n');
+                        // Check if cursor has already wrapped to next line after filling
+                        // If we filled to the right edge, ncurses auto-wraps and cursor is at x=0
+                        int wrap_y, wrap_x;
+                        getyx(tui->wm.conv_pad, wrap_y, wrap_x);
+                        (void)wrap_y;
+                        if (wrap_x > 0) {
+                            // Cursor hasn't wrapped yet, need explicit newline
+                            waddch(tui->wm.conv_pad, '\n');
+                        }
                         p++;
                         line_start = p;
                     }
                 }
             }
 
-            // Add final newline after bordered content
-            waddch(tui->wm.conv_pad, '\n');
+            // Add final newline after bordered content (only if cursor hasn't wrapped)
+            {
+                int final_y, final_x;
+                getyx(tui->wm.conv_pad, final_y, final_x);
+                (void)final_y;
+                if (final_x > 0) {
+                    waddch(tui->wm.conv_pad, '\n');
+                }
+            }
             continue;  // Skip regular text/newline handling below
         } else {
             // Write prefix for other (non-user, non-assistant) messages

@@ -538,7 +538,16 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
     }
 
     if (add_newline) {
-        waddch(pad, '\n');
+        // Check if cursor has already wrapped to next line after filling
+        // If we filled to the right edge, ncurses auto-wraps and cursor is at x=0
+        // In that case, we don't need to add an explicit newline
+        int cur_y, cur_x;
+        getyx(pad, cur_y, cur_x);
+        (void)cur_y;
+        if (cur_x > 0) {
+            // Cursor hasn't wrapped yet, need explicit newline
+            waddch(pad, '\n');
+        }
     }
 }
 
@@ -748,8 +757,15 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             int text_pair = NCURSES_PAIR_FOREGROUND;
             render_text_with_left_border(tui, text, text_pair, mapped_pair, "│ ");
 
-            // Add final newline after bordered content
-            waddch(tui->wm.conv_pad, '\n');
+            // Add final newline after bordered content (only if cursor hasn't wrapped)
+            {
+                int cur_y, cur_x;
+                getyx(tui->wm.conv_pad, cur_y, cur_x);
+                (void)cur_y;
+                if (cur_x > 0) {
+                    waddch(tui->wm.conv_pad, '\n');
+                }
+            }
             goto skip_newline;
         } else {
             // Caret style: leading '>>> ' prefix with no border
