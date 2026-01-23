@@ -4,12 +4,13 @@
   "type": "module",
   "scripts": {
     "dev": "bun x postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css --watch",
-    "prebuild": "bash scripts/check-hardcoded-colors.sh || true && bun scripts/validate-dynamic-css.js && bun scripts/validate-js-conventions.js && bun scripts/copy-vendor.js && bun -e \"const fs = require('fs'); const path = require('path'); const distDir = path.join(__dirname, 'src/main/resources/META-INF/resources/dist'); try { fs.rmSync(distDir, { recursive: true, force: true }); } catch(e) {}\"",
+    "prebuild": "bun test && bash scripts/check-hardcoded-colors.sh || true && bun scripts/validate-dynamic-css.js && bun scripts/validate-js-conventions.js && bun scripts/copy-vendor.js && bun -e \"const fs = require('fs'); const path = require('path'); const distDir = path.join(__dirname, 'src/main/resources/META-INF/resources/dist'); try { fs.rmSync(distDir, { recursive: true, force: true }); } catch(e) {}\"",
     "build": "NODE_ENV=production bun x postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css && NODE_ENV=production bun scripts/hash-css.js && NODE_ENV=production bun scripts/hash-js.js",
     "build:dev": "bun scripts/copy-vendor.js && bun scripts/validate-js-conventions.js && NODE_ENV=development bun x postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css && NODE_ENV=development bun scripts/hash-css.js && NODE_ENV=development bun scripts/hash-js.js",
     "check:colors": "bash scripts/check-hardcoded-colors.sh",
     "check:colors:strict": "bash scripts/check-hardcoded-colors.sh --strict",
     "check:js": "bun scripts/validate-js-conventions.js",
+    "test": "bun test",
     "watch": "bun x postcss ./src/main/resources/css/index.css -o ./src/main/resources/META-INF/resources/dist/main.css --watch",
     "preview": "echo 'Preview not configured for CSS-only build'"
   },
