@@ -1133,6 +1133,11 @@ int tui_event_loop(TUIState *tui, const char *prompt,
             refresh_conversation_viewport(tui);
             render_status_window(tui);
             tui_redraw_input(tui, prompt);
+
+            // Re-render file search popup if active (must be on top after resize)
+            if (tui->mode == TUI_MODE_FILE_SEARCH && tui->file_search.is_active) {
+                file_search_render(&tui->file_search);
+            }
         }
 
         // 2. Check for paste timeout (even when no input arrives)
@@ -1315,6 +1320,10 @@ void tui_drain_message_queue(TUIState *tui, const char *prompt, void *msg_queue_
                 tui_redraw_input(tui, prompt);
             } else {
                 tui_refresh(tui);
+            }
+            // Re-render file search popup if active (must be on top)
+            if (tui->mode == TUI_MODE_FILE_SEARCH && tui->file_search.is_active) {
+                file_search_render(&tui->file_search);
             }
         }
     } while (processed > 0);

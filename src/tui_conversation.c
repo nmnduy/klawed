@@ -265,6 +265,11 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
         touchwin(tui->wm.input_win);
         wrefresh(tui->wm.input_win);
     }
+
+    // Re-render file search popup if active (must be on top of conversation)
+    if (tui->mode == TUI_MODE_FILE_SEARCH && tui->file_search.is_active) {
+        file_search_render(&tui->file_search);
+    }
 }
 
 
@@ -355,6 +360,11 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
         }
     }
     window_manager_refresh_conversation(&tui->wm);
+
+    // Re-render file search popup if active (must be on top of conversation)
+    if (tui->mode == TUI_MODE_FILE_SEARCH && tui->file_search.is_active) {
+        file_search_render(&tui->file_search);
+    }
 }
 
 // Infer color pair from message prefix
