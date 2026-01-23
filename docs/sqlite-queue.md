@@ -123,7 +123,7 @@ UPDATE messages SET sent = 1 WHERE id = ?;
 |----------|-------------|---------|
 | `KLAWED_SQLITE_DB_PATH` | Path to SQLite database file (enables daemon mode when set) | Required |
 | `KLAWED_SQLITE_SENDER` | Sender name for klawed responses | "klawed" |
-| `KLAWED_SQLITE_POLL_INTERVAL` | Polling interval in milliseconds | 100 |
+| `KLAWED_SQLITE_POLL_INTERVAL` | Polling interval in milliseconds | 300 |
 | `KLAWED_SQLITE_POLL_TIMEOUT` | Timeout for waiting for messages (ms) | 30000 |
 | `KLAWED_SQLITE_MAX_RETRIES` | Maximum retry attempts | 3 |
 | `KLAWED_SQLITE_MAX_MESSAGE_SIZE` | Maximum message size in bytes | 1048576 (1MB) |
@@ -294,7 +294,7 @@ Clients can use this event to:
 
 #define SENDER_NAME "client"
 #define RECEIVER_NAME "klawed"
-#define POLL_INTERVAL_MS 100
+#define POLL_INTERVAL_MS 300
 
 // Send message to klawed
 int send_message(sqlite3 *db, const char *receiver, 
@@ -521,7 +521,7 @@ class KlawedSQLiteClient:
                 
                 self.acknowledge(msg_id)
             
-            time.sleep(0.1)
+            time.sleep(0.3)
         
         print("Timeout waiting for response")
         return False
@@ -636,7 +636,7 @@ class KlawedSQLiteClient:
         
         return completed
     
-    def send_and_wait(self, prompt, timeout=120, poll_interval=0.1):
+    def send_and_wait(self, prompt, timeout=120, poll_interval=0.3):
         """Send a prompt and wait for completion with tool call support."""
         print(f"\n{'='*60}")
         print(f"Sending: {prompt}")
@@ -772,7 +772,7 @@ if __name__ == "__main__":
 - New messages may be rejected when queue is full
 
 ### Polling Overhead
-- Poll-based communication introduces latency (default: 100ms intervals)
+- Poll-based communication introduces latency (default: 300ms intervals)
 - Not suitable for real-time or low-latency requirements
 - Consider using ZMQ socket mode for real-time communication
 
