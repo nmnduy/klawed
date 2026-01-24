@@ -5,11 +5,8 @@ Use the `web_browse_agent` command-line tool to control a persistent browser ses
 ## Quick Start
 
 ```bash
-# Open a URL (headless mode - default)
+# Open a URL
 web_browse_agent --session mysession open https://example.com
-
-# Open a URL with visible browser (non-headless)
-web_browse_agent --no-headless --session mysession open https://example.com
 
 # Get page content
 web_browse_agent --session mysession html
@@ -26,15 +23,14 @@ web_browse_agent --session mysession end-session
 All commands follow this pattern:
 
 ```bash
-web_browse_agent --session <session-id> [--headless|--no-headless] [--json] <command> [args...]
+web_browse_agent --session <session-id> [--headless] [--json] <command> [args...]
 ```
 
 - `--session <id>` - Session ID to use (required for most commands)
-- `--headless` - Run browser without visible UI (default)
-- `--no-headless` - Run browser with visible UI (allows manual interaction)
+- `--headless` - Run browser without visible UI (default: true)
+- `--headless=false` - Run browser with visible UI (requires X server, see below)
 - `--json` - Output in JSON format for machine parsing
 - `--timeout <sec>` - Per-command timeout in seconds (default: 30)
-- `--verbose` or `-v` - Enable verbose output
 
 ## Available Commands
 
@@ -200,38 +196,10 @@ web_browse_agent --session s wait-for "#main-content"
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `KLAWED_WEB_BROWSE_AGENT_PATH` | Path to web_browse_agent binary | Auto-detected |
-| `KLAWED_EXPLORE_HEADLESS` | Run in headless mode (when using klawed explore mode) | `1` (true) |
-| `BROWSER_HEADLESS` | Run browser without visible UI | `true` |
-| `WEB_AGENT_PERSISTENT_STORAGE` | Enable persistent browser storage (cookies, localStorage, etc.) | `false` |
-| `WEB_AGENT_IDLE_TIMEOUT` | Idle timeout in seconds (0 to disable) | `300` (5 min) |
-| `BROWSER_VIEWPORT_WIDTH` | Browser viewport width | `1280` |
-| `BROWSER_VIEWPORT_HEIGHT` | Browser viewport height | `720` |
-| `BROWSER_ACTION_TIMEOUT` | Timeout for actions (ms) | `5000` |
-| `BROWSER_NAVIGATION_TIMEOUT` | Timeout for navigation (ms) | `30000` |
-
-### Running with Visible Browser
-
-There are multiple ways to run with a visible browser window:
-
-```bash
-# Method 1: Using --no-headless flag
-web_browse_agent --no-headless --session mysession open https://example.com
-
-# Method 2: Using BROWSER_HEADLESS environment variable
-BROWSER_HEADLESS=false web_browse_agent --session mysession open https://example.com
-
-# Method 3: When using klawed explore mode
-KLAWED_EXPLORE_MODE=1 KLAWED_EXPLORE_HEADLESS=0 klawed "Research JWT authentication"
-
-# Method 4: Setting environment variables for subagents
-KLAWED_SUBAGENT_ENV_VARS="KLAWED_EXPLORE_MODE=1,KLAWED_EXPLORE_HEADLESS=0" klawed
-```
-
-**Benefits of visible browser mode:**
-- You can see what the agent is doing in real-time
-- You can manually interact with the browser while commands run
-- Useful for debugging and interactive exploration
-- The browser window persists across commands (session stays open)
+| `KLAWED_EXPLORE_HEADLESS` | Run in headless mode | `1` (true) |
+| `DISPLAY` | X server display for non-headless mode | Not set |
+| `WEB_AGENT_PERSISTENT_STORAGE` | Enable persistent browser storage | `false` |
+| `WEB_AGENT_IDLE_TIMEOUT` | Idle timeout in seconds | `300` (5 min) |
 
 ## Building from Source
 
@@ -243,6 +211,40 @@ make build
 make install-deps  # First time: installs Playwright browsers
 ```
 
+## Running in Non-Headless Mode (Visible Browser)
+
+To see the browser window, you must:
+
+1. **Have an X server running** (desktop environment or Xvfb)
+2. **Set the DISPLAY environment variable**
+3. **Use `--headless=false`**
+
+```bash
+# Check for available X displays
+ls /tmp/.X11-unix/
+
+# Find your display (look for :0 or :1)
+who
+
+# Run with visible browser
+DISPLAY=:1 web_browse_agent --session test --headless=false open https://example.com
+
+# Or export DISPLAY for the session
+export DISPLAY=:1
+web_browse_agent --session test --headless=false open https://example.com
+```
+
+**Common error without DISPLAY:**
+```
+Looks like you launched a headed browser without having a XServer running.
+Set either 'headless: true' or use 'xvfb-run <your-playwright-app>' before running Playwright.
+```
+
+**Alternative: Use xvfb-run** (virtual framebuffer, no visible window but runs headed mode):
+```bash
+xvfb-run web_browse_agent --session test --headless=false open https://example.com
+```
+
 ## Tips
 
 1. **Use JSON output** for programmatic parsing: `--json`
@@ -250,6 +252,4 @@ make install-deps  # First time: installs Playwright browsers
 3. **Use `wait-for`** after navigation to ensure content is loaded
 4. **Use `eval`** for complex data extraction that simple commands can't handle
 5. **Set viewport** before screenshots for consistent dimensions
-6. **Use visible browser** (`--no-headless`) for debugging and interactive exploration
-7. **Enable persistent storage** (`WEB_AGENT_PERSISTENT_STORAGE=true`) to preserve cookies and login sessions across restarts
-8. **Manual interaction** - When running with `--no-headless`, you can interact with the browser manually while commands run
+6. **Set DISPLAY** when using `--headless=false` to see the browser window
