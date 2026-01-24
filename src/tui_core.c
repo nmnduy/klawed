@@ -155,7 +155,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_INPUT_BORDER, 24, -1);      // Border/accent color
             init_pair(NCURSES_PAIR_USER_MSG_BG, 16, 23);       // User message background (same as input bg)
             init_pair(NCURSES_PAIR_ASSISTANT_BG, 16, 25);      // Foreground on subtle assistant background
-            init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, 18, 25);  // Assistant color on assistant background (for border)
+            init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, 18, -1);  // Assistant color with no background (for border)
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -184,7 +184,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_INPUT_BORDER, (short)user_idx, (short)-1);  // Border color (user/green)
             init_pair(NCURSES_PAIR_USER_MSG_BG, (short)fg_idx, (short)236);   // User message background (same as input bg)
             init_pair(NCURSES_PAIR_ASSISTANT_BG, (short)fg_idx, (short)235);  // Foreground on very dark gray (235)
-            init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, (short)assistant_idx, (short)235);  // Assistant color on dark gray (for border)
+            init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, (short)assistant_idx, (short)-1);  // Assistant color with no background (for border)
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
