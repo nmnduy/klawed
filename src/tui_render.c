@@ -472,14 +472,19 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
                                     int border_pair, const char *border_str, bool add_newline) {
     WINDOW *pad = tui->wm.conv_pad;
 
-    // Render border (with border color)
+    // Render border character only (│) with border color - no space
     if (has_colors()) {
         wattron(pad, COLOR_PAIR(border_pair) | A_BOLD);
     }
-    waddstr(pad, border_str);
+    waddstr(pad, "│");
     if (has_colors()) {
         wattroff(pad, COLOR_PAIR(border_pair) | A_BOLD);
+        // Reset to foreground color (no background) for the space and text
+        wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
     }
+    // Add space after border with foreground color (no background)
+    waddch(pad, ' ');
+    (void)border_str;  // No longer used - we render │ and space separately
 
     // Render text content with search highlighting if active
     if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
@@ -494,6 +499,10 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
         }
     } else {
         waddnstr(pad, segment, (int)len);
+    }
+
+    if (has_colors()) {
+        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
     }
 
     if (add_newline) {
