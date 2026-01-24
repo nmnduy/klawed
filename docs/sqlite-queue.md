@@ -151,6 +151,66 @@ export KLAWED_SQLITE_SENDER="klawed"
 export KLAWED_SQLITE_SENDER="my_agent"
 ```
 
+## Conversation Seeding
+
+Klawed supports seeding the conversation with pre-existing messages at boot time. This allows clients to inject conversation history before klawed starts processing new messages, enabling:
+
+- Resuming a previous conversation
+- Providing context or examples
+- Pre-populating the conversation with instructions
+
+### How It Works
+
+When klawed starts in SQLite queue daemon mode, it automatically reads up to 100 previous TEXT messages from the `messages` table where `sent = 1` (already acknowledged). These messages are loaded chronologically and added to the conversation state before klawed begins polling for new messages.
+
+### Seeding Messages
+
+To seed a conversation, insert messages with `sent = 1` before starting klawed:
+
+**User messages (from client to klawed):**
+```sql
+INSERT INTO messages (sender, receiver, message, sent, created_at)
+VALUES ('client', 'klawed', '{"messageType":"TEXT","content":"What is the capital of France?"}', 1, strftime('%s', 'now'));
+```
+
+**Assistant messages (from klawed to client):**
+```sql
+INSERT INTO messages (sender, receiver, message, sent, created_at)
+VALUES ('klawed', 'client', '{"messageType":"TEXT","content":"The capital of France is Paris."}', 1, strftime('%s', 'now'));
+```
+
+### Example: Seeding a Multi-turn Conversation
+
+```sql
+-- Clear existing messages (optional)
+DELETE FROM messages;
+
+-- Seed user message 1
+INSERT INTO messages (sender, receiver, message, sent, created_at)
+VALUES ('client', 'klawed', '{"messageType":"TEXT","content":"You are a helpful coding assistant."}', 1, 1700000001);
+
+-- Seed assistant response 1
+INSERT INTO messages (sender, receiver, message, sent, created_at)
+VALUES ('klawed', 'client', '{"messageType":"TEXT","content":"I understand. I am ready to help with coding tasks."}', 1, 1700000002);
+
+-- Seed user message 2
+INSERT INTO messages (sender, receiver, message, sent, created_at)
+VALUES ('client', 'klawed', '{"messageType":"TEXT","content":"Please remember to always use descriptive variable names."}', 1, 1700000003);
+
+-- Seed assistant response 2
+INSERT INTO messages (sender, receiver, message, sent, created_at)
+VALUES ('klawed', 'client', '{"messageType":"TEXT","content":"Understood. I will use descriptive variable names in all code examples."}', 1, 1700000004);
+```
+
+### Important Notes
+
+- Only `TEXT` messages are loaded for seeding (TOOL, TOOL_RESULT, etc. are skipped)
+- Messages must have `sent = 1` to be considered for seeding
+- At most 100 messages are loaded (the most recent 100, ordered chronologically)
+- The `created_at` timestamp determines the order of messages
+- Seeding happens once at klawed boot, before the daemon loop starts
+- Empty or whitespace-only messages are skipped
+
 ## Message Format Details
 
 ### Input Messages (Client → Klawed)
