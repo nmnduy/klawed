@@ -4,6 +4,7 @@ import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.checkout.SessionCreateParams;
+import com.stripe.net.Webhook;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -84,9 +85,8 @@ public class StripeService {
      * Verify webhook signature
      */
     public com.stripe.model.Event constructEvent(String payload, String sigHeader) throws StripeException {
-        return com.stripe.model.Event.constructFrom(
-                com.stripe.net.ApiResource.GSON.fromJson(payload, com.stripe.model.Event.class).getRawJsonObject(),
-                stripeSecretKey,
+        return Webhook.constructEvent(
+                payload,
                 sigHeader,
                 webhookSecret
         );

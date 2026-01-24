@@ -147,38 +147,45 @@ darkMode.init();
 window.darkMode = darkMode;
 
 /**
- * Initialize the theme toggle button
+ * Initialize the theme toggle button(s)
  * Should be called after DOM is ready
+ * Handles all toggle buttons (desktop and mobile)
  */
 export function initThemeToggle() {
-    const toggleButton = document.querySelector('[data-theme-toggle]');
-    console.log('[dark-mode] initThemeToggle called, button found:', !!toggleButton);
-    if (!toggleButton) {
-        console.warn('[dark-mode] Toggle button not found');
+    const toggleButtons = document.querySelectorAll('[data-theme-toggle]');
+    console.log('[dark-mode] initThemeToggle called, buttons found:', toggleButtons.length);
+    if (toggleButtons.length === 0) {
+        console.warn('[dark-mode] No toggle buttons found');
         return;
     }
 
-    // Update button state based on current theme
+    // Update all button states based on current theme
     console.log('[dark-mode] Current theme:', darkMode.getTheme());
-    updateToggleButtonState(toggleButton, darkMode.getTheme());
-
-    // Listen for theme changes to update button state
-    darkMode.addListener((theme) => {
-        console.log('[dark-mode] Theme changed to:', theme);
-        updateToggleButtonState(toggleButton, theme);
+    toggleButtons.forEach(button => {
+        updateToggleButtonState(button, darkMode.getTheme());
     });
 
-    // Add click handler
-    toggleButton.addEventListener('click', () => {
-        console.log('[dark-mode] Toggle button clicked, current theme:', darkMode.getTheme());
-        toggleButton.setAttribute('data-transitioning', 'true');
-        const newTheme = darkMode.toggle();
-        console.log('[dark-mode] After toggle, new theme:', newTheme);
+    // Listen for theme changes to update all button states
+    darkMode.addListener((theme) => {
+        console.log('[dark-mode] Theme changed to:', theme);
+        toggleButtons.forEach(button => {
+            updateToggleButtonState(button, theme);
+        });
+    });
 
-        // Remove transition state after animation
-        setTimeout(() => {
-            toggleButton.removeAttribute('data-transitioning');
-        }, 300);
+    // Add click handler to each button
+    toggleButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            console.log('[dark-mode] Toggle button clicked, current theme:', darkMode.getTheme());
+            button.setAttribute('data-transitioning', 'true');
+            const newTheme = darkMode.toggle();
+            console.log('[dark-mode] After toggle, new theme:', newTheme);
+
+            // Remove transition state after animation
+            setTimeout(() => {
+                button.removeAttribute('data-transitioning');
+            }, 300);
+        });
     });
 }
 

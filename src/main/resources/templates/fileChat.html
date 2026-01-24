@@ -68,10 +68,17 @@
         <!-- Header with gradient and status merged -->
         {#include partials/chatHeader.html /}
 
-        <!-- Tabs for Chat and Files (shown only on mobile/tablet) -->
-        <div class="lg:hidden">
-            {#include partials/chatTabs.html /}
+        <!-- Mobile connection status pill (shown only when not connected) -->
+        <div id="mobile-status-pill" data-mobile-status-pill class="hidden sm:hidden fixed top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 py-2 rounded-full border-2 bg-background/95 text-foreground shadow-lg backdrop-blur-sm animate-fade-in">
+            <div class="relative flex items-center justify-center">
+                <div data-mobile-status-pulse class="status-pulse status-pulse--working"></div>
+                <div data-mobile-status-indicator class="status-indicator status-indicator--working"></div>
+            </div>
+            <span data-mobile-status-text class="text-caption-m font-medium whitespace-nowrap">Connecting…</span>
         </div>
+
+        <!-- Tabs moved inline with header on mobile, separate tabs no longer needed -->
+        <!-- The chatTabs.html partial is kept for potential future use but hidden -->
 
         <!-- Main Content Area with Chat and File Explorer -->
         <div class="flex flex-1 overflow-hidden">

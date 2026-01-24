@@ -169,7 +169,7 @@ class FeedbackModule {
 
         // Find all elements in the document
         this.modal = document.querySelector('[data-feedback-modal]');
-        this.openButton = document.querySelector('[data-feedback-button]');
+        this.openButtons = document.querySelectorAll('[data-feedback-button]'); // Changed to querySelectorAll
         this.backdrop = document.querySelector('[data-feedback-backdrop]');
         this.panel = document.querySelector('[data-feedback-panel]');
         this.closeBtn = document.querySelector('[data-feedback-close]');
@@ -192,7 +192,7 @@ class FeedbackModule {
 
         this.bindEvents();
         this.initialized = true;
-        console.log('[feedback] Feedback module initialized');
+        console.log('[feedback] Feedback module initialized with', this.openButtons.length, 'open buttons');
     }
 
     bindEvents() {
@@ -201,8 +201,10 @@ class FeedbackModule {
             btn.addEventListener('click', () => this.selectType(btn));
         });
 
-        // Open modal
-        this.openButton?.addEventListener('click', () => this.openModal());
+        // Open modal - bind to all open buttons
+        this.openButtons?.forEach(btn => {
+            btn.addEventListener('click', () => this.openModal());
+        });
 
         // Close modal
         this.closeBtn?.addEventListener('click', () => this.closeModal());
