@@ -27,7 +27,8 @@ web_browse_agent --session <session-id> [--headless] [--json] <command> [args...
 ```
 
 - `--session <id>` - Session ID to use (required for most commands)
-- `--headless` - Run browser without visible UI (default)
+- `--headless` - Run browser without visible UI (default: true)
+- `--headless=false` - Run browser with visible UI (requires X server, see below)
 - `--json` - Output in JSON format for machine parsing
 - `--timeout <sec>` - Per-command timeout in seconds (default: 30)
 
@@ -196,6 +197,9 @@ web_browse_agent --session s wait-for "#main-content"
 |----------|-------------|---------|
 | `KLAWED_WEB_BROWSE_AGENT_PATH` | Path to web_browse_agent binary | Auto-detected |
 | `KLAWED_EXPLORE_HEADLESS` | Run in headless mode | `1` (true) |
+| `DISPLAY` | X server display for non-headless mode | Not set |
+| `WEB_AGENT_PERSISTENT_STORAGE` | Enable persistent browser storage | `false` |
+| `WEB_AGENT_IDLE_TIMEOUT` | Idle timeout in seconds | `300` (5 min) |
 
 ## Building from Source
 
@@ -207,6 +211,40 @@ make build
 make install-deps  # First time: installs Playwright browsers
 ```
 
+## Running in Non-Headless Mode (Visible Browser)
+
+To see the browser window, you must:
+
+1. **Have an X server running** (desktop environment or Xvfb)
+2. **Set the DISPLAY environment variable**
+3. **Use `--headless=false`**
+
+```bash
+# Check for available X displays
+ls /tmp/.X11-unix/
+
+# Find your display (look for :0 or :1)
+who
+
+# Run with visible browser
+DISPLAY=:1 web_browse_agent --session test --headless=false open https://example.com
+
+# Or export DISPLAY for the session
+export DISPLAY=:1
+web_browse_agent --session test --headless=false open https://example.com
+```
+
+**Common error without DISPLAY:**
+```
+Looks like you launched a headed browser without having a XServer running.
+Set either 'headless: true' or use 'xvfb-run <your-playwright-app>' before running Playwright.
+```
+
+**Alternative: Use xvfb-run** (virtual framebuffer, no visible window but runs headed mode):
+```bash
+xvfb-run web_browse_agent --session test --headless=false open https://example.com
+```
+
 ## Tips
 
 1. **Use JSON output** for programmatic parsing: `--json`
@@ -214,3 +252,4 @@ make install-deps  # First time: installs Playwright browsers
 3. **Use `wait-for`** after navigation to ensure content is loaded
 4. **Use `eval`** for complex data extraction that simple commands can't handle
 5. **Set viewport** before screenshots for consistent dimensions
+6. **Set DISPLAY** when using `--headless=false` to see the browser window
