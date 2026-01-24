@@ -101,17 +101,23 @@ export function parseMarkdown(markdown) {
         const renderer = new marked.Renderer();
         
         // Override code block rendering for security
-        renderer.code = function(code, language) {
+        // marked v17+ passes a token object: {text, lang, escaped}
+        renderer.code = function({text, lang, escaped}) {
             // Basic sanitization of code content
-            const sanitizedCode = escapeHtml(code);
-            const langClass = language ? `language-${escapeHtml(language)}` : 'language-text';
+            const sanitizedCode = escapeHtml(text || '');
+            const langClass = lang ? `language-${escapeHtml(lang)}` : 'language-text';
             return `<pre class="${langClass}"><code>${sanitizedCode}</code></pre>`;
         };
         
         // Override link rendering for security and file:// protocol support
-        renderer.link = function(href, title, text) {
+        // marked v17+ passes a token object: {href, title, tokens}
+        // We need to get the parser to render the tokens to text
+        renderer.link = function({href, title, tokens}) {
+            // Parse tokens to get the link text
+            const text = this.parser.parseInline(tokens);
+            
             // Check for file:// protocol - this is our custom scheme for file explorer links
-            if (href && href.startsWith('file://')) {
+            if (href && typeof href === 'string' && href.startsWith('file://')) {
                 // Extract the file path (remove file:// prefix)
                 // Support both file:///path and file://path formats
                 const filePath = href.replace(/^file:\/\/\/?/, '/');
@@ -123,10 +129,10 @@ export function parseMarkdown(markdown) {
             
             // Only allow safe protocols for external links
             const safeProtocols = ['http:', 'https:', 'mailto:'];
-            let safeHref = href;
+            let safeHref = href || '';
             
             try {
-                const url = new URL(href, window.location.href);
+                const url = new URL(safeHref, window.location.href);
                 if (!safeProtocols.includes(url.protocol)) {
                     safeHref = '#';
                 }
@@ -140,13 +146,14 @@ export function parseMarkdown(markdown) {
         };
         
         // Override image rendering for security
-        renderer.image = function(href, title, text) {
+        // marked v17+ passes a token object: {href, title, text}
+        renderer.image = function({href, title, text}) {
             // Only allow safe image protocols
             const safeProtocols = ['http:', 'https:'];
-            let safeHref = href;
+            let safeHref = href || '';
             
             try {
-                const url = new URL(href, window.location.href);
+                const url = new URL(safeHref, window.location.href);
                 if (!safeProtocols.includes(url.protocol)) {
                     safeHref = '';
                 }
@@ -155,12 +162,32 @@ export function parseMarkdown(markdown) {
             }
             
             const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
-            return safeHref ? `<img src="${safeHref}" alt="${escapeHtml(text)}"${titleAttr} class="markdown-image">` : '';
+            return safeHref ? `<img src="${safeHref}" alt="${escapeHtml(text || '')}"${titleAttr} class="markdown-image">` : '';
         };
         
         // Override table rendering
-        renderer.table = function(header, body) {
-            return `<div class="markdown-table-wrapper"><table class="markdown-table"><thead>${header}</thead><tbody>${body}</tbody></table></div>`;
+        // marked v17+ passes a token object: {header, rows}
+        renderer.table = function({header, rows}) {
+            // Render header cells
+            let headerHtml = '<tr>';
+            for (const cell of header) {
+                const align = cell.align ? ` style="text-align:${cell.align}"` : '';
+                headerHtml += `<th${align}>${this.parser.parseInline(cell.tokens)}</th>`;
+            }
+            headerHtml += '</tr>';
+            
+            // Render body rows
+            let bodyHtml = '';
+            for (const row of rows) {
+                bodyHtml += '<tr>';
+                for (const cell of row) {
+                    const align = cell.align ? ` style="text-align:${cell.align}"` : '';
+                    bodyHtml += `<td${align}>${this.parser.parseInline(cell.tokens)}</td>`;
+                }
+                bodyHtml += '</tr>';
+            }
+            
+            return `<div class="markdown-table-wrapper"><table class="markdown-table"><thead>${headerHtml}</thead><tbody>${bodyHtml}</tbody></table></div>`;
         };
         
         // Set custom renderer
