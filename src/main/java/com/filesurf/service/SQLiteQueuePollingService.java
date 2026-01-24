@@ -10,6 +10,9 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
@@ -37,6 +40,9 @@ public class SQLiteQueuePollingService {
     // Map: sessionId -> userId
     private final Map<String, String> activeSessions = new ConcurrentHashMap<>();
 
+    // Single-threaded executor to serialize all polling operations
+    private final ExecutorService pollingExecutor = Executors.newSingleThreadExecutor();
+
     // Shutdown flag to stop polling during shutdown
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
@@ -47,6 +53,16 @@ public class SQLiteQueuePollingService {
     public void shutdown() {
         LOGGER.info("SQLiteQueuePollingService shutting down");
         shuttingDown.set(true);
+        // Shutdown the executor gracefully
+        pollingExecutor.shutdown();
+        try {
+            if (!pollingExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                pollingExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            pollingExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
         activeSessions.clear();
         LOGGER.info("SQLiteQueuePollingService shutdown complete");
     }
@@ -70,11 +86,21 @@ public class SQLiteQueuePollingService {
     }
 
     /**
-     * Poll SQLite queues for klawed responses every 500ms
+     * Poll SQLite queues for klawed responses every 1s.
+     * Uses single-threaded executor to serialize operations.
      */
     @Scheduled(every = "1s")
     @ActivateRequestContext
     public void pollSQLiteQueues() {
+        // Submit to single-threaded executor to serialize polling
+        pollingExecutor.submit(this::pollSQLiteQueuesInternal);
+    }
+
+    /**
+     * Internal polling logic - executed by single-threaded executor
+     */
+    @ActivateRequestContext
+    void pollSQLiteQueuesInternal() {
         // Skip if shutdown is in progress
         if (shuttingDown.get()) {
             return;

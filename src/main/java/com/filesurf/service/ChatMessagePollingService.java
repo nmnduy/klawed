@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
@@ -35,6 +37,9 @@ public class ChatMessagePollingService {
     // Store active WebSocket connections by session ID
     private final Map<String, WebSocketConnection> activeConnections = new ConcurrentHashMap<>();
 
+    // Single-threaded executor to serialize all message polling
+    private final ExecutorService pollingExecutor = Executors.newSingleThreadExecutor();
+
     // Control flag for polling loop
     private final AtomicBoolean pollingActive = new AtomicBoolean(true);
 
@@ -46,6 +51,16 @@ public class ChatMessagePollingService {
         LOGGER.info("ChatMessagePollingService shutting down");
         stopPolling();
         activeConnections.clear();
+        // Shutdown the executor gracefully
+        pollingExecutor.shutdown();
+        try {
+            if (!pollingExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                pollingExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            pollingExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
         LOGGER.info("ChatMessagePollingService shutdown complete");
     }
 
@@ -129,10 +144,20 @@ public class ChatMessagePollingService {
      * Async polling loop for unsent messages every 300ms.
      * Only polls for messages belonging to sessions with active WebSocket connections.
      * Messages for disconnected sessions are ignored - users who drop off don't need those messages.
+     * Uses a single-threaded executor to serialize all polling operations.
      */
     @Scheduled(every = "1s")
     @ActivateRequestContext
     public void pollAndSendUnsentMessages() {
+        // Submit to single-threaded executor to serialize polling
+        pollingExecutor.submit(this::pollAndSendUnsentMessagesInternal);
+    }
+
+    /**
+     * Internal polling logic - executed by single-threaded executor
+     */
+    @ActivateRequestContext
+    void pollAndSendUnsentMessagesInternal() {
         if (!pollingActive.get()) {
             LOGGER.fine("Polling is paused");
             return;
@@ -308,9 +333,19 @@ public class ChatMessagePollingService {
     /**
      * Poll for unsent messages for a specific session.
      * Called when a WebSocket connection is established to catch up on any missed messages.
+     * Uses the single-threaded executor to serialize with the scheduled poller.
      */
     @ActivateRequestContext
     public void pollAndSendUnsentMessagesForSession(String sessionId) {
+        // Submit to single-threaded executor to serialize with scheduled polling
+        pollingExecutor.submit(() -> pollAndSendUnsentMessagesForSessionInternal(sessionId));
+    }
+
+    /**
+     * Internal session polling logic - executed by single-threaded executor
+     */
+    @ActivateRequestContext
+    void pollAndSendUnsentMessagesForSessionInternal(String sessionId) {
         LOGGER.fine("[SESSION:" + sessionId + "] Polling for unsent messages...");
 
         try {
