@@ -691,58 +691,6 @@ static int sqlite_queue_send_end_ai_turn(SQLiteQueueContext *ctx, const char *re
     return sqlite_queue_send_json(ctx, receiver, "END_AI_TURN", NULL);
 }
 
-// Helper function to send auto-compaction notice
-int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *receiver,
-                                       int messages_compacted, size_t tokens_before,
-                                        size_t tokens_after, double usage_before_pct,
-                                        double usage_after_pct) {
-    if (!ctx || !receiver) {
-        LOG_ERROR("SQLite Queue: Invalid parameters for send_compaction_notice");
-        return -1;
-    }
-
-    cJSON *notice_json = cJSON_CreateObject();
-    if (!notice_json) {
-        LOG_ERROR("SQLite Queue: Failed to create compaction notice JSON object");
-        return -1;
-    }
-
-    cJSON_AddStringToObject(notice_json, "messageType", "AUTO_COMPACTION");
-    cJSON_AddNumberToObject(notice_json, "messagesCompacted", messages_compacted);
-    cJSON_AddNumberToObject(notice_json, "tokensBefore", (double)tokens_before);
-    cJSON_AddNumberToObject(notice_json, "tokensAfter", (double)tokens_after);
-    cJSON_AddNumberToObject(notice_json, "tokensFreed", (double)(tokens_before - tokens_after));
-    cJSON_AddNumberToObject(notice_json, "usageBeforePct", usage_before_pct);
-    cJSON_AddNumberToObject(notice_json, "usageAfterPct", usage_after_pct);
-
-    // Build human-readable content message
-    char content_msg[512];
-    snprintf(content_msg, sizeof(content_msg),
-             "Context compaction: %d messages stored to memory. "
-             "Tokens: %zu → %zu (freed ~%zu tokens). "
-             "Usage: %.1f%% → %.1f%%.",
-             messages_compacted,
-             tokens_before, tokens_after, tokens_before - tokens_after,
-             usage_before_pct, usage_after_pct);
-    cJSON_AddStringToObject(notice_json, "content", content_msg);
-
-    char *notice_str = cJSON_PrintUnformatted(notice_json);
-    if (!notice_str) {
-        LOG_ERROR("SQLite Queue: Failed to serialize compaction notice JSON");
-        cJSON_Delete(notice_json);
-        return -1;
-    }
-
-    LOG_INFO("SQLite Queue: Sending AUTO_COMPACTION notice (%d messages, %zu→%zu tokens)",
-             messages_compacted, tokens_before, tokens_after);
-
-    int result = sqlite_queue_send(ctx, receiver, notice_str, strlen(notice_str));
-    free(notice_str);
-    cJSON_Delete(notice_json);
-
-    return result;
-}
-
 // Helper function to send a tool execution request
 static int sqlite_queue_send_tool_request(SQLiteQueueContext *ctx, const char *receiver,
                                          const char *tool_name, const char *tool_id,
@@ -984,6 +932,60 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
     return 0;
 }
 #endif // TEST_BUILD
+
+// Helper function to send auto-compaction notice
+// NOTE: This function is NOT wrapped in #ifndef TEST_BUILD because it's called from api_client.c
+// which needs to work in both normal and test builds.
+int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *receiver,
+                                       int messages_compacted, size_t tokens_before,
+                                        size_t tokens_after, double usage_before_pct,
+                                        double usage_after_pct) {
+    if (!ctx || !receiver) {
+        LOG_ERROR("SQLite Queue: Invalid parameters for send_compaction_notice");
+        return -1;
+    }
+
+    cJSON *notice_json = cJSON_CreateObject();
+    if (!notice_json) {
+        LOG_ERROR("SQLite Queue: Failed to create compaction notice JSON object");
+        return -1;
+    }
+
+    cJSON_AddStringToObject(notice_json, "messageType", "AUTO_COMPACTION");
+    cJSON_AddNumberToObject(notice_json, "messagesCompacted", messages_compacted);
+    cJSON_AddNumberToObject(notice_json, "tokensBefore", (double)tokens_before);
+    cJSON_AddNumberToObject(notice_json, "tokensAfter", (double)tokens_after);
+    cJSON_AddNumberToObject(notice_json, "tokensFreed", (double)(tokens_before - tokens_after));
+    cJSON_AddNumberToObject(notice_json, "usageBeforePct", usage_before_pct);
+    cJSON_AddNumberToObject(notice_json, "usageAfterPct", usage_after_pct);
+
+    // Build human-readable content message
+    char content_msg[512];
+    snprintf(content_msg, sizeof(content_msg),
+             "Context compaction: %d messages stored to memory. "
+             "Tokens: %zu → %zu (freed ~%zu tokens). "
+             "Usage: %.1f%% → %.1f%%.",
+             messages_compacted,
+             tokens_before, tokens_after, tokens_before - tokens_after,
+             usage_before_pct, usage_after_pct);
+    cJSON_AddStringToObject(notice_json, "content", content_msg);
+
+    char *notice_str = cJSON_PrintUnformatted(notice_json);
+    if (!notice_str) {
+        LOG_ERROR("SQLite Queue: Failed to serialize compaction notice JSON");
+        cJSON_Delete(notice_json);
+        return -1;
+    }
+
+    LOG_INFO("SQLite Queue: Sending AUTO_COMPACTION notice (%d messages, %zu→%zu tokens)",
+             messages_compacted, tokens_before, tokens_after);
+
+    int result = sqlite_queue_send(ctx, receiver, notice_str, strlen(notice_str));
+    free(notice_str);
+    cJSON_Delete(notice_json);
+
+    return result;
+}
 
 #ifndef TEST_BUILD
 /**
