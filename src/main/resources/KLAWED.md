@@ -115,6 +115,7 @@ SKILLS are organized as flat markdown files in `src/main/resources/SKILLS/`. Eac
 
 ### Current Skills
 
+- `context7.md` - Access up-to-date library documentation (React, Next.js, Python, AWS, etc.) using Context7 CLI to verify API syntax and get current framework documentation
 - `github.md` - Browse and analyze n8n connectors from GitHub without downloading entire repository, generate new connector templates based on existing patterns
 - `latex.md` - PDF generation using LaTeX with recipes for invoices, reports, and complex documents with Unicode/RTL support
 - `ocr.md` - Optical Character Recognition for extracting text from images and PDFs
