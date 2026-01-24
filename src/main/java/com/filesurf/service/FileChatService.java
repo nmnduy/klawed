@@ -17,6 +17,9 @@ public class FileChatService {
     @Inject
     SessionChatRepository sessionChatRepository;
 
+    @Inject
+    MetricsService metricsService;
+
     @PostConstruct
     void init() {
         LOGGER.info("Initializing FileChatService with per-session databases...");
@@ -25,7 +28,23 @@ public class FileChatService {
 
     public ChatSessionRecord createOrUpdateChatSession(String sessionId, String clientIdentity) {
         LOGGER.info("[SESSION:" + sessionId + "] Creating/updating chat session for client: " + clientIdentity);
-        return sessionChatRepository.createOrUpdateChatSession(sessionId, clientIdentity);
+        
+        // Check if session exists before creating/updating to track metrics
+        ChatSessionRecord existingSession = sessionChatRepository.findChatSessionBySessionId(sessionId);
+        boolean isNewSession = (existingSession == null);
+        
+        ChatSessionRecord result = sessionChatRepository.createOrUpdateChatSession(sessionId, clientIdentity);
+        
+        // Track metrics based on whether this was a new or resumed session
+        if (isNewSession) {
+            metricsService.incrementChatSessionsCreated();
+            LOGGER.info("[SESSION:" + sessionId + "] New session created");
+        } else {
+            metricsService.incrementChatSessionsResumed();
+            LOGGER.info("[SESSION:" + sessionId + "] Existing session resumed");
+        }
+        
+        return result;
     }
 
     public ChatMessageRecord createChatMessage(String sessionId, String sender, String receiver,

@@ -83,6 +83,10 @@ public class KlawedSandboxService {
     @Inject
     FileChatService fileChatService;
 
+    // MetricsService for tracking container lifecycle
+    @Inject
+    MetricsService metricsService;
+
     // ObjectMapper for JSON serialization
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -481,9 +485,12 @@ public class KlawedSandboxService {
                         startContainerForSession(sessionId, session.userId);
                     } catch (IOException e) {
                         LOGGER.severe("[SESSION:" + sessionId + "] Failed to start container: " + e.getMessage());
+                        metricsService.incrementContainerStartFailures();
                     }
                 } else {
                     LOGGER.fine("[SESSION:" + sessionId + "] Container is running and healthy");
+                    // Track container reuse - container already running, no action needed
+                    metricsService.incrementContainersReused();
                 }
             }
 
@@ -630,6 +637,7 @@ public class KlawedSandboxService {
         }
 
         if (exitCode != 0) {
+            metricsService.incrementContainerStartFailures();
             throw new IOException("Failed to start container, exit code: " + exitCode + ", output: " + output);
         }
 
@@ -637,10 +645,14 @@ public class KlawedSandboxService {
         String containerId = output.lines().findFirst().orElse("").trim();
 
         if (containerId.isBlank()) {
+            metricsService.incrementContainerStartFailures();
             throw new IOException("Failed to get container ID after starting container");
         }
 
         LOGGER.info("[SESSION:" + sessionId + "] Started container: " + containerId + " (name: " + containerName + ")");
+        
+        // Track successful container start
+        metricsService.incrementContainersStarted();
     }
 
     /**
@@ -761,6 +773,8 @@ public class KlawedSandboxService {
                 LOGGER.warning("Container stop returned exit code " + exitCode + ": " + output);
             } else {
                 LOGGER.info("Container stopped: " + containerId);
+                // Track successful container stop
+                metricsService.incrementContainersStopped();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

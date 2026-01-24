@@ -32,11 +32,17 @@ public class MetricsService {
 
     // Counters for various events
     private Counter chatSessionsStarted;
+    private Counter chatSessionsCreated;
+    private Counter chatSessionsResumed;
     private Counter chatMessagesSent;
     private Counter fileOperations;
     private Counter errors;
     private Counter apiCalls;
     private Counter containerStartFailures;
+    private Counter containersStarted;
+    private Counter containersReused;
+    private Counter containersStopped;
+    private Counter containersKilled;
     private Counter waitlistSubmissions;
     private Counter contactFormSubmissions;
     private Counter feedbackSubmissions;
@@ -62,7 +68,17 @@ public class MetricsService {
 
         // Initialize counters
         chatSessionsStarted = Counter.builder("filesurf_chat_sessions_started")
-                .description("Total number of chat sessions started")
+                .description("Total number of chat sessions started (WebSocket connections)")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        chatSessionsCreated = Counter.builder("filesurf_chat_sessions_created")
+                .description("Total number of NEW chat sessions created")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        chatSessionsResumed = Counter.builder("filesurf_chat_sessions_resumed")
+                .description("Total number of EXISTING chat sessions resumed")
                 .tag("application", "filesurf")
                 .register(meterRegistry);
 
@@ -89,6 +105,26 @@ public class MetricsService {
 
         containerStartFailures = Counter.builder("filesurf_container_start_failures")
                 .description("Total number of container start failures")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        containersStarted = Counter.builder("filesurf_containers_started")
+                .description("Total number of containers started (new or after stop)")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        containersReused = Counter.builder("filesurf_containers_reused")
+                .description("Total number of containers reused (already running)")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        containersStopped = Counter.builder("filesurf_containers_stopped")
+                .description("Total number of containers stopped (idle/inactive)")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        containersKilled = Counter.builder("filesurf_containers_killed")
+                .description("Total number of containers forcefully killed")
                 .tag("application", "filesurf")
                 .register(meterRegistry);
 
@@ -267,6 +303,16 @@ public class MetricsService {
         LOGGER.fine("Chat session started counter incremented");
     }
 
+    public void incrementChatSessionsCreated() {
+        chatSessionsCreated.increment();
+        LOGGER.fine("Chat session created counter incremented (new session)");
+    }
+
+    public void incrementChatSessionsResumed() {
+        chatSessionsResumed.increment();
+        LOGGER.fine("Chat session resumed counter incremented (existing session)");
+    }
+
     // NOTE: No decrementChatSessions() - active sessions are now dynamically queried from agent manager
     // The filesurf_active_chat_sessions gauge queries getActiveChatSessionsCount() which returns
     // the actual count of sessions with running agents
@@ -313,6 +359,27 @@ public class MetricsService {
     public void incrementContainerStartFailures() {
         containerStartFailures.increment();
         LOGGER.warning("Container start failure recorded");
+    }
+
+    // Container lifecycle tracking
+    public void incrementContainersStarted() {
+        containersStarted.increment();
+        LOGGER.fine("Container started counter incremented");
+    }
+
+    public void incrementContainersReused() {
+        containersReused.increment();
+        LOGGER.fine("Container reused counter incremented (already running)");
+    }
+
+    public void incrementContainersStopped() {
+        containersStopped.increment();
+        LOGGER.fine("Container stopped counter incremented");
+    }
+
+    public void incrementContainersKilled() {
+        containersKilled.increment();
+        LOGGER.warning("Container killed counter incremented");
     }
 
     // Timer methods
