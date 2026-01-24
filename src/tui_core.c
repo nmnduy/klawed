@@ -58,7 +58,16 @@ static void init_ncurses_colors(void) {
     }
 
     start_color();
-    use_default_colors();  // Use terminal's default colors as base
+
+    // Try to use terminal's default colors as base
+    // This allows -1 to mean "default/transparent" background
+    // If it fails, we'll use COLOR_BLACK as fallback for backgrounds
+    int default_colors_supported = (use_default_colors() == OK);
+    short default_bg = default_colors_supported ? -1 : COLOR_BLACK;
+
+    if (!default_colors_supported) {
+        LOG_DEBUG("[TUI] Terminal does not support default colors, using COLOR_BLACK for backgrounds");
+    }
 
     // If we have a loaded theme, use it to initialize custom colors
     if (g_theme_loaded) {
@@ -137,25 +146,25 @@ static void init_ncurses_colors(void) {
                 rgb_to_ncurses(asst_bg_b));
 
             // Initialize color pairs with custom colors
-            init_pair(NCURSES_PAIR_FOREGROUND, 16, -1);  // -1 = default background
-            init_pair(NCURSES_PAIR_USER, 17, -1);
-            init_pair(NCURSES_PAIR_ASSISTANT, 18, -1);
-            init_pair(NCURSES_PAIR_STATUS, 19, -1);
-            init_pair(NCURSES_PAIR_ERROR, 20, -1);
+            init_pair(NCURSES_PAIR_FOREGROUND, 16, default_bg);
+            init_pair(NCURSES_PAIR_USER, 17, default_bg);
+            init_pair(NCURSES_PAIR_ASSISTANT, 18, default_bg);
+            init_pair(NCURSES_PAIR_STATUS, 19, default_bg);
+            init_pair(NCURSES_PAIR_ERROR, 20, default_bg);
             // Use dedicated tool color pair (distinct from assistant)
             // Unify tool color with status to reduce color variance
-            init_pair(NCURSES_PAIR_TOOL, 19, -1);
-            init_pair(NCURSES_PAIR_PROMPT, 17, -1);  // Use USER color for prompt
+            init_pair(NCURSES_PAIR_TOOL, 19, default_bg);
+            init_pair(NCURSES_PAIR_PROMPT, 17, default_bg);  // Use USER color for prompt
             // TODO color pairs
-            init_pair(NCURSES_PAIR_TODO_COMPLETED, 17, -1);    // Green (same as USER)
-            init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, 19, -1);  // Yellow (same as STATUS)
-            init_pair(NCURSES_PAIR_TODO_PENDING, 18, -1);      // Cyan (same as ASSISTANT)
-            init_pair(NCURSES_PAIR_SEARCH, 22, -1);            // Search highlight (color5 from theme)
+            init_pair(NCURSES_PAIR_TODO_COMPLETED, 17, default_bg);    // Green (same as USER)
+            init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, 19, default_bg);  // Yellow (same as STATUS)
+            init_pair(NCURSES_PAIR_TODO_PENDING, 18, default_bg);      // Cyan (same as ASSISTANT)
+            init_pair(NCURSES_PAIR_SEARCH, 22, default_bg);            // Search highlight (color5 from theme)
             init_pair(NCURSES_PAIR_INPUT_BG, 16, 23);          // Foreground on subtle background
-            init_pair(NCURSES_PAIR_INPUT_BORDER, 24, -1);      // Border/accent color
+            init_pair(NCURSES_PAIR_INPUT_BORDER, 24, default_bg);      // Border/accent color
             init_pair(NCURSES_PAIR_USER_MSG_BG, 16, 23);       // User message background (same as input bg)
             init_pair(NCURSES_PAIR_ASSISTANT_BG, 16, 25);      // Foreground on subtle assistant background
-            init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, 18, -1);  // Assistant color with no background (for border)
+            init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, 18, default_bg);  // Assistant color with no background (for border)
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -167,71 +176,71 @@ static void init_ncurses_colors(void) {
             int error_idx = rgb_to_256_index(g_theme.error_rgb);
             int search_idx = rgb_to_256_index(g_theme.search_rgb);
 
-            init_pair(NCURSES_PAIR_FOREGROUND, (short)fg_idx, (short)-1);
-            init_pair(NCURSES_PAIR_USER, (short)user_idx, (short)-1);
-            init_pair(NCURSES_PAIR_ASSISTANT, (short)assistant_idx, (short)-1);
-            init_pair(NCURSES_PAIR_STATUS, (short)status_idx, (short)-1);
-            init_pair(NCURSES_PAIR_ERROR, (short)error_idx, (short)-1);
+            init_pair(NCURSES_PAIR_FOREGROUND, (short)fg_idx, default_bg);
+            init_pair(NCURSES_PAIR_USER, (short)user_idx, default_bg);
+            init_pair(NCURSES_PAIR_ASSISTANT, (short)assistant_idx, default_bg);
+            init_pair(NCURSES_PAIR_STATUS, (short)status_idx, default_bg);
+            init_pair(NCURSES_PAIR_ERROR, (short)error_idx, default_bg);
             // Use status color for tool tag to reduce color variance
-            init_pair(NCURSES_PAIR_TOOL, (short)status_idx, (short)-1);
-            init_pair(NCURSES_PAIR_PROMPT, (short)user_idx, (short)-1);
+            init_pair(NCURSES_PAIR_TOOL, (short)status_idx, default_bg);
+            init_pair(NCURSES_PAIR_PROMPT, (short)user_idx, default_bg);
             // TODO color pairs
-            init_pair(NCURSES_PAIR_TODO_COMPLETED, (short)user_idx, (short)-1);
-            init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, (short)status_idx, (short)-1);
-            init_pair(NCURSES_PAIR_TODO_PENDING, (short)assistant_idx, (short)-1);
-            init_pair(NCURSES_PAIR_SEARCH, (short)search_idx, (short)-1);  // Search highlight (color5 from theme)
+            init_pair(NCURSES_PAIR_TODO_COMPLETED, (short)user_idx, default_bg);
+            init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, (short)status_idx, default_bg);
+            init_pair(NCURSES_PAIR_TODO_PENDING, (short)assistant_idx, default_bg);
+            init_pair(NCURSES_PAIR_SEARCH, (short)search_idx, default_bg);  // Search highlight (color5 from theme)
             init_pair(NCURSES_PAIR_INPUT_BG, (short)fg_idx, (short)236);   // Foreground on dark gray (236 in 256 palette)
-            init_pair(NCURSES_PAIR_INPUT_BORDER, (short)user_idx, (short)-1);  // Border color (user/green)
+            init_pair(NCURSES_PAIR_INPUT_BORDER, (short)user_idx, default_bg);  // Border color (user/green)
             init_pair(NCURSES_PAIR_USER_MSG_BG, (short)fg_idx, (short)236);   // User message background (same as input bg)
             init_pair(NCURSES_PAIR_ASSISTANT_BG, (short)fg_idx, (short)235);  // Foreground on very dark gray (235)
-            init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, (short)assistant_idx, (short)-1);  // Assistant color with no background (for border)
+            init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, (short)assistant_idx, default_bg);  // Assistant color with no background (for border)
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
             LOG_DEBUG("[TUI] Terminal does not support color changes or 256 colors, using standard colors");
             // Fall back to standard ncurses colors
-            init_pair(NCURSES_PAIR_FOREGROUND, COLOR_WHITE, -1);
-            init_pair(NCURSES_PAIR_USER, COLOR_GREEN, -1);
-            init_pair(NCURSES_PAIR_ASSISTANT, COLOR_CYAN, -1);
-            init_pair(NCURSES_PAIR_STATUS, COLOR_YELLOW, -1);
-            init_pair(NCURSES_PAIR_ERROR, COLOR_RED, -1);
+            init_pair(NCURSES_PAIR_FOREGROUND, COLOR_WHITE, default_bg);
+            init_pair(NCURSES_PAIR_USER, COLOR_GREEN, default_bg);
+            init_pair(NCURSES_PAIR_ASSISTANT, COLOR_CYAN, default_bg);
+            init_pair(NCURSES_PAIR_STATUS, COLOR_YELLOW, default_bg);
+            init_pair(NCURSES_PAIR_ERROR, COLOR_RED, default_bg);
             // Use magenta for tool tag (distinct from assistant cyan)
             // Unify tool color with status color
-            init_pair(NCURSES_PAIR_TOOL, COLOR_YELLOW, -1);
-            init_pair(NCURSES_PAIR_PROMPT, COLOR_GREEN, -1);
+            init_pair(NCURSES_PAIR_TOOL, COLOR_YELLOW, default_bg);
+            init_pair(NCURSES_PAIR_PROMPT, COLOR_GREEN, default_bg);
             // TODO color pairs
-            init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, -1);
-            init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, -1);
-            init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
-            init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
+            init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, default_bg);
+            init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, default_bg);
+            init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, default_bg);
+            init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, default_bg);  // Fallback: magenta for search highlights
             init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
-            init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, -1);  // Fallback: green border (user color)
+            init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, default_bg);  // Fallback: green border (user color)
             init_pair(NCURSES_PAIR_USER_MSG_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: user message background
-            init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, -1);  // Fallback: no background (use default)
-            init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, COLOR_CYAN, -1);  // Fallback: cyan (assistant color)
+            init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, default_bg);  // Fallback: no background (use default)
+            init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, COLOR_CYAN, default_bg);  // Fallback: cyan (assistant color)
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
         // Use standard ncurses color constants
-        init_pair(NCURSES_PAIR_FOREGROUND, COLOR_WHITE, -1);
-        init_pair(NCURSES_PAIR_USER, COLOR_GREEN, -1);
-        init_pair(NCURSES_PAIR_ASSISTANT, COLOR_CYAN, -1);
-        init_pair(NCURSES_PAIR_STATUS, COLOR_YELLOW, -1);
-        init_pair(NCURSES_PAIR_ERROR, COLOR_RED, -1);
-        init_pair(NCURSES_PAIR_PROMPT, COLOR_GREEN, -1);
+        init_pair(NCURSES_PAIR_FOREGROUND, COLOR_WHITE, default_bg);
+        init_pair(NCURSES_PAIR_USER, COLOR_GREEN, default_bg);
+        init_pair(NCURSES_PAIR_ASSISTANT, COLOR_CYAN, default_bg);
+        init_pair(NCURSES_PAIR_STATUS, COLOR_YELLOW, default_bg);
+        init_pair(NCURSES_PAIR_ERROR, COLOR_RED, default_bg);
+        init_pair(NCURSES_PAIR_PROMPT, COLOR_GREEN, default_bg);
         // Ensure tool pair is initialized; use magenta for distinction
         // Unify tool color with status color
-        init_pair(NCURSES_PAIR_TOOL, COLOR_YELLOW, -1);
+        init_pair(NCURSES_PAIR_TOOL, COLOR_YELLOW, default_bg);
         // TODO color pairs
-        init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, -1);
-        init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, -1);
-        init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, -1);
-        init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, -1);  // Fallback: magenta for search highlights
+        init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, default_bg);
+        init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, default_bg);
+        init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, default_bg);
+        init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, default_bg);  // Fallback: magenta for search highlights
         init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
-        init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, -1);  // Fallback: green border (user color)
+        init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, default_bg);  // Fallback: green border (user color)
         init_pair(NCURSES_PAIR_USER_MSG_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: user message background
-        init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, -1);  // Fallback: no background (use default)
-        init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, COLOR_CYAN, -1);  // Fallback: cyan (assistant color)
+        init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, default_bg);  // Fallback: no background (use default)
+        init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, COLOR_CYAN, default_bg);  // Fallback: cyan (assistant color)
     }
 }
 
