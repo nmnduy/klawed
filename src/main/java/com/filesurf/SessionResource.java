@@ -39,8 +39,9 @@ public class SessionResource {
     @ConfigProperty(name = "cookie.secure", defaultValue = "false")
     Optional<Boolean> cookieSecure;
 
-    // In-memory session store (maps session ID to client identity)
-    private static final ConcurrentHashMap<String, String> sessionStore = new ConcurrentHashMap<>();
+    // In-memory session cache (maps session ID to client identity)
+    // This is a read-through cache; the database is the source of truth
+    private static final ConcurrentHashMap<String, String> sessionCache = new ConcurrentHashMap<>();
 
     /**
      * Generate a new session ID for authenticated users.
@@ -71,11 +72,11 @@ public class SessionResource {
 
         String sessionId = UUID.randomUUID().toString();
 
-        // Store the session ID with user identity
-        sessionStore.put(sessionId, user.getEmail());
+        // Store the session ID with user identity in cache
+        sessionCache.put(sessionId, user.getEmail());
 
-        // Register session in sessions.db for container management
-        klawedSandboxService.registerSession(sessionId, userId);
+        // Register session in sessions.db (source of truth) with email
+        klawedSandboxService.registerSession(sessionId, userId, user.getEmail());
 
         LOGGER.info("Generated new session ID: " + sessionId + " for user: " + user.getEmail() + " (userId: " + userId + ")");
 
@@ -113,42 +114,86 @@ public class SessionResource {
     }
 
     /**
-     * Validate a session ID
+     * Validate a session ID using database as source of truth
      * @param sessionId The session ID to validate
-     * @return true if session exists, false otherwise
+     * @param klawedSandboxService Service instance to query database
+     * @return true if session exists and is active, false otherwise
      */
+    public static boolean validateSession(String sessionId, KlawedSandboxService klawedSandboxService) {
+        // Database is the source of truth - check if session is active (not disconnected)
+        return klawedSandboxService.isSessionActive(sessionId);
+    }
+
+    /**
+     * Validate a session ID (legacy static method for backward compatibility)
+     * NOTE: This method is deprecated and will be removed in a future version.
+     * Use validateSession(sessionId, klawedSandboxService) instead.
+     * @param sessionId The session ID to validate
+     * @return true if session exists in cache, false otherwise
+     */
+    @Deprecated
     public static boolean validateSession(String sessionId) {
-        return sessionStore.containsKey(sessionId);
+        // Legacy: only check cache
+        // This is kept for backward compatibility but should not be used
+        return sessionCache.containsKey(sessionId);
     }
 
     /**
-     * Get client identity for a session
+     * Get client identity for a session with read-through cache
      * @param sessionId The session ID
-     * @return Client identity or null if session doesn't exist
+     * @param klawedSandboxService Service instance to query database
+     * @return Client identity (email) or null if session doesn't exist
      */
-    public static String getClientIdentity(String sessionId) {
-        return sessionStore.get(sessionId);
+    public static String getClientIdentity(String sessionId, KlawedSandboxService klawedSandboxService) {
+        // Try cache first
+        String cached = sessionCache.get(sessionId);
+        if (cached != null) {
+            return cached;
+        }
+        
+        // Cache miss - query database
+        String email = klawedSandboxService.getSessionEmail(sessionId);
+        if (email != null) {
+            // Populate cache for future requests
+            sessionCache.put(sessionId, email);
+            LOGGER.info("Loaded session " + sessionId + " from database into cache");
+        }
+        return email;
     }
 
     /**
-     * Remove a session (e.g., when WebSocket closes)
-     * @param sessionId The session ID to remove
+     * Get client identity for a session (legacy static method)
+     * NOTE: This method is deprecated and will be removed in a future version.
+     * Use getClientIdentity(sessionId, klawedSandboxService) instead.
+     * @param sessionId The session ID
+     * @return Client identity or null if session doesn't exist in cache
+     */
+    @Deprecated
+    public static String getClientIdentity(String sessionId) {
+        return sessionCache.get(sessionId);
+    }
+
+    /**
+     * Remove a session from cache (e.g., when WebSocket closes)
+     * Note: This only clears the cache. The database record is updated separately
+     * by KlawedSandboxService.unregisterSession()
+     * @param sessionId The session ID to remove from cache
      */
     public static void removeSession(String sessionId) {
-        sessionStore.remove(sessionId);
-        LOGGER.info("Removed session: " + sessionId);
+        sessionCache.remove(sessionId);
+        LOGGER.info("Removed session from cache: " + sessionId);
     }
 
     /**
      * Get all active sessions (for debugging/monitoring)
-     * @return Number of active sessions
+     * @return Number of sessions in cache (note: database is the source of truth)
      */
     @GET
     @Path("/count")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getActiveSessionCount() {
         return Response.ok()
-                .entity("{\"activeSessions\": " + sessionStore.size() + "}")
+                .entity("{\"cachedSessions\": " + sessionCache.size() + "}")
                 .build();
     }
 }

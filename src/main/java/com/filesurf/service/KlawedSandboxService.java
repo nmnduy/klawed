@@ -158,37 +158,60 @@ public class KlawedSandboxService {
                 "CREATE TABLE IF NOT EXISTS sessions (" +
                 "session_id TEXT PRIMARY KEY, " +
                 "user_id TEXT NOT NULL, " +
+                "email TEXT, " +  // Client identity (email address)
                 "registered_at INTEGER NOT NULL, " +
                 "last_active_at INTEGER NOT NULL, " +
                 "disconnected_at INTEGER" +  // NULL when connected, timestamp when disconnected
                 ");"
             );
 
+            // Migrate existing tables: add email column if it doesn't exist
+            // This is safe to run multiple times (ALTER TABLE IF NOT EXISTS would fail on older SQLite)
+            try {
+                stmt.execute("ALTER TABLE sessions ADD COLUMN email TEXT;");
+                LOGGER.info("Added email column to sessions table (migration)");
+            } catch (SQLException e) {
+                // Column already exists, ignore
+                if (!e.getMessage().contains("duplicate column name")) {
+                    throw e;
+                }
+            }
+
             LOGGER.info("Sessions schema initialized");
         }
     }
 
     /**
-     * Register a session (called on WebSocket connect)
+     * Register a session (called when session is generated)
      */
     public void registerSession(String sessionId, String userId) {
+        registerSession(sessionId, userId, null);
+    }
+
+    /**
+     * Register a session with email (called when session is generated)
+     */
+    public void registerSession(String sessionId, String userId, String email) {
         try (Connection conn = DriverManager.getConnection(jdbcUrl);
              PreparedStatement pstmt = conn.prepareStatement(
-                 "INSERT INTO sessions (session_id, user_id, registered_at, last_active_at, disconnected_at) " +
-                 "VALUES (?, ?, ?, ?, NULL) " +
+                 "INSERT INTO sessions (session_id, user_id, email, registered_at, last_active_at, disconnected_at) " +
+                 "VALUES (?, ?, ?, ?, ?, NULL) " +
                  "ON CONFLICT(session_id) DO UPDATE SET " +
-                 "last_active_at = ?, disconnected_at = NULL"
+                 "last_active_at = ?, disconnected_at = NULL, email = COALESCE(?, email)"
              )) {
 
             long now = Instant.now().getEpochSecond();
             pstmt.setString(1, sessionId);
             pstmt.setString(2, userId);
-            pstmt.setLong(3, now);
+            pstmt.setString(3, email);
             pstmt.setLong(4, now);
             pstmt.setLong(5, now);
+            pstmt.setLong(6, now);
+            pstmt.setString(7, email);
             pstmt.executeUpdate();
 
-            LOGGER.info("[SESSION:" + sessionId + "] Session registered for user: " + userId);
+            LOGGER.info("[SESSION:" + sessionId + "] Session registered for user: " + userId + 
+                        (email != null ? " (email: " + email + ")" : ""));
         } catch (SQLException e) {
             LOGGER.severe("[SESSION:" + sessionId + "] Failed to register session: " + e.getMessage());
         }
@@ -309,6 +332,54 @@ public class KlawedSandboxService {
         }
 
         return sessionIds;
+    }
+
+    /**
+     * Check if a session is active (exists and not disconnected)
+     * This is the source of truth for session validation.
+     */
+    public boolean isSessionActive(String sessionId) {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "SELECT 1 FROM sessions WHERE session_id = ? AND disconnected_at IS NULL"
+             )) {
+
+            pstmt.setString(1, sessionId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                boolean active = rs.next();
+                LOGGER.fine("[SESSION:" + sessionId + "] Session active check: " + active);
+                return active;
+            }
+        } catch (SQLException e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to check session active: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get the email (client identity) for a session
+     * Returns null if session doesn't exist or has no email
+     */
+    public String getSessionEmail(String sessionId) {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "SELECT email FROM sessions WHERE session_id = ?"
+             )) {
+
+            pstmt.setString(1, sessionId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    String email = rs.getString("email");
+                    LOGGER.fine("[SESSION:" + sessionId + "] Retrieved email: " + email);
+                    return email;
+                }
+                LOGGER.fine("[SESSION:" + sessionId + "] No session found in database");
+                return null;
+            }
+        } catch (SQLException e) {
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to get session email: " + e.getMessage());
+            return null;
+        }
     }
 
     /**

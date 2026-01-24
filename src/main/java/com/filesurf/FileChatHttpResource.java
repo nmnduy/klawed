@@ -72,7 +72,7 @@ public class FileChatHttpResource {
                     .build();
         }
 
-        if (!SessionResource.validateSession(sessionId)) {
+        if (!SessionResource.validateSession(sessionId, klawedSandboxService)) {
             LOGGER.severe("HTTP session initialization rejected: Invalid session ID: " + sessionId);
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity("{\"error\": \"Invalid session ID. Please generate a new session by calling /session/generate\"}")
@@ -90,8 +90,8 @@ public class FileChatHttpResource {
 
         LOGGER.info("[SESSION:" + sessionId + "] Using userId from cookie: " + userId);
 
-        // Get client identity for this session
-        String clientIdentity = SessionResource.getClientIdentity(sessionId);
+        // Get client identity for this session (read-through cache)
+        String clientIdentity = SessionResource.getClientIdentity(sessionId, klawedSandboxService);
         LOGGER.info("[SESSION:" + sessionId + "] HTTP session initialization for client: " + clientIdentity);
 
         try {

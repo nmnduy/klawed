@@ -94,8 +94,8 @@ public class FileChatWebSocket {
             }
         }
 
-        // Validate session ID
-        if (!SessionResource.validateSession(sessionId)) {
+        // Validate session ID using database (source of truth)
+        if (!SessionResource.validateSession(sessionId, klawedSandboxService)) {
             LOGGER.severe("WebSocket connection rejected: Invalid session ID: " + sessionId);
             try {
                 return objectMapper.writeValueAsString(KlawedSocketMessage.createError(
@@ -136,8 +136,8 @@ public class FileChatWebSocket {
 
         LOGGER.info("[SESSION:" + sessionId + "] Using userId from cookie: " + userId);
 
-        // Get client identity for this session
-        String clientIdentity = SessionResource.getClientIdentity(sessionId);
+        // Get client identity for this session (read-through cache)
+        String clientIdentity = SessionResource.getClientIdentity(sessionId, klawedSandboxService);
         LOGGER.info("[SESSION:" + sessionId + "] WebSocket connection opened for client: " + clientIdentity);
 
         // Create or update chat session in database
