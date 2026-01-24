@@ -128,6 +128,7 @@ static int ensure_parent_dir_exists(const char *file_path) {
 static void memvid_do_init(void) {
     const char *path = g_memvid_path;
     static char default_path[MEMVID_MAX_PATH];
+    int doctor_result;
 
     /* Use default path if none provided */
     if (path == NULL) {
@@ -150,7 +151,44 @@ static void memvid_do_init(void) {
     g_memvid_handle = memvid_open(path);
     if (g_memvid_handle == NULL) {
         const char *err = memvid_last_error();
-        LOG_ERROR("Memvid: Failed to open database: %s", err ? err : "unknown error");
+        LOG_WARN("Memvid: Failed to open database: %s", err ? err : "unknown error");
+
+        /* Attempt self-healing via doctor */
+        LOG_INFO("Memvid: Attempting automatic repair...");
+        doctor_result = memvid_doctor(path, 1, 1, 1); /* Rebuild all indices */
+
+        if (doctor_result == MEMVID_DOCTOR_STATUS_CLEAN ||
+            doctor_result == MEMVID_DOCTOR_STATUS_HEALED) {
+            LOG_INFO("Memvid: Repair successful (status=%d), retrying open", doctor_result);
+
+            /* Retry opening after repair */
+            g_memvid_handle = memvid_open(path);
+            if (g_memvid_handle == NULL) {
+                err = memvid_last_error();
+                LOG_ERROR("Memvid: Failed to open database after repair: %s",
+                          err ? err : "unknown error");
+                g_memvid_init_result = -1;
+                return;
+            }
+
+            LOG_INFO("Memvid: Database opened successfully after repair");
+            g_memvid_init_result = 0;
+            return;
+        } else if (doctor_result == MEMVID_DOCTOR_STATUS_PARTIAL) {
+            LOG_WARN("Memvid: Partial repair (status=%d), attempting to open anyway", doctor_result);
+
+            /* Try opening anyway - might work for some operations */
+            g_memvid_handle = memvid_open(path);
+            if (g_memvid_handle != NULL) {
+                LOG_INFO("Memvid: Database opened after partial repair");
+                g_memvid_init_result = 0;
+                return;
+            }
+            /* Fall through to error */
+        } else {
+            LOG_ERROR("Memvid: Automatic repair failed (status=%d)", doctor_result);
+        }
+
         g_memvid_init_result = -1;
         return;
     }
@@ -315,6 +353,15 @@ MemvidHandle* memvid_get_global(void) {
 
 int memvid_is_available(void) {
     return 0;
+}
+
+int memvid_doctor(const char *path, int rebuild_time_index,
+                  int rebuild_lex_index, int rebuild_vec_index) {
+    (void)path;
+    (void)rebuild_time_index;
+    (void)rebuild_lex_index;
+    (void)rebuild_vec_index;
+    return MEMVID_DOCTOR_STATUS_ERROR;
 }
 
 #endif /* HAVE_MEMVID */

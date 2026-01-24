@@ -109,7 +109,7 @@ char* build_system_prompt(ConversationState *state) {
             "- Best practices and coding standards\n"
             "Use the Read, Glob, and Grep tools to explore SKILLS/ contents when they might be relevant to your current task.\n\n"
             "Available in SKILLS/:\n");
-        
+
         // List top-level contents of SKILLS directory (up to 50 items)
         DIR *skills_dir = opendir(skills_path);
         if (skills_dir) {
@@ -117,7 +117,7 @@ char* build_system_prompt(ConversationState *state) {
             int item_count = 0;
             int total_count = 0;
             const int max_display = 50;
-            
+
             // First pass: count total items
             while ((entry = readdir(skills_dir)) != NULL) {
                 if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
@@ -125,28 +125,28 @@ char* build_system_prompt(ConversationState *state) {
                 }
             }
             rewinddir(skills_dir);
-            
+
             // Second pass: list items
             while ((entry = readdir(skills_dir)) != NULL && offset < (int)prompt_size) {
                 if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
                     continue;
                 }
-                
+
                 if (item_count < max_display) {
-                    offset += snprintf(prompt + offset, prompt_size - (size_t)offset, 
+                    offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
                                      "- %s\n", entry->d_name);
                     item_count++;
                 }
             }
-            
+
             // Add [...] if there are more items
             if (total_count > max_display && offset < (int)prompt_size) {
                 offset += snprintf(prompt + offset, prompt_size - (size_t)offset, "[...]\n");
             }
-            
+
             closedir(skills_dir);
         }
-        
+
         offset += snprintf(prompt + offset, prompt_size - (size_t)offset, "\n");
     }
 

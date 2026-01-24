@@ -373,3 +373,35 @@ Use descriptive, lowercase slot names with underscores:
 **Problem**: Memory tools not appearing
 - Cause: klawed built without memvid support
 - Solution: Verify with `memvid_is_available()` or rebuild with MEMVID=1
+
+## Automatic Self-Healing
+
+Klawed includes automatic self-healing for corrupted `.mv2` memory files. When the memory database fails to open (due to corruption, interrupted writes, or other issues), klawed will automatically:
+
+1. **Detect the failure** - Log a warning about the initial open failure
+2. **Run the doctor** - Automatically invoke `memvid_doctor()` to repair the file
+3. **Retry opening** - Attempt to open the database again after repair
+
+The doctor performs several repair operations:
+- Fixing header/footer pointer corruption
+- Replaying pending WAL (Write-Ahead Log) records
+- Rebuilding time, lexical, and vector indices
+- Zeroing corrupted WAL regions
+
+**Doctor status codes:**
+| Status | Description |
+|--------|-------------|
+| `CLEAN` (0) | File was already healthy, no repairs needed |
+| `HEALED` (1) | File was successfully repaired |
+| `PARTIAL` (2) | Some repairs succeeded, some failed |
+| `FAILED` (3) | Repair failed completely |
+
+**What you'll see in logs:**
+```
+WARN  Memvid: Failed to open database: <error message>
+INFO  Memvid: Attempting automatic repair...
+INFO  Memvid: Repair successful (status=1), retrying open
+INFO  Memvid: Database opened successfully after repair
+```
+
+**Manual repair:** If automatic healing fails, you can manually repair using the `memvid_doctor()` function or by following the instructions in `SKILLS/remediate_mv2_file_corruption.md`.

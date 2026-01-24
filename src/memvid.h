@@ -29,6 +29,14 @@ typedef struct MemvidHandle MemvidHandle;
 #define MEMVID_RELATION_EXTENDS  2
 #define MEMVID_RELATION_RETRACTS 3
 
+/* Doctor status codes (match Rust DoctorStatus) */
+#define MEMVID_DOCTOR_STATUS_CLEAN     0   /* File was already healthy */
+#define MEMVID_DOCTOR_STATUS_HEALED    1   /* File was repaired successfully */
+#define MEMVID_DOCTOR_STATUS_PARTIAL   2   /* Some repairs succeeded, some failed */
+#define MEMVID_DOCTOR_STATUS_FAILED    3   /* Repair failed */
+#define MEMVID_DOCTOR_STATUS_PLAN_ONLY 4   /* Dry run - only planned repairs */
+#define MEMVID_DOCTOR_STATUS_ERROR    -1   /* Error running doctor */
+
 /*
  * Global instance management (thread-safe)
  */
@@ -144,5 +152,23 @@ void memvid_free_string(char *s);
  * @return Error message string (do not free)
  */
 const char* memvid_last_error(void);
+
+/*
+ * Run doctor on a memvid file to detect and repair corruption.
+ *
+ * This function attempts to repair a corrupted .mv2 file by:
+ * - Detecting and fixing header/footer pointer corruption
+ * - Replaying pending WAL records
+ * - Rebuilding indices if requested
+ * - Zeroing corrupted WAL regions
+ *
+ * @param path Path to the .mv2 file to repair
+ * @param rebuild_time_index If true (non-zero), force rebuild time index
+ * @param rebuild_lex_index If true (non-zero), force rebuild lexical index
+ * @param rebuild_vec_index If true (non-zero), force rebuild vector index
+ * @return MEMVID_DOCTOR_STATUS_* code (see defines above)
+ */
+int memvid_doctor(const char *path, int rebuild_time_index,
+                  int rebuild_lex_index, int rebuild_vec_index);
 
 #endif /* MEMVID_H */

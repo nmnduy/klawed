@@ -9,7 +9,7 @@ use std::os::raw::c_char;
 use std::ptr;
 use std::sync::Mutex;
 
-use memvid_core::{Memvid, MemoryCard, MemoryCardBuilder, MemoryKind, VersionRelation};
+use memvid_core::{Memvid, MemoryCard, MemoryCardBuilder, MemoryKind, DoctorOptions, DoctorStatus};
 
 /// Thread-local storage for the last error message
 thread_local! {
@@ -387,6 +387,81 @@ pub extern "C" fn memvid_last_error() -> *const c_char {
             .map(|s| s.as_ptr())
             .unwrap_or(ptr::null())
     })
+}
+
+/// Doctor status codes returned by memvid_doctor
+pub const MEMVID_DOCTOR_STATUS_CLEAN: i32 = 0;
+pub const MEMVID_DOCTOR_STATUS_HEALED: i32 = 1;
+pub const MEMVID_DOCTOR_STATUS_PARTIAL: i32 = 2;
+pub const MEMVID_DOCTOR_STATUS_FAILED: i32 = 3;
+pub const MEMVID_DOCTOR_STATUS_PLAN_ONLY: i32 = 4;
+pub const MEMVID_DOCTOR_STATUS_ERROR: i32 = -1;
+
+/// Run doctor on a memvid file to detect and repair corruption
+///
+/// This function attempts to repair a corrupted .mv2 file by:
+/// - Detecting and fixing header/footer pointer corruption
+/// - Replaying pending WAL records
+/// - Rebuilding indices if requested
+/// - Zeroing corrupted WAL regions
+///
+/// # Safety
+/// - `path` must be a valid null-terminated UTF-8 string
+///
+/// # Parameters
+/// - `path`: Path to the .mv2 file to repair
+/// - `rebuild_time_index`: If true, force rebuild time index
+/// - `rebuild_lex_index`: If true, force rebuild lexical index
+/// - `rebuild_vec_index`: If true, force rebuild vector index
+///
+/// # Returns
+/// - `MEMVID_DOCTOR_STATUS_CLEAN` (0): File was already healthy
+/// - `MEMVID_DOCTOR_STATUS_HEALED` (1): File was repaired successfully
+/// - `MEMVID_DOCTOR_STATUS_PARTIAL` (2): Some repairs succeeded, some failed
+/// - `MEMVID_DOCTOR_STATUS_FAILED` (3): Repair failed
+/// - `MEMVID_DOCTOR_STATUS_ERROR` (-1): Error running doctor (check memvid_last_error)
+#[no_mangle]
+pub unsafe extern "C" fn memvid_doctor(
+    path: *const c_char,
+    rebuild_time_index: bool,
+    rebuild_lex_index: bool,
+    rebuild_vec_index: bool,
+) -> i32 {
+    if path.is_null() {
+        set_last_error("path is null");
+        return MEMVID_DOCTOR_STATUS_ERROR;
+    }
+
+    let path_str = match CStr::from_ptr(path).to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(&format!("invalid UTF-8 in path: {}", e));
+            return MEMVID_DOCTOR_STATUS_ERROR;
+        }
+    };
+
+    let options = DoctorOptions {
+        rebuild_time_index,
+        rebuild_lex_index,
+        rebuild_vec_index,
+        vacuum: false,
+        dry_run: false,
+        quiet: true, // Suppress debug output in production
+    };
+
+    match Memvid::doctor(path_str, options) {
+        Ok(report) => match report.status {
+            DoctorStatus::Clean => MEMVID_DOCTOR_STATUS_CLEAN,
+            DoctorStatus::Healed => MEMVID_DOCTOR_STATUS_HEALED,
+            DoctorStatus::Partial => MEMVID_DOCTOR_STATUS_PARTIAL,
+            DoctorStatus::Failed => MEMVID_DOCTOR_STATUS_FAILED,
+            DoctorStatus::PlanOnly => MEMVID_DOCTOR_STATUS_PLAN_ONLY,
+        },
+        Err(e) => {
+            set_last_error(&format!("doctor failed: {}", e));
+            MEMVID_DOCTOR_STATUS_ERROR
+        }
+    }
 }
 
 // Helper functions
