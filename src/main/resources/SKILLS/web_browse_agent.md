@@ -46,6 +46,7 @@ web_browse_agent --session <session-id> [--headless] [--json] <command> [args...
 |---------|-----------|-------------|
 | `click` | `<selector>` | Click an element (CSS or Playwright selector) |
 | `type` | `<selector> <text>` | Type text into an element |
+| `upload-file` | `<selector> <path...>` | Upload file(s) to a file input element |
 | `wait-for` | `<selector>` | Wait for element to appear |
 | `eval` | `<javascript>` | Execute JavaScript and return result |
 
@@ -103,6 +104,22 @@ web_browse_agent --session login click "#submit"
 
 # Wait for navigation
 web_browse_agent --session login wait-for --wait-type navigation
+```
+
+### File Upload
+
+```bash
+# Upload a single file to a file input
+web_browse_agent --session upload upload-file "input[type=file]" /path/to/document.pdf
+
+# Upload multiple files
+web_browse_agent --session upload upload-file "#file-input" /path/to/file1.pdf /path/to/file2.jpg
+
+# Common workflow: navigate, upload, submit
+web_browse_agent --session upload open https://example.com/upload
+web_browse_agent --session upload wait-for "input[type=file]"
+web_browse_agent --session upload upload-file "input[type=file]" /tmp/myfile.pdf
+web_browse_agent --session upload click "#submit-button"
 ```
 
 ### Taking Screenshots

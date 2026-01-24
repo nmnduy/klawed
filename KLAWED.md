@@ -86,9 +86,28 @@ klawed.sessions.db.path=data/sessions.db
 Note: Unix socket mode has been removed in favor of the more reliable SQLite queue approach.
 
 ## SKILLS Organization Guidance
-- Organize `src/main/resources/SKILLS` by **goal/outcome**, not by tool name.
-- Example: place Typst (PDF generation) under a `pdf/` goal folder, not a `typst/` tool folder.
-- When adding new SKILLS, group them by the user goal they serve (e.g., pdf, data-viz, audio), then document the tools inside.
+
+**Format:** All SKILLS should be **flat markdown files** in `src/main/resources/SKILLS/`.
+- ✅ Good: `SKILLS/ocr.md` - Flat markdown file
+- ❌ Bad: `SKILLS/ocr/README.md` - Nested folder structure
+
+**Organization Principle:** Organize by **goal/outcome**, not by tool name.
+- The markdown filename should reflect the user goal or capability (e.g., `latex.md`, `typst.md`, `ocr.md`)
+- Document the tools and techniques inside the markdown file
+- Keep each skill self-contained with installation instructions, usage examples, and troubleshooting tips
+
+**Current Skills:**
+- `github.md` - Browse and analyze GitHub repositories (n8n connectors) without full clone
+- `latex.md` - PDF generation using LaTeX with comprehensive recipes
+- `ocr.md` - Optical Character Recognition for extracting text
+- `search_engines.md` - Search engine integration capabilities
+- `typst.md` - PDF generation using Typst (modern LaTeX alternative)
+- `web_browse_agent.md` - Web browsing and content extraction
+
+**When Adding New Skills:**
+1. Create a single markdown file named after the goal (e.g., `video_editing.md`, `data_visualization.md`)
+2. Include comprehensive documentation: what it does, installation, usage, examples, troubleshooting
+3. Update this list with a brief description of the new skill
 
 ## Project Structure
 ```
