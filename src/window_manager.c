@@ -20,7 +20,7 @@ const WindowManagerConfig DEFAULT_WINDOW_CONFIG = {
     .status_height = 1,
     // No gap between status and input by default
     .padding = 0,
-    .conv_h_padding = 1,    // Right padding for scrollbar (no left padding)
+    .conv_h_padding = 0,    // No right padding (scrollbar removed)
     .initial_pad_capacity = 1000
 };
 
@@ -156,9 +156,9 @@ int window_manager_init(WindowManager *wm, const WindowManagerConfig *config) {
     LOG_INFO("[WM] Initializing window manager (screen=%dx%d)",
              wm->screen_width, wm->screen_height);
 
-    // Create conversation pad with horizontal padding (only right padding for scrollbar)
+    // Create conversation pad
     wm->conv_pad_capacity = wm->config.initial_pad_capacity;
-    int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;  // Only subtract right padding
+    int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;
     if (conv_pad_width < 1) conv_pad_width = 1; // Safety check
     wm->conv_pad = newpad(wm->conv_pad_capacity, conv_pad_width);
     if (!wm->conv_pad) {
@@ -277,9 +277,9 @@ int window_manager_resize_screen(WindowManager *wm) {
     int old_scroll_offset = wm->conv_scroll_offset;
     int old_capacity = wm->conv_pad_capacity;
 
-    // Recreate conversation pad with new width (only right padding for scrollbar)
+    // Recreate conversation pad with new width
     WINDOW *old_pad = wm->conv_pad;
-    int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;  // Only subtract right padding
+    int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;
     if (conv_pad_width < 1) conv_pad_width = 1; // Safety check
     wm->conv_pad = newpad(wm->conv_pad_capacity, conv_pad_width);
     if (!wm->conv_pad) {
@@ -296,7 +296,7 @@ int window_manager_resize_screen(WindowManager *wm) {
     if (lines_to_copy > old_capacity) lines_to_copy = old_capacity;
     if (lines_to_copy > wm->conv_pad_capacity) lines_to_copy = wm->conv_pad_capacity;
 
-    int old_conv_width = old_width - wm->config.conv_h_padding;  // Old pad also had only right padding
+    int old_conv_width = old_width - wm->config.conv_h_padding;
     if (old_conv_width < 1) old_conv_width = 1;
     int width_to_copy = old_conv_width < conv_pad_width ? old_conv_width : conv_pad_width;
 
@@ -399,8 +399,8 @@ int window_manager_ensure_pad_capacity(WindowManager *wm, int needed_lines) {
     LOG_INFO("[WM] Expanding pad capacity from %d to %d lines",
              wm->conv_pad_capacity, new_capacity);
 
-    // Create new larger pad (only right padding for scrollbar)
-    int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;  // Only subtract right padding
+    // Create new larger pad
+    int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;
     if (conv_pad_width < 1) conv_pad_width = 1; // Safety check
     WINDOW *new_pad = newpad(new_capacity, conv_pad_width);
     if (!new_pad) {
@@ -524,7 +524,7 @@ void window_manager_refresh_conversation(WindowManager *wm) {
     // prefresh(pad, pad_y, pad_x, screen_y1, screen_x1, screen_y2, screen_x2)
     int x1 = 0;  // No left padding
     int y2 = wm->conv_viewport_height - 1;
-    int x2 = wm->screen_width - 1 - wm->config.conv_h_padding;  // Right padding for scrollbar
+    int x2 = wm->screen_width - 1 - wm->config.conv_h_padding;  // Right padding
     if (y2 < 0) y2 = 0;
     if (x1 < 0) x1 = 0;
     if (x2 < x1) x2 = x1;
@@ -532,80 +532,6 @@ void window_manager_refresh_conversation(WindowManager *wm) {
              wm->conv_scroll_offset, 0,  // pad position
              0, x1,                       // screen top-left (with horizontal offset)
              y2, x2);                     // screen bottom-right (with horizontal offset)
-
-    // Draw vertical scroll bar on the right edge when not fully scrolled to bottom.
-    // The scroll bar is drawn on stdscr (not the pad) in the rightmost column.
-    // conv_h_padding reserves space on the right so content doesn't overlap with the scroll bar.
-    int total_lines = wm->conv_pad_content_lines;
-    int visible_lines = wm->conv_viewport_height;
-    int scroll_bar_col = wm->screen_width - 1;
-
-    // Clear scroll bar area first, then conditionally draw the scroll bar.
-    // This ensures the scroll bar disappears when scrolled to bottom.
-    for (int row = 0; row < visible_lines; row++) {
-        mvaddch(row, scroll_bar_col, ' ');
-    }
-
-    // Track if we drew the scroll bar (need to refresh stdscr if we did)
-    int drew_scroll_bar = 0;
-
-    // Show scroll bar when there's content below the visible area
-    if (total_lines > visible_lines && visible_lines > 0) {
-        int scroll_range = total_lines - visible_lines;
-
-        // Show scroll bar when not at the very bottom
-        // Use direct comparison instead of percentage to match status bar logic
-        if (scroll_range > 0 && wm->conv_scroll_offset < scroll_range) {
-            int track_height = visible_lines;
-            int thumb_height = (visible_lines * visible_lines) / total_lines;
-            if (thumb_height < 1) {
-                thumb_height = 1;
-            }
-
-            int max_thumb_top = track_height - thumb_height;
-            int thumb_top = 0;
-            if (scroll_range > 0 && max_thumb_top > 0) {
-                // Use rounding to ensure thumb reaches bottom smoothly
-                long long num = (long long)wm->conv_scroll_offset * (long long)max_thumb_top;
-                thumb_top = (int)((num + scroll_range / 2) / scroll_range);
-            }
-
-            if (thumb_top < 0) {
-                thumb_top = 0;
-            }
-            if (thumb_top > max_thumb_top) {
-                thumb_top = max_thumb_top;
-            }
-
-            // Draw scroll bar at the rightmost column (space reserved by conv_h_padding)
-            // Use prompt color for scroll bar (same as input box scroll bar)
-            if (has_colors()) {
-                attron(COLOR_PAIR(NCURSES_PAIR_PROMPT));
-            }
-
-            // Draw track
-            for (int row = 0; row < track_height; row++) {
-                mvaddch(row, scroll_bar_col, ACS_VLINE);
-            }
-
-            // Draw thumb
-            for (int row = thumb_top; row < thumb_top + thumb_height; row++) {
-                mvaddch(row, scroll_bar_col, ACS_CKBOARD);
-            }
-
-            if (has_colors()) {
-                attroff(COLOR_PAIR(NCURSES_PAIR_PROMPT));
-            }
-
-            drew_scroll_bar = 1;
-        }
-    }
-
-    // If we drew the scroll bar, we need to refresh stdscr to make it visible
-    // (prefresh only updates the pad region, not stdscr changes made with mvaddch)
-    if (drew_scroll_bar) {
-        refresh();
-    }
 }
 
 void window_manager_refresh_status(WindowManager *wm) {
