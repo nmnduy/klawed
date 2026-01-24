@@ -24,7 +24,7 @@ typedef struct {
     int max_input_height;     // Maximum input window height
     int status_height;        // Status window height (0 to disable)
     int padding;              // Padding between windows
-    int conv_h_padding;       // Right padding for conversation box (scrollbar space)
+    int conv_h_padding;       // Right padding for conversation box
     int initial_pad_capacity; // Initial pad capacity (lines)
 } WindowManagerConfig;
 
