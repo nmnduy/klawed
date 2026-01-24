@@ -822,8 +822,8 @@ export function init(rootEl) {
         toolList.appendChild(toolItem);
 
         // Initialize Lucide icons for the new tool item
-        if (typeof lucide !== 'undefined' && lucide.createIcons) {
-            lucide.createIcons({ root: toolItem });
+        if (typeof window.lucide !== 'undefined' && window.lucide.createIcons) {
+            window.lucide.createIcons({ root: toolItem });
         }
 
         // Track pending tool
@@ -885,8 +885,8 @@ export function init(rootEl) {
             }
 
             // Re-initialize Lucide icons for the updated status
-            if (typeof lucide !== 'undefined' && lucide.createIcons && statusEl) {
-                lucide.createIcons({ root: statusEl });
+            if (typeof window.lucide !== 'undefined' && window.lucide.createIcons && statusEl) {
+                window.lucide.createIcons({ root: statusEl });
             }
 
             resultEl.textContent = resultSummary + (duration > 1000 ? ` (${(duration/1000).toFixed(1)}s)` : '');
