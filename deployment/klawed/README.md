@@ -22,8 +22,8 @@ The klawed sandbox image provides an isolated environment for running AI agents 
 
 ```bash
 # Build on fandalf, transfer to production, DO NOT update :latest tag
-./deployment/klawed/build-klawed-sandbox.sh --tag v0.19.6
-./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.19.6
+./deployment/klawed/build-klawed-sandbox.sh --tag v0.20.0
+./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.20.0
 
 # Then deploy FileSurf with this version
 ./deployment/deploy-jvm.sh --image-version 0.19.6
@@ -35,7 +35,7 @@ The klawed sandbox image provides an isolated environment for running AI agents 
 
 ```bash
 # Build and deploy together (without updating :latest)
-./deployment/klawed/deploy-klawed-sandbox.sh --build --tag v0.19.6
+./deployment/klawed/deploy-klawed-sandbox.sh --build --tag v0.20.0
 
 # Then deploy FileSurf with this version
 ./deployment/deploy-jvm.sh --image-version 0.19.6
@@ -119,10 +119,10 @@ Build and deploy a new version:
 
 ```bash
 # 1. Build with a version tag
-./deployment/klawed/build-klawed-sandbox.sh --tag v0.19.6
+./deployment/klawed/build-klawed-sandbox.sh --tag v0.20.0
 
 # 2. Deploy to production
-./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.19.6
+./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.20.0
 
 # 3. Update FileSurf to use this version
 ./deployment/deploy-jvm.sh --image-version 0.19.6
@@ -131,8 +131,8 @@ Build and deploy a new version:
 ### Force Rebuild (No Cache)
 
 ```bash
-./deployment/klawed/build-klawed-sandbox.sh --tag v0.19.6 --no-cache
-./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.19.6
+./deployment/klawed/build-klawed-sandbox.sh --tag v0.20.0 --no-cache
+./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.20.0
 ./deployment/deploy-jvm.sh --image-version 0.19.6
 ```
 
@@ -141,13 +141,13 @@ Build and deploy a new version:
 If image already built on fandalf:
 
 ```bash
-./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.19.6
+./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.20.0
 ```
 
 ### Check Deployment (Dry Run)
 
 ```bash
-./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.19.6 --dry-run
+./deployment/klawed/deploy-klawed-sandbox.sh --tag v0.20.0 --dry-run
 ```
 
 ## Verifying the Image

@@ -1,9 +1,14 @@
 package com.filesurf.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.filesurf.model.ChatMessageRecord;
+import com.filesurf.model.ChatConstants;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
+import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.io.BufferedReader;
@@ -73,6 +78,16 @@ public class KlawedSandboxService {
     String sessionsDbPath;
 
     private String jdbcUrl;
+
+    // FileChatService for conversation seeding
+    @Inject
+    FileChatService fileChatService;
+
+    // ObjectMapper for JSON serialization
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    // Maximum number of messages to seed for conversation context
+    private static final int MAX_SEED_MESSAGES = 100;
 
     // Inactivity timeout: 1.5 minutes = 90 seconds (for disconnected sessions)
     private static final long INACTIVITY_TIMEOUT_SECONDS = 90;
@@ -590,6 +605,10 @@ public class KlawedSandboxService {
         String dbFileName = "klawed_messages_" + sessionId + ".db";
         Path sqliteDbPath = Path.of(sqliteQueueDbDir).resolve(dbFileName);
 
+        // Seed the conversation with previous chat messages before starting the container
+        // This allows klawed to have context when the user resumes a session
+        seedConversation(sessionId, sqliteDbPath);
+
         // Build podman run command
         List<String> command = buildPodmanRunCommand(containerName, workspaceDir, sqliteDbPath.toString(), sessionId);
 
@@ -844,6 +863,131 @@ public class KlawedSandboxService {
     private String readProcessOutput(Process process) throws IOException {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             return reader.lines().collect(Collectors.joining("\n"));
+        }
+    }
+
+    /**
+     * Seed the conversation with previous chat messages.
+     * This allows klawed to have context when the user resumes a session.
+     * Messages are inserted with sent=1 so klawed reads them at startup.
+     *
+     * @param sessionId The session ID
+     * @param sqliteDbPath Path to the klawed messages SQLite database
+     */
+    private void seedConversation(String sessionId, Path sqliteDbPath) {
+        LOGGER.info("[SESSION:" + sessionId + "] Seeding conversation from chat history");
+
+        try {
+            // Get the last MAX_SEED_MESSAGES from the chat database
+            List<ChatMessageRecord> messages = fileChatService.findMessagesBySession(sessionId);
+
+            if (messages == null || messages.isEmpty()) {
+                LOGGER.info("[SESSION:" + sessionId + "] No previous messages to seed");
+                return;
+            }
+
+            // Take only the last MAX_SEED_MESSAGES
+            int startIndex = Math.max(0, messages.size() - MAX_SEED_MESSAGES);
+            List<ChatMessageRecord> messagesToSeed = messages.subList(startIndex, messages.size());
+
+            LOGGER.info("[SESSION:" + sessionId + "] Found " + messages.size() + " messages, seeding last " + messagesToSeed.size());
+
+            // Ensure the database directory exists
+            Path dbDir = sqliteDbPath.getParent();
+            if (dbDir != null && !Files.exists(dbDir)) {
+                Files.createDirectories(dbDir);
+            }
+
+            // Connect to the SQLite queue database and insert seed messages
+            String jdbcUrl = "jdbc:sqlite:" + sqliteDbPath.toString();
+            try (Connection conn = DriverManager.getConnection(jdbcUrl)) {
+                // Set pragmas
+                try (Statement stmt = conn.createStatement()) {
+                    stmt.execute("PRAGMA journal_mode = WAL;");
+                    stmt.execute("PRAGMA synchronous = NORMAL;");
+                    stmt.execute("PRAGMA busy_timeout = 5000;");
+                }
+
+                // Create messages table if it doesn't exist
+                try (Statement stmt = conn.createStatement()) {
+                    stmt.execute(
+                        "CREATE TABLE IF NOT EXISTS messages (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                        "sender TEXT NOT NULL," +
+                        "receiver TEXT NOT NULL," +
+                        "message TEXT NOT NULL," +
+                        "sent INTEGER DEFAULT 0," +
+                        "created_at INTEGER DEFAULT (strftime('%s', 'now'))," +
+                        "updated_at INTEGER DEFAULT (strftime('%s', 'now'))" +
+                        ");"
+                    );
+                    stmt.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender, sent);");
+                    stmt.execute("CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver, sent);");
+                }
+
+                // Insert seed messages with sent=1 (so klawed reads them at startup)
+                String insertSql = "INSERT INTO messages (sender, receiver, message, sent, created_at) VALUES (?, ?, ?, 1, ?)";
+                try (PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
+                    int seededCount = 0;
+
+                    for (ChatMessageRecord msg : messagesToSeed) {
+                        // Skip non-text messages (tool results, status, etc.)
+                        String msgType = msg.getMessageType();
+                        if (msgType != null && !ChatConstants.DB_MESSAGE_TYPE_TEXT.equals(msgType)) {
+                            continue;
+                        }
+
+                        // Skip empty messages
+                        String content = msg.getContent();
+                        if (content == null || content.trim().isEmpty()) {
+                            continue;
+                        }
+
+                        // Determine sender/receiver for klawed's perspective
+                        // In chat_message: sender="client" means user, sender="agent" means klawed
+                        // In klawed queue: sender="client" means user message, sender="klawed" means assistant
+                        String sender;
+                        String receiver;
+                        if (ChatConstants.CLIENT.equals(msg.getSender())) {
+                            // User message: client -> klawed
+                            sender = "client";
+                            receiver = "klawed";
+                        } else if (ChatConstants.AGENT.equals(msg.getSender())) {
+                            // Assistant message: klawed -> client
+                            sender = "klawed";
+                            receiver = "client";
+                        } else {
+                            // Skip system or other messages
+                            continue;
+                        }
+
+                        // Create JSON message format
+                        ObjectNode json = objectMapper.createObjectNode();
+                        json.put("messageType", "TEXT");
+                        json.put("content", content);
+                        String jsonMessage = objectMapper.writeValueAsString(json);
+
+                        // Get timestamp (use epoch seconds)
+                        long createdAt = msg.getCreatedAt() != null ?
+                            msg.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toEpochSecond() :
+                            Instant.now().getEpochSecond();
+
+                        pstmt.setString(1, sender);
+                        pstmt.setString(2, receiver);
+                        pstmt.setString(3, jsonMessage);
+                        pstmt.setLong(4, createdAt);
+                        pstmt.executeUpdate();
+                        seededCount++;
+                    }
+
+                    LOGGER.info("[SESSION:" + sessionId + "] Seeded " + seededCount + " TEXT messages for conversation context");
+                }
+            }
+
+        } catch (Exception e) {
+            // Log error but don't fail container startup - seeding is best-effort
+            LOGGER.warning("[SESSION:" + sessionId + "] Failed to seed conversation: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
