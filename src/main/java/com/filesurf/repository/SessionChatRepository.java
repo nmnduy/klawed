@@ -82,8 +82,7 @@ public class SessionChatRepository {
     public ChatSessionRecord createOrUpdateChatSession(String sessionId, String clientIdentity) {
         try {
             return sessionSQLiteManager.executeInTransaction(sessionId, conn -> {
-                // First initialize schema if needed
-                initializeSchema(sessionId);
+                // Schema is now initialized automatically when connection is created
                 
                 // Check if session exists
                 ChatSessionRecord existing = findChatSessionBySessionId(conn, sessionId);
