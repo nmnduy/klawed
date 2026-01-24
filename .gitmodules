@@ -1,0 +1,3 @@
+[submodule "klawed"]
+	path = klawed
+	url = ../klawed
