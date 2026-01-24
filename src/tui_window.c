@@ -272,21 +272,22 @@ void tui_handle_resize(TUIState *tui) {
                     // Calculate line length
                     size_t line_len = (size_t)(p - line_start);
 
-                    // Render border with assistant color on assistant background
-                    // This ensures the entire assistant message region has consistent background
+                    // Render border character only (│) with border color
                     if (has_colors()) {
                         wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
                     }
-                    waddstr(tui->wm.conv_pad, "│ ");
+                    waddstr(tui->wm.conv_pad, "│");
                     if (has_colors()) {
                         wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-                    }
-
-                    // Render text content with explicit foreground color (no background)
-                    if (has_colors()) {
+                        // Reset to foreground color (no background) for space and text
                         wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
                     }
+                    // Add space after border with foreground color (no background)
+                    waddch(tui->wm.conv_pad, ' ');
+
+                    // Render text content (no background)
                     waddnstr(tui->wm.conv_pad, line_start, (int)line_len);
+
                     if (has_colors()) {
                         wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
                     }

@@ -473,21 +473,21 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
     WINDOW *pad = tui->wm.conv_pad;
     (void)border_pair;  // Unused, kept for API compatibility
 
-    // Render border with assistant color on assistant background
-    // This ensures the entire assistant message region has consistent background
+    // Render border character only (│) with border color - no space
     if (has_colors()) {
         wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
     }
-    waddstr(pad, border_str);
+    waddstr(pad, "│");
     if (has_colors()) {
         wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-    }
-
-    // Render text content with search highlighting if active
-    // Explicitly set foreground color to avoid inheriting border color's background
-    if (has_colors()) {
+        // Reset to foreground color (no background) for the space and text
         wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
     }
+    // Add space after border with foreground color (no background)
+    waddch(pad, ' ');
+    (void)border_str;  // No longer used - we render │ and space separately
+
+    // Render text content with search highlighting if active
     if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
         char *seg_buf = malloc(len + 1);
         if (seg_buf) {
@@ -501,6 +501,7 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
     } else {
         waddnstr(pad, segment, (int)len);
     }
+
     if (has_colors()) {
         wattroff(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
     }
@@ -574,7 +575,7 @@ static size_t find_wrap_point(const char *text, size_t text_len, int max_display
 
 // Helper to render text with a left border for assistant messages
 // Handles line wrapping by adding border at start of each new line
-// No background highlighting - just border decoration and foreground text
+// Uses NCURSES_PAIR_ASSISTANT_BG for subtle background highlighting
 static void render_text_with_left_border(TUIState *tui, const char *text, int text_pair,
                                          int border_pair, const char *border_str) {
     if (!text || !text[0]) return;
@@ -653,7 +654,7 @@ static void render_text_with_left_border(TUIState *tui, const char *text, int te
         }
     }
 
-    (void)text_pair;  // Suppress unused warning (text rendered with foreground pair in bordered_segment)
+    (void)text_pair;  // Suppress unused warning (background pair used instead)
 }
 
 int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
