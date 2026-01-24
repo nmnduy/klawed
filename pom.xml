@@ -115,6 +115,13 @@
       <artifactId>commonmark-ext-autolink</artifactId>
       <version>0.22.0</version>
     </dependency>
+    
+    <!-- Stripe payment processing -->
+    <dependency>
+      <groupId>com.stripe</groupId>
+      <artifactId>stripe-java</artifactId>
+      <version>26.13.0</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>

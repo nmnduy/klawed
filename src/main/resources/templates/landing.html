@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FileSurf - AI-Powered File Management & Chat</title>
+    <link rel="stylesheet" href="/css/{cssPath}">
+    <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900">
+    <!-- Hero Section -->
+    <section class="relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 text-white">
+        <div class="container mx-auto px-4 py-20 md:py-32">
+            <div class="max-w-4xl mx-auto text-center">
+                <h1 class="text-5xl md:text-6xl font-bold mb-6">
+                    FileSurf v2
+                </h1>
+                <p class="text-xl md:text-2xl mb-8 text-blue-100">
+                    AI-Powered File Management & Intelligent Chat
+                </p>
+                <p class="text-lg mb-10 text-blue-50 max-w-2xl mx-auto">
+                    Upload, manage, and interact with your files using cutting-edge AI models. 
+                    Get instant insights, generate documents, and collaborate seamlessly.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <a href="/auth/login" class="inline-block bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold hover:bg-blue-50 transition shadow-lg">
+                        Get Started
+                    </a>
+                    <a href="#pricing" class="inline-block bg-blue-500 text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-400 transition border-2 border-white">
+                        View Pricing
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="absolute bottom-0 left-0 right-0">
+            <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 120L60 110C120 100 240 80 360 70C480 60 600 60 720 65C840 70 960 80 1080 85C1200 90 1320 90 1380 90L1440 90V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0Z" fill="#F9FAFB" class="dark:fill-gray-900"/>
+            </svg>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="py-20 bg-gray-50 dark:bg-gray-900">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto">
+                <h2 class="text-4xl font-bold text-center mb-4 text-gray-900 dark:text-white">
+                    Powerful Features
+                </h2>
+                <p class="text-xl text-center mb-16 text-gray-600 dark:text-gray-400">
+                    Everything you need for intelligent file management
+                </p>
+                
+                <div class="grid md:grid-cols-3 gap-8">
+                    <!-- Feature 1 -->
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm hover:shadow-md transition">
+                        <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center mb-4">
+                            <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">Smart File Management</h3>
+                        <p class="text-gray-600 dark:text-gray-400">Upload, organize, and manage your files with intelligent categorization and instant search.</p>
+                    </div>
+
+                    <!-- Feature 2 -->
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm hover:shadow-md transition">
+                        <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center mb-4">
+                            <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">AI-Powered Chat</h3>
+                        <p class="text-gray-600 dark:text-gray-400">Interact with your files using state-of-the-art AI models. Ask questions, generate content, and get insights.</p>
+                    </div>
+
+                    <!-- Feature 3 -->
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm hover:shadow-md transition">
+                        <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center mb-4">
+                            <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">Secure & Private</h3>
+                        <p class="text-gray-600 dark:text-gray-400">Your data is encrypted and secure. Sandboxed compute environments ensure complete privacy.</p>
+                    </div>
+
+                    <!-- Feature 4 -->
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm hover:shadow-md transition">
+                        <div class="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center mb-4">
+                            <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">Lightning Fast</h3>
+                        <p class="text-gray-600 dark:text-gray-400">Fallback to Cerebras models for instant responses when you need speed over heavy computation.</p>
+                    </div>
+
+                    <!-- Feature 5 -->
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm hover:shadow-md transition">
+                        <div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900 rounded-lg flex items-center justify-center mb-4">
+                            <svg class="w-6 h-6 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">Document Generation</h3>
+                        <p class="text-gray-600 dark:text-gray-400">Create PDFs, compile LaTeX, and generate professional documents on-demand.</p>
+                    </div>
+
+                    <!-- Feature 6 -->
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm hover:shadow-md transition">
+                        <div class="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-lg flex items-center justify-center mb-4">
+                            <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-3 text-gray-900 dark:text-white">Massive Storage</h3>
+                        <p class="text-gray-600 dark:text-gray-400">Store up to 500GB on Basic, 2TB on Pro, or unlimited on Enterprise plans.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="py-20 bg-white dark:bg-gray-800">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto">
+                <h2 class="text-4xl font-bold text-center mb-4 text-gray-900 dark:text-white">
+                    Simple, Transparent Pricing
+                </h2>
+                <p class="text-xl text-center mb-16 text-gray-600 dark:text-gray-400">
+                    Choose the plan that fits your needs
+                </p>
+
+                <div class="grid md:grid-cols-3 gap-8">
+                    <!-- Basic Plan -->
+                    <div class="bg-gray-50 dark:bg-gray-900 rounded-2xl p-8 border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 transition">
+                        <div class="text-center mb-8">
+                            <h3 class="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Basic</h3>
+                            <div class="text-5xl font-bold mb-2 text-gray-900 dark:text-white">
+                                $99<span class="text-2xl text-gray-600 dark:text-gray-400">.99</span>
+                            </div>
+                            <p class="text-gray-600 dark:text-gray-400">per month</p>
+                        </div>
+                        
+                        <ul class="space-y-4 mb-8">
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">Limited use of heavy models</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">Fallback to Cerebras models</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">Shared secured sandboxed compute</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">Data privacy</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">500GB storage</span>
+                            </li>
+                        </ul>
+
+                        <button onclick="selectPlan('basic', 'price_basic_monthly')" 
+                                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition">
+                            Get Started
+                        </button>
+                    </div>
+
+                    <!-- Professional Plan -->
+                    <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-8 border-2 border-blue-500 transform md:scale-105 shadow-xl relative">
+                        <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                            <span class="bg-yellow-400 text-gray-900 text-sm font-bold px-4 py-1 rounded-full">
+                                POPULAR
+                            </span>
+                        </div>
+                        
+                        <div class="text-center mb-8">
+                            <h3 class="text-2xl font-bold mb-2 text-white">Professional</h3>
+                            <div class="text-5xl font-bold mb-2 text-white">
+                                $299<span class="text-2xl text-blue-100">.99</span>
+                            </div>
+                            <p class="text-blue-100">per month</p>
+                        </div>
+                        
+                        <ul class="space-y-4 mb-8">
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-white">Higher limit on heavy models</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-white">Fallback to Cerebras models</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-white">Shared secured sandboxed compute</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-white">Data privacy</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-white">2TB storage</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-green-300 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-white">Priority support</span>
+                            </li>
+                        </ul>
+
+                        <button onclick="selectPlan('pro', 'price_pro_monthly')" 
+                                class="w-full bg-white hover:bg-gray-100 text-blue-600 font-semibold py-3 px-6 rounded-lg transition">
+                            Get Started
+                        </button>
+                    </div>
+
+                    <!-- Enterprise Plan -->
+                    <div class="bg-gray-50 dark:bg-gray-900 rounded-2xl p-8 border-2 border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400 transition">
+                        <div class="text-center mb-8">
+                            <h3 class="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Enterprise</h3>
+                            <div class="text-3xl font-bold mb-2 text-gray-900 dark:text-white">
+                                Custom
+                            </div>
+                            <p class="text-gray-600 dark:text-gray-400">Talk to sales</p>
+                        </div>
+                        
+                        <ul class="space-y-4 mb-8">
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-purple-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">Unlimited highest quality models</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-purple-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">Data privacy</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-purple-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">Dedicated cloud compute nodes</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-purple-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">Unlimited storage</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-purple-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">Dedicated support team</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 text-purple-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                <span class="text-gray-700 dark:text-gray-300">99.9% uptime SLA</span>
+                            </li>
+                        </ul>
+
+                        <button onclick="contactSales()" 
+                                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition">
+                            Contact Sales
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-20 bg-gradient-to-br from-blue-600 to-indigo-700 text-white">
+        <div class="container mx-auto px-4">
+            <div class="max-w-4xl mx-auto text-center">
+                <h2 class="text-4xl font-bold mb-6">Ready to Get Started?</h2>
+                <p class="text-xl mb-8 text-blue-100">
+                    Join thousands of users who trust FileSurf for their file management and AI needs.
+                </p>
+                <a href="/auth/login" class="inline-block bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold hover:bg-blue-50 transition shadow-lg text-lg">
+                    Start Your Journey
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-400 py-12">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto text-center">
+                <p class="mb-4">&copy; 2026 FileSurf. All rights reserved.</p>
+                <div class="flex justify-center space-x-6">
+                    <a href="#" class="hover:text-white transition">Privacy Policy</a>
+                    <a href="#" class="hover:text-white transition">Terms of Service</a>
+                    <a href="#" class="hover:text-white transition">Contact</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize Stripe
+        const stripe = Stripe('{stripePublicKey}');
+
+        async function selectPlan(planCode, priceId) {
+            try {
+                // Check if user is authenticated
+                const authResponse = await fetch('/auth/status');
+                const authData = await authResponse.json();
+                
+                if (!authData.authenticated) {
+                    // Redirect to login with return URL
+                    window.location.href = `/auth/login?return=/pricing/checkout?plan=${planCode}`;
+                    return;
+                }
+
+                // Create checkout session
+                const response = await fetch('/api/stripe/create-checkout-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        planCode: planCode,
+                        priceId: priceId
+                    })
+                });
+
+                const session = await response.json();
+
+                if (session.error) {
+                    alert('Error: ' + session.error);
+                    return;
+                }
+
+                // Redirect to Stripe Checkout
+                const result = await stripe.redirectToCheckout({
+                    sessionId: session.sessionId
+                });
+
+                if (result.error) {
+                    alert(result.error.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+            }
+        }
+
+        function contactSales() {
+            // Open email client or redirect to contact form
+            window.location.href = 'mailto:sales@filesurf.example.com?subject=Enterprise Plan Inquiry';
+        }
+    </script>
+</body>
+</html>
