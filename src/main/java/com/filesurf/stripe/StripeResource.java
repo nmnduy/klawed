@@ -1,6 +1,5 @@
 package com.filesurf.stripe;
 
-import com.filesurf.auth.AuthService;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.checkout.Session;
@@ -22,9 +21,6 @@ public class StripeResource {
 
     @Inject
     StripeService stripeService;
-
-    @Inject
-    AuthService authService;
 
     @Inject
     SubscriptionService subscriptionService;
