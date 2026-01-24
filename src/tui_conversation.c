@@ -24,6 +24,8 @@
 #include <ncurses.h>
 #include <limits.h>
 #include <ctype.h>
+#include <wchar.h>
+#include <locale.h>
 
 // Initial capacity for conversation entries array
 #define INITIAL_CONV_CAPACITY 1000
@@ -273,6 +275,187 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
 }
 
 
+// Calculate display width of a UTF-8 string (local helper)
+static int utf8_display_width_conv(const char *str) {
+    if (!str || !*str) {
+        return 0;
+    }
+
+    // Save current locale
+    char *old_locale = setlocale(LC_ALL, NULL);
+    if (old_locale) {
+        old_locale = strdup(old_locale);
+    }
+
+    // Set to UTF-8 locale for mbstowcs
+    setlocale(LC_ALL, "C.UTF-8");
+
+    // Convert to wide characters
+    size_t len = mbstowcs(NULL, str, 0);
+    if (len == (size_t)-1) {
+        // Conversion failed, fall back to strlen
+        if (old_locale) {
+            setlocale(LC_ALL, old_locale);
+            free(old_locale);
+        }
+        return (int)strlen(str);
+    }
+
+    wchar_t *wstr = malloc((len + 1) * sizeof(wchar_t));
+    if (!wstr) {
+        if (old_locale) {
+            setlocale(LC_ALL, old_locale);
+            free(old_locale);
+        }
+        return (int)strlen(str);
+    }
+
+    mbstowcs(wstr, str, len + 1);
+    int width = wcswidth(wstr, len);
+    free(wstr);
+
+    // Restore locale
+    if (old_locale) {
+        setlocale(LC_ALL, old_locale);
+        free(old_locale);
+    }
+
+    // If wcswidth returns -1, fall back to character count
+    return width >= 0 ? width : (int)strlen(str);
+}
+
+// Render the left border for assistant messages (│ with space)
+// Used at the start of each visual line in bordered mode
+static void render_streaming_border(WINDOW *pad) {
+    if (has_colors()) {
+        wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
+    }
+    waddstr(pad, "│");
+    if (has_colors()) {
+        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
+        wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+    }
+    waddch(pad, ' ');
+    if (has_colors()) {
+        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+    }
+}
+
+// Write text to pad with border awareness for streaming in bordered mode
+// Handles wrapping by adding border character at the start of each new visual line
+static void write_streaming_text_bordered(TUIState *tui, const char *text) {
+    WINDOW *pad = tui->wm.conv_pad;
+    int pad_width;
+    int pad_height;
+    getmaxyx(pad, pad_height, pad_width);
+    (void)pad_height;
+
+    // Border takes 2 display columns (│ + space)
+    int border_width = 2;
+    int content_width = pad_width - border_width;
+    if (content_width < 1) content_width = 1;
+
+    const char *p = text;
+
+    while (*p) {
+        int cur_y, cur_x;
+        getyx(pad, cur_y, cur_x);
+        (void)cur_y;
+
+        // If we're at the start of a line, we need to add the border
+        // This happens when ncurses auto-wrapped or we added an explicit newline
+        if (cur_x == 0) {
+            render_streaming_border(pad);
+            getyx(pad, cur_y, cur_x);
+        }
+
+        // Check if this is a newline character
+        if (*p == '\n') {
+            waddch(pad, '\n');
+            p++;
+            continue;
+        }
+
+        // Calculate how many characters we can fit on the current line
+        int available_width = pad_width - cur_x;
+        if (available_width <= 0) {
+            // Line is full, cursor should auto-wrap on next write
+            // Write a single character to trigger wrap
+            waddch(pad, (chtype)(unsigned char)*p);
+            p++;
+            continue;
+        }
+
+        // Find the end of the current segment (up to newline or end of string)
+        const char *seg_end = p;
+        while (*seg_end && *seg_end != '\n') {
+            seg_end++;
+        }
+        size_t seg_len = (size_t)(seg_end - p);
+
+        // Calculate display width of this segment
+        char *seg_copy = malloc(seg_len + 1);
+        if (!seg_copy) {
+            // Fallback: write one character at a time
+            waddch(pad, (chtype)(unsigned char)*p);
+            p++;
+            continue;
+        }
+        memcpy(seg_copy, p, seg_len);
+        seg_copy[seg_len] = '\0';
+        int seg_display_width = utf8_display_width_conv(seg_copy);
+        free(seg_copy);
+
+        if (seg_display_width <= available_width) {
+            // Entire segment fits on current line
+            waddnstr(pad, p, (int)seg_len);
+            p = seg_end;
+        } else {
+            // Need to wrap - find how much fits
+            // Parse character by character for accurate width calculation
+            size_t bytes_written = 0;
+            int width_used = 0;
+
+            mbstate_t state;
+            memset(&state, 0, sizeof(state));
+
+            while (bytes_written < seg_len && width_used < available_width) {
+                wchar_t wc;
+                size_t char_bytes = mbrtowc(&wc, p + bytes_written, seg_len - bytes_written, &state);
+
+                if (char_bytes == 0) {
+                    break;  // Null character
+                } else if (char_bytes == (size_t)-1 || char_bytes == (size_t)-2) {
+                    // Invalid/incomplete sequence, treat as single byte
+                    if (width_used + 1 > available_width) break;
+                    bytes_written++;
+                    width_used++;
+                } else {
+                    int char_width = wcwidth(wc);
+                    if (char_width < 0) char_width = 1;
+
+                    if (width_used + char_width > available_width) {
+                        // This character would exceed the line
+                        break;
+                    }
+                    bytes_written += char_bytes;
+                    width_used += char_width;
+                }
+            }
+
+            // Write what fits
+            if (bytes_written > 0) {
+                waddnstr(pad, p, (int)bytes_written);
+                p += bytes_written;
+            } else {
+                // Safety: ensure progress (at least one byte)
+                waddch(pad, (chtype)(unsigned char)*p);
+                p++;
+            }
+        }
+    }
+}
+
 // Update the last conversation line (for streaming responses)
 void tui_update_last_conversation_line(TUIState *tui, const char *text) {
     if (!tui || !tui->is_initialized || !text) return;
@@ -323,16 +506,33 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
             int cur_y, cur_x;
             getyx(tui->wm.conv_pad, cur_y, cur_x);
 
+            // Check if this is an assistant message in bordered mode
+            int is_assistant = last_entry->prefix &&
+                               strcmp(last_entry->prefix, "[Assistant]") == 0;
+            int use_bordered = is_assistant &&
+                               (tui->response_style == RESPONSE_STYLE_BORDER);
+
             // If we're at the beginning of a line and there's a prefix,
             // we need to handle it differently
             if (cur_x == 0 && last_entry->prefix && last_entry->prefix[0] != '\0') {
-                // We shouldn't get here in streaming mode
-                LOG_WARN("[TUI] Streaming update but at start of line");
-                return;
+                if (use_bordered) {
+                    // In bordered mode at line start, add the border first
+                    render_streaming_border(tui->wm.conv_pad);
+                } else {
+                    // For non-bordered messages, shouldn't happen in streaming
+                    LOG_WARN("[TUI] Streaming update but at start of line");
+                    return;
+                }
             }
 
             // Write the new text at current position
-            waddstr(tui->wm.conv_pad, text);
+            if (use_bordered) {
+                // Use bordered streaming to handle wrapping with border
+                write_streaming_text_bordered(tui, text);
+            } else {
+                // Non-bordered: use simple waddstr
+                waddstr(tui->wm.conv_pad, text);
+            }
 
             // Update content lines
             getyx(tui->wm.conv_pad, cur_y, cur_x);
