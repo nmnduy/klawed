@@ -3,17 +3,17 @@
         <div class="flex flex-col gap-2 sm:gap-3">
             <!-- Top row: Logo, tagline, tabs (mobile) and actions -->
             <div class="flex items-center justify-between gap-2">
-                <!-- Left: Logo, Tagline, Tabs (mobile) -->
-                <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                    <!-- Logo and brand -->
-                    <div class="flex items-center gap-2 shrink-0">
-                        <img src="/assets/filesurf-logo.svg" alt="FileSurf logo" class="h-7 w-7 sm:h-8 sm:w-8 select-none" loading="lazy">
-                        <span class="text-h3-headline-m sm:text-h2-headline-l font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">FileSurf</span>
-                        <span class="hidden sm:inline-flex items-center justify-center rounded-full text-caption-m-bold px-2.5 py-[2px] bg-gradient-to-br from-primary to-primary/90 text-white shadow-lg shadow-primary/30 border border-primary/80">AI</span>
-                    </div>
-                    
+                <!-- Left: Logo and brand -->
+                <div class="flex items-center gap-2 shrink-0">
+                    <img src="/assets/filesurf-logo.svg" alt="FileSurf logo" class="h-7 w-7 sm:h-8 sm:w-8 select-none" loading="lazy">
+                    <span class="text-h3-headline-m sm:text-h2-headline-l font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">FileSurf</span>
+                    <span class="hidden sm:inline-flex items-center justify-center rounded-full text-caption-m-bold px-2.5 py-[2px] bg-gradient-to-br from-primary to-primary/90 text-white shadow-lg shadow-primary/30 border border-primary/80">AI</span>
+                </div>
+
+                <!-- Right: Tabs (mobile only) and Menu/Actions -->
+                <div class="flex items-center gap-2 shrink-0">
                     <!-- Inline tabs (mobile only) -->
-                    <nav class="flex items-center gap-1 lg:hidden ml-2" role="tablist" aria-label="Chat and file tabs" data-chat-tabs-inline>
+                    <nav class="flex items-center gap-1 lg:hidden" role="tablist" aria-label="Chat and file tabs" data-chat-tabs-inline>
                         <button
                             id="chat-tab-inline"
                             data-tab="chat"
@@ -41,11 +41,8 @@
                             <span class="hidden xs:inline">Files</span>
                         </button>
                     </nav>
-                </div>
-
-                <!-- Right: Connection Status and Menu -->
-                <div class="flex items-center gap-2 shrink-0">
-                    <!-- Connection Status - Color only on mobile, text on desktop -->
+                    
+                    <!-- Connection Status - Hidden on mobile, shown on desktop -->
                     <div class="hidden sm:inline-flex items-center gap-2" role="status" aria-live="polite">
                         <div class="relative flex items-center justify-center">
                             <div id="status-pulse" data-status-pulse class="status-pulse status-pulse--working"></div>
