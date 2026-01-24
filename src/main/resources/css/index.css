@@ -619,6 +619,56 @@
   }
 }
 
+/* ==========================================================================
+   Inline Tab Buttons (Mobile Header)
+   Compact tab buttons displayed inline with the header on mobile devices
+   ========================================================================== */
+.tab-button-inline {
+  color: theme('colors.slate.500');
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.dark .tab-button-inline {
+  color: theme('colors.slate.400');
+}
+
+.tab-button-inline:hover:not(.tab-button-inline--active) {
+  background: theme('colors.slate.100');
+  color: theme('colors.slate.900');
+  border-color: theme('colors.slate.200');
+}
+
+.dark .tab-button-inline:hover:not(.tab-button-inline--active) {
+  background: theme('colors.slate.800');
+  color: theme('colors.slate.100');
+  border-color: theme('colors.slate.700');
+}
+
+.tab-button-inline--active {
+  color: theme('colors.orange.600');
+  background: theme('colors.orange.50');
+  border-color: theme('colors.orange.200');
+  font-weight: 600;
+}
+
+.dark .tab-button-inline--active {
+  color: theme('colors.orange.400');
+  background: theme('colors.orange.950/0.5');
+  border-color: theme('colors.orange.800/0.5');
+}
+
+/* ==========================================================================
+   Mobile Menu (Three-dot dropdown)
+   Dropdown menu for mobile devices containing actions like feedback, privacy, theme
+   ========================================================================== */
+/* Extra small breakpoint for very narrow screens */
+@media (min-width: 380px) {
+  .xs\:inline {
+    display: inline;
+  }
+}
+
 /* Mobile & tablet: panels should fill available width when active */
 #chat-panel,
 #file-panel {

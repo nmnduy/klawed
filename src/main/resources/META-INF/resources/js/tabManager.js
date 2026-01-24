@@ -96,16 +96,29 @@ export class TabManager {
             return; // Already active
         }
 
-        // Deactivate current tab
+        // Find all buttons for this tab (including inline versions)
+        const allTabButtons = this.rootEl.querySelectorAll(`[data-tab="${tabId}"]`);
+        const allPrevTabButtons = this.activeTab ? this.rootEl.querySelectorAll(`[data-tab="${this.activeTab.id}"]`) : [];
+
+        // Deactivate current tab and all its button variants
         if (this.activeTab) {
-            this.activeTab.button.setAttribute('aria-selected', 'false');
-            this.activeTab.button.classList.remove('tab-button--active');
+            allPrevTabButtons.forEach(btn => {
+                btn.setAttribute('aria-selected', 'false');
+                btn.classList.remove('tab-button--active', 'tab-button-inline--active');
+            });
             this.activeTab.panel.classList.add('hidden');
         }
 
-        // Activate new tab
-        targetTab.button.setAttribute('aria-selected', 'true');
-        targetTab.button.classList.add('tab-button--active');
+        // Activate new tab and all its button variants
+        allTabButtons.forEach(btn => {
+            btn.setAttribute('aria-selected', 'true');
+            // Add appropriate active class based on button type
+            if (btn.classList.contains('tab-button-inline')) {
+                btn.classList.add('tab-button-inline--active');
+            } else {
+                btn.classList.add('tab-button--active');
+            }
+        });
         targetTab.panel.classList.remove('hidden');
 
         this.activeTab = targetTab;

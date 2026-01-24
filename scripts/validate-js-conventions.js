@@ -30,6 +30,7 @@ const MODULE_FILES = new Set([
     'authUtils.js',      // Imported by fileChat.js
     'darkMode.js',       // Imported by fileChat.js
     'tabManager.js',     // Imported by fileChat.js
+    'mobileMenu.js',     // Imported by fileChat.js
     'loginWaitlist.js',  // Loaded as module in login.html, waitlist.html
     'markdownUtils.js',  // Imported by fileChat.js, parses markdown
     'markdown-debug.js'  // Debug utility for markdown parsing

@@ -1,5 +1,6 @@
 // Invoice Chat module
 import { TabManager } from './tabManager.js';
+import { initMobileMenu } from './mobileMenu.js';
 import { handleAuthError, isAuthRequired } from './authUtils.js';
 import { parseMarkdown, containsMarkdown } from './markdownUtils.js';
 
@@ -28,6 +29,11 @@ export function init(rootEl) {
         statusIndicator: rootEl.querySelector('[data-status-indicator]'),
         statusPulse: rootEl.querySelector('[data-status-pulse]'),
         statusText: rootEl.querySelector('[data-status-text]'),
+        // Mobile status pill elements
+        mobileStatusPill: rootEl.querySelector('[data-mobile-status-pill]'),
+        mobileStatusIndicator: rootEl.querySelector('[data-mobile-status-indicator]'),
+        mobileStatusPulse: rootEl.querySelector('[data-mobile-status-pulse]'),
+        mobileStatusText: rootEl.querySelector('[data-mobile-status-text]'),
         chatContainer: rootEl.querySelector('[data-chat-container]'),
         chatMessages: rootEl.querySelector('[data-chat-messages]'),
         chatEmpty: rootEl.querySelector('[data-chat-empty]'),
@@ -42,6 +48,13 @@ export function init(rootEl) {
 
     const messageParent = elements.chatMessages || elements.chatContainer || rootEl;
     const scrollContainer = elements.chatContainer || elements.chatMessages || rootEl;
+
+    // Initialize mobile menu
+    try {
+        initMobileMenu(rootEl);
+    } catch (error) {
+        console.warn('[file-chat] Failed to initialize mobile menu:', error);
+    }
 
     // Initialize tab manager
     let tabManager = null;
@@ -157,19 +170,34 @@ export function init(rootEl) {
     function updateStatus(connected, message) {
         isConnected = connected;
         if (connected) {
+            // Desktop status
             elements.statusIndicator && (elements.statusIndicator.className = 'status-indicator status-indicator--connected');
             elements.statusPulse && (elements.statusPulse.className = 'status-pulse status-pulse--connected');
             if (elements.statusText) {
                 elements.statusText.textContent = message || 'Connected';
                 elements.statusText.className = 'status-text status-text--connected';
             }
+            // Mobile status pill - hide when connected
+            if (elements.mobileStatusPill) {
+                elements.mobileStatusPill.classList.add('hidden');
+            }
             setDisabledState(false);
         } else {
+            // Desktop status
             elements.statusIndicator && (elements.statusIndicator.className = 'status-indicator status-indicator--error');
             elements.statusPulse && (elements.statusPulse.className = 'status-pulse status-pulse--error');
             if (elements.statusText) {
                 elements.statusText.textContent = message || 'Disconnected';
                 elements.statusText.className = 'status-text status-text--error';
+            }
+            // Mobile status pill - show when disconnected
+            if (elements.mobileStatusPill) {
+                elements.mobileStatusPill.classList.remove('hidden');
+                elements.mobileStatusIndicator && (elements.mobileStatusIndicator.className = 'status-indicator status-indicator--error');
+                elements.mobileStatusPulse && (elements.mobileStatusPulse.className = 'status-pulse status-pulse--error');
+                if (elements.mobileStatusText) {
+                    elements.mobileStatusText.textContent = message || 'Disconnected';
+                }
             }
             setDisabledState(true);
         }
@@ -189,6 +217,16 @@ export function init(rootEl) {
         if (elements.statusText) {
             elements.statusText.textContent = statusMessage;
             elements.statusText.className = 'status-text status-text--working';
+        }
+        
+        // Mobile status pill - show during connecting/working state
+        if (elements.mobileStatusPill) {
+            elements.mobileStatusPill.classList.remove('hidden');
+            elements.mobileStatusIndicator && (elements.mobileStatusIndicator.className = 'status-indicator status-indicator--working');
+            elements.mobileStatusPulse && (elements.mobileStatusPulse.className = 'status-pulse status-pulse--working');
+            if (elements.mobileStatusText) {
+                elements.mobileStatusText.textContent = statusMessage;
+            }
         }
 
         if (statusMessage && (statusMessage.includes('completed processing') || statusMessage.includes('timeout reached'))) {
