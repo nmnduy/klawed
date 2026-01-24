@@ -18,7 +18,6 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
@@ -38,9 +37,6 @@ public class SessionResource {
 
     @ConfigProperty(name = "cookie.secure", defaultValue = "false")
     Optional<Boolean> cookieSecure;
-
-    // In-memory session store (maps session ID to client identity)
-    private static final ConcurrentHashMap<String, String> sessionStore = new ConcurrentHashMap<>();
 
     /**
      * Generate a new session ID for authenticated users.
@@ -71,11 +67,8 @@ public class SessionResource {
 
         String sessionId = UUID.randomUUID().toString();
 
-        // Store the session ID with user identity
-        sessionStore.put(sessionId, user.getEmail());
-
-        // Register session in sessions.db for container management
-        klawedSandboxService.registerSession(sessionId, userId);
+        // Register session in sessions.db (source of truth) with email
+        klawedSandboxService.registerSession(sessionId, userId, user.getEmail());
 
         LOGGER.info("Generated new session ID: " + sessionId + " for user: " + user.getEmail() + " (userId: " + userId + ")");
 
@@ -113,42 +106,48 @@ public class SessionResource {
     }
 
     /**
-     * Validate a session ID
+     * Validate a session ID using database as source of truth
      * @param sessionId The session ID to validate
-     * @return true if session exists, false otherwise
+     * @param klawedSandboxService Service instance to query database
+     * @return true if session exists and is active, false otherwise
      */
-    public static boolean validateSession(String sessionId) {
-        return sessionStore.containsKey(sessionId);
+    public static boolean validateSession(String sessionId, KlawedSandboxService klawedSandboxService) {
+        // Database is the source of truth - check if session is active (not disconnected)
+        return klawedSandboxService.isSessionActive(sessionId);
     }
 
     /**
-     * Get client identity for a session
+     * Get client identity for a session from database
      * @param sessionId The session ID
-     * @return Client identity or null if session doesn't exist
+     * @param klawedSandboxService Service instance to query database
+     * @return Client identity (email) or null if session doesn't exist
      */
-    public static String getClientIdentity(String sessionId) {
-        return sessionStore.get(sessionId);
+    public static String getClientIdentity(String sessionId, KlawedSandboxService klawedSandboxService) {
+        // Database is the source of truth
+        return klawedSandboxService.getSessionEmail(sessionId);
     }
 
     /**
-     * Remove a session (e.g., when WebSocket closes)
-     * @param sessionId The session ID to remove
+     * Remove a session (no-op, session state is managed in database)
+     * Note: The database record is updated by KlawedSandboxService.unregisterSession()
+     * @param sessionId The session ID
      */
     public static void removeSession(String sessionId) {
-        sessionStore.remove(sessionId);
-        LOGGER.info("Removed session: " + sessionId);
+        // No-op - session state is managed in the database, not in memory
+        LOGGER.info("Session removal requested for: " + sessionId + " (managed in database)");
     }
 
     /**
      * Get all active sessions (for debugging/monitoring)
-     * @return Number of active sessions
+     * @return Number of active sessions in database
      */
     @GET
     @Path("/count")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getActiveSessionCount() {
+        int activeCount = klawedSandboxService.getActiveSessionCount();
         return Response.ok()
-                .entity("{\"activeSessions\": " + sessionStore.size() + "}")
+                .entity("{\"activeSessions\": " + activeCount + "}")
                 .build();
     }
 }
