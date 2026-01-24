@@ -65,6 +65,23 @@
 #define COUNT_UNREAD_SQL \
     "SELECT COUNT(*) FROM messages WHERE sender = ? AND sent = 0;"
 
+// Select seed messages for conversation history (most recent 100, ordered chronologically)
+// Returns messages where sent=1 (already processed) for seeding conversation at boot
+#define SELECT_SEED_MESSAGES_SQL \
+    "SELECT sender, message FROM (" \
+    "  SELECT sender, message, created_at FROM messages " \
+    "  WHERE sent = 1 AND messageType_filter = 'TEXT' " \
+    "  ORDER BY created_at DESC LIMIT 100" \
+    ") ORDER BY created_at ASC;"
+
+// Simpler version that works without messageType filtering (we filter in code)
+#define SELECT_SEED_MESSAGES_SIMPLE_SQL \
+    "SELECT sender, message FROM (" \
+    "  SELECT sender, message, created_at FROM messages " \
+    "  WHERE sent = 1 " \
+    "  ORDER BY created_at DESC LIMIT 100" \
+    ") ORDER BY created_at ASC;"
+
 // Forward declarations
 #ifndef TEST_BUILD
 static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx, struct ConversationState *state, const char *user_input);
@@ -969,6 +986,130 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
 #endif // TEST_BUILD
 
 #ifndef TEST_BUILD
+/**
+ * Seed conversation history from existing messages in the database.
+ * Called once at daemon boot to restore conversation context.
+ * Reads at most 100 previous TEXT messages (sent=1) ordered chronologically.
+ *
+ * @param ctx SQLite queue context
+ * @param state Conversation state to seed
+ * @return Number of messages seeded, or -1 on error
+ */
+int sqlite_queue_seed_conversation(SQLiteQueueContext *ctx, struct ConversationState *state) {
+    if (!ctx || !state) {
+        LOG_ERROR("SQLite Queue: Invalid parameters for seed_conversation");
+        return -1;
+    }
+
+    // Open database if not already open
+    if (!ctx->db_handle && sqlite_queue_open_db(ctx) != 0) {
+        return -1;
+    }
+
+    sqlite3 *db = (sqlite3 *)ctx->db_handle;
+
+    LOG_INFO("SQLite Queue: Checking for seed messages to restore conversation history");
+
+    // Prepare select statement
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(db, SELECT_SEED_MESSAGES_SIMPLE_SQL, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("SQLite Queue: Failed to prepare seed query: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+
+    int seeded_count = 0;
+
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        const char *sender = (const char *)sqlite3_column_text(stmt, 0);
+        const char *message = (const char *)sqlite3_column_text(stmt, 1);
+
+        if (!sender || !message) {
+            continue;
+        }
+
+        // Parse JSON message
+        cJSON *json = cJSON_Parse(message);
+        if (!json) {
+            LOG_DEBUG("SQLite Queue: Skipping invalid JSON message during seeding");
+            continue;
+        }
+
+        // Only process TEXT messages for seeding
+        cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
+        cJSON *content = cJSON_GetObjectItem(json, "content");
+
+        if (!message_type || !cJSON_IsString(message_type) ||
+            strcmp(message_type->valuestring, "TEXT") != 0 ||
+            !content || !cJSON_IsString(content)) {
+            cJSON_Delete(json);
+            continue;
+        }
+
+        const char *text = content->valuestring;
+
+        // Skip empty or whitespace-only content
+        const char *p = text;
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p == '\0') {
+            cJSON_Delete(json);
+            continue;
+        }
+
+        // Determine role based on sender
+        // Messages from client (to klawed) are user messages
+        // Messages from klawed (to client) are assistant messages
+        if (strcmp(sender, ctx->sender_name) == 0) {
+            // This is a message FROM klawed (assistant response)
+            // We need to add it as an assistant message
+            // Create a simple internal message for the assistant
+            if (state->count < MAX_MESSAGES) {
+                InternalMessage *msg = &state->messages[state->count];
+                msg->role = MSG_ASSISTANT;
+                msg->content_count = 1;
+                msg->contents = reallocarray(NULL, 1, sizeof(InternalContent));
+                if (msg->contents) {
+                    memset(msg->contents, 0, sizeof(InternalContent));
+                    msg->contents[0].type = INTERNAL_TEXT;
+                    msg->contents[0].text = strdup(text);
+                    if (msg->contents[0].text) {
+                        state->count++;
+                        seeded_count++;
+                        LOG_DEBUG("SQLite Queue: Seeded assistant message: %.*s",
+                                 (int)(strlen(text) > 100 ? 100 : strlen(text)), text);
+                    } else {
+                        free(msg->contents);
+                        msg->contents = NULL;
+                        msg->content_count = 0;
+                    }
+                }
+            }
+        } else {
+            // This is a message TO klawed (user input)
+            add_user_message(state, text);
+            seeded_count++;
+            LOG_DEBUG("SQLite Queue: Seeded user message: %.*s",
+                     (int)(strlen(text) > 100 ? 100 : strlen(text)), text);
+        }
+
+        cJSON_Delete(json);
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (seeded_count > 0) {
+        LOG_INFO("SQLite Queue: Seeded %d message(s) from database history", seeded_count);
+        printf("SQLite Queue: Restored %d message(s) from conversation history\n", seeded_count);
+        fflush(stdout);
+    } else {
+        LOG_INFO("SQLite Queue: No previous messages found to seed conversation");
+    }
+
+    return seeded_count;
+}
+#endif // TEST_BUILD
+
+#ifndef TEST_BUILD
 int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *state) {
     if (!ctx || !state) {
         LOG_ERROR("SQLite Queue: Invalid parameters for daemon_mode");
@@ -984,6 +1125,13 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     // Print to console as well
     printf("SQLite Queue daemon started on %s\n", ctx->db_path);
     printf("Sender name: %s\n", ctx->sender_name);
+
+    // Seed conversation from existing messages (once at boot)
+    int seeded = sqlite_queue_seed_conversation(ctx, state);
+    if (seeded < 0) {
+        LOG_WARN("SQLite Queue: Failed to seed conversation from history, continuing anyway");
+    }
+
     printf("Waiting for messages...\n");
     fflush(stdout);
 

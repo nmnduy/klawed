@@ -139,6 +139,22 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
 int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *state);
 
 /**
+ * Seed conversation history from existing messages in the database.
+ * Called automatically at daemon boot to restore conversation context.
+ * Reads at most 100 previous TEXT messages (sent=1) ordered chronologically.
+ * Only TEXT messages are loaded; TOOL, TOOL_RESULT, etc. are skipped.
+ *
+ * Clients can pre-seed conversation by inserting messages with sent=1:
+ * - User messages: sender='client', receiver='klawed'
+ * - Assistant messages: sender='klawed', receiver='client'
+ *
+ * @param ctx SQLite queue context
+ * @param state Conversation state to seed
+ * @return Number of messages seeded, or -1 on error
+ */
+int sqlite_queue_seed_conversation(SQLiteQueueContext *ctx, struct ConversationState *state);
+
+/**
  * Check if SQLite queue is available (always true since SQLite is required)
  * @return true if SQLite queue support is available, false otherwise
  */
