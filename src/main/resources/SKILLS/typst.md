@@ -2,7 +2,7 @@
 
 This skill provides quick-start tips and snippets for generating PDFs with Typst.
 
-> Reliability note: Always compile/test the Typst file locally before sending the PDF to the user. Only ship artifacts that actually render without errors.
+> **Reliability note**: Always compile/test the Typst file locally before sending the PDF to the user. Only ship artifacts that actually render without errors.
 
 ## What is Typst?
 Typst is a modern markup-based typesetting system (similar to LaTeX but faster and simpler) used to create PDFs. Learn more: https://typst.app/
@@ -67,7 +67,7 @@ This PDF was generated with Typst.
 #table(
   columns: (1fr, auto, auto),
   inset: 6pt,
-  data.map(row => row.map(c => c)),
+  ..data.map(row => row),
 )
 
 == Image
@@ -99,8 +99,8 @@ This PDF was generated with Typst.
 
 ## Reusable Library (`lib/invoice.typ`)
 ```typst
-#let money(v) = "$" + v.format(precision: 2)
-#let sum_items(items) = items.fold(0, (acc, it) => acc + it.at(1) * it.at(2))
+#let money(v) = "$" + str(calc.round(v * 100) / 100)
+#let sum_items(items) = items.fold(0.0, (acc, it) => acc + it.at(1) * it.at(2))
 
 #let invoice(
   company,
@@ -110,60 +110,60 @@ This PDF was generated with Typst.
   items,
   tax,
 ) = [
-  set text(font: "Helvetica", size: 11pt)
-  set page(margin: 1in)
+  #set text(font: "Helvetica", size: 11pt)
+  #set page(margin: 1in)
 
-  align(center)[
-    text(18pt, strong)[Invoice]
+  #align(center)[
+    #text(18pt, weight: "bold")[Invoice]
   ]
-  v(12pt)
+  #v(12pt)
 
   // Header
-  grid(columns: (1fr, 1fr), gutter: 12pt)[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 12pt,
     [
-      text(strong)[Company: ] company
-      text(strong)[Client: ] client
-    ]
+      *Company:* #company \
+      *Client:* #client
+    ],
     [
-      text(strong)[Invoice #: ] number
-      text(strong)[Date: ] date.format()
+      *Invoice \#:* #number \
+      *Date:* #date.display()
     ]
-  ]
-  v(12pt)
+  )
+  #v(12pt)
 
   // Items table
   #let headers = ("Item", "Qty", "Unit", "Total")
-  #let body = items.map(it => (
+  #let body_rows = items.map(it => (
     it.at(0),
-    it.at(1),
+    str(it.at(1)),
     money(it.at(2)),
     money(it.at(1) * it.at(2)),
   ))
-  table(
+  
+  #table(
     columns: (1fr, auto, auto, auto),
     inset: 6pt,
     align: (left, right, right, right),
-    header: headers,
-    body: body,
-    stroke: 0.5pt + gray + solid,
+    stroke: 0.5pt + gray,
+    ..headers,
+    ..body_rows.flatten(),
   )
 
-  v(12pt)
+  #v(12pt)
 
   // Totals
   #let subtotal = sum_items(items)
   #let tax_amt = subtotal * tax
   #let total = subtotal + tax_amt
-  align(right)[
-    text(strong)[Subtotal: ] money(subtotal)
-    text(strong)[Tax: ] money(tax_amt)
-    text(strong)[Total: ] money(total)
+  #align(right)[
+    *Subtotal:* #money(subtotal) \
+    *Tax:* #money(tax_amt) \
+    *Total:* #money(total)
   ]
 ]
 ```
-
-## Goal Folder
-This skill lives under `SKILLS/pdf/` because Typst is used to achieve the PDF-generation goal. Tools (Typst) are documented inside the goal folder.
 
 ## How to Use in Agent Workspace
 1. Ask the user to upload or describe the desired PDF.
@@ -171,7 +171,36 @@ This skill lives under `SKILLS/pdf/` because Typst is used to achieve the PDF-ge
 3. Run `typst compile documents/report.typ` to produce `documents/report.pdf`.
 4. Share the generated PDF with the user.
 
+## Advanced Features
+
+### Custom Fonts
+```typst
+#set text(font: "Arial", size: 11pt)
+// Typst uses system fonts automatically
+```
+
+### Multi-column Layouts
+```typst
+#columns(2)[
+  Content here flows across two columns automatically.
+]
+```
+
+### Custom Colors
+```typst
+#set text(fill: rgb("#1F4B99"))
+#rect(fill: rgb("#E8F0FF"), width: 100%, height: 2em)[
+  Colored box
+]
+```
+
 ## Troubleshooting
 - If `typst` command is missing: install via the commands above.
 - Fonts: Typst uses system fonts; ensure referenced fonts are installed.
 - Images not showing: verify path and that the image exists in workspace.
+- Compilation errors: Check `.typ` syntax carefully (Typst uses `#` for commands).
+
+## Resources
+- Official docs: https://typst.app/docs
+- Typst Universe (packages): https://typst.app/universe
+- Community examples: https://github.com/typst/typst

@@ -111,15 +111,32 @@ You have the following rights regarding your data:
 
 ## Available SKILLS
 
-- `connectors/github/` - Browse and analyze n8n connectors from GitHub without downloading entire repository, generate new connector templates
-- `ocr/` - Optical Character Recognition for extracting text from images
-- `pdf/typst/` - PDF generation using the Typst typesetting system
+SKILLS are organized as flat markdown files in `src/main/resources/SKILLS/`. Each skill is self-contained and focused on a specific goal or capability.
+
+### Current Skills
+
+- `github.md` - Browse and analyze n8n connectors from GitHub without downloading entire repository, generate new connector templates based on existing patterns
+- `latex.md` - PDF generation using LaTeX with recipes for invoices, reports, and complex documents with Unicode/RTL support
+- `ocr.md` - Optical Character Recognition for extracting text from images and PDFs
+- `search_engines.md` - Search engine integration and web search capabilities
+- `typst.md` - PDF generation using the Typst typesetting system (modern alternative to LaTeX)
 - `web_browse_agent.md` - Web browsing agent for visiting websites, extracting content, and interacting with web pages
 
-## SKILLS Organization Guidance
-- Organize `src/main/resources/SKILLS` by **goal/outcome**, not by tool name.
-- Example: place Typst (PDF generation) under a `pdf/` goal folder, not a `typst/` tool folder.
-- When adding new SKILLS, group them by the user goal they serve (e.g., pdf, data-viz, audio), then document the tools inside.
+### SKILLS Organization Guidelines
+
+**Format:** All SKILLS should be **flat markdown files** in the SKILLS directory.
+- ✅ `SKILLS/ocr.md` - Good (flat file)
+- ❌ `SKILLS/ocr/README.md` - Bad (nested folder)
+
+**Organization Principle:** Organize by **goal/outcome**, not by tool name.
+- The markdown filename should reflect the user goal or capability (e.g., `pdf_generation.md`, `ocr.md`)
+- Document the tools and techniques inside the markdown file
+- Keep each skill self-contained with installation instructions, usage examples, and troubleshooting tips
+
+**When Adding New Skills:**
+1. Create a single markdown file named after the goal (e.g., `video_editing.md`, `data_visualization.md`)
+2. Include comprehensive documentation: what it does, installation, usage, examples, troubleshooting
+3. Reference the skill in this section with a brief description
 
 ## File Explorer - Showing Content to Users
 
