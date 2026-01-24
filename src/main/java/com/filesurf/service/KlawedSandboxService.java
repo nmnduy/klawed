@@ -383,6 +383,27 @@ public class KlawedSandboxService {
     }
 
     /**
+     * Get count of active sessions (connected, not disconnected)
+     * @return Number of active sessions in the database
+     */
+    public int getActiveSessionCount() {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "SELECT COUNT(*) FROM sessions WHERE disconnected_at IS NULL"
+             );
+             ResultSet rs = pstmt.executeQuery()) {
+
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+            return 0;
+        } catch (SQLException e) {
+            LOGGER.warning("Failed to get active session count: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
      * Check if a session exists in the database
      */
     private boolean sessionExists(String sessionId) throws SQLException {

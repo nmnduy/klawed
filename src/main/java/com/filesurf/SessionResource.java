@@ -18,7 +18,6 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
@@ -38,10 +37,6 @@ public class SessionResource {
 
     @ConfigProperty(name = "cookie.secure", defaultValue = "false")
     Optional<Boolean> cookieSecure;
-
-    // In-memory session cache (maps session ID to client identity)
-    // This is a read-through cache; the database is the source of truth
-    private static final ConcurrentHashMap<String, String> sessionCache = new ConcurrentHashMap<>();
 
     /**
      * Generate a new session ID for authenticated users.
@@ -71,9 +66,6 @@ public class SessionResource {
         }
 
         String sessionId = UUID.randomUUID().toString();
-
-        // Store the session ID with user identity in cache
-        sessionCache.put(sessionId, user.getEmail());
 
         // Register session in sessions.db (source of truth) with email
         klawedSandboxService.registerSession(sessionId, userId, user.getEmail());
@@ -125,75 +117,37 @@ public class SessionResource {
     }
 
     /**
-     * Validate a session ID (legacy static method for backward compatibility)
-     * NOTE: This method is deprecated and will be removed in a future version.
-     * Use validateSession(sessionId, klawedSandboxService) instead.
-     * @param sessionId The session ID to validate
-     * @return true if session exists in cache, false otherwise
-     */
-    @Deprecated
-    public static boolean validateSession(String sessionId) {
-        // Legacy: only check cache
-        // This is kept for backward compatibility but should not be used
-        return sessionCache.containsKey(sessionId);
-    }
-
-    /**
-     * Get client identity for a session with read-through cache
+     * Get client identity for a session from database
      * @param sessionId The session ID
      * @param klawedSandboxService Service instance to query database
      * @return Client identity (email) or null if session doesn't exist
      */
     public static String getClientIdentity(String sessionId, KlawedSandboxService klawedSandboxService) {
-        // Try cache first
-        String cached = sessionCache.get(sessionId);
-        if (cached != null) {
-            return cached;
-        }
-        
-        // Cache miss - query database
-        String email = klawedSandboxService.getSessionEmail(sessionId);
-        if (email != null) {
-            // Populate cache for future requests
-            sessionCache.put(sessionId, email);
-            LOGGER.info("Loaded session " + sessionId + " from database into cache");
-        }
-        return email;
+        // Database is the source of truth
+        return klawedSandboxService.getSessionEmail(sessionId);
     }
 
     /**
-     * Get client identity for a session (legacy static method)
-     * NOTE: This method is deprecated and will be removed in a future version.
-     * Use getClientIdentity(sessionId, klawedSandboxService) instead.
+     * Remove a session (no-op, session state is managed in database)
+     * Note: The database record is updated by KlawedSandboxService.unregisterSession()
      * @param sessionId The session ID
-     * @return Client identity or null if session doesn't exist in cache
-     */
-    @Deprecated
-    public static String getClientIdentity(String sessionId) {
-        return sessionCache.get(sessionId);
-    }
-
-    /**
-     * Remove a session from cache (e.g., when WebSocket closes)
-     * Note: This only clears the cache. The database record is updated separately
-     * by KlawedSandboxService.unregisterSession()
-     * @param sessionId The session ID to remove from cache
      */
     public static void removeSession(String sessionId) {
-        sessionCache.remove(sessionId);
-        LOGGER.info("Removed session from cache: " + sessionId);
+        // No-op - session state is managed in the database, not in memory
+        LOGGER.info("Session removal requested for: " + sessionId + " (managed in database)");
     }
 
     /**
      * Get all active sessions (for debugging/monitoring)
-     * @return Number of sessions in cache (note: database is the source of truth)
+     * @return Number of active sessions in database
      */
     @GET
     @Path("/count")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getActiveSessionCount() {
+        int activeCount = klawedSandboxService.getActiveSessionCount();
         return Response.ok()
-                .entity("{\"cachedSessions\": " + sessionCache.size() + "}")
+                .entity("{\"activeSessions\": " + activeCount + "}")
                 .build();
     }
 }
