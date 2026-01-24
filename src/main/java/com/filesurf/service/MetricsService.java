@@ -47,6 +47,7 @@ public class MetricsService {
     private Counter contactFormSubmissions;
     private Counter feedbackSubmissions;
     private Counter autoCompactionEvents;
+    private Counter conversationSeeded;
 
     // Gauges for current state
     private AtomicInteger activeWebSocketConnections = new AtomicInteger(0);
@@ -145,6 +146,11 @@ public class MetricsService {
 
         autoCompactionEvents = Counter.builder("filesurf_auto_compaction_events")
                 .description("Total number of auto compaction events")
+                .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        conversationSeeded = Counter.builder("filesurf_conversation_seeded")
+                .description("Total number of times conversation history was seeded to klawed containers")
                 .tag("application", "filesurf")
                 .register(meterRegistry);
 
@@ -496,5 +502,20 @@ public class MetricsService {
 
     public long getTotalAutoCompactionEvents() {
         return (long) autoCompactionEvents.count();
+    }
+
+    // Conversation seeding tracking
+    public void incrementConversationSeeded() {
+        conversationSeeded.increment();
+        LOGGER.fine("Conversation seeding event recorded");
+    }
+
+    public void incrementConversationSeeded(int messageCount) {
+        conversationSeeded.increment();
+        LOGGER.info("Conversation seeded with " + messageCount + " messages");
+    }
+
+    public long getTotalConversationSeeded() {
+        return (long) conversationSeeded.count();
     }
 }

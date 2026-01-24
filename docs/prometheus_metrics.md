@@ -17,6 +17,7 @@ This document describes all custom metrics exposed by the FileSurf v2 applicatio
 - **filesurf_containers_killed**: [application] Total number of containers forcefully killed
 - **filesurf_container_start_failures**: [application] Total number of container start failures
 - **filesurf_klawed_containers_active**: [application] Number of active klawed Podman containers (gauge)
+- **filesurf_conversation_seeded**: [application] Total number of times conversation history was seeded to klawed containers
 
 ### Message Metrics
 - **filesurf_chat_messages_sent**: [application] Total number of chat messages sent
@@ -139,6 +140,12 @@ rate(filesurf_container_start_failures_total[5m])
 
 # Container reuse efficiency (higher = better, containers staying alive)
 rate(filesurf_containers_reused_total[5m]) / (rate(filesurf_containers_started_total[5m]) + rate(filesurf_containers_reused_total[5m]))
+
+# Rate of conversation seeding events per minute
+rate(filesurf_conversation_seeded_total[1m])
+
+# Total conversation seeding events
+filesurf_conversation_seeded_total{application="filesurf"}
 ```
 
 ### Error Rate Monitoring
@@ -297,6 +304,22 @@ rate(filesurf_containers_reused_total[10m]) /
 ```
 
 **Container Leak Detection**: Compare `filesurf_klawed_containers_active` (gauge) with `filesurf_active_chat_sessions` (gauge). If containers significantly exceed active sessions, you may have a leak.
+
+### Conversation Seeding Tracking
+
+The **filesurf_conversation_seeded** metric tracks how many times klawed containers have been seeded with conversation history:
+
+- **When it happens**: When a user resumes an existing session and the klawed container needs to be started, the system seeds the conversation with up to 100 of the most recent TEXT messages from the chat history.
+- **Why it matters**: This metric helps track how often users are returning to existing sessions and getting contextual continuity. High seeding rates indicate good user retention and session resumption patterns.
+- **What's included**: Only TEXT messages from the user and assistant are seeded (excludes tool messages, system messages, etc.)
+
+```promql
+# How often are we seeding conversations?
+rate(filesurf_conversation_seeded_total[1h])
+
+# Ratio of seeded conversations to container starts (indicates resume pattern)
+rate(filesurf_conversation_seeded_total[5m]) / rate(filesurf_containers_started_total[5m])
+```
 
 **NOTE**: The `filesurf_errors` metric tracks different types of errors encountered in the application. The `type` tag helps identify error sources:
 - `application`: General application errors

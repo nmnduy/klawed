@@ -995,6 +995,11 @@ public class KlawedSandboxService {
                     }
 
                     LOGGER.info("[SESSION:" + sessionId + "] Seeded " + seededCount + " TEXT messages for conversation context");
+                    
+                    // Track conversation seeding metric
+                    if (seededCount > 0) {
+                        metricsService.incrementConversationSeeded(seededCount);
+                    }
                 }
             }
 
