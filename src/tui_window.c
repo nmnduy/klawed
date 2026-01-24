@@ -281,14 +281,8 @@ void tui_handle_resize(TUIState *tui) {
                         wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
                     }
 
-                    // Render text content with explicit foreground color (no background)
-                    if (has_colors()) {
-                        wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-                    }
+                    // Render text content (no background)
                     waddnstr(tui->wm.conv_pad, line_start, (int)line_len);
-                    if (has_colors()) {
-                        wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-                    }
 
                     if (*p == '\n') {
                         waddch(tui->wm.conv_pad, '\n');
