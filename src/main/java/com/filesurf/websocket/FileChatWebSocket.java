@@ -154,8 +154,8 @@ public class FileChatWebSocket {
         // Register session with SQLite queue polling service (for receiving messages from klawed)
         sqliteQueuePollingService.registerSession(sessionId, userId);
 
-        // Check for and resend any unsent messages from previous connection
-        chatMessagePollingService.pollAndSendUnsentMessagesForSession(sessionId);
+        // Unsent messages will be picked up by the scheduled poller
+        // No need for a separate catch-up poller here
 
         try {
             // Initialize session directory with persistent folders

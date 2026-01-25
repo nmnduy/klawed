@@ -177,9 +177,7 @@ public class ChatMessagePollingService {
             return; // Silent - don't log when there are no connections
         }
 
-        // Don't log every poll - only log when we find messages (below)
-
-        // Poll for unsent messages only for sessions with active connections
+        // Poll for unsent messages for all sessions with active connections
         for (Map.Entry<String, WebSocketConnection> entry : activeConnections.entrySet()) {
             String sessionId = entry.getKey();
             WebSocketConnection connection = entry.getValue();
@@ -189,44 +187,7 @@ public class ChatMessagePollingService {
                 continue;
             }
 
-            try {
-                List<ChatMessageRecord> unsentMessages = fileChatService.findUnsentMessagesForSession(sessionId);
-
-                if (!unsentMessages.isEmpty()) {
-                    LOGGER.fine("[SESSION:" + sessionId + "] Found " + unsentMessages.size() + " unsent messages");
-                }
-
-                for (ChatMessageRecord message : unsentMessages) {
-                    try {
-                        // Create appropriate message based on message type
-                        String jsonMessage = createJsonMessage(message);
-
-                        // Skip messages that should not be forwarded (e.g., AUTO_COMPACTION)
-                        if (jsonMessage == null) {
-                            LOGGER.fine("[SESSION:" + sessionId + "] Skipping non-forwardable message ID: " + message.getId());
-                            markMessageAsSent(sessionId, message.getId());
-                            continue;
-                        }
-
-                        // Send the message asynchronously
-                        connection.sendText(jsonMessage).subscribe().with(
-                            success -> {
-                                LOGGER.info("[SESSION:" + sessionId + "] Sent message ID: " + message.getId());
-                                markMessageAsSent(sessionId, message.getId());
-                            },
-                            failure -> {
-                                LOGGER.warning("[SESSION:" + sessionId + "] Failed to send message ID: " + message.getId() +
-                                             ", error: " + failure.getMessage());
-                            }
-                        );
-
-                    } catch (Exception e) {
-                        LOGGER.severe("[SESSION:" + sessionId + "] Error processing message ID: " + message.getId() + ", error: " + e.getMessage());
-                    }
-                }
-            } catch (Exception e) {
-                LOGGER.severe("[SESSION:" + sessionId + "] Error polling for messages: " + e.getMessage());
-            }
+            processUnsentMessagesForSession(sessionId, connection);
         }
     }
 
@@ -331,41 +292,31 @@ public class ChatMessagePollingService {
     }
 
     /**
-     * Poll for unsent messages for a specific session.
-     * Called when a WebSocket connection is established to catch up on any missed messages.
-     * Uses the single-threaded executor to serialize with the scheduled poller.
+     * Process and send unsent messages for a given session and connection.
+     * Called by the scheduled poller for each active WebSocket connection.
+     *
+     * @param sessionId The session ID
+     * @param connection The active WebSocket connection
      */
-    @ActivateRequestContext
-    public void pollAndSendUnsentMessagesForSession(String sessionId) {
-        // Submit to single-threaded executor to serialize with scheduled polling
-        pollingExecutor.submit(() -> pollAndSendUnsentMessagesForSessionInternal(sessionId));
-    }
-
-    /**
-     * Internal session polling logic - executed by single-threaded executor
-     */
-    @ActivateRequestContext
-    void pollAndSendUnsentMessagesForSessionInternal(String sessionId) {
-        LOGGER.fine("[SESSION:" + sessionId + "] Polling for unsent messages...");
-
+    private void processUnsentMessagesForSession(String sessionId, WebSocketConnection connection) {
         try {
-            // Get unsent messages for this session
             List<ChatMessageRecord> unsentMessages = fileChatService.findUnsentMessagesForSession(sessionId);
 
             if (!unsentMessages.isEmpty()) {
                 LOGGER.fine("[SESSION:" + sessionId + "] Found " + unsentMessages.size() + " unsent messages");
             }
 
-            WebSocketConnection connection = activeConnections.get(sessionId);
-            if (connection == null || connection.isClosed()) {
-                LOGGER.fine("[SESSION:" + sessionId + "] No active WebSocket connection, skipping poll");
-                return;
-            }
-
             for (ChatMessageRecord message : unsentMessages) {
                 try {
                     // Create appropriate message based on message type
                     String jsonMessage = createJsonMessage(message);
+
+                    // Skip messages that should not be forwarded (e.g., AUTO_COMPACTION)
+                    if (jsonMessage == null) {
+                        LOGGER.fine("[SESSION:" + sessionId + "] Skipping non-forwardable message ID: " + message.getId());
+                        markMessageAsSent(sessionId, message.getId());
+                        continue;
+                    }
 
                     // Send the message asynchronously
                     connection.sendText(jsonMessage).subscribe().with(
@@ -385,7 +336,7 @@ public class ChatMessagePollingService {
                 }
             }
         } catch (Exception e) {
-            LOGGER.severe("[SESSION:" + sessionId + "] Error in session polling: " + e.getMessage());
+            LOGGER.severe("[SESSION:" + sessionId + "] Error polling for messages: " + e.getMessage());
         }
     }
 }
