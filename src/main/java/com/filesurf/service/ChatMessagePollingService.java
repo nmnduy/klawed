@@ -149,6 +149,10 @@ public class ChatMessagePollingService {
     @Scheduled(every = "1s")
     @ActivateRequestContext
     public void pollAndSendUnsentMessages() {
+        // Don't submit if executor is shutting down (prevents RejectedExecutionException on shutdown)
+        if (pollingExecutor.isShutdown()) {
+            return;
+        }
         // Submit to single-threaded executor to serialize polling
         pollingExecutor.submit(this::pollAndSendUnsentMessagesInternal);
     }
@@ -296,6 +300,10 @@ public class ChatMessagePollingService {
      * Runs the database operation on a worker thread
      */
     public void markMessageAsSentFromIoThread(String sessionId, Long messageId) {
+        // Don't submit if executor is shutting down
+        if (pollingExecutor.isShutdown()) {
+            return;
+        }
         // Submit to executor to run on worker thread
         pollingExecutor.submit(() -> {
             try {
