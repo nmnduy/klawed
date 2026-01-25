@@ -4,9 +4,9 @@ This directory contains scripts for building and deploying FileSurf v2.
 
 ## Deployment Methods
 
-### Local Build + Remote Sync (Recommended)
+### Production Deployment
 
-Build the application on your local machine and sync to the server using rsync. This is faster and more reliable when you have a proper development environment locally.
+Build the application on your local machine and deploy to **filesurf-0** (production):
 
 ```bash
 ./deployment/deploy-rsync.sh
@@ -75,12 +75,15 @@ git push -f origin production
 
 ## Remote Server Configuration
 
+### Production (filesurf-0)
 - **Host:** filesurf-0
 - **Path:** /root/filesurf_v2
 - **Service:** filesurf-v2
 - **Port:** 9090
+- **Domain:** filesurf.io
 - **Data Directory:** /var/lib/filesurf
 - **Log Directory:** /var/log/filesurf
+- **Profile:** `prod`
 
 ## Prerequisites
 
