@@ -681,6 +681,10 @@ public class KlawedSandboxService {
 
         String containerName = "klawed-" + sessionId;
 
+        // Clean up any existing container with this name to prevent "name already in use" errors
+        // This handles cases where a previous container is in a limbo state (created but not running)
+        cleanupExistingContainer(containerName);
+
         // Construct workspace directory path
         // This matches SessionManager's logic: persistRoot/{userId}/
         Path workspaceDir = Path.of(persistRoot).resolve(userId);
@@ -877,6 +881,15 @@ public class KlawedSandboxService {
      * Remove a container from Podman
      */
     private void removeContainerFromPodman(String containerId) {
+        removeContainerFromPodman(containerId, false);
+    }
+
+    /**
+     * Remove a container from Podman with logging
+     * @param containerId Container name or ID
+     * @param quiet If true, suppress success messages (for cleanup operations)
+     */
+    private void removeContainerFromPodman(String containerId, boolean quiet) {
         try {
             ProcessBuilder pb = new ProcessBuilder("podman", "rm", "-f", containerId);
             pb.redirectErrorStream(true);
@@ -886,13 +899,40 @@ public class KlawedSandboxService {
             int exitCode = process.waitFor();
 
             if (exitCode != 0) {
-                LOGGER.fine("Container remove returned exit code " + exitCode + ": " + output);
+                if (!quiet) {
+                    LOGGER.fine("Container remove returned exit code " + exitCode + ": " + output);
+                }
             } else {
-                LOGGER.info("Container removed from Podman: " + containerId);
+                if (!quiet) {
+                    LOGGER.info("Container removed from Podman: " + containerId);
+                }
             }
         } catch (IOException | InterruptedException e) {
             LOGGER.warning("Failed to remove container " + containerId + ": " + e.getMessage());
         }
+    }
+
+    /**
+     * Clean up any existing container with this name that isn't running properly
+     * This prevents "name already in use" errors when containers are in limbo states
+     * but preserves running containers for reuse
+     */
+    private void cleanupExistingContainer(String containerName) {
+        if (!containerExists(containerName)) {
+            // No container exists, nothing to clean up
+            return;
+        }
+
+        // Container exists - check if it's actually running
+        if (isContainerRunning(containerName)) {
+            // Container is running, keep it for reuse
+            LOGGER.fine("[CONTAINER:" + containerName + "] Container already running, will reuse");
+            return;
+        }
+
+        // Container exists but isn't running (stopped, created, etc.) - clean it up
+        LOGGER.info("[CONTAINER:" + containerName + "] Cleaning up non-running container before starting new one");
+        removeContainerFromPodman(containerName, true);
     }
 
     /**
@@ -916,6 +956,33 @@ public class KlawedSandboxService {
             return "true".equalsIgnoreCase(output);
         } catch (IOException | InterruptedException e) {
             LOGGER.warning("Error checking container status: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Check if a container exists in ANY state (running, stopped, created, etc.)
+     * This prevents "name already in use" errors when a previous container is in limbo
+     */
+    public boolean containerExists(String containerName) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                "podman", "ps", "-a", "--filter", "name=" + containerName, "--format", "{{.Names}}"
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            String output = readProcessOutput(process).trim();
+            int exitCode = process.waitFor();
+
+            if (exitCode != 0) {
+                return false;
+            }
+
+            // Check if our container name is in the output
+            return !output.isEmpty() && output.contains(containerName);
+        } catch (IOException | InterruptedException e) {
+            LOGGER.warning("Error checking if container exists: " + e.getMessage());
             return false;
         }
     }
