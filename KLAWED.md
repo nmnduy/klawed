@@ -269,27 +269,84 @@ CREATE TABLE users (
 
 ## Testing Tools
 
-### WebSocket Chat Testing Script
-A persistent WebSocket connection testing tool for AI agents:
+### WebSocket Bridge Server (Python)
+A persistent WebSocket connection testing tool for AI agents using a Python-based bridge server:
 
+**Start the bridge server:**
 ```bash
-./scripts/filesurf-chat-test.sh <session_id> [command_file]
+# Start on port 5000, connecting to FileSurf on port 9090
+python3 scripts/ws_bridge_server.py --port 5000 --file-surf-port 9090
+
+# Or with custom email
+python3 scripts/ws_bridge_server.py --email user@example.com
 ```
 
-**Interactive mode:**
+**Send a message:**
 ```bash
-./scripts/filesurf-chat-test.sh session123
-> send {"type":"message","content":"hello"}
-> poll 3
-> close
+# Simple message
+curl -X POST http://localhost:5000/message -d "Generate a Solana wallet"
+
+# Or with JSON
+curl -X POST http://localhost:5000/message \
+  -H "Content-Type: application/json" \
+  -d '{"content": "List files in current directory"}'
 ```
 
-**Batch mode with command file:**
+**Poll for responses:**
 ```bash
-./scripts/filesurf-chat-test.sh session123 /tmp/commands.txt
+# Basic poll (waits up to 2 seconds for responses)
+curl http://localhost:5000/poll
+
+# Poll with longer timeout (5 seconds)
+curl "http://localhost:5000/poll?timeout=5&clear=false"
+
+# Stream responses (Server-Sent Events)
+curl -N http://localhost:5000/poll/stream
 ```
 
-Dependencies: `apt-get install websocat socat`
+**Check status:**
+```bash
+curl http://localhost:5000/status
+# Returns: {"connected": true, "session_id": "...", "pending_responses": 3}
+```
+
+**Session management:**
+```bash
+# Get current session ID
+curl http://localhost:5000/session
+
+# Close current session and create new one
+curl -X DELETE http://localhost:5000/session
+
+# Close WebSocket connection
+curl -X POST http://localhost:5000/close
+```
+
+**Python example:**
+```python
+import requests
+
+# Send message
+requests.post("http://localhost:5000/message", data="Generate a Solana wallet")
+
+# Poll for response
+response = requests.get("http://localhost:5000/poll")
+data = response.json()
+print(f"Received {data['count']} messages:")
+for msg in data['messages']:
+    print(f"  - {msg['content'][:100]}...")
+```
+
+**HTTP Endpoints:**
+- `POST /message` - Send a message to the WebSocket
+- `GET /poll` - Poll for responses (default 2s timeout)
+- `GET /poll/stream` - Stream responses (Server-Sent Events)
+- `GET /status` - Check connection status
+- `GET /session` - Get current session ID
+- `DELETE /session` - Close and create new session
+- `POST /close` - Close WebSocket connection
+
+Dependencies: `pip install flask requests websockets`
 
 ## Building for Development
 ```bash
