@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.*;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -76,17 +77,29 @@ public class KlawedSandboxService {
     @ConfigProperty(name = "klawed.sessions.db.path", defaultValue = "data/sessions.db")
     String sessionsDbPath;
 
+    // Reconnection grace period: timeout for disconnected sessions before container is stopped
+    @ConfigProperty(name = "klawed.sandbox.inactivity-timeout", defaultValue = "30m")
+    Duration inactivityTimeout;
+
+    // Idle timeout: timeout for active but idle sessions before container won't auto-start
+    @ConfigProperty(name = "klawed.sandbox.idle-timeout", defaultValue = "1h")
+    Duration idleTimeout;
+
     private String jdbcUrl;
 
     // MetricsService for tracking container lifecycle
     @Inject
     MetricsService metricsService;
 
-    // Inactivity timeout: 1.5 minutes = 90 seconds (for disconnected sessions)
-    private static final long INACTIVITY_TIMEOUT_SECONDS = 90;
+    // Inactivity timeout in seconds (converted from Duration)
+    private long getInactivityTimeoutSeconds() {
+        return inactivityTimeout.toSeconds();
+    }
 
-    // Idle timeout: 30 minutes = 1800 seconds (for active but idle sessions)
-    private static final long IDLE_TIMEOUT_SECONDS = 1800;
+    // Idle timeout in seconds (converted from Duration)
+    private long getIdleTimeoutSeconds() {
+        return idleTimeout.toSeconds();
+    }
 
     // Single-threaded executor to serialize lifecycle management operations
     private final ExecutorService lifecycleExecutor = Executors.newSingleThreadExecutor();
@@ -339,7 +352,7 @@ public class KlawedSandboxService {
      */
     private List<String> getInactiveSessions() throws SQLException {
         List<String> sessionIds = new ArrayList<>();
-        long cutoffTime = Instant.now().getEpochSecond() - INACTIVITY_TIMEOUT_SECONDS;
+        long cutoffTime = Instant.now().getEpochSecond() - getInactivityTimeoutSeconds();
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl);
              PreparedStatement pstmt = conn.prepareStatement(
@@ -364,7 +377,7 @@ public class KlawedSandboxService {
      */
     private List<String> getIdleSessions() throws SQLException {
         List<String> sessionIds = new ArrayList<>();
-        long cutoffTime = Instant.now().getEpochSecond() - IDLE_TIMEOUT_SECONDS;
+        long cutoffTime = Instant.now().getEpochSecond() - getIdleTimeoutSeconds();
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl);
              PreparedStatement pstmt = conn.prepareStatement(
@@ -562,10 +575,10 @@ public class KlawedSandboxService {
                     reason = "session does not exist in database";
                 } else if (inactiveSet.contains(sessionId)) {
                     shouldStop = true;
-                    reason = "session inactive for >" + INACTIVITY_TIMEOUT_SECONDS + " seconds";
+                    reason = "session inactive for >" + inactivityTimeout;
                 } else if (idleSet.contains(sessionId)) {
                     shouldStop = true;
-                    reason = "session idle (no activity) for >" + IDLE_TIMEOUT_SECONDS + " seconds";
+                    reason = "session idle (no activity) for >" + idleTimeout;
                 } else if (!activeSessionIds.contains(sessionId)) {
                     shouldStop = true;
                     reason = "session is disconnected";
