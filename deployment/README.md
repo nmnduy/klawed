@@ -24,23 +24,6 @@ This script will:
    - `pom.xml` and `package.json` (for reference)
 6. Run `deploy.sh` on the remote server to install/restart the service
 
-### Staging Deployment
-
-Build and deploy to **pie-01** (staging environment):
-
-```bash
-./deployment/deploy-staging.sh
-```
-
-This script will:
-1. Tag current commit as 'staging'
-2. Build CSS assets and Java application
-3. Run local verification test
-4. Rsync files to pie-01:/root/filesurf_v2_staging
-5. Install systemd service and restart
-
-See [STAGING.md](./STAGING.md) for complete staging environment documentation.
-
 ### Remote Build (Alternative)
 
 Build directly on the server. Useful if you don't have the proper build environment locally.
@@ -101,18 +84,6 @@ git push -f origin production
 - **Data Directory:** /var/lib/filesurf
 - **Log Directory:** /var/log/filesurf
 - **Profile:** `prod`
-
-### Staging (pie-01)
-- **Host:** pie-01
-- **Path:** /root/filesurf_v2_staging
-- **Service:** filesurf-v2-staging
-- **Port:** 9090
-- **Domain:** staging.filesurf.io
-- **Data Directory:** /var/lib/filesurf-staging
-- **Log Directory:** /var/log/filesurf-staging
-- **Profile:** `staging`
-
-See [STAGING.md](./STAGING.md) for detailed staging configuration.
 
 ## Prerequisites
 

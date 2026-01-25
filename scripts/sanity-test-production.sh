@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Production Sanity Test Script
-# Runs sanity tests and pushes results to Prometheus Pushgateway on pie-01
+# Runs sanity tests and pushes results to Prometheus Pushgateway
 # Then triggers an alert if tests fail
 #
 # Usage: ./scripts/sanity-test-production.sh
@@ -13,7 +13,7 @@ set -e
 
 # Configuration
 SERVER_URL="${SANITY_TEST_SERVER_URL:-https://filesurf.io}"
-PUSHGATEWAY_HOST="${SANITY_TEST_PUSHGATEWAY_HOST:-pie-01}"
+PUSHGATEWAY_HOST="${SANITY_TEST_PUSHGATEWAY_HOST:-filesurf-0}"
 PUSHGATEWAY_PORT="${SANITY_TEST_PUSHGATEWAY_PORT:-9091}"
 TEST_EMAIL="${SANITY_TEST_EMAIL:-test@example.com}"
 LOG_FILE="${SANITY_TEST_LOG:-/opt/filesurf-mon/logs/sanity-test.log}"
