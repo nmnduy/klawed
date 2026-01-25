@@ -99,9 +99,8 @@ public class FileChatHttpResource {
             ChatSessionRecord chatSession = fileChatService.createOrUpdateChatSession(sessionId, clientIdentity);
             LOGGER.info("[SESSION:" + sessionId + "] Chat session created/updated in database");
 
-            // Register session with KlawedSandboxService
-            klawedSandboxService.registerSession(sessionId, userId);
-            LOGGER.info("[SESSION:" + sessionId + "] Session registered with KlawedSandboxService");
+            // Note: Session was already registered in database when /session/generate was called
+            // The validateSession() call above already verified session exists and is active
 
             // Register session with SQLite queue polling service (for receiving messages from klawed)
             sqliteQueuePollingService.registerSession(sessionId, userId);
@@ -378,7 +377,7 @@ public class FileChatHttpResource {
             LOGGER.info("[SESSION:" + sessionId + "] Session tracking released");
 
             // Remove session from session store
-            SessionResource.removeSession(sessionId);
+            SessionResource.removeSession(sessionId, klawedSandboxService);
             LOGGER.info("[SESSION:" + sessionId + "] Session removed from session store");
 
             // Deactivate chat session in database

@@ -128,13 +128,19 @@ public class SessionResource {
     }
 
     /**
-     * Remove a session (no-op, session state is managed in database)
-     * Note: The database record is updated by KlawedSandboxService.unregisterSession()
+     * Remove a session from the database
+     * Note: This actually deletes the session record from sessions.db
      * @param sessionId The session ID
+     * @param klawedSandboxService Service instance to delete session
      */
-    public static void removeSession(String sessionId) {
-        // No-op - session state is managed in the database, not in memory
-        LOGGER.info("Session removal requested for: " + sessionId + " (managed in database)");
+    public static void removeSession(String sessionId, KlawedSandboxService klawedSandboxService) {
+        // Actually delete the session from the database
+        try {
+            klawedSandboxService.deleteSession(sessionId);
+            LOGGER.info("Session removed from database: " + sessionId);
+        } catch (Exception e) {
+            LOGGER.severe("Failed to remove session from database: " + sessionId + " - " + e.getMessage());
+        }
     }
 
     /**

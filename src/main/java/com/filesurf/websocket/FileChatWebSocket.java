@@ -165,10 +165,9 @@ public class FileChatWebSocket {
         ChatSessionRecord chatSession = fileChatService.createOrUpdateChatSession(sessionId, clientIdentity);
         LOGGER.info("[SESSION:" + sessionId + "] Chat session created/updated in database");
 
-        // Register session with KlawedSandboxService
-        klawedSandboxService.registerSession(sessionId, userId);
-        LOGGER.info("[SESSION:" + sessionId + "] Session registered with KlawedSandboxService");
-
+        // Note: Session was already registered in database when /session/generate was called
+        // The validateSession() call at the start of onOpen already verified session exists and is active
+        // We only update last_active_at periodically during message handling, not on every connection
 
         // Register connection with polling service (for sending messages to WebSocket)
         chatMessagePollingService.registerConnection(sessionId, connection);

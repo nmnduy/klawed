@@ -253,6 +253,7 @@ public class KlawedSandboxService {
 
     /**
      * Register a session with email (called when session is generated)
+     * @throws RuntimeException if session registration fails
      */
     public void registerSession(String sessionId, String userId, String email) {
         try (Connection conn = DriverManager.getConnection(jdbcUrl);
@@ -271,12 +272,25 @@ public class KlawedSandboxService {
             pstmt.setLong(5, now);
             pstmt.setLong(6, now);
             pstmt.setString(7, email);
-            pstmt.executeUpdate();
+            int rowsAffected = pstmt.executeUpdate();
 
-            LOGGER.info("[SESSION:" + sessionId + "] Session registered for user: " + userId + 
+            if (rowsAffected == 0) {
+                LOGGER.warning("[SESSION:" + sessionId + "] Session registration returned 0 rows affected");
+            }
+
+            // Verify session was created/updated
+            if (!sessionExists(sessionId)) {
+                String error = "Session was not created in database despite no errors";
+                LOGGER.severe("[SESSION:" + sessionId + "] " + error);
+                throw new RuntimeException(error);
+            }
+
+            LOGGER.info("[SESSION:" + sessionId + "] Session registered for user: " + userId +
                         (email != null ? " (email: " + email + ")" : ""));
         } catch (SQLException e) {
-            LOGGER.severe("[SESSION:" + sessionId + "] Failed to register session: " + e.getMessage());
+            String error = "Failed to register session: " + e.getMessage();
+            LOGGER.severe("[SESSION:" + sessionId + "] " + error);
+            throw new RuntimeException(error, e);
         }
     }
 
@@ -298,6 +312,30 @@ public class KlawedSandboxService {
             LOGGER.info("[SESSION:" + sessionId + "] Session disconnected at: " + now);
         } catch (SQLException e) {
             LOGGER.severe("[SESSION:" + sessionId + "] Failed to unregister session: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Delete a session from the database (called when session is concluded/removed)
+     * This permanently removes the session record from sessions.db
+     */
+    public void deleteSession(String sessionId) {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "DELETE FROM sessions WHERE session_id = ?"
+             )) {
+
+            pstmt.setString(1, sessionId);
+            int rowsAffected = pstmt.executeUpdate();
+
+            if (rowsAffected > 0) {
+                LOGGER.info("[SESSION:" + sessionId + "] Session deleted from database");
+            } else {
+                LOGGER.warning("[SESSION:" + sessionId + "] Session was not found in database for deletion");
+            }
+        } catch (SQLException e) {
+            LOGGER.severe("[SESSION:" + sessionId + "] Failed to delete session: " + e.getMessage());
+            throw new RuntimeException("Failed to delete session: " + e.getMessage(), e);
         }
     }
 
