@@ -238,28 +238,33 @@ static void get_provider_config(Arena *arena,
     const char *env_api_base = getenv("OPENAI_API_BASE");
     const char *env_use_bedrock = getenv("KLAWED_USE_BEDROCK");
 
-    // When a named provider is explicitly selected, its config takes precedence
-    // Environment variables serve as fallbacks only
+    // When a named provider is explicitly selected via active_provider or KLAWED_LLM_PROVIDER,
+    // environment variables take precedence (allows overrides)
+    // When no named provider is selected (legacy mode), env vars also take precedence
+    // In both cases, provider config serves as fallback
     if (provider_config) {
-        LOG_DEBUG("[Provider] Named provider selected, using provider config (env vars as fallback)");
+        LOG_DEBUG("[Provider] Named provider selected, using env vars as primary (config as fallback)");
         *provider_name_out = active_provider_key;
 
-        // Get model (priority: provider config > env var)
-        if (provider_config->model[0] != '\0') {
-            *model_out = arena_strdup(arena, provider_config->model);
-        } else if (env_model && env_model[0] != '\0') {
+        // Get model (priority: env var > provider config)
+        if (env_model && env_model[0] != '\0') {
             *model_out = arena_strdup(arena, env_model);
+        } else if (provider_config->model[0] != '\0') {
+            *model_out = arena_strdup(arena, provider_config->model);
         }
 
-        // Get API base (priority: provider config > env var)
-        if (provider_config->api_base[0] != '\0') {
-            *api_base_out = arena_strdup(arena, provider_config->api_base);
-        } else if (env_api_base && env_api_base[0] != '\0') {
+        // Get API base (priority: env var > provider config)
+        if (env_api_base && env_api_base[0] != '\0') {
             *api_base_out = arena_strdup(arena, env_api_base);
+        } else if (provider_config->api_base[0] != '\0') {
+            *api_base_out = arena_strdup(arena, provider_config->api_base);
         }
 
-        // Get API key (priority: api_key_env from config > api_key from config > OPENAI_API_KEY env)
-        if (provider_config->api_key_env[0] != '\0') {
+        // Get API key (priority: OPENAI_API_KEY env > api_key_env from config > api_key from config)
+        if (env_api_key && env_api_key[0] != '\0') {
+            *api_key_out = arena_strdup(arena, env_api_key);
+            *api_key_source_out = "OPENAI_API_KEY";
+        } else if (provider_config->api_key_env[0] != '\0') {
             const char *env_key_from_config = getenv(provider_config->api_key_env);
             if (env_key_from_config && env_key_from_config[0] != '\0') {
                 *api_key_out = arena_strdup(arena, env_key_from_config);
@@ -273,10 +278,6 @@ static void get_provider_config(Arena *arena,
             *api_key_out = arena_strdup(arena, provider_config->api_key);
             *api_key_source_out = "config file";
             LOG_WARN("[Provider] Using API key from config file - consider using environment variable for better security");
-        }
-        if (!*api_key_out && env_api_key && env_api_key[0] != '\0') {
-            *api_key_out = arena_strdup(arena, env_api_key);
-            *api_key_source_out = "OPENAI_API_KEY";
         }
 
         // Get use_bedrock flag (priority: env var > provider config for explicit override)

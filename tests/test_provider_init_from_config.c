@@ -174,11 +174,15 @@ static void test_openai_provider_with_api_key_env(void) {
 }
 
 /*
- * Test: api_key_env takes priority over api_key
+ * Test: api_key_env takes priority over api_key (when OPENAI_API_KEY is not set)
  */
 static void test_api_key_env_priority(void) {
-    printf("\nTest: api_key_env takes priority over api_key\n");
+    printf("\nTest: api_key_env takes priority over api_key (when OPENAI_API_KEY is not set)\n");
 
+    // Clear OPENAI_API_KEY to test api_key_env priority
+    const char *old_openai_key = getenv("OPENAI_API_KEY");
+    unsetenv("OPENAI_API_KEY");
+    
     // Set up environment variable
     setenv("TEST_PRIORITY_KEY", "sk-env-priority-key", 1);
 
@@ -193,12 +197,102 @@ static void test_api_key_env_priority(void) {
     ProviderInitResult result = {0};
     provider_init_from_config("test-priority", &config, &result);
 
-    // If provider was created, it used the env var key (env takes priority)
+    // If provider was created, it used the env var key (api_key_env takes priority over api_key)
     ASSERT_NOT_NULL(result.provider, "Provider should be created");
     ASSERT_NULL(result.error_message, "Error message should be NULL");
 
     cleanup_result(&result);
     unsetenv("TEST_PRIORITY_KEY");
+    
+    // Restore OPENAI_API_KEY
+    if (old_openai_key) {
+        setenv("OPENAI_API_KEY", old_openai_key, 1);
+    }
+}
+
+/*
+ * Test: OPENAI_API_KEY takes priority over api_key_env and api_key
+ */
+static void test_openai_api_key_priority(void) {
+    printf("\nTest: OPENAI_API_KEY takes priority over api_key_env and api_key\n");
+
+    // Set OPENAI_API_KEY to test its priority
+    setenv("OPENAI_API_KEY", "sk-openai-env-key-12345", 1);
+    // Also set a custom env var for api_key_env
+    setenv("CUSTOM_API_KEY_ENV", "sk-custom-env-key-67890", 1);
+
+    LLMProviderConfig config;
+    init_config(&config);
+    strlcpy(config.model, "gpt-4", sizeof(config.model));
+    strlcpy(config.api_key, "sk-direct-key-in-config", sizeof(config.api_key));
+    strlcpy(config.api_key_env, "CUSTOM_API_KEY_ENV", sizeof(config.api_key_env));
+    strlcpy(config.api_base, "https://api.openai.com/v1/chat/completions", sizeof(config.api_base));
+    config.provider_type = PROVIDER_OPENAI;
+
+    ProviderInitResult result = {0};
+    provider_init_from_config("test-openai-priority", &config, &result);
+
+    // Provider should be created using OPENAI_API_KEY (highest priority)
+    ASSERT_NOT_NULL(result.provider, "Provider should be created using OPENAI_API_KEY");
+    ASSERT_NULL(result.error_message, "Error message should be NULL");
+
+    cleanup_result(&result);
+    unsetenv("OPENAI_API_KEY");
+    unsetenv("CUSTOM_API_KEY_ENV");
+}
+
+/*
+ * Test: Environment variables take priority over provider config for model
+ */
+static void test_env_var_model_priority(void) {
+    printf("\nTest: Environment variables take priority over provider config for model\n");
+
+    // Set environment variable
+    setenv("OPENAI_MODEL", "env-model-override", 1);
+
+    LLMProviderConfig config;
+    init_config(&config);
+    strlcpy(config.model, "config-model-value", sizeof(config.model));
+    strlcpy(config.api_key, "sk-test-key", sizeof(config.api_key));
+    strlcpy(config.api_base, "https://api.openai.com/v1/chat/completions", sizeof(config.api_base));
+    config.provider_type = PROVIDER_OPENAI;
+
+    ProviderInitResult result = {0};
+    provider_init_from_config("test-model-priority", &config, &result);
+
+    // Provider should be created using env var model
+    ASSERT_NOT_NULL(result.provider, "Provider should be created");
+    ASSERT_NULL(result.error_message, "Error message should be NULL");
+
+    cleanup_result(&result);
+    unsetenv("OPENAI_MODEL");
+}
+
+/*
+ * Test: Environment variables take priority over provider config for API base
+ */
+static void test_env_var_api_base_priority(void) {
+    printf("\nTest: Environment variables take priority over provider config for API base\n");
+
+    // Set environment variable
+    setenv("OPENAI_API_BASE", "https://env-api-base.example.com", 1);
+
+    LLMProviderConfig config;
+    init_config(&config);
+    strlcpy(config.model, "gpt-4", sizeof(config.model));
+    strlcpy(config.api_key, "sk-test-key", sizeof(config.api_key));
+    strlcpy(config.api_base, "https://config-api-base.example.com", sizeof(config.api_base));
+    config.provider_type = PROVIDER_OPENAI;
+
+    ProviderInitResult result = {0};
+    provider_init_from_config("test-api-base-priority", &config, &result);
+
+    // Provider should be created using env var API base
+    ASSERT_NOT_NULL(result.provider, "Provider should be created");
+    ASSERT_NULL(result.error_message, "Error message should be NULL");
+
+    cleanup_result(&result);
+    unsetenv("OPENAI_API_BASE");
 }
 
 /*
@@ -490,6 +584,9 @@ int main(void) {
     test_openai_provider_with_api_key();
     test_openai_provider_with_api_key_env();
     test_api_key_env_priority();
+    test_openai_api_key_priority();
+    test_env_var_model_priority();
+    test_env_var_api_base_priority();
     test_fallback_to_openai_api_key();
     test_empty_api_key_env_fallback();
     test_null_provider_key();
