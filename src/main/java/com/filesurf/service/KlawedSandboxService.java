@@ -22,6 +22,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -99,8 +102,50 @@ public class KlawedSandboxService {
     // Idle timeout: 30 minutes = 1800 seconds (for active but idle sessions)
     private static final long IDLE_TIMEOUT_SECONDS = 1800;
 
+    // Single-threaded executor to serialize lifecycle management operations
+    private final ExecutorService lifecycleExecutor = Executors.newSingleThreadExecutor();
+
     // Shutdown flag to stop scheduled tasks from running during shutdown
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
+
+    /**
+     * Cleanup executor on shutdown
+     */
+    @PreDestroy
+    public void shutdown() {
+        LOGGER.info("KlawedSandboxService shutting down");
+
+        // Set shutdown flag first to prevent scheduled task from interfering
+        shuttingDown.set(true);
+
+        // Shutdown the executor gracefully
+        lifecycleExecutor.shutdown();
+        try {
+            if (!lifecycleExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                lifecycleExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            lifecycleExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        if (podmanEnabled) {
+            try {
+                List<String> runningContainers = listRunningKlawedContainers();
+                for (String containerName : runningContainers) {
+                    try {
+                        stopContainer(containerName);
+                    } catch (IOException e) {
+                        LOGGER.warning("Failed to stop container " + containerName + ": " + e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.severe("Error stopping containers on shutdown: " + e.getMessage());
+            }
+        }
+
+        LOGGER.info("KlawedSandboxService shutdown complete");
+    }
 
     /**
      * Initialize on startup
@@ -440,11 +485,21 @@ public class KlawedSandboxService {
 
     /**
      * Scheduled loop: Manage container lifecycle
-     * Runs every 10 seconds
+     * Runs every 10 seconds. Uses single-threaded executor to serialize operations
+     * and prevent catch-up runner behavior if execution takes longer than interval.
      */
     @Scheduled(every = "10s")
     @ActivateRequestContext
     public void manageContainerLifecycle() {
+        // Submit to single-threaded executor to serialize lifecycle management
+        lifecycleExecutor.submit(this::manageContainerLifecycleInternal);
+    }
+
+    /**
+     * Internal lifecycle management logic - executed by single-threaded executor
+     */
+    @ActivateRequestContext
+    void manageContainerLifecycleInternal() {
         if (!podmanEnabled) {
             return;
         }
@@ -1014,30 +1069,6 @@ public class KlawedSandboxService {
      * Stop all containers on shutdown
      */
     @PreDestroy
-    public void shutdown() {
-        LOGGER.info("KlawedSandboxService shutting down");
-
-        // Set shutdown flag first to prevent scheduled task from interfering
-        shuttingDown.set(true);
-
-        if (podmanEnabled) {
-            try {
-                List<String> runningContainers = listRunningKlawedContainers();
-                for (String containerName : runningContainers) {
-                    try {
-                        stopContainer(containerName);
-                    } catch (IOException e) {
-                        LOGGER.warning("Failed to stop container " + containerName + ": " + e.getMessage());
-                    }
-                }
-            } catch (Exception e) {
-                LOGGER.severe("Error stopping containers on shutdown: " + e.getMessage());
-            }
-        }
-
-        LOGGER.info("KlawedSandboxService shutdown complete");
-    }
-
     /**
      * Session record
      */

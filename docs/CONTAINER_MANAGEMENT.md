@@ -8,7 +8,8 @@ FileSurf runs Klawed AI agents inside isolated Podman containers. Container life
 **`KlawedSandboxService`** - Single source of truth for container and session lifecycle
 - Manages session registration/unregistration (in `sessions.db`)
 - Starts/stops containers via Podman CLI
-- Scheduled lifecycle management (runs every 10 seconds)
+- Scheduled lifecycle management (runs every 10 seconds via single-threaded executor)
+- Prevents catch-up runner behavior by serializing operations
 - Handles conversation seeding from chat history
 - Manages graceful shutdown of all containers
 - Container health checks (`isContainerRunning`)
@@ -97,8 +98,13 @@ klawed.sandbox.idle-timeout=30m           # Don't auto-start for idle sessions
 
 ## Scheduled Lifecycle Management
 
-`KlawedSandboxService.manageContainerLifecycle()` runs every 10 seconds:
+`KlawedSandboxService.manageContainerLifecycle()` runs every 10 seconds via a single-threaded executor:
 
+- Uses `ExecutorService.newSingleThreadExecutor()` to serialize operations
+- Prevents Quarkus catch-up runner behavior (missed executions won't pile up)
+- All lifecycle operations are serialized, preventing overlapping container checks
+
+**Execution flow:**
 1. **Get active sessions** - Sessions where `disconnected_at IS NULL`
 2. **Check idle sessions** - Sessions with no activity for >30 minutes
 3. **Ensure containers exist** - Start containers for active, non-idle sessions
