@@ -64,6 +64,11 @@ public class MetricsService {
     private File dataDirectory;
     private File logsDirectory;
 
+    // Message flow counters for monitoring
+    private Counter messagesReceivedFromUser;
+    private Counter messagesSentToKlawed;
+    private Counter messagesReceivedFromKlawed;
+
     public void initializeMetrics() {
         LOGGER.info("Initializing application metrics");
 
@@ -152,6 +157,25 @@ public class MetricsService {
         conversationSeeded = Counter.builder("filesurf_conversation_seeded")
                 .description("Total number of times conversation history was seeded to klawed containers")
                 .tag("application", "filesurf")
+                .register(meterRegistry);
+
+        // Initialize message flow counters for monitoring
+        messagesReceivedFromUser = Counter.builder("filesurf_messages_received_from_user")
+                .description("Messages received from user (sent to klawed)")
+                .tag("application", "filesurf")
+                .tag("flow", "user_to_klawed")
+                .register(meterRegistry);
+
+        messagesSentToKlawed = Counter.builder("filesurf_messages_sent_to_klawed")
+                .description("Messages sent to klawed (same as received from user)")
+                .tag("application", "filesurf")
+                .tag("flow", "user_to_klawed")
+                .register(meterRegistry);
+
+        messagesReceivedFromKlawed = Counter.builder("filesurf_messages_received_from_klawed")
+                .description("Messages received from klawed (sent to user)")
+                .tag("application", "filesurf")
+                .tag("flow", "klawed_to_user")
                 .register(meterRegistry);
 
         // Initialize gauges
@@ -517,5 +541,31 @@ public class MetricsService {
 
     public long getTotalConversationSeeded() {
         return (long) conversationSeeded.count();
+    }
+
+    // === Message Flow Counters ===
+
+    public void incrementMessagesReceivedFromUser() {
+        messagesReceivedFromUser.increment();
+    }
+
+    public void incrementMessagesSentToKlawed() {
+        messagesSentToKlawed.increment();
+    }
+
+    public void incrementMessagesReceivedFromKlawed() {
+        messagesReceivedFromKlawed.increment();
+    }
+
+    public long getTotalMessagesReceivedFromUser() {
+        return (long) messagesReceivedFromUser.count();
+    }
+
+    public long getTotalMessagesSentToKlawed() {
+        return (long) messagesSentToKlawed.count();
+    }
+
+    public long getTotalMessagesReceivedFromKlawed() {
+        return (long) messagesReceivedFromKlawed.count();
     }
 }
