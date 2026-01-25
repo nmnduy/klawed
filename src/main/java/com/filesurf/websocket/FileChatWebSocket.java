@@ -229,17 +229,6 @@ public class FileChatWebSocket {
                    (message.length() > 100 ? "..." : ""));
         LOGGER.info("[SESSION:" + sessionId + "] Full message length: " + message.length() + " chars");
 
-        // Check for special commands
-        if (message != null && !message.trim().isEmpty()) {
-            String trimmedMessage = message.trim();
-
-            // Handle conclude session command
-            if ("/conclude".equalsIgnoreCase(trimmedMessage) || "/conclude session".equalsIgnoreCase(trimmedMessage)) {
-                handleConcludeCommand(sessionId, connection);
-                return;
-            }
-        }
-
         // Save incoming message to database and mark as sent immediately
         // (client-to-agent messages don't need to be sent via WebSocket)
         try {
