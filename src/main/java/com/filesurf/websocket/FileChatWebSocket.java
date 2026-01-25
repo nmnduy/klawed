@@ -294,6 +294,7 @@ public class FileChatWebSocket {
 
         // Track metrics for chat message
         metricsService.incrementChatMessages();
+        metricsService.incrementMessagesReceivedFromUser();
         metricsService.trackUserActivity(userId);
 
         try {

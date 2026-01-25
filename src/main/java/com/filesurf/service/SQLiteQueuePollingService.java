@@ -5,7 +5,6 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +34,9 @@ public class SQLiteQueuePollingService {
 
     @Inject
     SQLiteQueueClientPool clientPool;
+
+    @Inject
+    MetricsService metricsService;
 
     // Track active sessions that need polling
     // Map: sessionId -> userId
@@ -137,6 +139,10 @@ public class SQLiteQueuePollingService {
 
             if (!messages.isEmpty()) {
                 LOGGER.info("[SESSION:" + sessionId + "] Received " + messages.size() + " message(s) from klawed");
+                // Count each message received from klawed
+                for (int i = 0; i < messages.size(); i++) {
+                    metricsService.incrementMessagesReceivedFromKlawed();
+                }
             }
 
         } catch (Exception e) {
