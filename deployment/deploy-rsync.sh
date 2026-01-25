@@ -250,7 +250,79 @@ echo "   ✓ Directories created and permissions set"
 echo ""
 echo "Step 7: Deploying on remote server..."
 echo ""
-ssh "$REMOTE_HOST" "cd $REMOTE_PATH && ./deployment/deploy-jvm.sh"
+
+DEPLOY_DIR="$REMOTE_PATH"
+DATA_DIR="/var/lib/filesurf"
+LOG_DIR="/var/log/filesurf"
+SERVICE_NAME="filesurf-v2"
+ENV_FILE="/etc/filesurf/.env"
+
+# Check for Stripe secrets
+echo "Step 7a: Checking for Stripe secrets..."
+if ssh "$REMOTE_HOST" "test -f $ENV_FILE" 2>/dev/null; then
+    echo "   ✓ Environment file found at $ENV_FILE"
+    
+    MISSING_VARS=""
+    ENV_CONTENT=$(ssh "$REMOTE_HOST" "cat $ENV_FILE" 2>/dev/null || echo "")
+    
+    if ! echo "$ENV_CONTENT" | grep -q "STRIPE_SECRET_KEY=" || echo "$ENV_CONTENT" | grep -q "STRIPE_SECRET_KEY=$"; then
+        MISSING_VARS="${MISSING_VARS}STRIPE_SECRET_KEY "
+    fi
+    if ! echo "$ENV_CONTENT" | grep -q "STRIPE_PUBLIC_KEY=" || echo "$ENV_CONTENT" | grep -q "STRIPE_PUBLIC_KEY=$"; then
+        MISSING_VARS="${MISSING_VARS}STRIPE_PUBLIC_KEY "
+    fi
+    if ! echo "$ENV_CONTENT" | grep -q "STRIPE_WEBHOOK_SECRET=" || echo "$ENV_CONTENT" | grep -q "STRIPE_WEBHOOK_SECRET=$"; then
+        MISSING_VARS="${MISSING_VARS}STRIPE_WEBHOOK_SECRET "
+    fi
+    
+    if [ -n "$MISSING_VARS" ]; then
+        echo "   ⚠ WARNING: Missing Stripe environment variables:"
+        echo "     $MISSING_VARS"
+        echo "   Stripe functionality will not work until these are set!"
+    else
+        echo "   ✓ All Stripe secrets are configured"
+    fi
+else
+    echo "   ✗ Environment file NOT found at $ENV_FILE"
+    echo "   Stripe integration will NOT work!"
+fi
+
+# Check for JVM build
+echo ""
+echo "Step 7b: Checking for JVM build..."
+if ssh "$REMOTE_HOST" "test -f $DEPLOY_DIR/target/quarkus-app/quarkus-run.jar" 2>/dev/null; then
+    echo "   ✓ JVM build found"
+    ssh "$REMOTE_HOST" "ls -lh $DEPLOY_DIR/target/quarkus-app/quarkus-run.jar"
+else
+    echo "   ✗ JVM build not found at $DEPLOY_DIR/target/quarkus-app/quarkus-run.jar"
+    echo "   Run './deployment/build.sh' to build it first"
+    exit 1
+fi
+
+# Install and restart service
+echo ""
+echo "Step 7c: Installing systemd service..."
+ssh "$REMOTE_HOST" "cp $DEPLOY_DIR/deployment/filesurf-v2.service /etc/systemd/system/"
+ssh "$REMOTE_HOST" "systemctl daemon-reload"
+
+echo ""
+echo "Step 7d: Restarting service..."
+ssh "$REMOTE_HOST" "systemctl enable $SERVICE_NAME"
+
+# Stop gracefully first
+if ssh "$REMOTE_HOST" "systemctl is-active --quiet $SERVICE_NAME" 2>/dev/null; then
+    echo "   Stopping existing service (waiting for graceful shutdown)..."
+    ssh "$REMOTE_HOST" "systemctl stop $SERVICE_NAME"
+    echo "   ✓ Service stopped"
+fi
+
+echo "   Starting new version..."
+ssh "$REMOTE_HOST" "systemctl start $SERVICE_NAME"
+
+echo ""
+echo "Step 7e: Checking service status..."
+sleep 3
+ssh "$REMOTE_HOST" "systemctl status $SERVICE_NAME --no-pager" || true
 
 echo ""
 echo "================================"
@@ -258,6 +330,10 @@ echo "Deployment Complete!"
 echo "================================"
 echo ""
 echo "The application has been built locally and deployed to $REMOTE_HOST"
+echo ""
+echo "IMPORTANT: Stripe secrets are NOT deployed automatically!"
+echo "To set up Stripe secrets on the remote server, run:"
+echo "  ./scripts/setup-stripe-secrets.sh --remote"
 echo ""
 echo "To check service status:"
 echo "  ssh $REMOTE_HOST 'systemctl status filesurf-v2'"
