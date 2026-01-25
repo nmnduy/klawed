@@ -1,7 +1,6 @@
 package com.filesurf.service;
 
 import com.filesurf.repository.SessionChatRepository;
-import com.filesurf.model.ChatSessionRecord;
 import com.filesurf.model.ChatMessageRecord;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -26,14 +25,14 @@ public class FileChatService {
         // Note: Schema is initialized per-session when needed
     }
 
-    public ChatSessionRecord createOrUpdateChatSession(String sessionId, String clientIdentity) {
+    /**
+     * Create or update a chat session and track metrics.
+     * @param sessionId The session ID
+     * @param clientIdentity The client identity
+     * @param isNewSession Whether this is a new session (true) or resumed (false)
+     */
+    public void createOrUpdateChatSession(String sessionId, String clientIdentity, boolean isNewSession) {
         LOGGER.info("[SESSION:" + sessionId + "] Creating/updating chat session for client: " + clientIdentity);
-        
-        // Check if session exists before creating/updating to track metrics
-        ChatSessionRecord existingSession = sessionChatRepository.findChatSessionBySessionId(sessionId);
-        boolean isNewSession = (existingSession == null);
-        
-        ChatSessionRecord result = sessionChatRepository.createOrUpdateChatSession(sessionId, clientIdentity);
         
         // Track metrics based on whether this was a new or resumed session
         if (isNewSession) {
@@ -43,8 +42,6 @@ public class FileChatService {
             metricsService.incrementChatSessionsResumed();
             LOGGER.info("[SESSION:" + sessionId + "] Existing session resumed");
         }
-        
-        return result;
     }
 
     public ChatMessageRecord createChatMessage(String sessionId, String sender, String receiver,
@@ -54,22 +51,22 @@ public class FileChatService {
     }
 
     public void deactivateChatSession(String sessionId) {
-        LOGGER.info("[SESSION:" + sessionId + "] Deactivating chat session");
-        sessionChatRepository.deactivateChatSession(sessionId);
+        LOGGER.info("[SESSION:" + sessionId + "] Deactivating chat session (no-op - session tracked in main DB)");
+        // Session deactivation is now handled in the main database
+        // The per-session database only stores messages
     }
 
     /**
-     * Check if a chat session is still active in the database.
+     * Check if a chat session is still active.
+     * @deprecated Session activity is now tracked in the main database
      */
+    @Deprecated
     public boolean isChatSessionActive(String sessionId) {
-        return sessionChatRepository.isChatSessionActive(sessionId);
+        // Return true as session activity is managed by the main database
+        return true;
     }
 
     // Finder methods - read operations
-    public ChatSessionRecord findChatSessionBySessionId(String sessionId) {
-        return sessionChatRepository.findChatSessionBySessionId(sessionId);
-    }
-
     public List<ChatMessageRecord> findUnsentMessages(String sessionId) {
         return sessionChatRepository.findUnsentMessages(sessionId);
     }

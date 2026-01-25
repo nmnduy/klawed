@@ -72,38 +72,22 @@ public class SessionSQLiteManager {
      */
     private void initializeDatabaseSchema(Connection conn, String sessionId) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            // Create chat_session table (local copy for this session)
-            stmt.execute("""
-                CREATE TABLE IF NOT EXISTS chat_session (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id TEXT NOT NULL UNIQUE,
-                    client_identity TEXT,
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    last_activity_at TIMESTAMP,
-                    is_active BOOLEAN NOT NULL DEFAULT TRUE
-                )
-            """);
-
-            // Create chat_message table (identical to main database schema)
+            // Create chat_message table - simplified schema for per-session database
+            // Note: session_id is stored directly in the filename, so no separate session table needed
             stmt.execute("""
                 CREATE TABLE IF NOT EXISTS chat_message (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    chat_session_id INTEGER NOT NULL,
                     sender TEXT NOT NULL,
                     receiver TEXT NOT NULL,
                     content TEXT NOT NULL,
                     message_type TEXT,
                     sent BOOLEAN NOT NULL DEFAULT FALSE,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    sent_at TIMESTAMP,
-                    FOREIGN KEY (chat_session_id) REFERENCES chat_session(id) ON DELETE CASCADE
+                    sent_at TIMESTAMP
                 )
             """);
 
             // Create indexes for performance
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_chat_session_session_id ON chat_session(session_id)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_chat_session_is_active ON chat_session(is_active)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_chat_message_chat_session_id ON chat_message(chat_session_id)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_chat_message_sent ON chat_message(sent)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_chat_message_created_at ON chat_message(created_at)");
 

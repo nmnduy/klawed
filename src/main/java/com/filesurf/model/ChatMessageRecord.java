@@ -4,8 +4,7 @@ import java.time.LocalDateTime;
 
 public class ChatMessageRecord {
     private Long id;
-    private Long sessionId;
-    private String sessionStringId; // Added to store the session string ID
+    private String sessionId; // Session ID is now passed explicitly (not from chat_session_id column)
     private String sender;
     private String receiver;
     private String content;
@@ -16,12 +15,11 @@ public class ChatMessageRecord {
 
     public ChatMessageRecord() {}
 
-    public ChatMessageRecord(Long id, Long sessionId, String sessionStringId, String sender, String receiver,
+    public ChatMessageRecord(Long id, String sessionId, String sender, String receiver,
                            String content, String messageType, Boolean sent,
                            LocalDateTime createdAt, LocalDateTime sentAt) {
         this.id = id;
         this.sessionId = sessionId;
-        this.sessionStringId = sessionStringId;
         this.sender = sender;
         this.receiver = receiver;
         this.content = content;
@@ -35,8 +33,8 @@ public class ChatMessageRecord {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public Long getSessionId() { return sessionId; }
-    public void setSessionId(Long sessionId) { this.sessionId = sessionId; }
+    public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 
     public String getSender() { return sender; }
     public void setSender(String sender) { this.sender = sender; }
@@ -59,15 +57,33 @@ public class ChatMessageRecord {
     public LocalDateTime getSentAt() { return sentAt; }
     public void setSentAt(LocalDateTime sentAt) { this.sentAt = sentAt; }
 
-    public String getSessionStringId() { return sessionStringId; }
-    public void setSessionStringId(String sessionStringId) { this.sessionStringId = sessionStringId; }
+    /**
+     * Factory method for creating ChatMessageRecord from ResultSet (for per-session databases).
+     * Session ID is passed explicitly since it's implicit in the database filename.
+     */
+    public static ChatMessageRecord fromResultSetWithSessionId(java.sql.ResultSet rs, String sessionId) throws java.sql.SQLException {
+        return new ChatMessageRecord(
+            rs.getLong("id"),
+            sessionId,
+            rs.getString("sender"),
+            rs.getString("receiver"),
+            rs.getString("content"),
+            rs.getString("message_type"),
+            rs.getBoolean("sent"),
+            rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
+            rs.getTimestamp("sent_at") != null ? rs.getTimestamp("sent_at").toLocalDateTime() : null
+        );
+    }
 
-    // Helper methods
+    /**
+     * Factory method for creating ChatMessageRecord from ResultSet (for main database with chat_session join).
+     * @deprecated Use fromResultSetWithSessionId for per-session databases
+     */
+    @Deprecated
     public static ChatMessageRecord fromResultSet(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new ChatMessageRecord(
             rs.getLong("id"),
-            rs.getLong("chat_session_id"),
-            rs.getString("session_string_id"), // This will be added in queries
+            rs.getString("session_string_id"),
             rs.getString("sender"),
             rs.getString("receiver"),
             rs.getString("content"),
