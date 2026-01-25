@@ -63,3 +63,4 @@ docker-compose.override.yml
 # Container build cache
 .buildx-cache/
 
+wt-*
