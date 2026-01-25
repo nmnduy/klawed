@@ -387,10 +387,10 @@ export function init(rootEl) {
         });
 
         scrollToBottomButton = button;
-        // Append to chat panel instead of body so it's contained within the chat area
-        const chatPanel = document.getElementById('chat-panel');
-        if (chatPanel) {
-            chatPanel.appendChild(button);
+        // Append to chat container so it floats relative to the scrollable area
+        const chatContainer = document.querySelector('[data-chat-container]');
+        if (chatContainer) {
+            chatContainer.appendChild(button);
         } else {
             document.body.appendChild(button); // Fallback
         }
