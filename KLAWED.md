@@ -267,6 +267,30 @@ CREATE TABLE users (
 - **Monitoring**: Micrometer + Prometheus registry
 - **Dark Mode**: Class-based theming with localStorage persistence (see `docs/DARK_MODE.md`)
 
+## Testing Tools
+
+### WebSocket Chat Testing Script
+A persistent WebSocket connection testing tool for AI agents:
+
+```bash
+./scripts/filesurf-chat-test.sh <session_id> [command_file]
+```
+
+**Interactive mode:**
+```bash
+./scripts/filesurf-chat-test.sh session123
+> send {"type":"message","content":"hello"}
+> poll 3
+> close
+```
+
+**Batch mode with command file:**
+```bash
+./scripts/filesurf-chat-test.sh session123 /tmp/commands.txt
+```
+
+Dependencies: `apt-get install websocat socat`
+
 ## Building for Development
 ```bash
 # Build CSS and JS without cache busting (faster for development)
