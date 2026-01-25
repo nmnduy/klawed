@@ -26,6 +26,15 @@ public class StripeService {
     @ConfigProperty(name = "stripe.webhook.secret")
     String webhookSecret;
 
+    @ConfigProperty(name = "stripe.price.basic")
+    String priceBasic;
+
+    @ConfigProperty(name = "stripe.price.pro")
+    String pricePro;
+
+    @ConfigProperty(name = "stripe.price.enterprise")
+    String priceEnterprise;
+
     @ConfigProperty(name = "app.base.url", defaultValue = "http://localhost:8080")
     String baseUrl;
 
@@ -101,8 +110,9 @@ public class StripeService {
      */
     public Map<String, String> getPlanPriceIds() {
         Map<String, String> priceIds = new HashMap<>();
-        priceIds.put("basic", "price_basic_monthly");  // Replace with actual Stripe price ID
-        priceIds.put("pro", "price_pro_monthly");      // Replace with actual Stripe price ID
+        priceIds.put("basic", priceBasic);
+        priceIds.put("pro", pricePro);
+        priceIds.put("enterprise", priceEnterprise);
         return priceIds;
     }
 }
