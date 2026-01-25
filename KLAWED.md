@@ -267,6 +267,91 @@ CREATE TABLE users (
 - **Monitoring**: Micrometer + Prometheus registry
 - **Dark Mode**: Class-based theming with localStorage persistence (see `docs/DARK_MODE.md`)
 
+## Testing Tools
+
+### WebSocket Bridge Server (Bun)
+A persistent WebSocket connection testing tool for AI agents using a Bun-based bridge server:
+
+**Start the bridge server:**
+```bash
+# Start on port 5000, connecting to FileSurf on port 9090
+bun run scripts/ws_bridge_server.ts 5000
+
+# Or with custom email
+bun run scripts/ws_bridge_server.ts 5000 user@example.com
+```
+
+**Send a message:**
+```bash
+# Simple message
+curl -X POST http://localhost:5000/message -d "Generate a Solana wallet"
+
+# Or with JSON
+curl -X POST http://localhost:5000/message \
+  -H "Content-Type: application/json" \
+  -d '{"content": "List files in current directory"}'
+```
+
+**Poll for responses:**
+```bash
+# Basic poll (waits up to 2 seconds for responses)
+curl http://localhost:5000/poll
+
+# Poll with longer timeout (5 seconds)
+curl "http://localhost:5000/poll?timeout=5&clear=false"
+
+# Stream responses (Server-Sent Events)
+curl -N http://localhost:5000/poll/stream
+```
+
+**Check status:**
+```bash
+curl http://localhost:5000/status
+# Returns: {"connected": true, "session_id": "...", "pending_responses": 3}
+```
+
+**Session management:**
+```bash
+# Get current session ID
+curl http://localhost:5000/session
+
+# Close current session and create new one
+curl -X DELETE http://localhost:5000/session
+
+# Close WebSocket connection
+curl -X POST http://localhost:5000/close
+```
+
+**JavaScript/Bun example:**
+```javascript
+// Send message
+await fetch("http://localhost:5000/message", {
+  method: "POST",
+  body: "Generate a Solana wallet"
+});
+
+// Poll for response
+const response = await fetch("http://localhost:5000/poll");
+const data = await response.json();
+console.log(`Received ${data.count} messages:`);
+for (const msg of data.messages) {
+  console.log(`  - ${msg.content.substring(0, 100)}...`);
+}
+```
+
+**HTTP Endpoints:**
+- `POST /message` - Send a message to the WebSocket
+- `GET /poll` - Poll for responses (default 2s timeout)
+- `GET /poll/stream` - Stream responses (Server-Sent Events)
+- `GET /status` - Check connection status
+- `GET /session` - Get current session ID
+- `DELETE /session` - Close and create new session
+- `POST /close` - Close WebSocket connection
+
+**Dependencies:**
+- Bun runtime (v1.3.6+)
+- ws package (`bun add ws`)
+
 ## Building for Development
 ```bash
 # Build CSS and JS without cache busting (faster for development)

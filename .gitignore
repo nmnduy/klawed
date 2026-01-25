@@ -71,3 +71,4 @@ wt-*/
 klawed.env
 *.env
 !.env.example
+scripts/__pycache__/

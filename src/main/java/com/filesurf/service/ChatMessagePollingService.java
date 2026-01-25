@@ -292,6 +292,22 @@ public class ChatMessagePollingService {
     }
 
     /**
+     * Mark a message as sent from an IO thread (WebSocket callback)
+     * Runs the database operation on a worker thread
+     */
+    public void markMessageAsSentFromIoThread(String sessionId, Long messageId) {
+        // Submit to executor to run on worker thread
+        pollingExecutor.submit(() -> {
+            try {
+                // Use @Transactional version on worker thread
+                markMessageAsSent(sessionId, messageId);
+            } catch (Exception e) {
+                LOGGER.warning("[SESSION:" + sessionId + "] Failed to mark message " + messageId + " as sent: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
      * Process and send unsent messages for a given session and connection.
      * Called by the scheduled poller for each active WebSocket connection.
      *
@@ -314,7 +330,8 @@ public class ChatMessagePollingService {
                     // Skip messages that should not be forwarded (e.g., AUTO_COMPACTION)
                     if (jsonMessage == null) {
                         LOGGER.fine("[SESSION:" + sessionId + "] Skipping non-forwardable message ID: " + message.getId());
-                        markMessageAsSent(sessionId, message.getId());
+                        // Use IO thread-safe method since we're in the polling thread
+                        markMessageAsSentFromIoThread(sessionId, message.getId());
                         continue;
                     }
 
@@ -322,7 +339,8 @@ public class ChatMessagePollingService {
                     connection.sendText(jsonMessage).subscribe().with(
                         success -> {
                             LOGGER.info("[SESSION:" + sessionId + "] Sent message ID: " + message.getId());
-                            markMessageAsSent(sessionId, message.getId());
+                            // Use IO thread-safe method for WebSocket callbacks
+                            markMessageAsSentFromIoThread(sessionId, message.getId());
                         },
                         failure -> {
                             LOGGER.warning("[SESSION:" + sessionId + "] Failed to send message ID: " + message.getId() +

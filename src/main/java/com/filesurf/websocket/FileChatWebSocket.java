@@ -82,6 +82,8 @@ public class FileChatWebSocket {
         // Get session ID from path parameter
         String sessionId = connection.pathParam("sessionId");
 
+        LOGGER.info("[DEBUG] WebSocket connection attempt - sessionId: " + sessionId);
+
         if (sessionId == null || sessionId.trim().isEmpty()) {
             LOGGER.severe("WebSocket connection rejected: No session ID provided in query parameter");
             try {
@@ -94,8 +96,25 @@ public class FileChatWebSocket {
             }
         }
 
+        // Log handshake details for debugging
+        HandshakeRequest handshake = connection.handshakeRequest();
+        if (handshake != null) {
+            LOGGER.info("[DEBUG] Handshake available - headers: " + handshake.headers().keySet().toString());
+            var cookieHeaders = handshake.headers("Cookie");
+            if (cookieHeaders != null) {
+                LOGGER.info("[DEBUG] Cookie headers received: " + String.join(", ", cookieHeaders));
+            } else {
+                LOGGER.info("[DEBUG] No Cookie headers received");
+            }
+        } else {
+            LOGGER.info("[DEBUG] No HandshakeRequest available");
+        }
+
         // Validate session ID using database (source of truth)
-        if (!SessionResource.validateSession(sessionId, klawedSandboxService)) {
+        boolean isSessionValid = SessionResource.validateSession(sessionId, klawedSandboxService);
+        LOGGER.info("[DEBUG] Session validation result for " + sessionId + ": " + isSessionValid);
+
+        if (!isSessionValid) {
             LOGGER.severe("WebSocket connection rejected: Invalid session ID: " + sessionId);
             try {
                 return objectMapper.writeValueAsString(KlawedSocketMessage.createError(
@@ -109,12 +128,12 @@ public class FileChatWebSocket {
 
         // Determine user ID from cookies (HandshakeRequest); reject if absent
         String userId = null;
-        HandshakeRequest handshake = connection.handshakeRequest();
         if (handshake != null) {
             var cookieHeaders = handshake.headers("Cookie");
             if (cookieHeaders != null) {
                 for (String cookieHeader : cookieHeaders) {
                     String maybe = parseCookie(cookieHeader, USER_COOKIE_NAME);
+                    LOGGER.info("[DEBUG] Parsing cookie header: " + cookieHeader + " - found " + USER_COOKIE_NAME + ": " + maybe);
                     if (maybe != null && !maybe.isBlank()) {
                         userId = maybe;
                         break;
@@ -122,6 +141,8 @@ public class FileChatWebSocket {
                 }
             }
         }
+        LOGGER.info("[DEBUG] Extracted userId: " + userId);
+
         if (userId == null || userId.isBlank()) {
             LOGGER.severe("[SESSION:" + sessionId + "] WebSocket connection rejected: No userId cookie provided");
             try {
@@ -147,6 +168,7 @@ public class FileChatWebSocket {
         // Register session with KlawedSandboxService
         klawedSandboxService.registerSession(sessionId, userId);
         LOGGER.info("[SESSION:" + sessionId + "] Session registered with KlawedSandboxService");
+
 
         // Register connection with polling service (for sending messages to WebSocket)
         chatMessagePollingService.registerConnection(sessionId, connection);
