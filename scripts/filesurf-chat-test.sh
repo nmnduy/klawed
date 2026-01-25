@@ -1,38 +1,74 @@
 #!/bin/bash
 #
-# ws-persistent-test.sh - Persistent WebSocket testing via Unix socket relay
+# filesurf-chat-test.sh - Persistent WebSocket testing via Unix socket relay
+# 
+# This script creates a persistent WebSocket connection for AI agents to interact
+# with the FileSurf chat system. It uses websocat to bridge WebSocket connections
+# through a Unix socket, allowing for easy testing and automation.
 #
-# Usage:
-#   ./ws-persistent-test.sh <session_id> [command_file]
-#   ./ws-persistent-test.sh session123                    # Interactive mode
-#   ./ws-persistent-test.sh session123 /tmp/cmds.txt      # Batch mode
+# DEPENDENCIES:
+#   - websocat: WebSocket client (apt-get install websocat)
+#   - socat: Socket relay tool (apt-get install socat)
 #
-# Commands (in command file or interactive):
-#   send <json_message>     Send a JSON message
+# USAGE:
+#   1. First, authenticate and get a session:
+#      curl -s -c cookies.txt -X POST -d "email=your-email@example.com" \
+#        "http://localhost:9090/auth/login"
+#      SESSION_RESPONSE=$(curl -s -b cookies.txt "http://localhost:9090/session/generate")
+#      SESSION_ID=$(echo "$SESSION_RESPONSE" | grep -o '"sessionId":"[^"]*"' | cut -d'"' -f4)
+#
+#   2. Run the script:
+#      export WS_HOST=localhost:9090
+#      export WEBSOCKET_COOKIES="filesurf_userId=user-test-123"
+#      ./filesurf-chat-test.sh $SESSION_ID
+#
+#   Or use batch mode with a command file:
+#      ./filesurf-chat-test.sh $SESSION_ID /tmp/commands.txt
+#
+# ARGUMENTS:
+#   session_id     WebSocket session ID (required)
+#   command_file   Optional file containing commands (batch mode)
+#
+# ENVIRONMENT VARIABLES:
+#   WS_HOST              WebSocket host (default: localhost:8080)
+#   WEBSOCKET_COOKIES    Cookie string for authentication (e.g., "filesurf_userId=xxx")
+#
+# COMMANDS (interactive or batch mode):
+#   send <json_message>     Send a JSON message to the chat
 #   poll [timeout]          Poll for responses (default: 2 seconds)
 #   sleep <seconds>         Wait between commands
 #   ping                    Send ping message
 #   close                   Close connection and exit
 #   quit                    Same as close
 #
-# Examples:
+# EXAMPLES:
 #   # Interactive session
-#   ./ws-persistent-test.sh abc123
-#   > send {"type":"message","content":"hello"}
-#   > poll
-#   > send {"type":"message","content":"world"}
+#   export WS_HOST=localhost:9090
+#   export WEBSOCKET_COOKIES="filesurf_userId=user-test-123"
+#   ./filesurf-chat-test.sh abc123
+#   > send {"type":"message","content":"list files in current directory"}
+#   > poll 5
+#   > send {"type":"message","content":"what time is it"}
+#   > poll 5
 #   > close
 #
 #   # Batch mode with command file
-#   ./ws-persistent-test.sh abc123 /tmp/my_commands.txt
-#
-#   # Command file example:
-#   send {"type":"message","content":"hello"}
-#   poll 3
+#   cat > /tmp/commands.txt << 'EOF'
+#   sleep 2
+#   send {"type":"message","content":"list files"}
+#   poll 5
 #   sleep 1
-#   send {"type":"message","content":"world"}
-#   poll
+#   send {"type":"message","content":"create a test file"}
+#   poll 5
 #   close
+#   EOF
+#   ./filesurf-chat-test.sh abc123 /tmp/commands.txt
+#
+# NOTES:
+#   - Messages must be valid JSON
+#   - Responses are delivered asynchronously via WebSocket
+#   - The script automatically handles cleanup on exit
+#   - Use batch mode for automation and testing
 
 set -e
 
@@ -40,6 +76,7 @@ set -e
 HOST="${WS_HOST:-localhost:8080}"
 SOCKET_PATH="/tmp/ws_test_$$.sock"
 PID_FILE="/tmp/ws_test_$$.pid"
+WEBSOCKET_COOKIES="${WEBSOCKET_COOKIES:-}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -99,7 +136,7 @@ check_dependencies() {
 # Start the WebSocket to Unix socket bridge
 start_bridge() {
     local session_id="$1"
-    local ws_url="ws://$HOST/file-chat/ws/$session_id"
+    local ws_url="ws://$HOST/app/ws/$session_id"
 
     log_info "Starting WebSocket bridge to: $ws_url"
     log_info "Unix socket: $SOCKET_PATH"
@@ -109,8 +146,13 @@ start_bridge() {
 
     # Start websocat in background
     # -t: Line-buffered text mode
-    # unix-l: Listen on Unix socket
-    websocat -t "ws://$ws_url" "unix-l:$SOCKET_PATH" &
+    # unix-l: Listen on Unix socket (listener on left, client on right)
+    # Pass cookies for authentication if WEBSOCKET_COOKIES is set
+    if [ -n "$WEBSOCKET_COOKIES" ]; then
+        websocat -t "unix-l:$SOCKET_PATH" -H="Cookie: $WEBSOCKET_COOKIES" "ws://$ws_url" &
+    else
+        websocat -t "unix-l:$SOCKET_PATH" "ws://$ws_url" &
+    fi
     BRIDGE_PID=$!
 
     echo "$BRIDGE_PID" > "$PID_FILE"
@@ -138,7 +180,8 @@ start_bridge() {
 ws_send() {
     local message="$1"
     # Use timeout to prevent hanging if socket is broken
-    echo "$message" | timeout 2 socat - "unix:$SOCKET_PATH" 2>/dev/null
+    # Send message with newline for proper WebSocket text framing
+    printf '%s\n' "$message" | timeout 2 socat - "unix:$SOCKET_PATH" 2>/dev/null
 }
 
 # Poll for responses
@@ -308,7 +351,23 @@ main() {
         echo "  command_file   Optional file with commands (batch mode)"
         echo ""
         echo "Environment variables:"
-        echo "  WS_HOST        WebSocket host (default: localhost:8080)"
+        echo "  WS_HOST              WebSocket host (default: localhost:8080)"
+        echo "  WEBSOCKET_COOKIES    Cookie string for authentication (e.g., 'filesurf_userId=xxx')"
+        echo ""
+        echo "EXAMPLES:"
+        echo "  # 1. First authenticate and get session:"
+        echo "  curl -s -c cookies.txt -X POST -d 'email=test@example.com' \\"
+        echo "    'http://localhost:9090/auth/login'"
+        echo "  SESSION=\$(curl -s -b cookies.txt 'http://localhost:9090/session/generate')"
+        echo "  SESSION_ID=\$(echo \$SESSION | grep -o '\"sessionId\":\"[^\"]*\"' | cut -d'\"' -f4)"
+        echo ""
+        echo "  # 2. Run the script:"
+        echo "  export WS_HOST=localhost:9090"
+        echo "  export WEBSOCKET_COOKIES=\"filesurf_userId=user-test-123\""
+        echo "  ./filesurf-chat-test.sh \$SESSION_ID"
+        echo ""
+        echo "  # Or use batch mode:"
+        echo "  ./filesurf-chat-test.sh \$SESSION_ID /path/to/commands.txt"
         echo ""
         exit 1
     fi
