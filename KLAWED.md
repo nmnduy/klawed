@@ -269,16 +269,16 @@ CREATE TABLE users (
 
 ## Testing Tools
 
-### WebSocket Bridge Server (Python)
-A persistent WebSocket connection testing tool for AI agents using a Python-based bridge server:
+### WebSocket Bridge Server (Bun)
+A persistent WebSocket connection testing tool for AI agents using a Bun-based bridge server:
 
 **Start the bridge server:**
 ```bash
 # Start on port 5000, connecting to FileSurf on port 9090
-python3 scripts/ws_bridge_server.py --port 5000 --file-surf-port 9090
+bun run scripts/ws_bridge_server.ts 5000
 
 # Or with custom email
-python3 scripts/ws_bridge_server.py --email user@example.com
+bun run scripts/ws_bridge_server.ts 5000 user@example.com
 ```
 
 **Send a message:**
@@ -322,19 +322,21 @@ curl -X DELETE http://localhost:5000/session
 curl -X POST http://localhost:5000/close
 ```
 
-**Python example:**
-```python
-import requests
+**JavaScript/Bun example:**
+```javascript
+// Send message
+await fetch("http://localhost:5000/message", {
+  method: "POST",
+  body: "Generate a Solana wallet"
+});
 
-# Send message
-requests.post("http://localhost:5000/message", data="Generate a Solana wallet")
-
-# Poll for response
-response = requests.get("http://localhost:5000/poll")
-data = response.json()
-print(f"Received {data['count']} messages:")
-for msg in data['messages']:
-    print(f"  - {msg['content'][:100]}...")
+// Poll for response
+const response = await fetch("http://localhost:5000/poll");
+const data = await response.json();
+console.log(`Received ${data.count} messages:`);
+for (const msg of data.messages) {
+  console.log(`  - ${msg.content.substring(0, 100)}...`);
+}
 ```
 
 **HTTP Endpoints:**
@@ -346,7 +348,9 @@ for msg in data['messages']:
 - `DELETE /session` - Close and create new session
 - `POST /close` - Close WebSocket connection
 
-Dependencies: `pip install flask requests websockets`
+**Dependencies:**
+- Bun runtime (v1.3.6+)
+- ws package (`bun add ws`)
 
 ## Building for Development
 ```bash
