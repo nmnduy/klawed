@@ -15,4 +15,21 @@
  */
 char* strip_ansi_escapes(const char *input);
 
+/**
+ * Trim whitespace from both ends of a string (in-place)
+ * @param str String to trim
+ * @return Pointer to the trimmed string (same as input)
+ */
+char* trim_whitespace(char *str);
+
+/**
+ * Duplicate a string and trim whitespace from both ends
+ * @param str String to duplicate and trim
+ * @return Newly allocated trimmed string, or NULL on error
+ *         Caller must free() the returned string
+ */
+char* strdup_trim(const char *str);
+
+
+
 #endif // STRING_UTILS_H

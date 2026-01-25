@@ -5,6 +5,7 @@
 #include "message_parser.h"
 #include "conversation_state.h"
 #include "../logger.h"
+#include "../util/string_utils.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -70,7 +71,7 @@ void add_assistant_message_openai(ConversationState *state, cJSON *message) {
     // Add text content if present
     if (content && cJSON_IsString(content) && content->valuestring) {
         msg->contents[idx].type = INTERNAL_TEXT;
-        msg->contents[idx].text = strdup(content->valuestring);
+        msg->contents[idx].text = strdup_trim(content->valuestring);
         if (!msg->contents[idx].text) {
             LOG_ERROR("Failed to duplicate message text");
             free(msg->contents);

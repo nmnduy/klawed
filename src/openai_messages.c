@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "klawed_internal.h"
 #include "tools/tool_definitions.h"
+#include "util/string_utils.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -579,7 +580,7 @@ InternalMessage parse_openai_response(cJSON *response) {
     // Parse text content
     if (content && cJSON_IsString(content) && content->valuestring) {
         msg.contents[idx].type = INTERNAL_TEXT;
-        msg.contents[idx].text = strdup(content->valuestring);
+        msg.contents[idx].text = strdup_trim(content->valuestring);
         if (!msg.contents[idx].text) {
             LOG_ERROR("Failed to duplicate text content");
         }
