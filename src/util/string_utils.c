@@ -6,6 +6,7 @@
 #include "string_utils.h"
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 /**
  * Strip ANSI escape sequences from string
@@ -43,3 +44,54 @@ char* strip_ansi_escapes(const char *input) {
     result[j] = '\0';
     return result;
 }
+
+/**
+ * Trim whitespace from both ends of a string (in-place)
+ */
+char* trim_whitespace(char *str) {
+    if (!str) return NULL;
+
+    // Trim leading whitespace
+    char *start = str;
+    while (*start && isspace((unsigned char)*start)) {
+        start++;
+    }
+
+    // If the string is all whitespace
+    if (*start == '\0') {
+        str[0] = '\0';
+        return str;
+    }
+
+    // Trim trailing whitespace
+    char *end = start + strlen(start) - 1;
+    while (end > start && isspace((unsigned char)*end)) {
+        end--;
+    }
+
+    // Null-terminate at new end
+    *(end + 1) = '\0';
+
+    // Move trimmed string to beginning if we trimmed leading whitespace
+    if (start != str) {
+        memmove(str, start, strlen(start) + 1);
+    }
+
+    return str;
+}
+
+/**
+ * Duplicate a string and trim whitespace from both ends
+ * Returns newly allocated string (caller must free), or NULL on error
+ */
+char* strdup_trim(const char *str) {
+    if (!str) return NULL;
+    
+    char *dup = strdup(str);
+    if (!dup) return NULL;
+    
+    trim_whitespace(dup);
+    return dup;
+}
+
+

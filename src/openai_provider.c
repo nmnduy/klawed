@@ -10,6 +10,7 @@
 #include "http_client.h"
 #include "tui.h"  // For streaming TUI updates
 #include "openai_responses.h"  // For Responses API support
+#include "util/string_utils.h" // For trim_whitespace
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -815,6 +816,10 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         cJSON *content = cJSON_GetObjectItem(message, "content");
         if (content && cJSON_IsString(content) && content->valuestring) {
             api_response->message.text = arena_strdup(api_response->arena, content->valuestring);
+            if (api_response->message.text) {
+                // Trim whitespace from the extracted content
+                trim_whitespace(api_response->message.text);
+            }
         } else {
             api_response->message.text = NULL;
         }

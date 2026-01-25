@@ -17,6 +17,7 @@
 #include "arena.h"
 #include "tool_utils.h"
 #include "tools/tool_definitions.h"
+#include "util/string_utils.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -532,6 +533,8 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
 
         if (combined_text && text_length > 0) {
             api_response->message.text = combined_text;
+            // Trim whitespace from the extracted content
+            trim_whitespace(api_response->message.text);
         }
         // Note: if combined_text is not used, it's allocated from arena
         // and will be freed when arena is destroyed
@@ -625,7 +628,7 @@ InternalMessage parse_openai_responses_response(cJSON *response) {
                     cJSON *text = cJSON_GetObjectItem(content_item, "text");
                     if (text && cJSON_IsString(text) && text->valuestring) {
                         msg.contents[idx].type = INTERNAL_TEXT;
-                        msg.contents[idx].text = strdup(text->valuestring);
+                        msg.contents[idx].text = strdup_trim(text->valuestring);
                         if (!msg.contents[idx].text) {
                             LOG_ERROR("Failed to duplicate text content");
                         }

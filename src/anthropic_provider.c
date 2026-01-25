@@ -10,6 +10,7 @@
 #include "logger.h"
 #include "http_client.h"
 #include "tui.h"  // For streaming TUI updates
+#include "util/string_utils.h" // For trim_whitespace
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -961,6 +962,10 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
         cJSON *content = cJSON_GetObjectItem(message, "content");
         if (content && cJSON_IsString(content) && content->valuestring) {
             api_resp->message.text = arena_strdup(api_resp->arena, content->valuestring);
+            if (api_resp->message.text) {
+                // Trim whitespace from the extracted content
+                trim_whitespace(api_resp->message.text);
+            }
         }
 
         cJSON *tool_calls = cJSON_GetObjectItem(message, "tool_calls");
