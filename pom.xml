@@ -17,6 +17,8 @@
     <quarkus.platform.version>3.16.4</quarkus.platform.version>
     <skipITs>true</skipITs>
     <surefire-plugin.version>3.0.0</surefire-plugin.version>
+    <!-- Frontend build: set to true to skip bun build (e.g., -DskipFrontendBuild=true) -->
+    <skipFrontendBuild>false</skipFrontendBuild>
   </properties>
   <dependencyManagement>
     <dependencies>
@@ -161,6 +163,29 @@
             <arg>-parameters</arg>
           </compilerArgs>
         </configuration>
+      </plugin>
+      <!-- Frontend build plugin - runs bun build:dev automatically -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>bun-build-dev</id>
+            <phase>initialize</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>bun</executable>
+              <arguments>
+                <argument>run</argument>
+                <argument>build:dev</argument>
+              </arguments>
+              <skip>${skipFrontendBuild}</skip>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>

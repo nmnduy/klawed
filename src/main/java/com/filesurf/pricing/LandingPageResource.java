@@ -1,12 +1,12 @@
 package com.filesurf.pricing;
 
 import com.filesurf.stripe.StripeService;
+import com.filesurf.util.CssVersionProvider;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.time.Year;
 
 @Path("/")
@@ -25,8 +25,8 @@ public class LandingPageResource {
     @Inject
     StripeService stripeService;
 
-    @ConfigProperty(name = "css.path", defaultValue = "main.css")
-    String cssPath;
+    @Inject
+    CssVersionProvider cssVersionProvider;
 
     /**
      * Landing page (index.html)
@@ -34,7 +34,7 @@ public class LandingPageResource {
     @GET
     public TemplateInstance getLandingPage() {
         return index
-                .data("cssPath", cssPath)
+                .data("cssPath", cssVersionProvider.getCssPath())
                 .data("currentYear", Year.now().getValue());
     }
 
@@ -45,7 +45,7 @@ public class LandingPageResource {
     @Path("/pricing/success")
     public TemplateInstance pricingSuccess(@QueryParam("session_id") String sessionId) {
         return pricingSuccess
-                .data("cssPath", cssPath)
+                .data("cssPath", cssVersionProvider.getCssPath())
                 .data("sessionId", sessionId);
     }
 
@@ -56,6 +56,6 @@ public class LandingPageResource {
     @Path("/pricing/cancel")
     public TemplateInstance pricingCancel() {
         return pricingCancel
-                .data("cssPath", cssPath);
+                .data("cssPath", cssVersionProvider.getCssPath());
     }
 }

@@ -7,6 +7,7 @@ FileSurf v2 is a Quarkus-based application for file management and chat function
 ```bash
 # 1. Start Quarkus in development mode (in a separate terminal)
 mvn quarkus:dev
+# Note: CSS/JS are automatically built via Maven exec plugin before startup
 
 # 2. Access the application
 # Default: http://localhost:9090/file-chat
@@ -29,15 +30,22 @@ You're encoureaged to create commits when finish a task, fix a bug or adding a n
    ```bash
    # In the project root directory
    mvn quarkus:dev
+   # CSS/JS will be built automatically before Quarkus starts (via exec-maven-plugin)
    ```
    This will start the application on port 9090 (or another port if specified).
 
-2. **Hot Reload Behavior**:
+2. **Automatic CSS/JS Build**:
+   - The Maven build now automatically runs `bun run build:dev` in the `initialize` phase
+   - This ensures CSS/JS files are always available before Quarkus starts
+   - To skip frontend build: `mvn quarkus:dev -DskipFrontendBuild=true`
+
+3. **Hot Reload Behavior**:
    - Changes to Java code, templates, and resources will be automatically picked up by Quarkus
    - The application will restart automatically when files are modified
+   - CSS/JS changes require running `bun run build:dev` manually (or use `bun run watch`)
    - This works seamlessly when the AI agent is **not** modifying code in a worktree
 
-3. **Important Note on Worktrees**:
+4. **Important Note on Worktrees**:
    - If the AI agent is working in a **git worktree**, hot reload may not work correctly
    - Quarkus dev mode monitors the main project directory, not worktree directories
    - For worktree development, you may need to:
@@ -56,6 +64,29 @@ You're encoureaged to create commits when finish a task, fix a bug or adding a n
 - Application logs: `logs/application.log` (rotates at 10MB)
 - Klawed agent logs: `logs/klawed-agents.log` (rotates at 50MB)
 - Console output also available in dev mode
+
+### Building CSS and JavaScript
+
+**Automatic Build (Maven Integration)**:
+- CSS/JS are automatically built when running `mvn quarkus:dev` or `mvn package`
+- The `exec-maven-plugin` runs `bun run build:dev` during the `initialize` phase
+- To skip automatic build: `mvn quarkus:dev -DskipFrontendBuild=true`
+
+**Manual Build (for active development)**:
+```bash
+# Build CSS and JS without cache busting (faster for development)
+bun run build:dev      # Creates main.css and *.js (no hashes)
+# OR
+make css-dev           # Same as above
+
+# Build CSS and JS with cache busting (production mode)
+bun run build          # Creates main.[hash].css and *.[hash].js
+# OR
+make css               # Same as above
+
+# Watch mode for continuous rebuilding during CSS development
+bun run watch          # Automatically rebuilds CSS on file changes
+```
 
 ### JavaScript Conventions
 See `docs/JS_CONVENTIONS.md` for full details. Key points:

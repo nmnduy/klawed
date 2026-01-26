@@ -46,8 +46,9 @@ build-dist: css
 	@echo "Production build complete! JAR file available in $(TARGET_DIR)/"
 
 # Start Quarkus development server
-dev: css-dev
-	@echo "Starting Quarkus development server..."
+# Note: CSS/JS build now runs automatically via Maven exec plugin (see pom.xml)
+dev:
+	@echo "Starting Quarkus development server (CSS/JS will build automatically)..."
 	@$(MAVEN) quarkus:dev
 
 # Build Tailwind CSS output (production with cache busting)
