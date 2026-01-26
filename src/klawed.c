@@ -1258,6 +1258,7 @@ int main(int argc, char *argv[]) {
         printf("  %s -r, --resume [ID]             Resume a previous conversation session\n", argv[0]);
         printf("                                      (defaults to most recent session if no ID given)\n");
         printf("  %s -l, --list-sessions [N]       List available sessions (N = max to show)\n", argv[0]);
+        printf("  %s -p, --provider NAME           Use named provider configuration (from .klawed/config.json)\n", argv[0]);
 
         printf("  %s -h, --help                     Show this help message\n", argv[0]);
         printf("  %s --auto-compact               Enable automatic context compaction\n", argv[0]);
@@ -1267,7 +1268,8 @@ int main(int argc, char *argv[]) {
         printf("    OPENAI_API_KEY       Required: Your OpenAI API key (not needed for Bedrock)\n");
         printf("    OPENAI_API_BASE      Optional: API base URL (default: %s)\n", API_BASE_URL);
         printf("    OPENAI_MODEL         Optional: Model name (default: %s)\n", DEFAULT_MODEL);
-        printf("    ANTHROPIC_MODEL      Alternative: Model name (fallback if OPENAI_MODEL not set)\n");
+        printf("    KLAWED_LLM_PROVIDER  Optional: Select named provider from config (e.g., \"anthropic-sonnet\")\n");
+        printf("                            Takes precedence over active_provider in config\n");
         /* printf("    DISABLE_PROMPT_CACHING  Optional: Set to 1 to disable prompt caching\n\n"); */
         printf("  AWS Bedrock Configuration:\n");
         printf("    KLAWED_USE_BEDROCK  Set to 1 to use AWS Bedrock instead of OpenAI\n");
@@ -1310,6 +1312,27 @@ int main(int argc, char *argv[]) {
         printf("  Type /help for commands (e.g., /clear, /exit, /add-dir, /voice)\n");
         printf("  Press Ctrl+C to cancel a running API/tool action\n\n");
         return 0;
+    }
+
+    // Check for provider flag
+    const char *provider_from_cli = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--provider") == 0) {
+            if (i + 1 < argc) {
+                provider_from_cli = argv[i + 1];
+                // Set the environment variable so provider_init picks it up
+                if (setenv("KLAWED_LLM_PROVIDER", provider_from_cli, 1) != 0) {
+                    LOG_WARN("Failed to set KLAWED_LLM_PROVIDER from --provider flag: %s", strerror(errno));
+                } else {
+                    LOG_INFO("Using provider from --provider flag: %s", provider_from_cli);
+                }
+                break;
+            } else {
+                LOG_ERROR("--provider/-p flag requires a provider name argument");
+                fprintf(stderr, "Error: --provider/-p flag requires a provider name\n");
+                return 1;
+            }
+        }
     }
 
     // Check for dump conversation flags
