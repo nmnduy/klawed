@@ -1,6 +1,5 @@
 package com.filesurf.pricing;
 
-import com.filesurf.stripe.StripeService;
 import com.filesurf.util.CssVersionProvider;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
@@ -23,9 +22,6 @@ public class LandingPageResource {
     Template pricingCancel;
 
     @Inject
-    StripeService stripeService;
-
-    @Inject
     CssVersionProvider cssVersionProvider;
 
     /**
@@ -35,8 +31,7 @@ public class LandingPageResource {
     public TemplateInstance getLandingPage() {
         return index
                 .data("cssPath", cssVersionProvider.getCssPath())
-                .data("currentYear", Year.now().getValue())
-                .data("stripePublicKey", stripeService.getPublicKey());
+                .data("currentYear", Year.now().getValue());
     }
 
     /**

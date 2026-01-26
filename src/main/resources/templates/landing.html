@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FileSurf - AI-Powered File Management & Chat</title>
     <link rel="stylesheet" href="/css/{cssPath}">
-    <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900">
     <!-- Hero Section -->
@@ -176,10 +175,10 @@
                             </li>
                         </ul>
 
-                        <button onclick="selectPlan('basic', 'price_basic_monthly')" 
-                                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition">
+                        <a href="/auth/login" 
+                           class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition">
                             Get Started
-                        </button>
+                        </a>
                     </div>
 
                     <!-- Professional Plan -->
@@ -237,10 +236,10 @@
                             </li>
                         </ul>
 
-                        <button onclick="selectPlan('pro', 'price_pro_monthly')" 
-                                class="w-full bg-white hover:bg-gray-100 text-blue-600 font-semibold py-3 px-6 rounded-lg transition">
+                        <a href="/auth/login" 
+                           class="block w-full text-center bg-white hover:bg-gray-100 text-blue-600 font-semibold py-3 px-6 rounded-lg transition">
                             Get Started
-                        </button>
+                        </a>
                     </div>
 
                     <!-- Enterprise Plan -->
@@ -292,10 +291,10 @@
                             </li>
                         </ul>
 
-                        <button onclick="contactSales()" 
-                                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition">
+                        <a href="/auth/login" 
+                           class="block w-full text-center bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition">
                             Contact Sales
-                        </button>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -332,10 +331,5 @@
     </footer>
 
 
-    <script defer src="{inject:jsHelper.path('pricing')}"></script>
-    <script>
-        // Initialize Stripe with public key after it loads
-        initStripe('{stripePublicKey}');
-    </script>
 </body>
 </html>
