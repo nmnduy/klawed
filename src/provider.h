@@ -111,6 +111,36 @@ void provider_init_from_config(const char *provider_key,
 char *provider_validate_env(void);
 
 /**
+ * Check if the selected provider (via KLAWED_LLM_PROVIDER or active_provider) uses Bedrock
+ *
+ * This is used early in startup to determine if API key is required.
+ * Checks KLAWED_LLM_PROVIDER first, then active_provider from config.
+ *
+ * @return 1 if selected provider uses bedrock, 0 otherwise
+ */
+int provider_is_bedrock_selected(void);
+
+/**
+ * Get the model from the selected provider configuration
+ *
+ * Checks KLAWED_LLM_PROVIDER first, then active_provider from config.
+ * Returns NULL if no provider is selected or if the provider has no model configured.
+ *
+ * @return Model name (caller must free) or NULL if not found
+ */
+char *provider_get_selected_model(void);
+
+/**
+ * Check if the selected provider has an API key configured
+ *
+ * Checks if the provider selected via KLAWED_LLM_PROVIDER or active_provider
+ * has api_key or api_key_env set, or if it's a bedrock provider (which uses AWS credentials).
+ *
+ * @return 1 if provider has API key configured (or uses bedrock), 0 otherwise
+ */
+int provider_has_api_key_configured(void);
+
+/**
  * Log the effective provider configuration
  *
  * Logs provider configuration details to the log file with API key redacted.

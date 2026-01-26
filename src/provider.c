@@ -192,6 +192,187 @@ char *provider_validate_env(void) {
 }
 
 /**
+ * Check if the selected provider (via KLAWED_LLM_PROVIDER or active_provider) uses Bedrock
+ *
+ * This is used early in startup to determine if API key is required.
+ * Checks KLAWED_LLM_PROVIDER first, then active_provider from config.
+ *
+ * @return 1 if selected provider uses bedrock, 0 otherwise
+ */
+int provider_is_bedrock_selected(void) {
+    // Load configuration
+    KlawedConfig config;
+    config_init_defaults(&config);
+    if (config_load(&config) != 0) {
+        LOG_DEBUG("[Provider] Could not load config to check bedrock selection");
+        return 0;
+    }
+
+    // Check KLAWED_LLM_PROVIDER first (highest priority)
+    const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
+    if (env_provider && env_provider[0] != '\0') {
+        const NamedProviderConfig *named_provider = config_find_provider(&config, env_provider);
+        if (named_provider) {
+            if (named_provider->config.provider_type == PROVIDER_BEDROCK ||
+                named_provider->config.use_bedrock) {
+                LOG_DEBUG("[Provider] Provider '%s' uses bedrock", env_provider);
+                return 1;
+            }
+            LOG_DEBUG("[Provider] Provider '%s' does not use bedrock", env_provider);
+            return 0;
+        }
+        // Provider not found, fall through to check active_provider
+        LOG_DEBUG("[Provider] Provider '%s' from KLAWED_LLM_PROVIDER not found", env_provider);
+    }
+
+    // Check active_provider from config
+    if (config.active_provider[0] != '\0') {
+        const NamedProviderConfig *active = config_find_provider(&config, config.active_provider);
+        if (active) {
+            if (active->config.provider_type == PROVIDER_BEDROCK ||
+                active->config.use_bedrock) {
+                LOG_DEBUG("[Provider] Active provider '%s' uses bedrock", config.active_provider);
+                return 1;
+            }
+            LOG_DEBUG("[Provider] Active provider '%s' does not use bedrock", config.active_provider);
+            return 0;
+        }
+    }
+
+    // Check legacy llm_provider
+    if (config.llm_provider.provider_type == PROVIDER_BEDROCK ||
+        config.llm_provider.use_bedrock) {
+        LOG_DEBUG("[Provider] Legacy llm_provider uses bedrock");
+        return 1;
+    }
+
+    LOG_DEBUG("[Provider] No bedrock provider selected");
+    return 0;
+}
+
+/**
+ * Get the model from the selected provider configuration
+ *
+ * Checks KLAWED_LLM_PROVIDER first, then active_provider from config.
+ * Returns NULL if no provider is selected or if the provider has no model configured.
+ *
+ * @return Model name (caller must free) or NULL if not found
+ */
+char *provider_get_selected_model(void) {
+    // Load configuration
+    KlawedConfig config;
+    config_init_defaults(&config);
+    if (config_load(&config) != 0) {
+        LOG_DEBUG("[Provider] Could not load config to get selected model");
+        return NULL;
+    }
+
+    // Check KLAWED_LLM_PROVIDER first (highest priority)
+    const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
+    if (env_provider && env_provider[0] != '\0') {
+        const NamedProviderConfig *named_provider = config_find_provider(&config, env_provider);
+        if (named_provider && named_provider->config.model[0] != '\0') {
+            LOG_DEBUG("[Provider] Using model '%s' from provider '%s'",
+                      named_provider->config.model, env_provider);
+            return strdup(named_provider->config.model);
+        }
+    }
+
+    // Check active_provider from config
+    if (config.active_provider[0] != '\0') {
+        const NamedProviderConfig *active = config_find_provider(&config, config.active_provider);
+        if (active && active->config.model[0] != '\0') {
+            LOG_DEBUG("[Provider] Using model '%s' from active provider '%s'",
+                      active->config.model, config.active_provider);
+            return strdup(active->config.model);
+        }
+    }
+
+    // Check legacy llm_provider
+    if (config.llm_provider.model[0] != '\0') {
+        LOG_DEBUG("[Provider] Using model '%s' from legacy llm_provider",
+                  config.llm_provider.model);
+        return strdup(config.llm_provider.model);
+    }
+
+    LOG_DEBUG("[Provider] No model found in selected provider");
+    return NULL;
+}
+
+/**
+ * Helper function to check if a provider config has API key configured
+ */
+static int provider_config_has_api_key(const LLMProviderConfig *cfg) {
+    if (!cfg) return 0;
+
+    // Bedrock providers use AWS credentials, not API keys
+    if (cfg->provider_type == PROVIDER_BEDROCK || cfg->use_bedrock) {
+        return 1;
+    }
+
+    // Check if api_key_env is set and the env var exists
+    if (cfg->api_key_env[0] != '\0') {
+        const char *env_key = getenv(cfg->api_key_env);
+        if (env_key && env_key[0] != '\0') {
+            return 1;
+        }
+    }
+
+    // Check if api_key is directly set
+    if (cfg->api_key[0] != '\0') {
+        return 1;
+    }
+
+    return 0;
+}
+
+/**
+ * Check if the selected provider has an API key configured
+ *
+ * Checks if the provider selected via KLAWED_LLM_PROVIDER or active_provider
+ * has api_key or api_key_env set, or if it's a bedrock provider (which uses AWS credentials).
+ *
+ * @return 1 if provider has API key configured (or uses bedrock), 0 otherwise
+ */
+int provider_has_api_key_configured(void) {
+    // Load configuration
+    KlawedConfig config;
+    config_init_defaults(&config);
+    if (config_load(&config) != 0) {
+        LOG_DEBUG("[Provider] Could not load config to check API key");
+        return 0;
+    }
+
+    // Check KLAWED_LLM_PROVIDER first (highest priority)
+    const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
+    if (env_provider && env_provider[0] != '\0') {
+        const NamedProviderConfig *named_provider = config_find_provider(&config, env_provider);
+        if (named_provider) {
+            int has_key = provider_config_has_api_key(&named_provider->config);
+            LOG_DEBUG("[Provider] Provider '%s' has API key configured: %d", env_provider, has_key);
+            return has_key;
+        }
+        // Provider not found, fall through
+    }
+
+    // Check active_provider from config
+    if (config.active_provider[0] != '\0') {
+        const NamedProviderConfig *active = config_find_provider(&config, config.active_provider);
+        if (active) {
+            int has_key = provider_config_has_api_key(&active->config);
+            LOG_DEBUG("[Provider] Active provider '%s' has API key configured: %d",
+                      config.active_provider, has_key);
+            return has_key;
+        }
+    }
+
+    // Check legacy llm_provider
+    int has_key = provider_config_has_api_key(&config.llm_provider);
+    LOG_DEBUG("[Provider] Legacy llm_provider has API key configured: %d", has_key);
+    return has_key;
+}
+
+/**
  * Get provider configuration from config file or environment variables
  *
  * Priority when a named provider is selected (via active_provider, KLAWED_LLM_PROVIDER, or --provider CLI flag):

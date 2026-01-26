@@ -1501,8 +1501,8 @@ int main(int argc, char *argv[]) {
     }
 
 #ifndef TEST_BUILD
-    // Check if Bedrock mode is enabled
-    int use_bedrock = bedrock_is_enabled();
+    // Check if Bedrock mode is enabled (via KLAWED_USE_BEDROCK env var or selected provider)
+    int use_bedrock = bedrock_is_enabled() || provider_is_bedrock_selected();
 #else
     int use_bedrock = 0;
 #endif
@@ -1510,25 +1510,33 @@ int main(int argc, char *argv[]) {
     const char *api_key = NULL;
     const char *api_base = NULL;
     const char *model = NULL;
+    char *model_from_provider = NULL;  // Needs to be freed if allocated
 
     if (use_bedrock) {
         // Bedrock mode: API key not required, credentials loaded separately
-        // Get model from ANTHROPIC_MODEL environment variable
-        model = getenv("ANTHROPIC_MODEL");
-        if (!model) {
-            LOG_ERROR("ANTHROPIC_MODEL environment variable required when using AWS Bedrock");
-            fprintf(stderr, "Error: ANTHROPIC_MODEL environment variable not set\n");
-            fprintf(stderr, "Example: export ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0\n");
-            return 1;
+        // Get model from provider config first, then fallback to ANTHROPIC_MODEL env var
+        model_from_provider = provider_get_selected_model();
+        if (model_from_provider) {
+            model = model_from_provider;
+            LOG_INFO("Bedrock mode enabled, using model from provider config: %s", model);
+        } else {
+            model = getenv("ANTHROPIC_MODEL");
+            if (!model) {
+                LOG_ERROR("ANTHROPIC_MODEL environment variable required when using AWS Bedrock");
+                fprintf(stderr, "Error: ANTHROPIC_MODEL environment variable not set\n");
+                fprintf(stderr, "Example: export ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0\n");
+                return 1;
+            }
+            LOG_INFO("Bedrock mode enabled, using model from ANTHROPIC_MODEL: %s", model);
         }
         // API key and base URL will be handled by Bedrock module
         api_key = "bedrock";  // Placeholder
         api_base = "bedrock"; // Will be overridden by Bedrock endpoint
-        LOG_INFO("Bedrock mode enabled, using model: %s", model);
     } else {
         // Standard mode: check for API key
+        // First check if the selected provider has an API key configured
         api_key = getenv("OPENAI_API_KEY");
-        if (!api_key) {
+        if (!api_key && !provider_has_api_key_configured()) {
             LOG_ERROR("OPENAI_API_KEY environment variable not set");
             fprintf(stderr, "Error: OPENAI_API_KEY environment variable not set\n");
             fprintf(stderr, "\nTo use AWS Bedrock instead, set:\n");
@@ -1538,6 +1546,10 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "  export AWS_PROFILE=your-profile\n");
             return 1;
         }
+        // Use placeholder if provider has its own key configured
+        if (!api_key) {
+            api_key = "provider-config";  // Placeholder, actual key resolved in provider_init
+        }
 
         // Get optional API base and model from environment
         api_base = getenv("OPENAI_API_BASE");
@@ -1545,11 +1557,17 @@ int main(int argc, char *argv[]) {
             api_base = API_BASE_URL;
         }
 
-        model = getenv("OPENAI_MODEL");
-        if (!model) {
-            model = getenv("ANTHROPIC_MODEL");  // Try ANTHROPIC_MODEL as fallback
+        // Get model from provider config first, then environment
+        model_from_provider = provider_get_selected_model();
+        if (model_from_provider) {
+            model = model_from_provider;
+        } else {
+            model = getenv("OPENAI_MODEL");
             if (!model) {
-                model = DEFAULT_MODEL;
+                model = getenv("ANTHROPIC_MODEL");  // Try ANTHROPIC_MODEL as fallback
+                if (!model) {
+                    model = DEFAULT_MODEL;
+                }
             }
         }
     }
@@ -1705,6 +1723,10 @@ int main(int argc, char *argv[]) {
     state.api_url = strdup(api_base);
     state.model = strdup(model);
     state.max_tokens = get_env_int_retry("KLAWED_MAX_TOKENS", MAX_TOKENS);
+
+    // Free the model string if it was allocated by provider_get_selected_model()
+    free(model_from_provider);
+    model_from_provider = NULL;
 
     // Note: DeepSeek API max_tokens override removed - no longer limiting to 4096
 
