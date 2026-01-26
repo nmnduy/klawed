@@ -185,7 +185,29 @@ static int filter_results(HistorySearchState *state) {
     for (int i = start_idx; i < state->history_count; i++) {
         int score = match_score(state->history_entries[i], pattern);
         if (score > 0) {
-            add_result(state, state->history_entries[i], score, i);
+            // Check if this command is already in results (deduplicate)
+            int is_duplicate = 0;
+            for (int j = 0; j < state->result_count; j++) {
+                if (strcmp(state->results[j].command, state->history_entries[i]) == 0) {
+                    is_duplicate = 1;
+                    // Update if we found a better match (higher score)
+                    if (score > state->results[j].score) {
+                        state->results[j].score = score;
+                        state->results[j].original_index = i; // New best match, use its index
+                    } else if (score == state->results[j].score) {
+                        // Same score, keep the most recent one (higher index)
+                        if (i > state->results[j].original_index) {
+                            state->results[j].original_index = i;
+                        }
+                    }
+                    // If score is lower, keep the existing entry (better match)
+                    break;
+                }
+            }
+
+            if (!is_duplicate) {
+                add_result(state, state->history_entries[i], score, i);
+            }
         }
     }
 
