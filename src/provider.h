@@ -63,6 +63,7 @@ typedef struct Provider {
 typedef struct {
     Provider *provider;   // Initialized provider (NULL on error)
     char *api_url;        // Base API URL for this provider
+    char *model;          // Selected model name (may differ from passed model parameter)
     char *error_message;  // Error message if initialization failed (caller must free)
 } ProviderInitResult;
 

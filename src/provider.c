@@ -431,17 +431,31 @@ void provider_init(const char *model,
     LOG_DEBUG("[Provider Init] Selected provider_config=%s, provider_type=%d",
               provider_config ? provider_config->provider_name : "(NULL)", provider_type);
 
-    // Determine which model to use (priority: passed parameter > config file > env var)
+    // Determine which model to use
+    // Priority:
+    // 1. Named provider's model (if a provider is explicitly selected via active_provider or KLAWED_LLM_PROVIDER)
+    // 2. Passed model parameter
+    // 3. Config file's model (from provider config or legacy llm_provider)
+    // 4. Environment variable (OPENAI_MODEL)
     char *model_to_use = NULL;
-    if (model && model[0] != '\0') {
+    if (provider_config && provider_config->model[0] != '\0') {
+        // Named provider explicitly selected - use its model (takes precedence over passed parameter)
+        model_to_use = arena_strdup(arena, provider_config->model);
+        LOG_DEBUG("[Provider] Using model from named provider: %s", model_to_use);
+    } else if (model && model[0] != '\0') {
+        // Use passed parameter
         model_to_use = arena_strdup(arena, model);
+        LOG_DEBUG("[Provider] Using model from passed parameter: %s", model_to_use);
     } else if (config_model && config_model[0] != '\0') {
-        model_to_use = config_model;  // Already arena-allocated
+        // Fall back to config file's model
+        model_to_use = config_model;
+        LOG_DEBUG("[Provider] Using model from config file: %s", model_to_use);
     } else {
         // Fall back to environment variable
         const char *env_model = getenv("OPENAI_MODEL");
         if (env_model && env_model[0] != '\0') {
             model_to_use = arena_strdup(arena, env_model);
+            LOG_DEBUG("[Provider] Using model from environment variable: %s", model_to_use);
         }
     }
 
@@ -467,6 +481,15 @@ void provider_init(const char *model,
                         api_key_for_log,
                         api_key_source,
                         config_use_bedrock);
+
+    // Set the selected model in the result (will be used to update state->model)
+    result->model = strdup(model_to_use);
+    if (!result->model) {
+        result->error_message = strdup("Failed to allocate memory for model");
+        LOG_ERROR("Provider init failed: %s", result->error_message);
+        arena_destroy(arena);
+        return;
+    }
 
     LOG_DEBUG("Initializing provider (model: %s, provider_type: %s)...",
               model_to_use, config_provider_type_to_string(provider_type));

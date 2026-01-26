@@ -506,7 +506,7 @@ query-tool: check-deps $(QUERY_TOOL)
 
 memvid-repl: check-deps $(MEMVID_REPL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-file-search test-provider-init-from-config
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-file-search test-provider-init-from-config test-provider-init
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -1952,6 +1952,29 @@ $(TEST_PROVIDER_INIT_FROM_CONFIG_TARGET): $(SRC) tests/test_provider_init_from_c
 	@echo ""
 	@echo "✓ provider_init_from_config test build successful!"
 	@echo ""
+
+# Test target for provider_init - tests that named provider's model takes precedence
+TEST_PROVIDER_INIT_TARGET = $(BUILD_DIR)/test_provider_init
+$(TEST_PROVIDER_INIT_TARGET): $(SRC) tests/test_provider_init.c $(TEST_COMMON_OBJS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling klawed.c for provider_init testing (renaming main)..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/provider_init_test.o $(SRC)
+	@echo "Compiling provider_init test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_provider_init.o tests/test_provider_init.c
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_API_CLIENT_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_PROVIDER_INIT_TARGET) $(BUILD_DIR)/provider_init_test.o $(BUILD_DIR)/test_provider_init.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@echo ""
+	@echo "✓ provider_init test build successful!"
+	@echo ""
+
+test-provider-init: $(TEST_PROVIDER_INIT_TARGET)
+	@echo ""
+	@echo "Running provider_init tests..."
+	@echo ""
+	@./$(TEST_PROVIDER_INIT_TARGET)
 
 # Test target for Memvid Memory Tools - tests parameter validation and availability
 # Note: We compile memvid.c directly here with matching HAVE_MEMVID setting

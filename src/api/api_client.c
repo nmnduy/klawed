@@ -226,16 +226,27 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
             return NULL;
         }
 
-        // Transfer ownership to state and update API URL
+        // Transfer ownership to state and update API URL and model
         if (state->api_url) {
             free(state->api_url);
         }
         state->api_url = provider_result.api_url;
         state->provider = provider_result.provider;
+
+        // Update model to the one selected by provider_init (respects config file)
+        if (provider_result.model) {
+            if (state->model) {
+                free(state->model);
+            }
+            state->model = provider_result.model;
+            LOG_DEBUG("Updated state->model from provider config: %s", state->model);
+        }
+
         free(provider_result.error_message);
 
-        LOG_INFO("Provider initialized: %s, API URL: %s",
-                 state->provider->name, state->api_url ? state->api_url : "(null)");
+        LOG_INFO("Provider initialized: %s, API URL: %s, Model: %s",
+                 state->provider->name, state->api_url ? state->api_url : "(null)",
+                 state->model ? state->model : "(null)");
     }
 
     int attempt_num = 1;
