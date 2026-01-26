@@ -116,6 +116,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     unzip \
     zip \
+    rclone \
     \
     # Runtime libraries for klawed (NOT -dev packages)
     libcjson1 \

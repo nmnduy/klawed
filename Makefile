@@ -36,11 +36,11 @@ ifeq ($(UNAME_S),Darwin)
     NCURSES_LIB = -lncurses
 endif
 
-LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd $(NCURSES_LIB) $(SANITIZERS) -Wl,-pie
+LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd -lm $(NCURSES_LIB) $(SANITIZERS) -Wl,-pie
 ifeq ($(UNAME_S),Linux)
     LDFLAGS += -Wl,-z,relro -Wl,-z,now
 endif
-DEBUG_LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd $(NCURSES_LIB) -fsanitize=address -Wl,-pie
+DEBUG_LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd -lm $(NCURSES_LIB) -fsanitize=address -Wl,-pie
 ifeq ($(UNAME_S),Linux)
     DEBUG_LDFLAGS += -Wl,-z,relro -Wl,-z,now
 endif
