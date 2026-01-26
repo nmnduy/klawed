@@ -344,7 +344,7 @@
         </div>
     </section>
 
-    {#include partials/pricingSection.html /}
+    {#include partials/waitListJoinSection.html /}
 
     <!-- Contact Section -->
     <section id="contact" class="py-16 px-4 sm:px-6 lg:px-8 bg-layout-surface">
@@ -451,10 +451,6 @@
         </div>
     </footer>
 
-    <script defer src="{inject:jsHelper.path('pricing')}"></script>
-    <script>
-        // Initialize Stripe with public key after it loads
-        initStripe('{stripePublicKey}');
-    </script>
+    <script defer src="{inject:jsHelper.path('waitlistJoin')}"></script>
 </body>
 </html>
