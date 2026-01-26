@@ -350,6 +350,14 @@ int cmd_provider(ConversationState *state, const char *args) {
         strlcpy(truncated_args, args, sizeof(truncated_args));
         if (session_switch_result == 0) {
             snprintf(success_msg, sizeof(success_msg), "Switched to provider '%s' (current session)", truncated_args);
+
+            // Display new model in mascot-style banner to show the change visually
+            char model_line[256];
+            snprintf(model_line, sizeof(model_line), " ( o.o )  %s", state->model ? state->model : "unknown");
+            tui_add_conversation_line(state->tui, NULL, "", COLOR_PAIR_FOREGROUND);
+            tui_add_conversation_line(state->tui, "[System]", "Provider switched:", COLOR_PAIR_STATUS);
+            tui_add_conversation_line(state->tui, NULL, model_line, COLOR_PAIR_ASSISTANT);
+            tui_add_conversation_line(state->tui, NULL, "", COLOR_PAIR_FOREGROUND);
         } else {
             snprintf(success_msg, sizeof(success_msg), "Switched to provider '%s' (config only)", truncated_args);
         }
