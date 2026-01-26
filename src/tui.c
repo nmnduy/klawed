@@ -26,6 +26,7 @@
 #include "fallback_colors.h"
 #include "logger.h"
 #include "indicators.h"
+#include "spinner_effects.h"
 #include "klawed_internal.h"
 #include <stdlib.h>
 #include <bsd/stdlib.h>
@@ -90,13 +91,6 @@ static uint64_t monotonic_time_ns(void) {
     return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
 }
 
-// Render the status window based on current state
-static uint64_t status_spinner_interval_ns(void) {
-    // Cast both operands to uint64_t to avoid intermediate ULL promotion
-    // that triggers -Wsign-conversion on some platforms (LP64 vs LLP64).
-    return (uint64_t)SPINNER_DELAY_MS * (uint64_t)1000000;
-}
-
 static void status_spinner_tick(TUIState *tui) {
     if (!tui || !tui->status_spinner_active || !tui->status_visible) {
         return;
@@ -106,28 +100,56 @@ static void status_spinner_tick(TUIState *tui) {
     }
 
     uint64_t now = monotonic_time_ns();
-    if (tui->status_spinner_last_update_ns == 0) {
+
+    // Initialize spring on first tick
+    if (!tui->status_spinner_spring_initialized) {
+        tui->status_spinner_pos = 0.0;
+        tui->status_spinner_vel = 0.0;
+        // 60 FPS, fast angular frequency (15 Hz), bouncy damping (0.25) for playful motion
+        tui->status_spinner_spring = spring_init(1.0/60.0, 15.0, 0.25);
+        tui->status_spinner_spring_initialized = 1;
         tui->status_spinner_last_update_ns = now;
         return;
     }
 
-    uint64_t delta = now - tui->status_spinner_last_update_ns;
-    uint64_t interval_ns = status_spinner_interval_ns();
-    if (delta < interval_ns) {
-        return;
+    // Calculate time delta in seconds
+    double delta_s = (double)(now - tui->status_spinner_last_update_ns) / 1e9;
+    if (delta_s > 0.1) {
+        // Cap large deltas to prevent instability
+        delta_s = 0.1;
     }
 
-    uint64_t steps = interval_ns ? delta / interval_ns : 1;
-    if (steps == 0) {
-        steps = 1;
-    }
+    // Target angle increases continuously for spinning effect
+    // Use a slightly randomized angular velocity to add organic feel
+    // ~20 rad/s base speed = ~3 rotations per second
+    double angular_velocity = 20.0;
+    double target_pos = tui->status_spinner_pos + delta_s * angular_velocity;
 
+    // Update spring with scaled time step
+    spring_update(tui->status_spinner_spring, &tui->status_spinner_pos, &tui->status_spinner_vel, target_pos);
+
+    // Convert angular position to frame index
     const spinner_variant_t *variant = status_spinner_variant();
     int frame_count = (variant->count > 0) ? variant->count : SPINNER_FRAME_COUNT;
     if (frame_count <= 0) {
         return;
     }
-    tui->status_spinner_frame = (tui->status_spinner_frame + (int)steps) % frame_count;
+
+    // Modulo arithmetic for smooth wrapping
+    double frame_pos = fmod(tui->status_spinner_pos, (double)frame_count);
+    if (frame_pos < 0) {
+        frame_pos += frame_count;
+    }
+
+    tui->status_spinner_frame = (int)(frame_pos + 0.5); // Round to nearest frame
+
+    // Update spinner effect phase
+    float delta_time_float = (float)delta_s;
+    spinner_effect_update_phase(&tui->status_spinner_effect,
+                               delta_time_float,
+                               tui->status_spinner_frame,
+                               frame_count);
+
     tui->status_spinner_last_update_ns = now;
     render_status_window(tui);
 }

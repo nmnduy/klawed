@@ -17,6 +17,8 @@
 #include "history_file.h"
 #include "file_search.h"
 #include "history_search.h"
+#include "spring.h"
+#include "spinner_effects.h"
 #ifndef TEST_BUILD
 #include "persistence.h"
 #else
@@ -113,6 +115,15 @@ typedef struct TUIStateStruct {
     int status_spinner_active;        // Spinner animation active flag
     int status_spinner_frame;         // Current spinner frame index
     uint64_t status_spinner_last_update_ns; // Last spinner frame update timestamp
+
+    // Spring physics for smooth spinner animation
+    double status_spinner_pos;        // Current angular position (float, for smooth animation)
+    double status_spinner_vel;        // Current angular velocity
+    Spring status_spinner_spring;     // Spring physics configuration
+    int status_spinner_spring_initialized; // Whether spring has been initialized
+
+    // Enhanced spinner effects
+    SpinnerEffectConfig status_spinner_effect; // Spinner effect configuration
 
 
 

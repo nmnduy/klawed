@@ -247,7 +247,7 @@ int submit_input_callback(const char *input, void *user_data) {
             }
         }
     } else {
-        ui_set_status(tui, queue, "Waiting for API response...");
+        ui_set_status_varied(tui, queue, SPINNER_CONTEXT_API_CALL);
         ApiResponse *response = call_api_with_retries(state);
         ui_set_status(tui, queue, "");
 

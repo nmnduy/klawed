@@ -14,10 +14,12 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
+#include <math.h>
 #include "fallback_colors.h"
 #include "logger.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
+#include "spinner_effects.h"
 
 // Standard spinner frames
 static const char *SPINNER_FRAMES[] = {"⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"};
@@ -98,22 +100,83 @@ typedef struct {
     pthread_mutex_t lock;
     const char **frames;
     int frame_count;
+    SpinnerEffectConfig effect_config;
+    uint64_t last_update_ns;
+    float speed_multiplier;           // Speed multiplier for animation (1.0 = normal)
+    uint64_t speed_transition_ns;     // Timestamp when speed transition started
+    int speed_transition_active;      // Whether speed transition is active
 } Spinner;
 
 static void *spinner_thread_func(void *arg) {
     Spinner *s = (Spinner*)arg;
     int idx = 0;
+    uint64_t last_frame_ns = 0;
+
     // Hide cursor
     printf("\033[?25l"); fflush(stdout);
+
+    // Initialize effect config if not already done
+    if (s->effect_config.effect_type == SPINNER_EFFECT_NONE) {
+        s->effect_config = spinner_effect_init(SPINNER_EFFECT_GRADIENT,
+                                              SPINNER_COLOR_SOLID,
+                                              s->color, NULL);
+    }
+
     while (1) {
         pthread_mutex_lock(&s->lock);
         if (!s->running) { pthread_mutex_unlock(&s->lock); break; }
-        printf("\r\033[K%s%s%s %s", s->color, s->frames[idx], SPINNER_RESET, s->message);
+
+        // Calculate delta time for smooth animations
+        uint64_t now_ns = 0;
+        struct timespec ts;
+        if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+            now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+        }
+
+        float delta_time = 0.0f;
+        if (last_frame_ns > 0 && now_ns > last_frame_ns) {
+            delta_time = (float)(now_ns - last_frame_ns) / 1e9f;
+        }
+        last_frame_ns = now_ns;
+
+        // Handle speed transitions (fast -> normal when message changes)
+        float current_speed = s->speed_multiplier;
+        if (s->speed_transition_active && now_ns > 0) {
+            // Transition duration: 0.5 seconds
+            const uint64_t TRANSITION_DURATION_NS = 500000000ULL; // 500ms
+            uint64_t elapsed = now_ns - s->speed_transition_ns;
+
+            if (elapsed >= TRANSITION_DURATION_NS) {
+                // Transition complete - back to normal speed
+                s->speed_multiplier = 1.0f;
+                s->speed_transition_active = 0;
+            } else {
+                // Smooth transition from fast (3.0) to normal (1.0)
+                float progress = (float)elapsed / (float)TRANSITION_DURATION_NS;
+                s->speed_multiplier = 3.0f - (2.0f * progress); // 3.0 -> 1.0
+            }
+            current_speed = s->speed_multiplier;
+        }
+
+        // Update effect phase
+        spinner_effect_update_phase(&s->effect_config, delta_time, idx, s->frame_count);
+
+        // Get color for current frame with effects
+        char effect_color[32];
+        spinner_effect_get_color(&s->effect_config, idx, effect_color, sizeof(effect_color));
+
+        printf("\r\033[K%s%s%s %s", effect_color, s->frames[idx], SPINNER_RESET, s->message);
         fflush(stdout);
         pthread_mutex_unlock(&s->lock);
+
         idx = (idx + 1) % s->frame_count;
-        usleep((unsigned int)(SPINNER_DELAY_MS * 1000));
+
+        // Apply speed multiplier to delay (lower delay = faster spin)
+        int delay_ms = (int)((float)SPINNER_DELAY_MS / current_speed);
+        if (delay_ms < 20) delay_ms = 20; // Minimum delay to avoid excessive CPU
+        usleep((unsigned int)(delay_ms * 1000));
     }
+
     // Restore cursor
     printf("\033[?25h"); fflush(stdout);
     return NULL;
@@ -129,6 +192,35 @@ static INDICATOR_UNUSED Spinner* spinner_start(const char *message, const char *
     pthread_mutex_init(&s->lock, NULL);
     s->frames = GLOBAL_SPINNER_VARIANT.frames;
     s->frame_count = GLOBAL_SPINNER_VARIANT.count;
+    s->effect_config = spinner_effect_init(SPINNER_EFFECT_PULSE,
+                                          SPINNER_COLOR_SOLID,
+                                          s->color, NULL);
+    s->last_update_ns = 0;
+    s->speed_multiplier = 1.0f;
+    s->speed_transition_ns = 0;
+    s->speed_transition_active = 0;
+    pthread_create(&s->thread, NULL, spinner_thread_func, s);
+    return s;
+}
+
+// Start spinner with specific effect
+static INDICATOR_UNUSED Spinner* spinner_start_with_effect(const char *message,
+                                                          const char *color,
+                                                          SpinnerEffectType effect_type,
+                                                          SpinnerColorMode color_mode) {
+    init_global_spinner_variant();
+    Spinner *s = malloc(sizeof(Spinner)); if (!s) return NULL;
+    s->message = strdup(message);
+    s->color = color ? color : SPINNER_CYAN;
+    s->running = 1;
+    pthread_mutex_init(&s->lock, NULL);
+    s->frames = GLOBAL_SPINNER_VARIANT.frames;
+    s->frame_count = GLOBAL_SPINNER_VARIANT.count;
+    s->effect_config = spinner_effect_init(effect_type, color_mode, s->color, NULL);
+    s->last_update_ns = 0;
+    s->speed_multiplier = 1.0f;
+    s->speed_transition_ns = 0;
+    s->speed_transition_active = 0;
     pthread_create(&s->thread, NULL, spinner_thread_func, s);
     return s;
 }
@@ -137,8 +229,25 @@ static INDICATOR_UNUSED Spinner* spinner_start(const char *message, const char *
 static INDICATOR_UNUSED void spinner_update(Spinner *s, const char *msg) {
     if (!s) return;
     pthread_mutex_lock(&s->lock);
+
+    // Check if message is actually changing
+    int message_changed = (strcmp(s->message, msg) != 0);
+
     free(s->message);
     s->message = strdup(msg);
+
+    // If message changed, trigger speed boost (fast -> normal transition)
+    if (message_changed) {
+        s->speed_multiplier = 3.0f; // Start at 3x speed
+        s->speed_transition_active = 1;
+
+        // Get current timestamp for transition
+        struct timespec ts;
+        if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+            s->speed_transition_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+        }
+    }
+
     pthread_mutex_unlock(&s->lock);
 }
 

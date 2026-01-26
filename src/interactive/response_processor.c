@@ -394,15 +394,12 @@ void process_response(ConversationState *state,
 
         Spinner *tool_spinner = NULL;
         if (!tui && !queue) {
-            char spinner_msg[128];
-            snprintf(spinner_msg, sizeof(spinner_msg), "Running %d tool%s...",
-                     valid_tool_calls, valid_tool_calls == 1 ? "" : "s");
-            tool_spinner = spinner_start(spinner_msg, SPINNER_YELLOW);
+            // Use varied message for spinner in non-TUI mode
+            const char *varied_msg = spinner_random_msg_for_context(SPINNER_CONTEXT_TOOL_RUNNING);
+            tool_spinner = spinner_start(varied_msg, SPINNER_YELLOW);
         } else {
-            char status_msg[128];
-            snprintf(status_msg, sizeof(status_msg), "Running %d tool%s...",
-                     valid_tool_calls, valid_tool_calls == 1 ? "" : "s");
-            ui_set_status(tui, queue, status_msg);
+            // Use varied message for TUI status
+            ui_set_status_varied(tui, queue, SPINNER_CONTEXT_TOOL_RUNNING);
         }
         callback_ctx.spinner = tool_spinner;
 
@@ -831,7 +828,7 @@ void process_response(ConversationState *state,
                 // Use the same color as other status messages to reduce color variance
                 followup_spinner = spinner_start("Processing tool results...", SPINNER_YELLOW);
             } else {
-                ui_set_status(tui, queue, "Processing tool results...");
+                ui_set_status_varied(tui, queue, SPINNER_CONTEXT_PROCESSING);
             }
             next_response = call_api_with_retries(state);
             if (!tui && !queue) {
@@ -881,7 +878,7 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
         return;
     }
 
-    ui_set_status(NULL, ctx->tui_queue, "Waiting for API response...");
+    ui_set_status_varied(NULL, ctx->tui_queue, SPINNER_CONTEXT_API_CALL);
 
     ApiResponse *response = call_api_with_retries(ctx->state);
 

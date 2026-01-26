@@ -24,6 +24,7 @@
 #include "window_manager.h"
 #include "klawed_internal.h"
 #include "persistence.h"
+#include "spinner_effects.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -133,6 +134,11 @@ static void status_spinner_start(TUIState *tui) {
     }
     if (!tui->status_spinner_active) {
         tui->status_spinner_frame = 0;
+        // Initialize spinner effect with pulse
+        tui->status_spinner_effect = spinner_effect_init(SPINNER_EFFECT_PULSE,
+                                                        SPINNER_COLOR_SOLID,
+                                                        get_spinner_color_status(),
+                                                        NULL);
     }
     tui->status_spinner_active = 1;
     tui->status_spinner_last_update_ns = monotonic_time_ns();
@@ -145,6 +151,9 @@ static void status_spinner_stop(TUIState *tui) {
     tui->status_spinner_active = 0;
     tui->status_spinner_frame = 0;
     tui->status_spinner_last_update_ns = 0;
+    tui->status_spinner_spring_initialized = 0;
+    tui->status_spinner_pos = 0.0;
+    tui->status_spinner_vel = 0.0;
 }
 
 // ============================================================================
@@ -176,10 +185,14 @@ void render_status_window(TUIState *tui) {
 
     int col = 0;
 
-    // Prepare status message string (agent status - rightmost)
-    char status_str[256] = {0};
-    int status_str_len = 0;  // Byte length for mvwaddnstr
-    int status_display_width = 0;  // Display width for positioning
+    // Prepare status message components (agent status - rightmost)
+    // Note: We render spinner and text separately to use ncurses colors properly.
+    // ANSI escape codes don't work with ncurses - they get displayed literally.
+    char status_text[256] = {0};  // Status text without spinner
+    char spinner_frame[16] = {0}; // Current spinner frame character
+    int status_text_len = 0;
+    int spinner_frame_len = 0;
+    int status_display_width = 0;
     int has_spinner = 0;
     if (tui->status_visible && tui->status_message && tui->status_message[0] != '\0') {
         if (tui->status_spinner_active) {
@@ -192,23 +205,33 @@ void render_status_window(TUIState *tui) {
             }
             const char *frame = frames[tui->status_spinner_frame % frame_count];
 
+            // Store spinner frame for separate rendering
+            snprintf(spinner_frame, sizeof(spinner_frame), "%s", frame);
+            spinner_frame_len = (int)strlen(spinner_frame);
+            has_spinner = 1;
+
             // When screen is narrow, show only spinner without text
             // to make space for token count and scroll percentage
             if (width < narrow_threshold) {
-                snprintf(status_str, sizeof(status_str), "%s", frame);
+                status_text[0] = '\0';
+                status_text_len = 0;
+                // Display width is just the spinner (1 character typically)
+                status_display_width = utf8_display_width(spinner_frame);
             } else {
-                snprintf(status_str, sizeof(status_str), "%s %s ", frame, tui->status_message);
+                snprintf(status_text, sizeof(status_text), " %s ", tui->status_message);
+                status_text_len = (int)strlen(status_text);
+                // Display width = spinner + space + text
+                status_display_width = utf8_display_width(spinner_frame) + utf8_display_width(status_text);
             }
-            has_spinner = 1;
         } else {
             // When screen is narrow, hide status text entirely
             // to make space for token count and scroll percentage
             if (width >= narrow_threshold) {
-                snprintf(status_str, sizeof(status_str), "%s ", tui->status_message);
+                snprintf(status_text, sizeof(status_text), "%s ", tui->status_message);
+                status_text_len = (int)strlen(status_text);
+                status_display_width = utf8_display_width(status_text);
             }
         }
-        status_str_len = (int)strlen(status_str);
-        status_display_width = utf8_display_width(status_str);
     }
 
     // Prepare plan mode indicator (if enabled) - always visible regardless of mode
@@ -317,13 +340,44 @@ void render_status_window(TUIState *tui) {
     if (status_col < 0) status_col = 0;
 
     // Render status message on the right (rightmost position)
-    if (status_str_len > 0 && status_str_len < width) {
+    // Render spinner and text separately to use ncurses colors properly
+    if (has_spinner && spinner_frame_len > 0) {
+        // Render spinner character with STATUS color (yellow)
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
-        mvwaddnstr(tui->wm.status_win, 0, status_col, status_str, status_str_len);
+        mvwaddnstr(tui->wm.status_win, 0, status_col, spinner_frame, spinner_frame_len);
+        if (has_colors()) {
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+        } else {
+            wattroff(tui->wm.status_win, A_BOLD);
+        }
+
+        // Render status text after spinner (if present)
+        if (status_text_len > 0) {
+            int text_col = status_col + utf8_display_width(spinner_frame);
+            if (has_colors()) {
+                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+            } else {
+                wattron(tui->wm.status_win, A_BOLD);
+            }
+            mvwaddnstr(tui->wm.status_win, 0, text_col, status_text, status_text_len);
+            if (has_colors()) {
+                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+            } else {
+                wattroff(tui->wm.status_win, A_BOLD);
+            }
+        }
+    } else if (status_text_len > 0 && status_display_width < width) {
+        // No spinner, just render status text
+        if (has_colors()) {
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+        } else {
+            wattron(tui->wm.status_win, A_BOLD);
+        }
+        mvwaddnstr(tui->wm.status_win, 0, status_col, status_text, status_text_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
