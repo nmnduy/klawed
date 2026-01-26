@@ -245,6 +245,297 @@ Set either 'headless: true' or use 'xvfb-run <your-playwright-app>' before runni
 xvfb-run web_browse_agent --session test --headless=false open https://example.com
 ```
 
+## Common Errors and Solutions
+
+### Error 1: "Cannot read properties of null"
+
+**Full Error:**
+```
+Error: command failed: failed to evaluate: playwright: TypeError: Cannot read properties of null (reading 'innerText')
+```
+
+**Cause:**
+- CSS selector didn't match any element on the page
+- `querySelector()` returned `null`
+- Attempted to access property on `null` value
+
+**Solution:**
+
+```bash
+# ❌ BAD - throws error if element doesn't exist
+web_browse_agent --session s eval "document.querySelector('.container').innerText"
+
+# ✅ GOOD - use optional chaining (returns undefined if null)
+web_browse_agent --session s eval "document.querySelector('.container')?.innerText"
+
+# ✅ BETTER - check existence first
+web_browse_agent --session s eval "document.querySelector('.container')?.innerText || 'Element not found'"
+
+# ✅ BEST - use guaranteed-to-exist selector
+web_browse_agent --session s eval "document.body.innerText"
+```
+
+**Testing Selectors:**
+```bash
+# Check if element exists before trying to access it
+web_browse_agent --session s eval "!!document.querySelector('.container')"
+# Returns: {"value": true} or {"value": false}
+```
+
+---
+
+### Error 2: "failed to unmarshal session"
+
+**Full Error:**
+```
+Error: failed to get session: failed to load session: failed to unmarshal session: unexpected end of JSON input
+```
+
+**Cause:**
+- Browser session file became corrupted
+- Usually happens after JavaScript errors or rapid navigation
+- Session state was not saved properly
+
+**Solution:**
+
+```bash
+# Clean up corrupted session
+web_browse_agent --session mysession end-session
+
+# Start fresh (next command will create new session)
+web_browse_agent --session mysession open https://example.com
+```
+
+**Prevention:**
+- Always use `wait-for` after navigation before running `eval`
+- Handle JavaScript errors gracefully in eval statements
+- Use `ping` to verify session health before operations
+
+```bash
+# Check session health
+web_browse_agent --session mysession ping
+
+# Get session status
+web_browse_agent --session mysession session-info
+```
+
+---
+
+### Error 3: Empty or Unexpected Output from `eval`
+
+**Problem:**
+- `eval` returns empty string or outdated content
+- JavaScript runs before page fully loads
+
+**Solution:**
+
+```bash
+# ❌ BAD - eval runs before content loads
+web_browse_agent --session s open https://example.com
+web_browse_agent --session s eval "document.body.innerText"  # May be empty!
+
+# ✅ GOOD - wait for body element
+web_browse_agent --session s open https://example.com
+web_browse_agent --session s wait-for "body"
+web_browse_agent --session s eval "document.body.innerText"
+
+# ✅ BETTER - wait for specific content element
+web_browse_agent --session s open https://example.com
+web_browse_agent --session s wait-for "#main-content"
+web_browse_agent --session s eval "document.querySelector('#main-content').innerText"
+
+# ✅ BEST - wait for navigation completion
+web_browse_agent --session s open https://example.com
+web_browse_agent --session s wait-for --wait-type navigation
+web_browse_agent --session s eval "document.body.innerText"
+```
+
+---
+
+## Best Practices & Lessons Learned
+
+### 1. Always Use Safe Selectors
+
+```bash
+# Selector Safety Hierarchy (safest to least safe)
+
+# Level 1: Always exists
+document.body.innerText
+document.documentElement.outerHTML
+document.title
+
+# Level 2: Safe with optional chaining
+document.querySelector('.container')?.innerText
+document.querySelector('#main')?.textContent || 'Not found'
+
+# Level 3: Requires existence check
+if (document.querySelector('.item')) {
+  document.querySelector('.item').innerText
+}
+
+# Level 4: Dangerous - will throw if element doesn't exist
+document.querySelector('.container').innerText  // ❌ DON'T USE
+```
+
+---
+
+### 2. Verify Session Health
+
+```bash
+# Check session before critical operations
+if web_browse_agent --session s ping &>/dev/null; then
+    web_browse_agent --session s eval "document.body.innerText"
+else
+    echo "Session unhealthy, restarting..."
+    web_browse_agent --session s end-session
+    web_browse_agent --session s open https://example.com
+fi
+```
+
+---
+
+### 3. Wait Properly After Navigation
+
+```bash
+# Pattern 1: Wait for specific content (RECOMMENDED)
+web_browse_agent --session s open https://example.com
+web_browse_agent --session s wait-for "#content-loaded"  # Wait for actual content
+web_browse_agent --session s eval "document.querySelector('#content-loaded').innerText"
+
+# Pattern 2: Wait for body (basic)
+web_browse_agent --session s open https://example.com
+web_browse_agent --session s wait-for "body"
+web_browse_agent --session s eval "document.body.innerText"
+
+# Pattern 3: Wait for navigation event (comprehensive)
+web_browse_agent --session s open https://example.com
+web_browse_agent --session s wait-for --wait-type navigation
+web_browse_agent --session s eval "document.body.innerText"
+```
+
+---
+
+### 4. Handle Errors Gracefully in Scripts
+
+```bash
+#!/bin/bash
+# Robust web scraping script
+
+SESSION="scraper"
+
+# Function to clean up on exit
+cleanup() {
+    web_browse_agent --session "$SESSION" end-session 2>/dev/null
+}
+trap cleanup EXIT
+
+# Navigate with error handling
+if ! web_browse_agent --session "$SESSION" open https://example.com; then
+    echo "Failed to open URL"
+    exit 1
+fi
+
+# Wait for content
+if ! web_browse_agent --session "$SESSION" wait-for "body"; then
+    echo "Content didn't load in time"
+    exit 1
+fi
+
+# Extract with safe selector
+CONTENT=$(web_browse_agent --session "$SESSION" --json eval \
+    "document.body?.innerText || 'No content found'" 2>&1)
+
+if [ $? -ne 0 ]; then
+    echo "Evaluation failed: $CONTENT"
+    exit 1
+fi
+
+echo "$CONTENT" | jq -r '.value'
+```
+
+---
+
+### 5. Test Selectors Before Complex Operations
+
+```bash
+# Step 1: Test if element exists
+EXISTS=$(web_browse_agent --session s --json eval \
+    "!!document.querySelector('.target-class')")
+
+if [ "$(echo "$EXISTS" | jq -r '.value')" = "true" ]; then
+    # Step 2: Extract content safely
+    web_browse_agent --session s eval "document.querySelector('.target-class').innerText"
+else
+    echo "Element .target-class not found on page"
+fi
+```
+
+---
+
+### 6. Use Consistent Workflow Pattern
+
+This pattern avoids most common errors:
+
+```bash
+#!/bin/bash
+# Reliable web content extraction pattern
+
+SESSION="docs"
+URL="https://example.com/documentation"
+
+# 1. Start session and navigate
+web_browse_agent --session "$SESSION" open "$URL"
+
+# 2. Wait for content (use specific selector when possible)
+web_browse_agent --session "$SESSION" wait-for "body"
+
+# 3. Extract with safest selector possible
+CONTENT=$(web_browse_agent --session "$SESSION" --json eval \
+    "document.body.innerText.substring(0, 8000)")
+
+# 4. Parse JSON output
+echo "$CONTENT" | jq -r '.value'
+
+# 5. Clean up when done
+web_browse_agent --session "$SESSION" end-session
+```
+
+---
+
+### 7. Debug with Verbose Output
+
+```bash
+# Add --verbose flag to see what's happening
+web_browse_agent --session debug --verbose open https://example.com
+web_browse_agent --session debug --verbose wait-for "body"
+web_browse_agent --session debug --verbose eval "document.title"
+```
+
+---
+
+### 8. Common Pitfall: Session Timeout
+
+Sessions have a default 5-minute idle timeout. For long-running operations:
+
+```bash
+# Set longer timeout
+export WEB_AGENT_IDLE_TIMEOUT=1800  # 30 minutes
+
+# Or keep session alive with periodic ping
+while true; do
+    web_browse_agent --session long-lived ping
+    sleep 240  # Ping every 4 minutes
+done &
+PING_PID=$!
+
+# Your long operations here...
+
+# Stop keepalive
+kill $PING_PID
+```
+
+---
+
 ## Tips
 
 1. **Use JSON output** for programmatic parsing: `--json`
@@ -253,3 +544,7 @@ xvfb-run web_browse_agent --session test --headless=false open https://example.c
 4. **Use `eval`** for complex data extraction that simple commands can't handle
 5. **Set viewport** before screenshots for consistent dimensions
 6. **Set DISPLAY** when using `--headless=false` to see the browser window
+7. **Always use safe selectors** - prefer `document.body` or optional chaining (`?.`)
+8. **Check session health** with `ping` before critical operations
+9. **Clean up sessions** with `end-session` when encountering corruption errors
+10. **Test selectors first** with `!!document.querySelector()` before extraction

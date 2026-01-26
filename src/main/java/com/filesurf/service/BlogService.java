@@ -425,7 +425,12 @@ public class BlogService {
 
     /**
      * Generate structured data (JSON-LD) for a blog post
+     * 
+     * @deprecated This method is no longer used. Structured data is now generated
+     *             client-side in blogPost.js to avoid Qute template escaping issues.
+     *             Kept for reference/backwards compatibility.
      */
+    @Deprecated
     public String generateStructuredData(BlogPost post) {
         StringBuilder sb = new StringBuilder();
         sb.append("{");

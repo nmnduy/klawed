@@ -65,6 +65,12 @@ See `docs/JS_CONVENTIONS.md` for full details. Key points:
 - Run `npm run check:js` to validate JavaScript files manually
 - Run `npm run build` to validate conventions automatically
 
+### Qute Template Best Practices
+
+**CRITICAL**: Keep Qute templates as **pure HTML structure only**. Qute auto-escapes all output for XSS protection, which breaks JSON and JavaScript when embedded in templates (e.g., `"{title}"` becomes `"&quot;title&quot;"` causing invalid JSON). **Solution**: Use the 3-step pattern: (1) **Java**: Serialize data with Jackson → `String json = OBJECT_MAPPER.writeValueAsString(data)`, (2) **Template**: Pass JSON → `<script>window.__DATA__ = {json.raw};</script>`, (3) **JavaScript**: Generate logic → `const data = window.__DATA__; // use it`. This prevents escaping issues, enables proper testing, and maintains clean separation. See `docs/CLIENT_SIDE_STRUCTURED_DATA.md` for examples.
+
+**When to use Qute**: ✅ Conditional HTML (`{#if}`), loops (`{#for}`), includes (`{#include}`), simple text (`{variable}`). **Never use for**: ❌ Building JSON objects, generating JavaScript code, complex logic. **Quick example**: BAD: `<script>const x = "{value}";</script>` (escaping breaks it), GOOD: `<script>window.__DATA__ = {jsonData.raw};</script><script defer src="app.js"></script>` (JS file contains logic).
+
 ### Klawed Communication Mode
 FileSurf v2 uses SQLite queue mode for communication with klawed agents:
 

@@ -29,6 +29,14 @@
     </script>
     <link rel="stylesheet" href="{cssPath}">
     <script type="module" src="{inject:jsHelper.path('darkMode')}"></script>
+    <script defer src="{inject:jsHelper.path('blogPost')}"></script>
+    
+    <!-- Pass blog post data to JavaScript for structured data generation -->
+    <!-- Data is JSON-encoded server-side to prevent XSS and escaping issues -->
+    <script>
+        window.__BLOG_POST_DATA__ = {blogPostDataJson.raw};
+    </script>
+    
     {#if post.featuredImageUrl}
     <meta property="og:image" content="{siteUrl}{post.featuredImageUrl}" />
     {/if}
@@ -47,9 +55,6 @@
     <meta name="keywords" content="{keywords}" />
     {/if}
     <link rel="canonical" href="{canonicalUrl}" />
-    {#if structuredData}
-    <script type="application/ld+json">{structuredData}</script>
-    {/if}
 </head>
 <body class="bg-background min-h-screen">
     <!-- Header -->
