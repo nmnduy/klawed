@@ -13,7 +13,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 public class LandingPageResource {
 
     @Inject
-    Template landing;
+    Template index;
 
     @Inject
     Template pricingSuccess;
@@ -28,13 +28,12 @@ public class LandingPageResource {
     String cssPath;
 
     /**
-     * Landing page with pricing section
+     * Landing page (index.html)
      */
     @GET
     public TemplateInstance getLandingPage() {
-        return landing
-                .data("cssPath", cssPath)
-                .data("stripePublicKey", stripeService.getPublicKey());
+        return index
+                .data("cssPath", cssPath);
     }
 
     /**
