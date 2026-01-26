@@ -204,6 +204,9 @@ int cmd_provider(ConversationState *state, const char *args) {
         config_init_defaults(&config);
     }
 
+    LOG_DEBUG("[Provider Command] cmd_provider called with args='%s', active_provider='%s', provider_count=%d",
+              args, config.active_provider[0] ? config.active_provider : "(not set)", config.provider_count);
+
     // Trim leading whitespace from args
     while (*args == ' ' || *args == '\t') args++;
 
@@ -215,10 +218,13 @@ int cmd_provider(ConversationState *state, const char *args) {
 
         // Check if we have an active provider from config
         if (config.active_provider[0] != '\0') {
+            LOG_DEBUG("[Provider Command] Found active_provider in config: '%s'", config.active_provider);
             const NamedProviderConfig *named_provider = config_find_provider(&config, config.active_provider);
             if (named_provider) {
                 current_provider_name = config.active_provider;
                 current_provider_config = &named_provider->config;
+            } else {
+                LOG_WARN("[Provider Command] active_provider '%s' not found in providers", config.active_provider);
             }
         } else if (config.llm_provider.model[0] != '\0') {
             // Check legacy llm_provider configuration
@@ -317,7 +323,9 @@ int cmd_provider(ConversationState *state, const char *args) {
     }
 
     // Update active provider in config
+    LOG_INFO("[Provider Command] Setting active_provider to '%s'", args);
     strlcpy(config.active_provider, args, sizeof(config.active_provider));
+    LOG_DEBUG("[Provider Command] active_provider is now '%s'", config.active_provider);
 
     // Save the configuration
     if (config_save(&config) != 0) {
@@ -325,8 +333,11 @@ int cmd_provider(ConversationState *state, const char *args) {
             tui_update_status(state->tui, "Failed to save provider configuration");
         }
         fprintf(stderr, "Error: Failed to save provider configuration\n");
+        LOG_ERROR("[Provider Command] Failed to save config with active_provider='%s'", args);
         return -1;
     }
+
+    LOG_INFO("[Provider Command] Configuration saved with active_provider='%s'", config.active_provider);
 
     // Also switch provider for the current session
     int session_switch_result = switch_provider_for_session(state, args);

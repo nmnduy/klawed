@@ -182,7 +182,7 @@ static void test_api_key_env_priority(void) {
     // Clear OPENAI_API_KEY to test api_key_env priority
     const char *old_openai_key = getenv("OPENAI_API_KEY");
     unsetenv("OPENAI_API_KEY");
-    
+
     // Set up environment variable
     setenv("TEST_PRIORITY_KEY", "sk-env-priority-key", 1);
 
@@ -203,7 +203,7 @@ static void test_api_key_env_priority(void) {
 
     cleanup_result(&result);
     unsetenv("TEST_PRIORITY_KEY");
-    
+
     // Restore OPENAI_API_KEY
     if (old_openai_key) {
         setenv("OPENAI_API_KEY", old_openai_key, 1);

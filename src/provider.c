@@ -87,32 +87,46 @@ void provider_log_config(const char *context,
  */
 static const LLMProviderConfig* get_provider_config_to_use(const KlawedConfig *config) {
     if (!config) {
+        LOG_DEBUG("[Provider] get_provider_config_to_use: config is NULL");
         return NULL;
     }
+
+    LOG_DEBUG("[Provider] get_provider_config_to_use: active_provider='%s', provider_count=%d",
+              config->active_provider[0] ? config->active_provider : "(not set)",
+              config->provider_count);
 
     // Check if a specific provider is requested via environment variable
     const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
     if (env_provider && env_provider[0] != '\0') {
+        LOG_DEBUG("[Provider] KLAWED_LLM_PROVIDER is set to '%s'", env_provider);
         const NamedProviderConfig *named_provider = config_find_provider(config, env_provider);
         if (named_provider) {
-            LOG_DEBUG("[Provider] Using provider '%s' from KLAWED_LLM_PROVIDER environment variable", env_provider);
+            LOG_INFO("[Provider] Selected provider from KLAWED_LLM_PROVIDER: '%s'", env_provider);
             return &named_provider->config;
         } else {
-            LOG_WARN("[Provider] Provider '%s' not found in configuration, falling back to default", env_provider);
+            LOG_WARN("[Provider] Provider '%s' from KLAWED_LLM_PROVIDER not found in configuration, falling back", env_provider);
             // Note: This warning also appears in provider_validate_env() as an error
             // The warning is kept here for backwards compatibility in case provider_validate_env() is not called
         }
+    } else {
+        LOG_DEBUG("[Provider] KLAWED_LLM_PROVIDER is not set");
     }
 
     // Check for active provider in config
     const NamedProviderConfig *active_provider = config_get_active_provider(config);
     if (active_provider) {
-        LOG_DEBUG("[Provider] Using active provider '%s'", config->active_provider);
+        LOG_INFO("[Provider] Selected active provider from config: '%s'", config->active_provider);
         return &active_provider->config;
     }
 
+    LOG_DEBUG("[Provider] No active provider found, checking legacy configuration");
     // Fall back to legacy llm_provider configuration
-    LOG_DEBUG("[Provider] Using legacy llm_provider configuration");
+    if (config->llm_provider.model[0] != '\0') {
+        LOG_INFO("[Provider] Using legacy llm_provider configuration");
+        return NULL;
+    }
+
+    LOG_WARN("[Provider] No provider configuration found at all!");
     return NULL;
 }
 
@@ -405,9 +419,17 @@ void provider_init(const char *model,
     get_provider_config(arena, &effective_config, &config_model, &config_api_key,
                         &config_api_base, &config_use_bedrock, &api_key_source, &provider_name);
 
+    LOG_DEBUG("[Provider Init] Loaded config: active_provider='%s', provider_count=%d, legacy model='%s'",
+              effective_config.active_provider[0] ? effective_config.active_provider : "(not set)",
+              effective_config.provider_count,
+              effective_config.llm_provider.model[0] ? effective_config.llm_provider.model : "(not set)");
+
     // Get the provider configuration to use for provider type
     const LLMProviderConfig *provider_config = get_provider_config_to_use(&effective_config);
     LLMProviderType provider_type = provider_config ? provider_config->provider_type : effective_config.llm_provider.provider_type;
+
+    LOG_DEBUG("[Provider Init] Selected provider_config=%s, provider_type=%d",
+              provider_config ? provider_config->provider_name : "(NULL)", provider_type);
 
     // Determine which model to use (priority: passed parameter > config file > env var)
     char *model_to_use = NULL;

@@ -385,7 +385,9 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
     cJSON *active_provider_item = cJSON_GetObjectItem(root, "active_provider");
     if (active_provider_item && cJSON_IsString(active_provider_item) && active_provider_item->valuestring) {
         strlcpy(config->active_provider, active_provider_item->valuestring, CONFIG_PROVIDER_KEY_MAX);
-        LOG_DEBUG("[Config] Loaded active_provider from %s: %s", label, config->active_provider);
+        LOG_DEBUG("[Config] Loaded active_provider from %s: '%s'", label, config->active_provider);
+    } else {
+        LOG_DEBUG("[Config] No active_provider found in %s config", label);
     }
 
     cJSON_Delete(root);
@@ -639,12 +641,15 @@ int config_save(const KlawedConfig *config) {
 
     // Save active provider (if set)
     if (config->active_provider[0] != '\0') {
+        LOG_DEBUG("[Config] config_save: saving active_provider='%s'", config->active_provider);
         cJSON *existing_active = cJSON_GetObjectItem(root, "active_provider");
         if (existing_active) {
             cJSON_SetValuestring(existing_active, config->active_provider);
         } else {
             cJSON_AddStringToObject(root, "active_provider", config->active_provider);
         }
+    } else {
+        LOG_DEBUG("[Config] config_save: active_provider is empty, not saving");
     }
 
     // Write to file
@@ -711,24 +716,45 @@ LLMProviderType config_provider_type_from_string(const char *str) {
 
 const NamedProviderConfig* config_find_provider(const KlawedConfig *config, const char *key) {
     if (!config || !key || key[0] == '\0') {
+        LOG_DEBUG("[Config] config_find_provider: NULL config or NULL/empty key");
         return NULL;
     }
 
+    LOG_DEBUG("[Config] config_find_provider: looking for key='%s' in %d providers",
+              key, config->provider_count);
+
     for (int i = 0; i < config->provider_count; i++) {
+        LOG_DEBUG("[Config] config_find_provider: checking provider[%d].key='%s'", i, config->providers[i].key);
         if (strcmp(config->providers[i].key, key) == 0) {
+            LOG_DEBUG("[Config] config_find_provider: found match at index %d", i);
             return &config->providers[i];
         }
     }
 
+    LOG_WARN("[Config] config_find_provider: key='%s' not found in any provider", key);
     return NULL;
 }
 
 const NamedProviderConfig* config_get_active_provider(const KlawedConfig *config) {
-    if (!config || config->active_provider[0] == '\0') {
+    if (!config) {
+        LOG_DEBUG("[Config] config_get_active_provider: config is NULL");
         return NULL;
     }
 
-    return config_find_provider(config, config->active_provider);
+    if (config->active_provider[0] == '\0') {
+        LOG_DEBUG("[Config] config_get_active_provider: active_provider is not set (empty string)");
+        return NULL;
+    }
+
+    LOG_DEBUG("[Config] config_get_active_provider: looking for provider '%s'", config->active_provider);
+    const NamedProviderConfig *provider = config_find_provider(config, config->active_provider);
+    if (provider) {
+        LOG_DEBUG("[Config] config_get_active_provider: found provider '%s'", config->active_provider);
+    } else {
+        LOG_WARN("[Config] config_get_active_provider: provider '%s' not found in config providers", config->active_provider);
+    }
+
+    return provider;
 }
 
 int config_set_provider(KlawedConfig *config, const char *key, const LLMProviderConfig *provider_config) {
