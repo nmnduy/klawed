@@ -20,6 +20,10 @@ class FilePanelResize {
         this.STORAGE_KEY_WIDTH = 'filesurf-file-panel-width';
         this.STORAGE_KEY_COLLAPSED = 'filesurf-file-panel-collapsed';
 
+        // Bound methods (to maintain correct 'this' and allow proper event listener removal)
+        this.boundHandleResize = this.handleResize.bind(this);
+        this.boundStopResize = this.stopResize.bind(this);
+
         // Initialize
         this.init();
     }
@@ -72,8 +76,8 @@ class FilePanelResize {
         document.body.style.userSelect = 'none';
 
         // Add event listeners for mousemove and mouseup
-        document.addEventListener('mousemove', this.handleResize.bind(this));
-        document.addEventListener('mouseup', this.stopResize.bind(this));
+        document.addEventListener('mousemove', this.boundHandleResize);
+        document.addEventListener('mouseup', this.boundStopResize);
 
         e.preventDefault();
     }
@@ -107,8 +111,8 @@ class FilePanelResize {
         document.body.style.userSelect = '';
 
         // Remove event listeners
-        document.removeEventListener('mousemove', this.handleResize.bind(this));
-        document.removeEventListener('mouseup', this.stopResize.bind(this));
+        document.removeEventListener('mousemove', this.boundHandleResize);
+        document.removeEventListener('mouseup', this.boundStopResize);
 
         // Save width to localStorage
         try {
