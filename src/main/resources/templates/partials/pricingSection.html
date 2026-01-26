@@ -1,0 +1,179 @@
+<!-- Pricing Section -->
+<section id="pricing" class="py-16 px-4 sm:px-6 lg:px-8 bg-layout-surface">
+    <div class="max-w-7xl mx-auto">
+        <div class="text-center mb-12">
+            <p class="text-body-s text-layout-content-medium uppercase tracking-wide">Simple, Transparent Pricing</p>
+            <h2 class="text-display-s text-layout-emphasis-high mt-3 mb-4">Choose the plan that fits your needs</h2>
+            <p class="text-body-l text-layout-content-medium">All plans include data privacy, secure sandboxed compute, and AI-powered workflows</p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            <!-- Basic Plan -->
+            <div class="rounded-2xl border-2 border-border bg-card hover:border-primary/50 transition-all duration-200 p-8 flex flex-col">
+                <div class="text-center mb-8">
+                    <h3 class="text-h3-headline-m text-layout-emphasis-high mb-2">Basic</h3>
+                    <div class="flex items-baseline justify-center mb-2">
+                        <span class="text-display-m text-layout-emphasis-high">$99</span>
+                        <span class="text-h4-headline-s text-layout-content-medium">.99</span>
+                    </div>
+                    <p class="text-body-m text-layout-content-medium">per month</p>
+                </div>
+                
+                <ul class="space-y-4 mb-8 flex-grow">
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Limited use of heavy models</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Fallback to Cerebras models</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Shared secured sandboxed compute</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Data privacy</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">500GB storage</span>
+                    </li>
+                </ul>
+
+                <button onclick="selectPlan('basic', 'price_basic_monthly')" 
+                        class="w-full px-6 py-3 text-body-l font-semibold text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg transition-all duration-200">
+                    Get Started
+                </button>
+            </div>
+
+            <!-- Professional Plan (Popular) -->
+            <div class="rounded-2xl border-2 border-primary bg-gradient-to-br from-primary/5 to-accent/5 transform md:scale-105 shadow-xl relative p-8 flex flex-col">
+                <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                    <span class="bg-accent text-accent-foreground text-body-s font-bold px-4 py-1 rounded-full shadow-md">
+                        POPULAR
+                    </span>
+                </div>
+                
+                <div class="text-center mb-8">
+                    <h3 class="text-h3-headline-m text-layout-emphasis-high mb-2">Professional</h3>
+                    <div class="flex items-baseline justify-center mb-2">
+                        <span class="text-display-m text-layout-emphasis-high">$299</span>
+                        <span class="text-h4-headline-s text-layout-content-medium">.99</span>
+                    </div>
+                    <p class="text-body-m text-layout-content-medium">per month</p>
+                </div>
+                
+                <ul class="space-y-4 mb-8 flex-grow">
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Higher limit on heavy models</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Fallback to Cerebras models</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Shared secured sandboxed compute</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Data privacy</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">2TB storage</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-semantic-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Priority support</span>
+                    </li>
+                </ul>
+
+                <button onclick="selectPlan('pro', 'price_pro_monthly')" 
+                        class="w-full px-6 py-3 text-body-l font-semibold text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-200">
+                    Get Started
+                </button>
+            </div>
+
+            <!-- Enterprise Plan -->
+            <div class="rounded-2xl border-2 border-border bg-card hover:border-accent/50 transition-all duration-200 p-8 flex flex-col">
+                <div class="text-center mb-8">
+                    <h3 class="text-h3-headline-m text-layout-emphasis-high mb-2">Enterprise</h3>
+                    <div class="flex items-baseline justify-center mb-2">
+                        <span class="text-display-s text-layout-emphasis-high">Custom</span>
+                    </div>
+                    <p class="text-body-m text-layout-content-medium">Talk to sales</p>
+                </div>
+                
+                <ul class="space-y-4 mb-8 flex-grow">
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Unlimited highest quality models</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Data privacy</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Dedicated cloud compute nodes</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Unlimited storage</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">Dedicated support team</span>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-accent flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-body-m text-layout-content-medium">99.9% uptime SLA</span>
+                    </li>
+                </ul>
+
+                <button onclick="contactSales()" 
+                        class="w-full px-6 py-3 text-body-l font-semibold text-foreground bg-background border-2 border-border rounded-lg hover:bg-muted hover:border-accent/50 shadow-inner transition-all duration-200">
+                    Contact Sales
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
