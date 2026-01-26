@@ -35,7 +35,8 @@ public class LandingPageResource {
     public TemplateInstance getLandingPage() {
         return index
                 .data("cssPath", cssVersionProvider.getCssPath())
-                .data("currentYear", Year.now().getValue());
+                .data("currentYear", Year.now().getValue())
+                .data("stripePublicKey", stripeService.getPublicKey());
     }
 
     /**
