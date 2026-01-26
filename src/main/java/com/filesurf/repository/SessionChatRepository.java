@@ -6,7 +6,7 @@ import com.filesurf.model.ChatConstants;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.sql.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -47,7 +47,7 @@ public class SessionChatRepository {
                     ps.setString(2, receiver);
                     ps.setString(3, content);
                     ps.setString(4, messageType);
-                    ps.setTimestamp(5, Timestamp.valueOf(LocalDateTime.now()));
+                    ps.setLong(5, Instant.now().getEpochSecond());
                     ps.executeUpdate();
 
                     // Get generated ID
@@ -213,7 +213,7 @@ public class SessionChatRepository {
             sessionSQLiteManager.execute(sessionId, conn -> {
                 try (PreparedStatement ps = conn.prepareStatement(
                     "UPDATE chat_message SET sent = TRUE, sent_at = ? WHERE id = ?")) {
-                    ps.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
+                    ps.setLong(1, Instant.now().getEpochSecond());
                     ps.setLong(2, messageId);
                     ps.executeUpdate();
                 }

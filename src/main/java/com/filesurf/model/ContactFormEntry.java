@@ -2,7 +2,9 @@ package com.filesurf.model;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 public class ContactFormEntry {
     private Long id;
@@ -22,12 +24,19 @@ public class ContactFormEntry {
     }
 
     public static ContactFormEntry fromResultSet(ResultSet rs) throws SQLException {
+        long seconds = rs.getLong("created_at");
+        LocalDateTime createdAt = null;
+        if (!rs.wasNull()) {
+            createdAt = LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(seconds), ZoneId.systemDefault());
+        }
+        
         return new ContactFormEntry(
                 rs.getLong("id"),
                 rs.getString("email"),
                 rs.getString("company"),
                 rs.getString("message"),
-                rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null
+                createdAt
         );
     }
 

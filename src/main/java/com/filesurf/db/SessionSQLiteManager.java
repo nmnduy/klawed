@@ -82,8 +82,8 @@ public class SessionSQLiteManager {
                     content TEXT NOT NULL,
                     message_type TEXT,
                     sent BOOLEAN NOT NULL DEFAULT FALSE,
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    sent_at TIMESTAMP
+                    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                    sent_at INTEGER
                 )
             """);
 

@@ -77,7 +77,7 @@ public class FeedbackDatabaseManager {
                         user_email TEXT NOT NULL,
                         error_details TEXT,
                         environment TEXT,
-                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
                     )
                 """);
 

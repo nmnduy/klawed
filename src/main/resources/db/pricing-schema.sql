@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS pricing_plans (
     plan_name TEXT NOT NULL,         -- 'Basic', 'Professional', 'Enterprise'
     price_cents INTEGER NOT NULL,    -- 9999, 29999, or -1 for contact sales
     description TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 
 -- Plan features (what each plan includes)
@@ -30,10 +30,10 @@ CREATE TABLE IF NOT EXISTS user_subscriptions (
     status TEXT NOT NULL DEFAULT 'active',  -- active, cancelled, expired, trial
     stripe_customer_id TEXT,         -- Stripe customer ID
     stripe_subscription_id TEXT,     -- Stripe subscription ID
-    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP,            -- NULL for active subscriptions
-    trial_ends_at TIMESTAMP,         -- For trial period tracking
-    cancelled_at TIMESTAMP,
+    started_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    expires_at INTEGER,            -- NULL for active subscriptions
+    trial_ends_at INTEGER,         -- For trial period tracking
+    cancelled_at INTEGER,
     cancellation_reason TEXT,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     FOREIGN KEY (plan_code) REFERENCES pricing_plans(plan_code)
@@ -43,13 +43,13 @@ CREATE TABLE IF NOT EXISTS user_subscriptions (
 CREATE TABLE IF NOT EXISTS user_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
-    period_start TIMESTAMP NOT NULL,  -- Start of billing period
-    period_end TIMESTAMP NOT NULL,    -- End of billing period
+    period_start INTEGER NOT NULL,  -- Start of billing period
+    period_end INTEGER NOT NULL,    -- End of billing period
     heavy_model_requests INTEGER DEFAULT 0,
     cerebras_requests INTEGER DEFAULT 0,
     storage_bytes INTEGER DEFAULT 0,
     compute_minutes INTEGER DEFAULT 0,
-    last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_updated INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     UNIQUE(user_id, period_start)
 );

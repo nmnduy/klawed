@@ -2,8 +2,9 @@ package com.filesurf.model;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 /**
  * Record representing a user in the system.
@@ -35,14 +36,16 @@ public class UserRecord {
         record.setUserId(rs.getString("user_id"));
         record.setEmail(rs.getString("email"));
 
-        Timestamp createdTs = rs.getTimestamp("created_at");
-        if (createdTs != null) {
-            record.setCreatedAt(createdTs.toLocalDateTime());
+        long createdAtSeconds = rs.getLong("created_at");
+        if (!rs.wasNull()) {
+            record.setCreatedAt(LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(createdAtSeconds), ZoneId.systemDefault()));
         }
 
-        Timestamp lastLoginTs = rs.getTimestamp("last_login_at");
-        if (lastLoginTs != null) {
-            record.setLastLoginAt(lastLoginTs.toLocalDateTime());
+        long lastLoginSeconds = rs.getLong("last_login_at");
+        if (!rs.wasNull()) {
+            record.setLastLoginAt(LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(lastLoginSeconds), ZoneId.systemDefault()));
         }
 
         record.setActive(rs.getBoolean("is_active"));

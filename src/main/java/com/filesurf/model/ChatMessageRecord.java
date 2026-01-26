@@ -1,6 +1,8 @@
 package com.filesurf.model;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 public class ChatMessageRecord {
     private Long id;
@@ -62,6 +64,20 @@ public class ChatMessageRecord {
      * Session ID is passed explicitly since it's implicit in the database filename.
      */
     public static ChatMessageRecord fromResultSetWithSessionId(java.sql.ResultSet rs, String sessionId) throws java.sql.SQLException {
+        LocalDateTime createdAt = null;
+        long createdAtSeconds = rs.getLong("created_at");
+        if (!rs.wasNull()) {
+            createdAt = LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(createdAtSeconds), ZoneId.systemDefault());
+        }
+        
+        LocalDateTime sentAt = null;
+        long sentAtSeconds = rs.getLong("sent_at");
+        if (!rs.wasNull()) {
+            sentAt = LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(sentAtSeconds), ZoneId.systemDefault());
+        }
+        
         return new ChatMessageRecord(
             rs.getLong("id"),
             sessionId,
@@ -70,8 +86,8 @@ public class ChatMessageRecord {
             rs.getString("content"),
             rs.getString("message_type"),
             rs.getBoolean("sent"),
-            rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
-            rs.getTimestamp("sent_at") != null ? rs.getTimestamp("sent_at").toLocalDateTime() : null
+            createdAt,
+            sentAt
         );
     }
 
@@ -81,6 +97,20 @@ public class ChatMessageRecord {
      */
     @Deprecated
     public static ChatMessageRecord fromResultSet(java.sql.ResultSet rs) throws java.sql.SQLException {
+        LocalDateTime createdAt = null;
+        long createdAtSeconds = rs.getLong("created_at");
+        if (!rs.wasNull()) {
+            createdAt = LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(createdAtSeconds), ZoneId.systemDefault());
+        }
+        
+        LocalDateTime sentAt = null;
+        long sentAtSeconds = rs.getLong("sent_at");
+        if (!rs.wasNull()) {
+            sentAt = LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(sentAtSeconds), ZoneId.systemDefault());
+        }
+        
         return new ChatMessageRecord(
             rs.getLong("id"),
             rs.getString("session_string_id"),
@@ -89,8 +119,8 @@ public class ChatMessageRecord {
             rs.getString("content"),
             rs.getString("message_type"),
             rs.getBoolean("sent"),
-            rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
-            rs.getTimestamp("sent_at") != null ? rs.getTimestamp("sent_at").toLocalDateTime() : null
+            createdAt,
+            sentAt
         );
     }
 }
