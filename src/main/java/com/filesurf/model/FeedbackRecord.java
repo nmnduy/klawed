@@ -2,8 +2,9 @@ package com.filesurf.model;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 /**
  * Record representing user feedback in the system.
@@ -47,9 +48,10 @@ public class FeedbackRecord {
         record.setErrorDetails(rs.getString("error_details"));
         record.setEnvironment(rs.getString("environment"));
 
-        Timestamp createdTs = rs.getTimestamp("created_at");
-        if (createdTs != null) {
-            record.setCreatedAt(createdTs.toLocalDateTime());
+        long seconds = rs.getLong("created_at");
+        if (!rs.wasNull()) {
+            record.setCreatedAt(LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(seconds), ZoneId.systemDefault()));
         }
 
         return record;

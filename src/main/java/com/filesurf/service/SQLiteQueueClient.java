@@ -135,7 +135,7 @@ public class SQLiteQueueClient {
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final AtomicInteger messagesSent = new AtomicInteger(0);
     private final AtomicInteger messagesReceived = new AtomicInteger(0);
-    private final AtomicLong lastActivityTime = new AtomicLong(System.currentTimeMillis());
+    private final AtomicLong lastActivityTime = new AtomicLong(java.time.Instant.now().getEpochSecond());
 
     // Thread pool for async operations
     private final ExecutorService executorService = Executors.newCachedThreadPool();
@@ -309,7 +309,7 @@ public class SQLiteQueueClient {
             pstmt.executeUpdate();
 
             messagesSent.incrementAndGet();
-            lastActivityTime.set(System.currentTimeMillis());
+            lastActivityTime.set(java.time.Instant.now().getEpochSecond());
 
             LOGGER.info("Message sent from " + sender + " to " + receiver + " (length: " + message.length() + " chars)");
         } catch (SQLException e) {
@@ -353,7 +353,7 @@ public class SQLiteQueueClient {
             pstmt.executeUpdate();
 
             messagesSent.incrementAndGet();
-            lastActivityTime.set(System.currentTimeMillis());
+            lastActivityTime.set(java.time.Instant.now().getEpochSecond());
 
             LOGGER.info("Message sent to " + receiver + " (length: " + message.length() + " chars)");
         } catch (SQLException e) {
@@ -639,7 +639,7 @@ public class SQLiteQueueClient {
                             // Acknowledge message
                             acknowledgeMessage(messageId);
                             messagesReceived.incrementAndGet();
-                            lastActivityTime.set(System.currentTimeMillis());
+                            lastActivityTime.set(java.time.Instant.now().getEpochSecond());
 
                         } catch (Exception e) {
                             LOGGER.warning("Failed to parse message JSON: " + e.getMessage());

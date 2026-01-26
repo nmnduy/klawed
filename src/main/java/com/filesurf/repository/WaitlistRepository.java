@@ -6,7 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.sql.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.logging.Logger;
 
 @ApplicationScoped
@@ -26,8 +26,8 @@ public class WaitlistRepository {
                             email TEXT NOT NULL UNIQUE,
                             name TEXT,
                             use_case TEXT,
-                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                            updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
                         )
                     """);
                     stmt.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_email ON waitlist(email)");
@@ -76,12 +76,12 @@ public class WaitlistRepository {
                 try (PreparedStatement ps = conn.prepareStatement(
                         "INSERT INTO waitlist (email, name, use_case, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
                         Statement.RETURN_GENERATED_KEYS)) {
-                    LocalDateTime now = LocalDateTime.now();
+                    long now = Instant.now().getEpochSecond();
                     ps.setString(1, email.toLowerCase().trim());
                     ps.setString(2, name != null ? name.trim() : null);
                     ps.setString(3, useCase != null ? useCase.trim() : null);
-                    ps.setTimestamp(4, Timestamp.valueOf(now));
-                    ps.setTimestamp(5, Timestamp.valueOf(now));
+                    ps.setLong(4, now);
+                    ps.setLong(5, now);
                     ps.executeUpdate();
 
                     try (ResultSet rs = ps.getGeneratedKeys()) {

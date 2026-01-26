@@ -138,8 +138,7 @@ public class KlawedSocketMessage {
         if (estimatedDurationMs != null) {
             apiCallMessage.put("estimatedDurationMs", estimatedDurationMs);
         }
-        apiCallMessage.put("timestamp", System.currentTimeMillis() / 1000);
-        apiCallMessage.put("timestampMs", System.currentTimeMillis());
+        apiCallMessage.put("timestamp", java.time.Instant.now().getEpochSecond());
         return create(SQLiteQueueConstants.MESSAGE_TYPE_API_CALL, apiCallMessage);
     }
 
