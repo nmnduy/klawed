@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import java.time.Year;
 
 @Path("/")
 @Produces(MediaType.TEXT_HTML)
@@ -33,7 +34,8 @@ public class LandingPageResource {
     @GET
     public TemplateInstance getLandingPage() {
         return index
-                .data("cssPath", cssPath);
+                .data("cssPath", cssPath)
+                .data("currentYear", Year.now().getValue());
     }
 
     /**
