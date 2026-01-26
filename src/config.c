@@ -441,7 +441,13 @@ int config_save(const KlawedConfig *config) {
         return -1;
     }
 
-    // Try to read existing config to preserve other fields
+    // Get default config for comparison - we only write fields that differ from defaults
+    // or that already exist in the local config file
+    KlawedConfig defaults;
+    config_init_defaults(&defaults);
+
+    // Try to read existing LOCAL config to preserve other fields
+    // This is the local config only - we don't merge with global here
     cJSON *root = NULL;
     FILE *fp = fopen(config_path, "r");
     if (fp) {
@@ -472,177 +478,196 @@ int config_save(const KlawedConfig *config) {
         }
     }
 
-    // Update input_box_style
+    // Update input_box_style - only add if it differs from default or already exists
     cJSON *existing_style = cJSON_GetObjectItem(root, "input_box_style");
     if (existing_style) {
+        // Already in local config - update it
         cJSON_SetValuestring(existing_style, config_input_style_to_string(config->input_box_style));
-    } else {
+    } else if (config->input_box_style != defaults.input_box_style) {
+        // Differs from default - add it
         cJSON_AddStringToObject(root, "input_box_style", config_input_style_to_string(config->input_box_style));
     }
 
-    // Update response_style
+    // Update response_style - only add if it differs from default or already exists
     cJSON *existing_resp_style = cJSON_GetObjectItem(root, "response_style");
     if (existing_resp_style) {
         cJSON_SetValuestring(existing_resp_style, config_response_style_to_string(config->response_style));
-    } else {
+    } else if (config->response_style != defaults.response_style) {
         cJSON_AddStringToObject(root, "response_style", config_response_style_to_string(config->response_style));
     }
 
-    // Update theme (only if non-empty)
+    // Update theme - only add if non-empty and (already exists or differs from default empty)
+    cJSON *existing_theme = cJSON_GetObjectItem(root, "theme");
     if (config->theme[0] != '\0') {
-        cJSON *existing_theme = cJSON_GetObjectItem(root, "theme");
         if (existing_theme) {
             cJSON_SetValuestring(existing_theme, config->theme);
         } else {
+            // Theme is non-empty (differs from default empty) - add it
             cJSON_AddStringToObject(root, "theme", config->theme);
         }
     }
 
-    // Update LLM provider configuration
+    // Update LLM provider configuration - only if llm_provider section already exists in local
+    // or if it differs from defaults
     cJSON *existing_llm = cJSON_GetObjectItem(root, "llm_provider");
-    cJSON *llm_obj = NULL;
+    int llm_differs_from_default =
+        config->llm_provider.provider_type != defaults.llm_provider.provider_type ||
+        strcmp(config->llm_provider.provider_name, defaults.llm_provider.provider_name) != 0 ||
+        strcmp(config->llm_provider.model, defaults.llm_provider.model) != 0 ||
+        strcmp(config->llm_provider.api_base, defaults.llm_provider.api_base) != 0 ||
+        strcmp(config->llm_provider.api_key, defaults.llm_provider.api_key) != 0 ||
+        strcmp(config->llm_provider.api_key_env, defaults.llm_provider.api_key_env) != 0 ||
+        config->llm_provider.use_bedrock != defaults.llm_provider.use_bedrock;
 
-    if (existing_llm && cJSON_IsObject(existing_llm)) {
-        llm_obj = existing_llm;
-    } else {
-        llm_obj = cJSON_AddObjectToObject(root, "llm_provider");
+    if (existing_llm || llm_differs_from_default) {
+        cJSON *llm_obj = NULL;
+
+        if (existing_llm && cJSON_IsObject(existing_llm)) {
+            llm_obj = existing_llm;
+        } else if (llm_differs_from_default) {
+            llm_obj = cJSON_AddObjectToObject(root, "llm_provider");
+        }
+
+        if (llm_obj) {
+            // Update provider type - only add if already exists or differs from default
+            cJSON *existing_provider_type = cJSON_GetObjectItem(llm_obj, "provider_type");
+            if (existing_provider_type) {
+                cJSON_SetValuestring(existing_provider_type, config_provider_type_to_string(config->llm_provider.provider_type));
+            } else if (config->llm_provider.provider_type != defaults.llm_provider.provider_type) {
+                cJSON_AddStringToObject(llm_obj, "provider_type", config_provider_type_to_string(config->llm_provider.provider_type));
+            }
+
+            // Update provider name - only add if already exists or non-empty
+            if (config->llm_provider.provider_name[0] != '\0') {
+                cJSON *existing_provider_name = cJSON_GetObjectItem(llm_obj, "provider_name");
+                if (existing_provider_name) {
+                    cJSON_SetValuestring(existing_provider_name, config->llm_provider.provider_name);
+                } else {
+                    cJSON_AddStringToObject(llm_obj, "provider_name", config->llm_provider.provider_name);
+                }
+            }
+
+            // Update model - only add if already exists or non-empty
+            if (config->llm_provider.model[0] != '\0') {
+                cJSON *existing_model = cJSON_GetObjectItem(llm_obj, "model");
+                if (existing_model) {
+                    cJSON_SetValuestring(existing_model, config->llm_provider.model);
+                } else {
+                    cJSON_AddStringToObject(llm_obj, "model", config->llm_provider.model);
+                }
+            }
+
+            // Update API base - only add if already exists or non-empty
+            if (config->llm_provider.api_base[0] != '\0') {
+                cJSON *existing_api_base = cJSON_GetObjectItem(llm_obj, "api_base");
+                if (existing_api_base) {
+                    cJSON_SetValuestring(existing_api_base, config->llm_provider.api_base);
+                } else {
+                    cJSON_AddStringToObject(llm_obj, "api_base", config->llm_provider.api_base);
+                }
+            }
+
+            // Update API key - only add if already exists or non-empty
+            if (config->llm_provider.api_key[0] != '\0') {
+                cJSON *existing_api_key = cJSON_GetObjectItem(llm_obj, "api_key");
+                if (existing_api_key) {
+                    cJSON_SetValuestring(existing_api_key, config->llm_provider.api_key);
+                } else {
+                    cJSON_AddStringToObject(llm_obj, "api_key", config->llm_provider.api_key);
+                }
+                LOG_WARN("[Config] Saving API key to config file - consider using environment variable for better security");
+            }
+
+            // Update API key environment variable name - only add if already exists or non-empty
+            if (config->llm_provider.api_key_env[0] != '\0') {
+                cJSON *existing_api_key_env = cJSON_GetObjectItem(llm_obj, "api_key_env");
+                if (existing_api_key_env) {
+                    cJSON_SetValuestring(existing_api_key_env, config->llm_provider.api_key_env);
+                } else {
+                    cJSON_AddStringToObject(llm_obj, "api_key_env", config->llm_provider.api_key_env);
+                }
+            }
+
+            // Update use_bedrock - only add if already exists or differs from default (0)
+            cJSON *existing_use_bedrock = cJSON_GetObjectItem(llm_obj, "use_bedrock");
+            if (existing_use_bedrock) {
+                // Remove and re-add to avoid type conversion warnings
+                cJSON_DeleteItemFromObject(llm_obj, "use_bedrock");
+                cJSON_AddNumberToObject(llm_obj, "use_bedrock", (double)(config->llm_provider.use_bedrock ? 1 : 0));
+            } else if (config->llm_provider.use_bedrock != 0) {
+                cJSON_AddNumberToObject(llm_obj, "use_bedrock", (double)(config->llm_provider.use_bedrock ? 1 : 0));
+            }
+        }
     }
 
-    if (llm_obj) {
-        // Update provider type
-        cJSON *existing_provider_type = cJSON_GetObjectItem(llm_obj, "provider_type");
-        if (existing_provider_type) {
-            cJSON_SetValuestring(existing_provider_type, config_provider_type_to_string(config->llm_provider.provider_type));
-        } else {
-            cJSON_AddStringToObject(llm_obj, "provider_type", config_provider_type_to_string(config->llm_provider.provider_type));
-        }
-
-        // Update provider name (if non-empty)
-        if (config->llm_provider.provider_name[0] != '\0') {
-            cJSON *existing_provider_name = cJSON_GetObjectItem(llm_obj, "provider_name");
-            if (existing_provider_name) {
-                cJSON_SetValuestring(existing_provider_name, config->llm_provider.provider_name);
-            } else {
-                cJSON_AddStringToObject(llm_obj, "provider_name", config->llm_provider.provider_name);
-            }
-        }
-
-        // Update model (if non-empty)
-        if (config->llm_provider.model[0] != '\0') {
-            cJSON *existing_model = cJSON_GetObjectItem(llm_obj, "model");
-            if (existing_model) {
-                cJSON_SetValuestring(existing_model, config->llm_provider.model);
-            } else {
-                cJSON_AddStringToObject(llm_obj, "model", config->llm_provider.model);
-            }
-        }
-
-        // Update API base (if non-empty)
-        if (config->llm_provider.api_base[0] != '\0') {
-            cJSON *existing_api_base = cJSON_GetObjectItem(llm_obj, "api_base");
-            if (existing_api_base) {
-                cJSON_SetValuestring(existing_api_base, config->llm_provider.api_base);
-            } else {
-                cJSON_AddStringToObject(llm_obj, "api_base", config->llm_provider.api_base);
-            }
-        }
-
-        // Update API key (if non-empty, but warn about security)
-        if (config->llm_provider.api_key[0] != '\0') {
-            cJSON *existing_api_key = cJSON_GetObjectItem(llm_obj, "api_key");
-            if (existing_api_key) {
-                cJSON_SetValuestring(existing_api_key, config->llm_provider.api_key);
-            } else {
-                cJSON_AddStringToObject(llm_obj, "api_key", config->llm_provider.api_key);
-            }
-            LOG_WARN("[Config] Saving API key to config file - consider using environment variable for better security");
-        }
-
-        // Update API key environment variable name (if non-empty)
-        if (config->llm_provider.api_key_env[0] != '\0') {
-            cJSON *existing_api_key_env = cJSON_GetObjectItem(llm_obj, "api_key_env");
-            if (existing_api_key_env) {
-                cJSON_SetValuestring(existing_api_key_env, config->llm_provider.api_key_env);
-            } else {
-                cJSON_AddStringToObject(llm_obj, "api_key_env", config->llm_provider.api_key_env);
-            }
-        }
-
-        // Update use_bedrock (legacy flag) - store as integer for compatibility
-        cJSON *existing_use_bedrock = cJSON_GetObjectItem(llm_obj, "use_bedrock");
-        if (existing_use_bedrock) {
-            // Remove and re-add to avoid type conversion warnings
-            cJSON_DeleteItemFromObject(llm_obj, "use_bedrock");
-            cJSON_AddNumberToObject(llm_obj, "use_bedrock", (double)(config->llm_provider.use_bedrock ? 1 : 0));
-        } else {
-            cJSON_AddNumberToObject(llm_obj, "use_bedrock", (double)(config->llm_provider.use_bedrock ? 1 : 0));
-        }
-    }
-
-    // Save multiple provider configurations
-    if (config->provider_count > 0) {
-        cJSON *existing_providers = cJSON_GetObjectItem(root, "providers");
+    // Save multiple provider configurations - only if providers section exists in local config
+    // or if there are providers that differ from defaults (i.e., provider_count > 0)
+    cJSON *existing_providers = cJSON_GetObjectItem(root, "providers");
+    if (existing_providers || config->provider_count > 0) {
         cJSON *providers_obj = NULL;
 
         if (existing_providers && cJSON_IsObject(existing_providers)) {
-            providers_obj = existing_providers;
-            // Clear existing providers to avoid duplicates
+            // Clear existing providers to rebuild with current config
             cJSON_DeleteItemFromObject(root, "providers");
-            providers_obj = cJSON_AddObjectToObject(root, "providers");
-        } else {
-            providers_obj = cJSON_AddObjectToObject(root, "providers");
         }
 
-        if (providers_obj) {
-            for (int i = 0; i < config->provider_count; i++) {
-                const NamedProviderConfig *named_provider = &config->providers[i];
-                const LLMProviderConfig *provider_config = &named_provider->config;
+        // Only create providers section if we have providers to save
+        if (config->provider_count > 0) {
+            providers_obj = cJSON_AddObjectToObject(root, "providers");
 
-                cJSON *provider_obj = cJSON_AddObjectToObject(providers_obj, named_provider->key);
-                if (!provider_obj) {
-                    LOG_WARN("[Config] Failed to create provider object for '%s'", named_provider->key);
-                    continue;
+            if (providers_obj) {
+                for (int i = 0; i < config->provider_count; i++) {
+                    const NamedProviderConfig *named_provider = &config->providers[i];
+                    const LLMProviderConfig *provider_config = &named_provider->config;
+
+                    cJSON *provider_obj = cJSON_AddObjectToObject(providers_obj, named_provider->key);
+                    if (!provider_obj) {
+                        LOG_WARN("[Config] Failed to create provider object for '%s'", named_provider->key);
+                        continue;
+                    }
+
+                    // Add provider type
+                    cJSON_AddStringToObject(provider_obj, "provider_type", config_provider_type_to_string(provider_config->provider_type));
+
+                    // Add provider name (if non-empty)
+                    if (provider_config->provider_name[0] != '\0') {
+                        cJSON_AddStringToObject(provider_obj, "provider_name", provider_config->provider_name);
+                    }
+
+                    // Add model (if non-empty)
+                    if (provider_config->model[0] != '\0') {
+                        cJSON_AddStringToObject(provider_obj, "model", provider_config->model);
+                    }
+
+                    // Add API base (if non-empty)
+                    if (provider_config->api_base[0] != '\0') {
+                        cJSON_AddStringToObject(provider_obj, "api_base", provider_config->api_base);
+                    }
+
+                    // Add API key (if non-empty, with security warning)
+                    if (provider_config->api_key[0] != '\0') {
+                        cJSON_AddStringToObject(provider_obj, "api_key", provider_config->api_key);
+                        LOG_WARN("[Config] Saving API key to config file for provider '%s' - consider using environment variable for better security", named_provider->key);
+                    }
+
+                    // Add API key environment variable name (if non-empty)
+                    if (provider_config->api_key_env[0] != '\0') {
+                        cJSON_AddStringToObject(provider_obj, "api_key_env", provider_config->api_key_env);
+                    }
+
+                    // Add use_bedrock (legacy flag) - only if non-zero
+                    if (provider_config->use_bedrock != 0) {
+                        cJSON_AddNumberToObject(provider_obj, "use_bedrock", (double)(provider_config->use_bedrock ? 1 : 0));
+                    }
                 }
-
-                // Add provider type
-                cJSON_AddStringToObject(provider_obj, "provider_type", config_provider_type_to_string(provider_config->provider_type));
-
-                // Add provider name (if non-empty)
-                if (provider_config->provider_name[0] != '\0') {
-                    cJSON_AddStringToObject(provider_obj, "provider_name", provider_config->provider_name);
-                }
-
-                // Add model (if non-empty)
-                if (provider_config->model[0] != '\0') {
-                    cJSON_AddStringToObject(provider_obj, "model", provider_config->model);
-                }
-
-                // Add API base (if non-empty)
-                if (provider_config->api_base[0] != '\0') {
-                    cJSON_AddStringToObject(provider_obj, "api_base", provider_config->api_base);
-                }
-
-                // Add API key (if non-empty, with security warning)
-                if (provider_config->api_key[0] != '\0') {
-                    cJSON_AddStringToObject(provider_obj, "api_key", provider_config->api_key);
-                    LOG_WARN("[Config] Saving API key to config file for provider '%s' - consider using environment variable for better security", named_provider->key);
-                }
-
-                // Add API key environment variable name (if non-empty)
-                if (provider_config->api_key_env[0] != '\0') {
-                    cJSON_AddStringToObject(provider_obj, "api_key_env", provider_config->api_key_env);
-                }
-
-                // Add use_bedrock (legacy flag)
-                cJSON_AddNumberToObject(provider_obj, "use_bedrock", (double)(provider_config->use_bedrock ? 1 : 0));
             }
         }
     }
 
-    // Save active provider (if set)
+    // Save active provider - only add if non-empty (already differs from default empty)
+    cJSON *existing_active = cJSON_GetObjectItem(root, "active_provider");
     if (config->active_provider[0] != '\0') {
         LOG_DEBUG("[Config] config_save: saving active_provider='%s'", config->active_provider);
-        cJSON *existing_active = cJSON_GetObjectItem(root, "active_provider");
         if (existing_active) {
             cJSON_SetValuestring(existing_active, config->active_provider);
         } else {

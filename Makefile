@@ -213,6 +213,7 @@ TEST_DUPLICATE_TOOL_DETECTION_TARGET = $(BUILD_DIR)/test_duplicate_tool_detectio
 TEST_ARRAY_RESIZE_TARGET = $(BUILD_DIR)/test_array_resize
 TEST_ARENA_TARGET = $(BUILD_DIR)/test_arena
 TEST_CONFIG_TARGET = $(BUILD_DIR)/test_config
+TEST_CONFIG_MERGE_TARGET = $(BUILD_DIR)/test_config_merge
 TEST_MEMVID_TARGET = $(BUILD_DIR)/test_memvid
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
@@ -506,7 +507,7 @@ query-tool: check-deps $(QUERY_TOOL)
 
 memvid-repl: check-deps $(MEMVID_REPL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-file-search test-provider-init-from-config test-provider-init
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-file-search test-provider-init-from-config test-provider-init
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -746,6 +747,13 @@ test-config: check-deps $(TEST_CONFIG_TARGET)
 	@echo "Running Config tests..."
 	@echo ""
 	@./$(TEST_CONFIG_TARGET)
+	@rm -f .klawed/config.json
+
+test-config-merge: check-deps $(TEST_CONFIG_MERGE_TARGET)
+	@echo ""
+	@echo "Running Config merge tests..."
+	@echo ""
+	@./$(TEST_CONFIG_MERGE_TARGET)
 	@rm -f .klawed/config.json
 
 test-provider-init-from-config: check-deps $(TEST_PROVIDER_INIT_FROM_CONFIG_TARGET)
@@ -1926,6 +1934,15 @@ $(TEST_CONFIG_TARGET): tests/test_config.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(DATA_DI
 	@$(CC) $(CFLAGS) -o $(TEST_CONFIG_TARGET) tests/test_config.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Config test build successful!"
+	@echo ""
+
+# Test target for Config merge - tests that saving doesn't copy global config to local
+$(TEST_CONFIG_MERGE_TARGET): tests/test_config_merge.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Config merge test suite..."
+	@$(CC) $(CFLAGS) -o $(TEST_CONFIG_MERGE_TARGET) tests/test_config_merge.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS) -lcjson
+	@echo ""
+	@echo "✓ Config merge test build successful!"
 	@echo ""
 
 # Test target for Data Directory utilities
