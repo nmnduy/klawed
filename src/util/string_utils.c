@@ -86,10 +86,10 @@ char* trim_whitespace(char *str) {
  */
 char* strdup_trim(const char *str) {
     if (!str) return NULL;
-    
+
     char *dup = strdup(str);
     if (!dup) return NULL;
-    
+
     trim_whitespace(dup);
     return dup;
 }
