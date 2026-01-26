@@ -97,8 +97,8 @@ async function httpRequest(
     if (typeof options.data === "string") {
       body = options.data;
     } else {
-      body = new URLSearchParams(options.data).toString();
-      headers["Content-Type"] = "application/x-www-form-urlencoded";
+      body = JSON.stringify(options.data);
+      headers["Content-Type"] = "application/json";
     }
   }
 
