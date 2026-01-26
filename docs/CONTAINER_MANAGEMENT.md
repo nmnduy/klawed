@@ -46,7 +46,7 @@ User disconnects → SessionManager.unregisterSession()
                      ↓
          (30s grace period via disconnected_at timestamp)
                      ↓
-         KlawedSandboxService stops container after 90s inactivity
+         KlawedSandboxService stops container after 30m inactivity
 ```
 
 ## Session Tracking (sessions.db)
@@ -67,8 +67,8 @@ CREATE TABLE sessions (
 **Session states:**
 - **Active**: `disconnected_at IS NULL` - WebSocket is connected
 - **Disconnected**: `disconnected_at IS NOT NULL` - WebSocket disconnected
-- **Inactive**: Disconnected for >90 seconds (container will be stopped)
-- **Idle**: Active but no activity for >30 minutes (container won't auto-start)
+- **Inactive**: Disconnected for >30 minutes (container will be stopped)
+- **Idle**: Active but no activity for >60 minutes (container won't auto-start)
 
 ## Container Configuration
 
@@ -82,9 +82,9 @@ sandbox.podman.memory=2g
 sandbox.podman.cpus=2
 sandbox.podman.pids-limit=512
 
-# Timeouts
-klawed.sandbox.inactivity-timeout=90s     # Stop after 90s of disconnection
-klawed.sandbox.idle-timeout=30m           # Don't auto-start for idle sessions
+# Timeouts (configurable via properties)
+klawed.sandbox.inactivity-timeout=30m     # Grace period for disconnected sessions
+klawed.sandbox.idle-timeout=1h            # Idle timeout for active sessions
 ```
 
 **Container specs:**
@@ -106,7 +106,7 @@ klawed.sandbox.idle-timeout=30m           # Don't auto-start for idle sessions
 
 **Execution flow:**
 1. **Get active sessions** - Sessions where `disconnected_at IS NULL`
-2. **Check idle sessions** - Sessions with no activity for >30 minutes
+2. **Check idle sessions** - Sessions with no activity for >60 minutes
 3. **Ensure containers exist** - Start containers for active, non-idle sessions
 4. **List running containers** - Get all `klawed-*` containers from Podman
 5. **Stop orphaned containers** - Containers where session is inactive/idle/disconnected
@@ -126,16 +126,20 @@ When a container starts, previous chat messages are seeded into the SQLite queue
 2. **Scheduled management** - 10-second polling loop instead of event-driven container lifecycle
 3. **Healthy containers are reused** - If running, don't restart; just write to SQLite queue
 4. **`--rm` flag** - Auto-removes containers on exit
-5. **Graceful shutdown** - 90-second timeout after disconnect before stopping container
+5. **Graceful shutdown** - 30-minute timeout after disconnect before stopping container
 6. **No ':latest' tags** - Prevents version confusion in production
 7. **Idle session handling** - Active sessions with no activity won't auto-start containers
 
 ## Grace Periods and Timeouts
 
+> **Note:** Both timeouts are configurable via `application.properties`:
+> - `klawed.sandbox.inactivity-timeout` - Grace period for disconnected sessions (default: 30m)
+> - `klawed.sandbox.idle-timeout` - Idle timeout for active sessions (default: 1h)
+
 | Scenario | Timeout | Behavior |
 |----------|---------|----------|
-| Disconnected | 90 seconds | Container stopped after disconnected_at + 90s |
-| Idle (connected but no activity) | 30 minutes | Container won't auto-start |
+| Disconnected | 30 minutes | Container stopped after disconnected_at + 30m |
+| Idle (connected but no activity) | 60 minutes | Container won't auto-start |
 | Application shutdown | Immediate | All containers stopped gracefully |
 
 ## Message Queue Lifecycle

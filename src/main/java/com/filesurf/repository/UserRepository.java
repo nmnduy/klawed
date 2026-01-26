@@ -6,7 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.sql.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.logging.Logger;
 
 /**
@@ -33,8 +33,8 @@ public class UserRepository {
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             user_id TEXT NOT NULL UNIQUE,
                             email TEXT NOT NULL UNIQUE,
-                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                            last_login_at TIMESTAMP,
+                            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                            last_login_at INTEGER,
                             is_active BOOLEAN NOT NULL DEFAULT TRUE
                         )
                     """);
@@ -110,11 +110,11 @@ public class UserRepository {
                 try (PreparedStatement ps = conn.prepareStatement(
                         "INSERT INTO users (user_id, email, created_at, last_login_at, is_active) VALUES (?, ?, ?, ?, ?)",
                         Statement.RETURN_GENERATED_KEYS)) {
-                    LocalDateTime now = LocalDateTime.now();
+                    long now = Instant.now().getEpochSecond();
                     ps.setString(1, userId);
                     ps.setString(2, email.toLowerCase().trim());
-                    ps.setTimestamp(3, Timestamp.valueOf(now));
-                    ps.setTimestamp(4, Timestamp.valueOf(now));
+                    ps.setLong(3, now);
+                    ps.setLong(4, now);
                     ps.setBoolean(5, true);
                     ps.executeUpdate();
 
@@ -142,7 +142,7 @@ public class UserRepository {
             sqliteManager.execute((SQLiteManager.ConnectionOperation) conn -> {
                 try (PreparedStatement ps = conn.prepareStatement(
                         "UPDATE users SET last_login_at = ? WHERE user_id = ?")) {
-                    ps.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
+                    ps.setLong(1, Instant.now().getEpochSecond());
                     ps.setString(2, userId);
                     ps.executeUpdate();
                 }

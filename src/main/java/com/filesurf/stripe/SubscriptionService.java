@@ -114,7 +114,7 @@ public class SubscriptionService {
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, userId);
-            stmt.setTimestamp(2, Timestamp.from(periodStart));
+            stmt.setLong(2, periodStart.getEpochSecond());
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
@@ -162,17 +162,17 @@ public class SubscriptionService {
 
         String sql = """
             INSERT INTO user_usage (user_id, period_start, period_end, %s, last_updated)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, strftime('%%s', 'now'))
             ON CONFLICT (user_id, period_start) DO UPDATE
-            SET %s = %s + ?, last_updated = CURRENT_TIMESTAMP
+            SET %s = %s + ?, last_updated = strftime('%%s', 'now')
         """.formatted(usageType, usageType, usageType);
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, userId);
-            stmt.setTimestamp(2, Timestamp.from(periodStart));
-            stmt.setTimestamp(3, Timestamp.from(periodEnd));
+            stmt.setLong(2, periodStart.getEpochSecond());
+            stmt.setLong(3, periodEnd.getEpochSecond());
             stmt.setInt(4, amount);
             stmt.setInt(5, amount);
             stmt.executeUpdate();
@@ -220,7 +220,7 @@ public class SubscriptionService {
         String sql = """
             INSERT INTO user_subscriptions 
             (user_id, plan_code, status, stripe_customer_id, stripe_subscription_id, started_at)
-            VALUES (?, ?, 'active', ?, ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, 'active', ?, ?, strftime('%s', 'now'))
         """;
 
         try (Connection conn = dataSource.getConnection();
@@ -279,7 +279,7 @@ public class SubscriptionService {
     public void handleSubscriptionDeleted(com.stripe.model.Subscription subscription) {
         String sql = """
             UPDATE user_subscriptions
-            SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP
+            SET status = 'cancelled', cancelled_at = strftime('%s', 'now')
             WHERE stripe_subscription_id = ?
         """;
 

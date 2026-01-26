@@ -6,7 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.sql.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -37,7 +37,7 @@ public class FeedbackRepository {
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         Statement.RETURN_GENERATED_KEYS)) {
-                    LocalDateTime now = LocalDateTime.now();
+                    long now = Instant.now().getEpochSecond();
                     ps.setString(1, feedbackId);
                     ps.setString(2, type);
                     ps.setString(3, description);
@@ -45,7 +45,7 @@ public class FeedbackRepository {
                     ps.setString(5, userEmail);
                     ps.setString(6, errorDetails);
                     ps.setString(7, environment);
-                    ps.setTimestamp(8, Timestamp.valueOf(now));
+                    ps.setLong(8, now);
                     ps.executeUpdate();
 
                     // Get generated ID

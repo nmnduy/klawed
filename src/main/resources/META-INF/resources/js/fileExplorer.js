@@ -1903,6 +1903,7 @@ class FileExplorer {
      * 1. Extracts the directory path from the file path
      * 2. Navigates to that directory
      * 3. Scrolls to and highlights the file item
+     * 4. If not found, falls back to workspace search to find the file
      * @param {string} filePath - Full path to the file (e.g., '/reports/output.pdf')
      * @returns {Promise<boolean>} - True if file was found and highlighted
      */
@@ -1947,17 +1948,93 @@ class FileExplorer {
         // Wait for DOM to update
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Find and highlight the file
-        return this.highlightFile(fileName, normalizedPath);
+        // Try to find and highlight the file
+        const found = this.highlightFile(fileName, normalizedPath);
+        
+        // If not found, fall back to workspace search
+        if (!found) {
+            console.log('[file-explorer] File not found at path, falling back to workspace search:', fileName);
+            return await this.searchAndNavigateToFile(fileName);
+        }
+        
+        return found;
+    }
+
+    /**
+     * Search for a file across the workspace and navigate to it if found.
+     * Used as a fallback when the provided path doesn't match the actual file location.
+     * @param {string} fileName - Name of the file to search for
+     * @returns {Promise<boolean>} - True if file was found and highlighted
+     */
+    async searchAndNavigateToFile(fileName) {
+        if (!fileName) return false;
+
+        console.log('[file-explorer] Searching workspace for file:', fileName);
+
+        try {
+            // Use the existing server-side search
+            const results = await this.searchFilesOnServer(fileName);
+            
+            if (!results || !results.items || results.items.length === 0) {
+                console.warn('[file-explorer] No files found matching:', fileName);
+                this.showToast(`File "${fileName}" not found in workspace`, 'warning');
+                return false;
+            }
+
+            // Look for an exact filename match first
+            let matchedFile = results.items.find(item => 
+                item.name === fileName || item.name.toLowerCase() === fileName.toLowerCase()
+            );
+
+            // If no exact match, use the first result
+            if (!matchedFile) {
+                matchedFile = results.items[0];
+                console.log('[file-explorer] No exact match, using closest result:', matchedFile.name);
+            }
+
+            console.log('[file-explorer] Found file via search:', matchedFile.path);
+
+            // Extract the actual directory from the found file's path
+            const foundPath = matchedFile.path.replace(/^\/+/, '');
+            const foundLastSlash = foundPath.lastIndexOf('/');
+            const foundDirectory = foundLastSlash > 0 ? foundPath.substring(0, foundLastSlash) : '/';
+            const foundFileName = foundLastSlash > 0 ? foundPath.substring(foundLastSlash + 1) : foundPath;
+
+            // Clear search state
+            this.searchTerm = '';
+            this.isSearchingWorkspace = false;
+            this.lastSearchResults = null;
+            if (this.fileExplorerSearch) {
+                this.fileExplorerSearch.value = '';
+            }
+            if (this.fileExplorerSearchClear) {
+                this.fileExplorerSearchClear.classList.add('hidden');
+            }
+
+            // Navigate to the correct directory
+            await this.loadDirectory(foundDirectory || '/');
+
+            // Wait for DOM to update
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Highlight the found file
+            return this.highlightFile(foundFileName, foundPath);
+
+        } catch (error) {
+            console.error('[file-explorer] Error searching for file:', error);
+            this.showToast(`Error searching for file: ${error.message}`, 'error');
+            return false;
+        }
     }
 
     /**
      * Find and highlight a file in the current file list.
      * @param {string} fileName - Name of the file to highlight
      * @param {string} fullPath - Full path for matching (optional, used as fallback)
+     * @param {boolean} showToastOnNotFound - Whether to show a toast if file not found (default: false)
      * @returns {boolean} - True if file was found and highlighted
      */
-    highlightFile(fileName, fullPath = null) {
+    highlightFile(fileName, fullPath = null, showToastOnNotFound = false) {
         if (!this.fileExplorerTree) return false;
 
         // Find the file item by name or path
@@ -1976,7 +2053,9 @@ class FileExplorer {
 
         if (!targetItem) {
             console.warn('[file-explorer] File not found for highlighting:', fileName);
-            this.showToast(`File "${fileName}" not found`, 'warning');
+            if (showToastOnNotFound) {
+                this.showToast(`File "${fileName}" not found`, 'warning');
+            }
             return false;
         }
 

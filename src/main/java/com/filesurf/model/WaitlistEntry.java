@@ -2,7 +2,9 @@ package com.filesurf.model;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 public class WaitlistEntry {
     private Long id;
@@ -24,13 +26,27 @@ public class WaitlistEntry {
     }
 
     public static WaitlistEntry fromResultSet(ResultSet rs) throws SQLException {
+        long createdSeconds = rs.getLong("created_at");
+        LocalDateTime createdAt = null;
+        if (!rs.wasNull()) {
+            createdAt = LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(createdSeconds), ZoneId.systemDefault());
+        }
+        
+        long updatedSeconds = rs.getLong("updated_at");
+        LocalDateTime updatedAt = null;
+        if (!rs.wasNull()) {
+            updatedAt = LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(updatedSeconds), ZoneId.systemDefault());
+        }
+        
         return new WaitlistEntry(
                 rs.getLong("id"),
                 rs.getString("email"),
                 rs.getString("name"),
                 rs.getString("use_case"),
-                rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
-                rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null
+                createdAt,
+                updatedAt
         );
     }
 

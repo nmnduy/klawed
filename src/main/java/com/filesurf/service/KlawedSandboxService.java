@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.*;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -76,17 +77,29 @@ public class KlawedSandboxService {
     @ConfigProperty(name = "klawed.sessions.db.path", defaultValue = "data/sessions.db")
     String sessionsDbPath;
 
+    // Reconnection grace period: timeout for disconnected sessions before container is stopped
+    @ConfigProperty(name = "klawed.sandbox.inactivity-timeout", defaultValue = "30m")
+    Duration inactivityTimeout;
+
+    // Idle timeout: timeout for active but idle sessions before container won't auto-start
+    @ConfigProperty(name = "klawed.sandbox.idle-timeout", defaultValue = "1h")
+    Duration idleTimeout;
+
     private String jdbcUrl;
 
     // MetricsService for tracking container lifecycle
     @Inject
     MetricsService metricsService;
 
-    // Inactivity timeout: 1.5 minutes = 90 seconds (for disconnected sessions)
-    private static final long INACTIVITY_TIMEOUT_SECONDS = 90;
+    // Inactivity timeout in seconds (converted from Duration)
+    private long getInactivityTimeoutSeconds() {
+        return inactivityTimeout.toSeconds();
+    }
 
-    // Idle timeout: 30 minutes = 1800 seconds (for active but idle sessions)
-    private static final long IDLE_TIMEOUT_SECONDS = 1800;
+    // Idle timeout in seconds (converted from Duration)
+    private long getIdleTimeoutSeconds() {
+        return idleTimeout.toSeconds();
+    }
 
     // Single-threaded executor to serialize lifecycle management operations
     private final ExecutorService lifecycleExecutor = Executors.newSingleThreadExecutor();
@@ -240,6 +253,7 @@ public class KlawedSandboxService {
 
     /**
      * Register a session with email (called when session is generated)
+     * @throws RuntimeException if session registration fails
      */
     public void registerSession(String sessionId, String userId, String email) {
         try (Connection conn = DriverManager.getConnection(jdbcUrl);
@@ -258,12 +272,25 @@ public class KlawedSandboxService {
             pstmt.setLong(5, now);
             pstmt.setLong(6, now);
             pstmt.setString(7, email);
-            pstmt.executeUpdate();
+            int rowsAffected = pstmt.executeUpdate();
 
-            LOGGER.info("[SESSION:" + sessionId + "] Session registered for user: " + userId + 
+            if (rowsAffected == 0) {
+                LOGGER.warning("[SESSION:" + sessionId + "] Session registration returned 0 rows affected");
+            }
+
+            // Verify session was created/updated
+            if (!sessionExists(sessionId)) {
+                String error = "Session was not created in database despite no errors";
+                LOGGER.severe("[SESSION:" + sessionId + "] " + error);
+                throw new RuntimeException(error);
+            }
+
+            LOGGER.info("[SESSION:" + sessionId + "] Session registered for user: " + userId +
                         (email != null ? " (email: " + email + ")" : ""));
         } catch (SQLException e) {
-            LOGGER.severe("[SESSION:" + sessionId + "] Failed to register session: " + e.getMessage());
+            String error = "Failed to register session: " + e.getMessage();
+            LOGGER.severe("[SESSION:" + sessionId + "] " + error);
+            throw new RuntimeException(error, e);
         }
     }
 
@@ -285,6 +312,30 @@ public class KlawedSandboxService {
             LOGGER.info("[SESSION:" + sessionId + "] Session disconnected at: " + now);
         } catch (SQLException e) {
             LOGGER.severe("[SESSION:" + sessionId + "] Failed to unregister session: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Delete a session from the database (called when session is concluded/removed)
+     * This permanently removes the session record from sessions.db
+     */
+    public void deleteSession(String sessionId) {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "DELETE FROM sessions WHERE session_id = ?"
+             )) {
+
+            pstmt.setString(1, sessionId);
+            int rowsAffected = pstmt.executeUpdate();
+
+            if (rowsAffected > 0) {
+                LOGGER.info("[SESSION:" + sessionId + "] Session deleted from database");
+            } else {
+                LOGGER.warning("[SESSION:" + sessionId + "] Session was not found in database for deletion");
+            }
+        } catch (SQLException e) {
+            LOGGER.severe("[SESSION:" + sessionId + "] Failed to delete session: " + e.getMessage());
+            throw new RuntimeException("Failed to delete session: " + e.getMessage(), e);
         }
     }
 
@@ -339,7 +390,7 @@ public class KlawedSandboxService {
      */
     private List<String> getInactiveSessions() throws SQLException {
         List<String> sessionIds = new ArrayList<>();
-        long cutoffTime = Instant.now().getEpochSecond() - INACTIVITY_TIMEOUT_SECONDS;
+        long cutoffTime = Instant.now().getEpochSecond() - getInactivityTimeoutSeconds();
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl);
              PreparedStatement pstmt = conn.prepareStatement(
@@ -364,7 +415,7 @@ public class KlawedSandboxService {
      */
     private List<String> getIdleSessions() throws SQLException {
         List<String> sessionIds = new ArrayList<>();
-        long cutoffTime = Instant.now().getEpochSecond() - IDLE_TIMEOUT_SECONDS;
+        long cutoffTime = Instant.now().getEpochSecond() - getIdleTimeoutSeconds();
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl);
              PreparedStatement pstmt = conn.prepareStatement(
@@ -562,10 +613,10 @@ public class KlawedSandboxService {
                     reason = "session does not exist in database";
                 } else if (inactiveSet.contains(sessionId)) {
                     shouldStop = true;
-                    reason = "session inactive for >" + INACTIVITY_TIMEOUT_SECONDS + " seconds";
+                    reason = "session inactive for >" + inactivityTimeout;
                 } else if (idleSet.contains(sessionId)) {
                     shouldStop = true;
-                    reason = "session idle (no activity) for >" + IDLE_TIMEOUT_SECONDS + " seconds";
+                    reason = "session idle (no activity) for >" + idleTimeout;
                 } else if (!activeSessionIds.contains(sessionId)) {
                     shouldStop = true;
                     reason = "session is disconnected";
@@ -629,6 +680,10 @@ public class KlawedSandboxService {
         LOGGER.info("[SESSION:" + sessionId + "] Starting Podman container for klawed agent");
 
         String containerName = "klawed-" + sessionId;
+
+        // Clean up any existing container with this name to prevent "name already in use" errors
+        // This handles cases where a previous container is in a limbo state (created but not running)
+        cleanupExistingContainer(containerName);
 
         // Construct workspace directory path
         // This matches SessionManager's logic: persistRoot/{userId}/
@@ -826,6 +881,15 @@ public class KlawedSandboxService {
      * Remove a container from Podman
      */
     private void removeContainerFromPodman(String containerId) {
+        removeContainerFromPodman(containerId, false);
+    }
+
+    /**
+     * Remove a container from Podman with logging
+     * @param containerId Container name or ID
+     * @param quiet If true, suppress success messages (for cleanup operations)
+     */
+    private void removeContainerFromPodman(String containerId, boolean quiet) {
         try {
             ProcessBuilder pb = new ProcessBuilder("podman", "rm", "-f", containerId);
             pb.redirectErrorStream(true);
@@ -835,13 +899,40 @@ public class KlawedSandboxService {
             int exitCode = process.waitFor();
 
             if (exitCode != 0) {
-                LOGGER.fine("Container remove returned exit code " + exitCode + ": " + output);
+                if (!quiet) {
+                    LOGGER.fine("Container remove returned exit code " + exitCode + ": " + output);
+                }
             } else {
-                LOGGER.info("Container removed from Podman: " + containerId);
+                if (!quiet) {
+                    LOGGER.info("Container removed from Podman: " + containerId);
+                }
             }
         } catch (IOException | InterruptedException e) {
             LOGGER.warning("Failed to remove container " + containerId + ": " + e.getMessage());
         }
+    }
+
+    /**
+     * Clean up any existing container with this name that isn't running properly
+     * This prevents "name already in use" errors when containers are in limbo states
+     * but preserves running containers for reuse
+     */
+    private void cleanupExistingContainer(String containerName) {
+        if (!containerExists(containerName)) {
+            // No container exists, nothing to clean up
+            return;
+        }
+
+        // Container exists - check if it's actually running
+        if (isContainerRunning(containerName)) {
+            // Container is running, keep it for reuse
+            LOGGER.fine("[CONTAINER:" + containerName + "] Container already running, will reuse");
+            return;
+        }
+
+        // Container exists but isn't running (stopped, created, etc.) - clean it up
+        LOGGER.info("[CONTAINER:" + containerName + "] Cleaning up non-running container before starting new one");
+        removeContainerFromPodman(containerName, true);
     }
 
     /**
@@ -865,6 +956,33 @@ public class KlawedSandboxService {
             return "true".equalsIgnoreCase(output);
         } catch (IOException | InterruptedException e) {
             LOGGER.warning("Error checking container status: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Check if a container exists in ANY state (running, stopped, created, etc.)
+     * This prevents "name already in use" errors when a previous container is in limbo
+     */
+    public boolean containerExists(String containerName) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                "podman", "ps", "-a", "--filter", "name=" + containerName, "--format", "{{.Names}}"
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            String output = readProcessOutput(process).trim();
+            int exitCode = process.waitFor();
+
+            if (exitCode != 0) {
+                return false;
+            }
+
+            // Check if our container name is in the output
+            return !output.isEmpty() && output.contains(containerName);
+        } catch (IOException | InterruptedException e) {
+            LOGGER.warning("Error checking if container exists: " + e.getMessage());
             return false;
         }
     }

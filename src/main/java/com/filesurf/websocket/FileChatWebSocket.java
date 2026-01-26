@@ -3,7 +3,6 @@ package com.filesurf.websocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.filesurf.SessionResource;
-import com.filesurf.model.ChatSessionRecord;
 import com.filesurf.model.ChatMessageRecord;
 import com.filesurf.model.ChatConstants;
 import com.filesurf.model.KlawedSocketMessage;
@@ -161,14 +160,9 @@ public class FileChatWebSocket {
         String clientIdentity = SessionResource.getClientIdentity(sessionId, klawedSandboxService);
         LOGGER.info("[SESSION:" + sessionId + "] WebSocket connection opened for client: " + clientIdentity);
 
-        // Create or update chat session in database
-        ChatSessionRecord chatSession = fileChatService.createOrUpdateChatSession(sessionId, clientIdentity);
-        LOGGER.info("[SESSION:" + sessionId + "] Chat session created/updated in database");
-
-        // Register session with KlawedSandboxService
-        klawedSandboxService.registerSession(sessionId, userId);
-        LOGGER.info("[SESSION:" + sessionId + "] Session registered with KlawedSandboxService");
-
+        // Note: Session was already registered in sessions.db when /session/generate was called
+        // Metrics for new/resumed sessions were tracked at that point by KlawedSandboxService
+        // The validateSession() call at the start of onOpen already verified session exists and is active
 
         // Register connection with polling service (for sending messages to WebSocket)
         chatMessagePollingService.registerConnection(sessionId, connection);
@@ -294,6 +288,7 @@ public class FileChatWebSocket {
 
         // Track metrics for chat message
         metricsService.incrementChatMessages();
+        metricsService.incrementMessagesReceivedFromUser();
         metricsService.trackUserActivity(userId);
 
         try {

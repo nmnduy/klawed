@@ -34,6 +34,9 @@ public class ChatMessagePollingService {
     @Inject
     SQLiteQueueClientPool clientPool;
 
+    @Inject
+    MetricsService metricsService;
+
     // Store active WebSocket connections by session ID
     private final Map<String, WebSocketConnection> activeConnections = new ConcurrentHashMap<>();
 
@@ -116,6 +119,9 @@ public class ChatMessagePollingService {
             // we need to directly insert the message with correct sender/receiver
 
             queueClient.sendMessageFrom("client", "klawed", message);
+
+            // Track message sent to klawed
+            metricsService.incrementMessagesSentToKlawed();
 
             LOGGER.info("[SESSION:" + sessionId + "] Message sent to klawed (length: " + message.length() + " chars)");
         } catch (Exception e) {
@@ -347,6 +353,8 @@ public class ChatMessagePollingService {
                     connection.sendText(jsonMessage).subscribe().with(
                         success -> {
                             LOGGER.info("[SESSION:" + sessionId + "] Sent message ID: " + message.getId());
+                            // Track message sent from klawed to user
+                            metricsService.incrementMessagesReceivedFromKlawed();
                             // Use IO thread-safe method for WebSocket callbacks
                             markMessageAsSentFromIoThread(sessionId, message.getId());
                         },

@@ -11,6 +11,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.sql.*;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
@@ -58,18 +61,37 @@ public class BlogDatabaseManager {
     }
 
     private void initializeSchema() throws SQLException, IOException {
-        try (InputStream is = getClass().getResourceAsStream("/db/migration/V1.0.0__create_blog_tables.sql")) {
-            if (is == null) {
-                throw new SQLException("Blog schema migration file not found");
-            }
-            String sql = new BufferedReader(new InputStreamReader(is))
-                    .lines()
-                    .collect(Collectors.joining("\n"));
-            
-            try (Statement stmt = connection.createStatement()) {
-                stmt.execute(sql);
+        // Run migrations in order
+        String[] migrations = {
+            "V1.0.0__create_blog_tables.sql",
+            "V1.0.1__convert_timestamps_to_epoch.sql"
+        };
+        
+        for (String migrationFile : migrations) {
+            String migrationPath = "/db/migration/" + migrationFile;
+            try (InputStream is = getClass().getResourceAsStream(migrationPath)) {
+                if (is == null) {
+                    LOGGER.warning("Migration file not found, skipping: " + migrationFile);
+                    continue;
+                }
+                
+                String sql = new BufferedReader(new InputStreamReader(is))
+                        .lines()
+                        .collect(Collectors.joining("\n"));
+                
+                try (Statement stmt = connection.createStatement()) {
+                    // Execute migration (split by semicolons for multiple statements)
+                    for (String statement : sql.split(";")) {
+                        String trimmed = statement.trim();
+                        if (!trimmed.isEmpty() && !trimmed.startsWith("--")) {
+                            stmt.execute(trimmed);
+                        }
+                    }
+                }
+                LOGGER.info("Applied migration: " + migrationFile);
             }
         }
+        
         LOGGER.info("Blog database schema initialized");
     }
 
@@ -427,9 +449,9 @@ public class BlogDatabaseManager {
                 stmt.setString(11, post.getCanonicalUrl());
                 stmt.setString(12, post.getStatus());
                 if (post.getPublishedAt() != null) {
-                    stmt.setTimestamp(13, Timestamp.valueOf(post.getPublishedAt()));
+                    stmt.setLong(13, post.getPublishedAt().toEpochSecond(ZoneOffset.UTC));
                 } else {
-                    stmt.setNull(13, Types.TIMESTAMP);
+                    stmt.setNull(13, Types.INTEGER);
                 }
                 stmt.setInt(14, post.getReadingTimeMinutes());
                 stmt.executeUpdate();
@@ -489,7 +511,7 @@ public class BlogDatabaseManager {
     public List<BlogPost> getPublishedPosts(int limit, int offset) throws SQLException {
         return execute(conn -> {
             String sql = "SELECT * FROM blog_posts WHERE status = 'published' " +
-                        "AND published_at <= CURRENT_TIMESTAMP " +
+                        "AND published_at <= strftime('%s', 'now') " +
                         "ORDER BY published_at DESC LIMIT ? OFFSET ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setInt(1, limit);
@@ -514,7 +536,7 @@ public class BlogDatabaseManager {
     public List<BlogPost> getPostsByCategory(int categoryId, int limit, int offset) throws SQLException {
         return execute(conn -> {
             String sql = "SELECT * FROM blog_posts WHERE category_id = ? AND status = 'published' " +
-                        "AND published_at <= CURRENT_TIMESTAMP " +
+                        "AND published_at <= strftime('%s', 'now') " +
                         "ORDER BY published_at DESC LIMIT ? OFFSET ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setInt(1, categoryId);
@@ -539,7 +561,7 @@ public class BlogDatabaseManager {
             String sql = "SELECT bp.* FROM blog_posts bp " +
                         "JOIN post_tags pt ON bp.id = pt.post_id " +
                         "WHERE pt.tag_id = ? AND bp.status = 'published' " +
-                        "AND bp.published_at <= CURRENT_TIMESTAMP " +
+                        "AND bp.published_at <= strftime('%s', 'now') " +
                         "ORDER BY bp.published_at DESC LIMIT ? OFFSET ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setInt(1, tagId);
@@ -562,7 +584,7 @@ public class BlogDatabaseManager {
     public List<BlogPost> getPostsByAuthor(int authorId, int limit, int offset) throws SQLException {
         return execute(conn -> {
             String sql = "SELECT * FROM blog_posts WHERE author_id = ? AND status = 'published' " +
-                        "AND published_at <= CURRENT_TIMESTAMP " +
+                        "AND published_at <= strftime('%s', 'now') " +
                         "ORDER BY published_at DESC LIMIT ? OFFSET ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setInt(1, authorId);
@@ -588,7 +610,7 @@ public class BlogDatabaseManager {
     public List<BlogPost> searchPosts(String query, int limit, int offset) throws SQLException {
         return execute(conn -> {
             String sql = "SELECT * FROM blog_posts WHERE status = 'published' " +
-                        "AND published_at <= CURRENT_TIMESTAMP " +
+                        "AND published_at <= strftime('%s', 'now') " +
                         "AND (title LIKE ? OR content LIKE ? OR excerpt LIKE ?) " +
                         "ORDER BY published_at DESC LIMIT ? OFFSET ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -617,7 +639,7 @@ public class BlogDatabaseManager {
 
     public int countPublishedPosts() throws SQLException {
         return execute(conn -> {
-            String sql = "SELECT COUNT(*) FROM blog_posts WHERE status = 'published' AND published_at <= CURRENT_TIMESTAMP";
+            String sql = "SELECT COUNT(*) FROM blog_posts WHERE status = 'published' AND published_at <= strftime('%s', 'now')";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 try (ResultSet rs = stmt.executeQuery()) {
                     return rs.next() ? rs.getInt(1) : 0;
@@ -646,9 +668,9 @@ public class BlogDatabaseManager {
                 stmt.setString(11, post.getCanonicalUrl());
                 stmt.setString(12, post.getStatus());
                 if (post.getPublishedAt() != null) {
-                    stmt.setTimestamp(13, Timestamp.valueOf(post.getPublishedAt()));
+                    stmt.setLong(13, post.getPublishedAt().toEpochSecond(ZoneOffset.UTC));
                 } else {
-                    stmt.setNull(13, Types.TIMESTAMP);
+                    stmt.setNull(13, Types.INTEGER);
                 }
                 stmt.setInt(14, post.getReadingTimeMinutes());
                 stmt.setInt(15, post.getId());
@@ -774,7 +796,7 @@ public class BlogDatabaseManager {
     public List<BlogPost> getPopularPosts(int limit) throws SQLException {
         return execute(conn -> {
             String sql = "SELECT * FROM blog_posts WHERE status = 'published' " +
-                        "AND published_at <= CURRENT_TIMESTAMP " +
+                        "AND published_at <= strftime('%s', 'now') " +
                         "ORDER BY views DESC LIMIT ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setInt(1, limit);
@@ -824,10 +846,12 @@ public class BlogDatabaseManager {
         author.setEmail(rs.getString("email"));
         author.setBio(rs.getString("bio"));
         author.setAvatarUrl(rs.getString("avatar_url"));
-        author.setCreatedAt(rs.getTimestamp("created_at") != null ? 
-            rs.getTimestamp("created_at").toLocalDateTime() : null);
-        author.setUpdatedAt(rs.getTimestamp("updated_at") != null ? 
-            rs.getTimestamp("updated_at").toLocalDateTime() : null);
+        long createdAt = rs.getLong("created_at");
+        author.setCreatedAt(createdAt > 0 ? 
+            LocalDateTime.ofEpochSecond(createdAt, 0, ZoneOffset.UTC) : null);
+        long updatedAt = rs.getLong("updated_at");
+        author.setUpdatedAt(updatedAt > 0 ? 
+            LocalDateTime.ofEpochSecond(updatedAt, 0, ZoneOffset.UTC) : null);
         return author;
     }
 
@@ -837,8 +861,9 @@ public class BlogDatabaseManager {
         category.setName(rs.getString("name"));
         category.setSlug(rs.getString("slug"));
         category.setDescription(rs.getString("description"));
-        category.setCreatedAt(rs.getTimestamp("created_at") != null ? 
-            rs.getTimestamp("created_at").toLocalDateTime() : null);
+        long createdAt = rs.getLong("created_at");
+        category.setCreatedAt(createdAt > 0 ? 
+            LocalDateTime.ofEpochSecond(createdAt, 0, ZoneOffset.UTC) : null);
         return category;
     }
 
@@ -847,8 +872,9 @@ public class BlogDatabaseManager {
         tag.setId(rs.getInt("id"));
         tag.setName(rs.getString("name"));
         tag.setSlug(rs.getString("slug"));
-        tag.setCreatedAt(rs.getTimestamp("created_at") != null ? 
-            rs.getTimestamp("created_at").toLocalDateTime() : null);
+        long createdAt = rs.getLong("created_at");
+        tag.setCreatedAt(createdAt > 0 ? 
+            LocalDateTime.ofEpochSecond(createdAt, 0, ZoneOffset.UTC) : null);
         return tag;
     }
 
@@ -867,12 +893,15 @@ public class BlogDatabaseManager {
         post.setMetaKeywords(rs.getString("meta_keywords"));
         post.setCanonicalUrl(rs.getString("canonical_url"));
         post.setStatus(rs.getString("status"));
-        post.setPublishedAt(rs.getTimestamp("published_at") != null ? 
-            rs.getTimestamp("published_at").toLocalDateTime() : null);
-        post.setCreatedAt(rs.getTimestamp("created_at") != null ? 
-            rs.getTimestamp("created_at").toLocalDateTime() : null);
-        post.setUpdatedAt(rs.getTimestamp("updated_at") != null ? 
-            rs.getTimestamp("updated_at").toLocalDateTime() : null);
+        long publishedAt = rs.getLong("published_at");
+        post.setPublishedAt(publishedAt > 0 ? 
+            LocalDateTime.ofEpochSecond(publishedAt, 0, ZoneOffset.UTC) : null);
+        long createdAt = rs.getLong("created_at");
+        post.setCreatedAt(createdAt > 0 ? 
+            LocalDateTime.ofEpochSecond(createdAt, 0, ZoneOffset.UTC) : null);
+        long updatedAt = rs.getLong("updated_at");
+        post.setUpdatedAt(updatedAt > 0 ? 
+            LocalDateTime.ofEpochSecond(updatedAt, 0, ZoneOffset.UTC) : null);
         post.setViews(rs.getInt("views"));
         post.setReadingTimeMinutes(rs.getInt("reading_time_minutes"));
         return post;

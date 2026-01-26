@@ -8,7 +8,12 @@
  * 4. Provides HTTP endpoints to send messages and poll for responses
  *
  * Usage:
- *   bun run ws_bridge_server.ts [port]
+ *   bun run ws_bridge_server.ts [bridge_port] [email] [filesurf_port]
+ *
+ * Arguments:
+ *   bridge_port   - Port for the bridge server (default: 5000)
+ *   email         - Email for authentication (default: test@example.com)
+ *   filesurf_port - FileSurf application port (default: 9090)
  *
  * Endpoints:
  *   POST /message - Send a message to the WebSocket
@@ -18,9 +23,15 @@
  *   DELETE /session - Close connection and create new session
  *   POST /close - Close the WebSocket connection
  *
- * Example:
- *   # Start the server
+ * Examples:
+ *   # Start bridge on port 5000, connect to FileSurf on port 9090 (default)
  *   bun run ws_bridge_server.ts 5000
+ *
+ *   # Start bridge on port 5000 with custom email
+ *   bun run ws_bridge_server.ts 5000 user@example.com
+ *
+ *   # Start bridge on port 5000 with custom email and FileSurf port 8080
+ *   bun run ws_bridge_server.ts 5000 user@example.com 8080
  *
  *   # Send a message
  *   curl -X POST http://localhost:5000/message -d "List files"
@@ -36,9 +47,15 @@ import type { WebSocket as WSWebSocket } from "ws";
 
 // Configuration
 const DEFAULT_HOST = "localhost";
-const DEFAULT_PORT = 9090;
-const BRIDGE_PORT = parseInt(process.argv[2] || "5000");
-const EMAIL = process.argv[3] || "test@example.com";
+const DEFAULT_FILESURF_PORT = 9090;
+const DEFAULT_BRIDGE_PORT = 5000;
+const DEFAULT_EMAIL = "test@example.com";
+
+// Parse command-line arguments
+const BRIDGE_PORT = parseInt(process.argv[2] || String(DEFAULT_BRIDGE_PORT));
+const EMAIL = process.argv[3] || DEFAULT_EMAIL;
+const FILESURF_PORT = process.argv[4] ? parseInt(process.argv[4]) : DEFAULT_FILESURF_PORT;
+
 const WEBSOCKET_PATH = "/app/ws/";
 
 // Global state
@@ -80,8 +97,8 @@ async function httpRequest(
     if (typeof options.data === "string") {
       body = options.data;
     } else {
-      body = new URLSearchParams(options.data).toString();
-      headers["Content-Type"] = "application/x-www-form-urlencoded";
+      body = JSON.stringify(options.data);
+      headers["Content-Type"] = "application/json";
     }
   }
 
@@ -459,7 +476,9 @@ const server = new Server(async (req: IncomingMessage, res: ServerResponse) => {
       state.sessionId = "";
 
       const host = process.env.FILE_SURF_HOST || DEFAULT_HOST;
-      const port = parseInt(process.env.FILE_SURF_PORT || String(DEFAULT_PORT));
+      const port = process.env.FILE_SURF_PORT 
+        ? parseInt(process.env.FILE_SURF_PORT) 
+        : FILESURF_PORT;
 
       await initializeSession(host, port, state.email);
 
@@ -565,14 +584,17 @@ process.on("SIGTERM", () => {
 
 // Start the server
 async function main() {
-  const port = parseInt(process.env.FILE_SURF_PORT || String(DEFAULT_PORT));
+  // Use environment variable if set, otherwise use command-line argument or default
+  const filesurfPort = process.env.FILE_SURF_PORT 
+    ? parseInt(process.env.FILE_SURF_PORT) 
+    : FILESURF_PORT;
   const host = process.env.FILE_SURF_HOST || DEFAULT_HOST;
 
-  await initializeSession(host, port, EMAIL);
+  await initializeSession(host, filesurfPort, EMAIL);
 
   server.listen(BRIDGE_PORT, "0.0.0.0", () => {
     console.log(`\n🌐 Starting bridge server on http://localhost:${BRIDGE_PORT}`);
-    console.log(`📡 FileSurf app: http://${host}:${port}`);
+    console.log(`📡 FileSurf app: http://${host}:${filesurfPort}`);
     console.log();
   });
 }
