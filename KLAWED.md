@@ -9,7 +9,7 @@ FileSurf v2 is a Quarkus-based application for file management and chat function
 mvn quarkus:dev
 
 # 2. Access the application
-# Default: http://localhost:8080/file-chat
+# Default: http://localhost:9090/file-chat
 # Or use custom port: http://localhost:8082/file-chat
 
 # 3. View logs
@@ -30,7 +30,7 @@ You're encoureaged to create commits when finish a task, fix a bug or adding a n
    # In the project root directory
    mvn quarkus:dev
    ```
-   This will start the application on port 8080 (or another port if specified).
+   This will start the application on port 9090 (or another port if specified).
 
 2. **Hot Reload Behavior**:
    - Changes to Java code, templates, and resources will be automatically picked up by Quarkus
@@ -45,8 +45,8 @@ You're encoureaged to create commits when finish a task, fix a bug or adding a n
      - Restart Quarkus manually after changes
 
 ### Port Configuration
-- Default port: 8080
-- Alternative port (if 8080 is busy): 8082
+- Default port: 9090 (configured in application.properties)
+- Alternative port (if 9090 is busy): 8082
 - To specify a custom port:
   ```bash
   mvn quarkus:dev -Dquarkus.http.port=8081
@@ -274,11 +274,17 @@ A persistent WebSocket connection testing tool for AI agents using a Bun-based b
 
 **Start the bridge server:**
 ```bash
-# Start on port 5000, connecting to FileSurf on port 9090
+# Start on port 5000, connecting to FileSurf on port 9090 (default)
 bun run scripts/ws_bridge_server.ts 5000
 
 # Or with custom email
 bun run scripts/ws_bridge_server.ts 5000 user@example.com
+
+# Or with custom email and FileSurf port
+bun run scripts/ws_bridge_server.ts 5000 user@example.com 8080
+
+# Environment variables still work as alternative
+FILE_SURF_PORT=8080 bun run scripts/ws_bridge_server.ts 5000 user@example.com
 ```
 
 **Send a message:**
@@ -383,7 +389,7 @@ Both CSS and JS files are automatically hashed during **production** builds to p
 ### Port Already in Use
 ```bash
 # Check what's using the port
-lsof -i :8080
+lsof -i :9090
 
 # Kill the process
 kill <pid>
