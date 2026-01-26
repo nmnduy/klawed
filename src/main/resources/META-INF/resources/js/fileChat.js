@@ -158,13 +158,18 @@ export function init(rootEl) {
 
 
     function setDisabledState(disabled) {
-        if (elements.messageInput) elements.messageInput.disabled = disabled;
+        // Allow users to continue typing even when disconnected
+        // Only disable send and upload buttons
+        // if (elements.messageInput) elements.messageInput.disabled = disabled;
+        
         // Enable/disable all send buttons (both mobile and desktop)
         if (elements.sendButtons) {
             elements.sendButtons.forEach(btn => btn.disabled = disabled);
         }
         if (elements.chatUploadButton) elements.chatUploadButton.disabled = disabled;
-        if (elements.voiceButton) elements.voiceButton.disabled = disabled;
+        
+        // Allow voice recording even when disconnected (users can queue messages)
+        // if (elements.voiceButton) elements.voiceButton.disabled = disabled;
     }
 
     function updateStatus(connected, message) {
