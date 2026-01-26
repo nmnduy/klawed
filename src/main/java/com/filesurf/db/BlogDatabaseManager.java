@@ -120,20 +120,42 @@ public class BlogDatabaseManager {
     }
 
     public <T> T executeInTransaction(ConnectionConsumer<T> operation) throws SQLException {
-        return execute(conn -> {
-            boolean autoCommit = conn.getAutoCommit();
+        synchronized(lock) {
+            boolean autoCommit = connection.getAutoCommit();
+            boolean transactionStarted = false;
             try {
-                conn.setAutoCommit(false);
-                T result = operation.accept(conn);
-                conn.commit();
+                if (autoCommit) {
+                    connection.setAutoCommit(false);
+                    transactionStarted = true;
+                }
+                T result = operation.accept(connection);
+                if (transactionStarted) {
+                    connection.commit();
+                }
                 return result;
-            } catch (SQLException e) {
-                conn.rollback();
-                throw e;
+            } catch (Exception e) {
+                if (transactionStarted) {
+                    try {
+                        connection.rollback();
+                    } catch (SQLException rollbackEx) {
+                        LOGGER.warning("Error during rollback: " + rollbackEx.getMessage());
+                    }
+                }
+                if (e instanceof SQLException) {
+                    throw (SQLException) e;
+                } else {
+                    throw new SQLException("Transaction failed", e);
+                }
             } finally {
-                conn.setAutoCommit(autoCommit);
+                if (transactionStarted) {
+                    try {
+                        connection.setAutoCommit(autoCommit);
+                    } catch (SQLException ex) {
+                        LOGGER.warning("Error restoring autoCommit: " + ex.getMessage());
+                    }
+                }
             }
-        });
+        }
     }
 
     // ==================== AUTHOR OPERATIONS ====================

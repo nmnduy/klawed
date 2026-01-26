@@ -48,7 +48,9 @@ public class FeedbackDatabaseManager {
                 stmt.execute("PRAGMA busy_timeout = 5000");
                 stmt.execute("PRAGMA foreign_keys = ON");
                 stmt.execute("PRAGMA cache_size = -2000");
+                stmt.execute("PRAGMA mmap_size = 268435456");
                 stmt.execute("PRAGMA temp_store = MEMORY");
+                stmt.execute("PRAGMA encoding = 'UTF-8'");
             }
 
             LOGGER.info("Feedback database initialized: " + feedbackDbPath);
