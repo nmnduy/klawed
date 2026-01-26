@@ -1316,10 +1316,12 @@ int main(int argc, char *argv[]) {
 
     // Check for provider flag
     const char *provider_from_cli = NULL;
+    int provider_flag_argc = 0;  // Track how many args consumed by -p/--provider
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--provider") == 0) {
             if (i + 1 < argc) {
                 provider_from_cli = argv[i + 1];
+                provider_flag_argc = 2;  // -p and the provider name
                 // Set the environment variable so provider_init picks it up
                 if (setenv("KLAWED_LLM_PROVIDER", provider_from_cli, 1) != 0) {
                     LOG_WARN("Failed to set KLAWED_LLM_PROVIDER from --provider flag: %s", strerror(errno));
@@ -1461,6 +1463,7 @@ int main(int argc, char *argv[]) {
 #endif
 
     // Check for single command mode: ./klawed "prompt"
+    // Also support: ./klawed -p provider "prompt"
     int is_single_command_mode = 0;
     char *single_command = NULL;
     int socket_ipc_enabled = 0;
@@ -1468,13 +1471,30 @@ int main(int argc, char *argv[]) {
         socket_ipc_enabled = 1;
     }
 
-    if (argc == 2 && !resume_session && !list_sessions && !socket_ipc_enabled) {
+    // Compute effective argc after removing provider flag arguments
+    int effective_argc = argc - provider_flag_argc;
+
+    if (effective_argc == 2 && !resume_session && !list_sessions && !socket_ipc_enabled) {
         // Single argument provided - treat as prompt for single command mode
         // (but not if it's a resume flag without session ID)
+        // Find the prompt argument (the one that's not part of -p flag)
         is_single_command_mode = 1;
-        single_command = argv[1];
+        if (provider_flag_argc > 0) {
+            // With -p flag: find the prompt (last argument that's not provider name)
+            // Could be: ./klawed -p provider "prompt" or ./klawed "prompt" -p provider
+            for (int i = 1; i < argc; i++) {
+                if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--provider") == 0) {
+                    i++;  // Skip provider name too
+                    continue;
+                }
+                single_command = argv[i];
+                break;
+            }
+        } else {
+            single_command = argv[1];
+        }
         LOG_INFO("Single command mode enabled with prompt: %s", single_command);
-    } else if (argc > 2 && !resume_session && !list_sessions && !socket_ipc_enabled) {
+    } else if (effective_argc > 2 && !resume_session && !list_sessions && !socket_ipc_enabled) {
         LOG_ERROR("Unexpected arguments provided");
         printf("Try '%s --help' for usage information.\n", argv[0]);
         return 1;
