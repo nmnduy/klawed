@@ -1,5 +1,7 @@
 package com.filesurf;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.filesurf.model.*;
 import com.filesurf.service.BlogService;
 import com.filesurf.service.RssFeedService;
@@ -17,7 +19,9 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 /**
@@ -28,6 +32,7 @@ import java.util.logging.Logger;
 public class BlogResource {
 
     private static final Logger LOGGER = Logger.getLogger(BlogResource.class.getName());
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Inject
     BlogService blogService;
@@ -163,14 +168,51 @@ public class BlogResource {
             String metaDescription = blogService.getMetaDescription(post);
             String keywords = blogService.getKeywords(post);
             String canonicalUrl = blogService.getCanonicalUrl(post);
-            String structuredData = blogService.generateStructuredData(post);
+            
+            // Create blog post data object for client-side structured data generation
+            Map<String, Object> blogPostData = new HashMap<>();
+            blogPostData.put("title", post.getTitle());
+            blogPostData.put("description", metaDescription);
+            blogPostData.put("canonicalUrl", canonicalUrl);
+            blogPostData.put("siteName", siteName);
+            blogPostData.put("siteUrl", siteUrl);
+            
+            if (post.getFeaturedImageUrl() != null) {
+                blogPostData.put("featuredImageUrl", siteUrl + post.getFeaturedImageUrl());
+            }
+            
+            if (post.getAuthor() != null) {
+                Map<String, String> authorData = new HashMap<>();
+                authorData.put("name", post.getAuthor().getName());
+                if (post.getAuthor().getAvatarUrl() != null) {
+                    authorData.put("avatarUrl", post.getAuthor().getAvatarUrl());
+                }
+                blogPostData.put("author", authorData);
+            }
+            
+            if (post.getPublishedAt() != null) {
+                blogPostData.put("publishedAt", post.getPublishedAt().toString());
+            }
+            
+            if (post.getUpdatedAt() != null) {
+                blogPostData.put("updatedAt", post.getUpdatedAt().toString());
+            }
+            
+            // Convert to JSON string for safe injection into JavaScript
+            String blogPostDataJson;
+            try {
+                blogPostDataJson = OBJECT_MAPPER.writeValueAsString(blogPostData);
+            } catch (JsonProcessingException e) {
+                LOGGER.warning("Failed to serialize blog post data: " + e.getMessage());
+                blogPostDataJson = "{}";
+            }
             
             return Response.ok(blogPost.data("post", post)
                     .data("metaTitle", metaTitle)
                     .data("metaDescription", metaDescription)
                     .data("keywords", keywords)
                     .data("canonicalUrl", canonicalUrl)
-                    .data("structuredData", structuredData)
+                    .data("blogPostDataJson", blogPostDataJson)
                     .data("relatedPosts", relatedPosts)
                     .data("siteName", siteName)
                     .data("siteUrl", siteUrl)
