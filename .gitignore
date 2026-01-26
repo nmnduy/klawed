@@ -70,5 +70,6 @@ wt-*/
 # Klawed environment files with secrets
 klawed.env
 *.env
+.env.local
 !.env.example
 scripts/__pycache__/
