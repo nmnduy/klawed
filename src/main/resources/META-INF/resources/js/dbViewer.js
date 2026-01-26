@@ -172,16 +172,16 @@ class DBViewer {
         this.modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm hidden';
 
         this.modal.innerHTML = `
-            <div class="bg-card w-[90vw] h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden border border-border">
+            <div class="bg-card w-full h-full sm:w-[90vw] sm:h-[90vh] sm:rounded-xl shadow-2xl flex flex-col overflow-hidden border-0 sm:border border-border">
                 <!-- Header -->
-                <div class="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
-                    <div class="flex items-center gap-3">
-                        <svg class="w-6 h-6 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b border-border bg-muted/30">
+                    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6 text-cyan-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
                         </svg>
-                        <h2 class="text-heading-s text-foreground" id="dbv-filename">${this.escapeHtml(this.currentDbName)}</h2>
+                        <h2 class="text-body-m sm:text-heading-s text-foreground truncate" id="dbv-filename">${this.escapeHtml(this.currentDbName)}</h2>
                     </div>
-                    <button id="dbv-close" class="p-2 hover:bg-muted rounded-lg transition" title="Close (Esc)">
+                    <button id="dbv-close" class="p-2 hover:bg-muted rounded-lg transition flex-shrink-0" title="Close (Esc)">
                         <svg class="w-5 h-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -189,15 +189,21 @@ class DBViewer {
                 </div>
 
                 <!-- Main content -->
-                <div class="flex flex-1 overflow-hidden">
-                    <!-- Left sidebar -->
-                    <div class="w-64 flex-shrink-0 border-r border-border flex flex-col bg-muted/20">
-                        <!-- Tables list -->
+                <div class="flex flex-col sm:flex-row flex-1 overflow-hidden">
+                    <!-- Left sidebar / Mobile toggle -->
+                    <div class="sm:w-64 flex-shrink-0 border-b sm:border-b-0 sm:border-r border-border flex flex-col bg-muted/20">
+                        <!-- Tables list with mobile toggle -->
                         <div class="flex-1 overflow-hidden flex flex-col">
-                            <div class="px-4 py-3 border-b border-border">
+                            <button id="dbv-tables-toggle" class="sm:hidden w-full px-3 py-3 flex items-center justify-between hover:bg-muted/50 transition border-b border-border">
+                                <h3 class="text-caption-m-bold text-muted-foreground uppercase tracking-wider">Tables</h3>
+                                <svg id="dbv-tables-chevron" class="w-4 h-4 text-muted-foreground transform rotate-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                            <div class="hidden sm:block px-3 sm:px-4 py-2 sm:py-3 border-b border-border">
                                 <h3 class="text-caption-m-bold text-muted-foreground uppercase tracking-wider">Tables</h3>
                             </div>
-                            <div id="dbv-tables-list" class="flex-1 overflow-y-auto p-2">
+                            <div id="dbv-tables-list" class="hidden sm:block flex-1 overflow-y-auto p-2">
                                 <div class="flex items-center justify-center py-8">
                                     <svg class="w-5 h-5 animate-spin text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -208,13 +214,13 @@ class DBViewer {
 
                         <!-- Schema panel -->
                         <div class="border-t border-border">
-                            <button id="dbv-schema-toggle" class="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition">
+                            <button id="dbv-schema-toggle" class="w-full px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between hover:bg-muted/50 transition">
                                 <h3 class="text-caption-m-bold text-muted-foreground uppercase tracking-wider">Schema</h3>
                                 <svg id="dbv-schema-chevron" class="w-4 h-4 text-muted-foreground transform rotate-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                 </svg>
                             </button>
-                            <div id="dbv-schema-panel" class="hidden overflow-y-auto max-h-48 p-2 bg-muted/10">
+                            <div id="dbv-schema-panel" class="hidden overflow-y-auto max-h-40 sm:max-h-48 p-2 bg-muted/10">
                                 <p class="text-caption-s text-muted-foreground px-2 py-4 text-center">Select a table to view schema</p>
                             </div>
                         </div>
@@ -224,7 +230,7 @@ class DBViewer {
                     <div class="flex-1 flex flex-col overflow-hidden">
                         <!-- SQL Runner section -->
                         <div class="border-b border-border">
-                            <button id="dbv-sql-toggle" class="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition">
+                            <button id="dbv-sql-toggle" class="w-full px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between hover:bg-muted/30 transition">
                                 <div class="flex items-center gap-2">
                                     <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
@@ -235,23 +241,23 @@ class DBViewer {
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                 </svg>
                             </button>
-                            <div id="dbv-sql-section" class="px-4 pb-4">
-                                <div class="flex gap-3">
+                            <div id="dbv-sql-section" class="px-3 sm:px-4 pb-3 sm:pb-4">
+                                <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
                                     <div class="flex-1">
                                         <textarea id="dbv-sql-input"
-                                            class="w-full h-20 px-3 py-2 bg-background border border-border rounded-lg text-body-s font-mono text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                                            class="w-full h-20 sm:h-20 px-3 py-2 bg-background border border-border rounded-lg text-caption-s sm:text-body-s font-mono text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
                                             placeholder="Enter SQL query... (Ctrl+Enter to run)"></textarea>
                                     </div>
-                                    <div class="flex flex-col gap-2">
-                                        <button id="dbv-run-query" class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition text-caption-m-bold flex items-center gap-2">
+                                    <div class="flex sm:flex-col gap-2">
+                                        <button id="dbv-run-query" class="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition text-caption-m-bold flex items-center justify-center gap-2">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
-                                            Run
+                                            <span class="hidden sm:inline">Run</span>
                                         </button>
-                                        <div class="relative">
-                                            <button id="dbv-history-btn" class="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition text-caption-m flex items-center gap-2" title="Query history">
+                                        <div class="relative flex-1 sm:flex-none">
+                                            <button id="dbv-history-btn" class="w-full px-3 sm:px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition text-caption-m flex items-center justify-center gap-2" title="Query history">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                 </svg>
@@ -259,7 +265,7 @@ class DBViewer {
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                                 </svg>
                                             </button>
-                                            <div id="dbv-history-dropdown" class="hidden absolute right-0 top-full mt-1 w-80 max-h-60 overflow-y-auto bg-card rounded-lg shadow-lg border border-border z-20">
+                                            <div id="dbv-history-dropdown" class="hidden absolute left-0 sm:right-0 sm:left-auto top-full mt-1 w-full sm:w-80 max-h-60 overflow-y-auto bg-card rounded-lg shadow-lg border border-border z-20">
                                                 <div class="p-2 text-caption-s text-muted-foreground text-center">No query history</div>
                                             </div>
                                         </div>
@@ -282,26 +288,26 @@ class DBViewer {
                         <!-- Table data section -->
                         <div class="flex-1 flex flex-col overflow-hidden">
                             <!-- Toolbar -->
-                            <div id="dbv-toolbar" class="hidden px-4 py-3 border-b border-border flex items-center gap-4 flex-wrap">
+                            <div id="dbv-toolbar" class="hidden px-3 sm:px-4 py-2 sm:py-3 border-b border-border flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
                                 <!-- Search -->
-                                <div class="flex-1 min-w-[200px] max-w-md relative">
-                                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div class="flex-1 min-w-0 relative">
+                                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
                                     <input id="dbv-search" type="text"
-                                        class="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-body-s text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        class="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-caption-s sm:text-body-s text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                                         placeholder="Search all columns...">
                                 </div>
 
                                 <!-- Export buttons -->
                                 <div class="flex items-center gap-2">
-                                    <button id="dbv-export-csv" class="px-3 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition text-caption-m flex items-center gap-2">
+                                    <button id="dbv-export-csv" class="flex-1 sm:flex-none px-3 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition text-caption-m flex items-center justify-center gap-2">
                                         <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
                                         CSV
                                     </button>
-                                    <button id="dbv-export-json" class="px-3 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition text-caption-m flex items-center gap-2">
+                                    <button id="dbv-export-json" class="flex-1 sm:flex-none px-3 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg transition text-caption-m flex items-center justify-center gap-2">
                                         <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
@@ -323,28 +329,28 @@ class DBViewer {
                             </div>
 
                             <!-- Pagination -->
-                            <div id="dbv-pagination" class="hidden px-4 py-3 border-t border-border flex items-center justify-between">
-                                <div class="text-caption-s text-muted-foreground">
+                            <div id="dbv-pagination" class="hidden px-3 sm:px-4 py-2 sm:py-3 border-t border-border flex flex-col sm:flex-row items-center gap-3 sm:justify-between">
+                                <div class="text-caption-s text-muted-foreground text-center sm:text-left">
                                     <span id="dbv-pagination-info">Showing 0 rows</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <button id="dbv-page-first" class="p-2 hover:bg-muted rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed" title="First page">
+                                    <button id="dbv-page-first" class="p-2 hover:bg-muted rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation" title="First page">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                                         </svg>
                                     </button>
-                                    <button id="dbv-page-prev" class="p-2 hover:bg-muted rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed" title="Previous page">
+                                    <button id="dbv-page-prev" class="p-2 hover:bg-muted rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation" title="Previous page">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                                         </svg>
                                     </button>
-                                    <span id="dbv-page-number" class="px-3 py-1 text-caption-m text-foreground">Page 1</span>
-                                    <button id="dbv-page-next" class="p-2 hover:bg-muted rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed" title="Next page">
+                                    <span id="dbv-page-number" class="px-3 py-1 text-caption-m text-foreground whitespace-nowrap">Page 1</span>
+                                    <button id="dbv-page-next" class="p-2 hover:bg-muted rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation" title="Next page">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                         </svg>
                                     </button>
-                                    <button id="dbv-page-last" class="p-2 hover:bg-muted rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed" title="Last page">
+                                    <button id="dbv-page-last" class="p-2 hover:bg-muted rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation" title="Last page">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                                         </svg>
@@ -374,6 +380,18 @@ class DBViewer {
                 this.close();
             }
         });
+
+        // Tables toggle (mobile)
+        const tablesToggle = document.getElementById('dbv-tables-toggle');
+        if (tablesToggle) {
+            tablesToggle.addEventListener('click', () => {
+                const tablesList = document.getElementById('dbv-tables-list');
+                const tablesChevron = document.getElementById('dbv-tables-chevron');
+                tablesList.classList.toggle('hidden');
+                tablesList.classList.toggle('block');
+                tablesChevron.classList.toggle('rotate-180');
+            });
+        }
 
         // Schema toggle
         document.getElementById('dbv-schema-toggle').addEventListener('click', () => {
@@ -515,9 +533,9 @@ class DBViewer {
         }
 
         tablesList.innerHTML = this.tables.map(table => `
-            <button class="dbv-table-item w-full text-left px-3 py-2 rounded-lg hover:bg-muted/50 transition flex items-center gap-2 group ${this.currentTable === table ? 'bg-primary/10 text-primary' : 'text-foreground'}"
+            <button class="dbv-table-item w-full text-left px-3 py-2.5 rounded-lg hover:bg-muted/50 transition flex items-center gap-2 group touch-manipulation ${this.currentTable === table ? 'bg-primary/10 text-primary' : 'text-foreground'}"
                 data-table="${this.escapeHtml(table)}">
-                <svg class="w-4 h-4 ${this.currentTable === table ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4 flex-shrink-0 ${this.currentTable === table ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
                 <span class="text-caption-m truncate">${this.escapeHtml(table)}</span>
@@ -528,6 +546,14 @@ class DBViewer {
         tablesList.querySelectorAll('.dbv-table-item').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.selectTable(btn.dataset.table);
+                // On mobile, collapse the tables list after selection
+                if (window.innerWidth < 640) { // sm breakpoint
+                    tablesList.classList.add('hidden');
+                    const tablesChevron = document.getElementById('dbv-tables-chevron');
+                    if (tablesChevron) {
+                        tablesChevron.classList.remove('rotate-180');
+                    }
+                }
             });
         });
     }
@@ -734,11 +760,12 @@ class DBViewer {
 
         // Build table HTML
         const tableHtml = `
-            <table class="w-full border-collapse min-w-max">
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse min-w-max">
                 <thead class="sticky top-0 bg-muted/50 backdrop-blur-sm z-10">
                     <tr>
                         ${columns.map(col => `
-                            <th class="px-4 py-3 text-left text-caption-m-bold text-foreground border-b border-border cursor-pointer hover:bg-muted/70 transition select-none whitespace-nowrap"
+                            <th class="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-caption-m-bold text-foreground border-b border-border cursor-pointer hover:bg-muted/70 active:bg-muted transition select-none whitespace-nowrap touch-manipulation"
                                 data-column="${this.escapeHtml(col)}">
                                 <div class="flex items-center gap-2">
                                     <span>${this.escapeHtml(col)}</span>
@@ -756,7 +783,7 @@ class DBViewer {
                         ${columns.map(col => `
                             <th class="px-2 py-2 border-b border-border">
                                 <input type="text"
-                                    class="w-full px-2 py-1 text-caption-s bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary/50"
+                                    class="w-full min-w-[100px] px-2 py-1.5 text-caption-s bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary/50"
                                     placeholder="Filter..."
                                     data-filter-column="${this.escapeHtml(col)}"
                                     value="${this.escapeHtml(this.columnFilters[col] || '')}">
@@ -773,16 +800,17 @@ class DBViewer {
                                 const displayValue = isNull ? 'NULL' : String(value);
                                 const truncated = displayValue.length > 100;
                                 return `
-                                    <td class="px-4 py-2.5 text-body-s border-b border-border/50 ${isNull ? 'text-muted-foreground italic' : 'text-foreground'}"
+                                    <td class="px-3 sm:px-4 py-2 sm:py-2.5 text-caption-s sm:text-body-s border-b border-border/50 ${isNull ? 'text-muted-foreground italic' : 'text-foreground'}"
                                         title="${this.escapeHtml(displayValue)}">
-                                        <span class="block max-w-xs truncate">${this.escapeHtml(truncated ? displayValue.substring(0, 100) + '...' : displayValue)}</span>
+                                        <span class="block max-w-[200px] sm:max-w-xs truncate">${this.escapeHtml(truncated ? displayValue.substring(0, 100) + '...' : displayValue)}</span>
                                     </td>
                                 `;
                             }).join('')}
                         </tr>
                     `).join('')}
                 </tbody>
-            </table>
+                </table>
+            </div>
         `;
 
         dataContainer.innerHTML = tableHtml;
