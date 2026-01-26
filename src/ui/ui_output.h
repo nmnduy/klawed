@@ -10,6 +10,7 @@
 
 #include "../tui.h"
 #include "../message_queue.h"
+#include "../spinner_messages.h"
 
 /**
  * Append a line to the UI conversation area
@@ -41,6 +42,28 @@ void ui_append_line(TUIState *tui,
 void ui_set_status(TUIState *tui,
                    TUIMessageQueue *queue,
                    const char *status_text);
+
+/**
+ * Set a random varied status message based on context
+ *
+ * @param tui TUI state pointer (NULL if not in TUI mode)
+ * @param queue Message queue pointer (NULL if not using queue)
+ * @param context Message context (API call, tool running, etc.)
+ */
+void ui_set_status_varied(TUIState *tui,
+                          TUIMessageQueue *queue,
+                          SpinnerMessageContext context);
+
+/**
+ * Set a random varied status message for a specific tool
+ *
+ * @param tui TUI state pointer (NULL if not in TUI mode)
+ * @param queue Message queue pointer (NULL if not using queue)
+ * @param tool_name Name of the tool being executed
+ */
+void ui_set_status_for_tool(TUIState *tui,
+                            TUIMessageQueue *queue,
+                            const char *tool_name);
 
 /**
  * Show an error message in the UI

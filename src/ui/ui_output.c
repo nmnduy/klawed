@@ -145,3 +145,17 @@ void ui_show_error(TUIState *tui,
     }
     print_error(safe);
 }
+
+void ui_set_status_varied(TUIState *tui,
+                          TUIMessageQueue *queue,
+                          SpinnerMessageContext context) {
+    const char *msg = spinner_random_msg_for_context(context);
+    ui_set_status(tui, queue, msg);
+}
+
+void ui_set_status_for_tool(TUIState *tui,
+                            TUIMessageQueue *queue,
+                            const char *tool_name) {
+    const char *msg = spinner_random_msg_for_tool(tool_name);
+    ui_set_status(tui, queue, msg);
+}
