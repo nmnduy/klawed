@@ -139,4 +139,3 @@ go run github.com/playwright-community/playwright-go/cmd/playwright@latest insta
 - `src/explore_tools.c` - C implementation of explore tools
 - `src/explore_tools.h` - Header file
 - `tools/web_browse_agent/` - Go web browser agent
-- `vendors/context7/` - Context7 MCP server (reference)

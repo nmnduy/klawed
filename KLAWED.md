@@ -34,7 +34,6 @@ Project instructions for Klawed when working with this codebase.
 
 **Vendors:**
 - **web_browse_agent**: `tools/web_browse_agent/` - Go-based web browser agent with Playwright
-- **context7**: `vendors/context7/` - Context7 MCP server (reference for API)
 
 **Data & State:**
 - **Database/Persistence**: `src/persistence.c`, `src/sqlite_queue.c`, `docs/sqlite-queue.md`
