@@ -97,6 +97,7 @@ Note: Unix socket mode has been removed in favor of the more reliable SQLite que
 - Keep each skill self-contained with installation instructions, usage examples, and troubleshooting tips
 
 **Current Skills:**
+- `cloud_storage.md` - Access Dropbox, Google Drive, OneDrive, S3, etc. via rclone
 - `github.md` - Browse and analyze GitHub repositories (n8n connectors) without full clone
 - `latex.md` - PDF generation using LaTeX with comprehensive recipes
 - `ocr.md` - Optical Character Recognition for extracting text
