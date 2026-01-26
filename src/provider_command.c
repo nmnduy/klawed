@@ -248,6 +248,35 @@ int cmd_provider(ConversationState *state, const char *args) {
             char status_msg[256];
             snprintf(status_msg, sizeof(status_msg), "Current provider: %s", current_provider_name);
             tui_update_status(state->tui, status_msg);
+
+            // Display current provider settings in conversation window
+            tui_add_conversation_line(state->tui, NULL, "", COLOR_PAIR_FOREGROUND);
+            tui_add_conversation_line(state->tui, "[System]", "Current LLM Provider Settings:", COLOR_PAIR_STATUS);
+
+            // Provider name
+            char line_buf[512];
+            snprintf(line_buf, sizeof(line_buf), "  Provider: %s", current_provider_name);
+            tui_add_conversation_line(state->tui, NULL, line_buf, COLOR_PAIR_FOREGROUND);
+
+            // Show current model from state (runtime value)
+            if (state->model && state->model[0] != '\0') {
+                snprintf(line_buf, sizeof(line_buf), "  Model: %s", state->model);
+                tui_add_conversation_line(state->tui, NULL, line_buf, COLOR_PAIR_FOREGROUND);
+            }
+
+            // Provider type and API base from config
+            if (current_provider_config) {
+                snprintf(line_buf, sizeof(line_buf), "  Type: %s",
+                         config_provider_type_to_string(current_provider_config->provider_type));
+                tui_add_conversation_line(state->tui, NULL, line_buf, COLOR_PAIR_FOREGROUND);
+
+                if (current_provider_config->api_base[0] != '\0') {
+                    snprintf(line_buf, sizeof(line_buf), "  API Base: %s", current_provider_config->api_base);
+                    tui_add_conversation_line(state->tui, NULL, line_buf, COLOR_PAIR_FOREGROUND);
+                }
+            }
+
+            tui_add_conversation_line(state->tui, NULL, "", COLOR_PAIR_FOREGROUND);
         }
 
         // Always print to stdout (in TUI mode, this goes to log)
