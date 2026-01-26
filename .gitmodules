@@ -3,6 +3,3 @@
 	url = https://github.com/ggerganov/whisper.cpp.git
 	# Pinned to v1.8.2 (released 2024-10-15)
 	# Version controlled in Makefile: WHISPER_VERSION
-[submodule "vendors/context7"]
-	path = vendors/context7
-	url = https://github.com/upstash/context7.git
