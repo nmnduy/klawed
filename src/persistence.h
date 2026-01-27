@@ -32,27 +32,20 @@
 //     created_at INTEGER NOT NULL        -- Unix timestamp for indexing/sorting
 // );
 //
-// Database schema for token_usage table:
-//
-// CREATE TABLE IF NOT EXISTS token_usage (
-//     id INTEGER PRIMARY KEY AUTOINCREMENT,
-//     api_call_id INTEGER NOT NULL,      -- Foreign key to api_calls.id
-//     session_id TEXT,                   -- Unique session identifier for grouping related token usage
-//     prompt_tokens INTEGER DEFAULT 0,   -- Number of prompt tokens used
-//     completion_tokens INTEGER DEFAULT 0, -- Number of completion tokens used
-//     total_tokens INTEGER DEFAULT 0,    -- Total tokens used
-//     cached_tokens INTEGER DEFAULT 0,   -- Number of cached tokens (from prompt_tokens_details)
-//     prompt_cache_hit_tokens INTEGER DEFAULT 0, -- Number of prompt cache hit tokens
-//     prompt_cache_miss_tokens INTEGER DEFAULT 0, -- Number of prompt cache miss tokens
-//     created_at INTEGER NOT NULL,       -- Unix timestamp for indexing/sorting
-//     FOREIGN KEY (api_call_id) REFERENCES api_calls(id) ON DELETE CASCADE
-// );
+// Token usage is stored in a separate database file (token_usage.db)
+// See token_usage_db.h for the schema and documentation.
+// The PersistenceDB struct contains a pointer to the TokenUsageDB for
+// seamless integration with existing code.
+
+// Forward declaration for token usage database
+struct TokenUsageDB;
 
 // Persistence handle - opaque structure for database connection
 typedef struct PersistenceDB {
     sqlite3 *db;
     char *db_path;
     pthread_mutex_t mutex;  // Mutex for thread-safe SQLite access
+    struct TokenUsageDB *token_usage_db;  // Separate database for token usage tracking
 } PersistenceDB;
 
 // Initialize persistence layer

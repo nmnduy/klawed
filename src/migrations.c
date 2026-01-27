@@ -68,12 +68,38 @@ static int migration_002_add_headers_json(sqlite3 *db) {
 }
 
 // Migration 3: Add session_id column to token_usage table
+// NOTE: This migration is now a no-op because token_usage has been moved
+// to a separate database file (token_usage.db). The migration is kept for
+// backwards compatibility with existing databases that have already applied
+// earlier migrations. New databases won't have a token_usage table in api_calls.db.
 static int migration_003_add_session_id_to_token_usage(sqlite3 *db) {
+    // Check if token_usage table exists first
+    const char *check_sql =
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='token_usage';";
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, check_sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_WARN("Migration 003: Failed to check for token_usage table: %s", sqlite3_errmsg(db));
+        return 0;  // Non-fatal, just skip this migration
+    }
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_ROW) {
+        // Table doesn't exist - this is expected for new databases
+        // where token_usage is in a separate file
+        LOG_INFO("Migration 003: token_usage table not found (moved to separate database), skipping");
+        return 0;
+    }
+
+    // Table exists (legacy database) - apply the migration
     const char *sql =
         "ALTER TABLE token_usage ADD COLUMN session_id TEXT;";
 
     char *err_msg = NULL;
-    int rc = sqlite3_exec(db, sql, NULL, NULL, &err_msg);
+    rc = sqlite3_exec(db, sql, NULL, NULL, &err_msg);
 
     if (rc != SQLITE_OK) {
         // Check if column already exists (idempotent migration)

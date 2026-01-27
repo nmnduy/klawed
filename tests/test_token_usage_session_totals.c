@@ -1,5 +1,7 @@
 /*
  * test_token_usage_session_totals.c - Verify session token aggregation
+ *
+ * Updated to use the separate token_usage database via persistence layer
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -10,106 +12,68 @@
 #include <string.h>
 #include <unistd.h>
 #include "../src/persistence.h"
+#include "../src/token_usage_db.h"
 
 static const char *TEST_DB_PATH = "/tmp/test_token_usage_session_totals.db";
-
-static void insert_api_call(sqlite3 *db, const char *session_id, long created_at, int *out_id) {
-    const char *sql =
-        "INSERT INTO api_calls (timestamp, session_id, api_base_url, request_json, model, status, created_at) "
-        "VALUES (?, ?, 'https://api.test', '{""request"":true}', 'test-model', 'ok', ?);";
-
-    sqlite3_stmt *stmt = NULL;
-    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-    assert(rc == SQLITE_OK);
-
-    rc = sqlite3_bind_text(stmt, 1, "2025-01-01T00:00:00Z", -1, SQLITE_TRANSIENT);
-    assert(rc == SQLITE_OK);
-    rc = sqlite3_bind_text(stmt, 2, session_id, -1, SQLITE_TRANSIENT);
-    assert(rc == SQLITE_OK);
-    rc = sqlite3_bind_int64(stmt, 3, created_at);
-    assert(rc == SQLITE_OK);
-
-    rc = sqlite3_step(stmt);
-    assert(rc == SQLITE_DONE);
-    sqlite3_finalize(stmt);
-
-    *out_id = (int)sqlite3_last_insert_rowid(db);
-}
-
-static void insert_token_usage(sqlite3 *db, int api_call_id, const char *session_id,
-                               int prompt, int completion, int cached, long created_at) {
-    const char *sql =
-        "INSERT INTO token_usage (api_call_id, session_id, prompt_tokens, completion_tokens, total_tokens, cached_tokens, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?);";
-
-    sqlite3_stmt *stmt = NULL;
-    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-    assert(rc == SQLITE_OK);
-
-    rc = sqlite3_bind_int(stmt, 1, api_call_id);
-    assert(rc == SQLITE_OK);
-    rc = sqlite3_bind_text(stmt, 2, session_id, -1, SQLITE_TRANSIENT);
-    assert(rc == SQLITE_OK);
-    rc = sqlite3_bind_int(stmt, 3, prompt);
-    assert(rc == SQLITE_OK);
-    rc = sqlite3_bind_int(stmt, 4, completion);
-    assert(rc == SQLITE_OK);
-    rc = sqlite3_bind_int(stmt, 5, prompt + completion);
-    assert(rc == SQLITE_OK);
-    rc = sqlite3_bind_int(stmt, 6, cached);
-    assert(rc == SQLITE_OK);
-    rc = sqlite3_bind_int64(stmt, 7, created_at);
-    assert(rc == SQLITE_OK);
-
-    rc = sqlite3_step(stmt);
-    assert(rc == SQLITE_DONE);
-    sqlite3_finalize(stmt);
-}
+static const char *TEST_TOKEN_DB_PATH = "/tmp/test_token_usage_session_totals_tokens.db";
 
 int main(void) {
     unlink(TEST_DB_PATH);
+    unlink(TEST_TOKEN_DB_PATH);
 
-    PersistenceDB *pdb = persistence_init(TEST_DB_PATH);
-    assert(pdb != NULL);
-    sqlite3 *db = pdb->db;
-    assert(db != NULL);
+    // Initialize the token usage database directly for testing
+    TokenUsageDB *token_db = token_usage_db_init(TEST_TOKEN_DB_PATH);
+    assert(token_db != NULL);
 
-    // Insert two API calls for the same session with different token counts
-    int api_call_id1 = 0;
-    int api_call_id2 = 0;
-    insert_api_call(db, "session-1", 1, &api_call_id1);
-    insert_api_call(db, "session-1", 2, &api_call_id2);
-
-    // Insert cumulative token usage records
+    // Insert cumulative token usage records for a session
     // First call: 100 prompt, 25 completion, 10 cached
-    // Second call: adds 40 more prompt, 15 more completion, 5 more cached
-    // So second record should have cumulative totals: 140, 40, 15
-    insert_token_usage(db, api_call_id1, "session-1", 100, 25, 10, 1);
-    insert_token_usage(db, api_call_id2, "session-1", 140, 40, 15, 2);
+    int rc = token_usage_db_log(token_db, 1, "session-1", 100, 25, 125, 10, 0, 0);
+    assert(rc == 0);
+
+    // Second call: adds more tokens (cumulative totals: 140, 40, 15)
+    rc = token_usage_db_log(token_db, 2, "session-1", 140, 40, 180, 15, 0, 0);
+    assert(rc == 0);
 
     int prompt_tokens = -1;
     int completion_tokens = -1;
     int cached_tokens = -1;
 
     // Per-session totals - should get latest (cumulative) record
-    int rc = persistence_get_session_token_usage(pdb, "session-1",
-                                                 &prompt_tokens, &completion_tokens, &cached_tokens);
+    rc = token_usage_db_get_session_usage(token_db, "session-1",
+                                          &prompt_tokens, &completion_tokens, &cached_tokens);
     assert(rc == 0);
+    printf("Session-1: prompt=%d, completion=%d, cached=%d\n",
+           prompt_tokens, completion_tokens, cached_tokens);
     assert(prompt_tokens == 140);      // Latest record (cumulative)
     assert(completion_tokens == 40);   // Latest record (cumulative)
     assert(cached_tokens == 15);       // Latest record (cumulative)
 
     // All sessions (should match since only one session exists)
     prompt_tokens = completion_tokens = cached_tokens = -1;
-    rc = persistence_get_session_token_usage(pdb, NULL,
-                                             &prompt_tokens, &completion_tokens, &cached_tokens);
+    rc = token_usage_db_get_session_usage(token_db, NULL,
+                                          &prompt_tokens, &completion_tokens, &cached_tokens);
     assert(rc == 0);
+    printf("All sessions: prompt=%d, completion=%d, cached=%d\n",
+           prompt_tokens, completion_tokens, cached_tokens);
     assert(prompt_tokens == 140);
     assert(completion_tokens == 40);
     assert(cached_tokens == 15);
 
-    persistence_close(pdb);
+    // Test get_last_prompt_tokens
+    int last_prompt = -1;
+    rc = token_usage_db_get_last_prompt_tokens(token_db, "session-1", &last_prompt);
+    assert(rc == 0);
+    assert(last_prompt == 140);
+
+    // Test get_last_cached_tokens
+    int last_cached = -1;
+    rc = token_usage_db_get_last_cached_tokens(token_db, "session-1", &last_cached);
+    assert(rc == 0);
+    assert(last_cached == 15);
+
+    token_usage_db_close(token_db);
     unlink(TEST_DB_PATH);
+    unlink(TEST_TOKEN_DB_PATH);
     printf("✓ test_token_usage_session_totals passed\n");
     return 0;
 }

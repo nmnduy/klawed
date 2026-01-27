@@ -12,148 +12,13 @@
 #include <unistd.h>
 #include <cjson/cJSON.h>
 #include "persistence.h"
+#include "token_usage_db.h"
 #include "migrations.h"
 #include "logger.h"
 #include "data_dir.h"
 
-/**
- * Extract token usage statistics from API response JSON
- *
- * Parameters:
- *   response_json: Raw JSON response string
- *   prompt_tokens: Output parameter for prompt tokens count
- *   completion_tokens: Output parameter for completion tokens count
- *   total_tokens: Output parameter for total tokens count
- *   cached_tokens: Output parameter for cached tokens count
- *   prompt_cache_hit_tokens: Output parameter for prompt cache hit tokens
- *   prompt_cache_miss_tokens: Output parameter for prompt cache miss tokens
- *
- * Returns:
- *   0 on success, -1 if no token usage data found
- */
-static int extract_token_usage(
-    const char *response_json,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *total_tokens,
-    int *cached_tokens,
-    int *prompt_cache_hit_tokens,
-    int *prompt_cache_miss_tokens
-) {
-    if (!response_json) {
-        LOG_DEBUG("extract_token_usage: response_json is NULL");
-        return -1;
-    }
-
-    cJSON *json = cJSON_Parse(response_json);
-    if (!json) {
-        LOG_DEBUG("extract_token_usage: failed to parse JSON response");
-        return -1;
-    }
-
-    // Extract usage object
-    cJSON *usage = cJSON_GetObjectItem(json, "usage");
-    if (!usage) {
-        LOG_DEBUG("extract_token_usage: no 'usage' object found in response");
-        cJSON_Delete(json);
-        return -1;
-    }
-
-    // Initialize all output parameters to 0
-    *prompt_tokens = 0;
-    *completion_tokens = 0;
-    *total_tokens = 0;
-    *cached_tokens = 0;
-    *prompt_cache_hit_tokens = 0;
-    *prompt_cache_miss_tokens = 0;
-
-    // Extract basic token counts - these are lenient and won't fail if fields are missing
-    // Try both OpenAI/Anthropic style (input_tokens/output_tokens) and generic style (prompt_tokens/completion_tokens)
-
-    // Try input_tokens first (Anthropic style)
-    cJSON *prompt_tokens_json = cJSON_GetObjectItem(usage, "input_tokens");
-    if (!prompt_tokens_json) {
-        // Fall back to generic prompt_tokens
-        prompt_tokens_json = cJSON_GetObjectItem(usage, "prompt_tokens");
-    }
-
-    cJSON *completion_tokens_json = cJSON_GetObjectItem(usage, "output_tokens");
-    if (!completion_tokens_json) {
-        // Fall back to generic completion_tokens
-        completion_tokens_json = cJSON_GetObjectItem(usage, "completion_tokens");
-    }
-
-    cJSON *total_tokens_json = cJSON_GetObjectItem(usage, "total_tokens");
-
-    if (prompt_tokens_json && cJSON_IsNumber(prompt_tokens_json)) {
-        *prompt_tokens = prompt_tokens_json->valueint;
-        LOG_DEBUG("extract_token_usage: found prompt_tokens = %d", *prompt_tokens);
-    }
-
-    if (completion_tokens_json && cJSON_IsNumber(completion_tokens_json)) {
-        *completion_tokens = completion_tokens_json->valueint;
-        LOG_DEBUG("extract_token_usage: found completion_tokens = %d", *completion_tokens);
-    }
-
-    if (total_tokens_json && cJSON_IsNumber(total_tokens_json)) {
-        *total_tokens = total_tokens_json->valueint;
-        LOG_DEBUG("extract_token_usage: found total_tokens = %d", *total_tokens);
-    }
-
-    // Extract cache-related token counts with provider-specific detection
-    // Priority order: Moonshot > DeepSeek > Anthropic > General
-
-    // 1. Moonshot-style: direct cached_tokens field
-    cJSON *direct_cached_tokens = cJSON_GetObjectItem(usage, "cached_tokens");
-    if (direct_cached_tokens && cJSON_IsNumber(direct_cached_tokens)) {
-        *cached_tokens = direct_cached_tokens->valueint;
-        LOG_DEBUG("extract_token_usage: found Moonshot-style cached_tokens = %d", *cached_tokens);
-    }
-
-    // 2. DeepSeek-style: cached_tokens inside prompt_tokens_details
-    if (*cached_tokens == 0) {
-        cJSON *prompt_tokens_details = cJSON_GetObjectItem(usage, "prompt_tokens_details");
-        if (prompt_tokens_details) {
-            cJSON *cached_tokens_json = cJSON_GetObjectItem(prompt_tokens_details, "cached_tokens");
-            if (cached_tokens_json && cJSON_IsNumber(cached_tokens_json)) {
-                *cached_tokens = cached_tokens_json->valueint;
-                LOG_DEBUG("extract_token_usage: found DeepSeek-style cached_tokens in prompt_tokens_details = %d", *cached_tokens);
-            }
-        }
-    }
-
-    // 3. Anthropic-style: cache_read_input_tokens (counts cache hits)
-    if (*cached_tokens == 0) {
-        cJSON *cache_read_input_tokens = cJSON_GetObjectItem(usage, "cache_read_input_tokens");
-        if (cache_read_input_tokens && cJSON_IsNumber(cache_read_input_tokens)) {
-            *cached_tokens = cache_read_input_tokens->valueint;
-            LOG_DEBUG("extract_token_usage: using Anthropic-style cache_read_input_tokens as cached_tokens = %d", *cached_tokens);
-        }
-    }
-
-    // Extract detailed cache metrics (DeepSeek-style)
-    cJSON *cache_hit_tokens_json = cJSON_GetObjectItem(usage, "prompt_cache_hit_tokens");
-    cJSON *cache_miss_tokens_json = cJSON_GetObjectItem(usage, "prompt_cache_miss_tokens");
-
-    if (cache_hit_tokens_json && cJSON_IsNumber(cache_hit_tokens_json)) {
-        *prompt_cache_hit_tokens = cache_hit_tokens_json->valueint;
-        LOG_DEBUG("extract_token_usage: found prompt_cache_hit_tokens = %d", *prompt_cache_hit_tokens);
-    }
-
-    if (cache_miss_tokens_json && cJSON_IsNumber(cache_miss_tokens_json)) {
-        *prompt_cache_miss_tokens = cache_miss_tokens_json->valueint;
-        LOG_DEBUG("extract_token_usage: found prompt_cache_miss_tokens = %d", *prompt_cache_miss_tokens);
-    }
-
-    cJSON_Delete(json);
-
-    // Return success even if some fields were missing - we got what we could
-    LOG_DEBUG("extract_token_usage: completed successfully (prompt=%d, completion=%d, total=%d)",
-             *prompt_tokens, *completion_tokens, *total_tokens);
-    return 0;
-}
-
 // Get total token usage for a session
+// Delegates to the separate token_usage database
 int persistence_get_session_token_usage(
     PersistenceDB *db,
     const char *session_id,
@@ -161,235 +26,72 @@ int persistence_get_session_token_usage(
     int *completion_tokens,
     int *cached_tokens
 ) {
-    if (!db || !db->db || !prompt_tokens || !completion_tokens || !cached_tokens) {
+    if (!db || !prompt_tokens || !completion_tokens || !cached_tokens) {
         LOG_ERROR("Invalid parameters to persistence_get_session_token_usage");
         return -1;
     }
 
-    // Initialize output parameters
+    // Delegate to the separate token usage database
+    if (db->token_usage_db) {
+        return token_usage_db_get_session_usage(
+            db->token_usage_db, session_id, prompt_tokens, completion_tokens, cached_tokens);
+    }
+
+    // No token usage database available
     *prompt_tokens = 0;
     *completion_tokens = 0;
     *cached_tokens = 0;
-
-    // Lock mutex for thread-safe SQLite access
-    pthread_mutex_lock(&db->mutex);
-
-    const char *sql;
-    sqlite3_stmt *stmt;
-    int rc;
-
-    // Get the latest token usage record (cumulative mode)
-    if (session_id) {
-        sql = "SELECT "
-              "prompt_tokens, "
-              "completion_tokens, "
-              "cached_tokens "
-              "FROM token_usage "
-              "WHERE session_id = ? "
-              "ORDER BY created_at DESC "
-              "LIMIT 1;";
-    } else {
-        sql = "SELECT "
-              "prompt_tokens, "
-              "completion_tokens, "
-              "cached_tokens "
-              "FROM token_usage "
-              "ORDER BY created_at DESC "
-              "LIMIT 1;";
-    }
-
-    rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        LOG_ERROR("Failed to prepare token usage query: %s", sqlite3_errmsg(db->db));
-        pthread_mutex_unlock(&db->mutex);
-        return -1;
-    }
-
-    if (session_id) {
-        sqlite3_bind_text(stmt, 1, session_id, -1, SQLITE_TRANSIENT);
-    }
-
-    rc = sqlite3_step(stmt);
-    if (rc == SQLITE_ROW) {
-        *prompt_tokens = sqlite3_column_int(stmt, 0);
-        *completion_tokens = sqlite3_column_int(stmt, 1);
-        *cached_tokens = sqlite3_column_int(stmt, 2);
-
-        LOG_FINE("Retrieved token usage for session %s: prompt=%d, completion=%d, cached=%d",
-                 session_id ? session_id : "all",
-                 *prompt_tokens, *completion_tokens, *cached_tokens);
-    } else if (rc == SQLITE_DONE) {
-        // No records found - this is OK for a new session
-        LOG_FINE("No token usage records found for session %s",
-                 session_id ? session_id : "all");
-    } else {
-        LOG_ERROR("Failed to execute token usage query: %s", sqlite3_errmsg(db->db));
-        sqlite3_finalize(stmt);
-        pthread_mutex_unlock(&db->mutex);
-        return -1;
-    }
-
-    sqlite3_finalize(stmt);
-    pthread_mutex_unlock(&db->mutex);
+    LOG_DEBUG("Token usage database not initialized");
     return 0;
 }
 
 // Get prompt tokens from the most recent API call in the session
+// Delegates to the separate token_usage database
 int persistence_get_last_prompt_tokens(
     PersistenceDB *db,
     const char *session_id,
     int *prompt_tokens
 ) {
-    if (!db || !db->db || !prompt_tokens) {
+    if (!db || !prompt_tokens) {
         LOG_ERROR("Invalid parameters to persistence_get_last_prompt_tokens");
         return -1;
     }
 
-    // Initialize output parameter
+    // Delegate to the separate token usage database
+    if (db->token_usage_db) {
+        return token_usage_db_get_last_prompt_tokens(db->token_usage_db, session_id, prompt_tokens);
+    }
+
+    // No token usage database available
     *prompt_tokens = 0;
-
-    // Lock mutex for thread-safe SQLite access
-    pthread_mutex_lock(&db->mutex);
-
-    const char *sql;
-    sqlite3_stmt *stmt;
-    int rc;
-
-    if (session_id) {
-        // Get the most recent token usage for this session
-        sql = "SELECT prompt_tokens "
-              "FROM token_usage "
-              "WHERE session_id = ? "
-              "ORDER BY created_at DESC "
-              "LIMIT 1;";
-    } else {
-        // Get the most recent token usage overall
-        sql = "SELECT prompt_tokens "
-              "FROM token_usage "
-              "ORDER BY created_at DESC "
-              "LIMIT 1;";
-    }
-
-    rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        LOG_ERROR("Failed to prepare token usage query: %s", sqlite3_errmsg(db->db));
-        pthread_mutex_unlock(&db->mutex);
-        return -1;
-    }
-
-    if (session_id) {
-        sqlite3_bind_text(stmt, 1, session_id, -1, SQLITE_TRANSIENT);
-    }
-
-    rc = sqlite3_step(stmt);
-    if (rc == SQLITE_ROW) {
-        *prompt_tokens = sqlite3_column_int(stmt, 0);
-        LOG_DEBUG("Retrieved last prompt tokens for session %s: %d",
-                 session_id ? session_id : "all", *prompt_tokens);
-        sqlite3_finalize(stmt);
-        pthread_mutex_unlock(&db->mutex);
-        return 0;
-    } else if (rc == SQLITE_DONE) {
-        // No records found - this is not an error, just no data yet
-        LOG_DEBUG("No token usage records found for session %s",
-                 session_id ? session_id : "all");
-        sqlite3_finalize(stmt);
-        pthread_mutex_unlock(&db->mutex);
-        return 0;
-    } else {
-        LOG_ERROR("Failed to execute token usage query: %s", sqlite3_errmsg(db->db));
-        sqlite3_finalize(stmt);
-        pthread_mutex_unlock(&db->mutex);
-        return -1;
-    }
+    LOG_DEBUG("Token usage database not initialized");
+    return 0;
 }
 
 // Get cached tokens from the most recent API call in the session
-//
-// Parameters:
-//   db: Persistence database handle
-//   session_id: Session identifier
-//   cached_tokens: Output parameter for cached tokens from last call
-//
-// Returns:
-//   0 on success, -1 on error or if no records found
+// Delegates to the separate token_usage database
 int persistence_get_last_cached_tokens(
     PersistenceDB *db,
     const char *session_id,
     int *cached_tokens
 ) {
-    if (!db || !db->db || !cached_tokens) {
+    if (!db || !cached_tokens) {
         LOG_ERROR("Invalid parameters to persistence_get_last_cached_tokens");
         return -1;
     }
 
-    // Initialize output parameter
+    // Delegate to the separate token usage database
+    if (db->token_usage_db) {
+        return token_usage_db_get_last_cached_tokens(db->token_usage_db, session_id, cached_tokens);
+    }
+
+    // No token usage database available
     *cached_tokens = 0;
-
-    // Lock mutex for thread-safe SQLite access
-    pthread_mutex_lock(&db->mutex);
-
-    const char *sql;
-    sqlite3_stmt *stmt;
-    int rc;
-
-    if (session_id) {
-        // Get the most recent token usage for this session
-        sql = "SELECT cached_tokens, prompt_cache_hit_tokens, prompt_cache_miss_tokens "
-              "FROM token_usage "
-              "WHERE session_id = ? "
-              "ORDER BY created_at DESC "
-              "LIMIT 1;";
-    } else {
-        // Get the most recent token usage overall
-        sql = "SELECT cached_tokens, prompt_cache_hit_tokens, prompt_cache_miss_tokens "
-              "FROM token_usage "
-              "ORDER BY created_at DESC "
-              "LIMIT 1;";
-    }
-
-    rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        LOG_ERROR("Failed to prepare cached tokens query: %s", sqlite3_errmsg(db->db));
-        pthread_mutex_unlock(&db->mutex);
-        return -1;
-    }
-
-    if (session_id) {
-        sqlite3_bind_text(stmt, 1, session_id, -1, SQLITE_TRANSIENT);
-    }
-
-    rc = sqlite3_step(stmt);
-    if (rc == SQLITE_ROW) {
-        // First try the cached_tokens field (highest priority)
-        *cached_tokens = sqlite3_column_int(stmt, 0);
-
-        // If cached_tokens is 0, try prompt_cache_hit_tokens as fallback
-        if (*cached_tokens == 0) {
-            *cached_tokens = sqlite3_column_int(stmt, 1);
-        }
-
-        LOG_DEBUG("Retrieved last cached tokens for session %s: %d",
-                 session_id ? session_id : "all", *cached_tokens);
-        sqlite3_finalize(stmt);
-        pthread_mutex_unlock(&db->mutex);
-        return 0;
-    } else if (rc == SQLITE_DONE) {
-        // No records found - this is not an error, just no data yet
-        LOG_DEBUG("No token usage records found for session %s",
-                 session_id ? session_id : "all");
-        sqlite3_finalize(stmt);
-        pthread_mutex_unlock(&db->mutex);
-        return 0;
-    } else {
-        LOG_ERROR("Failed to execute cached tokens query: %s", sqlite3_errmsg(db->db));
-        sqlite3_finalize(stmt);
-        pthread_mutex_unlock(&db->mutex);
-        return -1;
-    }
+    LOG_DEBUG("Token usage database not initialized");
+    return 0;
 }
 
-// SQL schema for the api_calls table
+// SQL schema for the api_calls table (token_usage is now in a separate database)
 static const char *SCHEMA_SQL =
     "CREATE TABLE IF NOT EXISTS api_calls ("
     "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -406,28 +108,12 @@ static const char *SCHEMA_SQL =
     "    duration_ms INTEGER,"
     "    tool_count INTEGER DEFAULT 0,"
     "    created_at INTEGER NOT NULL"
-    ");"
-
-    "CREATE TABLE IF NOT EXISTS token_usage ("
-    "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
-    "    api_call_id INTEGER NOT NULL,"
-    "    session_id TEXT,"
-    "    prompt_tokens INTEGER DEFAULT 0,"
-    "    completion_tokens INTEGER DEFAULT 0,"
-    "    total_tokens INTEGER DEFAULT 0,"
-    "    cached_tokens INTEGER DEFAULT 0,"
-    "    prompt_cache_hit_tokens INTEGER DEFAULT 0,"
-    "    prompt_cache_miss_tokens INTEGER DEFAULT 0,"
-    "    created_at INTEGER NOT NULL,"
-    "    FOREIGN KEY (api_call_id) REFERENCES api_calls(id) ON DELETE CASCADE"
     ");";
 
 // SQL for creating indexes for faster queries
 static const char *INDEX_SQL =
     "CREATE INDEX IF NOT EXISTS idx_api_calls_timestamp ON api_calls(timestamp);"
-    "CREATE INDEX IF NOT EXISTS idx_api_calls_session_id ON api_calls(session_id);"
-    "CREATE INDEX IF NOT EXISTS idx_token_usage_api_call_id ON token_usage(api_call_id);"
-    "CREATE INDEX IF NOT EXISTS idx_token_usage_session_id ON token_usage(session_id);";
+    "CREATE INDEX IF NOT EXISTS idx_api_calls_session_id ON api_calls(session_id);";
 
 // Get default database path
 // Priority: $KLAWED_DB_PATH > $KLAWED_DATA_DIR/api_calls.db > ./.klawed/api_calls.db > $XDG_DATA_HOME/klawed/api_calls.db > ~/.local/share/klawed/api_calls.db
@@ -607,6 +293,13 @@ PersistenceDB* persistence_init(const char *db_path) {
         return NULL;
     }
 
+    // Initialize the separate token usage database
+    pdb->token_usage_db = token_usage_db_init(NULL);
+    if (!pdb->token_usage_db) {
+        LOG_WARN("Failed to initialize token usage database - token tracking will be disabled");
+        // Non-fatal: continue without token usage tracking
+    }
+
     // Apply automatic rotation rules if enabled
     persistence_auto_rotate(pdb);
 
@@ -723,9 +416,14 @@ int persistence_log_api_call(
     sqlite3_finalize(stmt);
     free(timestamp);
 
+    // Get the last inserted API call ID (for reference in token usage)
+    sqlite3_int64 api_call_id = sqlite3_last_insert_rowid(db->db);
+
+    pthread_mutex_unlock(&db->mutex);
+
     // If this was a successful API call with response JSON, also log token usage
-    // This is non-critical functionality - log everything but don't fail on errors
-    if (strcmp(status, "success") == 0 && response_json) {
+    // to the separate token usage database
+    if (strcmp(status, "success") == 0 && response_json && db->token_usage_db) {
         LOG_DEBUG("Attempting to extract token usage from successful API response");
 
         int prompt_tokens = 0;
@@ -736,24 +434,21 @@ int persistence_log_api_call(
         int prompt_cache_miss_tokens = 0;
 
         // Extract token usage from response JSON
-        int extract_result = extract_token_usage(response_json,
-                                               &prompt_tokens,
-                                               &completion_tokens,
-                                               &total_tokens,
-                                               &cached_tokens,
-                                               &prompt_cache_hit_tokens,
-                                               &prompt_cache_miss_tokens);
+        int extract_result = token_usage_extract_from_response(
+            response_json,
+            &prompt_tokens,
+            &completion_tokens,
+            &total_tokens,
+            &cached_tokens,
+            &prompt_cache_hit_tokens,
+            &prompt_cache_miss_tokens
+        );
 
         LOG_DEBUG("Token extraction result: %d (0=success, -1=no usage field)", extract_result);
 
         if (extract_result == 0) {
-            LOG_DEBUG("Token usage extracted: prompt=%d, completion=%d, total=%d, cached=%d, cache_hit=%d, cache_miss=%d",
-                     prompt_tokens, completion_tokens, total_tokens, cached_tokens,
-                     prompt_cache_hit_tokens, prompt_cache_miss_tokens);
-
-            // Get the last inserted API call ID
-            sqlite3_int64 api_call_id = sqlite3_last_insert_rowid(db->db);
-            LOG_DEBUG("Token usage: api_call_id = %lld (last_insert_rowid)", (long long)api_call_id);
+            LOG_DEBUG("Token usage extracted: prompt=%d, completion=%d, total=%d, cached=%d",
+                     prompt_tokens, completion_tokens, total_tokens, cached_tokens);
 
             // Warn if session_id is NULL - this should not happen in normal operation
             if (!session_id) {
@@ -761,59 +456,47 @@ int persistence_log_api_call(
                          "This indicates a potential bug in session tracking.", (long long)api_call_id);
             }
 
-            // Prepare token usage insert statement
-            const char *token_sql =
-                "INSERT INTO token_usage "
-                "(api_call_id, session_id, prompt_tokens, completion_tokens, total_tokens, "
-                "cached_tokens, prompt_cache_hit_tokens, prompt_cache_miss_tokens, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
+            // Log to the separate token usage database
+            int log_result = token_usage_db_log(
+                db->token_usage_db,
+                api_call_id,
+                session_id,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+                cached_tokens,
+                prompt_cache_hit_tokens,
+                prompt_cache_miss_tokens
+            );
 
-            sqlite3_stmt *token_stmt;
-            rc = sqlite3_prepare_v2(db->db, token_sql, -1, &token_stmt, NULL);
-            if (rc != SQLITE_OK) {
-                LOG_WARN("Failed to prepare token usage statement: %s", sqlite3_errmsg(db->db));
-                // Continue without token logging - don't fail the main API call logging
+            if (log_result != 0) {
+                LOG_WARN("Failed to log token usage to separate database");
             } else {
-                // Bind parameters
-                sqlite3_bind_int64(token_stmt, 1, api_call_id);
-                if (session_id) {
-                    sqlite3_bind_text(token_stmt, 2, session_id, -1, SQLITE_TRANSIENT);
-                } else {
-                    sqlite3_bind_null(token_stmt, 2);
-                }
-                sqlite3_bind_int(token_stmt, 3, prompt_tokens);
-                sqlite3_bind_int(token_stmt, 4, completion_tokens);
-                sqlite3_bind_int(token_stmt, 5, total_tokens);
-                sqlite3_bind_int(token_stmt, 6, cached_tokens);
-                sqlite3_bind_int(token_stmt, 7, prompt_cache_hit_tokens);
-                sqlite3_bind_int(token_stmt, 8, prompt_cache_miss_tokens);
-                sqlite3_bind_int64(token_stmt, 9, now);
-
-                // Execute token usage insert
-                rc = sqlite3_step(token_stmt);
-                if (rc != SQLITE_DONE) {
-                    LOG_WARN("Failed to insert token usage record: %s", sqlite3_errmsg(db->db));
-                } else {
-                    LOG_DEBUG("Token usage successfully logged for API call ID %lld", (long long)api_call_id);
-                }
-
-                sqlite3_finalize(token_stmt);
+                LOG_DEBUG("Token usage logged to separate database for API call ID %lld",
+                         (long long)api_call_id);
             }
         } else {
             LOG_DEBUG("No token usage data found in API response or extraction failed");
         }
+    } else if (strcmp(status, "success") == 0 && response_json && !db->token_usage_db) {
+        LOG_DEBUG("Skipping token usage logging - token usage database not initialized");
     } else {
         LOG_DEBUG("Skipping token usage logging - status=%s, response_json=%s",
                  status, response_json ? "present" : "NULL");
     }
 
-    pthread_mutex_unlock(&db->mutex);
     return 0;
 }
 
 // Close persistence layer
 void persistence_close(PersistenceDB *db) {
     if (!db) return;
+
+    // Close the token usage database first
+    if (db->token_usage_db) {
+        token_usage_db_close(db->token_usage_db);
+        db->token_usage_db = NULL;
+    }
 
     // Destroy mutex
     pthread_mutex_destroy(&db->mutex);
