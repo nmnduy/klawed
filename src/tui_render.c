@@ -183,9 +183,7 @@ void render_status_window(TUIState *tui) {
 
     werase(tui->wm.status_win);
 
-    int col = 0;
-
-    // Prepare status message components (agent status - rightmost)
+    // Prepare status message components (agent status - now on LEFT)
     // Note: We render spinner and text separately to use ncurses colors properly.
     // ANSI escape codes don't work with ncurses - they get displayed literally.
     char status_text[256] = {0};  // Status text without spinner
@@ -218,7 +216,7 @@ void render_status_window(TUIState *tui) {
                 // Display width is just the spinner (1 character typically)
                 status_display_width = utf8_display_width(spinner_frame);
             } else {
-                snprintf(status_text, sizeof(status_text), " %s ", tui->status_message);
+                snprintf(status_text, sizeof(status_text), " %s", tui->status_message);
                 status_text_len = (int)strlen(status_text);
                 // Display width = spinner + space + text
                 status_display_width = utf8_display_width(spinner_frame) + utf8_display_width(status_text);
@@ -227,7 +225,7 @@ void render_status_window(TUIState *tui) {
             // When screen is narrow, hide status text entirely
             // to make space for token count and scroll percentage
             if (width >= narrow_threshold) {
-                snprintf(status_text, sizeof(status_text), "%s ", tui->status_message);
+                snprintf(status_text, sizeof(status_text), "%s", tui->status_message);
                 status_text_len = (int)strlen(status_text);
                 status_display_width = utf8_display_width(status_text);
             }
@@ -254,7 +252,7 @@ void render_status_window(TUIState *tui) {
 
     int plan_display_width = 0;
     if (plan_mode) {
-        snprintf(plan_str, sizeof(plan_str), " ● Plan ");
+        snprintf(plan_str, sizeof(plan_str), " ● Plan");
         plan_str_len = (int)strlen(plan_str);
         plan_display_width = utf8_display_width(plan_str);
         LOG_FINE("[TUI] Plan mode indicator: '%s' (len=%d, display_width=%d)", plan_str, plan_str_len, plan_display_width);
@@ -287,7 +285,7 @@ void render_status_window(TUIState *tui) {
             if (percentage > 100) percentage = 100;
         }
 
-        snprintf(scroll_str, sizeof(scroll_str), " %d%% ", percentage);
+        snprintf(scroll_str, sizeof(scroll_str), " %d%%", percentage);
         scroll_str_len = (int)strlen(scroll_str);
         scroll_display_width = utf8_display_width(scroll_str);
     }
@@ -320,64 +318,73 @@ void render_status_window(TUIState *tui) {
 
     // Show token count when non-zero, regardless of mode
     if (total_tokens > 0) {
-        // Show total tokens and cached tokens in the format: "Token: X (+Y cached) "
+        // Show total tokens and cached tokens in the format: " Token: X (+Y cached)"
         if (cached_tokens > 0) {
-            snprintf(token_str, sizeof(token_str), "Token: %d (+%d cached) ",
+            snprintf(token_str, sizeof(token_str), " Token: %d (+%d cached)",
                      total_tokens, cached_tokens);
         } else {
-            snprintf(token_str, sizeof(token_str), "Token: %d ", total_tokens);
+            snprintf(token_str, sizeof(token_str), " Token: %d", total_tokens);
         }
         token_str_len = (int)strlen(token_str);
         token_display_width = utf8_display_width(token_str);
         LOG_FINE("[TUI] Rendering token display: %s (mode=%d)", token_str, tui->mode);
     }
 
-    // Layout: keep spinner + status message on the right, float the rest on the left
-    // Left side (in order): plan mode, scroll %, token usage
-    // Right side: spinner + LLM status message
+    // Layout: spinner + status message on the LEFT, indicators on the RIGHT
+    // Left side: spinner + LLM status message
+    // Right side (in order from right): plan mode, scroll %, token usage
 
-    int status_col = width - status_display_width;
-    if (status_col < 0) status_col = 0;
+    // Calculate total width needed for right-side indicators
+    int right_total_width = 0;
+    if (plan_str_len > 0) right_total_width += plan_display_width;
+    if (scroll_str_len > 0) right_total_width += scroll_display_width;
+    if (token_str_len > 0) right_total_width += token_display_width;
 
-    // Render status message on the right (rightmost position)
-    // Render spinner and text separately to use ncurses colors properly
-    if (has_spinner && spinner_frame_len > 0) {
+    // Calculate where right-side content starts
+    int right_start_col = width - right_total_width;
+    if (right_start_col < 0) right_start_col = 0;
+
+    // Render spinner and status text on the LEFT
+    int left_col = 0;
+    int left_limit = right_start_col;  // Don't overlap with right-side indicators
+
+    if (has_spinner && spinner_frame_len > 0 && left_col + status_display_width <= left_limit) {
         // Render spinner character with STATUS color (yellow)
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
-        mvwaddnstr(tui->wm.status_win, 0, status_col, spinner_frame, spinner_frame_len);
+        mvwaddnstr(tui->wm.status_win, 0, left_col, spinner_frame, spinner_frame_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
             wattroff(tui->wm.status_win, A_BOLD);
         }
+        left_col += utf8_display_width(spinner_frame);
 
         // Render status text after spinner (if present)
-        if (status_text_len > 0) {
-            int text_col = status_col + utf8_display_width(spinner_frame);
+        if (status_text_len > 0 && left_col + utf8_display_width(status_text) <= left_limit) {
             if (has_colors()) {
                 wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             } else {
                 wattron(tui->wm.status_win, A_BOLD);
             }
-            mvwaddnstr(tui->wm.status_win, 0, text_col, status_text, status_text_len);
+            mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
             if (has_colors()) {
                 wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             } else {
                 wattroff(tui->wm.status_win, A_BOLD);
             }
         }
-    } else if (status_text_len > 0 && status_display_width < width) {
-        // No spinner, just render status text
+    } else if (status_text_len > 0 && status_display_width <= left_limit) {
+        // No spinner, just render status text on the left
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
-        mvwaddnstr(tui->wm.status_win, 0, status_col, status_text, status_text_len);
+        mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
@@ -385,56 +392,55 @@ void render_status_window(TUIState *tui) {
         }
     }
 
-    // Float left-aligned info, stopping before the status block starts
-    int left_col = 0;
-    int left_limit = status_col;
+    // Render right-aligned indicators (token usage, scroll %, plan mode)
+    // Order from left to right: token usage, scroll %, plan mode
+    int right_col = right_start_col;
+
+    // Token usage
+    if (token_str_len > 0 && right_col + token_display_width <= width) {
+        if (has_colors()) {
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+        }
+        mvwaddnstr(tui->wm.status_win, 0, right_col, token_str, token_str_len);
+        if (has_colors()) {
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+        }
+        right_col += token_display_width;
+    }
+
+    // Scroll percentage (NORMAL mode only)
+    if (scroll_str_len > 0 && right_col + scroll_display_width <= width) {
+        if (has_colors()) {
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        mvwaddnstr(tui->wm.status_win, 0, right_col, scroll_str, scroll_str_len);
+        if (has_colors()) {
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        right_col += scroll_display_width;
+    }
 
     // Plan mode indicator (always visible when enabled)
-    if (plan_str_len > 0 && plan_display_width < width && left_col + plan_display_width < left_limit) {
+    if (plan_str_len > 0 && right_col + plan_display_width <= width) {
         LOG_FINE("[TUI] Rendering plan mode at col=%d, width=%d, plan_display_width=%d, mode=%d",
-                  left_col, width, plan_display_width, tui->mode);
+                  right_col, width, plan_display_width, tui->mode);
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
-        mvwaddnstr(tui->wm.status_win, 0, left_col, plan_str, plan_str_len);
+        mvwaddnstr(tui->wm.status_win, 0, right_col, plan_str, plan_str_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         } else {
             wattroff(tui->wm.status_win, A_BOLD);
         }
-        left_col += plan_display_width;
+        right_col += plan_display_width;
     } else if (plan_str_len > 0) {
         LOG_FINE("[TUI] Plan mode indicator not rendered: plan_display_width=%d, width=%d, condition=%d",
                   plan_display_width, width, (plan_str_len > 0 && plan_display_width < width));
     }
 
-    // Scroll percentage (NORMAL mode only)
-    if (scroll_str_len > 0 && scroll_display_width < width && left_col + scroll_display_width < left_limit) {
-        if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
-        }
-        mvwaddnstr(tui->wm.status_win, 0, left_col, scroll_str, scroll_str_len);
-        if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
-        }
-        left_col += scroll_display_width;
-    }
-
-    // Token usage (NORMAL mode only)
-    if (token_str_len > 0 && token_display_width < width && left_col + token_display_width < left_limit) {
-        if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
-        }
-        mvwaddnstr(tui->wm.status_win, 0, left_col, token_str, token_str_len);
-        if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
-        }
-        left_col += token_display_width;
-    }
-
-    (void)col;  // Suppress unused variable warning
     (void)has_spinner;  // Suppress unused variable warning
 
     wrefresh(tui->wm.status_win);
