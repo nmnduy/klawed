@@ -121,8 +121,8 @@ static void status_spinner_tick(TUIState *tui) {
 
     // Target angle increases continuously for spinning effect
     // Use a slightly randomized angular velocity to add organic feel
-    // ~20 rad/s base speed = ~3 rotations per second
-    double angular_velocity = 20.0;
+    // ~40 rad/s base speed = ~6 rotations per second
+    double angular_velocity = 40.0;
     double target_pos = tui->status_spinner_pos + delta_s * angular_velocity;
 
     // Update spring with scaled time step

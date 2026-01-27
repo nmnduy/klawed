@@ -24,7 +24,7 @@
 // Standard spinner frames
 static const char *SPINNER_FRAMES[] = {"⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"};
 static const int SPINNER_FRAME_COUNT = 10;
-static const int SPINNER_DELAY_MS = 80;
+static const int SPINNER_DELAY_MS = 40;
 
 // Alternative spinner styles
 static const char *SPINNER_DOTS[]   = {"⣾","⣽","⣻","⢿","⡿","⣟","⣯","⣷"};
