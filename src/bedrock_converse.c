@@ -701,7 +701,8 @@ cJSON* bedrock_converse_convert_response(const char *converse_response) {
     /* Add standard OpenAI response fields */
     cJSON_AddStringToObject(openai, "id", "converse-request");
     cJSON_AddStringToObject(openai, "object", "chat.completion");
-    cJSON_AddNumberToObject(openai, "created", (double)time(NULL));
+    time_t now = time(NULL);
+    cJSON_AddNumberToObject(openai, "created", (double)now);
     cJSON_AddStringToObject(openai, "model", "bedrock-converse");
 
     /* === Build choices array === */

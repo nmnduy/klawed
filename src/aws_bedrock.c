@@ -1,5 +1,20 @@
 /*
- * aws_bedrock.c - AWS Bedrock provider implementation
+ * aws_bedrock.c - AWS Bedrock provider implementation (InvokeModel API - DEPRECATED)
+ *
+ * DEPRECATED: The InvokeModel API functions in this file are being superseded by
+ * the Converse API. New code should use bedrock_converse.c instead.
+ *
+ * This file still contains essential shared functions:
+ *   - bedrock_sign_request() - SigV4 signing (used by both APIs)
+ *   - bedrock_load_credentials() - Credential loading (used by both APIs)
+ *   - bedrock_authenticate() - AWS authentication (used by both APIs)
+ *   - bedrock_config_init/free() - Configuration management (used by both APIs)
+ *
+ * Deprecated functions (use bedrock_converse.c equivalents):
+ *   - bedrock_build_endpoint() -> bedrock_converse_build_endpoint()
+ *   - bedrock_build_streaming_endpoint() -> bedrock_converse_build_streaming_endpoint()
+ *   - bedrock_convert_request() -> bedrock_converse_convert_request()
+ *   - bedrock_convert_response() -> bedrock_converse_convert_response()
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -841,6 +856,10 @@ int bedrock_handle_auth_error(BedrockConfig *config, long http_status, const cha
     return 1;  // Signal that retry is appropriate
 }
 
+/**
+ * DEPRECATED: Use bedrock_converse_build_endpoint() from bedrock_converse.c instead.
+ * The Converse API provides a unified interface across all Bedrock models.
+ */
 char* bedrock_build_endpoint(const char *region, const char *model_id) {
     if (!region || !model_id) {
         return NULL;
@@ -859,6 +878,10 @@ char* bedrock_build_endpoint(const char *region, const char *model_id) {
     return endpoint;
 }
 
+/**
+ * DEPRECATED: Use bedrock_converse_build_streaming_endpoint() from bedrock_converse.c instead.
+ * The Converse API provides a unified interface across all Bedrock models.
+ */
 char* bedrock_build_streaming_endpoint(const char *region, const char *model_id) {
     if (!region || !model_id) {
         return NULL;
@@ -1003,6 +1026,10 @@ static cJSON* convert_content_array_to_anthropic(cJSON *openai_content) {
     return anthropic_content;
 }
 
+/**
+ * DEPRECATED: Use bedrock_converse_convert_request() from bedrock_converse.c instead.
+ * The Converse API provides a unified interface across all Bedrock models.
+ */
 char* bedrock_convert_request(const char *openai_request) {
     // AWS Bedrock uses Anthropic's native format, not OpenAI format
     // We need to convert from OpenAI to Anthropic format
@@ -1269,6 +1296,10 @@ char* bedrock_convert_request(const char *openai_request) {
     return result;
 }
 
+/**
+ * DEPRECATED: Use bedrock_converse_convert_response() from bedrock_converse.c instead.
+ * The Converse API provides a unified interface across all Bedrock models.
+ */
 cJSON* bedrock_convert_response(const char *bedrock_response) {
     // AWS Bedrock returns Anthropic's native format
     // We need to convert it to OpenAI format

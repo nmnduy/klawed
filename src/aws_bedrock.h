@@ -1,5 +1,20 @@
 /*
- * aws_bedrock.h - AWS Bedrock provider support
+ * aws_bedrock.h - AWS Bedrock provider support (InvokeModel API - DEPRECATED)
+ *
+ * DEPRECATED: This file implements the InvokeModel API which is being superseded
+ * by the Converse API. New code should use bedrock_converse.h instead.
+ *
+ * The Converse API provides:
+ *   - Unified interface across all Bedrock models
+ *   - Native tool/function calling support
+ *   - Built-in prompt caching
+ *   - Better streaming support
+ *
+ * This file is maintained for backward compatibility. The InvokeModel API
+ * functions (bedrock_convert_request, bedrock_convert_response, bedrock_build_endpoint)
+ * should not be used in new code.
+ *
+ * See: bedrock_converse.h for the recommended Converse API implementation.
  *
  * Enables calling Claude models via AWS Bedrock with automatic authentication
  * and SigV4 request signing.
@@ -123,26 +138,42 @@ int bedrock_authenticate(const char *profile);
 int bedrock_handle_auth_error(BedrockConfig *config, long http_status, const char *error_message, const char *response_body);
 
 /**
- * Build AWS Bedrock API endpoint URL
+ * Build AWS Bedrock API endpoint URL (InvokeModel API)
+ *
+ * DEPRECATED: Use bedrock_converse_build_endpoint() from bedrock_converse.h instead.
+ * The Converse API provides a unified interface across all Bedrock models.
+ *
  * Returns: Newly allocated string (caller must free), or NULL on error
  */
 char* bedrock_build_endpoint(const char *region, const char *model_id);
 
 /**
- * Build AWS Bedrock streaming API endpoint URL
+ * Build AWS Bedrock streaming API endpoint URL (InvokeModel API)
+ *
+ * DEPRECATED: Use bedrock_converse_build_streaming_endpoint() from bedrock_converse.h instead.
+ * The Converse API provides a unified interface across all Bedrock models.
+ *
  * Returns: Newly allocated string (caller must free), or NULL on error
  */
 char* bedrock_build_streaming_endpoint(const char *region, const char *model_id);
 
 /**
- * Convert OpenAI format request to AWS Bedrock format
+ * Convert OpenAI format request to AWS Bedrock format (InvokeModel API)
+ *
+ * DEPRECATED: Use bedrock_converse_convert_request() from bedrock_converse.h instead.
+ * The Converse API provides a unified interface across all Bedrock models.
+ *
  * Bedrock wraps the request in a specific structure
  * Returns: Newly allocated JSON string (caller must free), or NULL on error
  */
 char* bedrock_convert_request(const char *openai_request);
 
 /**
- * Convert AWS Bedrock response to OpenAI format
+ * Convert AWS Bedrock response to OpenAI format (InvokeModel API)
+ *
+ * DEPRECATED: Use bedrock_converse_convert_response() from bedrock_converse.h instead.
+ * The Converse API provides a unified interface across all Bedrock models.
+ *
  * Returns: cJSON object (caller must delete), or NULL on error
  */
 cJSON* bedrock_convert_response(const char *bedrock_response);

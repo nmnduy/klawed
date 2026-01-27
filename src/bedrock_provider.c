@@ -1,11 +1,16 @@
 /*
  * bedrock_provider.c - AWS Bedrock API provider implementation
+ *
+ * This provider uses the Converse API (bedrock_converse.h) which provides a
+ * unified interface across all Bedrock models. The older InvokeModel API
+ * (aws_bedrock.h) is deprecated.
  */
 
 #define _POSIX_C_SOURCE 200809L
 
 #include "klawed_internal.h"  // Must be first to get ApiResponse definition
 #include "bedrock_provider.h"
+#include "bedrock_converse.h"  // Converse API (preferred)
 #include "logger.h"
 #include "http_client.h"
 #include "tui.h"  // For streaming TUI updates
@@ -361,28 +366,36 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
 
 /**
  * Helper: Execute a single HTTP request with current credentials
+ * Uses the Converse API by default (bedrock_converse.h)
  * Returns: ApiCallResult (caller must free fields)
  */
-static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *bedrock_json, ConversationState *state, int enable_streaming) {
+static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *converse_json, ConversationState *state, int enable_streaming) {
     ApiCallResult result = {0};
 
-    // Use streaming endpoint if streaming is enabled
-    char *streaming_endpoint = NULL;
-    const char *endpoint_url = config->endpoint;
+    // Build Converse API endpoint (streaming not yet supported for Converse API)
+    char *endpoint_url = NULL;
 
     if (enable_streaming) {
-        streaming_endpoint = bedrock_build_streaming_endpoint(config->region, config->model_id);
-        if (!streaming_endpoint) {
-            result.error_message = strdup("Failed to build streaming endpoint");
+        // Use Converse streaming endpoint
+        endpoint_url = bedrock_converse_build_streaming_endpoint(config->region, config->model_id);
+        if (!endpoint_url) {
+            result.error_message = strdup("Failed to build Converse streaming endpoint");
             result.is_retryable = 0;
             return result;
         }
-        endpoint_url = streaming_endpoint;
+    } else {
+        // Use standard Converse endpoint
+        endpoint_url = bedrock_converse_build_endpoint(config->region, config->model_id);
+        if (!endpoint_url) {
+            result.error_message = strdup("Failed to build Converse endpoint");
+            result.is_retryable = 0;
+            return result;
+        }
     }
 
     // Sign request with SigV4 using current credentials
     struct curl_slist *headers = bedrock_sign_request(
-        NULL, "POST", endpoint_url, bedrock_json,
+        NULL, "POST", endpoint_url, converse_json,
         config->creds, config->region, AWS_BEDROCK_SERVICE
     );
 
@@ -390,7 +403,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
         result.error_message = strdup("Failed to sign request with AWS SigV4");
         result.is_retryable = 0;
         result.headers_json = NULL;  // No headers to log
-        free(streaming_endpoint);
+        free(endpoint_url);
         return result;
     }
 
@@ -398,7 +411,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
     HttpRequest req = {0};
     req.url = endpoint_url;
     req.method = "POST";
-    req.body = bedrock_json;
+    req.body = converse_json;
     req.headers = headers;
     req.connect_timeout_ms = 30000;  // 30 seconds
     req.total_timeout_ms = 300000;   // 5 minutes
@@ -423,7 +436,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
 
     // Free the headers list (http_client_execute makes its own copy)
     curl_slist_free_all(headers);
-    free(streaming_endpoint);
+    free(endpoint_url);
 
     if (!http_resp) {
         result.error_message = strdup("Failed to execute HTTP request (memory allocation failed)");
@@ -460,10 +473,13 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
         cJSON *openai_json = NULL;
 
         // If streaming was used, reconstruct response from streaming context
+        // Note: Streaming still uses the older Anthropic format from InvokeModel API
+        // TODO: Update streaming to use Converse API streaming format
         if (enable_streaming) {
             LOG_DEBUG("Reconstructing Bedrock response from streaming context");
 
             // Build synthetic response in Anthropic format, then convert to OpenAI
+            // (Streaming format is still based on InvokeModel API)
             cJSON *anth_response = cJSON_CreateObject();
             cJSON_AddStringToObject(anth_response, "id", "streaming");
             cJSON_AddStringToObject(anth_response, "type", "message");
@@ -502,7 +518,8 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             cJSON_AddStringToObject(anth_response, "stop_reason",
                 stream_ctx.stop_reason ? stream_ctx.stop_reason : "end_turn");
 
-            // Convert Anthropic format to OpenAI format
+            // Convert Anthropic format to OpenAI format using deprecated InvokeModel converter
+            // TODO: Update when Converse streaming is implemented
             char *anth_str = cJSON_PrintUnformatted(anth_response);
             cJSON_Delete(anth_response);
 
@@ -514,12 +531,12 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             // Free streaming context
             bedrock_streaming_context_free(&stream_ctx);
         } else {
-            // Non-streaming: convert Bedrock response to OpenAI format
-            openai_json = bedrock_convert_response(result.raw_response);
+            // Non-streaming: convert Converse API response to OpenAI format
+            openai_json = bedrock_converse_convert_response(result.raw_response);
         }
 
         if (!openai_json) {
-            result.error_message = strdup("Failed to parse Bedrock response");
+            result.error_message = strdup("Failed to parse Bedrock Converse response");
             result.is_retryable = 0;
             char *tmp_headers = result.headers_json;
             result.headers_json = NULL;
@@ -782,16 +799,16 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
         return result;
     }
 
-    LOG_DEBUG("Bedrock: Built OpenAI-format request, converting to Bedrock format");
+    LOG_DEBUG("Bedrock: Built OpenAI-format request, converting to Converse API format");
 
-    char *bedrock_json = bedrock_convert_request(openai_json);
+    char *converse_json = bedrock_converse_convert_request(openai_json);
     free(openai_json);
 
-    LOG_DEBUG("Bedrock: Converted to Bedrock format, request length: %zu bytes",
-              bedrock_json ? strlen(bedrock_json) : 0);
+    LOG_DEBUG("Bedrock: Converted to Converse format, request length: %zu bytes",
+              converse_json ? strlen(converse_json) : 0);
 
-    if (!bedrock_json) {
-        result.error_message = strdup("Failed to convert request to Bedrock format");
+    if (!converse_json) {
+        result.error_message = strdup("Failed to convert request to Converse API format");
         result.is_retryable = 0;
         free(saved_access_key);
         return result;
@@ -812,13 +829,13 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
     // === STEP 2: First API call attempt ===
     LOG_DEBUG("Executing first API call attempt...");
-    result = bedrock_execute_request(config, bedrock_json, state, enable_streaming);
+    result = bedrock_execute_request(config, converse_json, state, enable_streaming);
 
     // Success on first try
     if (result.response) {
         LOG_INFO("API call succeeded on first attempt");
         free(saved_access_key);
-        result.request_json = bedrock_json;  // Store for logging (caller frees)
+        result.request_json = converse_json;  // Store for logging (caller frees)
         return result;
     }
 
@@ -859,12 +876,12 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
                 // === STEP 5: Retry with externally rotated credentials ===
                 LOG_DEBUG("Retrying API call with externally rotated credentials...");
-                result = bedrock_execute_request(config, bedrock_json, state, enable_streaming);
+                result = bedrock_execute_request(config, converse_json, state, enable_streaming);
 
                 if (result.response) {
                     LOG_INFO("API call succeeded after using externally rotated credentials");
                     free(saved_access_key);
-                    result.request_json = bedrock_json;  // Store for logging (caller frees)
+                    result.request_json = converse_json;  // Store for logging (caller frees)
                     return result;
                 }
 
@@ -924,12 +941,12 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
                         // === STEP 5: Retry with rotated credentials ===
                         LOG_DEBUG("Retrying API call with rotated credentials...");
-                        result = bedrock_execute_request(config, bedrock_json, state, enable_streaming);
+                        result = bedrock_execute_request(config, converse_json, state, enable_streaming);
 
                         if (result.response) {
                             LOG_INFO("API call succeeded after credential rotation");
                             free(saved_access_key);
-                            result.request_json = bedrock_json;  // Store for logging (caller frees)
+                            result.request_json = converse_json;  // Store for logging (caller frees)
                             return result;
                         }
 
@@ -998,7 +1015,7 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
                     // === STEP 7: Final retry ===
                     LOG_DEBUG("Final API call attempt with re-rotated credentials...");
-                    result = bedrock_execute_request(config, bedrock_json, state, enable_streaming);
+                    result = bedrock_execute_request(config, converse_json, state, enable_streaming);
 
                     if (result.response) {
                         LOG_INFO("API call succeeded on final retry");
@@ -1014,7 +1031,7 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
     // Cleanup
     free(saved_access_key);
-    result.request_json = bedrock_json;  // Store for logging even on error (caller frees)
+    result.request_json = converse_json;  // Store for logging even on error (caller frees)
 
     return result;
 }
