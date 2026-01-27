@@ -7,9 +7,13 @@
 #
 # Memvid Integration (video-based memory storage):
 #   make MEMVID=1 - Enable memvid support (requires memvid-ffi library)
-#   make MEMVID=0 - Disable memvid support (default)
-#   make          - Auto-detect if libmemvid_ffi is available
-#   Memvid FFI is vendored in: vendors/memvid-ffi/memvid-ffi/
+#   make MEMVID=0 - Disable memvid support
+#   make          - Auto-detect if libmemvid_ffi is available and compatible
+#   Memvid FFI is vendored in: vendors/memvid-ffi/
+#
+#   Note: Auto-detection checks architecture compatibility. If you have a
+#   memvid-ffi library built for a different platform, use MEMVID=0 to disable.
+#   To rebuild memvid-ffi: cd vendors/memvid-ffi && cargo build --release
 
 CC ?= gcc
 CLANG = clang
@@ -149,8 +153,41 @@ else ifeq ($(MEMVID),0)
     MEMVID_SRC = src/memvid.c
     MEMVID_LIBS =
 else
-    # Default: auto-detect by checking if libmemvid_ffi exists
-    ifeq ($(shell test -f $(MEMVID_FFI_LIB) && echo yes),yes)
+    # Default: auto-detect by checking if libmemvid_ffi exists AND is compatible
+    MEMVID_LIB_EXISTS := $(shell test -f $(MEMVID_FFI_LIB) && echo yes)
+    MEMVID_LIB_COMPATIBLE := no
+    
+    # If library exists, check if it's compatible with current architecture
+    ifeq ($(MEMVID_LIB_EXISTS),yes)
+        # Try to extract object files and check their format
+        # On macOS arm64, we need arm64 objects; on Linux x86_64, we need x86_64 objects
+        ifeq ($(UNAME_S),Darwin)
+            # On macOS, check if library contains arm64 or x86_64 objects
+            MEMVID_LIB_ARCH := $(shell lipo -info $(MEMVID_FFI_LIB) 2>/dev/null | grep -o 'arm64\|x86_64' || \
+                                        ar t $(MEMVID_FFI_LIB) 2>/dev/null | head -1 | xargs -I{} sh -c 'ar p $(MEMVID_FFI_LIB) {} 2>/dev/null | file - | grep -o "arm64\|x86_64"' || echo unknown)
+            CURRENT_ARCH := $(shell uname -m)
+            ifeq ($(MEMVID_LIB_ARCH),$(CURRENT_ARCH))
+                MEMVID_LIB_COMPATIBLE := yes
+            endif
+        else ifeq ($(UNAME_S),Linux)
+            # On Linux, check if library contains compatible ELF objects
+            MEMVID_LIB_ARCH := $(shell ar t $(MEMVID_FFI_LIB) 2>/dev/null | head -1 | xargs -I{} sh -c 'ar p $(MEMVID_FFI_LIB) {} 2>/dev/null | file - | grep -o "x86-64\|x86_64\|aarch64"' || echo unknown)
+            CURRENT_ARCH := $(shell uname -m)
+            # Match common architecture names
+            ifeq ($(CURRENT_ARCH),x86_64)
+                ifneq ($(findstring x86,$(MEMVID_LIB_ARCH)),)
+                    MEMVID_LIB_COMPATIBLE := yes
+                endif
+            else ifeq ($(CURRENT_ARCH),aarch64)
+                ifneq ($(findstring aarch64,$(MEMVID_LIB_ARCH)),)
+                    MEMVID_LIB_COMPATIBLE := yes
+                endif
+            endif
+        endif
+    endif
+    
+    ifeq ($(MEMVID_LIB_COMPATIBLE),yes)
+        # Memvid library exists and is compatible with current architecture
         CFLAGS += -DHAVE_MEMVID=1
         DEBUG_CFLAGS += -DHAVE_MEMVID=1
         MEMVID_SRC = src/memvid.c
@@ -164,7 +201,7 @@ else
         LDFLAGS += $(MEMVID_LIBS)
         DEBUG_LDFLAGS += $(MEMVID_LIBS)
     else
-        # Memvid not available, disable it
+        # Memvid not available or incompatible architecture, disable it
         CFLAGS += -DDISABLE_MEMVID=1
         DEBUG_CFLAGS += -DDISABLE_MEMVID=1
         MEMVID_SRC = src/memvid.c
