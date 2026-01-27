@@ -17,7 +17,8 @@ The Subagent tool allows klawed to spawn a new instance of itself with a fresh c
 {
   "prompt": "Your task description here",
   "timeout": 300,
-  "provider": "gpt-4-turbo"
+  "provider": "gpt-4-turbo",
+  "working_dir": "/path/to/project"
 }
 ```
 
@@ -28,6 +29,10 @@ The Subagent tool allows klawed to spawn a new instance of itself with a fresh c
   - If not specified, subagent inherits the parent's provider configuration
   - Provider name must exist in your configuration file (.klawed/config.json or ~/.klawed/config.json)
   - Useful for using different models for different subtasks (e.g., fast model for simple tasks, powerful model for complex analysis)
+- `working_dir` (optional, string) - Working directory for the subagent
+  - Must be an absolute path (starting with '/')
+  - If not specified, subagent inherits the parent's working directory
+  - Useful for delegating tasks that need to operate in a different project or directory
 
 ### Monitoring Subagent Progress
 
@@ -71,9 +76,12 @@ The Subagent tool allows klawed to spawn a new instance of itself with a fresh c
   "pid": 12345,
   "log_file": "/path/to/.klawed/subagent/subagent_20231208_123456_1234.log",
   "timeout_seconds": 300,
+  "working_dir": "/path/to/project",
   "message": "Subagent started with PID 12345. Log file: /path/to/log... Use 'CheckSubagentProgress' tool to monitor progress or 'InterruptSubagent' to stop it."
 }
 ```
+
+Note: `working_dir` is only included in the response if it was explicitly set in the request.
 
 ### CheckSubagentProgress Tool Response
 ```json

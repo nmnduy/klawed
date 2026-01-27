@@ -37,15 +37,16 @@ Project instructions for Klawed when working with this codebase.
 
 **Data & State:**
 - **Database/Persistence**: `src/persistence.c`, `src/sqlite_queue.c`, `docs/sqlite-queue.md`
+- **Token usage database**: `src/token_usage_db.c`, `src/token_usage_db.h` (separate SQLite file for token tracking)
 - **HTTP client**: `src/http_client.c`, `src/http_client.h`
 - **Session management**: `src/session.c`, `src/session.h`
 - **History**: `src/history_file.c`, `src/history_file.h`
-- **Migration system**: `src/migrations.c`, `src/migrations.h`
+- **Migration system**: `src/migrations.c`, `src/migrations.h`, `src/token_usage_db_migrations.c`
 - **Retry logic**: `src/retry_logic.c`, `src/retry_logic.h`
 
 **User Interfaces:**
 - **Color themes**: `src/colorscheme.h`, `src/builtin_themes.c`, `docs/COLOR_THEMES.md`
-- **Token usage tracking**: `src/persistence.c`, `docs/token-usage.md`
+- **Token usage tracking**: `src/token_usage_db.c`, `docs/token-usage.md` (stored in separate `token_usage.db`)
 - **Window management**: `src/window_manager.c`, `src/window_manager.h`, `docs/window-management-refactor.md`
 - **Voice mode**: `src/voice_input.c`, `src/voice_stub.c`, `docs/voice-mode.md`
 - **Chat input**: `src/ncurses_input.c`, `src/ncurses_input.h`
@@ -171,12 +172,15 @@ export OPENAI_API_KEY="your-api-key"
 - **Data Directory**: `KLAWED_DATA_DIR` - Base directory for all klawed data files (default: `.klawed`). Individual paths can still be overridden by their specific env vars.
 - **Logging**: `KLAWED_LOG_LEVEL` (DEBUG/INFO/WARN/ERROR), `KLAWED_LOG_PATH`
 - **Database**: `KLAWED_DB_PATH` for API call history (SQLite)
+- **Token Usage Database**: `KLAWED_TOKEN_USAGE_DB_PATH` - Path for token usage tracking (default: `.klawed/token_usage.db`)
 - **Diagnostics**: `KLAWED_NO_STORAGE` - Set to 1 to disable SQLite database and history file. Useful for debugging TUI hangs on certain platforms (e.g., Mac Apple Silicon).
 - **Database Rotation**:
   - `KLAWED_DB_MAX_DAYS` - Keep records for N days (default: 30, 0=unlimited)
   - `KLAWED_DB_MAX_RECORDS` - Keep last N records (default: 1000, 0=unlimited)
   - `KLAWED_DB_MAX_SIZE_MB` - Max database size in MB (default: 100, 0=unlimited)
   - `KLAWED_DB_AUTO_ROTATE` - Enable auto-rotation (default: 1, set to 0 to disable)
+  - `KLAWED_TOKEN_USAGE_DB_MAX_DAYS` - Keep token records for N days (default: 30)
+  - `KLAWED_TOKEN_USAGE_DB_MAX_RECORDS` - Keep last N token records (default: 5000)
 - **Tools**: 
   - `KLAWED_GREP_MAX_RESULTS` - Max grep results (default: 100)
   - `KLAWED_GREP_DISPLAY_LIMIT` - Max grep results to display in TUI (default: 20)
@@ -209,9 +213,10 @@ export OPENAI_API_KEY="your-api-key"
 **Defaults:**
 - Logs: `./.klawed/logs/klawed.log` (project-local)
 - Database: `./.klawed/api_calls.db` (project-local)
+- Token usage database: `./.klawed/token_usage.db` (project-local, separate from API call logs)
 - Prompt caching: Enabled
 - Max tokens: 16384 (configurable via `KLAWED_MAX_TOKENS`)
-- Token usage tracking: Enabled (stores in `token_usage` table)
+- Token usage tracking: Enabled (stores in separate `token_usage.db`)
 - Memory file: `./.klawed/memory.mv2` (project-local, when memvid enabled)
 
 ## Development
