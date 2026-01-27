@@ -762,10 +762,13 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     char line3[256];
     char tip_line[512];
 
+    // Add left padding for wider screens (>= 100 chars)
+    const char *pad = (tui->wm.screen_width >= 100) ? "    " : "";
+
     // Create content lines without box borders
-    snprintf(line1, sizeof(line1), "  /\\_/\\   klawed v%s", version ? version : "?");
-    snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
-    snprintf(line3, sizeof(line3), "  > ^ <    %s", working_dir);
+    snprintf(line1, sizeof(line1), "%s  /\\_/\\   klawed v%s", pad, version ? version : "?");
+    snprintf(line2, sizeof(line2), "%s ( o.o )  %s", pad, model);
+    snprintf(line3, sizeof(line3), "%s  > ^ <    %s", pad, working_dir);
 
     // Add padding before mascot
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
@@ -811,7 +814,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     // Compute a simple per-process pseudo-random index without relying on global srand
     unsigned int seed = (unsigned int)(time(NULL) ^ getpid());
     size_t tip_index = tips_count ? (seed % tips_count) : 0;
-    snprintf(tip_line, sizeof(tip_line), "Tip: %s", tips[tip_index]);
+    snprintf(tip_line, sizeof(tip_line), "%sTip: %s", pad, tips[tip_index]);
 
     tui_add_conversation_line(tui, NULL, tip_line, COLOR_PAIR_STATUS);
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
