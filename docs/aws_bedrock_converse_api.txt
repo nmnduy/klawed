@@ -1,0 +1,362 @@
+AWS BEDROCK CONVERSE API DOCUMENTATION
+======================================
+
+Source: https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html
+
+OVERVIEW
+--------
+The Converse API sends messages to Amazon Bedrock models. It provides a consistent
+interface that works with all models supporting messages, allowing you to write
+code once and use it with different models.
+
+Key points:
+- Amazon Bedrock doesn't store any text, images, or documents you provide
+- Data is only used to generate the response
+- Requires permission for the bedrock:InvokeModel action
+
+REQUEST SYNTAX
+--------------
+POST /model/{modelId}/converse HTTP/1.1
+Content-type: application/json
+
+{
+    "messages": [
+        {
+            "role": "user" | "assistant",
+            "content": [
+                { "text": "string" }
+            ]
+        }
+    ],
+    "system": [
+        { "text": "string" }
+    ],
+    "inferenceConfig": {
+        "maxTokens": number,
+        "temperature": number,
+        "topP": number,
+        "stopSequences": ["string"]
+    },
+    "additionalModelRequestFields": { },
+    "additionalModelResponseFieldPaths": ["string"],
+    "guardrailConfig": {
+        "guardrailIdentifier": "string",
+        "guardrailVersion": "string",
+        "trace": "string"
+    },
+    "toolConfig": {
+        "tools": [ { } ],
+        "toolChoice": { }
+    },
+    "performanceConfig": {
+        "latency": "string"
+    },
+    "promptVariables": { },
+    "requestMetadata": { }
+}
+
+URI PARAMETERS
+--------------
+modelId (Required)
+    Specifies the model or throughput with which to run inference.
+    
+    Options:
+    - Base model: Use model ID or ARN (e.g., "anthropic.claude-3-sonnet-20240229-v1:0")
+    - Inference profile: Use inference profile ID or ARN (e.g., "us.anthropic.claude-3-5-sonnet-20240620-v1:0")
+    - Provisioned model: Use ARN of Provisioned Throughput
+    - Custom model: Use ARN of custom model deployment
+    - Prompt management: Use ARN of prompt version
+    
+    Length: 1-2048 characters
+
+REQUEST BODY PARAMETERS
+-----------------------
+
+messages (Array of Message objects)
+    The messages to send to the model.
+    Each message has:
+    - role: "user" or "assistant"
+    - content: Array of content blocks (text, image, etc.)
+
+system (Array of SystemContentBlock objects)
+    Instructions or context for the model about the task or persona.
+
+inferenceConfig (InferenceConfiguration object)
+    Base inference parameters:
+    - maxTokens: Maximum tokens to generate
+    - temperature: Randomness (0.0-1.0)
+    - topP: Nucleus sampling parameter
+    - stopSequences: Array of stop sequences
+
+additionalModelRequestFields (JSON value)
+    Additional model-specific parameters not in inferenceConfig
+    Example: { "top_k": 200 }
+
+additionalModelResponseFieldPaths (Array of strings)
+    JSON Pointer paths for additional fields to return in response
+    Example: ["/stop_sequence"]
+    Max 10 items, each 1-256 characters
+
+guardrailConfig (GuardrailConfiguration object)
+    Configuration for guardrails:
+    - guardrailIdentifier: Guardrail ID
+    - guardrailVersion: Version number
+    - trace: Trace setting
+
+toolConfig (ToolConfiguration object)
+    Configuration for tools the model can use:
+    - tools: Array of tool definitions
+    - toolChoice: How the model should choose tools
+
+performanceConfig (PerformanceConfiguration object)
+    Model performance settings:
+    - latency: Latency preference
+
+promptVariables (Map)
+    Variables for prompts from Prompt management
+
+requestMetadata (Map)
+    Key-value pairs for filtering invocation logs
+    Max 16 items
+
+RESPONSE SYNTAX
+---------------
+HTTP/1.1 200
+Content-type: application/json
+
+{
+    "output": {
+        "message": {
+            "role": "assistant",
+            "content": [
+                { "text": "string" }
+            ]
+        }
+    },
+    "stopReason": "string",
+    "usage": {
+        "inputTokens": number,
+        "outputTokens": number,
+        "totalTokens": number,
+        "cacheReadInputTokens": number,
+        "cacheWriteInputTokens": number
+    },
+    "metrics": {
+        "latencyMs": number
+    },
+    "additionalModelResponseFields": { },
+    "trace": { },
+    "performanceConfig": { },
+    "serviceTier": { }
+}
+
+RESPONSE ELEMENTS
+-----------------
+
+output (ConverseOutput object)
+    The result from Converse, contains the generated message.
+
+stopReason (String)
+    Why the model stopped generating. Valid values:
+    - end_turn: Model completed its response
+    - tool_use: Model wants to use a tool
+    - max_tokens: Hit token limit
+    - stop_sequence: Hit a stop sequence
+    - guardrail_intervened: Guardrail blocked content
+    - content_filtered: Content was filtered
+    - model_context_window_exceeded: Exceeded context window
+
+usage (TokenUsage object)
+    Token counts:
+    - inputTokens: Tokens in the input
+    - outputTokens: Tokens generated
+    - totalTokens: Total tokens used
+    - cacheReadInputTokens: Tokens read from cache
+    - cacheWriteInputTokens: Tokens written to cache
+
+metrics (ConverseMetrics object)
+    Performance metrics:
+    - latencyMs: Request latency in milliseconds
+
+ERRORS
+------
+AccessDeniedException (403)
+    Insufficient permissions for the requested action.
+
+ValidationException (400)
+    Input fails to satisfy constraints.
+
+ResourceNotFoundException (404)
+    Specified resource ARN not found.
+
+ThrottlingException (429)
+    Account quotas exceeded.
+
+ModelNotReadyException (429)
+    Model not ready to serve requests. SDK auto-retries up to 5 times.
+
+ModelTimeoutException (408)
+    Request took too long, exceeded model timeout.
+
+ModelErrorException (424)
+    Error while processing the model.
+
+InternalServerException (500)
+    Internal server error.
+
+ServiceUnavailableException (503)
+    Service currently unavailable.
+
+EXAMPLES
+--------
+
+Example 1: Basic Message
+------------------------
+Request:
+POST /model/anthropic.claude-3-sonnet-20240229-v1:0/converse HTTP/1.1
+Content-type: application/json
+
+{
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                { "text": "Write an article about impact of high inflation to GDP" }
+            ]
+        }
+    ],
+    "system": [
+        { "text": "You are an economist with access to lots of data" }
+    ],
+    "inferenceConfig": {
+        "maxTokens": 1000,
+        "temperature": 0.5
+    }
+}
+
+Response:
+{
+    "output": {
+        "message": {
+            "role": "assistant",
+            "content": [
+                { "text": "<generated text>" }
+            ]
+        }
+    },
+    "stopReason": "end_turn",
+    "usage": {
+        "inputTokens": 30,
+        "outputTokens": 628,
+        "totalTokens": 658
+    },
+    "metrics": {
+        "latencyMs": 1275
+    }
+}
+
+Example 2: With Additional Model Fields
+---------------------------------------
+Request:
+POST /model/anthropic.claude-3-sonnet-20240229-v1:0/converse HTTP/1.1
+Content-type: application/json
+
+{
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                { "text": "Provide general steps to debug a BSOD on a Windows laptop." }
+            ]
+        }
+    ],
+    "system": [
+        { "text": "You are a tech support expert. Signal 'SUCCESS' or 'FAILURE'" }
+    ],
+    "inferenceConfig": {
+        "stopSequences": ["SUCCESS", "FAILURE"]
+    },
+    "additionalModelRequestFields": {
+        "top_k": 200
+    },
+    "additionalModelResponseFieldPaths": ["/stop_sequence"]
+}
+
+Response:
+{
+    "output": {
+        "message": {
+            "role": "assistant",
+            "content": [
+                { "text": "<generated text>" }
+            ]
+        }
+    },
+    "additionalModelResponseFields": {
+        "stop_sequence": "SUCCESS"
+    },
+    "stopReason": "stop_sequence",
+    "usage": {
+        "inputTokens": 51,
+        "outputTokens": 442,
+        "totalTokens": 493
+    },
+    "metrics": {
+        "latencyMs": 7944
+    }
+}
+
+Example 3: Using Inference Profile (Cross-Region)
+-------------------------------------------------
+Request:
+POST /model/us.anthropic.claude-3-5-sonnet-20240620-v1:0/converse HTTP/1.1
+Content-type: application/json
+
+{
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                { "text": "Hello world" }
+            ]
+        }
+    ]
+}
+
+Example 4: Using Prompt Management
+----------------------------------
+Request:
+POST /model/arn:aws:bedrock:us-west-2:123456789012:prompt/PROMPT12345:1/converse HTTP/1.1
+Content-type: application/json
+
+{
+    "promptVariables": {
+        "genre": {
+            "text": "pop"
+        }
+    }
+}
+
+COMMON MODEL IDs
+----------------
+Claude 3.5 Sonnet: anthropic.claude-3-5-sonnet-20240620-v1:0
+Claude 3 Sonnet:   anthropic.claude-3-sonnet-20240229-v1:0
+Claude 3 Haiku:    anthropic.claude-3-haiku-20240307-v1:0
+Claude 3 Opus:     anthropic.claude-3-opus-20240229-v1:0
+
+Cross-region inference profiles (prefix with region):
+us.anthropic.claude-3-5-sonnet-20240620-v1:0
+eu.anthropic.claude-3-5-sonnet-20240620-v1:0
+
+NOTES
+-----
+1. If using Prompt management, you cannot include: additionalModelRequestFields,
+   inferenceConfig, system, or toolConfig in the request. These must be defined
+   through Prompt management.
+
+2. To deny all inference access, deny both bedrock:InvokeModel and
+   bedrock:InvokeModelWithResponseStream actions.
+
+3. For tool use with models, see the AWS documentation on "Tool use (Function calling)".
+
+4. For streaming responses, use the ConverseStream API instead.
