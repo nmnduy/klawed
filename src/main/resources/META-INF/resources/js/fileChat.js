@@ -374,9 +374,9 @@ export function init(rootEl) {
         if (scrollToBottomButton) return scrollToBottomButton;
 
         const button = document.createElement('button');
-        // Position relative to chat-container with bottom-6 to stay above the input bar
+        // Position relative to chat-container with bottom-4 to stay above the input bar
         // Use sticky positioning so it stays at the bottom of the visible area
-        button.className = 'sticky bottom-6 ml-auto mr-6 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center opacity-0 pointer-events-none hover:scale-110 active:scale-95';
+        button.className = 'sticky bottom-4 ml-auto mr-4 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center opacity-0 pointer-events-none hover:scale-110 active:scale-95';
         button.setAttribute('aria-label', 'Scroll to bottom');
         button.innerHTML = `
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
