@@ -818,7 +818,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     // Compute a simple per-process pseudo-random index without relying on global srand
     unsigned int seed = (unsigned int)(time(NULL) ^ getpid());
     size_t tip_index = tips_count ? (seed % tips_count) : 0;
-    snprintf(tip_line, sizeof(tip_line), "Tip: %s", tips[tip_index]);
+    snprintf(tip_line, sizeof(tip_line), "%sTip: %s", pad, tips[tip_index]);
 
     tui_add_conversation_line(tui, NULL, tip_line, COLOR_PAIR_STATUS);
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
