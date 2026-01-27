@@ -99,6 +99,21 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         }
     }
 
+    // Get optional working_dir parameter
+    const char *subagent_working_dir = NULL;
+    const cJSON *working_dir_json = cJSON_GetObjectItem(params, "working_dir");
+    if (working_dir_json && cJSON_IsString(working_dir_json)) {
+        subagent_working_dir = working_dir_json->valuestring;
+        // Validate that working_dir is not empty and is an absolute path
+        if (subagent_working_dir && strlen(subagent_working_dir) == 0) {
+            subagent_working_dir = NULL;
+        } else if (subagent_working_dir && subagent_working_dir[0] != '/') {
+            cJSON *error = cJSON_CreateObject();
+            cJSON_AddStringToObject(error, "error", "working_dir must be an absolute path (starting with '/')");
+            return error;
+        }
+    }
+
     // Create unique log file in data_dir/subagent/ directory
     if (!state) {
         cJSON *error = cJSON_CreateObject();
@@ -266,6 +281,15 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
             }
         }
 
+        // Change working directory if specified
+        if (subagent_working_dir && subagent_working_dir[0] != '\0') {
+            if (chdir(subagent_working_dir) != 0) {
+                fprintf(stderr, "Failed to change to working directory '%s': %s\n",
+                        subagent_working_dir, strerror(errno));
+                exit(1);
+            }
+        }
+
         // Execute the command
         execl("/bin/sh", "sh", "-c", command, (char *)NULL);
         // If we get here, exec failed
@@ -290,6 +314,9 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     cJSON_AddNumberToObject(result, "pid", pid);
     cJSON_AddStringToObject(result, "log_file", log_file);
     cJSON_AddNumberToObject(result, "timeout_seconds", timeout_seconds);
+    if (subagent_working_dir && subagent_working_dir[0] != '\0') {
+        cJSON_AddStringToObject(result, "working_dir", subagent_working_dir);
+    }
 
     // Add message about how to check progress - use dynamic allocation to avoid truncation
     size_t msg_size = strlen(log_file) + 256; // Extra space for message template and PID

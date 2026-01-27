@@ -810,6 +810,18 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
             cJSON_AddStringToObject(subagent_tail, "description",
                 "Optional: Number of lines to return from end of log. Default: 100. The summary is usually at the end.");
             cJSON_AddItemToObject(subagent_props, "tail_lines", subagent_tail);
+            cJSON *subagent_provider = cJSON_CreateObject();
+            cJSON_AddStringToObject(subagent_provider, "type", "string");
+            cJSON_AddStringToObject(subagent_provider, "description",
+                "Optional: LLM provider name to use for this subagent (e.g., 'gpt-4-turbo', 'sonnet-4.5-bedrock'). "
+                "If not specified, subagent inherits the parent's provider configuration.");
+            cJSON_AddItemToObject(subagent_props, "provider", subagent_provider);
+            cJSON *subagent_working_dir = cJSON_CreateObject();
+            cJSON_AddStringToObject(subagent_working_dir, "type", "string");
+            cJSON_AddStringToObject(subagent_working_dir, "description",
+                "Optional: Working directory for the subagent. If not specified, subagent inherits "
+                "the parent's working directory. Must be an absolute path.");
+            cJSON_AddItemToObject(subagent_props, "working_dir", subagent_working_dir);
             cJSON_AddItemToObject(subagent_params, "properties", subagent_props);
             cJSON *subagent_req = cJSON_CreateArray();
             cJSON_AddItemToArray(subagent_req, cJSON_CreateString("prompt"));
