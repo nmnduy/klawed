@@ -31,6 +31,76 @@ static const char *SPINNER_DOTS[]   = {"⣾","⣽","⣻","⢿","⡿","⣟","⣯"
 static const char *SPINNER_LINE[]   = {"-","\\","|","/"};
 static const char *SPINNER_BOX[]    = {"◰","◳","◲","◱"};
 static const char *SPINNER_CIRCLE[] = {"◜","◠","◝","◞","◡","◟"};
+// Audio visualizer styles using braille characters (like btop graphs)
+// Wave pattern - synchronized bounce
+static const char *SPINNER_BARS_WAVE[] = {
+    "⣀⣠⣤⣀",
+    "⣠⣴⣶⣤",
+    "⣤⣶⣿⣶",
+    "⣶⣿⣷⣾",
+    "⣿⣷⣶⣿",
+    "⣷⣶⣴⣾",
+    "⣶⣴⣠⣶",
+    "⣴⣠⣀⣴",
+    "⣠⣀⣀⣠",
+    "⣀⣀⣠⣀",
+    "⣀⣠⣴⣠",
+    "⣠⣴⣶⣴"
+};
+// Ripple pattern - wave moves left to right
+static const char *SPINNER_BARS_RIPPLE[] = {
+    "⣿⣶⣤⣀",
+    "⣷⣿⣶⣤",
+    "⣤⣷⣿⣶",
+    "⣀⣤⣷⣿",
+    "⣀⣀⣤⣷",
+    "⣀⣀⣀⣤",
+    "⣤⣀⣀⣀",
+    "⣶⣤⣀⣀",
+    "⣷⣶⣤⣀",
+    "⣿⣷⣶⣤",
+    "⣶⣿⣷⣶",
+    "⣤⣶⣿⣷"
+};
+// Bounce pattern - alternating peaks
+static const char *SPINNER_BARS_BOUNCE[] = {
+    "⣿⣀⣿⣀",
+    "⣶⣠⣶⣠",
+    "⣤⣴⣤⣴",
+    "⣠⣶⣠⣶",
+    "⣀⣿⣀⣿",
+    "⣠⣶⣠⣶",
+    "⣤⣴⣤⣴",
+    "⣶⣠⣶⣠"
+};
+// Random-ish pattern - chaotic equalizer
+static const char *SPINNER_BARS_RANDOM[] = {
+    "⣿⣤⣶⣠",
+    "⣶⣿⣠⣴",
+    "⣤⣶⣿⣤",
+    "⣠⣤⣶⣿",
+    "⣴⣠⣤⣶",
+    "⣶⣴⣠⣤",
+    "⣤⣶⣴⣠",
+    "⣠⣤⣶⣴",
+    "⣿⣠⣴⣶",
+    "⣴⣿⣶⣠"
+};
+// Pulse pattern - center expands outward
+static const char *SPINNER_BARS_PULSE[] = {
+    "⣀⣀⣀⣀",
+    "⣀⣠⣠⣀",
+    "⣀⣴⣴⣀",
+    "⣠⣶⣶⣠",
+    "⣤⣿⣿⣤",
+    "⣶⣿⣿⣶",
+    "⣿⣿⣿⣿",
+    "⣶⣿⣿⣶",
+    "⣤⣿⣿⣤",
+    "⣠⣶⣶⣠",
+    "⣀⣴⣴⣀",
+    "⣀⣠⣠⣀"
+};
 
 #if defined(__GNUC__) || defined(__clang__)
 #define INDICATOR_UNUSED __attribute__((unused))
@@ -76,7 +146,12 @@ static const spinner_variant_t SPINNER_VARIANTS[] = {
     { SPINNER_DOTS,    (int)(sizeof(SPINNER_DOTS)/sizeof(*SPINNER_DOTS)) },
     { SPINNER_LINE,    (int)(sizeof(SPINNER_LINE)/sizeof(*SPINNER_LINE)) },
     { SPINNER_BOX,     (int)(sizeof(SPINNER_BOX)/sizeof(*SPINNER_BOX)) },
-    { SPINNER_CIRCLE,  (int)(sizeof(SPINNER_CIRCLE)/sizeof(*SPINNER_CIRCLE)) }
+    { SPINNER_CIRCLE,  (int)(sizeof(SPINNER_CIRCLE)/sizeof(*SPINNER_CIRCLE)) },
+    { SPINNER_BARS_WAVE,   (int)(sizeof(SPINNER_BARS_WAVE)/sizeof(*SPINNER_BARS_WAVE)) },
+    { SPINNER_BARS_RIPPLE, (int)(sizeof(SPINNER_BARS_RIPPLE)/sizeof(*SPINNER_BARS_RIPPLE)) },
+    { SPINNER_BARS_BOUNCE, (int)(sizeof(SPINNER_BARS_BOUNCE)/sizeof(*SPINNER_BARS_BOUNCE)) },
+    { SPINNER_BARS_RANDOM, (int)(sizeof(SPINNER_BARS_RANDOM)/sizeof(*SPINNER_BARS_RANDOM)) },
+    { SPINNER_BARS_PULSE,  (int)(sizeof(SPINNER_BARS_PULSE)/sizeof(*SPINNER_BARS_PULSE)) }
 };
 static const int SPINNER_VARIANT_COUNT = (int)(sizeof(SPINNER_VARIANTS)/sizeof(*SPINNER_VARIANTS));
 
