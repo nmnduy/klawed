@@ -1,0 +1,37 @@
+OCR Processing Statistics
+=========================
+
+Total screenshots processed: 21
+Total text files generated: 21
+
+File sizes:
+  Screenshot 2026-01-23 at 14.28.32.txt: 927 bytes
+  Screenshot 2026-01-23 at 14.29.47.txt: 1952 bytes
+  Screenshot 2026-01-23 at 14.36.15.txt: 2853 bytes
+  Screenshot 2026-01-23 at 14.37.12.txt: 838 bytes
+  Screenshot 2026-01-23 at 14.37.30.txt: 865 bytes
+  Screenshot 2026-01-23 at 14.38.58.txt: 157 bytes
+  Screenshot 2026-01-23 at 14.39.33.txt: 208 bytes
+  Screenshot 2026-01-23 at 14.51.43.txt: 2994 bytes
+  Screenshot 2026-01-23 at 15.29.52.txt: 2931 bytes
+  Screenshot 2026-01-23 at 15.30.28.txt: 210 bytes
+  Screenshot 2026-01-23 at 15.33.08.txt: 252 bytes
+  Screenshot 2026-01-23 at 15.33.15.txt: 307 bytes
+  Screenshot 2026-01-23 at 15.49.52.txt: 2654 bytes
+  Screenshot 2026-01-23 at 15.50.25.txt: 880 bytes
+  Screenshot 2026-01-23 at 15.52.26.txt: 497 bytes
+  Screenshot 2026-01-23 at 15.54.50.txt: 2995 bytes
+  Screenshot 2026-01-23 at 16.01.27.txt: 3854 bytes
+  Screenshot 2026-01-23 at 16.14.43.txt: 2109 bytes
+  Screenshot 2026-01-23 at 16.17.02.txt: 2574 bytes
+  Screenshot 2026-01-23 at 16.23.52.txt: 394 bytes
+  Screenshot 2026-01-23 at 16.26.57.txt: 381 bytes
+
+Total extracted text: 30832 bytes
+
+Top 5 largest extractions:
+  Screenshot - 3.8K
+  Screenshot - 3.0K
+  Screenshot - 3.0K
+  Screenshot - 2.9K
+  Screenshot - 2.8K

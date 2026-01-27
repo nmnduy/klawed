@@ -1,0 +1,49 @@
+= Google Cloud sheets
+
+e IAM & Admin / Service accounts / Create service account
+
++2 IAM <€ Create service account
+
+@ PAM
+
+Principal Access Boundary 1) Create service account
+
+Service account name
+& Security Insights agent
+(3) Identity & Organization Display name for this service account
+. Service account ID *
+& Policy Troubleshooter agent-508 x ¢G
+—& Policy Analyzer . . .
+Email address: agent-508@filesurf.iam.gserviceaccount.com [Qj
+
+® Organization Policies
+
+¢3— Service Accounts
+
+Describe what this service account will do
+
+© Workload Identity Federat...
+
+‘= ~~ Workforce Identity Federa...
+
+2 Labels
+
+> Tags @ Permissions (optional)
+
+|
+a = Settings ooo. : .
+9 © Principals with access (optional)
+
+@ Privacy & Security
+
+— . | Done | Cancel
+
+HE Identity-Aware Proxy
+
+® Roles
+
+= Audit logs
+
+< _ Asset Inventory
+
+I htt B PT... ck On OM. 2k kt tk

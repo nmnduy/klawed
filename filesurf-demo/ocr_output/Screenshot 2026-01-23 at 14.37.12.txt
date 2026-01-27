@@ -1,0 +1,26 @@
+= Google Cloud sheets
+e IAM & Admin / Service accounts / Create service account
++2 IAM € Create service account
+@ PAM
+(Principal Access Boundary @ Create service account
+£4 Security Insights | , .
+@ Permissions (optional)
+© Identity & Organization Grant this service account access to filesurf so that it has permission to
+A Policy Troubleshooter complete specific actions on the resources in your project. Learn more 4%
+- . IAM condition (optional) @ _
+Polley Analyzer + Add IAM condition .
+® Organization Policies
+¢3— Service Accounts
+© Workload Identity Federat...
+‘= ~~ Workforce Identity Federa...
+2 Labels
+» = Tags
+Settings © Principals with access (optional)
+@ Privacy & Security | Done | Cancel
+HE Identity-Aware Proxy
+® Roles
+= Audit logs
+< _ Asset Inventory
+l=] Quotas & System Limits
+Essential Contacts
+2s Groups

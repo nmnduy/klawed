@@ -56,11 +56,22 @@ public class BlogDatabaseManager {
 
         // Initialize schema
         initializeSchema();
+        
+        // Ensure connection is in autocommit mode after initialization
+        if (!connection.getAutoCommit()) {
+            LOGGER.info("Setting autoCommit=true after schema initialization");
+            connection.setAutoCommit(true);
+        }
 
         LOGGER.info("BlogDatabaseManager initialized successfully");
     }
 
     private void initializeSchema() throws SQLException, IOException {
+        // Create migrations tracking table if it doesn't exist
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)");
+        }
+        
         // Run migrations in order
         String[] migrations = {
             "V1.0.0__create_blog_tables.sql",
@@ -68,6 +79,17 @@ public class BlogDatabaseManager {
         };
         
         for (String migrationFile : migrations) {
+            // Check if migration has already been applied
+            try (PreparedStatement checkStmt = connection.prepareStatement("SELECT version FROM schema_migrations WHERE version = ?")) {
+                checkStmt.setString(1, migrationFile);
+                try (ResultSet rs = checkStmt.executeQuery()) {
+                    if (rs.next()) {
+                        LOGGER.fine("Migration already applied, skipping: " + migrationFile);
+                        continue;
+                    }
+                }
+            }
+            
             String migrationPath = "/db/migration/" + migrationFile;
             try (InputStream is = getClass().getResourceAsStream(migrationPath)) {
                 if (is == null) {
@@ -79,16 +101,40 @@ public class BlogDatabaseManager {
                         .lines()
                         .collect(Collectors.joining("\n"));
                 
-                try (Statement stmt = connection.createStatement()) {
-                    // Execute migration (split by semicolons for multiple statements)
-                    for (String statement : sql.split(";")) {
-                        String trimmed = statement.trim();
-                        if (!trimmed.isEmpty() && !trimmed.startsWith("--")) {
-                            stmt.execute(trimmed);
+                // Apply migration in a transaction
+                boolean originalAutoCommit = connection.getAutoCommit();
+                try {
+                    connection.setAutoCommit(false);
+                    
+                    try (Statement stmt = connection.createStatement()) {
+                        // Execute migration (split by semicolons for multiple statements)
+                        for (String statement : sql.split(";")) {
+                            String trimmed = statement.trim();
+                            if (!trimmed.isEmpty() && !trimmed.startsWith("--")) {
+                                stmt.execute(trimmed);
+                            }
                         }
                     }
+                    
+                    // Record migration as applied
+                    try (PreparedStatement insertStmt = connection.prepareStatement("INSERT INTO schema_migrations (version, applied_at) VALUES (?, strftime('%s', 'now'))")) {
+                        insertStmt.setString(1, migrationFile);
+                        insertStmt.executeUpdate();
+                    }
+                    
+                    connection.commit();
+                    connection.setAutoCommit(originalAutoCommit);
+                    LOGGER.info("Applied migration: " + migrationFile);
+                    
+                } catch (Exception e) {
+                    try {
+                        connection.rollback();
+                    } catch (SQLException rollbackEx) {
+                        LOGGER.warning("Error during rollback: " + rollbackEx.getMessage());
+                    }
+                    connection.setAutoCommit(originalAutoCommit);
+                    throw new SQLException("Migration failed: " + migrationFile, e);
                 }
-                LOGGER.info("Applied migration: " + migrationFile);
             }
         }
         
@@ -121,38 +167,45 @@ public class BlogDatabaseManager {
 
     public <T> T executeInTransaction(ConnectionConsumer<T> operation) throws SQLException {
         synchronized(lock) {
-            boolean autoCommit = connection.getAutoCommit();
-            boolean transactionStarted = false;
+            boolean autoCommitWasEnabled = connection.getAutoCommit();
+            boolean needsCommit = false;
+            LOGGER.fine("executeInTransaction: autoCommit=" + autoCommitWasEnabled);
             try {
-                if (autoCommit) {
+                if (autoCommitWasEnabled) {
+                    LOGGER.fine("executeInTransaction: disabling autoCommit");
                     connection.setAutoCommit(false);
-                    transactionStarted = true;
+                    needsCommit = true;
                 }
                 T result = operation.accept(connection);
-                if (transactionStarted) {
+                if (needsCommit) {
+                    LOGGER.fine("executeInTransaction: committing transaction");
                     connection.commit();
+                    // After successful commit, re-enable autocommit for next operation
+                    LOGGER.fine("executeInTransaction: re-enabling autoCommit");
+                    connection.setAutoCommit(true);
                 }
                 return result;
             } catch (Exception e) {
-                if (transactionStarted) {
+                LOGGER.severe("executeInTransaction: exception caught: " + e.getMessage());
+                if (needsCommit) {
                     try {
+                        LOGGER.fine("executeInTransaction: rolling back transaction");
                         connection.rollback();
                     } catch (SQLException rollbackEx) {
                         LOGGER.warning("Error during rollback: " + rollbackEx.getMessage());
+                    }
+                    // After rollback, re-enable autocommit
+                    try {
+                        LOGGER.fine("executeInTransaction: re-enabling autoCommit after rollback");
+                        connection.setAutoCommit(true);
+                    } catch (SQLException autoCommitEx) {
+                        LOGGER.warning("Error restoring autoCommit after rollback: " + autoCommitEx.getMessage());
                     }
                 }
                 if (e instanceof SQLException) {
                     throw (SQLException) e;
                 } else {
                     throw new SQLException("Transaction failed", e);
-                }
-            } finally {
-                if (transactionStarted) {
-                    try {
-                        connection.setAutoCommit(autoCommit);
-                    } catch (SQLException ex) {
-                        LOGGER.warning("Error restoring autoCommit: " + ex.getMessage());
-                    }
                 }
             }
         }
