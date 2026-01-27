@@ -25,6 +25,7 @@
 #include "klawed_internal.h"
 #include "persistence.h"
 #include "spinner_effects.h"
+#include "text_diffusion.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -186,7 +187,7 @@ void render_status_window(TUIState *tui) {
     // Prepare status message components (agent status - now on LEFT)
     // Note: We render spinner and text separately to use ncurses colors properly.
     // ANSI escape codes don't work with ncurses - they get displayed literally.
-    char status_text[256] = {0};  // Status text without spinner
+    char status_text[512] = {0};  // Status text without spinner (extra room for prefix)
     char spinner_frame[16] = {0}; // Current spinner frame character
     int status_text_len = 0;
     int spinner_frame_len = 0;
@@ -216,7 +217,11 @@ void render_status_window(TUIState *tui) {
                 // Display width is just the spinner (1 character typically)
                 status_display_width = utf8_display_width(spinner_frame);
             } else {
-                snprintf(status_text, sizeof(status_text), " %s", tui->status_message);
+                // Update text diffusion animation and get display text
+                text_diffusion_update(&tui->status_text_diffusion);
+                const char *diffused_text = text_diffusion_get_display(&tui->status_text_diffusion);
+
+                snprintf(status_text, sizeof(status_text), " %s", diffused_text);
                 status_text_len = (int)strlen(status_text);
                 // Display width = spinner + space + text
                 status_display_width = utf8_display_width(spinner_frame) + utf8_display_width(status_text);
@@ -1383,6 +1388,7 @@ void tui_update_status(TUIState *tui, const char *status_text) {
 
     if (message[0] == '\0') {
         status_spinner_stop(tui);
+        text_diffusion_reset(&tui->status_text_diffusion);
         tui->status_visible = 0;
         free(tui->status_message);
         tui->status_message = NULL;
@@ -1400,6 +1406,9 @@ void tui_update_status(TUIState *tui, const char *status_text) {
         }
         free(tui->status_message);
         tui->status_message = copy;
+
+        // Start text diffusion animation for the new message
+        text_diffusion_set_target(&tui->status_text_diffusion, message);
     }
 
     if (status_message_wants_spinner(message)) {

@@ -26,6 +26,7 @@
 #include "subagent_manager.h"
 #include "config.h"
 #include "data_dir.h"
+#include "text_diffusion.h"
 #include <stdlib.h>
 #include <bsd/stdlib.h>
 #include <string.h>
@@ -381,6 +382,9 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->status_spinner_active = 0;
     tui->status_spinner_frame = 0;
     tui->status_spinner_last_update_ns = 0;
+
+    // Initialize text diffusion effect
+    text_diffusion_init(&tui->status_text_diffusion);
 
     // Initialize mode (start in INSERT mode for immediate input)
     tui->mode = TUI_MODE_INSERT;

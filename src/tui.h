@@ -19,6 +19,7 @@
 #include "history_search.h"
 #include "spring.h"
 #include "spinner_effects.h"
+#include "text_diffusion.h"
 #ifndef TEST_BUILD
 #include "persistence.h"
 #else
@@ -125,6 +126,8 @@ typedef struct TUIStateStruct {
     // Enhanced spinner effects
     SpinnerEffectConfig status_spinner_effect; // Spinner effect configuration
 
+    // Text diffusion effect for status messages
+    TextDiffusionConfig status_text_diffusion; // Diffusion animation config
 
 
     // Database connection for real-time token usage queries
