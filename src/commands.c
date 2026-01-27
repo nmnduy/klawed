@@ -13,6 +13,7 @@
 #include "config.h"
 #include "provider_command.h"
 #include "config_command.h"
+#include "compaction.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
 #include <bsd/string.h>
@@ -564,6 +565,110 @@ static int cmd_dump(ConversationState *state, const char *args) {
     return 0;
 }
 
+static int cmd_compact(ConversationState *state, const char *args) {
+    (void)args;  // No arguments needed
+
+    if (!state) {
+        print_error("No conversation state available");
+        return -1;
+    }
+
+#ifndef HAVE_MEMVID
+    print_error("Compaction requires memvid support. Build with MEMVID=1");
+    return -1;
+#else
+    // Check if we have a compaction config
+    if (!state->compaction_config) {
+        // Create a temporary config for manual compaction
+        state->compaction_config = malloc(sizeof(CompactionConfig));
+        if (!state->compaction_config) {
+            print_error("Failed to allocate memory for compaction config");
+            return -1;
+        }
+        compaction_init_config(state->compaction_config, 1, state->model);
+    }
+
+    // Update token count before compaction
+    compaction_update_token_count(state, state->compaction_config);
+
+    // Perform compaction
+    CompactionResult result = {0};
+    int ret = compaction_perform(state, state->compaction_config, state->session_id, &result);
+
+    if (ret == 0 && result.success) {
+        char status_msg[256];
+        snprintf(status_msg, sizeof(status_msg),
+                 "Compacted %d messages. Context: %.1f%% -> %.1f%%",
+                 result.messages_compacted,
+                 result.usage_before_pct,
+                 result.usage_after_pct);
+        print_status(status_msg);
+
+        // Update TUI status if available
+        if (tui_mode_enabled && state->tui) {
+            tui_update_status(state->tui, status_msg);
+        }
+        return 0;
+    } else if (ret == 0) {
+        print_status("Nothing to compact (not enough messages)");
+        if (tui_mode_enabled && state->tui) {
+            tui_update_status(state->tui, "Nothing to compact");
+        }
+        return 0;
+    } else {
+        print_error("Compaction failed");
+        return -1;
+    }
+#endif
+}
+
+static int cmd_autocompact(ConversationState *state, const char *args) {
+    (void)args;  // No arguments needed for toggle
+
+    if (!state) {
+        print_error("No conversation state available");
+        return -1;
+    }
+
+#ifndef HAVE_MEMVID
+    print_error("Auto-compaction requires memvid support. Build with MEMVID=1");
+    return -1;
+#else
+    // Initialize compaction config if not present
+    if (!state->compaction_config) {
+        state->compaction_config = malloc(sizeof(CompactionConfig));
+        if (!state->compaction_config) {
+            print_error("Failed to allocate memory for compaction config");
+            return -1;
+        }
+        compaction_init_config(state->compaction_config, 0, state->model);
+    }
+
+    // Toggle auto-compaction
+    state->compaction_config->enabled = !state->compaction_config->enabled;
+
+    char status_msg[128];
+    if (state->compaction_config->enabled) {
+        snprintf(status_msg, sizeof(status_msg),
+                 "Auto-compaction enabled (threshold: %d%%, keep recent: %d)",
+                 state->compaction_config->threshold_percent,
+                 state->compaction_config->keep_recent);
+    } else {
+        snprintf(status_msg, sizeof(status_msg), "Auto-compaction disabled");
+    }
+
+    print_status(status_msg);
+
+    // Update TUI status if available
+    if (tui_mode_enabled && state->tui) {
+        tui_update_status(state->tui, status_msg);
+    }
+
+    LOG_INFO("[CMD_AUTOCOMPACT] %s", status_msg);
+    return 0;
+#endif
+}
+
 // ============================================================================
 // Command Definitions
 // ============================================================================
@@ -667,6 +772,24 @@ static Command config_cmd = {
     .needs_terminal = 0
 };
 
+static Command compact_cmd = {
+    .name = "compact",
+    .usage = "/compact",
+    .description = "Trigger context compaction (stores older messages to memory)",
+    .handler = cmd_compact,
+    .completer = NULL,
+    .needs_terminal = 0
+};
+
+static Command autocompact_cmd = {
+    .name = "autocompact",
+    .usage = "/autocompact",
+    .description = "Toggle automatic context compaction on/off",
+    .handler = cmd_autocompact,
+    .completer = NULL,
+    .needs_terminal = 0
+};
+
 // ============================================================================
 // API Implementation
 // ============================================================================
@@ -684,6 +807,8 @@ void commands_init(void) {
     commands_register(&dump_cmd);
     commands_register(&provider_cmd);
     commands_register(&config_cmd);
+    commands_register(&compact_cmd);
+    commands_register(&autocompact_cmd);
 }
 
 void commands_set_tui_mode(int enabled) {
