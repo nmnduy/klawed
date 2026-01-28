@@ -86,7 +86,7 @@ static void test_init_config_defaults(void) {
     TEST("Initialize config with defaults");
 
     CompactionConfig config;
-    compaction_init_config(&config, 1);
+    compaction_init_config(&config, 1, NULL);
 
     // When memvid is not available, enabled should be forced to 0
 #ifdef HAVE_MEMVID
@@ -105,7 +105,7 @@ static void test_init_config_disabled(void) {
     TEST("Initialize config disabled");
 
     CompactionConfig config;
-    compaction_init_config(&config, 0);
+    compaction_init_config(&config, 0, NULL);
 
     assert(config.enabled == 0);
     assert(config.threshold_percent == 60);
@@ -122,7 +122,7 @@ static void test_init_config_env_override(void) {
     setenv("KLAWED_COMPACT_KEEP_RECENT", "30", 1);
 
     CompactionConfig config;
-    compaction_init_config(&config, 1);
+    compaction_init_config(&config, 1, NULL);
 
     assert(config.threshold_percent == 75);
     assert(config.keep_recent == 30);
@@ -142,7 +142,7 @@ static void test_init_config_invalid_env(void) {
     setenv("KLAWED_COMPACT_KEEP_RECENT", "-5", 1);
 
     CompactionConfig config;
-    compaction_init_config(&config, 1);
+    compaction_init_config(&config, 1, NULL);
 
     // Should use defaults when env values are invalid
     assert(config.threshold_percent == 60);
@@ -159,7 +159,7 @@ static void test_init_config_null(void) {
     TEST("Initialize config with NULL pointer");
 
     // Should not crash
-    compaction_init_config(NULL, 1);
+    compaction_init_config(NULL, 1, NULL);
 
     PASS();
 }
@@ -175,10 +175,12 @@ static void test_should_trigger_disabled(void) {
         .enabled = 0,
         .threshold_percent = 60,
         .keep_recent = 20,
-        .last_compacted_index = -1
+        .last_compacted_index = -1,
+        .model_token_limit = 125000,
+        .current_tokens = 80000       // Above threshold but disabled
     };
 
-    ConversationState *state = create_test_state(7000);  // Above 60% threshold
+    ConversationState *state = create_test_state(100);
     assert(state != NULL);
 
     int result = compaction_should_trigger(state, &config);
@@ -195,10 +197,12 @@ static void test_should_trigger_below_threshold(void) {
         .enabled = 1,
         .threshold_percent = 60,
         .keep_recent = 20,
-        .last_compacted_index = -1
+        .last_compacted_index = -1,
+        .model_token_limit = 125000,  // 125k tokens
+        .current_tokens = 10000       // Way below 60% of 125k (75k)
     };
 
-    ConversationState *state = create_test_state(100);  // Well below 60% of 10000
+    ConversationState *state = create_test_state(100);
     assert(state != NULL);
 
     int result = compaction_should_trigger(state, &config);
@@ -220,11 +224,12 @@ static void test_should_trigger_at_threshold(void) {
         .enabled = 1,
         .threshold_percent = 60,
         .keep_recent = 20,
-        .last_compacted_index = -1
+        .last_compacted_index = -1,
+        .model_token_limit = 125000,  // 125k tokens
+        .current_tokens = 80000       // Above 60% of 125k (75k)
     };
 
-    // 60% of MAX_MESSAGES (10000) = 6000
-    ConversationState *state = create_test_state(6000);
+    ConversationState *state = create_test_state(100);
     assert(state != NULL);
 
     int result = compaction_should_trigger(state, &config);
@@ -245,7 +250,9 @@ static void test_should_trigger_null_params(void) {
         .enabled = 1,
         .threshold_percent = 60,
         .keep_recent = 20,
-        .last_compacted_index = -1
+        .last_compacted_index = -1,
+        .model_token_limit = 125000,
+        .current_tokens = 80000
     };
 
     ConversationState *state = create_test_state(100);
@@ -276,10 +283,12 @@ static void test_perform_without_memvid(void) {
         .enabled = 1,
         .threshold_percent = 60,
         .keep_recent = 20,
-        .last_compacted_index = -1
+        .last_compacted_index = -1,
+        .model_token_limit = 125000,
+        .current_tokens = 80000
     };
 
-    int result = compaction_perform(state, &config, "test-session");
+    int result = compaction_perform(state, &config, "test-session", NULL);
 
     // Should return -1 (error) without memvid
     assert(result == -1);
@@ -298,17 +307,19 @@ static void test_perform_null_params(void) {
         .enabled = 1,
         .threshold_percent = 60,
         .keep_recent = 20,
-        .last_compacted_index = -1
+        .last_compacted_index = -1,
+        .model_token_limit = 125000,
+        .current_tokens = 80000
     };
 
     ConversationState *state = create_test_state(100);
 
     // NULL state
-    int result = compaction_perform(NULL, &config, "test-session");
+    int result = compaction_perform(NULL, &config, "test-session", NULL);
     assert(result == -1);
 
     // NULL config
-    result = compaction_perform(state, NULL, "test-session");
+    result = compaction_perform(state, NULL, "test-session", NULL);
     assert(result == -1);
 
     free_test_state(state);
@@ -322,7 +333,9 @@ static void test_perform_not_enough_messages(void) {
         .enabled = 1,
         .threshold_percent = 60,
         .keep_recent = 20,
-        .last_compacted_index = -1
+        .last_compacted_index = -1,
+        .model_token_limit = 125000,
+        .current_tokens = 80000
     };
 
     // Only 10 messages - less than keep_recent + 1 (system)
@@ -332,12 +345,12 @@ static void test_perform_not_enough_messages(void) {
     int original_count = state->count;
 
 #ifdef HAVE_MEMVID
-    int result = compaction_perform(state, &config, "test-session");
+    int result = compaction_perform(state, &config, "test-session", NULL);
     // Should return 0 (success but no action) when not enough messages
     assert(result == 0);
     assert(state->count == original_count);  // Count unchanged
 #else
-    int result = compaction_perform(state, &config, "test-session");
+    int result = compaction_perform(state, &config, "test-session", NULL);
     assert(result == -1);  // Error without memvid
     (void)original_count;
 #endif

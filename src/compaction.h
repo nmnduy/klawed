@@ -88,4 +88,24 @@ size_t compaction_update_token_count(const struct ConversationState *state, Comp
  */
 size_t compaction_estimate_message_tokens(const InternalMessage *msg);
 
+/**
+ * Generate a summary of the compacted messages using an API call.
+ * The summary includes:
+ * - What was being worked on (summary of recent activity)
+ * - Current goals/objectives
+ * - Task state/progress
+ *
+ * @param state Conversation state (for provider access)
+ * @param messages Array of messages to summarize
+ * @param message_count Number of messages
+ * @param summary_out Output buffer for the summary (caller provides)
+ * @param summary_size Size of output buffer
+ * @return 0 on success, -1 on error (summary_out will be empty string on error)
+ */
+int compaction_generate_summary(struct ConversationState *state,
+                                const InternalMessage *messages,
+                                int message_count,
+                                char *summary_out,
+                                size_t summary_size);
+
 #endif /* COMPACTION_H */

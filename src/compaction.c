@@ -3,10 +3,13 @@
 #include "tool_utils.h"
 #include "logger.h"
 #include "persistence.h"
+#include "http_client.h"
+#include "provider.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <bsd/string.h>
 
 #ifdef HAVE_MEMVID
 #include "memvid.h"
@@ -25,6 +28,328 @@ static inline size_t estimate_tokens(const char *text) {
     if (!text) return 0;
     size_t char_count = strlen(text);
     return (char_count + 3) / 4; // Round up
+}
+
+// ============================================================================
+// Summarization for Compaction
+// ============================================================================
+
+// Summarization prompt template
+static const char *SUMMARIZATION_PROMPT =
+    "You are summarizing a conversation segment that is being archived. "
+    "Provide a concise summary (250-400 words) that captures:\n\n"
+    "1. **What was being worked on**: Summarize the main activities and tasks performed\n"
+    "2. **Current goals/objectives**: What the user is trying to accomplish\n"
+    "3. **Task state/progress**: Current status, what has been completed, what remains\n\n"
+    "Focus on actionable context that would help continue the work. "
+    "Be specific about file names, function names, and technical details mentioned. "
+    "Write in a clear, professional style.\n\n"
+    "Here is the conversation to summarize:\n\n";
+
+/**
+ * Helper to get role string for a message
+ */
+static const char* get_role_string(MessageRole role) {
+    switch (role) {
+        case MSG_USER: return "User";
+        case MSG_ASSISTANT: return "Assistant";
+        case MSG_SYSTEM: return "System";
+        case MSG_AUTO_COMPACTION: return "System (Compaction)";
+        default: return "Unknown";
+    }
+}
+
+/**
+ * Build conversation text from messages for summarization
+ * Returns: Allocated string (caller must free), or NULL on error
+ */
+static char* build_conversation_text(const InternalMessage *messages, int message_count) {
+    if (!messages || message_count <= 0) {
+        return NULL;
+    }
+
+    // Estimate total size needed
+    size_t total_size = 0;
+    for (int i = 0; i < message_count; i++) {
+        const InternalMessage *msg = &messages[i];
+        total_size += 32; // Role header + newlines
+        for (int j = 0; j < msg->content_count; j++) {
+            if (msg->contents[j].type == INTERNAL_TEXT && msg->contents[j].text) {
+                total_size += strlen(msg->contents[j].text) + 4;
+            } else if (msg->contents[j].type == INTERNAL_TOOL_CALL && msg->contents[j].tool_name) {
+                total_size += 64; // Tool call summary
+            }
+        }
+    }
+
+    // Add buffer for safety
+    total_size += 1024;
+
+    char *result = malloc(total_size);
+    if (!result) {
+        return NULL;
+    }
+    result[0] = '\0';
+    size_t current_len = 0;
+
+    for (int i = 0; i < message_count; i++) {
+        const InternalMessage *msg = &messages[i];
+        const char *role = get_role_string(msg->role);
+
+        // Add role header
+        char header[64];
+        snprintf(header, sizeof(header), "**%s**:\n", role);
+        strlcat(result, header, total_size);
+        current_len = strlen(result);
+
+        // Add content
+        for (int j = 0; j < msg->content_count; j++) {
+            const InternalContent *content = &msg->contents[j];
+            if (content->type == INTERNAL_TEXT && content->text) {
+                // Truncate very long content to avoid overwhelming the summarizer
+                size_t text_len = strlen(content->text);
+                if (text_len > 2000) {
+                    // Use first 1000 and last 500 chars
+                    strncat(result + current_len, content->text, 1000);
+                    strlcat(result, "\n[... content truncated ...]\n", total_size);
+                    strlcat(result, content->text + text_len - 500, total_size);
+                } else {
+                    strlcat(result, content->text, total_size);
+                }
+                strlcat(result, "\n", total_size);
+                current_len = strlen(result);
+            } else if (content->type == INTERNAL_TOOL_CALL && content->tool_name) {
+                char tool_info[128];
+                snprintf(tool_info, sizeof(tool_info), "[Used tool: %s]\n", content->tool_name);
+                strlcat(result, tool_info, total_size);
+                current_len = strlen(result);
+            }
+        }
+
+        strlcat(result, "\n", total_size);
+        current_len = strlen(result);
+    }
+
+    return result;
+}
+
+/**
+ * Extract text content from API response JSON
+ * Supports both OpenAI and Anthropic response formats
+ */
+static char* extract_response_text(const char *response_body) {
+    if (!response_body) {
+        return NULL;
+    }
+
+    cJSON *json = cJSON_Parse(response_body);
+    if (!json) {
+        LOG_WARN("Failed to parse summarization response JSON");
+        return NULL;
+    }
+
+    char *result = NULL;
+
+    // Try OpenAI format: choices[0].message.content
+    cJSON *choices = cJSON_GetObjectItem(json, "choices");
+    if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
+        cJSON *first_choice = cJSON_GetArrayItem(choices, 0);
+        cJSON *message = cJSON_GetObjectItem(first_choice, "message");
+        if (message) {
+            cJSON *content = cJSON_GetObjectItem(message, "content");
+            if (content && cJSON_IsString(content) && content->valuestring) {
+                result = strdup(content->valuestring);
+            }
+        }
+    }
+
+    // Try Anthropic format: content[0].text
+    if (!result) {
+        cJSON *content_array = cJSON_GetObjectItem(json, "content");
+        if (content_array && cJSON_IsArray(content_array) && cJSON_GetArraySize(content_array) > 0) {
+            cJSON *first_content = cJSON_GetArrayItem(content_array, 0);
+            cJSON *text = cJSON_GetObjectItem(first_content, "text");
+            if (text && cJSON_IsString(text) && text->valuestring) {
+                result = strdup(text->valuestring);
+            }
+        }
+    }
+
+    cJSON_Delete(json);
+    return result;
+}
+
+/**
+ * Build a minimal API request JSON for summarization
+ * Uses OpenAI-compatible format (works with Anthropic via compatibility layer)
+ */
+static char* build_summarization_request(const char *model, const char *conversation_text, int max_tokens) {
+    cJSON *request = cJSON_CreateObject();
+    if (!request) {
+        return NULL;
+    }
+
+    // Add model
+    cJSON_AddStringToObject(request, "model", model ? model : "claude-sonnet-4-20250514");
+
+    // Add max_tokens (target ~400 words = ~600 tokens, with buffer)
+    cJSON_AddNumberToObject(request, "max_tokens", max_tokens > 0 ? max_tokens : 800);
+
+    // Build messages array
+    cJSON *messages = cJSON_CreateArray();
+    if (!messages) {
+        cJSON_Delete(request);
+        return NULL;
+    }
+
+    // Single user message with summarization request
+    cJSON *user_msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(user_msg, "role", "user");
+
+    // Build full prompt
+    size_t prompt_len = strlen(SUMMARIZATION_PROMPT) + strlen(conversation_text) + 1;
+    char *full_prompt = malloc(prompt_len);
+    if (!full_prompt) {
+        cJSON_Delete(user_msg);
+        cJSON_Delete(messages);
+        cJSON_Delete(request);
+        return NULL;
+    }
+    strlcpy(full_prompt, SUMMARIZATION_PROMPT, prompt_len);
+    strlcat(full_prompt, conversation_text, prompt_len);
+
+    cJSON_AddStringToObject(user_msg, "content", full_prompt);
+    free(full_prompt);
+
+    cJSON_AddItemToArray(messages, user_msg);
+    cJSON_AddItemToObject(request, "messages", messages);
+
+    char *result = cJSON_PrintUnformatted(request);
+    cJSON_Delete(request);
+
+    return result;
+}
+
+int compaction_generate_summary(ConversationState *state,
+                                const InternalMessage *messages,
+                                int message_count,
+                                char *summary_out,
+                                size_t summary_size) {
+    if (!summary_out || summary_size == 0) {
+        return -1;
+    }
+    summary_out[0] = '\0';
+
+    if (!state || !messages || message_count <= 0) {
+        LOG_WARN("compaction_generate_summary: invalid parameters");
+        return -1;
+    }
+
+    // Check if provider is available
+    if (!state->provider || !state->api_url || !state->api_key) {
+        LOG_WARN("compaction_generate_summary: provider not initialized");
+        return -1;
+    }
+
+    LOG_INFO("Generating compaction summary for %d messages", message_count);
+
+    // Build conversation text from messages
+    char *conversation_text = build_conversation_text(messages, message_count);
+    if (!conversation_text) {
+        LOG_ERROR("Failed to build conversation text for summarization");
+        return -1;
+    }
+
+    // Build API request
+    char *request_json = build_summarization_request(state->model, conversation_text, 800);
+    free(conversation_text);
+
+    if (!request_json) {
+        LOG_ERROR("Failed to build summarization request");
+        return -1;
+    }
+
+    // Set up HTTP request headers
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+
+    // Add authorization header
+    char auth_header[512];
+    snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", state->api_key);
+    headers = curl_slist_append(headers, auth_header);
+
+    // Add Anthropic version header if using Anthropic API
+    if (state->api_url && strstr(state->api_url, "anthropic.com")) {
+        headers = curl_slist_append(headers, "anthropic-version: 2023-06-01");
+        // Anthropic uses x-api-key instead of Authorization Bearer
+        curl_slist_free_all(headers);
+        headers = NULL;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        headers = curl_slist_append(headers, "anthropic-version: 2023-06-01");
+        snprintf(auth_header, sizeof(auth_header), "x-api-key: %s", state->api_key);
+        headers = curl_slist_append(headers, auth_header);
+    }
+
+    if (!headers) {
+        LOG_ERROR("Failed to setup HTTP headers for summarization");
+        free(request_json);
+        return -1;
+    }
+
+    // Execute HTTP request
+    HttpRequest req = {0};
+    req.url = state->api_url;
+    req.method = "POST";
+    req.body = request_json;
+    req.headers = headers;
+    req.connect_timeout_ms = 30000;  // 30 seconds
+    req.total_timeout_ms = 120000;   // 2 minutes for summarization
+
+    LOG_DEBUG("Making summarization API call to %s", state->api_url);
+
+    HttpResponse *http_resp = http_client_execute(&req, NULL, NULL);
+
+    // Clean up request resources
+    free(request_json);
+    curl_slist_free_all(headers);
+
+    if (!http_resp) {
+        LOG_ERROR("Summarization HTTP request failed");
+        return -1;
+    }
+
+    // Check for errors
+    if (http_resp->error_message) {
+        LOG_ERROR("Summarization API error: %s", http_resp->error_message);
+        http_response_free(http_resp);
+        return -1;
+    }
+
+    if (http_resp->status_code < 200 || http_resp->status_code >= 300) {
+        LOG_ERROR("Summarization API returned status %ld", http_resp->status_code);
+        if (http_resp->body) {
+            LOG_DEBUG("Response body: %s", http_resp->body);
+        }
+        http_response_free(http_resp);
+        return -1;
+    }
+
+    // Extract summary text from response
+    char *summary_text = extract_response_text(http_resp->body);
+    http_response_free(http_resp);
+
+    if (!summary_text) {
+        LOG_ERROR("Failed to extract summary from API response");
+        return -1;
+    }
+
+    // Copy to output buffer, respecting size limit
+    strlcpy(summary_out, summary_text, summary_size);
+    free(summary_text);
+
+    LOG_INFO("Successfully generated compaction summary (%zu chars)", strlen(summary_out));
+
+    return 0;
 }
 
 void compaction_init_config(CompactionConfig *config, int enabled, const char *model_name) {
@@ -381,27 +706,48 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
     for (int i = compact_end + 1; i < state->count; i++) {
         tokens_after += compaction_estimate_message_tokens(&state->messages[i]);
     }
-    // Notice message (estimate ~50 tokens)
-    tokens_after += 50;
+    // Notice message with summary (estimate ~800 tokens for ~400 word summary + metadata)
+    tokens_after += 800;
     // API overhead
     tokens_after += 100;
 
     double usage_percent = (double)tokens_before / config->model_token_limit * 100.0;
     double after_percent = (double)tokens_after / config->model_token_limit * 100.0;
 
-    // Build compaction notice
-    char notice[2048];
+    // Generate AI summary of the compacted messages (before freeing them)
+    // Summary buffer: 400 words * ~6 chars/word + formatting = ~3000 chars
+    char summary[4096] = "";
+    int summary_result = compaction_generate_summary(
+        state,
+        &state->messages[compact_start],
+        compacted_count,
+        summary,
+        sizeof(summary)
+    );
+
+    if (summary_result != 0 || summary[0] == '\0') {
+        LOG_WARN("Failed to generate compaction summary, using fallback notice");
+        strlcpy(summary, "(Summary generation failed - use MemorySearch to retrieve context)", sizeof(summary));
+    }
+
+    // Build compaction notice with summary
+    // Notice buffer: summary (~3000) + metadata (~500) + formatting (~500) = ~4000 chars
+    char notice[6144];
 
     snprintf(notice, sizeof(notice),
-        "## Context Compaction Notice\n"
+        "## Context Compaction Notice\n\n"
         "%d earlier messages have been stored in memory. "
         "Use MemorySearch to retrieve relevant past context if needed.\n\n"
-        "Session: %s\n"
-        "Messages compacted: %d-%d\n"
-        "Tools used: Read (%d), Write (%d), Edit (%d), Bash (%d)\n"
-        "Tokens: %zu → %zu (freed ~%zu tokens)\n"
-        "Context usage: %.1f%% → %.1f%% of %d token limit\n",
+        "### Summary of Compacted Context\n\n"
+        "%s\n\n"
+        "---\n"
+        "**Session**: %s\n"
+        "**Messages compacted**: %d-%d\n"
+        "**Tools used**: Read (%d), Write (%d), Edit (%d), Bash (%d)\n"
+        "**Tokens**: %zu → %zu (freed ~%zu tokens)\n"
+        "**Context usage**: %.1f%% → %.1f%% of %d token limit\n",
         compacted_count,
+        summary,
         session_id ? session_id : "(no session)",
         compact_start, compact_end,
         read_count, write_count, edit_count, bash_count,
