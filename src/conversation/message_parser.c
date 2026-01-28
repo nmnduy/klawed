@@ -27,6 +27,7 @@ void add_assistant_message_openai(ConversationState *state, cJSON *message) {
     int content_count = 0;
     cJSON *content = cJSON_GetObjectItem(message, "content");
     cJSON *tool_calls = cJSON_GetObjectItem(message, "tool_calls");
+    cJSON *reasoning_content = cJSON_GetObjectItem(message, "reasoning_content");
 
     if (content && cJSON_IsString(content) && content->valuestring) {
         content_count++;
@@ -80,6 +81,16 @@ void add_assistant_message_openai(ConversationState *state, cJSON *message) {
             conversation_state_unlock(state);
             return;
         }
+
+        // Store reasoning_content if present (for thinking models like DeepSeek, Moonshot/Kimi)
+        if (reasoning_content && cJSON_IsString(reasoning_content) && reasoning_content->valuestring) {
+            msg->contents[idx].reasoning_content = strdup(reasoning_content->valuestring);
+            if (msg->contents[idx].reasoning_content) {
+                LOG_DEBUG("Stored reasoning_content (%zu bytes) for text content",
+                          strlen(msg->contents[idx].reasoning_content));
+            }
+        }
+
         idx++;
     }
 

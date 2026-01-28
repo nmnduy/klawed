@@ -26,6 +26,22 @@
 cJSON* build_openai_request(ConversationState *state, int enable_caching);
 
 /**
+ * Build OpenAI request JSON with reasoning_content support
+ *
+ * Same as build_openai_request but with option to include reasoning_content
+ * in assistant messages. Used by providers that require reasoning_content
+ * to be preserved (e.g., Moonshot/Kimi).
+ *
+ * @param state - Conversation state with internal messages
+ * @param enable_caching - Whether to add Anthropic cache_control markers
+ * @param include_reasoning_content - Whether to include reasoning_content in assistant messages
+ * @return JSON object with OpenAI request (caller must free), or NULL on error
+ */
+cJSON* build_openai_request_with_reasoning(ConversationState *state,
+                                            int enable_caching,
+                                            int include_reasoning_content);
+
+/**
  * Parse OpenAI response into internal message format
  *
  * Converts OpenAI API response to InternalMessage:

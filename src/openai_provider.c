@@ -88,6 +88,9 @@ typedef struct {
     char *accumulated_text;          // Accumulated text from deltas
     size_t accumulated_size;
     size_t accumulated_capacity;
+    char *accumulated_reasoning;     // Accumulated reasoning_content from thinking models
+    size_t reasoning_size;
+    size_t reasoning_capacity;
     char *finish_reason;             // Finish reason from final chunk
     char *model;                     // Model name from chunks
     char *message_id;                // Message ID from chunks
@@ -111,6 +114,14 @@ static void openai_streaming_context_init(OpenAIStreamingContext *ctx, Conversat
     if (ctx->accumulated_text) {
         ctx->accumulated_text[0] = '\0';
     }
+
+    // Initialize reasoning_content buffer
+    ctx->reasoning_capacity = 4096;
+    ctx->accumulated_reasoning = arena_alloc(ctx->arena, ctx->reasoning_capacity);
+    if (ctx->accumulated_reasoning) {
+        ctx->accumulated_reasoning[0] = '\0';
+    }
+
     ctx->tool_calls_array = cJSON_CreateArray();
 }
 
@@ -223,6 +234,36 @@ static int openai_streaming_event_handler(StreamEvent *event, void *userdata) {
                             if (ctx->state && ctx->state->tui) {
                                 tui_update_last_conversation_line(ctx->state->tui, content->valuestring);
                             }
+                        }
+                    }
+
+                    // Handle reasoning_content (for thinking models like DeepSeek, Moonshot/Kimi)
+                    cJSON *reasoning_content = cJSON_GetObjectItem(delta, "reasoning_content");
+                    if (reasoning_content && cJSON_IsString(reasoning_content) && reasoning_content->valuestring) {
+                        size_t new_len = strlen(reasoning_content->valuestring);
+                        size_t needed = ctx->reasoning_size + new_len + 1;
+
+                        if (needed > ctx->reasoning_capacity) {
+                            size_t new_cap = ctx->reasoning_capacity * 2;
+                            if (new_cap < needed) new_cap = needed;
+                            char *new_buf = arena_alloc(ctx->arena, new_cap);
+                            if (new_buf) {
+                                // Copy existing data if any
+                                if (ctx->accumulated_reasoning && ctx->reasoning_size > 0) {
+                                    memcpy(new_buf, ctx->accumulated_reasoning, ctx->reasoning_size);
+                                }
+                                ctx->accumulated_reasoning = new_buf;
+                                ctx->reasoning_capacity = new_cap;
+                            }
+                        }
+
+                        if (ctx->accumulated_reasoning && needed <= ctx->reasoning_capacity) {
+                            memcpy(ctx->accumulated_reasoning + ctx->reasoning_size,
+                                  reasoning_content->valuestring, new_len);
+                            ctx->reasoning_size += new_len;
+                            ctx->accumulated_reasoning[ctx->reasoning_size] = '\0';
+
+                            LOG_DEBUG("Accumulated reasoning_content: %zu bytes", ctx->reasoning_size);
                         }
                     }
 
@@ -379,7 +420,9 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
         LOG_INFO("OpenAI provider: using Responses API format");
         request = build_openai_responses_request(state, enable_caching);
     } else {
-        request = build_openai_request(state, enable_caching);
+        // Check if we need to preserve reasoning_content (for Moonshot/Kimi)
+        int include_reasoning = (config->reasoning_content_mode == REASONING_CONTENT_PRESERVE);
+        request = build_openai_request_with_reasoning(state, enable_caching, include_reasoning);
     }
 
     if (!request) {
@@ -560,6 +603,12 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
                 cJSON_AddStringToObject(message, "content", stream_ctx.accumulated_text);
             } else {
                 cJSON_AddNullToObject(message, "content");
+            }
+
+            // Add reasoning_content if we have any (for thinking models)
+            if (stream_ctx.accumulated_reasoning && stream_ctx.reasoning_size > 0) {
+                cJSON_AddStringToObject(message, "reasoning_content", stream_ctx.accumulated_reasoning);
+                LOG_DEBUG("Added reasoning_content to response (%zu bytes)", stream_ctx.reasoning_size);
             }
 
             // Add tool calls if we have any
@@ -978,8 +1027,10 @@ static void openai_cleanup(Provider *self) {
 // Public API
 // ============================================================================
 
-Provider* openai_provider_create(const char *api_key, const char *base_url) {
-    LOG_DEBUG("Creating OpenAI provider...");
+Provider* openai_provider_create_with_reasoning_mode(const char *api_key,
+                                                      const char *base_url,
+                                                      ReasoningContentMode reasoning_mode) {
+    LOG_DEBUG("Creating OpenAI provider (reasoning_mode=%d)...", reasoning_mode);
 
     if (!api_key || api_key[0] == '\0') {
         LOG_ERROR("OpenAI provider: API key is required");
@@ -1000,6 +1051,9 @@ Provider* openai_provider_create(const char *api_key, const char *base_url) {
         free(provider);
         return NULL;
     }
+
+    // Set reasoning content mode
+    config->reasoning_content_mode = reasoning_mode;
 
     // Copy API key
     config->api_key = strdup(api_key);
@@ -1144,6 +1198,26 @@ Provider* openai_provider_create(const char *api_key, const char *base_url) {
     provider->call_api = openai_call_api;
     provider->cleanup = openai_cleanup;
 
-    LOG_INFO("OpenAI provider created successfully (base URL: %s)", config->base_url);
+    LOG_INFO("OpenAI provider created successfully (base URL: %s, reasoning_mode=%d)",
+             config->base_url, config->reasoning_content_mode);
     return provider;
+}
+
+Provider* openai_provider_create(const char *api_key, const char *base_url) {
+    // Default: discard reasoning_content (standard OpenAI/DeepSeek behavior)
+    return openai_provider_create_with_reasoning_mode(api_key, base_url, REASONING_CONTENT_DISCARD);
+}
+
+ReasoningContentMode openai_provider_get_reasoning_mode(Provider *provider) {
+    if (!provider || !provider->config) {
+        return REASONING_CONTENT_DISCARD;
+    }
+
+    // Check if this is an OpenAI-compatible provider by checking if it has our call_api function
+    if (provider->call_api != openai_call_api) {
+        return REASONING_CONTENT_DISCARD;
+    }
+
+    OpenAIConfig *config = (OpenAIConfig *)provider->config;
+    return config->reasoning_content_mode;
 }

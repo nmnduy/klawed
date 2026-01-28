@@ -281,9 +281,9 @@ void ensure_tool_results(ConversationState *state) {
 }
 
 /**
- * Build OpenAI request JSON from internal message format
+ * Build OpenAI request JSON from internal message format (with reasoning_content support)
  */
-cJSON* build_openai_request(ConversationState *state, int enable_caching) {
+cJSON* build_openai_request_with_reasoning(ConversationState *state, int enable_caching, int include_reasoning_content) {
     if (!state) {
         LOG_ERROR("ConversationState is NULL");
         return NULL;
@@ -296,8 +296,9 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
     // Ensure all tool calls have matching results before building request
     ensure_tool_results(state);
 
-    LOG_DEBUG("Building OpenAI request (messages: %d, caching: %s)",
-              state->count, enable_caching ? "enabled" : "disabled");
+    LOG_DEBUG("Building OpenAI request (messages: %d, caching: %s, reasoning: %s)",
+              state->count, enable_caching ? "enabled" : "disabled",
+              include_reasoning_content ? "preserve" : "discard");
 
     cJSON *request = cJSON_CreateObject();
     if (!request) {
@@ -394,12 +395,16 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
             cJSON *asst_msg = cJSON_CreateObject();
             cJSON_AddStringToObject(asst_msg, "role", "assistant");
 
-            // Collect text content (skip empty strings)
+            // Collect text content and reasoning_content (skip empty strings)
             char *text_content = NULL;
+            char *reasoning_content_str = NULL;
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
                 if (c->type == INTERNAL_TEXT && c->text && c->text[0]) {
                     text_content = c->text;
+                    if (include_reasoning_content && c->reasoning_content) {
+                        reasoning_content_str = c->reasoning_content;
+                    }
                     break;
                 }
             }
@@ -434,6 +439,12 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
                 cJSON_AddStringToObject(asst_msg, "content", text_content);
             } else {
                 cJSON_AddNullToObject(asst_msg, "content");
+            }
+
+            // Add reasoning_content if preserving it (for Moonshot/Kimi)
+            if (reasoning_content_str) {
+                cJSON_AddStringToObject(asst_msg, "reasoning_content", reasoning_content_str);
+                LOG_DEBUG("Including reasoning_content in assistant message (msg %d)", i);
             }
 
             // Add tool_calls if present
@@ -507,6 +518,14 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
 
     LOG_DEBUG("OpenAI request built successfully");
     return request;
+}
+
+/**
+ * Build OpenAI request JSON from internal message format
+ */
+cJSON* build_openai_request(ConversationState *state, int enable_caching) {
+    // Default: don't include reasoning_content (DeepSeek/OpenAI behavior)
+    return build_openai_request_with_reasoning(state, enable_caching, 0);
 }
 
 /**
@@ -671,6 +690,10 @@ void free_internal_message(InternalMessage *msg) {
         if (c->tool_name) {
             free(c->tool_name);
             c->tool_name = NULL;
+        }
+        if (c->reasoning_content) {
+            free(c->reasoning_content);
+            c->reasoning_content = NULL;
         }
 
         if (c->tool_params) {

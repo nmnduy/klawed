@@ -124,6 +124,9 @@ typedef struct {
     char *mime_type;         // MIME type of the image
     char *base64_data;       // Base64 encoded image data
     size_t image_size;       // Size of the image in bytes
+
+    // For reasoning/thinking models (DeepSeek, Moonshot/Kimi)
+    char *reasoning_content; // Reasoning content from thinking models (may be NULL)
 } InternalContent;
 
 /**

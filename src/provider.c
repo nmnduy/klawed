@@ -9,6 +9,8 @@
 #include "openai_provider.h"
 #include "bedrock_provider.h"
 #include "anthropic_provider.h"
+#include "deepseek_provider.h"
+#include "moonshot_provider.h"
 #include "config.h"
 #include "logger.h"
 #include "arena.h"
@@ -788,6 +790,64 @@ void provider_init(const char *model,
         } else if (provider_type == PROVIDER_OPENAI) {
             use_anthropic = 0;
             LOG_INFO("Using OpenAI provider (explicitly configured)");
+        } else if (provider_type == PROVIDER_DEEPSEEK) {
+            LOG_INFO("Using DeepSeek provider (explicitly configured)");
+            Provider *prov = deepseek_provider_create(api_key_to_use, base_url);
+            if (!prov) {
+                result->error_message = strdup("Failed to initialize DeepSeek provider (check logs for details)");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                arena_destroy(arena);
+                return;
+            }
+            OpenAIConfig *cfg = (OpenAIConfig *)prov->config;
+            if (!cfg || !cfg->base_url) {
+                result->error_message = strdup("DeepSeek provider initialized but base URL is missing");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            result->provider = prov;
+            result->api_url = strdup(cfg->base_url);
+            if (!result->api_url) {
+                result->error_message = strdup("Failed to allocate memory for API URL");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            LOG_INFO("Provider initialization successful: DeepSeek (base URL: %s)", result->api_url);
+            arena_destroy(arena);
+            return;
+        } else if (provider_type == PROVIDER_MOONSHOT) {
+            LOG_INFO("Using Moonshot provider (explicitly configured)");
+            Provider *prov = moonshot_provider_create(api_key_to_use, base_url);
+            if (!prov) {
+                result->error_message = strdup("Failed to initialize Moonshot provider (check logs for details)");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                arena_destroy(arena);
+                return;
+            }
+            OpenAIConfig *cfg = (OpenAIConfig *)prov->config;
+            if (!cfg || !cfg->base_url) {
+                result->error_message = strdup("Moonshot provider initialized but base URL is missing");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            result->provider = prov;
+            result->api_url = strdup(cfg->base_url);
+            if (!result->api_url) {
+                result->error_message = strdup("Failed to allocate memory for API URL");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            LOG_INFO("Provider initialization successful: Moonshot (base URL: %s)", result->api_url);
+            arena_destroy(arena);
+            return;
         } else if (provider_type == PROVIDER_CUSTOM) {
             // For custom, we need to check URL patterns
             use_anthropic = 0; // Default to OpenAI-compatible for custom
@@ -1026,6 +1086,66 @@ void provider_init_from_config(const char *provider_key,
     }
 
     // Create provider based on type
+    if (provider_type == PROVIDER_DEEPSEEK) {
+        LOG_INFO("Creating DeepSeek provider from config...");
+        Provider *prov = deepseek_provider_create(api_key, base_url);
+        free(base_url);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize DeepSeek provider (check logs for details)");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        OpenAIConfig *cfg = (OpenAIConfig *)prov->config;
+        if (!cfg || !cfg->base_url) {
+            result->error_message = strdup(
+                "DeepSeek provider initialized but base URL is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(cfg->base_url);
+        if (!result->api_url) {
+            result->error_message = strdup("Failed to allocate memory for API URL");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: DeepSeek (base URL: %s)", result->api_url);
+        return;
+    }
+
+    if (provider_type == PROVIDER_MOONSHOT) {
+        LOG_INFO("Creating Moonshot provider from config...");
+        Provider *prov = moonshot_provider_create(api_key, base_url);
+        free(base_url);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize Moonshot provider (check logs for details)");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        OpenAIConfig *cfg = (OpenAIConfig *)prov->config;
+        if (!cfg || !cfg->base_url) {
+            result->error_message = strdup(
+                "Moonshot provider initialized but base URL is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(cfg->base_url);
+        if (!result->api_url) {
+            result->error_message = strdup("Failed to allocate memory for API URL");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: Moonshot (base URL: %s)", result->api_url);
+        return;
+    }
+
     int use_anthropic = 0;
     if (provider_type == PROVIDER_ANTHROPIC) {
         use_anthropic = 1;
