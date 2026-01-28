@@ -107,7 +107,7 @@ static const char *invalid_json = "{this is not valid json";
 static void test_null_response(void) {
     printf(COLOR_YELLOW "\nTest: NULL response handling\n" COLOR_RESET);
 
-    InternalMessage msg = parse_openai_response(NULL);
+    InternalMessage msg = {0}; parse_openai_response(NULL, &msg);
 
     TEST_ASSERT(msg.contents == NULL, "contents should be NULL for NULL response");
     TEST_ASSERT(msg.content_count == 0, "content_count should be 0 for NULL response");
@@ -123,7 +123,7 @@ static void test_missing_choices_array(void) {
     cJSON *json = cJSON_Parse(missing_choices_response);
     TEST_ASSERT(json != NULL, "Should parse JSON successfully");
 
-    InternalMessage msg = parse_openai_response(json);
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
     TEST_ASSERT(msg.contents == NULL, "contents should be NULL when choices missing");
     TEST_ASSERT(msg.content_count == 0, "content_count should be 0 when choices missing");
@@ -139,7 +139,7 @@ static void test_empty_choices_array(void) {
     cJSON *json = cJSON_Parse(empty_choices_response);
     TEST_ASSERT(json != NULL, "Should parse JSON successfully");
 
-    InternalMessage msg = parse_openai_response(json);
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
     TEST_ASSERT(msg.contents == NULL, "contents should be NULL for empty choices");
     TEST_ASSERT(msg.content_count == 0, "content_count should be 0 for empty choices");
@@ -155,7 +155,7 @@ static void test_missing_message_object(void) {
     cJSON *json = cJSON_Parse(missing_message_response);
     TEST_ASSERT(json != NULL, "Should parse JSON successfully");
 
-    InternalMessage msg = parse_openai_response(json);
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
     TEST_ASSERT(msg.contents == NULL, "contents should be NULL when message missing");
     TEST_ASSERT(msg.content_count == 0, "content_count should be 0 when message missing");
@@ -171,7 +171,7 @@ static void test_no_content_or_tool_calls(void) {
     cJSON *json = cJSON_Parse(no_content_response);
     TEST_ASSERT(json != NULL, "Should parse JSON successfully");
 
-    InternalMessage msg = parse_openai_response(json);
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
     TEST_ASSERT(msg.contents == NULL, "contents should be NULL when no content");
     TEST_ASSERT(msg.content_count == 0, "content_count should be 0 when no content");
@@ -188,7 +188,7 @@ static void test_invalid_json(void) {
     TEST_ASSERT(json == NULL, "Should fail to parse invalid JSON");
 
     // parse_openai_response with NULL JSON should be handled gracefully
-    InternalMessage msg = parse_openai_response(NULL);
+    InternalMessage msg = {0}; parse_openai_response(NULL, &msg);
 
     TEST_ASSERT(msg.contents == NULL, "contents should be NULL for NULL JSON");
     TEST_ASSERT(msg.content_count == 0, "content_count should be 0 for NULL JSON");
@@ -207,7 +207,7 @@ static void test_valid_text_response(void) {
     cJSON *json = cJSON_Parse(valid_text_response);
     TEST_ASSERT(json != NULL, "Should parse JSON successfully");
 
-    InternalMessage msg = parse_openai_response(json);
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
     TEST_ASSERT(msg.contents != NULL, "contents should not be NULL for valid response");
     TEST_ASSERT(msg.content_count == 1, "Should have 1 content block");
@@ -226,7 +226,7 @@ static void test_valid_tool_call_response(void) {
     cJSON *json = cJSON_Parse(valid_tool_call_response);
     TEST_ASSERT(json != NULL, "Should parse JSON successfully");
 
-    InternalMessage msg = parse_openai_response(json);
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
     TEST_ASSERT(msg.contents != NULL, "contents should not be NULL");
     TEST_ASSERT(msg.content_count == 1, "Should have 1 content block");
@@ -252,7 +252,7 @@ static void test_valid_multiple_tool_calls(void) {
     cJSON *json = cJSON_Parse(valid_multiple_tool_calls_response);
     TEST_ASSERT(json != NULL, "Should parse JSON successfully");
 
-    InternalMessage msg = parse_openai_response(json);
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
     TEST_ASSERT(msg.contents != NULL, "contents should not be NULL");
     TEST_ASSERT(msg.content_count == 2, "Should have 2 content blocks");
@@ -274,7 +274,7 @@ static void test_valid_text_and_tool_calls(void) {
     cJSON *json = cJSON_Parse(valid_text_and_tool_calls_response);
     TEST_ASSERT(json != NULL, "Should parse JSON successfully");
 
-    InternalMessage msg = parse_openai_response(json);
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
     TEST_ASSERT(msg.contents != NULL, "contents should not be NULL");
     TEST_ASSERT(msg.content_count == 2, "Should have 2 content blocks (text + tool)");
@@ -328,7 +328,7 @@ static void test_free_already_freed(void) {
 
     // Create a message with allocated contents
     cJSON *json = cJSON_Parse(valid_text_response);
-    InternalMessage msg = parse_openai_response(json);
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
     // Free it
     free_internal_message(&msg);
@@ -369,7 +369,7 @@ static void test_session_loading_scenario(void) {
             continue;
         }
 
-        InternalMessage msg = parse_openai_response(json);
+        InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
         // Simulate adding to conversation (like session.c does)
         if (msg.content_count > 0) {

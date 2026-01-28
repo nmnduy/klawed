@@ -8,9 +8,10 @@
  * Perfect for spinners, UI animations, and any motion that should feel organic.
  *
  * Usage:
- *   spring = spring_init(60.0, 8.0, 0.3);  // 60 FPS, fast, slightly bouncy
+ *   Spring spring;
+ *   spring_init(&spring, 1.0/60.0, 8.0, 0.3);  // 60 FPS, fast, slightly bouncy
  *   // In animation loop:
- *   pos, vel = spring_update(spring, pos, vel, target);
+ *   spring_update(spring, &pos, &vel, target);
  */
 
 #ifndef SPRING_H
@@ -46,13 +47,16 @@ static inline double spring_fps(double fps) {
 /**
  * Initialize a Spring with framerate, angular frequency, and damping ratio.
  *
+ * @param s           Output: Initialized Spring with pre-computed coefficients
  * @param delta_time  Animation time step in seconds (e.g., 1/60.0 for 60 FPS)
  * @param frequency   Angular frequency (speed): higher = faster
  * @param damping     Damping ratio: < 1 = bouncy, 1 = no overshoot, > 1 = sluggish
- * @return Initialized Spring with pre-computed coefficients
  */
-static inline Spring spring_init(double delta_time, double frequency, double damping) {
-    Spring s = {0};
+static inline void spring_init(Spring *s, double delta_time, double frequency, double damping) {
+    s->pos_pos_coef = 0.0;
+    s->pos_vel_coef = 0.0;
+    s->vel_pos_coef = 0.0;
+    s->vel_vel_coef = 0.0;
 
     // Keep values in valid range
     frequency = fmax(0.0, frequency);
@@ -63,11 +67,11 @@ static inline Spring spring_init(double delta_time, double frequency, double dam
 
     // No frequency = no motion
     if (frequency < epsilon) {
-        s.pos_pos_coef = 1.0;
-        s.pos_vel_coef = 0.0;
-        s.vel_pos_coef = 0.0;
-        s.vel_vel_coef = 1.0;
-        return s;
+        s->pos_pos_coef = 1.0;
+        s->pos_vel_coef = 0.0;
+        s->vel_pos_coef = 0.0;
+        s->vel_vel_coef = 1.0;
+        return;
     }
 
     if (damping > 1.0 + epsilon) {
@@ -86,10 +90,10 @@ static inline Spring spring_init(double delta_time, double frequency, double dam
         double z1e1_over_two_zb = z1 * e1_over_two_zb;
         double z2e2_over_two_zb = z2 * e2_over_two_zb;
 
-        s.pos_pos_coef = e1_over_two_zb * z2 - z2e2_over_two_zb + e2;
-        s.pos_vel_coef = -e1_over_two_zb + e2_over_two_zb;
-        s.vel_pos_coef = (z1e1_over_two_zb - z2e2_over_two_zb + e2) * z2;
-        s.vel_vel_coef = -z1e1_over_two_zb + z2e2_over_two_zb;
+        s->pos_pos_coef = e1_over_two_zb * z2 - z2e2_over_two_zb + e2;
+        s->pos_vel_coef = -e1_over_two_zb + e2_over_two_zb;
+        s->vel_pos_coef = (z1e1_over_two_zb - z2e2_over_two_zb + e2) * z2;
+        s->vel_vel_coef = -z1e1_over_two_zb + z2e2_over_two_zb;
 
     } else if (damping < 1.0 - epsilon) {
         /* Under-damped: Fastest with oscillation and bounce */
@@ -105,10 +109,10 @@ static inline Spring spring_init(double delta_time, double frequency, double dam
         double exp_cos = exp_term * cos_term;
         double exp_omega_zeta_sin_over_alpha = exp_term * omega_zeta * sin_term * inv_alpha;
 
-        s.pos_pos_coef = exp_cos + exp_omega_zeta_sin_over_alpha;
-        s.pos_vel_coef = exp_sin * inv_alpha;
-        s.vel_pos_coef = -exp_sin * alpha - omega_zeta * exp_omega_zeta_sin_over_alpha;
-        s.vel_vel_coef = exp_cos - exp_omega_zeta_sin_over_alpha;
+        s->pos_pos_coef = exp_cos + exp_omega_zeta_sin_over_alpha;
+        s->pos_vel_coef = exp_sin * inv_alpha;
+        s->vel_pos_coef = -exp_sin * alpha - omega_zeta * exp_omega_zeta_sin_over_alpha;
+        s->vel_vel_coef = exp_cos - exp_omega_zeta_sin_over_alpha;
 
     } else {
         /* Critically-damped: Fastest without oscillation */
@@ -116,13 +120,11 @@ static inline Spring spring_init(double delta_time, double frequency, double dam
         double time_exp = delta_time * exp_term;
         double time_exp_freq = time_exp * frequency;
 
-        s.pos_pos_coef = time_exp_freq + exp_term;
-        s.pos_vel_coef = time_exp;
-        s.vel_pos_coef = -frequency * time_exp_freq;
-        s.vel_vel_coef = -time_exp_freq + exp_term;
+        s->pos_pos_coef = time_exp_freq + exp_term;
+        s->pos_vel_coef = time_exp;
+        s->vel_pos_coef = -frequency * time_exp_freq;
+        s->vel_vel_coef = -time_exp_freq + exp_term;
     }
-
-    return s;
 }
 
 /**

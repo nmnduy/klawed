@@ -106,7 +106,7 @@ static void status_spinner_tick(TUIState *tui) {
         tui->status_spinner_pos = 0.0;
         tui->status_spinner_vel = 0.0;
         // 60 FPS, fast angular frequency (15 Hz), bouncy damping (0.25) for playful motion
-        tui->status_spinner_spring = spring_init(1.0/60.0, 15.0, 0.25);
+        spring_init(&tui->status_spinner_spring, 1.0/60.0, 15.0, 0.25);
         tui->status_spinner_spring_initialized = 1;
         tui->status_spinner_last_update_ns = now;
         return;

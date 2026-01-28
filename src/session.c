@@ -207,7 +207,8 @@ int session_load_from_db(PersistenceDB *db, const char *session_id, Conversation
 
         LOG_DEBUG("session_load_from_db: calling parse_openai_response");
         // Parse OpenAI response into internal message format
-        InternalMessage assistant_msg = parse_openai_response(response);
+        InternalMessage assistant_msg;
+        parse_openai_response(response, &assistant_msg);
         LOG_DEBUG("session_load_from_db: parse_openai_response returned, content_count = %d", assistant_msg.content_count);
 
         LOG_DEBUG("session_load_from_db: adding assistant message to conversation");

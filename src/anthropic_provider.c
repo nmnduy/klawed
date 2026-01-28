@@ -671,14 +671,15 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
 // Provider Implementation
 // ============================================================================
 
-static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state) {
+static void anthropic_call_api(Provider *self, ConversationState *state, ApiCallResult *out) {
     ApiCallResult result = {0};
     AnthropicConfig *config = (AnthropicConfig*)self->config;
 
     if (!config || !config->api_key || !config->base_url) {
         result.error_message = strdup("Anthropic config or credentials not initialized");
         result.is_retryable = 0;
-        return result;
+        *out = result;
+        return;
     }
 
     // Build request JSON from internal messages (OpenAI-style), then convert
@@ -692,7 +693,8 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
     if (!openai_req_obj) {
         result.error_message = strdup("Failed to build request JSON");
         result.is_retryable = 0;
-        return result;
+        *out = result;
+        return;
     }
 
     LOG_DEBUG("Anthropic: Built OpenAI-format request, converting to Anthropic format");
@@ -702,7 +704,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
     if (!openai_req) {
         result.error_message = strdup("Failed to serialize request JSON");
         result.is_retryable = 0;
-        return result;
+        *out = result; return;
     }
 
     char *anth_req = openai_to_anthropic_request(openai_req);
@@ -712,7 +714,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
         result.error_message = strdup("Failed to convert request to Anthropic format");
         result.is_retryable = 0;
         result.request_json = openai_req;  // keep for logging
-        return result;
+        *out = result; return;
     }
 
     // Set up headers
@@ -766,7 +768,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
         result.request_json = anth_req;
         result.headers_json = NULL;
         free(openai_req);
-        return result;
+        *out = result; return;
     }
 
     // Check if streaming is enabled via environment variable
@@ -825,7 +827,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
         free(result.headers_json);
         result.headers_json = NULL;
         free(openai_req);
-        return result;
+        *out = result; return;
     }
 
     result.duration_ms = http_resp->duration_ms;
@@ -839,7 +841,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
         free(result.headers_json);
         result.headers_json = NULL;
         free(openai_req);
-        return result;
+        *out = result; return;
     }
 
     result.raw_response = http_resp->body ? strdup(http_resp->body) : NULL;
@@ -904,7 +906,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
             free(result.headers_json);
             result.headers_json = NULL;
             free(openai_req);
-            return result;
+            *out = result; return;
         }
 
         // Create arena for ApiResponse and all its string data
@@ -916,7 +918,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
             free(result.headers_json);
             result.headers_json = NULL;
             free(openai_req);
-            return result;
+            *out = result; return;
         }
 
         // Allocate ApiResponse from arena
@@ -929,7 +931,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
             free(result.headers_json);
             result.headers_json = NULL;
             free(openai_req);
-            return result;
+            *out = result; return;
         }
 
         // Initialize ApiResponse
@@ -945,7 +947,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
             free(result.headers_json);
             result.headers_json = NULL;
             free(openai_req);
-            return result;
+            *out = result; return;
         }
         cJSON *choice = cJSON_GetArrayItem(choices, 0);
         cJSON *message = cJSON_GetObjectItem(choice, "message");
@@ -956,7 +958,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
             free(result.headers_json);
             result.headers_json = NULL;
             free(openai_req);
-            return result;
+            *out = result; return;
         }
 
         cJSON *content = cJSON_GetObjectItem(message, "content");
@@ -986,7 +988,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
                     free(result.headers_json);
                     result.headers_json = NULL;
                     free(openai_req);
-                    return result;
+                    *out = result; return;
                 }
 
                 // Initialize tool call array
@@ -1015,7 +1017,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
 
         result.response = api_resp;
         free(openai_req);
-        return result;
+        *out = result; return;
     }
 
     // HTTP error handling
@@ -1052,7 +1054,7 @@ static ApiCallResult anthropic_call_api(Provider *self, ConversationState *state
     free(result.headers_json);
     result.headers_json = NULL;
     free(openai_req);
-    return result;
+    *out = result; return;
 }
 
 static void anthropic_cleanup(Provider *self) {

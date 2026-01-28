@@ -332,7 +332,8 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         }
 #endif
 
-        ApiCallResult result = state->provider->call_api(state->provider, state);
+        ApiCallResult result = {0};
+        state->provider->call_api(state->provider, state, &result);
 
         // Success case
         if (result.response) {

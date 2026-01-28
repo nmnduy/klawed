@@ -40,9 +40,9 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
  * @param state - Conversation state with messages
  * @param config - OpenAI provider configuration
  * @param enable_caching - Whether to enable prompt caching
- * @return HttpRequest struct (caller must free request->headers and request->body on success), or empty struct on error
+ * @param out - Output: HttpRequest struct (caller must free request->headers and request->body on success), or empty struct on error
  */
-HttpRequest build_responses_http_request(ConversationState *state, OpenAIConfig *config, int enable_caching);
+void build_responses_http_request(ConversationState *state, OpenAIConfig *config, int enable_caching, HttpRequest *out);
 
 /**
  * Submit HTTP request to OpenAI Responses API
@@ -76,9 +76,9 @@ ApiResponse* parse_responses_http_response(const char *raw_response);
  * - output array with items -> INTERNAL_TEXT or INTERNAL_TOOL_CALL blocks
  *
  * @param response - OpenAI Responses API response JSON
- * @return InternalMessage (caller must free contents), or empty message on error
+ * @param out - Output: InternalMessage (caller must free contents), or empty message on error
  */
-InternalMessage parse_openai_responses_response(cJSON *response);
+void parse_openai_responses_response(cJSON *response, InternalMessage *out);
 
 /**
  * Build OpenAI Responses API tool definitions

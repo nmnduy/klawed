@@ -136,10 +136,10 @@ static void status_spinner_start(TUIState *tui) {
     if (!tui->status_spinner_active) {
         tui->status_spinner_frame = 0;
         // Initialize spinner effect with pulse
-        tui->status_spinner_effect = spinner_effect_init(SPINNER_EFFECT_PULSE,
-                                                        SPINNER_COLOR_SOLID,
-                                                        get_spinner_color_status(),
-                                                        NULL);
+        spinner_effect_init(&tui->status_spinner_effect, SPINNER_EFFECT_PULSE,
+                            SPINNER_COLOR_SOLID,
+                            get_spinner_color_status(),
+                            NULL);
     }
     tui->status_spinner_active = 1;
     tui->status_spinner_last_update_ns = monotonic_time_ns();

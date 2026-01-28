@@ -228,19 +228,21 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
  * @param state - Conversation state with messages
  * @param config - OpenAI provider configuration
  * @param enable_caching - Whether to enable prompt caching
- * @return HttpRequest struct (caller must free request->headers and request->body on success), or empty struct on error
+ * @param out - Output: HttpRequest struct (caller must free request->headers and request->body on success), or empty struct on error
  */
-HttpRequest build_responses_http_request(ConversationState *state, OpenAIConfig *config, int enable_caching) {
+void build_responses_http_request(ConversationState *state, OpenAIConfig *config, int enable_caching, HttpRequest *out) {
     HttpRequest req = {0};
 
     if (!config || !config->api_key || !config->base_url) {
         LOG_ERROR("OpenAI config or credentials not initialized");
-        return req;
+        *out = req;
+        return;
     }
 
     if (!state) {
         LOG_ERROR("ConversationState is NULL");
-        return req;
+        *out = req;
+        return;
     }
 
     LOG_DEBUG("Building HTTP request for Responses API (caching: %s)",
@@ -250,7 +252,7 @@ HttpRequest build_responses_http_request(ConversationState *state, OpenAIConfig 
     cJSON *request_json = build_openai_responses_request(state, enable_caching);
     if (!request_json) {
         LOG_ERROR("Failed to build Responses API request JSON");
-        return req;
+        *out = req; return;
     }
 
     // Serialize to JSON string
@@ -259,7 +261,7 @@ HttpRequest build_responses_http_request(ConversationState *state, OpenAIConfig 
 
     if (!body) {
         LOG_ERROR("Failed to serialize request JSON");
-        return req;
+        *out = req; return;
     }
 
     LOG_DEBUG("OpenAI Responses API: Request serialized, length: %zu bytes", strlen(body));
@@ -307,7 +309,7 @@ HttpRequest build_responses_http_request(ConversationState *state, OpenAIConfig 
     if (!headers) {
         free(body);
         LOG_ERROR("Failed to setup HTTP headers");
-        return req;
+        *out = req; return;
     }
 
     // Populate HttpRequest struct
@@ -320,7 +322,7 @@ HttpRequest build_responses_http_request(ConversationState *state, OpenAIConfig 
     req.enable_streaming = 0;          // Responses API doesn't use SSE streaming
 
     LOG_DEBUG("HTTP request built for URL: %s", req.url);
-    return req;
+    *out = req; return;
 }
 
 /**
@@ -562,21 +564,23 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
  * - output array with items -> INTERNAL_TEXT or INTERNAL_TOOL_CALL blocks
  *
  * @param response - OpenAI Responses API response JSON
- * @return InternalMessage (caller must free contents), or empty message on error
+ * @param out - Output: InternalMessage (caller must free contents), or empty message on error
  */
-InternalMessage parse_openai_responses_response(cJSON *response) {
+void parse_openai_responses_response(cJSON *response, InternalMessage *out) {
     InternalMessage msg = {0};
     msg.role = MSG_ASSISTANT;
 
     if (!response) {
         LOG_ERROR("Response is NULL");
-        return msg;
+        *out = msg;
+        return;
     }
 
     cJSON *output = cJSON_GetObjectItem(response, "output");
     if (!output || !cJSON_IsArray(output)) {
         LOG_ERROR("Invalid Responses API response: missing 'output' array");
-        return msg;
+        *out = msg;
+        return;
     }
 
     // Count content blocks in output array
@@ -599,14 +603,16 @@ InternalMessage parse_openai_responses_response(cJSON *response) {
 
     if (count == 0) {
         LOG_WARN("Response has no content or tool_calls");
-        return msg;
+        *out = msg;
+        return;
     }
 
     // Allocate content array
     msg.contents = calloc((size_t)count, sizeof(InternalContent));
     if (!msg.contents) {
         LOG_ERROR("Failed to allocate content array");
-        return msg;
+        *out = msg;
+        return;
     }
     msg.content_count = count;
 
@@ -671,7 +677,7 @@ InternalMessage parse_openai_responses_response(cJSON *response) {
     }
 
     LOG_DEBUG("Parsed OpenAI Responses API response: %d content blocks", msg.content_count);
-    return msg;
+    *out = msg;
 }
 
 /**

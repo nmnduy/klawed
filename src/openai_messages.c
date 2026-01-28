@@ -512,7 +512,7 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching) {
 /**
  * Parse OpenAI response into internal message format
  */
-InternalMessage parse_openai_response(cJSON *response) {
+void parse_openai_response(cJSON *response, InternalMessage *out) {
     InternalMessage msg = {0};
     msg.role = MSG_ASSISTANT;
 
@@ -520,7 +520,8 @@ InternalMessage parse_openai_response(cJSON *response) {
         LOG_ERROR("Response is NULL");
         msg.contents = NULL;
         msg.content_count = 0;
-        return msg;
+        *out = msg;
+        return;
     }
 
     cJSON *choices = cJSON_GetObjectItem(response, "choices");
@@ -528,7 +529,8 @@ InternalMessage parse_openai_response(cJSON *response) {
         LOG_ERROR("Invalid response: missing 'choices' array");
         msg.contents = NULL;
         msg.content_count = 0;
-        return msg;
+        *out = msg;
+        return;
     }
 
     cJSON *choice = cJSON_GetArrayItem(choices, 0);
@@ -536,7 +538,8 @@ InternalMessage parse_openai_response(cJSON *response) {
         LOG_ERROR("Invalid response: empty 'choices' array");
         msg.contents = NULL;
         msg.content_count = 0;
-        return msg;
+        *out = msg;
+        return;
     }
 
     cJSON *message = cJSON_GetObjectItem(choice, "message");
@@ -544,7 +547,8 @@ InternalMessage parse_openai_response(cJSON *response) {
         LOG_ERROR("Invalid response: missing 'message' object");
         msg.contents = NULL;
         msg.content_count = 0;
-        return msg;
+        *out = msg;
+        return;
     }
 
     // Count content blocks
@@ -564,14 +568,16 @@ InternalMessage parse_openai_response(cJSON *response) {
         free(msg.contents);  // Free the empty allocation
         msg.contents = NULL;
         msg.content_count = 0;
-        return msg;
+        *out = msg;
+        return;
     }
 
     // Allocate content array
     msg.contents = calloc((size_t)count, sizeof(InternalContent));
     if (!msg.contents) {
         LOG_ERROR("Failed to allocate content array");
-        return msg;
+        *out = msg;
+        return;
     }
     msg.content_count = count;
 
@@ -626,7 +632,7 @@ InternalMessage parse_openai_response(cJSON *response) {
     }
 
     LOG_DEBUG("Parsed OpenAI response: %d content blocks", msg.content_count);
-    return msg;
+    *out = msg;
 }
 
 /**

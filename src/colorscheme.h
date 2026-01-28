@@ -67,9 +67,11 @@ extern Theme g_theme;
 extern int g_theme_loaded;
 #endif
 
-// Parse hex color "#RRGGBB" to RGB struct
-static RGB parse_hex_color(const char *hex) {
-    RGB rgb = {0, 0, 0};
+// Parse hex color "#RRGGBB" to RGB struct (output parameter to avoid aggregate return)
+static void parse_hex_color(const char *hex, RGB *rgb) {
+    rgb->r = 0;
+    rgb->g = 0;
+    rgb->b = 0;
 
     // Skip leading '#' if present
     if (hex[0] == '#') {
@@ -82,15 +84,13 @@ static RGB parse_hex_color(const char *hex) {
         char g_str[3] = {hex[2], hex[3], '\0'};
         char b_str[3] = {hex[4], hex[5], '\0'};
 
-        rgb.r = (int)strtol(r_str, NULL, 16);
-        rgb.g = (int)strtol(g_str, NULL, 16);
-        rgb.b = (int)strtol(b_str, NULL, 16);
+        rgb->r = (int)strtol(r_str, NULL, 16);
+        rgb->g = (int)strtol(g_str, NULL, 16);
+        rgb->b = (int)strtol(b_str, NULL, 16);
 
         LOG_DEBUG("[THEME]     Parsed hex %s -> RGB(%d, %d, %d)",
-                hex - 1, rgb.r, rgb.g, rgb.b);
+                hex - 1, rgb->r, rgb->g, rgb->b);
     }
-
-    return rgb;
 }
 
 // Convert RGB to nearest 256-color palette index
@@ -213,7 +213,8 @@ static int load_kitty_theme_buf(const char *buf_data, Theme *theme) {
         if (*p == '\0' || *p == '#') continue;
         char key[64], value[32];
         if (sscanf(p, "%63s %31s", key, value) == 2) {
-            RGB rgb = parse_hex_color(value);
+            RGB rgb;
+            parse_hex_color(value, &rgb);
             if (strcmp(key, "foreground") == 0) {
                 theme->foreground_rgb = rgb;
                 theme->assistant_rgb = rgb;
@@ -302,7 +303,8 @@ static int load_kitty_theme(const char *filepath, Theme *theme) {
         if (sscanf(p, "%63s %31s", key, value) == 2) {
             LOG_DEBUG("[THEME] Line %d: %s = %s", line_num, key, value);
 
-            RGB rgb = parse_hex_color(value);
+            RGB rgb;
+            parse_hex_color(value, &rgb);
 
             // Map ONLY standard Kitty color keys to TUI elements
             if (strcmp(key, "foreground") == 0) {

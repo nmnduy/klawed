@@ -367,9 +367,9 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
 /**
  * Helper: Execute a single HTTP request with current credentials
  * Uses the Converse API by default (bedrock_converse.h)
- * Returns: ApiCallResult (caller must free fields)
+ * Output: ApiCallResult written to out parameter (caller must free fields)
  */
-static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *converse_json, ConversationState *state, int enable_streaming) {
+static void bedrock_execute_request(BedrockConfig *config, const char *converse_json, ConversationState *state, int enable_streaming, ApiCallResult *out) {
     ApiCallResult result = {0};
 
     // Build Converse API endpoint (streaming not yet supported for Converse API)
@@ -381,7 +381,8 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
         if (!endpoint_url) {
             result.error_message = strdup("Failed to build Converse streaming endpoint");
             result.is_retryable = 0;
-            return result;
+            *out = result;
+            return;
         }
     } else {
         // Use standard Converse endpoint
@@ -389,7 +390,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
         if (!endpoint_url) {
             result.error_message = strdup("Failed to build Converse endpoint");
             result.is_retryable = 0;
-            return result;
+            *out = result; return;
         }
     }
 
@@ -404,7 +405,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
         result.is_retryable = 0;
         result.headers_json = NULL;  // No headers to log
         free(endpoint_url);
-        return result;
+        *out = result; return;
     }
 
     // Build HTTP request using the new HTTP client
@@ -444,7 +445,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
         free(result.headers_json);  // Clean up headers JSON
         result.headers_json = NULL;
         if (enable_streaming) bedrock_streaming_context_free(&stream_ctx);
-        return result;
+        *out = result; return;
     }
 
     result.duration_ms = http_resp->duration_ms;
@@ -456,7 +457,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
         result.is_retryable = http_resp->is_retryable;
         http_response_free(http_resp);
         if (enable_streaming) bedrock_streaming_context_free(&stream_ctx);
-        return result;
+        *out = result; return;
     }
 
     result.raw_response = http_resp->body ? strdup(http_resp->body) : NULL;
@@ -542,7 +543,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             result.headers_json = NULL;
             free(tmp_headers);  // Clean up headers JSON in error paths
             if (enable_streaming) bedrock_streaming_context_free(&stream_ctx);
-            return result;
+            *out = result; return;
         }
 
         // Now extract vendor-agnostic response data (same as OpenAI provider)
@@ -555,7 +556,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             char *tmp_headers = result.headers_json;
             result.headers_json = NULL;
             free(tmp_headers);  // Clean up headers JSON in error paths
-            return result;
+            *out = result; return;
         }
 
         // Allocate ApiResponse from arena
@@ -568,7 +569,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             char *tmp_headers = result.headers_json;
             result.headers_json = NULL;
             free(tmp_headers);  // Clean up headers JSON in error paths
-            return result;
+            *out = result; return;
         }
 
         // Initialize ApiResponse
@@ -587,7 +588,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             char *tmp_headers = result.headers_json;
             result.headers_json = NULL;
             free(tmp_headers);  // Clean up headers JSON in error paths
-            return result;
+            *out = result; return;
         }
 
         cJSON *choice = cJSON_GetArrayItem(choices, 0);
@@ -599,7 +600,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
             char *tmp_headers = result.headers_json;
             result.headers_json = NULL;
             free(tmp_headers);  // Clean up headers JSON in error paths
-            return result;
+            *out = result; return;
         }
 
         // Extract text content
@@ -639,7 +640,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
                     char *tmp_headers = result.headers_json;
                     result.headers_json = NULL;
                     free(tmp_headers);  // Clean up headers JSON in error paths
-                    return result;
+                    *out = result; return;
                 }
 
                 // Initialize tool call array
@@ -684,7 +685,7 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
         }
 
         result.response = api_response;
-        return result;
+        *out = result; return;
     }
 
     // HTTP error
@@ -719,20 +720,22 @@ static ApiCallResult bedrock_execute_request(BedrockConfig *config, const char *
     char *tmp_headers = result.headers_json;
     result.headers_json = NULL;
     free(tmp_headers);  // Clean up headers JSON in error paths
-    return result;
+    *out = result;
+    return;
 }
 
 /**
  * Bedrock provider's call_api - handles AWS authentication with smart rotation detection
  */
-static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) {
+static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallResult *out) {
     ApiCallResult result = {0};
     BedrockConfig *config = (BedrockConfig*)self->config;
 
     if (!config) {
         result.error_message = strdup("Bedrock config not initialized");
         result.is_retryable = 0;
-        return result;
+        *out = result;
+        return;
     }
 
     const char *profile = getenv(ENV_AWS_PROFILE);
@@ -774,12 +777,12 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
             } else {
                 result.error_message = strdup("Failed to load credentials after authentication");
                 result.is_retryable = 0;
-                return result;
+                *out = result; return;
             }
         } else {
             result.error_message = strdup("Authentication failed");
             result.is_retryable = 0;
-            return result;
+            *out = result; return;
         }
     }
 
@@ -796,7 +799,7 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
         result.error_message = strdup("Failed to build request JSON");
         result.is_retryable = 0;
         free(saved_access_key);
-        return result;
+        *out = result; return;
     }
 
     LOG_DEBUG("Bedrock: Built OpenAI-format request, converting to Converse API format");
@@ -811,7 +814,7 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
         result.error_message = strdup("Failed to convert request to Converse API format");
         result.is_retryable = 0;
         free(saved_access_key);
-        return result;
+        *out = result; return;
     }
 
     // Update profile from config if available
@@ -829,14 +832,14 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
     // === STEP 2: First API call attempt ===
     LOG_DEBUG("Executing first API call attempt...");
-    result = bedrock_execute_request(config, converse_json, state, enable_streaming);
+    bedrock_execute_request(config, converse_json, state, enable_streaming, &result);
 
     // Success on first try
     if (result.response) {
         LOG_INFO("API call succeeded on first attempt");
         free(saved_access_key);
         result.request_json = converse_json;  // Store for logging (caller frees)
-        return result;
+        *out = result; return;
     }
 
     // === STEP 3: Auth error? Check for external credential rotation ===
@@ -876,13 +879,13 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
                 // === STEP 5: Retry with externally rotated credentials ===
                 LOG_DEBUG("Retrying API call with externally rotated credentials...");
-                result = bedrock_execute_request(config, converse_json, state, enable_streaming);
+                bedrock_execute_request(config, converse_json, state, enable_streaming, &result);
 
                 if (result.response) {
                     LOG_INFO("API call succeeded after using externally rotated credentials");
                     free(saved_access_key);
                     result.request_json = converse_json;  // Store for logging (caller frees)
-                    return result;
+                    *out = result; return;
                 }
 
                 LOG_WARN("API call still failed after external rotation: %s", result.error_message);
@@ -941,13 +944,13 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
                         // === STEP 5: Retry with rotated credentials ===
                         LOG_DEBUG("Retrying API call with rotated credentials...");
-                        result = bedrock_execute_request(config, converse_json, state, enable_streaming);
+                        bedrock_execute_request(config, converse_json, state, enable_streaming, &result);
 
                         if (result.response) {
                             LOG_INFO("API call succeeded after credential rotation");
                             free(saved_access_key);
                             result.request_json = converse_json;  // Store for logging (caller frees)
-                            return result;
+                            *out = result; return;
                         }
 
                         LOG_WARN("API call still failed after rotation: %s", result.error_message);
@@ -1015,7 +1018,7 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
 
                     // === STEP 7: Final retry ===
                     LOG_DEBUG("Final API call attempt with re-rotated credentials...");
-                    result = bedrock_execute_request(config, converse_json, state, enable_streaming);
+                    bedrock_execute_request(config, converse_json, state, enable_streaming, &result);
 
                     if (result.response) {
                         LOG_INFO("API call succeeded on final retry");
@@ -1033,7 +1036,7 @@ static ApiCallResult bedrock_call_api(Provider *self, ConversationState *state) 
     free(saved_access_key);
     result.request_json = converse_json;  // Store for logging even on error (caller frees)
 
-    return result;
+    *out = result; return;
 }
 
 /**

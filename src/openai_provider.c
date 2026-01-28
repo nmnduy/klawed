@@ -323,14 +323,15 @@ static int openai_streaming_event_handler(StreamEvent *event, void *userdata) {
  * OpenAI provider's call_api - handles Bearer token authentication
  * Simple single-attempt API call with no auth rotation logic
  */
-static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
+static void openai_call_api(Provider *self, ConversationState *state, ApiCallResult *out) {
     ApiCallResult result = {0};
     OpenAIConfig *config = (OpenAIConfig*)self->config;
 
     if (!config || !config->api_key || !config->base_url) {
         result.error_message = strdup("OpenAI config or credentials not initialized");
         result.is_retryable = 0;
-        return result;
+        *out = result;
+        return;
     }
 
     // Check if streaming is enabled via environment variable
@@ -384,7 +385,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
     if (!request) {
         result.error_message = strdup("Failed to build request JSON");
         result.is_retryable = 0;
-        return result;
+        *out = result; return;
     }
 
     LOG_DEBUG("OpenAI: Built request with caching %s, format: %s",
@@ -405,7 +406,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
     if (!openai_json) {
         result.error_message = strdup("Failed to serialize request JSON");
         result.is_retryable = 0;
-        return result;
+        *out = result; return;
     }
 
     // Build full URL (base_url is already complete for OpenAI, just use it directly)
@@ -463,7 +464,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         result.is_retryable = 0;
         result.request_json = openai_json;  // Store for logging
         result.headers_json = NULL;  // No headers to log
-        return result;
+        *out = result; return;
     }
 
     // Execute HTTP request using HTTP client
@@ -498,7 +499,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         result.is_retryable = 0;
         curl_slist_free_all(headers);
         if (enable_streaming) openai_streaming_context_free(&stream_ctx);
-        return result;
+        *out = result; return;
     }
 
     // Copy results from HTTP response
@@ -518,7 +519,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         http_response_free(http_resp);
         curl_slist_free_all(headers);
         if (enable_streaming) openai_streaming_context_free(&stream_ctx);
-        return result;
+        *out = result; return;
     }
 
     // Clean up HTTP response (but keep body since we duplicated it)
@@ -590,7 +591,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                 result.is_retryable = 0;
                 free(result.headers_json);  // Clean up headers JSON in error paths
                 result.headers_json = NULL;
-                return result;
+                *out = result; return;
             }
         }
 
@@ -604,7 +605,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
             free(result.headers_json);  // Clean up headers JSON in error paths
             result.headers_json = NULL;
             if (enable_streaming) openai_streaming_context_free(&stream_ctx);
-            return result;
+            *out = result; return;
         }
 
         // Allocate ApiResponse from arena
@@ -617,7 +618,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
             free(result.headers_json);  // Clean up headers JSON in error paths
             result.headers_json = NULL;
             if (enable_streaming) openai_streaming_context_free(&stream_ctx);
-            return result;
+            *out = result; return;
         }
 
         // Initialize ApiResponse
@@ -716,7 +717,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                             api_response_free(api_response);
                             free(result.headers_json);
                             result.headers_json = NULL;
-                            return result;
+                            *out = result; return;
                         }
 
                         size_t text_length = 0;
@@ -797,7 +798,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                 api_response_free(api_response);
                 free(result.headers_json);
                 result.headers_json = NULL;
-                return result;
+                *out = result; return;
             }
 
             cJSON *choice = cJSON_GetArrayItem(choices, 0);
@@ -808,7 +809,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                 api_response_free(api_response);
                 free(result.headers_json);
                 result.headers_json = NULL;
-                return result;
+                *out = result; return;
             }
         }
 
@@ -849,7 +850,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
                     api_response_free(api_response);
                     free(result.headers_json);  // Clean up headers JSON in error paths
                     result.headers_json = NULL;
-                    return result;
+                    *out = result; return;
                 }
 
                 // Initialize tool call array
@@ -899,7 +900,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
         }
 
         result.response = api_response;
-        return result;
+        *out = result; return;
     }
 
     // HTTP error
@@ -941,7 +942,7 @@ static ApiCallResult openai_call_api(Provider *self, ConversationState *state) {
     free(result.headers_json);  // Clean up headers JSON in error paths
     result.headers_json = NULL;
     if (enable_streaming) openai_streaming_context_free(&stream_ctx);
-    return result;
+    *out = result; return;
 }
 
 /**
