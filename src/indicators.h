@@ -192,9 +192,9 @@ static void *spinner_thread_func(void *arg) {
 
     // Initialize effect config if not already done
     if (s->effect_config.effect_type == SPINNER_EFFECT_NONE) {
-        s->effect_config = spinner_effect_init(SPINNER_EFFECT_GRADIENT,
-                                              SPINNER_COLOR_SOLID,
-                                              s->color, NULL);
+        spinner_effect_init(&s->effect_config, SPINNER_EFFECT_GRADIENT,
+                            SPINNER_COLOR_SOLID,
+                            s->color, NULL);
     }
 
     while (1) {
@@ -267,9 +267,9 @@ static INDICATOR_UNUSED Spinner* spinner_start(const char *message, const char *
     pthread_mutex_init(&s->lock, NULL);
     s->frames = GLOBAL_SPINNER_VARIANT.frames;
     s->frame_count = GLOBAL_SPINNER_VARIANT.count;
-    s->effect_config = spinner_effect_init(SPINNER_EFFECT_PULSE,
-                                          SPINNER_COLOR_SOLID,
-                                          s->color, NULL);
+    spinner_effect_init(&s->effect_config, SPINNER_EFFECT_PULSE,
+                        SPINNER_COLOR_SOLID,
+                        s->color, NULL);
     s->last_update_ns = 0;
     s->speed_multiplier = 1.0f;
     s->speed_transition_ns = 0;
@@ -291,7 +291,7 @@ static INDICATOR_UNUSED Spinner* spinner_start_with_effect(const char *message,
     pthread_mutex_init(&s->lock, NULL);
     s->frames = GLOBAL_SPINNER_VARIANT.frames;
     s->frame_count = GLOBAL_SPINNER_VARIANT.count;
-    s->effect_config = spinner_effect_init(effect_type, color_mode, s->color, NULL);
+    spinner_effect_init(&s->effect_config, effect_type, color_mode, s->color, NULL);
     s->last_update_ns = 0;
     s->speed_multiplier = 1.0f;
     s->speed_transition_ns = 0;

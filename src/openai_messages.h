@@ -33,9 +33,9 @@ cJSON* build_openai_request(ConversationState *state, int enable_caching);
  * - tool_calls: [...] -> INTERNAL_TOOL_CALL blocks
  *
  * @param response - OpenAI API response JSON
- * @return InternalMessage (caller must free contents), or empty message on error
+ * @param out - Output: InternalMessage (caller must free contents), or empty message on error
  */
-InternalMessage parse_openai_response(cJSON *response);
+void parse_openai_response(cJSON *response, InternalMessage *out);
 
 /**
  * Free internal message contents

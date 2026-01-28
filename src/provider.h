@@ -47,8 +47,9 @@ typedef struct Provider {
 
     /**
      * Execute a single API call attempt (no retries)
+     * Output is written to result parameter to avoid aggregate return
      */
-    ApiCallResult (*call_api)(struct Provider *self, struct ConversationState *state);
+    void (*call_api)(struct Provider *self, struct ConversationState *state, ApiCallResult *result);
 
     /**
      * Cleanup provider resources

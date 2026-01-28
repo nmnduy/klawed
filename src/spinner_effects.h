@@ -101,21 +101,20 @@ static inline void hsv_to_rgb(float h, float s, float v,
     if (*b_out < 0) *b_out = 0;
 }
 
-// Initialize spinner effect configuration
-static inline SpinnerEffectConfig spinner_effect_init(SpinnerEffectType effect_type,
-                                                     SpinnerColorMode color_mode,
-                                                     const char* base_color,
-                                                     const char* secondary_color) {
-    SpinnerEffectConfig config = {0};
-    config.effect_type = effect_type;
-    config.color_mode = color_mode;
-    config.base_color = base_color;
-    config.secondary_color = secondary_color;
-    config.speed_multiplier = 1.0f;
-    config.intensity = 1.0f;
-    config.phase = 0.0f;
-    config.frame_count = 10;  // Default frame count
-    return config;
+// Initialize spinner effect configuration (output parameter to avoid aggregate return)
+static inline void spinner_effect_init(SpinnerEffectConfig *config,
+                                       SpinnerEffectType effect_type,
+                                       SpinnerColorMode color_mode,
+                                       const char* base_color,
+                                       const char* secondary_color) {
+    config->effect_type = effect_type;
+    config->color_mode = color_mode;
+    config->base_color = base_color;
+    config->secondary_color = secondary_color;
+    config->speed_multiplier = 1.0f;
+    config->intensity = 1.0f;
+    config->phase = 0.0f;
+    config->frame_count = 10;  // Default frame count
 }
 
 // Update animation phase based on elapsed time
