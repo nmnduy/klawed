@@ -1311,6 +1311,16 @@ int tui_event_loop(TUIState *tui, const char *prompt,
         // Update spinner animation if active
         status_spinner_tick(tui);
 
+        // After spinner update, ensure cursor stays in input window
+        // status_spinner_tick uses wnoutrefresh, so we need to sync the screen
+        // and ensure the cursor is positioned in the input window, not the status bar
+        if (tui->status_spinner_active && tui->wm.input_win && tui->mode != TUI_MODE_NORMAL) {
+            // Use wnoutrefresh to update virtual screen without moving physical cursor
+            wnoutrefresh(tui->wm.input_win);
+            // Sync virtual screen to physical, cursor will be at input window's position
+            doupdate();
+        }
+
         // 5. Sleep to maintain frame rate
         struct timespec frame_end;
         clock_gettime(CLOCK_MONOTONIC, &frame_end);
