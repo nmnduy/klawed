@@ -54,6 +54,7 @@
 #include "openai_messages.h"
 #endif
 #include "config.h"
+#include "provider_config_loader.h"
 
 #ifdef TEST_BUILD
 // Disable unused function warnings for test builds since not all functions are used by tests
@@ -1337,6 +1338,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Load unified provider configuration ONCE at startup
+    // This converts environment variables into provider config and determines
+    // the effective provider to use. All subsequent provider lookups use this.
+    UnifiedProviderConfig unified_config;
+    provider_config_load(&unified_config);
+
     // Check for dump conversation flags
 #ifndef TEST_BUILD
     if ((argc == 2 || argc == 3 || argc == 4) &&
@@ -1501,42 +1508,51 @@ int main(int argc, char *argv[]) {
     }
 
 #ifndef TEST_BUILD
-    // Check if Bedrock mode is enabled (via KLAWED_USE_BEDROCK env var or selected provider)
-    int use_bedrock = bedrock_is_enabled() || provider_is_bedrock_selected();
+    // Check if Bedrock mode is enabled using unified config
+    int use_bedrock = provider_config_is_bedrock(&unified_config);
 #else
     int use_bedrock = 0;
 #endif
 
     const char *api_key = NULL;
+    const char *api_key_source = NULL;
     const char *api_base = NULL;
     const char *model = NULL;
-    char *model_from_provider = NULL;  // Needs to be freed if allocated
+
+    // Get model from unified config
+    model = provider_config_get_model(&unified_config);
+    if (!model) {
+        // Fallback to environment variables
+        model = getenv("OPENAI_MODEL");
+        if (!model) {
+            model = getenv("ANTHROPIC_MODEL");
+        }
+    }
 
     if (use_bedrock) {
         // Bedrock mode: API key not required, credentials loaded separately
-        // Get model from provider config first, then fallback to ANTHROPIC_MODEL env var
-        model_from_provider = provider_get_selected_model();
-        if (model_from_provider) {
-            model = model_from_provider;
-            LOG_INFO("Bedrock mode enabled, using model from provider config: %s", model);
-        } else {
-            model = getenv("ANTHROPIC_MODEL");
-            if (!model) {
-                LOG_ERROR("ANTHROPIC_MODEL environment variable required when using AWS Bedrock");
-                fprintf(stderr, "Error: ANTHROPIC_MODEL environment variable not set\n");
-                fprintf(stderr, "Example: export ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0\n");
-                return 1;
-            }
-            LOG_INFO("Bedrock mode enabled, using model from ANTHROPIC_MODEL: %s", model);
+        if (!model) {
+            LOG_ERROR("ANTHROPIC_MODEL environment variable required when using AWS Bedrock");
+            fprintf(stderr, "Error: ANTHROPIC_MODEL environment variable not set\n");
+            fprintf(stderr, "Example: export ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0\n");
+            return 1;
         }
+        LOG_INFO("Bedrock mode enabled, using model: %s", model);
         // API key and base URL will be handled by Bedrock module
         api_key = "bedrock";  // Placeholder
         api_base = "bedrock"; // Will be overridden by Bedrock endpoint
     } else {
         // Standard mode: check for API key
-        // First check if the selected provider has an API key configured
-        api_key = getenv("OPENAI_API_KEY");
-        if (!api_key && !provider_has_api_key_configured()) {
+        api_key = provider_config_resolve_api_key(&unified_config, &api_key_source);
+        if (!api_key) {
+            // Try OPENAI_API_KEY directly
+            api_key = getenv("OPENAI_API_KEY");
+            if (api_key) {
+                api_key_source = "OPENAI_API_KEY";
+            }
+        }
+
+        if (!api_key) {
             LOG_ERROR("OPENAI_API_KEY environment variable not set");
             fprintf(stderr, "Error: OPENAI_API_KEY environment variable not set\n");
             fprintf(stderr, "\nTo use AWS Bedrock instead, set:\n");
@@ -1546,29 +1562,24 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "  export AWS_PROFILE=your-profile\n");
             return 1;
         }
-        // Use placeholder if provider has its own key configured
-        if (!api_key) {
+
+        // Use placeholder if provider has its own key configured (resolved later in provider_init)
+        if (strcmp(api_key_source, "config file") == 0) {
             api_key = "provider-config";  // Placeholder, actual key resolved in provider_init
         }
 
-        // Get optional API base and model from environment
-        api_base = getenv("OPENAI_API_BASE");
+        // Get API base from unified config or environment
+        api_base = provider_config_get_api_base(&unified_config);
+        if (!api_base) {
+            api_base = getenv("OPENAI_API_BASE");
+        }
         if (!api_base) {
             api_base = API_BASE_URL;
         }
 
-        // Get model from provider config first, then environment
-        model_from_provider = provider_get_selected_model();
-        if (model_from_provider) {
-            model = model_from_provider;
-        } else {
-            model = getenv("OPENAI_MODEL");
-            if (!model) {
-                model = getenv("ANTHROPIC_MODEL");  // Try ANTHROPIC_MODEL as fallback
-                if (!model) {
-                    model = DEFAULT_MODEL;
-                }
-            }
+        // Ensure we have a model
+        if (!model) {
+            model = DEFAULT_MODEL;
         }
     }
 
@@ -1611,8 +1622,8 @@ int main(int argc, char *argv[]) {
     LOG_INFO("API URL: %s", api_base);
     LOG_INFO("Model: %s", model);
 
-    // Validate KLAWED_LLM_PROVIDER if set
-    char *provider_error = provider_validate_env();
+    // Validate provider configuration
+    char *provider_error = provider_config_validate(&unified_config);
     if (provider_error) {
         // Error message format depends on run mode
         if (is_single_command_mode) {
@@ -1634,10 +1645,9 @@ int main(int argc, char *argv[]) {
     // Priority: KLAWED_THEME env var > config file theme > default "tender"
     const char *theme = getenv("KLAWED_THEME");
     if (!theme || strlen(theme) == 0) {
-        // Try loading theme from config file
-        KlawedConfig cfg;
-        if (config_load(&cfg) == 0 && cfg.theme[0] != '\0') {
-            theme = cfg.theme;
+        // Use theme from unified config (already loaded from files)
+        if (unified_config.base_config.theme[0] != '\0') {
+            theme = unified_config.base_config.theme;
             LOG_DEBUG("[Config] Using theme from config file: %s", theme);
         }
     }
@@ -1724,9 +1734,7 @@ int main(int argc, char *argv[]) {
     state.model = strdup(model);
     state.max_tokens = get_env_int_retry("KLAWED_MAX_TOKENS", MAX_TOKENS);
 
-    // Free the model string if it was allocated by provider_get_selected_model()
-    free(model_from_provider);
-    model_from_provider = NULL;
+    // Note: model is now a pointer to unified_config data or env var, no need to free
 
     // Note: DeepSeek API max_tokens override removed - no longer limiting to 4096
 
