@@ -395,23 +395,30 @@ cJSON* build_openai_request_with_reasoning(ConversationState *state, int enable_
             cJSON *asst_msg = cJSON_CreateObject();
             cJSON_AddStringToObject(asst_msg, "role", "assistant");
 
-            // Collect text content and reasoning_content (skip empty strings)
-            // Also check tool calls for reasoning_content (for tool-call-only messages)
+            // Collect text content and reasoning_content (skip empty strings for text)
+            // Also check for reasoning_content on empty text blocks or tool calls
             char *text_content = NULL;
             char *reasoning_content_str = NULL;
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
-                if (c->type == INTERNAL_TEXT && c->text && c->text[0]) {
-                    text_content = c->text;
-                    if (include_reasoning_content && c->reasoning_content) {
-                        reasoning_content_str = c->reasoning_content;
+                if (c->type == INTERNAL_TEXT) {
+                    // Capture non-empty text content
+                    if (c->text && c->text[0]) {
+                        text_content = c->text;
                     }
-                    break;
+                    // Capture reasoning_content even if text is empty
+                    // (Moonshot/Kimi returns reasoning_content with empty content string)
+                    if (include_reasoning_content && c->reasoning_content && !reasoning_content_str) {
+                        reasoning_content_str = c->reasoning_content;
+                        LOG_DEBUG("Found reasoning_content on text content block (text %s)",
+                                  text_content ? "present" : "empty");
+                    }
+                    if (text_content) break;  // Stop if we found non-empty text
                 }
             }
 
-            // If no reasoning_content found in text, check tool calls
-            // (Moonshot/Kimi may have reasoning_content even in tool-call-only messages)
+            // If no reasoning_content found in text blocks, check tool calls
+            // (Some providers may have reasoning_content on tool call blocks)
             if (include_reasoning_content && !reasoning_content_str) {
                 for (int j = 0; j < msg->content_count; j++) {
                     InternalContent *c = &msg->contents[j];
