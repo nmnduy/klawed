@@ -1377,11 +1377,11 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     printf("SQLite Queue daemon started on %s\n", ctx->db_path);
     printf("Sender name: %s\n", ctx->sender_name);
 
-    // Seed conversation from existing messages (once at boot)
-    int seeded = sqlite_queue_seed_conversation(ctx, state);
-    if (seeded < 0) {
-        LOG_WARN("SQLite Queue: Failed to seed conversation from history, continuing anyway");
-    }
+    // Conversation seeding disabled to prevent tool use/result mismatch errors
+    // Previously: sqlite_queue_seed_conversation(ctx, state);
+    // Issue: When klawed crashes/restarts, orphaned tool results cause API errors
+    // Solution: Always start with fresh conversation state
+    LOG_INFO("SQLite Queue: Conversation seeding disabled - starting with fresh state");
 
     printf("Waiting for messages...\n");
     fflush(stdout);
