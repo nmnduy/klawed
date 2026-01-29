@@ -47,8 +47,11 @@ MessageType tui_conversation_get_message_type(const char *prefix) {
         return MSG_TYPE_SYSTEM;
     }
     // Check for tools - must come after checking specific system prefixes
-    // Matches "[Tool: ...]" or any tool name in brackets like "[Bash]", "[Read]", etc.
-    if (prefix[0] == '[') {
+    // Matches tool prefixes starting with "● " (bullet point)
+    // UTF-8 encoding of ● (U+25CF) is 0xE2 0x97 0x8F
+    if ((unsigned char)prefix[0] == 0xE2 &&
+        (unsigned char)prefix[1] == 0x97 &&
+        (unsigned char)prefix[2] == 0x8F) {
         return MSG_TYPE_TOOL;
     }
 
