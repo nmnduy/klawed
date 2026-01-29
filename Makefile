@@ -218,6 +218,7 @@ TEST_MEMVID_TARGET = $(BUILD_DIR)/test_memvid
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 TEST_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_sqlite_queue
+TEST_SQLITE_QUEUE_SEEDING_TARGET = $(BUILD_DIR)/test_sqlite_queue_seeding
 TEST_PROVIDER_INIT_FROM_CONFIG_TARGET = $(BUILD_DIR)/test_provider_init_from_config
 TEST_DATA_DIR_TARGET = $(BUILD_DIR)/test_data_dir
 QUERY_TOOL = $(BUILD_DIR)/query_logs
@@ -496,6 +497,7 @@ TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
 TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
 TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
 TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
+TEST_SQLITE_QUEUE_SEEDING_SRC = tests/test_sqlite_queue_seeding.c
 TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
@@ -517,7 +519,7 @@ query-tool: check-deps $(QUERY_TOOL)
 
 memvid-repl: check-deps $(MEMVID_REPL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-file-search test-provider-init-from-config test-provider-init
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -809,6 +811,12 @@ test-sqlite-queue: check-deps $(TEST_SQLITE_QUEUE_TARGET)
 	@echo "Running SQLite Queue tests..."
 	@echo ""
 	@./$(TEST_SQLITE_QUEUE_TARGET)
+
+test-sqlite-queue-seeding: check-deps $(TARGET) $(TEST_SQLITE_QUEUE_SEEDING_TARGET)
+	@echo ""
+	@echo "Running SQLite Queue Seeding tests..."
+	@echo ""
+	@./$(TEST_SQLITE_QUEUE_SEEDING_TARGET)
 
 test-file-search: check-deps $(TEST_FILE_SEARCH_TARGET)
 	@echo ""
@@ -2724,6 +2732,21 @@ $(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_
 $(TEST_SQLITE_QUEUE_TARGET): $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_SQLITE_QUEUE_TARGET) $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 
+# Test target for SQLite Queue Seeding (conversation history restoration)
+$(TEST_SQLITE_QUEUE_SEEDING_TARGET): $(SRC) $(TEST_SQLITE_QUEUE_SEEDING_SRC) $(TEST_COMMON_OBJS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling klawed.c for sqlite_queue_seeding testing (renaming main)..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/klawed_sqlite_queue_seeding_test.o $(SRC)
+	@echo "Compiling SQLite Queue Seeding test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_sqlite_queue_seeding.o $(TEST_SQLITE_QUEUE_SEEDING_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_API_CLIENT_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_SQLITE_QUEUE_SEEDING_TARGET) $(BUILD_DIR)/klawed_sqlite_queue_seeding_test.o $(BUILD_DIR)/test_sqlite_queue_seeding.o $(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@echo ""
+	@echo "✓ SQLite Queue Seeding test build successful!"
+	@echo ""
 
 # Test target for File Search fuzzy matching
 $(TEST_FILE_SEARCH_TARGET): $(FILE_SEARCH_SRC) $(TEST_FILE_SEARCH_SRC) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
