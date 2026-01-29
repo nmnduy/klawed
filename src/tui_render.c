@@ -448,7 +448,13 @@ void render_status_window(TUIState *tui) {
 
     (void)has_spinner;  // Suppress unused variable warning
 
+    // Use leaveok to keep cursor in its current position (input window).
+    // This ensures the caret stays in the input box during spinner animations,
+    // matching vim's behavior where the cursor doesn't jump around during
+    // background updates.
+    leaveok(tui->wm.status_win, TRUE);
     wrefresh(tui->wm.status_win);
+    leaveok(tui->wm.status_win, FALSE);  // Reset for potential direct cursor use
 }
 
 // ============================================================================
