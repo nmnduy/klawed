@@ -396,6 +396,7 @@ cJSON* build_openai_request_with_reasoning(ConversationState *state, int enable_
             cJSON_AddStringToObject(asst_msg, "role", "assistant");
 
             // Collect text content and reasoning_content (skip empty strings)
+            // Also check tool calls for reasoning_content (for tool-call-only messages)
             char *text_content = NULL;
             char *reasoning_content_str = NULL;
             for (int j = 0; j < msg->content_count; j++) {
@@ -406,6 +407,19 @@ cJSON* build_openai_request_with_reasoning(ConversationState *state, int enable_
                         reasoning_content_str = c->reasoning_content;
                     }
                     break;
+                }
+            }
+
+            // If no reasoning_content found in text, check tool calls
+            // (Moonshot/Kimi may have reasoning_content even in tool-call-only messages)
+            if (include_reasoning_content && !reasoning_content_str) {
+                for (int j = 0; j < msg->content_count; j++) {
+                    InternalContent *c = &msg->contents[j];
+                    if (c->type == INTERNAL_TOOL_CALL && c->reasoning_content) {
+                        reasoning_content_str = c->reasoning_content;
+                        LOG_DEBUG("Found reasoning_content on tool call content block");
+                        break;
+                    }
                 }
             }
 
@@ -573,6 +587,7 @@ void parse_openai_response(cJSON *response, InternalMessage *out) {
     // Count content blocks
     int count = 0;
     cJSON *content = cJSON_GetObjectItem(message, "content");
+    cJSON *reasoning_content = cJSON_GetObjectItem(message, "reasoning_content");
     if (content && cJSON_IsString(content) && content->valuestring) {
         count++;
     }
@@ -601,6 +616,7 @@ void parse_openai_response(cJSON *response, InternalMessage *out) {
     msg.content_count = count;
 
     int idx = 0;
+    int reasoning_content_stored = 0;
 
     // Parse text content
     if (content && cJSON_IsString(content) && content->valuestring) {
@@ -608,6 +624,16 @@ void parse_openai_response(cJSON *response, InternalMessage *out) {
         msg.contents[idx].text = strdup_trim(content->valuestring);
         if (!msg.contents[idx].text) {
             LOG_ERROR("Failed to duplicate text content");
+        }
+
+        // Store reasoning_content on text block if present (for thinking models)
+        if (reasoning_content && cJSON_IsString(reasoning_content) && reasoning_content->valuestring) {
+            msg.contents[idx].reasoning_content = strdup(reasoning_content->valuestring);
+            if (msg.contents[idx].reasoning_content) {
+                LOG_DEBUG("Stored reasoning_content (%zu bytes) on text content",
+                          strlen(msg.contents[idx].reasoning_content));
+                reasoning_content_stored = 1;
+            }
         }
         idx++;
     }
@@ -631,6 +657,18 @@ void parse_openai_response(cJSON *response, InternalMessage *out) {
             }
 
             msg.contents[idx].type = INTERNAL_TOOL_CALL;
+
+            // Store reasoning_content on first tool call if no text content existed
+            // This is needed for Moonshot/Kimi which requires reasoning_content in tool call messages
+            if (!reasoning_content_stored && reasoning_content &&
+                cJSON_IsString(reasoning_content) && reasoning_content->valuestring) {
+                msg.contents[idx].reasoning_content = strdup(reasoning_content->valuestring);
+                if (msg.contents[idx].reasoning_content) {
+                    LOG_DEBUG("Stored reasoning_content (%zu bytes) on tool call (no text content)",
+                              strlen(msg.contents[idx].reasoning_content));
+                    reasoning_content_stored = 1;
+                }
+            }
 
             // Copy tool_id
             msg.contents[idx].tool_id = strdup(id->valuestring);
