@@ -989,8 +989,6 @@ int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *rec
     return result;
 }
 
-#ifndef TEST_BUILD
-
 /**
  * Helper structure to track pending tool calls during seeding.
  * We need to pair TOOL messages with their TOOL_RESULT to maintain
@@ -1361,7 +1359,6 @@ int sqlite_queue_seed_conversation(SQLiteQueueContext *ctx, struct ConversationS
 
     return seeded_count;
 }
-#endif // TEST_BUILD
 
 #ifndef TEST_BUILD
 int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *state) {
