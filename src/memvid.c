@@ -276,6 +276,31 @@ int memvid_is_available(void) {
     return 1;
 }
 
+MemvidHandle* memvid_open_for_path(const char *path) {
+    if (path == NULL || path[0] == '\0') {
+        /* Return global handle if no specific path requested */
+        return memvid_get_global();
+    }
+
+    /* Ensure parent directory exists */
+    if (ensure_parent_dir_exists(path) != 0) {
+        LOG_ERROR("Memvid: Failed to create parent directory for %s", path);
+        return NULL;
+    }
+
+    LOG_INFO("Memvid: Opening database at %s (custom path)", path);
+
+    MemvidHandle *handle = memvid_open(path);
+    if (handle == NULL) {
+        const char *err = memvid_last_error();
+        LOG_ERROR("Memvid: Failed to open database at %s: %s",
+                  path, err ? err : "unknown error");
+        return NULL;
+    }
+
+    return handle;
+}
+
 #else /* !HAVE_MEMVID */
 
 /*
@@ -353,6 +378,12 @@ MemvidHandle* memvid_get_global(void) {
 
 int memvid_is_available(void) {
     return 0;
+}
+
+MemvidHandle* memvid_open_for_path(const char *path) {
+    (void)path;
+    LOG_WARN("Memvid: Not available (built without HAVE_MEMVID)");
+    return NULL;
 }
 
 int memvid_doctor(const char *path, int rebuild_time_index,

@@ -69,6 +69,16 @@ MemvidHandle* memvid_get_global(void);
 int memvid_is_available(void);
 
 /*
+ * Open a specific memvid file for one-time use.
+ * This is useful when a tool specifies a custom memvid_file path.
+ * The caller is responsible for closing the returned handle.
+ *
+ * @param path Path to the memvid file. If NULL, returns the global handle.
+ * @return Handle pointer on success (caller must close), global handle if path is NULL, NULL on failure
+ */
+MemvidHandle* memvid_open_for_path(const char *path);
+
+/*
  * Core memvid operations
  */
 
