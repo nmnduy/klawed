@@ -1,0 +1,11 @@
+# Build artifacts
+test_provider_configs
+*.o
+
+# Environment files with secrets
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.log
