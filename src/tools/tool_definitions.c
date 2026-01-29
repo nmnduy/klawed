@@ -140,6 +140,12 @@ static cJSON* build_memory_store_params(void) {
         "How this relates to existing values (default: sets)");
     cJSON_AddItemToObject(props, "relation", relation);
 
+    cJSON *memvid_file = cJSON_CreateObject();
+    cJSON_AddStringToObject(memvid_file, "type", "string");
+    cJSON_AddStringToObject(memvid_file, "description",
+        "Optional path to a specific memvid file to use. Defaults to the configured memory file.");
+    cJSON_AddItemToObject(props, "memvid_file", memvid_file);
+
     cJSON_AddItemToObject(params, "properties", props);
 
     cJSON *required = cJSON_CreateArray();
@@ -167,6 +173,12 @@ static cJSON* build_memory_recall_params(void) {
     cJSON_AddStringToObject(slot, "description", "The attribute to recall");
     cJSON_AddItemToObject(props, "slot", slot);
 
+    cJSON *memvid_file = cJSON_CreateObject();
+    cJSON_AddStringToObject(memvid_file, "type", "string");
+    cJSON_AddStringToObject(memvid_file, "description",
+        "Optional path to a specific memvid file to use. Defaults to the configured memory file.");
+    cJSON_AddItemToObject(props, "memvid_file", memvid_file);
+
     cJSON_AddItemToObject(params, "properties", props);
 
     cJSON *required = cJSON_CreateArray();
@@ -191,6 +203,12 @@ static cJSON* build_memory_search_params(void) {
     cJSON_AddStringToObject(top_k, "type", "integer");
     cJSON_AddStringToObject(top_k, "description", "Number of results (default: 10)");
     cJSON_AddItemToObject(props, "top_k", top_k);
+
+    cJSON *memvid_file_search = cJSON_CreateObject();
+    cJSON_AddStringToObject(memvid_file_search, "type", "string");
+    cJSON_AddStringToObject(memvid_file_search, "description",
+        "Optional path to a specific memvid file to use. Defaults to the configured memory file.");
+    cJSON_AddItemToObject(props, "memvid_file", memvid_file_search);
 
     cJSON_AddItemToObject(params, "properties", props);
 
