@@ -100,6 +100,15 @@ static const char *no_content_response =
 // Invalid JSON
 static const char *invalid_json = "{this is not valid json";
 
+// Response with reasoning_content and text (Moonshot/Kimi thinking model)
+static const char *valid_reasoning_with_text_response =
+    "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"The answer is 42.\",\"reasoning_content\":\"Let me think step by step...\"}}]}";
+
+// Response with reasoning_content and tool calls only (no text content)
+// This is the critical case for Moonshot/Kimi - reasoning_content must be preserved
+static const char *valid_reasoning_with_tool_calls_response =
+    "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":null,\"reasoning_content\":\"I need to check the file first.\",\"tool_calls\":[{\"id\":\"call_rc1\",\"type\":\"function\",\"function\":{\"name\":\"Read\",\"arguments\":\"{\\\"file_path\\\":\\\"/tmp/test.txt\\\"}\"}}]}}]}";
+
 // ============================================================================
 // Test Cases - parse_openai_response() edge cases
 // ============================================================================
@@ -343,6 +352,79 @@ static void test_free_already_freed(void) {
 }
 
 // ============================================================================
+// Test Cases - reasoning_content support (Moonshot/Kimi thinking models)
+// ============================================================================
+
+static void test_reasoning_content_with_text(void) {
+    printf(COLOR_YELLOW "\nTest: reasoning_content with text content\n" COLOR_RESET);
+
+    cJSON *json = cJSON_Parse(valid_reasoning_with_text_response);
+    TEST_ASSERT(json != NULL, "Should parse JSON successfully");
+    if (!json) return;
+
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
+
+    TEST_ASSERT(msg.contents != NULL, "contents should not be NULL");
+    TEST_ASSERT(msg.content_count == 1, "Should have 1 content block");
+    if (!msg.contents || msg.content_count < 1) {
+        free_internal_message(&msg);
+        cJSON_Delete(json);
+        return;
+    }
+
+    TEST_ASSERT(msg.contents[0].type == INTERNAL_TEXT, "Content should be TEXT type");
+    TEST_ASSERT(msg.contents[0].text != NULL, "Text should not be NULL");
+    if (msg.contents[0].text) {
+        TEST_ASSERT(strstr(msg.contents[0].text, "42") != NULL, "Text should contain answer");
+    }
+    TEST_ASSERT(msg.contents[0].reasoning_content != NULL, "reasoning_content should be stored");
+    if (msg.contents[0].reasoning_content) {
+        TEST_ASSERT(strstr(msg.contents[0].reasoning_content, "step by step") != NULL,
+                    "reasoning_content should contain thinking");
+    }
+
+    free_internal_message(&msg);
+    cJSON_Delete(json);
+    TEST_ASSERT(true, "free_internal_message cleans up reasoning_content");
+}
+
+static void test_reasoning_content_with_tool_calls_only(void) {
+    printf(COLOR_YELLOW "\nTest: reasoning_content with tool calls only (Moonshot/Kimi fix)\n" COLOR_RESET);
+
+    cJSON *json = cJSON_Parse(valid_reasoning_with_tool_calls_response);
+    TEST_ASSERT(json != NULL, "Should parse JSON successfully");
+    if (!json) return;
+
+    InternalMessage msg = {0}; parse_openai_response(json, &msg);
+
+    TEST_ASSERT(msg.contents != NULL, "contents should not be NULL");
+    TEST_ASSERT(msg.content_count == 1, "Should have 1 content block (tool call)");
+    if (!msg.contents || msg.content_count < 1) {
+        free_internal_message(&msg);
+        cJSON_Delete(json);
+        return;
+    }
+
+    TEST_ASSERT(msg.contents[0].type == INTERNAL_TOOL_CALL, "Content should be TOOL_CALL type");
+    if (msg.contents[0].tool_id) {
+        TEST_ASSERT(strcmp(msg.contents[0].tool_id, "call_rc1") == 0, "Tool ID should match");
+    }
+
+    // CRITICAL: reasoning_content must be stored on tool call when no text content exists
+    // This is the fix for Moonshot/Kimi HTTP 400 error
+    TEST_ASSERT(msg.contents[0].reasoning_content != NULL,
+                "reasoning_content should be stored on tool call when no text");
+    if (msg.contents[0].reasoning_content) {
+        TEST_ASSERT(strstr(msg.contents[0].reasoning_content, "check the file") != NULL,
+                    "reasoning_content should contain thinking content");
+    }
+
+    free_internal_message(&msg);
+    cJSON_Delete(json);
+    TEST_ASSERT(true, "free_internal_message cleans up reasoning_content on tool call");
+}
+
+// ============================================================================
 // Regression Test - Session loading scenario
 // ============================================================================
 
@@ -414,6 +496,10 @@ int main(void) {
     test_valid_tool_call_response();
     test_valid_multiple_tool_calls();
     test_valid_text_and_tool_calls();
+
+    // reasoning_content tests (Moonshot/Kimi thinking models)
+    test_reasoning_content_with_text();
+    test_reasoning_content_with_tool_calls_only();
 
     // free_internal_message edge cases
     test_free_null_message();

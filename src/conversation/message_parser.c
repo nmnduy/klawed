@@ -95,6 +95,9 @@ void add_assistant_message_openai(ConversationState *state, cJSON *message) {
     }
 
     // Add tool calls if present
+    // Track whether we've stored reasoning_content yet (for tool-call-only messages)
+    int reasoning_content_stored = (content && cJSON_IsString(content) && content->valuestring);
+
     if (tool_calls && cJSON_IsArray(tool_calls)) {
         int array_size = cJSON_GetArraySize(tool_calls);
         for (int i = 0; i < array_size; i++) {
@@ -111,6 +114,18 @@ void add_assistant_message_openai(ConversationState *state, cJSON *message) {
             cJSON *arguments = cJSON_GetObjectItem(function, "arguments");
 
             msg->contents[idx].type = INTERNAL_TOOL_CALL;
+
+            // Store reasoning_content on first tool call if no text content existed
+            // This is needed for Moonshot/Kimi which requires reasoning_content in tool call messages
+            if (!reasoning_content_stored && reasoning_content &&
+                cJSON_IsString(reasoning_content) && reasoning_content->valuestring) {
+                msg->contents[idx].reasoning_content = strdup(reasoning_content->valuestring);
+                if (msg->contents[idx].reasoning_content) {
+                    LOG_DEBUG("Stored reasoning_content (%zu bytes) on tool call (no text content)",
+                              strlen(msg->contents[idx].reasoning_content));
+                }
+                reasoning_content_stored = 1;
+            }
             msg->contents[idx].tool_id = strdup(id->valuestring);
             if (!msg->contents[idx].tool_id) {
                 LOG_ERROR("Failed to duplicate tool use ID");
