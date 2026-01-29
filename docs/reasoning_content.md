@@ -1,17 +1,13 @@
 ## Summary: `reasoning_content` Support for Moonshot/Kimi and OpenAI-compatible APIs
 
-### The Issue
+### Current Implementation Status: ✅ IMPLEMENTED
 
-The error you're seeing:
-```
-thinking is enabled but reasoning_content is missing in assistant tool call message at index 2 (HTTP 400)
-```
+klawed now supports `reasoning_content` for Moonshot/Kimi thinking models. The implementation:
 
-This is an HTTP 400 error from the Moonshot/Kimi API, not from klawed. The API is rejecting your request because:
-
-1. **Moonshot/Kimi thinking models** (kimi-k2-thinking, kimi-k2.5) return a `reasoning_content` field alongside `content` in assistant messages
-2. When you send the conversation history back to the API for tool calls, **Moonshot requires that `reasoning_content` be included** in the assistant messages
-3. klawed currently doesn't capture or preserve `reasoning_content` from API responses
+1. **Parses `reasoning_content`** from API responses (both streaming and non-streaming)
+2. **Stores it in `InternalContent`** structure alongside text content
+3. **Includes `reasoning_content`** in subsequent API requests when using Moonshot provider
+4. **Handles empty content correctly**: When the model returns `reasoning_content` with empty `content`, we send `content: ""` (empty string) instead of `content: null` to match Moonshot API expectations
 
 ### Provider Differences
 
@@ -21,45 +17,78 @@ This is an HTTP 400 error from the Moonshot/Kimi API, not from klawed. The API i
 | **DeepSeek** | deepseek-reasoner | **MUST NOT include** (causes 400 error) |
 | **OpenAI** | o1, o1-mini, o1-preview, o3-mini | Uses different mechanism (no reasoning_content) |
 
-### What Needs to be Implemented
+### Configuration
 
-To support Moonshot/Kimi thinking models, klawed needs:
+The provider type automatically determines the behavior:
+- `"provider_type": "moonshot"` → preserves `reasoning_content`
+- `"provider_type": "deepseek"` → discards `reasoning_content`
+- `"provider_type": "openai"` → discards `reasoning_content` (default)
 
-1. **Parse `reasoning_content`** from API responses at the same level as `content`
-2. **Store it in the InternalMessage** structure (add a `reasoning_content` field to track it)
-3. **Include `reasoning_content`** when building subsequent API requests
+### Example Moonshot Configuration
 
-### The Complication
-
-The tricky part is that different providers handle this differently:
-- **Moonshot/Kimi**: Must include reasoning_content in subsequent requests
-- **DeepSeek**: Must NOT include reasoning_content in subsequent requests
-
-This means we'd need provider-specific logic or a configuration option.
-
-### Recommended Approach
-
-Add a configuration option in the provider config:
 ```json
 {
-  "reasoning_content_mode": "preserve"  // or "discard"
+  "providers": {
+    "kimi-k2.5": {
+      "provider_type": "moonshot",
+      "provider_name": "Moonshot AI",
+      "model": "kimi-k2.5",
+      "api_base": "https://api.moonshot.ai",
+      "api_key_env": "MOONSHOT_AI_API_KEY"
+    }
+  }
 }
 ```
 
-Where:
-- `"preserve"` (default for Moonshot): Include reasoning_content in subsequent API calls
-- `"discard"` (default for DeepSeek): Strip reasoning_content from subsequent API calls
+### Technical Details
 
-### Quick Workaround
+#### Important: Empty Content Handling
 
-If you need this working immediately for Moonshot, the simplest workaround would be to:
-1. Don't use tool calling with thinking models, OR
-2. Use kimi-k2.5 with thinking disabled: add `"thinking": {"type": "disabled"}` to requests
+Moonshot/Kimi returns `content: ""` (empty string) when making tool calls with `reasoning_content`. When echoing these messages back, we must:
+- Send `content: ""` (empty string), NOT `content: null`
+- Include `reasoning_content` alongside the empty content
 
-Would you like me to implement the full `reasoning_content` support for klawed? This would involve:
+This is handled in `src/openai_messages.c`:
+```c
+// Moonshot/Kimi: use empty string when reasoning_content is present
+if (include_reasoning_content && reasoning_content_str) {
+    cJSON_AddStringToObject(asst_msg, "content", "");
+}
+```
 
-1. Adding a `reasoning_content` field to `InternalContent` or `InternalMessage`
-2. Modifying `message_parser.c` to extract `reasoning_content` from responses
-3. Modifying `api_builder.c` to include `reasoning_content` in requests when present
-4. Adding provider configuration for reasoning_content handling mode
-5. Updating the streaming parser in `openai_provider.c` to capture reasoning_content from streamed responses
+#### Where reasoning_content is Stored
+
+The `reasoning_content` is stored in the `InternalContent` structure:
+- For text content blocks with `reasoning_content`
+- For tool-call-only messages (stored on the first tool call)
+
+See `src/klawed_internal.h`:
+```c
+typedef struct InternalContent {
+    // ... other fields ...
+    char *reasoning_content; // Reasoning content from thinking models (may be NULL)
+} InternalContent;
+```
+
+#### Streaming Support
+
+The streaming parser in `src/openai_provider.c` accumulates `reasoning_content` from SSE delta events and attaches it to the final response message.
+
+### Known Error Messages
+
+If you see these errors, check:
+
+1. **"thinking is enabled but reasoning_content is missing in assistant tool call message"** (HTTP 400)
+   - Solution: Ensure `provider_type` is set to `"moonshot"` in your configuration
+
+2. **"Invalid response format: no choices or output"** (HTTP 200 with empty response)
+   - This can happen if the API is overloaded or has issues
+   - May also occur if `content: null` is sent instead of `content: ""`
+   - Solution: Update to latest klawed version with the empty content fix
+
+### References
+
+- `src/moonshot_provider.c` - Moonshot provider implementation
+- `src/openai_messages.c` - Request building with reasoning_content preservation
+- `src/conversation/message_parser.c` - Response parsing with reasoning_content extraction
+- `src/openai_provider.c` - Streaming support for reasoning_content
