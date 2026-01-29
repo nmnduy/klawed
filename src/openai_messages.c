@@ -456,8 +456,12 @@ cJSON* build_openai_request_with_reasoning(ConversationState *state, int enable_
             }
 
             // Add content (required field in OpenAI API)
+            // Note: Moonshot/Kimi requires empty string "" instead of null when reasoning_content is present
             if (text_content) {
                 cJSON_AddStringToObject(asst_msg, "content", text_content);
+            } else if (include_reasoning_content && reasoning_content_str) {
+                // Moonshot/Kimi: use empty string when reasoning_content is present
+                cJSON_AddStringToObject(asst_msg, "content", "");
             } else {
                 cJSON_AddNullToObject(asst_msg, "content");
             }
