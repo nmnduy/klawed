@@ -204,7 +204,10 @@ VALUES ('klawed', 'client', '{"messageType":"TEXT","content":"Understood. I will
 
 ### Important Notes
 
-- Only `TEXT` messages are loaded for seeding (TOOL, TOOL_RESULT, etc. are skipped)
+- `TEXT`, `TOOL`, and `TOOL_RESULT` messages are loaded for seeding (other types like END_AI_TURN, ERROR, etc. are skipped)
+- **Tool Call Pairing**: TOOL messages are paired with their corresponding TOOL_RESULT messages to maintain API validity
+  - If a TOOL lacks a matching TOOL_RESULT (interrupted execution), a synthetic error result is injected
+  - Orphaned TOOL_RESULT messages (no matching TOOL) are ignored
 - Messages must have `sent = 1` to be considered for seeding
 - At most 100 messages are loaded (the most recent 100, ordered chronologically)
 - The `created_at` timestamp determines the order of messages

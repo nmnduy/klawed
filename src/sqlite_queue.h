@@ -141,8 +141,18 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
 /**
  * Seed conversation history from existing messages in the database.
  * Called automatically at daemon boot to restore conversation context.
- * Reads at most 100 previous TEXT messages (sent=1) ordered chronologically.
- * Only TEXT messages are loaded; TOOL, TOOL_RESULT, etc. are skipped.
+ * Reads at most 100 previous messages (sent=1) ordered chronologically.
+ *
+ * Handles the following message types:
+ * - TEXT: User and assistant text messages
+ * - TOOL: Assistant tool call requests (paired with TOOL_RESULT)
+ * - TOOL_RESULT: Tool execution results (paired with TOOL calls)
+ *
+ * Tool Call Pairing:
+ * - TOOL messages are tracked and paired with their corresponding TOOL_RESULT
+ * - If a TOOL lacks a matching TOOL_RESULT (interrupted execution), a synthetic
+ *   error result is injected to maintain API validity
+ * - Orphaned TOOL_RESULT messages (no matching TOOL) are ignored
  *
  * Clients can pre-seed conversation by inserting messages with sent=1:
  * - User messages: sender='client', receiver='klawed'
