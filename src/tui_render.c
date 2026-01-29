@@ -448,7 +448,9 @@ void render_status_window(TUIState *tui) {
 
     (void)has_spinner;  // Suppress unused variable warning
 
-    wrefresh(tui->wm.status_win);
+    // Use wnoutrefresh instead of wrefresh to avoid moving the physical cursor.
+    // The cursor should remain in the input window, not appear after the spinner.
+    wnoutrefresh(tui->wm.status_win);
 }
 
 // ============================================================================
