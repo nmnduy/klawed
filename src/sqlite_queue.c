@@ -956,6 +956,44 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
                 return -1;
             }
 
+            // Check for pending user messages that arrived during tool execution
+            // If there are pending messages, inject them into the conversation
+            // before calling the API again with tool results
+            pthread_mutex_lock(&ctx->queue_mutex);
+            while (ctx->pending_messages != NULL) {
+                // Dequeue the message
+                PendingMessage *pm = ctx->pending_messages;
+                ctx->pending_messages = pm->next;
+                if (ctx->pending_messages == NULL) {
+                    ctx->pending_tail = NULL;
+                }
+                ctx->pending_count--;
+                pthread_mutex_unlock(&ctx->queue_mutex);
+
+                LOG_INFO("SQLite Queue: Injecting pending user message ID %lld during tool execution",
+                         pm->msg_id);
+
+                // Acknowledge the message
+                sqlite_queue_acknowledge(ctx, pm->msg_id);
+
+                // Send a TEXT response to the client to confirm message was received
+                char ack_msg[256];
+                snprintf(ack_msg, sizeof(ack_msg),
+                         "[Message received during tool execution, will be processed with current context]");
+                sqlite_queue_send_text_response(ctx, response_receiver, ack_msg);
+
+                // Add the user message to conversation
+                add_user_message(state, pm->content);
+
+                // Clean up the pending message
+                free(pm->content);
+                free(pm);
+
+                // Re-acquire mutex to check for more pending messages
+                pthread_mutex_lock(&ctx->queue_mutex);
+            }
+            pthread_mutex_unlock(&ctx->queue_mutex);
+
             // Continue loop to process next AI response with tool results
             api_response_free(api_response);
             continue;
