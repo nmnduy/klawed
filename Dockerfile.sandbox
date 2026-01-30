@@ -154,6 +154,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# Install sudo and build tools for runtime package installation (root mode support)
+RUN apt-get update && apt-get install -y \
+    sudo build-essential curl git pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy klawed binary from builder
 COPY --from=builder /build/build/klawed /usr/local/bin/klawed
 
@@ -165,6 +170,34 @@ COPY --from=builder /build/tools/web_browse_agent/web_browse_agent /usr/local/bi
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+# Create install-packages helper script for manual package installation
+RUN echo '#!/bin/bash\n\
+apt-get update && apt-get install -y "$@"' > /usr/local/bin/install-packages && \
+    chmod +x /usr/local/bin/install-packages
+
+# Create klawed-wrapper script for root mode with permission fixing
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+HOST_UID=${HOST_UID:-1000}\n\
+HOST_GID=${HOST_GID:-1000}\n\
+\n\
+cleanup() {\n\
+    echo "[wrapper] Fixing permissions..."\n\
+    chown -R "$HOST_UID:$HOST_GID" /workspace 2>/dev/null || true\n\
+    chown -R "$HOST_UID:$HOST_GID" /tmp/.klawed 2>/dev/null || true\n\
+    chown -R "$HOST_UID:$HOST_GID" /tmp/klawed-messages 2>/dev/null || true\n\
+}\n\
+trap cleanup EXIT\n\
+\n\
+if [ -n "$INSTALL_PACKAGES" ]; then\n\
+    echo "[wrapper] Installing packages: $INSTALL_PACKAGES"\n\
+    apt-get update && apt-get install -y $INSTALL_PACKAGES\n\
+fi\n\
+\n\
+exec /usr/local/bin/klawed "$@"' > /usr/local/bin/klawed-wrapper && \
+    chmod +x /usr/local/bin/klawed-wrapper
 
 # Set up library paths and permissions
 RUN chmod +x /usr/local/bin/klawed && \
@@ -213,9 +246,12 @@ RUN git config --system init.defaultBranch main \
 # Run as root
 
 # Default entrypoint - accepts all arguments
-# The entrypoint script ensures directories exist in the mounted volume
+# The klawed-wrapper script handles:
+#   - Installing packages if INSTALL_PACKAGES env var is set
+#   - Fixing permissions on exit using EXIT trap
+#   - Running the klawed binary with all arguments
 # Usage examples:
 #   docker run image-name --sqlite-queue /path/to/queue.db
 #   docker run image-name -u /path/to/socket
 #   docker run image-name "your prompt here"
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/klawed-wrapper"]
