@@ -62,7 +62,7 @@ void print_tool(const char *tool_name, const char *details) {
         text_color_start = ANSI_FALLBACK_FOREGROUND;
     }
 
-    printf("%s[Tool: %s]%s", tool_color_start, tool_name, ANSI_RESET);
+    printf("%s● %s%s", tool_color_start, tool_name, ANSI_RESET);
     if (details && strlen(details) > 0) {
         printf(" %s%s%s", text_color_start, details, ANSI_RESET);
     }

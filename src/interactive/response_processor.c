@@ -494,7 +494,7 @@ void process_response(ConversationState *state,
 
                 // Display error to user
                 char prefix_with_tool[128];
-                snprintf(prefix_with_tool, sizeof(prefix_with_tool), "[%s]", tool->name);
+                snprintf(prefix_with_tool, sizeof(prefix_with_tool), "● %s", tool->name);
                 char display_error[512];
                 if (is_plan_mode_restriction) {
                     snprintf(display_error, sizeof(display_error),
@@ -516,7 +516,7 @@ void process_response(ConversationState *state,
             // Get tool details (includes special handling for Subagent to show all params)
             char *tool_details = get_tool_details(tool->name, input);
             char prefix_with_tool[128];
-            snprintf(prefix_with_tool, sizeof(prefix_with_tool), "[%s]", tool->name);
+            snprintf(prefix_with_tool, sizeof(prefix_with_tool), "● %s", tool->name);
             ui_append_line(tui, queue, prefix_with_tool, tool_details, COLOR_PAIR_TOOL);
 
             if (!tracker_initialized) {
