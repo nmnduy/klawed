@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <time.h>
+#include <pthread.h>
 
 // Error codes
 typedef enum {
@@ -30,6 +31,13 @@ typedef enum {
 // Forward declarations
 struct ConversationState;
 struct TUIState;
+
+// Pending message entry for queued user input during tool execution
+typedef struct PendingMessage {
+    long long msg_id;        // Message ID from database
+    char *content;           // Message content (TEXT type only)
+    struct PendingMessage *next;
+} PendingMessage;
 
 // SQLite queue context
 typedef struct SQLiteQueueContext {
@@ -60,6 +68,17 @@ typedef struct SQLiteQueueContext {
 
     // Internal database handle (opened on demand)
     void *db_handle;  // sqlite3* but we don't want to expose sqlite3.h in header
+
+    // Threading support for async message processing
+    pthread_t worker_thread;        // Worker thread for processing messages
+    pthread_mutex_t queue_mutex;    // Protects pending_messages queue
+    pthread_cond_t queue_cond;      // Signals when new messages are queued
+    PendingMessage *pending_messages; // Linked list of pending messages
+    PendingMessage *pending_tail;   // Tail of pending messages list
+    int pending_count;              // Number of pending messages
+    volatile int processing;        // 1 if worker is processing a message
+    volatile int shutdown;          // 1 to signal worker thread to exit
+    struct ConversationState *state; // Conversation state (for worker thread)
 } SQLiteQueueContext;
 
 /**
@@ -212,5 +231,23 @@ int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *rec
                                        int messages_compacted, size_t tokens_before,
                                         size_t tokens_after, double usage_before_pct,
                                         double usage_after_pct);
+
+/**
+ * Check if there are pending user messages in the queue.
+ * This allows detecting if user input was received during tool execution.
+ *
+ * @param ctx SQLite queue context
+ * @return Number of pending messages, 0 if none
+ */
+int sqlite_queue_pending_count(SQLiteQueueContext *ctx);
+
+/**
+ * Interrupt the current message processing.
+ * Sets the interrupt_requested flag in conversation state.
+ *
+ * @param ctx SQLite queue context
+ * @return 0 on success, -1 on failure
+ */
+int sqlite_queue_interrupt(SQLiteQueueContext *ctx);
 
 #endif // SQLITE_QUEUE_H

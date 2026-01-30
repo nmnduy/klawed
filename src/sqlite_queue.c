@@ -2,6 +2,9 @@
  * sqlite_queue.c - SQLite message queue implementation for Klawed
  */
 
+// For pthread_timedjoin_np
+#define _GNU_SOURCE
+
 #include "sqlite_queue.h"
 #include "klawed_internal.h"
 #include "logger.h"
@@ -116,6 +119,20 @@ SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_na
     // Zero-initialize the context (calloc equivalent)
     memset(ctx, 0, sizeof(SQLiteQueueContext));
 
+    // Initialize threading primitives
+    if (pthread_mutex_init(&ctx->queue_mutex, NULL) != 0) {
+        LOG_ERROR("SQLite Queue: Failed to initialize queue mutex");
+        free(ctx);
+        return NULL;
+    }
+
+    if (pthread_cond_init(&ctx->queue_cond, NULL) != 0) {
+        LOG_ERROR("SQLite Queue: Failed to initialize queue condition variable");
+        pthread_mutex_destroy(&ctx->queue_mutex);
+        free(ctx);
+        return NULL;
+    }
+
     // Copy database path
     ctx->db_path = strdup(db_path);
     if (!ctx->db_path) {
@@ -209,6 +226,38 @@ void sqlite_queue_cleanup(SQLiteQueueContext *ctx) {
 
     LOG_INFO("SQLite Queue: Cleaning up SQLite queue context for database: %s",
              ctx->db_path ? ctx->db_path : "unknown");
+
+    // Signal worker thread to shutdown and wait for it
+    pthread_mutex_lock(&ctx->queue_mutex);
+    ctx->shutdown = 1;
+    pthread_cond_broadcast(&ctx->queue_cond);
+    pthread_mutex_unlock(&ctx->queue_mutex);
+
+    // Wait for worker thread to finish (with timeout)
+    if (ctx->worker_thread) {
+        struct timespec timeout;
+        clock_gettime(CLOCK_REALTIME, &timeout);
+        timeout.tv_sec += 2;  // 2 second timeout
+        pthread_timedjoin_np(ctx->worker_thread, NULL, &timeout);
+    }
+
+    // Free any pending messages
+    pthread_mutex_lock(&ctx->queue_mutex);
+    PendingMessage *pm = ctx->pending_messages;
+    while (pm) {
+        PendingMessage *next = pm->next;
+        free(pm->content);
+        free(pm);
+        pm = next;
+    }
+    ctx->pending_messages = NULL;
+    ctx->pending_tail = NULL;
+    ctx->pending_count = 0;
+    pthread_mutex_unlock(&ctx->queue_mutex);
+
+    // Destroy threading primitives
+    pthread_mutex_destroy(&ctx->queue_mutex);
+    pthread_cond_destroy(&ctx->queue_cond);
 
     // Close database if open
     sqlite_queue_close_db(ctx);
@@ -1360,7 +1409,152 @@ int sqlite_queue_seed_conversation(SQLiteQueueContext *ctx, struct ConversationS
     return seeded_count;
 }
 
+/**
+ * Get the number of pending messages in the queue.
+ * This allows detecting if user input was received during tool execution.
+ */
+int sqlite_queue_pending_count(SQLiteQueueContext *ctx) {
+    if (!ctx) {
+        return 0;
+    }
+
+    pthread_mutex_lock(&ctx->queue_mutex);
+    int count = ctx->pending_count;
+    pthread_mutex_unlock(&ctx->queue_mutex);
+
+    return count;
+}
+
+/**
+ * Interrupt the current message processing.
+ * Sets the interrupt_requested flag in conversation state.
+ */
+int sqlite_queue_interrupt(SQLiteQueueContext *ctx) {
+    if (!ctx || !ctx->state) {
+        return -1;
+    }
+
+    LOG_INFO("SQLite Queue: Interrupt requested");
+    ctx->state->interrupt_requested = 1;
+
+    return 0;
+}
+
 #ifndef TEST_BUILD
+
+// Forward declarations for async processing
+static void *sqlite_queue_worker_thread(void *arg);
+static int sqlite_queue_enqueue_message(SQLiteQueueContext *ctx, long long msg_id, const char *content);
+
+/**
+ * Worker thread function that processes messages from the pending queue.
+ * This runs in a separate thread so the main daemon loop can continue
+ * polling for new user input during tool execution.
+ */
+static void *sqlite_queue_worker_thread(void *arg) {
+    SQLiteQueueContext *ctx = (SQLiteQueueContext *)arg;
+
+    LOG_INFO("SQLite Queue: Worker thread started");
+
+    for (;;) {
+        // Wait for a message to process (mutex protects shutdown flag)
+        pthread_mutex_lock(&ctx->queue_mutex);
+
+        while (!ctx->shutdown && ctx->pending_messages == NULL) {
+            pthread_cond_wait(&ctx->queue_cond, &ctx->queue_mutex);
+        }
+
+        if (ctx->shutdown) {
+            pthread_mutex_unlock(&ctx->queue_mutex);
+            break;
+        }
+
+        // Dequeue the next message
+        PendingMessage *pm = ctx->pending_messages;
+        if (pm) {
+            ctx->pending_messages = pm->next;
+            if (ctx->pending_messages == NULL) {
+                ctx->pending_tail = NULL;
+            }
+            ctx->pending_count--;
+        }
+        ctx->processing = 1;
+        pthread_mutex_unlock(&ctx->queue_mutex);
+
+        if (pm) {
+            LOG_INFO("SQLite Queue: Worker processing message ID %lld", pm->msg_id);
+            printf("SQLite Queue: Processing message ID %lld\n", pm->msg_id);
+            fflush(stdout);
+
+            // Acknowledge the message first (mark as received)
+            sqlite_queue_acknowledge(ctx, pm->msg_id);
+
+            // Process the message interactively
+            sqlite_queue_process_interactive(ctx, ctx->state, pm->content);
+
+            LOG_INFO("SQLite Queue: Worker completed message ID %lld", pm->msg_id);
+            printf("SQLite Queue: Completed message ID %lld\n", pm->msg_id);
+            fflush(stdout);
+
+            free(pm->content);
+            free(pm);
+        }
+
+        pthread_mutex_lock(&ctx->queue_mutex);
+        ctx->processing = 0;
+        // Signal that processing is complete (for potential waiters)
+        pthread_cond_broadcast(&ctx->queue_cond);
+        pthread_mutex_unlock(&ctx->queue_mutex);
+    }
+
+    LOG_INFO("SQLite Queue: Worker thread exiting");
+    return NULL;
+}
+
+/**
+ * Enqueue a message for processing by the worker thread.
+ * Called from the main daemon loop when a new message is received.
+ */
+static int sqlite_queue_enqueue_message(SQLiteQueueContext *ctx, long long msg_id, const char *content) {
+    if (!ctx || !content) {
+        return -1;
+    }
+
+    PendingMessage *pm = reallocarray(NULL, 1, sizeof(PendingMessage));
+    if (!pm) {
+        LOG_ERROR("SQLite Queue: Failed to allocate pending message");
+        return -1;
+    }
+
+    pm->msg_id = msg_id;
+    pm->content = strdup(content);
+    if (!pm->content) {
+        free(pm);
+        LOG_ERROR("SQLite Queue: Failed to duplicate message content");
+        return -1;
+    }
+    pm->next = NULL;
+
+    pthread_mutex_lock(&ctx->queue_mutex);
+
+    // Add to tail of queue
+    if (ctx->pending_tail) {
+        ctx->pending_tail->next = pm;
+    } else {
+        ctx->pending_messages = pm;
+    }
+    ctx->pending_tail = pm;
+    ctx->pending_count++;
+
+    LOG_INFO("SQLite Queue: Enqueued message ID %lld for processing (queue depth: %d)",
+             msg_id, ctx->pending_count);
+
+    pthread_cond_signal(&ctx->queue_cond);
+    pthread_mutex_unlock(&ctx->queue_mutex);
+
+    return 0;
+}
+
 int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *state) {
     if (!ctx || !state) {
         LOG_ERROR("SQLite Queue: Invalid parameters for daemon_mode");
@@ -1378,10 +1572,17 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     printf("Sender name: %s\n", ctx->sender_name);
 
     // Conversation seeding disabled to prevent tool use/result mismatch errors
-    // Previously: sqlite_queue_seed_conversation(ctx, state);
-    // Issue: When klawed crashes/restarts, orphaned tool results cause API errors
-    // Solution: Always start with fresh conversation state
     LOG_INFO("SQLite Queue: Conversation seeding disabled - starting with fresh state");
+
+    // Store state in context for worker thread access
+    ctx->state = state;
+
+    // Start the worker thread
+    if (pthread_create(&ctx->worker_thread, NULL, sqlite_queue_worker_thread, ctx) != 0) {
+        LOG_ERROR("SQLite Queue: Failed to start worker thread");
+        printf("SQLite Queue: Failed to start worker thread\n");
+        return -1;
+    }
 
     printf("Waiting for messages...\n");
     fflush(stdout);
@@ -1389,39 +1590,100 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     int message_count = 0;
     int error_count = 0;
 
+    // Main daemon loop - polls for messages and enqueues them for worker
     while (ctx->enabled) {
-        LOG_DEBUG("SQLite Queue: Waiting for next message (message #%d)", message_count + 1);
+        LOG_DEBUG("SQLite Queue: Polling for messages (total processed: %d)", message_count);
 
-        int result = sqlite_queue_process_message(ctx, state, NULL);
-        if (result == SQLITE_QUEUE_ERROR_NO_MESSAGES) {
+        // Poll for messages from SQLite
+        char **messages = NULL;
+        int msg_count = 0;
+        long long *message_ids = NULL;
+
+        int result = sqlite_queue_receive(ctx, NULL, 1, &messages, &msg_count, &message_ids, 100); // Short timeout
+
+        if (result == SQLITE_QUEUE_ERROR_TIMEOUT || msg_count == 0) {
             // No messages, this is normal - continue polling
             // Small delay to avoid tight loop
             struct timespec sleep_time = {0, (ctx->poll_interval * 1000000L)};
             nanosleep(&sleep_time, NULL);
             continue;
-        } else if (result != 0) {
+        } else if (result != SQLITE_QUEUE_ERROR_NONE) {
             error_count++;
-            LOG_WARN("SQLite Queue: Message processing failed (error #%d)", error_count);
+            LOG_WARN("SQLite Queue: Message receive failed (error #%d): %s",
+                     error_count, sqlite_queue_last_error(ctx));
 
-            // Check if we should continue or exit
             if (error_count > 10) {
                 LOG_ERROR("SQLite Queue: Too many consecutive errors (%d), stopping daemon", error_count);
                 printf("SQLite Queue: Too many consecutive errors (%d), stopping daemon\n", error_count);
                 break;
             }
 
-            // Small delay before retrying to avoid tight loop on errors
             struct timespec sleep_time = {0, 100000000}; // 100ms
             nanosleep(&sleep_time, NULL);
             continue;
         }
 
-        message_count++;
-        error_count = 0; // Reset error count on successful processing
-        LOG_DEBUG("SQLite Queue: Successfully processed message #%d", message_count);
-        printf("SQLite Queue: Successfully processed message #%d\n", message_count);
+        // Process received messages
+        for (int i = 0; i < msg_count; i++) {
+            char *message = messages[i];
+            long long msg_id = message_ids[i];
+
+            // Parse JSON to extract content
+            cJSON *json = cJSON_Parse(message);
+            if (!json) {
+                LOG_ERROR("SQLite Queue: Failed to parse JSON message ID %lld", msg_id);
+                sqlite_queue_acknowledge(ctx, msg_id); // Acknowledge to remove from queue
+                free(message);
+                continue;
+            }
+
+            cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
+            cJSON *content = cJSON_GetObjectItem(json, "content");
+
+            if (message_type && cJSON_IsString(message_type) &&
+                strcmp(message_type->valuestring, "TEXT") == 0 &&
+                content && cJSON_IsString(content)) {
+
+                // Enqueue the message for the worker thread
+                if (sqlite_queue_enqueue_message(ctx, msg_id, content->valuestring) == 0) {
+                    message_count++;
+                    error_count = 0;
+                    LOG_INFO("SQLite Queue: Enqueued message ID %lld for processing (queue depth: %d)",
+                             msg_id, sqlite_queue_pending_count(ctx));
+                    printf("SQLite Queue: Received message ID %lld (queue depth: %d)\n",
+                           msg_id, sqlite_queue_pending_count(ctx));
+                } else {
+                    LOG_ERROR("SQLite Queue: Failed to enqueue message ID %lld", msg_id);
+                    sqlite_queue_acknowledge(ctx, msg_id); // Acknowledge to prevent reprocessing
+                    error_count++;
+                }
+            } else {
+                // Non-TEXT message or invalid format - acknowledge and skip
+                LOG_WARN("SQLite Queue: Ignoring non-TEXT message ID %lld", msg_id);
+                sqlite_queue_acknowledge(ctx, msg_id);
+            }
+
+            cJSON_Delete(json);
+            free(message);
+        }
+
+        free(message_ids);
+        free(messages);
+
         fflush(stdout);
     }
+
+    // Signal worker thread to shutdown (mutex protects shutdown flag)
+    pthread_mutex_lock(&ctx->queue_mutex);
+    ctx->shutdown = 1;
+    pthread_cond_broadcast(&ctx->queue_cond);
+    pthread_mutex_unlock(&ctx->queue_mutex);
+
+    // Wait for worker thread to finish (with timeout)
+    struct timespec timeout;
+    clock_gettime(CLOCK_REALTIME, &timeout);
+    timeout.tv_sec += 5;  // 5 second timeout
+    pthread_timedjoin_np(ctx->worker_thread, NULL, &timeout);
 
     LOG_INFO("SQLite Queue: =========================================");
     LOG_INFO("SQLite Queue: SQLite queue daemon mode stopping");
@@ -1429,7 +1691,6 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     LOG_INFO("SQLite Queue: Total errors: %d", error_count);
     LOG_INFO("SQLite Queue: =========================================");
 
-    // Print to console as well
     printf("\nSQLite Queue daemon stopped\n");
     printf("Total messages processed: %d\n", message_count);
     printf("Total errors: %d\n", error_count);
