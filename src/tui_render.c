@@ -801,11 +801,6 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         }
     }
 
-    // For tool messages, add padding line before
-    if (is_tool_message) {
-        waddch(tui->wm.conv_pad, '\n');
-    }
-
     // For user messages, add padding line before and caret prefix
     if (is_user_message) {
         // Add one blank line for top padding
@@ -864,6 +859,9 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         } else if (is_assistant_message && tui->response_style == RESPONSE_STYLE_CARET) {
             // Caret-style assistant: use foreground color
             text_pair = NCURSES_PAIR_FOREGROUND;
+        } else if (is_tool_message) {
+            // Tool messages: use the tool color (mapped from COLOR_PAIR_TOOL)
+            text_pair = mapped_pair;
         } else if (prefix && prefix[0] != '\0') {
             // Other messages with prefix use foreground
             text_pair = NCURSES_PAIR_FOREGROUND;
@@ -896,14 +894,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             goto skip_newline;
         }
 
-        // For tool messages, add padding line after
-        if (is_tool_message) {
-            // Add one blank line for bottom padding
-            waddch(tui->wm.conv_pad, '\n');
 
-            // Exit early to avoid duplicate newline below
-            goto skip_newline;
-        }
     }
 
     // Add newline (for messages that didn't use goto skip_newline)
