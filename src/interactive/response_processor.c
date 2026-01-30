@@ -12,7 +12,6 @@
 #include "../subagent_manager.h"
 #include "../arena.h"
 #include "../indicators.h"
-#include "../tui_conversation.h"
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -165,14 +164,6 @@ static void tool_progress_callback(const ToolCompletion *completion, void *user_
     ToolCallbackContext *ctx = (ToolCallbackContext *)user_data;
     const char *tool_name = completion->tool_name ? completion->tool_name : "tool";
     const char *status_word = completion->is_error ? "failed" : "completed";
-
-    // Update tool icon in conversation from running (◦) to completed (✓)
-    // Only update for successful completions (errors keep the running icon with error color)
-    if (!completion->is_error && ctx->tui) {
-        tui_conversation_update_tool_completed(ctx->tui, tool_name);
-        // Trigger a redraw to show the updated icon
-        redraw_conversation(ctx->tui);
-    }
 
     char status[256];
     if (completion->total > 0) {
@@ -503,7 +494,7 @@ void process_response(ConversationState *state,
 
                 // Display error to user
                 char prefix_with_tool[128];
-                snprintf(prefix_with_tool, sizeof(prefix_with_tool), "● %s", tool->name);
+                snprintf(prefix_with_tool, sizeof(prefix_with_tool), "[%s]", tool->name);
                 char display_error[512];
                 if (is_plan_mode_restriction) {
                     snprintf(display_error, sizeof(display_error),
@@ -525,8 +516,7 @@ void process_response(ConversationState *state,
             // Get tool details (includes special handling for Subagent to show all params)
             char *tool_details = get_tool_details(tool->name, input);
             char prefix_with_tool[128];
-            // Use running icon (◦) for tool that is starting execution
-            snprintf(prefix_with_tool, sizeof(prefix_with_tool), TOOL_ICON_RUNNING " %s", tool->name);
+            snprintf(prefix_with_tool, sizeof(prefix_with_tool), "[%s]", tool->name);
             ui_append_line(tui, queue, prefix_with_tool, tool_details, COLOR_PAIR_TOOL);
 
             if (!tracker_initialized) {

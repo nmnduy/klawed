@@ -47,23 +47,9 @@ MessageType tui_conversation_get_message_type(const char *prefix) {
         return MSG_TYPE_SYSTEM;
     }
     // Check for tools - must come after checking specific system prefixes
-    // Matches tool prefixes with various icons:
-    // - Running: ◦ (U+25E6, UTF-8: 0xE2 0x97 0xA6)
-    // - Completed: ✓ (U+2713, UTF-8: 0xE2 0x9C 0x93)
-    // - Legacy: ● (U+25CF, UTF-8: 0xE2 0x97 0x8F)
-    if ((unsigned char)prefix[0] == 0xE2) {
-        // Running tool: ◦
-        if ((unsigned char)prefix[1] == 0x97 && (unsigned char)prefix[2] == 0xA6) {
-            return MSG_TYPE_TOOL;
-        }
-        // Completed tool: ✓
-        if ((unsigned char)prefix[1] == 0x9C && (unsigned char)prefix[2] == 0x93) {
-            return MSG_TYPE_TOOL;
-        }
-        // Legacy tool: ●
-        if ((unsigned char)prefix[1] == 0x97 && (unsigned char)prefix[2] == 0x8F) {
-            return MSG_TYPE_TOOL;
-        }
+    // Matches "[Tool: ...]" or any tool name in brackets like "[Bash]", "[Read]", etc.
+    if (prefix[0] == '[') {
+        return MSG_TYPE_TOOL;
     }
 
     return MSG_TYPE_UNKNOWN;
@@ -632,51 +618,4 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
         }
     }
     return COLOR_PAIR_DEFAULT;
-}
-
-// Update a tool entry's icon from running (◦) to completed (✓)
-int tui_conversation_update_tool_completed(TUIState *tui, const char *tool_name) {
-    if (!tui || !tool_name) return -1;
-
-    // Search backwards from the end to find the most recent tool entry with this name
-    for (int i = tui->entries_count - 1; i >= 0; i--) {
-        ConversationEntry *entry = &tui->entries[i];
-        if (!entry->prefix) continue;
-
-        // Check if this is a running tool entry with the matching name
-        // Running tool icon: ◦ (U+25E6, UTF-8: 0xE2 0x97 0xA6)
-        if ((unsigned char)entry->prefix[0] == 0xE2 &&
-            (unsigned char)entry->prefix[1] == 0x97 &&
-            (unsigned char)entry->prefix[2] == 0xA6) {
-            // Check if the tool name matches (prefix format: "◦ ToolName")
-            // Skip icon (3 bytes) + space (1 byte) = start at position 4
-            if (entry->prefix[3] == ' ' && strcmp(entry->prefix + 4, tool_name) == 0) {
-                // Found the entry - update the prefix to use completed icon
-                // Completed icon: ✓ (U+2713, UTF-8: 0xE2 0x9C 0x93)
-                size_t name_len = strlen(tool_name);
-                // New prefix: "✓ " (3 bytes + 1 space) + tool_name + null
-                char *new_prefix = malloc(4 + name_len + 1);
-                if (!new_prefix) {
-                    LOG_ERROR("[TUI] Failed to allocate memory for updated tool prefix");
-                    return -1;
-                }
-                // Build new prefix with completed icon
-                new_prefix[0] = (char)0xE2;
-                new_prefix[1] = (char)0x9C;
-                new_prefix[2] = (char)0x93;
-                new_prefix[3] = ' ';
-                strlcpy(new_prefix + 4, tool_name, name_len + 1);
-
-                // Replace old prefix
-                free(entry->prefix);
-                entry->prefix = new_prefix;
-
-                LOG_DEBUG("[TUI] Updated tool '%s' icon to completed", tool_name);
-                return 0;
-            }
-        }
-    }
-
-    LOG_DEBUG("[TUI] Could not find running tool entry for '%s' to mark completed", tool_name);
-    return -1;
 }
