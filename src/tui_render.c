@@ -779,6 +779,33 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     int is_user_message = (prefix && strcmp(prefix, "[User]") == 0);
     int is_assistant_message = (prefix && strcmp(prefix, "[Assistant]") == 0);
 
+    // Check if this is a tool message
+    // Matches tool prefixes starting with "● " (bullet point, UTF-8: 0xE2 0x97 0x8F)
+    // or old format "[ToolName]" (any prefix starting with '[' that isn't User/Assistant/System/Error)
+    int is_tool_message = 0;
+    if (prefix) {
+        // Check for new bullet point format: "● ToolName"
+        if ((unsigned char)prefix[0] == 0xE2 &&
+            (unsigned char)prefix[1] == 0x97 &&
+            (unsigned char)prefix[2] == 0x8F) {
+            is_tool_message = 1;
+        }
+        // Check for old bracket format: "[ToolName]"
+        else if (prefix[0] == '[' && !is_user_message && !is_assistant_message) {
+            // Exclude known system prefixes
+            if (strcmp(prefix, "[System]") != 0 &&
+                strcmp(prefix, "[Error]") != 0 &&
+                strcmp(prefix, "[Transcription]") != 0) {
+                is_tool_message = 1;
+            }
+        }
+    }
+
+    // For tool messages, add padding line before
+    if (is_tool_message) {
+        waddch(tui->wm.conv_pad, '\n');
+    }
+
     // For user messages, add padding line before and caret prefix
     if (is_user_message) {
         // Add one blank line for top padding
@@ -862,6 +889,15 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
 
         // For user messages, add padding line after
         if (is_user_message) {
+            // Add one blank line for bottom padding
+            waddch(tui->wm.conv_pad, '\n');
+
+            // Exit early to avoid duplicate newline below
+            goto skip_newline;
+        }
+
+        // For tool messages, add padding line after
+        if (is_tool_message) {
             // Add one blank line for bottom padding
             waddch(tui->wm.conv_pad, '\n');
 
