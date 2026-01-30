@@ -766,6 +766,12 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         case COLOR_PAIR_SEARCH:
             mapped_pair = NCURSES_PAIR_SEARCH;
             break;
+        case COLOR_PAIR_TOOL_RUNNING:
+            mapped_pair = NCURSES_PAIR_TOOL_RUNNING;
+            break;
+        case COLOR_PAIR_TOOL_COMPLETED:
+            mapped_pair = NCURSES_PAIR_TOOL_COMPLETED;
+            break;
         default:
             /* Keep default mapped_pair (foreground) */
             break;
@@ -779,16 +785,34 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     int is_user_message = (prefix && strcmp(prefix, "[User]") == 0);
     int is_assistant_message = (prefix && strcmp(prefix, "[Assistant]") == 0);
 
-    // Check if this is a tool message
-    // Matches tool prefixes starting with "● " (bullet point, UTF-8: 0xE2 0x97 0x8F)
+    // Check if this is a tool message with different icon types:
+    // - Running: ◦ (WHITE BULLET, U+25E6, UTF-8: 0xE2 0x97 0xA6) - yellow
+    // - Completed: ✓ (CHECK MARK, U+2713, UTF-8: 0xE2 0x9C 0x93) - green
+    // - Legacy: ● (BLACK CIRCLE, U+25CF, UTF-8: 0xE2 0x97 0x8F) - default tool color
     // or old format "[ToolName]" (any prefix starting with '[' that isn't User/Assistant/System/Error)
     int is_tool_message = 0;
+    int tool_icon_type = 0;  // 0 = none/legacy, 1 = running (◦), 2 = completed (✓)
     if (prefix) {
-        // Check for new bullet point format: "● ToolName"
+        // Check for running tool icon: ◦ (U+25E6)
         if ((unsigned char)prefix[0] == 0xE2 &&
+            (unsigned char)prefix[1] == 0x97 &&
+            (unsigned char)prefix[2] == 0xA6) {
+            is_tool_message = 1;
+            tool_icon_type = 1;  // Running
+        }
+        // Check for completed tool icon: ✓ (U+2713)
+        else if ((unsigned char)prefix[0] == 0xE2 &&
+                 (unsigned char)prefix[1] == 0x9C &&
+                 (unsigned char)prefix[2] == 0x93) {
+            is_tool_message = 1;
+            tool_icon_type = 2;  // Completed
+        }
+        // Check for legacy bullet point format: ● (U+25CF)
+        else if ((unsigned char)prefix[0] == 0xE2 &&
             (unsigned char)prefix[1] == 0x97 &&
             (unsigned char)prefix[2] == 0x8F) {
             is_tool_message = 1;
+            tool_icon_type = 0;  // Legacy (use default tool color)
         }
         // Check for old bracket format: "[ToolName]"
         else if (prefix[0] == '[' && !is_user_message && !is_assistant_message) {
@@ -797,6 +821,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
                 strcmp(prefix, "[Error]") != 0 &&
                 strcmp(prefix, "[Transcription]") != 0) {
                 is_tool_message = 1;
+                tool_icon_type = 0;  // Legacy
             }
         }
     }
@@ -836,8 +861,46 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             }
             // Fall through to write text normally
         }
+    } else if (is_tool_message && prefix && prefix[0] != '\0') {
+        // Tool message: render icon with specific color, then tool name with tool color
+        // Icon is 3 bytes (UTF-8 encoded), followed by space and tool name
+
+        // Determine icon color based on tool_icon_type
+        int icon_pair;
+        if (tool_icon_type == 1) {
+            // Running tool: yellow
+            icon_pair = NCURSES_PAIR_TOOL_RUNNING;
+        } else if (tool_icon_type == 2) {
+            // Completed tool: green
+            icon_pair = NCURSES_PAIR_TOOL_COMPLETED;
+        } else {
+            // Legacy or default: use mapped tool color
+            icon_pair = mapped_pair;
+        }
+
+        // Render the icon (first 3 bytes) with icon color
+        if (has_colors()) {
+            wattron(tui->wm.conv_pad, COLOR_PAIR(icon_pair) | A_BOLD);
+        }
+        // Write first 3 bytes (the UTF-8 icon character)
+        waddnstr(tui->wm.conv_pad, prefix, 3);
+        if (has_colors()) {
+            wattroff(tui->wm.conv_pad, COLOR_PAIR(icon_pair) | A_BOLD);
+        }
+
+        // Render the rest of the prefix (space + tool name) with tool color
+        if (prefix[3] != '\0') {
+            if (has_colors()) {
+                wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_TOOL) | A_BOLD);
+            }
+            waddstr(tui->wm.conv_pad, prefix + 3);
+            waddch(tui->wm.conv_pad, ' ');
+            if (has_colors()) {
+                wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_TOOL) | A_BOLD);
+            }
+        }
     } else {
-        // Write prefix for other (non-user, non-assistant) messages
+        // Write prefix for other (non-user, non-assistant, non-tool) messages
         if (prefix && prefix[0] != '\0') {
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);

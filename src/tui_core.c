@@ -166,6 +166,8 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_USER_MSG_BG, 16, 23);       // User message background (same as input bg)
             init_pair(NCURSES_PAIR_ASSISTANT_BG, 16, 25);      // Foreground on subtle assistant background
             init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, 18, default_bg);  // Assistant color with no background (for border)
+            init_pair(NCURSES_PAIR_TOOL_RUNNING, 19, default_bg);       // Yellow (same as STATUS) for running tool icon
+            init_pair(NCURSES_PAIR_TOOL_COMPLETED, 17, default_bg);     // Green (same as USER) for completed tool icon
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -195,6 +197,8 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_USER_MSG_BG, (short)fg_idx, (short)236);   // User message background (same as input bg)
             init_pair(NCURSES_PAIR_ASSISTANT_BG, (short)fg_idx, (short)235);  // Foreground on very dark gray (235)
             init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, (short)assistant_idx, default_bg);  // Assistant color with no background (for border)
+            init_pair(NCURSES_PAIR_TOOL_RUNNING, (short)status_idx, default_bg);    // Yellow for running tool icon
+            init_pair(NCURSES_PAIR_TOOL_COMPLETED, (short)user_idx, default_bg);    // Green for completed tool icon
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -219,6 +223,8 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_USER_MSG_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: user message background
             init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, default_bg);  // Fallback: no background (use default)
             init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, COLOR_CYAN, default_bg);  // Fallback: cyan (assistant color)
+            init_pair(NCURSES_PAIR_TOOL_RUNNING, COLOR_YELLOW, default_bg);      // Yellow for running tool icon
+            init_pair(NCURSES_PAIR_TOOL_COMPLETED, COLOR_GREEN, default_bg);     // Green for completed tool icon
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -242,6 +248,8 @@ static void init_ncurses_colors(void) {
         init_pair(NCURSES_PAIR_USER_MSG_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: user message background
         init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, default_bg);  // Fallback: no background (use default)
         init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, COLOR_CYAN, default_bg);  // Fallback: cyan (assistant color)
+        init_pair(NCURSES_PAIR_TOOL_RUNNING, COLOR_YELLOW, default_bg);      // Yellow for running tool icon
+        init_pair(NCURSES_PAIR_TOOL_COMPLETED, COLOR_GREEN, default_bg);     // Green for completed tool icon
     }
 }
 

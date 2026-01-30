@@ -40,4 +40,9 @@ MessageType tui_conversation_get_message_type(const char *prefix);
 // Returns appropriate TUIColorPair based on prefix content
 TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix);
 
+// Update a tool entry's icon from running (◦) to completed (✓)
+// Searches backwards from the end to find the most recent tool entry with the given name
+// and updates its icon. Returns 0 on success, -1 if not found.
+int tui_conversation_update_tool_completed(TUIState *tui, const char *tool_name);
+
 #endif // TUI_CONVERSATION_H
