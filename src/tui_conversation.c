@@ -582,6 +582,10 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
     if (strstr(prefix, "Tool")) {
         return COLOR_PAIR_TOOL;
     }
+    // Check for circle prefix "● ToolName" (UTF-8: 0xE2 0x97 0x8F)
+    if (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') {
+        return COLOR_PAIR_TOOL;
+    }
     if (strstr(prefix, "Error")) {
         return COLOR_PAIR_ERROR;
     }

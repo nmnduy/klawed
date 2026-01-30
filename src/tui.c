@@ -942,6 +942,12 @@ static TUIColorPair infer_color_from_prefix(const char *prefix) {
     if (!prefix) {
         return COLOR_PAIR_DEFAULT;
     }
+    // Check for circle prefix (● = UTF-8: 0xE2 0x97 0x8F) which indicates tool
+    if ((unsigned char)prefix[0] == 0xE2 &&
+        (unsigned char)prefix[1] == 0x97 &&
+        (unsigned char)prefix[2] == 0x8F) {
+        return COLOR_PAIR_TOOL;
+    }
     if (strstr(prefix, "User")) {
         return COLOR_PAIR_USER;
     }
@@ -1004,6 +1010,41 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
 
             char *mutable_text = msg->text;
             const char *content = mutable_text;
+
+            // Check for circle prefix (● = UTF-8: 0xE2 0x97 0x8F) which indicates tool
+            if ((unsigned char)mutable_text[0] == 0xE2 &&
+                (unsigned char)mutable_text[1] == 0x97 &&
+                (unsigned char)mutable_text[2] == 0x8F) {
+                // Format is "● ToolName details"
+                // Find the space after the tool name
+                const char *after_circle = mutable_text + 3;  // Skip the ● (3 bytes)
+                while (*after_circle == ' ') after_circle++;  // Skip space after ●
+
+                // Find end of tool name (next space)
+                const char *tool_name_end = after_circle;
+                while (*tool_name_end && *tool_name_end != ' ') tool_name_end++;
+
+                // Build prefix "● ToolName"
+                size_t prefix_len = (size_t)(tool_name_end - mutable_text);
+                char *prefix = malloc(prefix_len + 1);
+                if (prefix) {
+                    memcpy(prefix, mutable_text, prefix_len);
+                    prefix[prefix_len] = '\0';
+                }
+
+                // Content starts after tool name
+                const char *content_start = tool_name_end;
+                while (*content_start == ' ') content_start++;
+
+                tui_add_conversation_line(
+                    tui,
+                    prefix ? prefix : "",
+                    content_start,
+                    COLOR_PAIR_TOOL);
+
+                free(prefix);
+                break;
+            }
 
             if (mutable_text[0] == '[') {
                 char *close = strchr(mutable_text, ']');

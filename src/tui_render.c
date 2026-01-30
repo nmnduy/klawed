@@ -721,6 +721,16 @@ static void render_text_with_left_border(TUIState *tui, const char *text, int te
         }
     }
 
+    // Ensure we end on a new line - check cursor position
+    WINDOW *pad_final = tui->wm.conv_pad;
+    int cur_y, cur_x;
+    getyx(pad_final, cur_y, cur_x);
+    (void)cur_y;
+    if (cur_x > 0) {
+        // Cursor is not at column 0, need a newline
+        waddch(pad_final, '\n');
+    }
+
     (void)text_pair;  // Suppress unused warning (background pair used instead)
 }
 
