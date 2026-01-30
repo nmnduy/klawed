@@ -110,6 +110,51 @@ After reading, the client acknowledges:
 UPDATE messages SET sent = 1 WHERE id = ?;
 ```
 
+## User Message Injection During Tool Execution
+
+The SQLite queue mode supports **user message injection during tool execution**, similar to the interactive CLI mode. This means:
+
+- **Clients can send messages while tools are running**: A client can insert a new TEXT message into the database while klawed is executing tools from a previous request.
+- **Messages are queued for processing**: When a user message arrives during tool execution, it is added to an internal pending queue and processed after the current turn completes.
+- **No blocking**: The main daemon loop continues polling for new messages while the worker thread processes the current message.
+
+### How It Works
+
+1. **Main Daemon Loop**: Continuously polls the SQLite database for new messages with a short timeout (100ms)
+2. **Worker Thread**: Processes one message at a time, executing all tools and API calls
+3. **Message Queue**: When a new message arrives while the worker is busy, it's added to a pending queue
+4. **Sequential Processing**: Messages are processed in the order they are received (FIFO)
+5. **Deferred Acknowledgment**: Messages are acknowledged (marked as `sent=1`) only when the worker thread starts processing them, not when they are received
+
+### Implications for Clients
+
+**Client-Side Queuing**: Clients can safely send messages at any time. If sent during tool execution:
+- The message remains unacknowledged (`sent=0`) while queued internally
+- The message is acknowledged when klawed's worker thread begins processing it
+- The client can send multiple messages; they will be processed sequentially
+
+**Example Flow with Interleaved Messages**:
+
+```
+T=0: Client sends "Read file A" → klawed acknowledges and starts processing
+T=1: klawed sends TOOL request for Read
+T=2: klawed sends TOOL_RESULT for Read
+T=3: Client sends "Read file B" (while first request still processing)
+T=4: klawed receives "Read file B", queues it internally (NOT acknowledged yet)
+T=5: klawed sends API_CALL (for first request)
+T=6: klawed sends TEXT response for first request
+T=7: klawed sends END_AI_TURN for first request
+T=8: klawed acknowledges "Read file B" and starts processing it
+```
+
+### Interruption Support
+
+The implementation also supports interruption:
+
+- **Interrupt Request**: Clients can request interruption by sending an appropriate signal or using the API
+- **Tool Cancellation**: Long-running tools can be interrupted mid-execution
+- **Graceful Shutdown**: The worker thread can be gracefully shut down with a timeout
+
 ## Configuration
 
 ### Command Line Usage
@@ -151,68 +196,11 @@ export KLAWED_SQLITE_SENDER="klawed"
 export KLAWED_SQLITE_SENDER="my_agent"
 ```
 
-## Conversation Seeding
+## Conversation Seeding (Currently Disabled)
 
-Klawed supports seeding the conversation with pre-existing messages at boot time. This allows clients to inject conversation history before klawed starts processing new messages, enabling:
+> **Note**: Conversation seeding is currently disabled to prevent tool use/result mismatch errors that can occur when user messages are interleaved with tool execution in the message history. Klawed starts with a fresh conversation state in daemon mode.
 
-- Resuming a previous conversation
-- Providing context or examples
-- Pre-populating the conversation with instructions
-
-### How It Works
-
-When klawed starts in SQLite queue daemon mode, it automatically reads up to 100 previous TEXT messages from the `messages` table where `sent = 1` (already acknowledged). These messages are loaded chronologically and added to the conversation state before klawed begins polling for new messages.
-
-### Seeding Messages
-
-To seed a conversation, insert messages with `sent = 1` before starting klawed:
-
-**User messages (from client to klawed):**
-```sql
-INSERT INTO messages (sender, receiver, message, sent, created_at)
-VALUES ('client', 'klawed', '{"messageType":"TEXT","content":"What is the capital of France?"}', 1, strftime('%s', 'now'));
-```
-
-**Assistant messages (from klawed to client):**
-```sql
-INSERT INTO messages (sender, receiver, message, sent, created_at)
-VALUES ('klawed', 'client', '{"messageType":"TEXT","content":"The capital of France is Paris."}', 1, strftime('%s', 'now'));
-```
-
-### Example: Seeding a Multi-turn Conversation
-
-```sql
--- Clear existing messages (optional)
-DELETE FROM messages;
-
--- Seed user message 1
-INSERT INTO messages (sender, receiver, message, sent, created_at)
-VALUES ('client', 'klawed', '{"messageType":"TEXT","content":"You are a helpful coding assistant."}', 1, 1700000001);
-
--- Seed assistant response 1
-INSERT INTO messages (sender, receiver, message, sent, created_at)
-VALUES ('klawed', 'client', '{"messageType":"TEXT","content":"I understand. I am ready to help with coding tasks."}', 1, 1700000002);
-
--- Seed user message 2
-INSERT INTO messages (sender, receiver, message, sent, created_at)
-VALUES ('client', 'klawed', '{"messageType":"TEXT","content":"Please remember to always use descriptive variable names."}', 1, 1700000003);
-
--- Seed assistant response 2
-INSERT INTO messages (sender, receiver, message, sent, created_at)
-VALUES ('klawed', 'client', '{"messageType":"TEXT","content":"Understood. I will use descriptive variable names in all code examples."}', 1, 1700000004);
-```
-
-### Important Notes
-
-- `TEXT`, `TOOL`, and `TOOL_RESULT` messages are loaded for seeding (other types like END_AI_TURN, ERROR, etc. are skipped)
-- **Tool Call Pairing**: TOOL messages are paired with their corresponding TOOL_RESULT messages to maintain API validity
-  - If a TOOL lacks a matching TOOL_RESULT (interrupted execution), a synthetic error result is injected
-  - Orphaned TOOL_RESULT messages (no matching TOOL) are ignored
-- Messages must have `sent = 1` to be considered for seeding
-- At most 100 messages are loaded (the most recent 100, ordered chronologically)
-- The `created_at` timestamp determines the order of messages
-- Seeding happens once at klawed boot, before the daemon loop starts
-- Empty or whitespace-only messages are skipped
+Klawed previously supported seeding the conversation with pre-existing messages at boot time. This feature may be re-enabled in a future version with improved message ordering logic.
 
 ## Message Format Details
 
