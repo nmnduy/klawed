@@ -26,7 +26,7 @@ Validates provider configuration loading and initialization **without making API
 
 ### 2. API Call Tests (`test_provider_api_calls`)
 
-Makes **real API calls** to providers from your `~/.klawed/config.json` and validates tool handling.
+Makes **real API calls** to providers from your `~/.klawed/config.json` and validates tool handling. This test uses the actual klawed provider code, so all supported providers (including AWS Bedrock) work correctly.
 
 ---
 
@@ -190,10 +190,25 @@ The tests read from `~/.klawed/config.json`:
             "model": "kimi-k2.5",
             "api_base": "https://api.moonshot.ai",
             "api_key_env": "MOONSHOT_AI_API_KEY"
+        },
+        "sonnet-4.5-bedrock": {
+            "provider_type": "bedrock",
+            "provider_name": "AWS Bedrock",
+            "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
         }
     }
 }
 ```
+
+**Supported Provider Types:**
+
+| Provider Type | Description | Auth Method |
+|---------------|-------------|-------------|
+| `openai` | OpenAI-compatible APIs (OpenAI, local LM Studio) | `api_key_env` or `api_key` |
+| `anthropic` | Anthropic Claude API (and compatible like MiniMax) | `api_key_env` or `api_key` |
+| `moonshot` | Moonshot AI / Kimi API | `api_key_env` or `api_key` |
+| `deepseek` | DeepSeek API | `api_key_env` or `api_key` |
+| `bedrock` | AWS Bedrock (Claude models) | AWS credentials (env vars) |
 
 ---
 
@@ -217,10 +232,10 @@ brew install cjson curl libbsd
 tests_manual/
 ├── Makefile                       # Build configuration
 ├── README.md                      # This file
-├── .env.example                   # Example environment variables
+├── test_stubs.c                   # Stub implementations for test dependencies
 ├── test_provider_configs.h        # Provider configuration definitions
 ├── test_provider_configs.c        # Configuration test implementation
-└── test_provider_api_calls.c      # API call test implementation (uses ~/.klawed/config.json)
+└── test_provider_api_calls.c      # API call test using actual klawed provider code
 ```
 
 ---
@@ -236,9 +251,25 @@ The tests use this priority order to select a provider:
 
 ---
 
+## Implementation Details
+
+The `test_provider_api_calls` binary now links against the actual klawed provider code:
+
+- **Provider abstraction**: `src/provider.c`, `src/openai_provider.c`, `src/bedrock_provider.c`, etc.
+- **HTTP client**: `src/http_client.c` with retry logic
+- **AWS signing**: `src/aws_bedrock.c` for Bedrock support
+- **Request building**: `src/openai_messages.c`, `src/openai_responses.c`
+
+This ensures that the tests exercise the same code paths as the main klawed application, including proper handling of:
+- AWS SigV4 signing for Bedrock
+- Provider-specific request formatting
+- Retry logic and error handling
+- Token usage tracking
+
 ## Notes
 
 - **API keys** are read from environment variables (never from config file)
 - The config file `~/.klawed/config.json` is shared with the main klawed application
 - Tests will show `[ACTIVE]` next to the active provider from config
 - API call tests require a valid API key for the selected provider
+- **AWS Bedrock** uses AWS credentials from environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`)

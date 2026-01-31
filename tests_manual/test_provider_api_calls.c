@@ -1,7 +1,7 @@
 /*
  * test_provider_api_calls.c - Manual provider API call tests
  *
- * Makes REAL API calls to LLM providers and validates tool handling.
+ * Makes REAL API calls to LLM providers using the actual klawed provider code.
  * These tests cost money and are NOT part of the normal test suite.
  *
  * Usage:
@@ -37,12 +37,24 @@
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
 
-#include "../src/config.h"
+// Define ARENA_IMPLEMENTATION in exactly one file for the header-only arena library
+#define ARENA_IMPLEMENTATION
+#include "config.h"
+#include "provider.h"
+#include "arena.h"
+#include "logger.h"
+#include "api/api_response.h"
+
+// Stub for TUI functions not needed in tests
+#include "tui.h"
+void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
+    (void)tui; (void)prefix; (void)text; (void)color_pair;
+}
+void tui_update_last_conversation_line(TUIState *tui, const char *text) { (void)tui; (void)text; }
 
 // Test configuration
 #define MAX_TESTS 10
-#define MAX_RESPONSE_SIZE (1024 * 1024)  // 1MB
-#define DEFAULT_TIMEOUT_MS 120000         // 2 minutes
+#define DEFAULT_TIMEOUT_MS 120000
 #undef MAX_TOKENS
 #define MAX_TOKENS 4096
 
@@ -52,7 +64,7 @@ static const char *BASH_SAFE_COMMANDS[] = {
     "wc", "head", "tail", "find", "grep", "ps", "df", "du", "whoami",
     "uname", "date", "env", "printenv", "id", "groups", "hostname",
     "which", "whereis", "file", "stat", "readlink", "realpath",
-    "curl -I", "curl -s", "curl --head",  // HEAD requests only
+    "curl -I", "curl -s", "curl --head",
     NULL
 };
 
@@ -85,16 +97,9 @@ typedef struct {
     char *error;
 } TestResult;
 
-// Tool call from LLM (local definition to avoid conflict with klawed_internal.h)
-typedef struct {
-    char id[64];
-    char name[32];
-    cJSON *arguments;
-} APITestToolCall;
-
 // Global options
 static int verbose = 0;
-static int max_turns = 10;  // Maximum conversation turns to prevent runaway
+static int max_turns = 10;
 
 // Test definitions
 static const TestDefinition TESTS[] = {
@@ -135,7 +140,6 @@ static double get_time_ms(void) {
 static int is_bash_command_safe(const char *command) {
     if (!command || !command[0]) return 0;
 
-    // Check for dangerous patterns
     const char *dangerous[] = {
         ";", "&&", "||", "|", ">", "<", "`", "$", "rm ", "mv ", "cp ",
         "chmod ", "chown ", "sudo ", "su ", "dd ", "mkfs", "fdisk",
@@ -149,7 +153,6 @@ static int is_bash_command_safe(const char *command) {
         }
     }
 
-    // Check against safelist
     for (int i = 0; BASH_SAFE_COMMANDS[i]; i++) {
         size_t len = strlen(BASH_SAFE_COMMANDS[i]);
         if (strncmp(command, BASH_SAFE_COMMANDS[i], len) == 0) {
@@ -161,119 +164,18 @@ static int is_bash_command_safe(const char *command) {
 }
 
 // ============================================================================
-// Tool Definitions (JSON schema for API)
-// ============================================================================
-
-static cJSON* create_tool_definitions(void) {
-    cJSON *tools = cJSON_CreateArray();
-
-    // Read tool
-    cJSON *read_tool = cJSON_CreateObject();
-    cJSON_AddStringToObject(read_tool, "type", "function");
-    cJSON *read_func = cJSON_CreateObject();
-    cJSON_AddStringToObject(read_func, "name", "Read");
-    cJSON_AddStringToObject(read_func, "description", "Read a file from the filesystem");
-    cJSON *read_params = cJSON_CreateObject();
-    cJSON_AddStringToObject(read_params, "type", "object");
-    cJSON *read_props = cJSON_CreateObject();
-    cJSON *file_path = cJSON_CreateObject();
-    cJSON_AddStringToObject(file_path, "type", "string");
-    cJSON_AddStringToObject(file_path, "description", "Absolute path to the file");
-    cJSON_AddItemToObject(read_props, "file_path", file_path);
-    cJSON_AddItemToObject(read_params, "properties", read_props);
-    cJSON *read_required = cJSON_CreateArray();
-    cJSON_AddItemToArray(read_required, cJSON_CreateString("file_path"));
-    cJSON_AddItemToObject(read_params, "required", read_required);
-    cJSON_AddItemToObject(read_func, "parameters", read_params);
-    cJSON_AddItemToObject(read_tool, "function", read_func);
-    cJSON_AddItemToArray(tools, read_tool);
-
-    // Glob tool
-    cJSON *glob_tool = cJSON_CreateObject();
-    cJSON_AddStringToObject(glob_tool, "type", "function");
-    cJSON *glob_func = cJSON_CreateObject();
-    cJSON_AddStringToObject(glob_func, "name", "Glob");
-    cJSON_AddStringToObject(glob_func, "description", "Find files matching a pattern");
-    cJSON *glob_params = cJSON_CreateObject();
-    cJSON_AddStringToObject(glob_params, "type", "object");
-    cJSON *glob_props = cJSON_CreateObject();
-    cJSON *pattern = cJSON_CreateObject();
-    cJSON_AddStringToObject(pattern, "type", "string");
-    cJSON_AddStringToObject(pattern, "description", "Glob pattern to match");
-    cJSON_AddItemToObject(glob_props, "pattern", pattern);
-    cJSON_AddItemToObject(glob_params, "properties", glob_props);
-    cJSON *glob_required = cJSON_CreateArray();
-    cJSON_AddItemToArray(glob_required, cJSON_CreateString("pattern"));
-    cJSON_AddItemToObject(glob_params, "required", glob_required);
-    cJSON_AddItemToObject(glob_func, "parameters", glob_params);
-    cJSON_AddItemToObject(glob_tool, "function", glob_func);
-    cJSON_AddItemToArray(tools, glob_tool);
-
-    // Grep tool
-    cJSON *grep_tool = cJSON_CreateObject();
-    cJSON_AddStringToObject(grep_tool, "type", "function");
-    cJSON *grep_func = cJSON_CreateObject();
-    cJSON_AddStringToObject(grep_func, "name", "Grep");
-    cJSON_AddStringToObject(grep_func, "description", "Search for text patterns in files");
-    cJSON *grep_params = cJSON_CreateObject();
-    cJSON_AddStringToObject(grep_params, "type", "object");
-    cJSON *grep_props = cJSON_CreateObject();
-    cJSON *grep_pattern = cJSON_CreateObject();
-    cJSON_AddStringToObject(grep_pattern, "type", "string");
-    cJSON_AddStringToObject(grep_pattern, "description", "Pattern to search for");
-    cJSON_AddItemToObject(grep_props, "pattern", grep_pattern);
-    cJSON *path = cJSON_CreateObject();
-    cJSON_AddStringToObject(path, "type", "string");
-    cJSON_AddStringToObject(path, "description", "Path to search in (default: current directory)");
-    cJSON_AddItemToObject(grep_props, "path", path);
-    cJSON_AddItemToObject(grep_params, "properties", grep_props);
-    cJSON *grep_required = cJSON_CreateArray();
-    cJSON_AddItemToArray(grep_required, cJSON_CreateString("pattern"));
-    cJSON_AddItemToObject(grep_params, "required", grep_required);
-    cJSON_AddItemToObject(grep_func, "parameters", grep_params);
-    cJSON_AddItemToObject(grep_tool, "function", grep_func);
-    cJSON_AddItemToArray(tools, grep_tool);
-
-    // Bash tool (restricted to read-only)
-    cJSON *bash_tool = cJSON_CreateObject();
-    cJSON_AddStringToObject(bash_tool, "type", "function");
-    cJSON *bash_func = cJSON_CreateObject();
-    cJSON_AddStringToObject(bash_func, "name", "Bash");
-    cJSON_AddStringToObject(bash_func, "description",
-        "Execute a bash command (read-only: ls, cat, pwd, git status, etc.)");
-    cJSON *bash_params = cJSON_CreateObject();
-    cJSON_AddStringToObject(bash_params, "type", "object");
-    cJSON *bash_props = cJSON_CreateObject();
-    cJSON *command = cJSON_CreateObject();
-    cJSON_AddStringToObject(command, "type", "string");
-    cJSON_AddStringToObject(command, "description", "Command to execute");
-    cJSON_AddItemToObject(bash_props, "command", command);
-    cJSON_AddItemToObject(bash_params, "properties", bash_props);
-    cJSON *bash_required = cJSON_CreateArray();
-    cJSON_AddItemToArray(bash_required, cJSON_CreateString("command"));
-    cJSON_AddItemToObject(bash_params, "required", bash_required);
-    cJSON_AddItemToObject(bash_func, "parameters", bash_params);
-    cJSON_AddItemToObject(bash_tool, "function", bash_func);
-    cJSON_AddItemToArray(tools, bash_tool);
-
-    return tools;
-}
-
-// ============================================================================
-// Tool Execution
+// Tool Execution (Local implementations for testing)
 // ============================================================================
 
 static char* read_file(const char *path) {
     FILE *f = fopen(path, "r");
-    if (!f) {
-        return strdup("Error: File not found");
-    }
+    if (!f) return strdup("Error: File not found");
 
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    if (size > 100000) {  // Limit to 100KB
+    if (size > 100000) {
         fclose(f);
         return strdup("Error: File too large (max 100KB)");
     }
@@ -292,21 +194,7 @@ static char* read_file(const char *path) {
 
 static char* execute_glob(const char *pattern) {
     char cmd[1024];
-    snprintf(cmd, sizeof(cmd), "find . -path '%s' -type f 2>/dev/null | head -20", pattern);
-
-    // Replace ** with proper find pattern
-    char *clean_pattern = strdup(pattern);
-    char *p = clean_pattern;
-    while (*p) {
-        if (*p == '*' && *(p+1) == '*') {
-            // Simplify ** to *
-            memmove(p, p+1, strlen(p));
-        }
-        p++;
-    }
-
-    snprintf(cmd, sizeof(cmd), "find . -name '%s' -type f 2>/dev/null | head -20", clean_pattern);
-    free(clean_pattern);
+    snprintf(cmd, sizeof(cmd), "find . -name '%s' -type f 2>/dev/null | head -20", pattern);
 
     FILE *pipe = popen(cmd, "r");
     if (!pipe) return strdup("Error: Failed to execute glob");
@@ -388,372 +276,297 @@ static char* execute_bash(const char *command) {
     return result;
 }
 
-static char* api_test_execute_tool(const char *name, cJSON *arguments, char **tool_name_out) {
-    *tool_name_out = strdup(name);
+// ============================================================================
+// Minimal ConversationState for Testing
+// ============================================================================
 
-    if (strcmp(name, "Read") == 0) {
-        cJSON *file_path = cJSON_GetObjectItem(arguments, "file_path");
+#include "klawed_internal.h"
+
+static int init_test_conversation_state(ConversationState *state, const char *model) {
+    memset(state, 0, sizeof(ConversationState));
+    state->count = 0;
+    state->max_tokens = MAX_TOKENS;
+    state->model = strdup(model ? model : "gpt-4");
+    state->working_dir = getcwd(NULL, 0);
+    state->session_id = NULL;
+    state->tui = NULL;
+    state->provider = NULL;
+    state->interrupt_requested = 0;
+
+    if (pthread_mutex_init(&state->conv_mutex, NULL) != 0) {
+        return -1;
+    }
+    state->conv_mutex_initialized = 1;
+
+    return 0;
+}
+
+static void cleanup_test_conversation_state(ConversationState *state) {
+    if (!state) return;
+
+    for (int i = 0; i < state->count; i++) {
+        for (int j = 0; j < state->messages[i].content_count; j++) {
+            InternalContent *content = &state->messages[i].contents[j];
+            free(content->text);
+            free(content->tool_id);
+            free(content->tool_name);
+            if (content->tool_params) cJSON_Delete(content->tool_params);
+            if (content->tool_output) cJSON_Delete(content->tool_output);
+            free(content->image_path);
+            free(content->mime_type);
+            free(content->base64_data);
+            free(content->reasoning_content);
+        }
+        free(state->messages[i].contents);
+    }
+
+    free(state->model);
+    free(state->working_dir);
+    free(state->api_key);
+    free(state->api_url);
+    free(state->session_id);
+
+    if (state->conv_mutex_initialized) {
+        pthread_mutex_destroy(&state->conv_mutex);
+    }
+}
+
+// Note: add_user_message is defined in klawed_internal.h, we use it directly
+
+static void add_assistant_message_with_tools(ConversationState *state, const char *content,
+                                              cJSON *tool_calls_json) {
+    if (state->count >= MAX_MESSAGES) return;
+
+    int content_count = 1;
+    if (tool_calls_json && cJSON_GetArraySize(tool_calls_json) > 0) {
+        content_count += cJSON_GetArraySize(tool_calls_json);
+    }
+
+    InternalMessage *msg = &state->messages[state->count++];
+    msg->role = MSG_ASSISTANT;
+    msg->content_count = content_count;
+    msg->contents = calloc(content_count, sizeof(InternalContent));
+
+    int idx = 0;
+    msg->contents[idx].type = INTERNAL_TEXT;
+    msg->contents[idx].text = content ? strdup(content) : strdup("");
+    idx++;
+
+    if (tool_calls_json) {
+        cJSON *tc = NULL;
+        cJSON_ArrayForEach(tc, tool_calls_json) {
+            if (idx >= content_count) break;
+            msg->contents[idx].type = INTERNAL_TOOL_CALL;
+
+            cJSON *id = cJSON_GetObjectItem(tc, "id");
+            cJSON *func = cJSON_GetObjectItem(tc, "function");
+            if (func) {
+                cJSON *name = cJSON_GetObjectItem(func, "name");
+                cJSON *args = cJSON_GetObjectItem(func, "arguments");
+
+                if (id && cJSON_IsString(id)) {
+                    msg->contents[idx].tool_id = strdup(id->valuestring);
+                }
+                if (name && cJSON_IsString(name)) {
+                    msg->contents[idx].tool_name = strdup(name->valuestring);
+                }
+                if (args) {
+                    msg->contents[idx].tool_params = cJSON_Duplicate(args, 1);
+                }
+            }
+            idx++;
+        }
+    }
+}
+
+static void add_tool_result(ConversationState *state, const char *tool_call_id,
+                            const char *result) {
+    if (state->count >= MAX_MESSAGES) return;
+
+    InternalMessage *msg = &state->messages[state->count++];
+    msg->role = MSG_USER;
+    msg->content_count = 1;
+    msg->contents = calloc(1, sizeof(InternalContent));
+    msg->contents[0].type = INTERNAL_TOOL_RESPONSE;
+    msg->contents[0].tool_id = strdup(tool_call_id);
+    msg->contents[0].tool_output = cJSON_CreateString(result ? result : "");
+}
+
+// ============================================================================
+// Tool Call Execution
+// ============================================================================
+
+static char* execute_tool_call(const char *tool_call_json, char **tool_name_out) {
+    cJSON *tc = cJSON_Parse(tool_call_json);
+    if (!tc) return strdup("Error: Invalid tool call JSON");
+
+    cJSON *func = cJSON_GetObjectItem(tc, "function");
+
+    if (!func) {
+        cJSON_Delete(tc);
+        return strdup("Error: Missing function in tool call");
+    }
+
+    cJSON *name = cJSON_GetObjectItem(func, "name");
+    cJSON *args = cJSON_GetObjectItem(func, "arguments");
+
+    if (!name || !cJSON_IsString(name)) {
+        cJSON_Delete(tc);
+        return strdup("Error: Missing tool name");
+    }
+
+    *tool_name_out = strdup(name->valuestring);
+    char *result = NULL;
+
+    if (strcmp(name->valuestring, "Read") == 0) {
+        cJSON *file_path = cJSON_GetObjectItem(args, "file_path");
         if (cJSON_IsString(file_path)) {
-            return read_file(file_path->valuestring);
+            result = read_file(file_path->valuestring);
+        } else {
+            result = strdup("Error: Missing file_path");
         }
-        return strdup("Error: Missing file_path");
-    }
-
-    if (strcmp(name, "Glob") == 0) {
-        cJSON *pattern = cJSON_GetObjectItem(arguments, "pattern");
+    } else if (strcmp(name->valuestring, "Glob") == 0) {
+        cJSON *pattern = cJSON_GetObjectItem(args, "pattern");
         if (cJSON_IsString(pattern)) {
-            return execute_glob(pattern->valuestring);
+            result = execute_glob(pattern->valuestring);
+        } else {
+            result = strdup("Error: Missing pattern");
         }
-        return strdup("Error: Missing pattern");
-    }
-
-    if (strcmp(name, "Grep") == 0) {
-        cJSON *pattern = cJSON_GetObjectItem(arguments, "pattern");
-        cJSON *path = cJSON_GetObjectItem(arguments, "path");
+    } else if (strcmp(name->valuestring, "Grep") == 0) {
+        cJSON *pattern = cJSON_GetObjectItem(args, "pattern");
+        cJSON *path = cJSON_GetObjectItem(args, "path");
         if (cJSON_IsString(pattern)) {
-            return execute_grep(pattern->valuestring,
-                               cJSON_IsString(path) ? path->valuestring : NULL);
+            result = execute_grep(pattern->valuestring,
+                                  cJSON_IsString(path) ? path->valuestring : NULL);
+        } else {
+            result = strdup("Error: Missing pattern");
         }
-        return strdup("Error: Missing pattern");
-    }
-
-    if (strcmp(name, "Bash") == 0) {
-        cJSON *command = cJSON_GetObjectItem(arguments, "command");
+    } else if (strcmp(name->valuestring, "Bash") == 0) {
+        cJSON *command = cJSON_GetObjectItem(args, "command");
         if (cJSON_IsString(command)) {
-            return execute_bash(command->valuestring);
+            result = execute_bash(command->valuestring);
+        } else {
+            result = strdup("Error: Missing command");
         }
-        return strdup("Error: Missing command");
-    }
-
-    free(*tool_name_out);
-    *tool_name_out = NULL;
-    return strdup("Error: Unknown tool");
-}
-
-// ============================================================================
-// HTTP Client
-// ============================================================================
-
-typedef struct {
-    char *data;
-    size_t size;
-} ResponseBuffer;
-
-static size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp) {
-    size_t total = size * nmemb;
-    ResponseBuffer *buf = (ResponseBuffer*)userp;
-
-    char *new_data = realloc(buf->data, buf->size + total + 1);
-    if (!new_data) return 0;
-
-    buf->data = new_data;
-    memcpy(buf->data + buf->size, contents, total);
-    buf->size += total;
-    buf->data[buf->size] = '\0';
-
-    return total;
-}
-
-static char* make_api_request(const LLMProviderConfig *config, const char *request_body,
-                              long *status_code, char **error_msg) {
-    CURL *curl = curl_easy_init();
-    if (!curl) {
-        *error_msg = strdup("Failed to initialize CURL");
-        return NULL;
-    }
-
-    ResponseBuffer resp = {0};
-    resp.data = malloc(1);
-    resp.data[0] = '\0';
-
-    struct curl_slist *headers = NULL;
-
-    // Provider-specific headers
-    if (config->provider_type == PROVIDER_ANTHROPIC) {
-        headers = curl_slist_append(headers, "Content-Type: application/json");
-        headers = curl_slist_append(headers, "anthropic-version: 2023-06-01");
-        if (config->api_key[0]) {
-            char auth_header[512];
-            snprintf(auth_header, sizeof(auth_header), "x-api-key: %s", config->api_key);
-            headers = curl_slist_append(headers, auth_header);
-        }
-    } else if (config->provider_type == PROVIDER_OPENAI ||
-               config->provider_type == PROVIDER_DEEPSEEK ||
-               config->provider_type == PROVIDER_MOONSHOT) {
-        headers = curl_slist_append(headers, "Content-Type: application/json");
-        if (config->api_key[0]) {
-            char auth_header[512];
-            snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", config->api_key);
-            headers = curl_slist_append(headers, auth_header);
-        }
-    } else if (config->provider_type == PROVIDER_BEDROCK) {
-        // Bedrock uses AWS SigV4 - would need aws-sdk or custom signing
-        *error_msg = strdup("Bedrock not supported in this test (requires AWS signing)");
-        curl_easy_cleanup(curl);
-        free(resp.data);
-        curl_slist_free_all(headers);
-        return NULL;
-    }
-
-    curl_easy_setopt(curl, CURLOPT_URL, config->api_base);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_body);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 30000);
-
-    // Suppress progress output unless verbose
-    if (!verbose) {
-        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-    }
-
-    CURLcode res = curl_easy_perform(curl);
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, status_code);
-
-    curl_easy_cleanup(curl);
-    curl_slist_free_all(headers);
-
-    if (res != CURLE_OK) {
-        *error_msg = strdup(curl_easy_strerror(res));
-        free(resp.data);
-        return NULL;
-    }
-
-    return resp.data;
-}
-
-// ============================================================================
-// Request/Response Building
-// ============================================================================
-
-static cJSON* build_messages_array(const char *system_prompt, const char *user_query) {
-    cJSON *messages = cJSON_CreateArray();
-
-    if (system_prompt) {
-        cJSON *sys = cJSON_CreateObject();
-        cJSON_AddStringToObject(sys, "role", "system");
-        cJSON_AddStringToObject(sys, "content", system_prompt);
-        cJSON_AddItemToArray(messages, sys);
-    }
-
-    cJSON *user = cJSON_CreateObject();
-    cJSON_AddStringToObject(user, "role", "user");
-    cJSON_AddStringToObject(user, "content", user_query);
-    cJSON_AddItemToArray(messages, user);
-
-    return messages;
-}
-
-static char* build_request_body(const LLMProviderConfig *config, cJSON *messages,
-                                cJSON *tools, int stream_unused) {
-    (void)stream_unused;
-    cJSON *req = cJSON_CreateObject();
-
-    cJSON_AddStringToObject(req, "model", config->model);
-    cJSON_AddItemToObject(req, "messages", cJSON_Duplicate(messages, 1));
-    cJSON_AddNumberToObject(req, "max_tokens", MAX_TOKENS);
-
-    if (tools) {
-        cJSON_AddItemToObject(req, "tools", cJSON_Duplicate(tools, 1));
-    }
-
-    // Provider-specific parameters
-    if (config->provider_type == PROVIDER_ANTHROPIC) {
-        // Anthropic uses max_tokens, already set
     } else {
-        // OpenAI-compatible uses max_completion_tokens
-        cJSON *max_toks = cJSON_GetObjectItem(req, "max_tokens");
-        if (max_toks) {
-            cJSON_AddNumberToObject(req, "max_completion_tokens", max_toks->valueint);
-        }
+        result = strdup("Error: Unknown tool");
     }
 
-    char *body = cJSON_PrintUnformatted(req);
-    cJSON_Delete(req);
-    return body;
-}
-
-static int parse_tool_calls(cJSON *response, APITestToolCall *calls, int max_calls) {
-    cJSON *choices = cJSON_GetObjectItem(response, "choices");
-    if (!choices || !cJSON_IsArray(choices)) return 0;
-
-    cJSON *choice = cJSON_GetArrayItem(choices, 0);
-    if (!choice) return 0;
-
-    cJSON *message = cJSON_GetObjectItem(choice, "message");
-    if (!message) return 0;
-
-    cJSON *tool_calls = cJSON_GetObjectItem(message, "tool_calls");
-    if (!tool_calls || !cJSON_IsArray(tool_calls)) return 0;
-
-    int count = 0;
-    cJSON *tc = NULL;
-    cJSON_ArrayForEach(tc, tool_calls) {
-        if (count >= max_calls) break;
-
-        cJSON *id = cJSON_GetObjectItem(tc, "id");
-        cJSON *func = cJSON_GetObjectItem(tc, "function");
-
-        if (func) {
-            cJSON *name = cJSON_GetObjectItem(func, "name");
-            cJSON *args = cJSON_GetObjectItem(func, "arguments");
-
-            if (id && cJSON_IsString(id)) {
-                strlcpy(calls[count].id, id->valuestring, sizeof(calls[count].id));
-            }
-            if (name && cJSON_IsString(name)) {
-                strlcpy(calls[count].name, name->valuestring, sizeof(calls[count].name));
-            }
-            if (args && cJSON_IsString(args)) {
-                calls[count].arguments = cJSON_Parse(args->valuestring);
-            } else if (args && cJSON_IsObject(args)) {
-                calls[count].arguments = cJSON_Duplicate(args, 1);
-            } else {
-                calls[count].arguments = cJSON_CreateObject();
-            }
-            count++;
-        }
-    }
-
-    return count;
-}
-
-static char* extract_response_text(cJSON *response) {
-    cJSON *choices = cJSON_GetObjectItem(response, "choices");
-    if (!choices || !cJSON_IsArray(choices)) return NULL;
-
-    cJSON *choice = cJSON_GetArrayItem(choices, 0);
-    if (!choice) return NULL;
-
-    cJSON *message = cJSON_GetObjectItem(choice, "message");
-    if (!message) return NULL;
-
-    cJSON *content = cJSON_GetObjectItem(message, "content");
-    if (cJSON_IsString(content)) {
-        return strdup(content->valuestring);
-    }
-
-    return NULL;
+    cJSON_Delete(tc);
+    return result;
 }
 
 // ============================================================================
-// Conversation Loop
+// Conversation Loop using Real Provider
 // ============================================================================
 
-static char* run_conversation(const LLMProviderConfig *config, const char *query,
+static char* run_conversation(Provider *provider, const char *query,
                               char **tools_used_out, char **error_out) {
     const char *system_prompt =
         "You are a helpful assistant with access to file system tools. "
         "Use the tools provided to answer the user's question. "
         "When done, provide a clear, concise answer.";
 
-    cJSON *messages = build_messages_array(system_prompt, query);
-    cJSON *tools = create_tool_definitions();
+    ConversationState state;
+    if (init_test_conversation_state(&state, NULL) != 0) {
+        *error_out = strdup("Failed to initialize conversation state");
+        return NULL;
+    }
 
-    char *final_response = NULL;
+    state.provider = provider;
+
     char tools_used[512] = "";
+    char *final_response = NULL;
     int turn = 0;
+
+    // Add system prompt as first user message (some APIs don't support system role)
+    add_user_message(&state, system_prompt);
+    add_user_message(&state, query);
 
     while (turn < max_turns) {
         turn++;
 
-        // Build and send request
-        char *body = build_request_body(config, messages, tools, 0);
         if (verbose) {
-            printf("  [Request turn %d]\n", turn);
+            printf("  [Turn %d] Calling API...\n", turn);
         }
 
-        long status = 0;
-        char *error = NULL;
-        char *resp_str = make_api_request(config, body, &status, &error);
-        free(body);
+        ApiCallResult result = {0};
+        provider->call_api(provider, &state, &result);
 
-        if (!resp_str) {
-            *error_out = error ? error : strdup("Unknown error");
-            break;
+        if (result.error_message) {
+            *error_out = result.error_message;
+            result.error_message = NULL;
+            cleanup_test_conversation_state(&state);
+            return NULL;
         }
 
-        if (status != 200) {
-            *error_out = malloc(512);
-            snprintf(*error_out, 512, "HTTP %ld: %s", status, resp_str);
-            free(resp_str);
-            break;
+        if (!result.response) {
+            *error_out = strdup("No response from API");
+            cleanup_test_conversation_state(&state);
+            return NULL;
         }
 
-        cJSON *response = cJSON_Parse(resp_str);
-        free(resp_str);
-
-        if (!response) {
-            *error_out = strdup("Failed to parse response JSON");
-            break;
+        // Extract text response
+        if (result.response->message.text) {
+            final_response = strdup(result.response->message.text);
         }
 
         // Check for tool calls
-        APITestToolCall calls[10];
-        int num_calls = parse_tool_calls(response, calls, 10);
-
-        if (num_calls == 0) {
-            // No tool calls - we have final answer
-            final_response = extract_response_text(response);
-            cJSON_Delete(response);
+        if (result.response->tool_count == 0) {
+            // No tool calls - we're done
+            api_response_free(result.response);
             break;
         }
 
-        // Execute tool calls and build tool results
-        cJSON *tool_results = cJSON_CreateArray();
+        // Execute tool calls
+        cJSON *tool_calls_array = cJSON_CreateArray();
 
-        for (int i = 0; i < num_calls; i++) {
-            // Track tools used
+        for (int i = 0; i < result.response->tool_count; i++) {
+            ToolCall *tc = &result.response->tools[i];
+
+            // Track tool used
             if (tools_used[0]) strcat(tools_used, ",");
-            strcat(tools_used, calls[i].name);
+            strcat(tools_used, tc->name);
 
             if (verbose) {
-                printf("  [Tool call] %s\n", calls[i].name);
+                printf("  [Tool call] %s\n", tc->name);
             }
 
-            char *tool_name = NULL;
-            char *result = api_test_execute_tool(calls[i].name, calls[i].arguments, &tool_name);
-
-            // Add assistant's tool call to messages
-            cJSON *assistant_msg = cJSON_CreateObject();
-            cJSON_AddStringToObject(assistant_msg, "role", "assistant");
-            cJSON *tc_array = cJSON_CreateArray();
-            cJSON *tc = cJSON_CreateObject();
-            cJSON_AddStringToObject(tc, "id", calls[i].id);
-            cJSON_AddStringToObject(tc, "type", "function");
+            // Create tool call JSON
+            cJSON *tc_json = cJSON_CreateObject();
+            cJSON_AddStringToObject(tc_json, "id", tc->id);
             cJSON *func = cJSON_CreateObject();
-            cJSON_AddStringToObject(func, "name", calls[i].name);
-            char *args_str = cJSON_PrintUnformatted(calls[i].arguments);
-            cJSON_AddStringToObject(func, "arguments", args_str ? args_str : "{}");
-            free(args_str);
-            cJSON_AddItemToObject(tc, "function", func);
-            cJSON_AddItemToArray(tc_array, tc);
-            cJSON_AddItemToObject(assistant_msg, "tool_calls", tc_array);
-            cJSON_AddItemToArray(messages, assistant_msg);
+            cJSON_AddStringToObject(func, "name", tc->name);
+            cJSON_AddItemToObject(func, "arguments", cJSON_Duplicate(tc->parameters, 1));
+            cJSON_AddItemToObject(tc_json, "function", func);
+            cJSON_AddItemToArray(tool_calls_array, tc_json);
 
-            // Add tool result
-            cJSON *tool_msg = cJSON_CreateObject();
-            cJSON_AddStringToObject(tool_msg, "role", "tool");
-            cJSON_AddStringToObject(tool_msg, "tool_call_id", calls[i].id);
-            cJSON_AddStringToObject(tool_msg, "content", result);
-            cJSON_AddItemToArray(messages, tool_msg);
+            // Execute tool
+            char *tc_json_str = cJSON_PrintUnformatted(tc_json);
+            char *tool_name = NULL;
+            char *tool_result = execute_tool_call(tc_json_str, &tool_name);
+            free(tc_json_str);
 
-            free(result);
-            if (tool_name) free(tool_name);
-            cJSON_Delete(calls[i].arguments);
+            // Add to conversation
+            add_tool_result(&state, tc->id, tool_result);
+
+            free(tool_result);
+            free(tool_name);
         }
 
-        cJSON_Delete(tool_results);
-        cJSON_Delete(response);
+        // Add assistant message with tool calls
+        add_assistant_message_with_tools(&state, result.response->message.text, tool_calls_array);
+        cJSON_Delete(tool_calls_array);
+
+        api_response_free(result.response);
+        final_response = NULL;
     }
 
     if (turn >= max_turns && !final_response) {
         *error_out = strdup("Max conversation turns exceeded");
     }
 
-    cJSON_Delete(messages);
-    cJSON_Delete(tools);
+    cleanup_test_conversation_state(&state);
 
     *tools_used_out = strdup(tools_used);
     return final_response;
@@ -766,19 +579,12 @@ static char* run_conversation(const LLMProviderConfig *config, const char *query
 static int load_user_config(KlawedConfig *config) {
     config_init_defaults(config);
 
-    // Try to load from ~/.klawed/config.json
     const char *home = getenv("HOME");
     if (!home) return -1;
 
     char path[512];
     snprintf(path, sizeof(path), "%s/.klawed/config.json", home);
 
-    // Temporarily set data dir to load from home
-    char *original_data_dir = getenv("KLAWED_DATA_DIR");
-    setenv("KLAWED_DATA_DIR", path, 1);
-
-    // Actually, config_load expects .klawed/ in current dir or uses DATA_DIR
-    // Let's manually parse the config file
     FILE *f = fopen(path, "r");
     if (!f) return -1;
 
@@ -796,11 +602,9 @@ static int load_user_config(KlawedConfig *config) {
 
     if (!json) return -1;
 
-    // Parse providers
     cJSON *providers = cJSON_GetObjectItem(json, "providers");
     if (providers && cJSON_IsObject(providers)) {
-        cJSON *provider = NULL;
-        provider = providers->child;
+        cJSON *provider = providers->child;
         while (provider) {
             if (config->provider_count >= CONFIG_MAX_PROVIDERS) break;
 
@@ -827,7 +631,6 @@ static int load_user_config(KlawedConfig *config) {
             }
             if (api_key_env && cJSON_IsString(api_key_env)) {
                 strlcpy(npc->config.api_key_env, api_key_env->valuestring, sizeof(npc->config.api_key_env));
-                // Load API key from environment
                 const char *key = getenv(api_key_env->valuestring);
                 if (key) {
                     strlcpy(npc->config.api_key, key, sizeof(npc->config.api_key));
@@ -839,43 +642,30 @@ static int load_user_config(KlawedConfig *config) {
         }
     }
 
-    // Parse active provider
     cJSON *active = cJSON_GetObjectItem(json, "active_provider");
     if (active && cJSON_IsString(active)) {
         strlcpy(config->active_provider, active->valuestring, sizeof(config->active_provider));
     }
 
     cJSON_Delete(json);
-
-    // Restore original data dir
-    if (original_data_dir) {
-        setenv("KLAWED_DATA_DIR", original_data_dir, 1);
-    } else {
-        unsetenv("KLAWED_DATA_DIR");
-    }
-
     return 0;
 }
 
 static const NamedProviderConfig* select_provider(const KlawedConfig *config,
                                                    const char *cli_provider,
                                                    const char *env_provider) {
-    // Priority 1: CLI argument
     if (cli_provider) {
         return config_find_provider(config, cli_provider);
     }
 
-    // Priority 2: Environment variable
     if (env_provider) {
         return config_find_provider(config, env_provider);
     }
 
-    // Priority 3: Active provider from config
     if (config->active_provider[0]) {
         return config_find_provider(config, config->active_provider);
     }
 
-    // Priority 4: First configured provider
     if (config->provider_count > 0) {
         return &config->providers[0];
     }
@@ -887,14 +677,14 @@ static const NamedProviderConfig* select_provider(const KlawedConfig *config,
 // Test Execution
 // ============================================================================
 
-static TestResult run_test(const LLMProviderConfig *config, const TestDefinition *test) {
+static TestResult run_test(Provider *provider, const TestDefinition *test) {
     TestResult result = {0};
     result.name = test->name;
 
     double start = get_time_ms();
 
     char *error = NULL;
-    char *response = run_conversation(config, test->query, &result.tools_used, &error);
+    char *response = run_conversation(provider, test->query, &result.tools_used, &error);
 
     result.duration_ms = get_time_ms() - start;
 
@@ -908,16 +698,13 @@ static TestResult run_test(const LLMProviderConfig *config, const TestDefinition
         result.passed = 1;
         result.response = response;
 
-        // Check if expected tools were used
         if (test->expected_tools && result.tools_used) {
-            // Simple check - could be more sophisticated
             char expected_copy[256];
             strlcpy(expected_copy, test->expected_tools, sizeof(expected_copy));
 
             char *saveptr;
             char *tool = strtok_r(expected_copy, ",", &saveptr);
             while (tool) {
-                // Trim whitespace
                 while (isspace(*tool)) tool++;
                 char *end = tool + strlen(tool) - 1;
                 while (end > tool && isspace(*end)) *end-- = '\0';
@@ -1001,7 +788,7 @@ static void list_providers(const KlawedConfig *config) {
         const NamedProviderConfig *npc = &config->providers[i];
         int is_active = (strcmp(npc->key, config->active_provider) == 0);
 
-        printf("\n%s%s%s\n", npc->key, is_active ? " [ACTIVE]" : "", "");
+        printf("\n%s%s\n", npc->key, is_active ? " [ACTIVE]" : "");
         printf("  Type:    %s\n", config_provider_type_to_string(npc->config.provider_type));
         printf("  Name:    %s\n", npc->config.provider_name[0] ? npc->config.provider_name : "(not set)");
         printf("  Model:   %s\n", npc->config.model);
@@ -1040,7 +827,6 @@ static void print_usage(const char *program) {
 }
 
 int main(int argc, char *argv[]) {
-    // Parse arguments
     int do_list = 0;
     int do_test_all = 0;
     int do_tests[TEST_COUNT] = {0};
@@ -1075,13 +861,11 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Default action
     if (!do_list && !do_test_all && !do_tests[TEST_READ] && !do_tests[TEST_GLOB] &&
         !do_tests[TEST_GREP] && !do_tests[TEST_BASH] && !do_tests[TEST_MULTI]) {
         do_list = 1;
     }
 
-    // Load configuration
     KlawedConfig config;
     if (load_user_config(&config) != 0) {
         printf("Warning: Could not load ~/.klawed/config.json\n");
@@ -1092,7 +876,6 @@ int main(int argc, char *argv[]) {
         list_providers(&config);
     }
 
-    // Run tests if requested
     int num_tests_to_run = do_test_all ? TEST_COUNT : 0;
     if (!do_test_all) {
         for (int i = 0; i < TEST_COUNT; i++) {
@@ -1102,35 +885,39 @@ int main(int argc, char *argv[]) {
 
     if (num_tests_to_run > 0) {
         print_header("Provider API Call Tests");
-        printf("Testing real API calls with tool validation\n");
+        printf("Testing real API calls using actual klawed provider code\n");
         printf("WARNING: These tests make ACTUAL API calls and may incur costs!\n\n");
 
-        // Select provider
         const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
-        const NamedProviderConfig *provider = select_provider(&config, cli_provider, env_provider);
+        const NamedProviderConfig *named_provider = select_provider(&config, cli_provider, env_provider);
 
-        if (!provider) {
+        if (!named_provider) {
             printf("Error: No provider configured. Please set up ~/.klawed/config.json\n");
             return 1;
         }
 
-        print_provider_info(provider);
+        print_provider_info(named_provider);
         printf("\n");
 
-        // Verify API key is set for non-local providers
-        if (!provider->config.api_key[0] &&
-            provider->config.provider_type != PROVIDER_BEDROCK) {
-            // Check if it's a local instance
-            if (strstr(provider->config.api_base, "localhost") == NULL &&
-                strstr(provider->config.api_base, "127.0.0.1") == NULL &&
-                strstr(provider->config.api_base, "192.168.") == NULL) {
-                printf("Error: API key not set for provider '%s'\n", provider->key);
-                printf("Set the environment variable specified in api_key_env\n");
-                return 1;
-            }
+        // Initialize provider using the actual klawed provider code
+        ProviderInitResult provider_result;
+        provider_init_from_config(named_provider->key, &named_provider->config, &provider_result);
+
+        if (provider_result.error_message) {
+            printf("Error: Failed to initialize provider: %s\n", provider_result.error_message);
+            free(provider_result.error_message);
+            return 1;
         }
 
-        printf("Running %d test(s)...\n", num_tests_to_run);
+        if (!provider_result.provider) {
+            printf("Error: Provider initialization returned NULL\n");
+            free(provider_result.api_url);
+            free(provider_result.model);
+            return 1;
+        }
+
+        printf("Provider initialized: %s\n", provider_result.api_url ? provider_result.api_url : "(no URL)");
+        printf("\nRunning %d test(s)...\n", num_tests_to_run);
 
         TestResult results[TEST_COUNT];
         int result_count = 0;
@@ -1141,7 +928,7 @@ int main(int argc, char *argv[]) {
                 printf("\n  Running test: %s", test->name);
                 fflush(stdout);
 
-                TestResult result = run_test(&provider->config, test);
+                TestResult result = run_test(provider_result.provider, test);
                 results[result_count++] = result;
 
                 printf("\r");
@@ -1151,14 +938,19 @@ int main(int argc, char *argv[]) {
 
         print_summary(results, result_count);
 
-        // Cleanup
         for (int i = 0; i < result_count; i++) {
             free(results[i].tools_used);
             free(results[i].response);
             free(results[i].error);
         }
 
-        // Return exit code based on results
+        // Cleanup provider
+        if (provider_result.provider->cleanup) {
+            provider_result.provider->cleanup(provider_result.provider);
+        }
+        free(provider_result.api_url);
+        free(provider_result.model);
+
         for (int i = 0; i < result_count; i++) {
             if (results[i].failed) return 1;
         }
