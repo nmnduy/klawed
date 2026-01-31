@@ -556,22 +556,59 @@ char* bedrock_converse_convert_request(const char *openai_request) {
                 cJSON *tool_call_id = cJSON_GetObjectItem(msg, "tool_call_id");
                 if (!tool_call_id || !cJSON_IsString(tool_call_id)) continue;
 
-                /* Tool results go in a user message with toolResult block */
-                cJSON *converse_msg = cJSON_CreateObject();
-                if (!converse_msg) continue;
+                /* Check if previous message was also a tool result - if so, merge into it.
+                 * Bedrock Converse API requires all tool results to be in a single user
+                 * message with multiple toolResult content blocks, not multiple user messages.
+                 */
+                cJSON *converse_msg = NULL;
+                cJSON *content_array = NULL;
+                int msg_count = cJSON_GetArraySize(converse_messages);
 
-                cJSON_AddStringToObject(converse_msg, "role", "user");
+                if (msg_count > 0) {
+                    cJSON *last_msg = cJSON_GetArrayItem(converse_messages, msg_count - 1);
+                    if (last_msg) {
+                        cJSON *last_role = cJSON_GetObjectItem(last_msg, "role");
+                        if (last_role && cJSON_IsString(last_role) &&
+                            strcmp(last_role->valuestring, "user") == 0) {
+                            /* Check if last message has toolResult content */
+                            cJSON *last_content = cJSON_GetObjectItem(last_msg, "content");
+                            if (last_content && cJSON_IsArray(last_content) &&
+                                cJSON_GetArraySize(last_content) > 0) {
+                                cJSON *first_block = cJSON_GetArrayItem(last_content, 0);
+                                if (first_block && cJSON_GetObjectItem(first_block, "toolResult")) {
+                                    /* Previous message is a tool result message, reuse it */
+                                    converse_msg = last_msg;
+                                    content_array = last_content;
+                                    LOG_DEBUG("Merging tool result into existing user message for toolUseId: %s",
+                                              tool_call_id->valuestring);
+                                }
+                            }
+                        }
+                    }
+                }
 
-                cJSON *content_array = cJSON_CreateArray();
-                if (!content_array) {
-                    cJSON_Delete(converse_msg);
-                    continue;
+                /* Create new user message if not merging with previous */
+                if (!converse_msg) {
+                    converse_msg = cJSON_CreateObject();
+                    if (!converse_msg) continue;
+
+                    cJSON_AddStringToObject(converse_msg, "role", "user");
+
+                    content_array = cJSON_CreateArray();
+                    if (!content_array) {
+                        cJSON_Delete(converse_msg);
+                        continue;
+                    }
+                    cJSON_AddItemToObject(converse_msg, "content", content_array);
+                    cJSON_AddItemToArray(converse_messages, converse_msg);
                 }
 
                 cJSON *tool_result_block = cJSON_CreateObject();
                 if (!tool_result_block) {
-                    cJSON_Delete(content_array);
-                    cJSON_Delete(converse_msg);
+                    if (converse_msg != cJSON_GetArrayItem(converse_messages, msg_count - 1)) {
+                        /* We created this message, need to clean it up on error */
+                        cJSON_Delete(converse_msg);
+                    }
                     continue;
                 }
 
@@ -579,8 +616,9 @@ char* bedrock_converse_convert_request(const char *openai_request) {
                 cJSON *tool_result = cJSON_CreateObject();
                 if (!tool_result) {
                     cJSON_Delete(tool_result_block);
-                    cJSON_Delete(content_array);
-                    cJSON_Delete(converse_msg);
+                    if (converse_msg != cJSON_GetArrayItem(converse_messages, msg_count - 1)) {
+                        cJSON_Delete(converse_msg);
+                    }
                     continue;
                 }
 
@@ -618,8 +656,6 @@ char* bedrock_converse_convert_request(const char *openai_request) {
 
                 cJSON_AddItemToObject(tool_result_block, "toolResult", tool_result);
                 cJSON_AddItemToArray(content_array, tool_result_block);
-                cJSON_AddItemToObject(converse_msg, "content", content_array);
-                cJSON_AddItemToArray(converse_messages, converse_msg);
 
                 LOG_DEBUG("Converted tool result for toolUseId: %s", tool_call_id->valuestring);
             }
