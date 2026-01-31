@@ -1,5 +1,5 @@
 # Build artifacts
-test_provider_configs
+build/
 *.o
 
 # Environment files with secrets

@@ -20,11 +20,15 @@ else
     LDFLAGS += -lbsd
 endif
 
-TESTS = test_provider_configs test_provider_api_calls
+BUILD_DIR = build
+TESTS = $(BUILD_DIR)/test_provider_configs $(BUILD_DIR)/test_provider_api_calls
 
 .PHONY: all clean check-deps help
 
-all: check-deps $(TESTS)
+all: check-deps $(BUILD_DIR) $(TESTS)
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
 check-deps:
 	@echo "Checking dependencies..."
@@ -40,15 +44,15 @@ CONFIG_SOURCES = \
     ../src/array_resize.c
 
 # Configuration-only test (no API calls)
-test_provider_configs: test_provider_configs.c test_provider_configs.h $(CONFIG_SOURCES)
+$(BUILD_DIR)/test_provider_configs: test_provider_configs.c test_provider_configs.h $(CONFIG_SOURCES) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ test_provider_configs.c $(CONFIG_SOURCES) $(LDFLAGS)
 
 # API call test (makes real API calls!)
-test_provider_api_calls: test_provider_api_calls.c $(CONFIG_SOURCES)
+$(BUILD_DIR)/test_provider_api_calls: test_provider_api_calls.c $(CONFIG_SOURCES) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ test_provider_api_calls.c $(CONFIG_SOURCES) $(LDFLAGS)
 
 clean:
-	rm -f $(TESTS)
+	rm -rf $(BUILD_DIR)
 
 help:
 	@echo "Manual Provider Test Suite"
@@ -60,9 +64,9 @@ help:
 	@echo "  clean                  Remove built files"
 	@echo ""
 	@echo "Usage:"
-	@echo "  ./test_provider_configs --list"
-	@echo "  ./test_provider_configs --test-all"
+	@echo "  $(BUILD_DIR)/test_provider_configs --list"
+	@echo "  $(BUILD_DIR)/test_provider_configs --test-all"
 	@echo ""
 	@echo "  export OPENAI_API_KEY='sk-...'"
-	@echo "  ./test_provider_api_calls --test-all"
-	@echo "  ./test_provider_api_calls --test-read --verbose"
+	@echo "  $(BUILD_DIR)/test_provider_api_calls --test-all"
+	@echo "  $(BUILD_DIR)/test_provider_api_calls --test-read --verbose"
