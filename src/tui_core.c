@@ -146,6 +146,15 @@ static void init_ncurses_colors(void) {
                 rgb_to_ncurses(asst_bg_g),
                 rgb_to_ncurses(asst_bg_b));
 
+            // Dimmed tool text color: blend 50% foreground + 50% background for subtle gray
+            int tool_dim_r = (g_theme.foreground_rgb.r * 5 + g_theme.background_rgb.r * 5) / 10;
+            int tool_dim_g = (g_theme.foreground_rgb.g * 5 + g_theme.background_rgb.g * 5) / 10;
+            int tool_dim_b = (g_theme.foreground_rgb.b * 5 + g_theme.background_rgb.b * 5) / 10;
+            init_color(26,
+                rgb_to_ncurses(tool_dim_r),
+                rgb_to_ncurses(tool_dim_g),
+                rgb_to_ncurses(tool_dim_b));
+
             // Initialize color pairs with custom colors
             init_pair(NCURSES_PAIR_FOREGROUND, 16, default_bg);
             init_pair(NCURSES_PAIR_USER, 17, default_bg);
@@ -166,6 +175,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_USER_MSG_BG, 16, 23);       // User message background (same as input bg)
             init_pair(NCURSES_PAIR_ASSISTANT_BG, 16, 25);      // Foreground on subtle assistant background
             init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, 18, default_bg);  // Assistant color with no background (for border)
+            init_pair(NCURSES_PAIR_TOOL_DIM, 26, default_bg);             // Dimmed gray for tool text
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -195,6 +205,13 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_USER_MSG_BG, (short)fg_idx, (short)236);   // User message background (same as input bg)
             init_pair(NCURSES_PAIR_ASSISTANT_BG, (short)fg_idx, (short)235);  // Foreground on very dark gray (235)
             init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, (short)assistant_idx, default_bg);  // Assistant color with no background (for border)
+            // Dimmed tool text: derive gray from foreground brightness mapped to grayscale 232-255, then darken by ~40%
+            int fg_brightness = (g_theme.foreground_rgb.r + g_theme.foreground_rgb.g + g_theme.foreground_rgb.b) / 3;
+            int dim_brightness = (fg_brightness * 6) / 10;  // Darken by 40%
+            int tool_dim_gray_idx = 232 + (dim_brightness * 23) / 255;
+            if (tool_dim_gray_idx < 232) tool_dim_gray_idx = 232;
+            if (tool_dim_gray_idx > 255) tool_dim_gray_idx = 255;
+            init_pair(NCURSES_PAIR_TOOL_DIM, (short)tool_dim_gray_idx, default_bg);
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -219,6 +236,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_USER_MSG_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: user message background
             init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, default_bg);  // Fallback: no background (use default)
             init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, COLOR_CYAN, default_bg);  // Fallback: cyan (assistant color)
+            init_pair(NCURSES_PAIR_TOOL_DIM, COLOR_WHITE, default_bg);  // Fallback: foreground color for dimmed tool text
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -242,6 +260,7 @@ static void init_ncurses_colors(void) {
         init_pair(NCURSES_PAIR_USER_MSG_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: user message background
         init_pair(NCURSES_PAIR_ASSISTANT_BG, COLOR_WHITE, default_bg);  // Fallback: no background (use default)
         init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, COLOR_CYAN, default_bg);  // Fallback: cyan (assistant color)
+        init_pair(NCURSES_PAIR_TOOL_DIM, COLOR_WHITE, default_bg);  // Fallback: foreground color for dimmed tool text
     }
 }
 

@@ -233,6 +233,9 @@ void tui_handle_resize(TUIState *tui) {
             case COLOR_PAIR_SEARCH:
                 mapped_pair = NCURSES_PAIR_SEARCH;
                 break;
+            case COLOR_PAIR_TOOL_DIM:
+                mapped_pair = NCURSES_PAIR_TOOL_DIM;
+                break;
             default:
                 /* Keep default mapped_pair (foreground) */
                 break;

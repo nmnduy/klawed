@@ -44,7 +44,8 @@ typedef enum {
     COLOR_PAIR_TODO_COMPLETED = 9,   // Green for completed tasks
     COLOR_PAIR_TODO_IN_PROGRESS = 10, // Yellow for in-progress tasks
     COLOR_PAIR_TODO_PENDING = 11,     // Cyan/Blue for pending tasks
-    COLOR_PAIR_SEARCH = 12            // Highlight color for search matches
+    COLOR_PAIR_SEARCH = 12,           // Highlight color for search matches
+    COLOR_PAIR_TOOL_DIM = 13          // Dimmed gray for tool text (arguments)
 } TUIColorPair;
 
 // Ncurses color pair definitions (internal indices for init_pair/COLOR_PAIR)
@@ -65,6 +66,7 @@ typedef enum {
 #define NCURSES_PAIR_USER_MSG_BG 14
 #define NCURSES_PAIR_ASSISTANT_BG 15
 #define NCURSES_PAIR_ASSISTANT_BORDER_BG 16  // Assistant border color on assistant background
+#define NCURSES_PAIR_TOOL_DIM 17             // Dimmed gray for tool text
 
 // Conversation message entry
 typedef struct {

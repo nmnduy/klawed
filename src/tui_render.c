@@ -776,6 +776,9 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         case COLOR_PAIR_SEARCH:
             mapped_pair = NCURSES_PAIR_SEARCH;
             break;
+        case COLOR_PAIR_TOOL_DIM:
+            mapped_pair = NCURSES_PAIR_TOOL_DIM;
+            break;
         default:
             /* Keep default mapped_pair (foreground) */
             break;
@@ -848,8 +851,15 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             // Caret-style assistant: use foreground color
             text_pair = NCURSES_PAIR_FOREGROUND;
         } else if (prefix && prefix[0] != '\0') {
-            // Other messages with prefix use foreground
-            text_pair = NCURSES_PAIR_FOREGROUND;
+            // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F)
+            int is_tool_message = (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f');
+            if (is_tool_message) {
+                // Tool message: use dimmed color for text (tag keeps tool color)
+                text_pair = NCURSES_PAIR_TOOL_DIM;
+            } else {
+                // Other messages with prefix use foreground
+                text_pair = NCURSES_PAIR_FOREGROUND;
+            }
         } else {
             // No prefix: use the mapped pair
             text_pair = mapped_pair;
