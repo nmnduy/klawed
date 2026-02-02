@@ -779,6 +779,9 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         case COLOR_PAIR_TOOL_DIM:
             mapped_pair = NCURSES_PAIR_TOOL_DIM;
             break;
+        case COLOR_PAIR_DIFF_CONTEXT:
+            mapped_pair = NCURSES_PAIR_DIFF_CONTEXT;
+            break;
         default:
             /* Keep default mapped_pair (foreground) */
             break;
