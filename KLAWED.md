@@ -28,7 +28,7 @@ Project instructions for Klawed when working with this codebase.
 - **TODO system**: `src/todo.c`, `src/todo.h`
 - **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/keyboard-shortcuts.md`
 - **Arena allocator**: `src/arena.h` (region-based memory management, single-header library)
-- **Memvid integration**: `src/memvid.c`, `src/memvid.h`, `docs/memvid.md` (persistent memory)
+- **Memory system**: `src/memory_db.c`, `src/memory_db.h` (SQLite-based persistent memory with FTS5)
 - **Memory injection**: `src/context/memory_injection.c`, `src/context/memory_injection.h` (automatic context injection before each API request)
 - **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management with API token tracking)
 
@@ -136,14 +136,6 @@ make              # Build: output to build/klawed
 make test         # Run unit tests (tests/ directory)
 ```
 
-**With Memvid support (persistent memory):**
-```bash
-make MEMVID=1     # Build with memvid support (requires memvid-ffi library)
-make MEMVID=0     # Explicitly disable memvid support
-# Or let it auto-detect (default):
-make              # Will auto-detect if libmemvid_ffi is available
-```
-
 `make test` can take a while, most likely more than the default bash command timeout. So increase timeout value if required.
 
 **Running:**
@@ -200,7 +192,7 @@ export OPENAI_API_KEY="your-api-key"
 - **MCP**: `KLAWED_MCP_ENABLED=1` to enable (disabled by default), `KLAWED_MCP_CONFIG` for config path
   - `KLAWED_MCP_INIT_TIMEOUT` - Timeout for MCP server initialization in seconds (default: 10, 0=no timeout, overrides config file)
   - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
-- **Memory**: `KLAWED_MEMORY_PATH` for custom memory file location (default: `.klawed/memory.mv2`)
+- **Memory**: `KLAWED_MEMORY_PATH` for custom memory database location (default: `.klawed/memory.db`)
 - **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes, requires memvid)
   - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of model token limit (default: 60)
   - `KLAWED_COMPACT_KEEP_RECENT` - Keep this many recent messages after compaction (default: 20)
@@ -217,7 +209,7 @@ export OPENAI_API_KEY="your-api-key"
 - Prompt caching: Enabled
 - Max tokens: 16384 (configurable via `KLAWED_MAX_TOKENS`)
 - Token usage tracking: Enabled (stores in separate `token_usage.db`)
-- Memory file: `./.klawed/memory.mv2` (project-local, when memvid enabled)
+- Memory database: `./.klawed/memory.db` (project-local, SQLite with FTS5)
 
 ## Development
 

@@ -11,18 +11,16 @@
 
 #include "memory_injection.h"
 #include "../logger.h"
-
-#ifdef HAVE_MEMVID
-#include "../memvid.h"
+#include "../memory_db.h"
 
 /**
- * Build memory context string from memvid searches.
+ * Build memory context string from memory database searches.
  * Queries for user preferences, active tasks, and project knowledge.
  */
 char* build_memory_context(const char *working_dir) {
-    MemvidHandle *handle = memvid_get_global();
+    MemoryDB *handle = memory_db_get_global();
     if (!handle) {
-        LOG_DEBUG("Memory context: No memvid handle available");
+        LOG_DEBUG("Memory context: No memory database handle available");
         return NULL;
     }
 
@@ -60,55 +58,42 @@ char* build_memory_context(const char *working_dir) {
     } while(0)
 
     // 1. Search for user preferences
-    char *user_memories = memvid_get_entity_memories(handle, "user");
-    if (user_memories) {
-        cJSON *memories = cJSON_Parse(user_memories);
-        memvid_free_string(user_memories);
-
-        if (memories && cJSON_IsArray(memories) && cJSON_GetArraySize(memories) > 0) {
-            CONTEXT_APPEND("### User Preferences\n");
-            int count = cJSON_GetArraySize(memories);
-            for (int i = 0; i < count && i < 10; i++) {  // Limit to 10 preferences
-                cJSON *mem = cJSON_GetArrayItem(memories, i);
-                cJSON *slot = cJSON_GetObjectItem(mem, "slot");
-                cJSON *value = cJSON_GetObjectItem(mem, "value");
-                if (slot && cJSON_IsString(slot) && value && cJSON_IsString(value)) {
-                    CONTEXT_APPEND("- %s: %s\n", slot->valuestring, value->valuestring);
-                    has_content = 1;
-                }
+    MemorySearchResult *user_memories = memory_db_get_entity_memories(handle, "user");
+    if (user_memories && user_memories->count > 0) {
+        CONTEXT_APPEND("### User Preferences\n");
+        for (size_t i = 0; i < user_memories->count && i < 10; i++) {  // Limit to 10 preferences
+            MemoryCard *card = &user_memories->cards[i];
+            if (card->slot && card->value) {
+                CONTEXT_APPEND("- %s: %s\n", card->slot, card->value);
+                has_content = 1;
             }
-            CONTEXT_APPEND("\n");
         }
-        if (memories) cJSON_Delete(memories);
+        CONTEXT_APPEND("\n");
+        memory_db_free_result(user_memories);
     }
 
-    // 2. Search for active tasks/goals
-    char *task_results = memvid_search(handle, "task: goal:", 10);
-    if (task_results) {
-        cJSON *results = cJSON_Parse(task_results);
-        memvid_free_string(task_results);
-
-        if (results && cJSON_IsArray(results) && cJSON_GetArraySize(results) > 0) {
-            CONTEXT_APPEND("### Active Tasks\n");
-            int count = cJSON_GetArraySize(results);
-            for (int i = 0; i < count && i < 5; i++) {  // Limit to 5 tasks
-                cJSON *mem = cJSON_GetArrayItem(results, i);
-                cJSON *entity = cJSON_GetObjectItem(mem, "entity");
-                cJSON *value = cJSON_GetObjectItem(mem, "value");
-                // Check if entity starts with "task:" or "goal:"
-                if (entity && cJSON_IsString(entity)) {
-                    const char *ent = entity->valuestring;
-                    if (strncmp(ent, "task:", 5) == 0 || strncmp(ent, "goal:", 5) == 0) {
-                        if (value && cJSON_IsString(value)) {
-                            CONTEXT_APPEND("- %s\n", value->valuestring);
-                            has_content = 1;
-                        }
+    // 2. Search for active tasks/goals using FTS
+    MemorySearchResult *task_results = memory_db_search(handle, "task goal", 10);
+    if (task_results && task_results->count > 0) {
+        CONTEXT_APPEND("### Active Tasks\n");
+        int tasks_added = 0;
+        for (size_t i = 0; i < task_results->count && tasks_added < 5; i++) {  // Limit to 5 tasks
+            MemoryCard *card = &task_results->cards[i];
+            // Check if entity starts with "task:" or "goal:"
+            if (card->entity) {
+                if (strncmp(card->entity, "task:", 5) == 0 || strncmp(card->entity, "goal:", 5) == 0) {
+                    if (card->value) {
+                        CONTEXT_APPEND("- %s\n", card->value);
+                        has_content = 1;
+                        tasks_added++;
                     }
                 }
             }
+        }
+        if (tasks_added > 0) {
             CONTEXT_APPEND("\n");
         }
-        if (results) cJSON_Delete(results);
+        memory_db_free_result(task_results);
     }
 
     // 3. Search for project-specific knowledge
@@ -116,26 +101,18 @@ char* build_memory_context(const char *working_dir) {
         char project_entity[300];
         snprintf(project_entity, sizeof(project_entity), "project.%s", project_name);
 
-        char *project_memories = memvid_get_entity_memories(handle, project_entity);
-        if (project_memories) {
-            cJSON *memories = cJSON_Parse(project_memories);
-            memvid_free_string(project_memories);
-
-            if (memories && cJSON_IsArray(memories) && cJSON_GetArraySize(memories) > 0) {
-                CONTEXT_APPEND("### Project Knowledge (%s)\n", project_name);
-                int count = cJSON_GetArraySize(memories);
-                for (int i = 0; i < count && i < 10; i++) {  // Limit to 10 items
-                    cJSON *mem = cJSON_GetArrayItem(memories, i);
-                    cJSON *slot = cJSON_GetObjectItem(mem, "slot");
-                    cJSON *value = cJSON_GetObjectItem(mem, "value");
-                    if (slot && cJSON_IsString(slot) && value && cJSON_IsString(value)) {
-                        CONTEXT_APPEND("- %s: %s\n", slot->valuestring, value->valuestring);
-                        has_content = 1;
-                    }
+        MemorySearchResult *project_memories = memory_db_get_entity_memories(handle, project_entity);
+        if (project_memories && project_memories->count > 0) {
+            CONTEXT_APPEND("### Project Knowledge (%s)\n", project_name);
+            for (size_t i = 0; i < project_memories->count && i < 10; i++) {  // Limit to 10 items
+                MemoryCard *card = &project_memories->cards[i];
+                if (card->slot && card->value) {
+                    CONTEXT_APPEND("- %s: %s\n", card->slot, card->value);
+                    has_content = 1;
                 }
-                CONTEXT_APPEND("\n");
             }
-            if (memories) cJSON_Delete(memories);
+            CONTEXT_APPEND("\n");
+            memory_db_free_result(project_memories);
         }
     }
 
@@ -217,9 +194,9 @@ int inject_memory_context(ConversationState *state) {
         return -1;
     }
 
-    // Check if memvid is available
-    if (!memvid_is_available() || !memvid_get_global()) {
-        LOG_DEBUG("Memory context injection: Memvid not available");
+    // Check if memory database is available
+    if (!memory_db_get_global()) {
+        LOG_DEBUG("Memory context injection: Memory database not available");
         return 0;  // Not an error, just nothing to inject
     }
 
@@ -308,5 +285,3 @@ int inject_memory_context(ConversationState *state) {
     free(memory_context);
     return 0;
 }
-
-#endif /* HAVE_MEMVID */

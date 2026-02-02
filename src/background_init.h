@@ -34,7 +34,7 @@ struct PersistenceDB* await_database_ready(ConversationState *state);
  * Check if memvid is ready (wait if not ready)
  * Returns 0 on success, -1 on failure
  */
-int await_memvid_ready(ConversationState *state);
+int await_memory_db_ready(ConversationState *state);
 
 /*
  * Cleanup background loaders and join threads
