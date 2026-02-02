@@ -341,8 +341,15 @@ void tui_handle_resize(TUIState *tui) {
                 // Skip the regular newline below for user messages
                 continue;
             } else if (entry->prefix && entry->prefix[0] != '\0') {
-                // Other messages with prefix use foreground
-                text_pair = NCURSES_PAIR_FOREGROUND;
+                // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F)
+                int is_tool_message = (entry->prefix[0] == '\xe2' && entry->prefix[1] == '\x97' && entry->prefix[2] == '\x8f');
+                if (is_tool_message) {
+                    // Tool message: use dimmed color for text (tag keeps tool color)
+                    text_pair = NCURSES_PAIR_TOOL_DIM;
+                } else {
+                    // Other messages with prefix use foreground
+                    text_pair = NCURSES_PAIR_FOREGROUND;
+                }
                 if (has_colors()) {
                     wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
                 }
