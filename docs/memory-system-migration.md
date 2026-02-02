@@ -81,7 +81,7 @@ CREATE TRIGGER memories_fts_delete AFTER DELETE ON memories ...
 | `MemoryRecall` | ✅ Migrated | Uses `memory_db_get_current()` |
 | `MemorySearch` | ✅ Migrated | Uses `memory_db_search()` with FTS5 |
 
-All tools support the optional `memory_file` parameter for custom memory database files. The legacy parameter name `memvid_file` is still accepted for backward compatibility.
+All tools support the optional `memory_file` parameter for custom memory database files.
 
 #### 4. Tool Definitions (`src/tools/tool_definitions.c`)
 **Status: COMPLETE**
@@ -141,18 +141,13 @@ All tools support the optional `memory_file` parameter for custom memory databas
 
 ## Architecture Comparison
 
-### Old: Memvid System
+### Old: Memvid System (Obsolete - Removed)
 ```
-┌─────────────────┐     ┌──────────────┐     ┌─────────────────┐
-│  Memory Tools   │────▶│  memvid.c    │────▶│  libmemvid_ffi  │
-│  (klawed.c)     │     │  (C wrapper) │     │  (Rust library) │
-└─────────────────┘     └──────────────┘     └─────────────────┘
-                                                        │
-                                                        ▼
-                                               ┌─────────────────┐
-                                               │  memory.mv2     │
-                                               │  (custom format)│
-                                               └─────────────────┘
+The old memvid system has been removed. It was a Rust-based memory system
+that stored memories in `.mv2` files. It required:
+- Rust toolchain to build
+- memvid-ffi FFI bindings
+- External memvid-core library
 ```
 
 ### New: SQLite System
@@ -220,7 +215,7 @@ The tool API remains unchanged. Existing code using memory tools continues to wo
 
 | Setting | Old | New |
 |---------|-----|-----|
-| Default memory file | `.klawed/memory.mv2` | `.klawed/memory.db` |
+| Default memory file | N/A (removed) | `.klawed/memory.db` |
 
 ---
 
@@ -240,9 +235,9 @@ The tool API remains unchanged. Existing code using memory tools continues to wo
 To verify the migration is complete:
 
 ```bash
-# 1. Build without memvid support
+# 1. Build the project
 make clean
-make  # Should build successfully without MEMVID=1
+make  # Should build successfully
 
 # 2. Verify memory tools work
 echo '{"entity": "test", "slot": "migration", "value": "complete", "kind": "fact"}' | ./build/klawed "store this memory"
@@ -254,7 +249,7 @@ ls -la .klawed/memory.db  # Should exist
 sqlite3 .klawed/memory.db "SELECT * FROM memories_fts;"  # Should show indexed content
 
 # 5. Run memory-related tests
-make test-memvid  # May need renaming to test-memory-db
+make test-memory-db
 ```
 
 ---

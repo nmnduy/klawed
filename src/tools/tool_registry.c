@@ -35,7 +35,7 @@ static Tool tools[] = {
     {"Grep", tool_grep},
     {"TodoWrite", tool_todo_write},
     {"UploadImage", tool_upload_image},
-    // Memory tools (always registered, but return error if HAVE_MEMVID not defined)
+    // Memory tools (always registered, use SQLite memory database)
     {"MemoryStore", tool_memory_store},
     {"MemoryRecall", tool_memory_recall},
     {"MemorySearch", tool_memory_search},

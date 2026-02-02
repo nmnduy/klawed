@@ -5,12 +5,12 @@
  * Context Compaction System
  *
  * When enabled and context approaches threshold:
- * 1. Store older messages in memvid (searchable long-term memory)
+ * 1. Store older messages in SQLite memory database (searchable long-term memory)
  * 2. Replace with a compaction notice message
  * 3. Continue - AI can use MemorySearch to retrieve past context
  *
  * Requirements:
- * - Memvid must be available (HAVE_MEMVID)
+ * - SQLite memory database (always available)
  * - Auto-compact flag enabled (--auto-compact or KLAWED_AUTO_COMPACT=1)
  */
 
@@ -58,14 +58,14 @@ int compaction_should_trigger(const struct ConversationState *state, const Compa
 
 /**
  * Perform compaction:
- * 1. Store old messages to memvid
+ * 1. Store old messages to SQLite memory database
  * 2. Generate structured extraction (files modified, tools used)
  * 3. Inject compaction notice message
  * 4. Remove compacted messages from state
  *
  * @param state Current conversation state (will be modified)
  * @param config Compaction configuration (will update last_compacted_index)
- * @param session_id Current session ID (for memvid storage)
+ * @param session_id Current session ID (for memory storage)
  * @param result Optional: receives compaction statistics for UI notification (can be NULL)
  * @return 0 on success, -1 on error
  */

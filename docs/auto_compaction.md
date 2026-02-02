@@ -283,6 +283,4 @@ Potential improvements for future versions:
 ## Related Documentation
 
 - [SQLite Memory System](memory_db.md) - Long-term memory storage with FTS5
-- [Memory System Migration](memory-system-migration.md) - Migration from memvid to SQLite
 - [Session Management](session.md) - Session ID generation and tracking
-- [Database Rotation](database-rotation.md) - Related but different: rotates SQLite records

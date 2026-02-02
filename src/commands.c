@@ -573,10 +573,6 @@ static int cmd_compact(ConversationState *state, const char *args) {
         return -1;
     }
 
-#ifndef HAVE_MEMVID
-    print_error("Compaction requires memvid support. Build with MEMVID=1");
-    return -1;
-#else
     // Check if we have a compaction config
     if (!state->compaction_config) {
         // Create a temporary config for manual compaction
@@ -619,7 +615,6 @@ static int cmd_compact(ConversationState *state, const char *args) {
         print_error("Compaction failed");
         return -1;
     }
-#endif
 }
 
 static int cmd_autocompact(ConversationState *state, const char *args) {
@@ -630,10 +625,6 @@ static int cmd_autocompact(ConversationState *state, const char *args) {
         return -1;
     }
 
-#ifndef HAVE_MEMVID
-    print_error("Auto-compaction requires memvid support. Build with MEMVID=1");
-    return -1;
-#else
     // Initialize compaction config if not present
     if (!state->compaction_config) {
         state->compaction_config = malloc(sizeof(CompactionConfig));

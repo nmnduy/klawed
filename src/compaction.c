@@ -5,14 +5,12 @@
 #include "persistence.h"
 #include "http_client.h"
 #include "provider.h"
+#include "memory_db.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <bsd/string.h>
-
-/* Memory database (SQLite-based) for context retrieval */
-#include "memory_db.h"
 
 // Default configuration values
 #define DEFAULT_COMPACT_THRESHOLD 60    // 60% of token limit
@@ -279,8 +277,6 @@ int compaction_generate_summary(ConversationState *state,
 
     // Add Anthropic version header if using Anthropic API
     if (state->api_url && strstr(state->api_url, "anthropic.com")) {
-        headers = curl_slist_append(headers, "anthropic-version: 2023-06-01");
-        // Anthropic uses x-api-key instead of Authorization Bearer
         curl_slist_free_all(headers);
         headers = NULL;
         headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -385,13 +381,6 @@ void compaction_init_config(CompactionConfig *config, int enabled, const char *m
 
     config->last_compacted_index = -1; // No compaction yet
     config->current_tokens = 0;        // Will be updated during conversation
-
-#ifndef HAVE_MEMVID
-    if (enabled) {
-        fprintf(stderr, "Warning: Auto-compact enabled but memvid not available. Compaction disabled.\n");
-        config->enabled = 0;
-    }
-#endif
 }
 
 size_t compaction_estimate_message_tokens(const InternalMessage *msg) {
@@ -501,9 +490,6 @@ int compaction_should_trigger(const ConversationState *state, const CompactionCo
         return 0;
     }
 
-#ifndef HAVE_MEMVID
-    return 0; // Can't compact without memvid
-#else
     // Calculate token threshold
     size_t threshold_tokens = (size_t)((config->model_token_limit * config->threshold_percent) / 100);
 
@@ -534,10 +520,8 @@ int compaction_should_trigger(const ConversationState *state, const CompactionCo
 
     // Trigger if we're at or above threshold
     return (current_tokens >= threshold_tokens);
-#endif
 }
 
-#ifdef HAVE_MEMVID
 // Helper function to get text content from a message
 static const char* get_message_text(const InternalMessage *msg) {
     if (!msg || msg->content_count == 0) {
@@ -569,7 +553,10 @@ static void free_message_contents(InternalMessage *msg) {
     msg->content_count = 0;
 }
 
-static int compaction_store_message(const InternalMessage *msg, int msg_index, const char *session_id) {
+/**
+ * Store a message to the SQLite memory database
+ */
+static int compaction_store_message(MemoryDB *db, const InternalMessage *msg, int msg_index, const char *session_id) {
     if (!msg) {
         return -1;
     }
@@ -610,20 +597,12 @@ static int compaction_store_message(const InternalMessage *msg, int msg_index, c
     }
     snprintf(value, value_len, "%s: %s", role_str, text);
 
-    // Store in memvid
-    MemvidHandle *handle = memvid_get_global();
-    if (!handle) {
-        free(value);
-        return -1;
-    }
-
-    int64_t card_id = memvid_put_memory(handle, entity, slot, value,
-                                        MEMVID_KIND_EVENT, MEMVID_RELATION_SETS);
+    // Store in SQLite memory database
+    int64_t card_id = memory_db_store(db, entity, slot, value, MEMORY_KIND_EVENT, MEMORY_RELATION_SETS);
     free(value);
 
     return (card_id >= 0) ? 0 : -1;
 }
-#endif /* HAVE_MEMVID */
 
 int compaction_perform(ConversationState *state, CompactionConfig *config, const char *session_id, CompactionResult *result) {
     // Initialize result to indicate no compaction
@@ -631,13 +610,6 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         memset(result, 0, sizeof(*result));
     }
 
-#ifndef HAVE_MEMVID
-    (void)state;
-    (void)config;
-    (void)session_id;
-    LOG_WARN("Compaction requested but memvid not available. Skipping.");
-    return -1;
-#else
     if (!state || !config) {
         return -1;
     }
@@ -662,13 +634,20 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
     LOG_INFO("Compacting messages %d-%d (keeping last %d messages)",
            compact_start, compact_end, config->keep_recent);
 
+    // Get memory database handle
+    MemoryDB *memdb = memory_db_get_global();
+    if (!memdb) {
+        LOG_ERROR("Memory database not available for compaction");
+        return -1;
+    }
+
     // Track structured information
     int write_count = 0, edit_count = 0, bash_count = 0, read_count = 0;
 
-    // Store each message to memvid and count tool usage
+    // Store each message to memory database and count tool usage
     for (int i = compact_start; i <= compact_end; i++) {
-        if (compaction_store_message(&state->messages[i], i, session_id) != 0) {
-            LOG_WARN("Failed to store message %d to memvid", i);
+        if (compaction_store_message(memdb, &state->messages[i], i, session_id) != 0) {
+            LOG_WARN("Failed to store message %d to memory database", i);
         }
 
         // Extract structured information from assistant messages (tool calls)
@@ -813,5 +792,4 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
              state->count, tokens_after, after_percent);
 
     return 0;
-#endif
 }

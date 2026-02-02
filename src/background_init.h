@@ -1,7 +1,7 @@
 /*
  * background_init.h
  *
- * Async background initialization for system prompt, database, and memvid.
+ * Async background initialization for system prompt, database, and memory database.
  * Allows these components to load in parallel during startup to improve
  * time-to-first-response.
  */
@@ -15,7 +15,7 @@
 struct PersistenceDB;
 
 /*
- * Start all background loaders (system prompt, database, memvid)
+ * Start all background loaders (system prompt, database, memory_db)
  * Returns 0 on success, -1 on error
  */
 int start_background_loaders(ConversationState *state);
@@ -31,7 +31,7 @@ void await_system_prompt_ready(ConversationState *state);
 struct PersistenceDB* await_database_ready(ConversationState *state);
 
 /*
- * Check if memvid is ready (wait if not ready)
+ * Check if memory database is ready (wait if not ready)
  * Returns 0 on success, -1 on failure
  */
 int await_memory_db_ready(ConversationState *state);

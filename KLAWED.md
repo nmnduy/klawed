@@ -193,7 +193,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_MCP_INIT_TIMEOUT` - Timeout for MCP server initialization in seconds (default: 10, 0=no timeout, overrides config file)
   - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
 - **Memory**: `KLAWED_MEMORY_PATH` for custom memory database location (default: `.klawed/memory.db`)
-- **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes, requires memvid)
+- **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes)
   - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of model token limit (default: 60)
   - `KLAWED_COMPACT_KEEP_RECENT` - Keep this many recent messages after compaction (default: 20)
   - `KLAWED_CONTEXT_LIMIT` - Override model token limit (default: 125000)

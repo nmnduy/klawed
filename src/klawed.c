@@ -1683,19 +1683,7 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
-#ifdef HAVE_MEMVID
-    // DISABLED: Blocking initialization moved to background loading
-    // Initialize Memvid persistent memory subsystem
-    // Memory file is stored in .klawed/memory.mv2 relative to working directory
-    // if (memvid_init_global(NULL) == 0) {
-    //     LOG_INFO("Memvid memory subsystem initialized");
-    // } else {
-    //     LOG_WARN("Failed to initialize Memvid memory subsystem - memory tools will not be available");
-    // }
-    // Note: Will be initialized by background loader
-#endif
-
-    // Start background loading of expensive resources (persistence DB, memvid, system prompt)
+    // Start background loading of expensive resources (persistence DB, memory_db, system prompt)
     // This allows the TUI to start immediately while these resources load asynchronously
     LOG_DEBUG("Starting background resource loaders");
 
@@ -1717,7 +1705,7 @@ int main(int argc, char *argv[]) {
         LOG_ERROR("Failed to initialize conversation state synchronization");
         fprintf(stderr, "Error: Unable to initialize conversation state\n");
         free(session_id);
-        // Note: persistence_db and memvid are initialized by background loaders
+        // Note: persistence_db and memory_db are initialized by background loaders
         // which haven't started yet at this point
         curl_global_cleanup();
         log_shutdown();
@@ -1769,7 +1757,7 @@ int main(int argc, char *argv[]) {
         LOG_ERROR("Failed to allocate memory for todo list");
     }
 
-    // Start background loading of expensive resources (persistence DB, memvid, system prompt)
+    // Start background loading of expensive resources (persistence DB, memory_db, system prompt)
     // This must happen after state initialization but before session resume or execution modes
     if (start_background_loaders(&state) != 0) {
         LOG_WARN("Failed to start background loaders, resources will be loaded synchronously");
@@ -1813,9 +1801,7 @@ int main(int argc, char *argv[]) {
                 if (state.persistence_db) {
                     persistence_close(state.persistence_db);
                 }
-#ifdef HAVE_MEMVID
-                memvid_cleanup_global();
-#endif
+                memory_db_cleanup_global();
                 curl_global_cleanup();
                 log_shutdown();
                 return 1;
@@ -1828,9 +1814,7 @@ int main(int argc, char *argv[]) {
             cleanup_background_loaders(&state);
             conversation_free(&state);
             free(session_id);
-#ifdef HAVE_MEMVID
-            memvid_cleanup_global();
-#endif
+            memory_db_cleanup_global();
             curl_global_cleanup();
             log_shutdown();
             return 1;
@@ -1909,9 +1893,7 @@ int main(int argc, char *argv[]) {
             free(state.todo_list);
         }
         conversation_state_destroy(&state);
-#ifdef HAVE_MEMVID
-        memvid_cleanup_global();
-#endif
+        memory_db_cleanup_global();
         curl_global_cleanup();
         return 1;
     }
@@ -1922,9 +1904,7 @@ int main(int argc, char *argv[]) {
         free(state.api_url);
         free(state.model);
         conversation_state_destroy(&state);
-#ifdef HAVE_MEMVID
-        memvid_cleanup_global();
-#endif
+        memory_db_cleanup_global();
         curl_global_cleanup();
         return 1;
     }
@@ -2039,10 +2019,9 @@ int main(int argc, char *argv[]) {
     LOG_INFO("MCP subsystem cleaned up");
 #endif
 
-#ifdef HAVE_MEMVID
-    // Clean up Memvid memory subsystem
-    memvid_cleanup_global();
-    LOG_INFO("Memvid memory subsystem cleaned up");
+    // Clean up memory database
+    memory_db_cleanup_global();
+    LOG_INFO("Memory database cleaned up");
 #endif
 
     curl_global_cleanup();
