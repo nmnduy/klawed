@@ -363,14 +363,23 @@ int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int
         return ctx->last_error;
     }
 
-    // Poll for messages with timeout
-    time_t start_time = time(NULL);
-    time_t timeout_sec = (timeout_ms > 0) ? (timeout_ms / 1000) : 30;
+    // Poll for messages with timeout (millisecond precision)
+    struct timespec start_ts;
+    clock_gettime(CLOCK_MONOTONIC, &start_ts);
+    long timeout_ms_adj = (timeout_ms > 0) ? timeout_ms : 30000;
 
-    LOG_DEBUG("SQLite Queue: Polling for messages (timeout: %ld seconds, sender_filter: %s)",
-              (long)timeout_sec, sender_filter ? sender_filter : "any");
+    LOG_DEBUG("SQLite Queue: Polling for messages (timeout: %ld ms, sender_filter: %s)",
+              timeout_ms_adj, sender_filter ? sender_filter : "any");
 
-    while (time(NULL) - start_time < timeout_sec) {
+    while (1) {
+        // Check if timeout has elapsed
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        long elapsed_ms = (long)((now.tv_sec - start_ts.tv_sec) * 1000 +
+                                 (now.tv_nsec - start_ts.tv_nsec) / 1000000);
+        if (elapsed_ms >= timeout_ms_adj) {
+            break;
+        }
         // Prepare select statement
         sqlite3_stmt *stmt = NULL;
         int rc = sqlite_queue_prepare_statement(ctx, &stmt, SELECT_MESSAGES_SQL);
@@ -432,12 +441,18 @@ int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int
             free(id_array);
         }
 
-        // No messages, wait for poll interval
-        usleep((useconds_t)(ctx->poll_interval * 1000));
+        // No messages, wait a short interval before retrying (50ms for responsive polling)
+        // This allows checking the database multiple times within the timeout window
+        usleep(50000);  // 50ms
     }
 
+    // Timeout is a normal condition when polling - no messages available
+    // Don't log as error, just set the error code for the caller
+    ctx->last_error = SQLITE_QUEUE_ERROR_TIMEOUT;
+    strlcpy(ctx->error_message, "No messages received within timeout", sizeof(ctx->error_message));
+    ctx->error_time = time(NULL);
+
     LOG_DEBUG("SQLite Queue: No messages received within timeout");
-    sqlite_queue_set_error(ctx, SQLITE_QUEUE_ERROR_TIMEOUT, "No messages received within timeout");
     return SQLITE_QUEUE_ERROR_TIMEOUT;
 }
 
@@ -1524,9 +1539,7 @@ static void *sqlite_queue_worker_thread(void *arg) {
             printf("SQLite Queue: Processing message ID %lld\n", pm->msg_id);
             fflush(stdout);
 
-            // Acknowledge the message first (mark as received)
-            sqlite_queue_acknowledge(ctx, pm->msg_id);
-
+            // Note: Message was already acknowledged when enqueued
             // Process the message interactively
             sqlite_queue_process_interactive(ctx, ctx->state, pm->content);
 
@@ -1556,6 +1569,28 @@ static void *sqlite_queue_worker_thread(void *arg) {
 static int sqlite_queue_enqueue_message(SQLiteQueueContext *ctx, long long msg_id, const char *content) {
     if (!ctx || !content) {
         return -1;
+    }
+
+    pthread_mutex_lock(&ctx->queue_mutex);
+
+    // Check if message is already in the pending queue (duplicate detection)
+    PendingMessage *check = ctx->pending_messages;
+    while (check) {
+        if (check->msg_id == msg_id) {
+            pthread_mutex_unlock(&ctx->queue_mutex);
+            LOG_DEBUG("SQLite Queue: Message ID %lld already in queue, skipping duplicate", msg_id);
+            return 0;  // Already queued, not an error
+        }
+        check = check->next;
+    }
+
+    pthread_mutex_unlock(&ctx->queue_mutex);
+
+    // Acknowledge the message immediately to prevent re-receiving it
+    int ack_result = sqlite_queue_acknowledge(ctx, msg_id);
+    if (ack_result != SQLITE_QUEUE_ERROR_NONE) {
+        LOG_WARN("SQLite Queue: Failed to acknowledge message ID %lld, may be reprocessed", msg_id);
+        // Continue anyway - the message might still be processable
     }
 
     PendingMessage *pm = reallocarray(NULL, 1, sizeof(PendingMessage));

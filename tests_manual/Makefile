@@ -2,9 +2,11 @@
 # These tests require actual API keys and are NOT part of the normal test suite
 
 CC = gcc
+# KLAWED_USE_BEDROCK can be set to enable AWS Bedrock support
+BEDROCK_FLAG := $(if $(KLAWED_USE_BEDROCK),-DKLAWED_USE_BEDROCK)
 CFLAGS = -Wall -Wextra -I../src -I.. \
     $(shell pkg-config --cflags libcjson libcurl) \
-    -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE=1 -DTEST_BUILD
+    -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE=1 -DTEST_BUILD $(BEDROCK_FLAG)
 
 LDFLAGS = $(shell pkg-config --libs libcjson libcurl) \
     -lpthread -lcurl -lssl -lcrypto -lm

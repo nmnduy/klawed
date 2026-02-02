@@ -2022,7 +2022,9 @@ int main(int argc, char *argv[]) {
             exit_code = 1;
         } else {
             sqlite_ctx->daemon_mode = true;
+            state.sqlite_queue_context = sqlite_ctx;
             exit_code = sqlite_queue_daemon_mode(sqlite_ctx, &state);
+            state.sqlite_queue_context = NULL;
             sqlite_queue_cleanup(sqlite_ctx);
         }
     }
