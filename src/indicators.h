@@ -155,15 +155,25 @@ static const spinner_variant_t SPINNER_VARIANTS[] = {
 };
 static const int SPINNER_VARIANT_COUNT = (int)(sizeof(SPINNER_VARIANTS)/sizeof(*SPINNER_VARIANTS));
 
-// Global spinner variant: seeded once per app lifecycle
+// Wave form spinner variants (indices 5-9 in SPINNER_VARIANTS)
+static const int WAVE_VARIANT_INDICES[] = {5, 6, 7, 8, 9};
+static const int WAVE_VARIANT_COUNT = (int)(sizeof(WAVE_VARIANT_INDICES)/sizeof(*WAVE_VARIANT_INDICES));
+
+// Global spinner variant: wave form only
 static spinner_variant_t GLOBAL_SPINNER_VARIANT = {NULL,0};
 static void init_global_spinner_variant(void) {
     static int init = 0;
     if (init) return;
     srand((unsigned)time(NULL));
-    int idx = rand() % SPINNER_VARIANT_COUNT;
-    GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[idx];
+    // Default to first wave variant, actual frame selection happens per-cycle
+    GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[5];
     init = 1;
+}
+
+// Get a random wave variant
+static spinner_variant_t get_random_wave_variant(void) {
+    int idx = WAVE_VARIANT_INDICES[rand() % WAVE_VARIANT_COUNT];
+    return SPINNER_VARIANTS[idx];
 }
 
 // Spinner object
@@ -233,18 +243,23 @@ static void *spinner_thread_func(void *arg) {
             current_speed = s->speed_multiplier;
         }
 
+        // Randomly pick a wave variant for this frame
+        spinner_variant_t variant = get_random_wave_variant();
+        const char **frames = variant.frames;
+        int frame_count = variant.count;
+
         // Update effect phase
-        spinner_effect_update_phase(&s->effect_config, delta_time, idx, s->frame_count);
+        spinner_effect_update_phase(&s->effect_config, delta_time, idx, frame_count);
 
         // Get color for current frame with effects
         char effect_color[32];
         spinner_effect_get_color(&s->effect_config, idx, effect_color, sizeof(effect_color));
 
-        printf("\r\033[K%s%s%s %s", effect_color, s->frames[idx], SPINNER_RESET, s->message);
+        printf("\r\033[K%s%s%s %s", effect_color, frames[idx], SPINNER_RESET, s->message);
         fflush(stdout);
         pthread_mutex_unlock(&s->lock);
 
-        idx = (idx + 1) % s->frame_count;
+        idx = (idx + 1) % frame_count;
 
         // Apply speed multiplier to delay (lower delay = faster spin)
         int delay_ms = (int)((float)SPINNER_DELAY_MS / current_speed);
