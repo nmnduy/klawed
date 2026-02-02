@@ -67,7 +67,8 @@ COPY . .
 
 # Clone and build sqlite-vector extension for vector similarity search
 # sqlite-vector provides vector search capabilities for the memory system
-RUN git clone --depth 1 --branch v0.0.5 https://github.com/sqliteai/sqlite-vector.git && \
+# Using v0.9.60 - stable release with verified API
+RUN git clone --depth 1 --branch 0.9.60 https://github.com/sqliteai/sqlite-vector.git && \
     cd sqlite-vector && \
     make && \
     ls -lh vector0.so && \
