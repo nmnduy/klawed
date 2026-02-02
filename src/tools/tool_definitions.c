@@ -902,21 +902,6 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         } else {
             LOG_WARN("web_browse_agent binary not found - web_search and web_read tools disabled");
         }
-
-        // Context7 tools use HTTP API, no binary needed
-        // context7_search tool
-        cJSON *c7_search_json = cJSON_Parse(explore_tool_context7_search_schema());
-        if (c7_search_json) {
-            cJSON_AddItemToArray(tool_array, c7_search_json);
-        }
-
-        // context7_docs tool
-        cJSON *c7_docs_json = cJSON_Parse(explore_tool_context7_docs_schema());
-        if (c7_docs_json) {
-            cJSON_AddItemToArray(tool_array, c7_docs_json);
-        }
-
-        LOG_INFO("Added context7 tools (context7_search, context7_docs)");
     }
 
     return tool_array;

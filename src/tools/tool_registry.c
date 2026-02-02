@@ -20,14 +20,6 @@ static cJSON* tool_web_read_wrapper(cJSON *params, ConversationState *state) {
     return tool_web_read(params, state);
 }
 
-static cJSON* tool_context7_search_wrapper(cJSON *params, ConversationState *state) {
-    return tool_context7_search(params, state);
-}
-
-static cJSON* tool_context7_docs_wrapper(cJSON *params, ConversationState *state) {
-    return tool_context7_docs(params, state);
-}
-
 // Tool registry - all available tools
 static Tool tools[] = {
     {"Sleep", tool_sleep},
@@ -50,8 +42,6 @@ static Tool tools[] = {
     // Explore tools (only work when KLAWED_EXPLORE_MODE=1)
     {"web_search", tool_web_search_wrapper},
     {"web_read", tool_web_read_wrapper},
-    {"context7_search", tool_context7_search_wrapper},
-    {"context7_docs", tool_context7_docs_wrapper},
 #ifndef TEST_BUILD
     {"ListMcpResources", tool_list_mcp_resources},
     {"ReadMcpResource", tool_read_mcp_resource},

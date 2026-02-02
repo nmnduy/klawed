@@ -23,7 +23,7 @@ Project instructions for Klawed when working with this codebase.
 - **API providers**: `src/openai_provider.c`, `src/anthropic_provider.c`, `src/bedrock_provider.c`, `src/aws_bedrock.c`
 - **Tools**: Built-in tools in `src/klawed.c`, common utilities in `src/tool_utils.c`
 - **Subagent**: `src/subagent_manager.c`, `docs/subagent.md` (task delegation with fresh context, supports per-subagent provider selection)
-- **Explore Subagent**: `src/explore_tools.c`, `docs/explore-subagent.md` (web research mode with Context7 + web_browse_agent)
+- **Explore Subagent**: `src/explore_tools.c`, `docs/explore-subagent.md` (web research mode with web_browse_agent)
 - **MCP**: `src/mcp.c`, `src/mcp.h`, `docs/mcp.md` (external tool servers)
 - **TODO system**: `src/todo.c`, `src/todo.h`
 - **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/keyboard-shortcuts.md`

@@ -13,11 +13,8 @@ char* resolve_path(const char *path, const char *working_dir);
 // Stubs for tool_definitions.c dependencies (TEST_BUILD mode)
 int is_web_agent_available(void);
 int is_explore_mode_enabled(void);
-const char* explore_tool_web_browse_agent_schema(void);
 const char* explore_tool_web_search_schema(void);
 const char* explore_tool_web_read_schema(void);
-const char* explore_tool_context7_search_schema(void);
-const char* explore_tool_context7_docs_schema(void);
 int mcp_is_enabled(void);
 void* mcp_get_all_tools(void *config);
 void add_cache_control(void *obj);

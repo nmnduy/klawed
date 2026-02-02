@@ -52,16 +52,6 @@ const char* explore_tool_web_read_schema(void) {
     return empty_schema;
 }
 
-const char* explore_tool_context7_search_schema(void) {
-    static const char *empty_schema = "{}";
-    return empty_schema;
-}
-
-const char* explore_tool_context7_docs_schema(void) {
-    static const char *empty_schema = "{}";
-    return empty_schema;
-}
-
 int mcp_is_enabled(void) {
     return 0;
 }

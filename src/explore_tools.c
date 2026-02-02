@@ -6,8 +6,6 @@
  * Tools:
  * - web_search: Search the web using DuckDuckGo via web_browse_agent
  * - web_read: Navigate to a URL and extract content
- * - context7_search: Search for library documentation
- * - context7_docs: Fetch documentation for a specific library
  */
 
 #include <stdio.h>
@@ -29,7 +27,6 @@
 #include "util/string_utils.h"
 #include "util/output_utils.h"
 
-#define CONTEXT7_API_BASE "https://context7.com/api"
 #define MAX_WEB_OUTPUT 100000  // 100KB max output from web_browse_agent
 #define WEB_AGENT_TIMEOUT 120  // 2 minute timeout for web operations
 
@@ -117,7 +114,7 @@ int is_web_agent_available(void) {
 
 
 
-// HTTP response buffer for Context7 API
+// HTTP response buffer
 typedef struct {
     char *data;
     size_t size;
@@ -138,65 +135,6 @@ static size_t write_callback(void *contents, size_t size, size_t nmemb, void *us
     buf->data[buf->size] = '\0';
 
     return realsize;
-}
-
-// Make HTTP GET request to Context7 API
-static char* context7_request(const char *endpoint, const char *query_params) {
-    CURL *curl = curl_easy_init();
-    if (!curl) {
-        return NULL;
-    }
-
-    // Build URL
-    size_t url_size = strlen(CONTEXT7_API_BASE) + strlen(endpoint) + strlen(query_params) + 2;
-    char *url = malloc(url_size);
-    if (!url) {
-        curl_easy_cleanup(curl);
-        return NULL;
-    }
-    snprintf(url, url_size, "%s%s?%s", CONTEXT7_API_BASE, endpoint, query_params);
-
-    ResponseBuffer response = {0};
-    response.data = malloc(1);
-    if (!response.data) {
-        free(url);
-        curl_easy_cleanup(curl);
-        return NULL;
-    }
-    response.data[0] = '\0';
-
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "klawed-explore/1.0");
-
-    // Add API key header if available
-    struct curl_slist *headers = NULL;
-    const char *api_key = getenv("CONTEXT7_API_KEY");
-    if (api_key && api_key[0] != '\0') {
-        char auth_header[512];
-        snprintf(auth_header, sizeof(auth_header), "X-Context7-API-Key: %s", api_key);
-        headers = curl_slist_append(headers, auth_header);
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    }
-
-    CURLcode res = curl_easy_perform(curl);
-
-    if (headers) {
-        curl_slist_free_all(headers);
-    }
-    free(url);
-    curl_easy_cleanup(curl);
-
-    if (res != CURLE_OK) {
-        LOG_ERROR("Context7 API request failed: %s", curl_easy_strerror(res));
-        free(response.data);
-        return NULL;
-    }
-
-    return response.data;
 }
 
 // URL encode a string
@@ -403,132 +341,6 @@ cJSON* tool_web_read(cJSON *params, void *state) {
 }
 
 // ============================================================================
-// ============================================================================
-// Tool: context7_search - Search for library documentation
-// ============================================================================
-
-cJSON* tool_context7_search(cJSON *params, void *state) {
-    (void)state;
-
-    if (!is_explore_mode_enabled()) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error",
-            "context7_search is only available in Explore mode. Set KLAWED_EXPLORE_MODE=1");
-        return error;
-    }
-
-    cJSON *query_json = cJSON_GetObjectItem(params, "query");
-    cJSON *library_json = cJSON_GetObjectItem(params, "library_name");
-
-    if (!query_json || !cJSON_IsString(query_json) ||
-        !library_json || !cJSON_IsString(library_json)) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error",
-            "Both query and library_name parameters are required");
-        return error;
-    }
-
-    char *encoded_query = url_encode(query_json->valuestring);
-    char *encoded_library = url_encode(library_json->valuestring);
-
-    if (!encoded_query || !encoded_library) {
-        free(encoded_query);
-        free(encoded_library);
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Failed to encode parameters");
-        return error;
-    }
-
-    char query_params[2048];
-    snprintf(query_params, sizeof(query_params),
-             "query=%s&libraryName=%s", encoded_query, encoded_library);
-
-    free(encoded_query);
-    free(encoded_library);
-
-    char *response = context7_request("/v2/libs/search", query_params);
-
-    if (!response) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Failed to search Context7");
-        return error;
-    }
-
-    cJSON *result = cJSON_Parse(response);
-    free(response);
-
-    if (!result) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Failed to parse Context7 response");
-        return error;
-    }
-
-    return result;
-}
-
-// ============================================================================
-// Tool: context7_docs - Fetch documentation for a library
-// ============================================================================
-
-cJSON* tool_context7_docs(cJSON *params, void *state) {
-    (void)state;
-
-    if (!is_explore_mode_enabled()) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error",
-            "context7_docs is only available in Explore mode. Set KLAWED_EXPLORE_MODE=1");
-        return error;
-    }
-
-    cJSON *library_id_json = cJSON_GetObjectItem(params, "library_id");
-    cJSON *query_json = cJSON_GetObjectItem(params, "query");
-
-    if (!library_id_json || !cJSON_IsString(library_id_json) ||
-        !query_json || !cJSON_IsString(query_json)) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error",
-            "Both library_id and query parameters are required");
-        return error;
-    }
-
-    char *encoded_library = url_encode(library_id_json->valuestring);
-    char *encoded_query = url_encode(query_json->valuestring);
-
-    if (!encoded_library || !encoded_query) {
-        free(encoded_library);
-        free(encoded_query);
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Failed to encode parameters");
-        return error;
-    }
-
-    char query_params[2048];
-    snprintf(query_params, sizeof(query_params),
-             "libraryId=%s&query=%s", encoded_library, encoded_query);
-
-    free(encoded_library);
-    free(encoded_query);
-
-    char *response = context7_request("/v2/context", query_params);
-
-    if (!response) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Failed to fetch Context7 documentation");
-        return error;
-    }
-
-    // The response is plain text, not JSON
-    cJSON *result = cJSON_CreateObject();
-    cJSON_AddStringToObject(result, "library_id", library_id_json->valuestring);
-    cJSON_AddStringToObject(result, "query", query_json->valuestring);
-    cJSON_AddStringToObject(result, "documentation", response);
-    cJSON_AddStringToObject(result, "source", "Context7 (https://context7.com)");
-
-    free(response);
-    return result;
-}
-
-// ============================================================================
 // Tool definitions for Explore mode
 // ============================================================================
 
@@ -575,54 +387,6 @@ const char* explore_tool_web_read_schema(void) {
                     "}"
                 "},"
                 "\"required\": [\"url\"]"
-            "}"
-        "}"
-    "}";
-}
-
-const char* explore_tool_context7_search_schema(void) {
-    return "{"
-        "\"type\": \"function\","
-        "\"function\": {"
-            "\"name\": \"context7_search\","
-            "\"description\": \"Search for library/package documentation using Context7. Returns matching libraries with their IDs, descriptions, and snippet counts. Use this before context7_docs to find the correct library ID.\","
-            "\"parameters\": {"
-                "\"type\": \"object\","
-                "\"properties\": {"
-                    "\"query\": {"
-                        "\"type\": \"string\","
-                        "\"description\": \"What you're trying to accomplish (used for relevance ranking)\""
-                    "},"
-                    "\"library_name\": {"
-                        "\"type\": \"string\","
-                        "\"description\": \"The library/package name to search for\""
-                    "}"
-                "},"
-                "\"required\": [\"query\", \"library_name\"]"
-            "}"
-        "}"
-    "}";
-}
-
-const char* explore_tool_context7_docs_schema(void) {
-    return "{"
-        "\"type\": \"function\","
-        "\"function\": {"
-            "\"name\": \"context7_docs\","
-            "\"description\": \"Fetch up-to-date documentation for a library using Context7. Use context7_search first to find the library ID unless you already know it (format: /org/project).\","
-            "\"parameters\": {"
-                "\"type\": \"object\","
-                "\"properties\": {"
-                    "\"library_id\": {"
-                        "\"type\": \"string\","
-                        "\"description\": \"Context7 library ID (e.g., '/vercel/next.js', '/facebook/react')\""
-                    "},"
-                    "\"query\": {"
-                        "\"type\": \"string\","
-                        "\"description\": \"What you want to learn about the library (e.g., 'routing', 'authentication')\""
-                    "}"
-                "},"
-                "\"required\": [\"library_id\", \"query\"]"
             "}"
         "}"
     "}";
