@@ -657,7 +657,6 @@ static int cmd_autocompact(ConversationState *state, const char *args) {
 
     LOG_INFO("[CMD_AUTOCOMPACT] %s", status_msg);
     return 0;
-#endif
 }
 
 // ============================================================================

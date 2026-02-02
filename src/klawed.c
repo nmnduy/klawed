@@ -2022,7 +2022,6 @@ int main(int argc, char *argv[]) {
     // Clean up memory database
     memory_db_cleanup_global();
     LOG_INFO("Memory database cleaned up");
-#endif
 
     curl_global_cleanup();
 
