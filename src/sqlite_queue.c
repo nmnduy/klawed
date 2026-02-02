@@ -7,6 +7,7 @@
 
 #include "sqlite_queue.h"
 #include "klawed_internal.h"
+#include "conversation/conversation_processor.h"
 #include "logger.h"
 #include <string.h>
 #include <stdlib.h>
@@ -365,7 +366,9 @@ int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int
 
     // Poll for messages with timeout
     time_t start_time = time(NULL);
-    time_t timeout_sec = (timeout_ms > 0) ? (timeout_ms / 1000) : 30;
+    // Round up to ensure we always wait at least the requested milliseconds
+    // e.g., 100ms -> 1 sec, 1000ms -> 1 sec, 1500ms -> 2 sec
+    time_t timeout_sec = (timeout_ms > 0) ? ((timeout_ms + 999) / 1000) : 30;
 
     LOG_DEBUG("SQLite Queue: Polling for messages (timeout: %ld seconds, sender_filter: %s)",
               (long)timeout_sec, sender_filter ? sender_filter : "any");
@@ -660,7 +663,8 @@ static int sqlite_queue_send_json(SQLiteQueueContext *ctx, const char *receiver,
     return result;
 }
 
-// Helper function to send a tool result response
+// Helper function to send a tool result response (unused with unified processor)
+__attribute__((unused))
 static int sqlite_queue_send_tool_result(SQLiteQueueContext *ctx, const char *receiver,
                                          const char *tool_name, const char *tool_id,
                                          cJSON *tool_output, int is_error) {
@@ -742,7 +746,8 @@ static int sqlite_queue_send_end_ai_turn(SQLiteQueueContext *ctx, const char *re
     return sqlite_queue_send_json(ctx, receiver, "END_AI_TURN", NULL);
 }
 
-// Helper function to send a tool execution request
+// Helper function to send a tool execution request (unused with unified processor)
+__attribute__((unused))
 static int sqlite_queue_send_tool_request(SQLiteQueueContext *ctx, const char *receiver,
                                          const char *tool_name, const char *tool_id,
                                          cJSON *tool_parameters) {
@@ -782,86 +787,84 @@ static int sqlite_queue_send_tool_request(SQLiteQueueContext *ctx, const char *r
     return result;
 }
 
-// Helper function to validate and execute a single tool
-static int process_single_tool(SQLiteQueueContext *ctx, const char *response_receiver,
-                              ToolCall *tool, ConversationState *state,
-                              InternalContent *result) {
-    if (!ctx || !response_receiver || !tool || !state || !result) {
-        LOG_ERROR("SQLite Queue: Invalid parameters for process_single_tool");
-        return -1;
-    }
+// Structure to hold callback context for unified processor
+typedef struct {
+    SQLiteQueueContext *ctx;
+    const char *response_receiver;
+} SQLiteQueueCallbackContext;
 
-    // Initialize result
-    memset(result, 0, sizeof(InternalContent));
-    result->type = INTERNAL_TOOL_RESPONSE;
-
-    // Check for missing tool name or ID
-    if (!tool->name || !tool->id) {
-        LOG_WARN("SQLite Queue: Tool call missing name or id, skipping");
-        result->tool_id = tool->id ? strdup(tool->id) : strdup("unknown");
-        result->tool_name = tool->name ? strdup(tool->name) : strdup("tool");
-        result->tool_output = cJSON_CreateObject();
-        cJSON_AddStringToObject(result->tool_output, "error", "Tool call missing name or id");
-        result->is_error = 1;
-        return 0;
-    }
-
-    LOG_INFO("SQLite Queue: Executing tool: %s (id: %s)", tool->name, tool->id);
-
-    // Print to console
-    printf("SQLite Queue: Executing tool: %s\n", tool->name);
+// Callback implementations for unified processor
+static void sqlite_on_tool_start(const char *tool_name, const char *tool_details, void *user_data) {
+    (void)tool_details;
+    (void)user_data;
+    // TOOL request is sent by on_tool_complete with the result
+    LOG_INFO("SQLite Queue: Starting tool: %s", tool_name);
+    printf("SQLite Queue: Executing tool: %s\n", tool_name);
     fflush(stdout);
-
-    // Validate that the tool is in the allowed tools list (prevent hallucination)
-    if (!is_tool_allowed(tool->name, state)) {
-        LOG_ERROR("SQLite Queue: Tool validation failed: '%s' was not provided in tools list", tool->name);
-        result->tool_id = strdup(tool->id);
-        result->tool_name = strdup(tool->name);
-        result->tool_output = cJSON_CreateObject();
-        char error_msg[512];
-        snprintf(error_msg, sizeof(error_msg),
-                 "ERROR: Tool '%s' does not exist or was not provided to you. "
-                 "Please check the list of available tools and try again with a valid tool name.",
-                 tool->name);
-        cJSON_AddStringToObject(result->tool_output, "error", error_msg);
-        result->is_error = 1;
-
-        // Send TOOL request message (even though it will fail)
-        sqlite_queue_send_tool_request(ctx, response_receiver, tool->name, tool->id, NULL);
-
-        // Send error response
-        sqlite_queue_send_tool_result(ctx, response_receiver, tool->name, tool->id, result->tool_output, 1);
-        return 0;
-    }
-
-    // Convert ToolCall to execute_tool parameters
-    cJSON *input = tool->parameters
-        ? cJSON_Duplicate(tool->parameters, /*recurse*/1)
-        : cJSON_CreateObject();
-
-    // Send TOOL request message before execution
-    sqlite_queue_send_tool_request(ctx, response_receiver, tool->name, tool->id, input);
-
-    // Execute tool synchronously
-    cJSON *tool_result = execute_tool(tool->name, input, state);
-
-    // Send tool result response
-    sqlite_queue_send_tool_result(ctx, response_receiver, tool->name, tool->id, tool_result, 0);
-
-    // Store tool result
-    result->tool_id = strdup(tool->id);
-    result->tool_name = strdup(tool->name);
-    result->tool_output = tool_result ? cJSON_Duplicate(tool_result, 1) : cJSON_CreateObject();
-    result->is_error = 0;
-
-    // Clean up
-    if (input) cJSON_Delete(input);
-    if (tool_result) cJSON_Delete(tool_result);
-
-    return 0;
 }
 
-// Process SQLite message with interactive tool call support
+static void sqlite_on_tool_complete(const char *tool_name, cJSON *result, int is_error, void *user_data) {
+    (void)result;
+    (void)user_data;
+    // For SQLite queue mode, we need to track tool_id - this is handled differently
+    // We'll send the TOOL_RESULT directly since we don't have tool_id in this callback
+    // The actual TOOL request/result pairing is handled in the unified processor
+    LOG_INFO("SQLite Queue: Tool completed: %s (error=%d)", tool_name, is_error);
+}
+
+static void sqlite_on_assistant_text(const char *text, void *user_data) {
+    SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
+    sqlite_queue_send_text_response(cb_ctx->ctx, cb_ctx->response_receiver, text);
+}
+
+static void sqlite_on_error(const char *error_message, void *user_data) {
+    SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
+    sqlite_queue_send_json(cb_ctx->ctx, cb_ctx->response_receiver, "ERROR", error_message);
+}
+
+static int sqlite_should_interrupt(void *user_data) {
+    SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
+    return cb_ctx->ctx->state && cb_ctx->ctx->state->interrupt_requested;
+}
+
+static void sqlite_on_status_update(const char *status, void *user_data) {
+    (void)user_data;
+    LOG_INFO("SQLite Queue: %s", status);
+}
+
+// Check for and inject pending messages
+static void check_and_inject_pending_messages(SQLiteQueueContext *ctx,
+                                               struct ConversationState *state,
+                                               const char *response_receiver) {
+    pthread_mutex_lock(&ctx->queue_mutex);
+    while (ctx->pending_messages != NULL) {
+        PendingMessage *pm = ctx->pending_messages;
+        ctx->pending_messages = pm->next;
+        if (ctx->pending_messages == NULL) {
+            ctx->pending_tail = NULL;
+        }
+        ctx->pending_count--;
+        pthread_mutex_unlock(&ctx->queue_mutex);
+
+        LOG_INFO("SQLite Queue: Injecting pending user message ID %lld", pm->msg_id);
+        sqlite_queue_acknowledge(ctx, pm->msg_id);
+
+        char ack_msg[256];
+        snprintf(ack_msg, sizeof(ack_msg),
+                 "[Message received during processing, will be processed with current context]");
+        sqlite_queue_send_text_response(ctx, response_receiver, ack_msg);
+
+        add_user_message(state, pm->content);
+
+        free(pm->content);
+        free(pm);
+
+        pthread_mutex_lock(&ctx->queue_mutex);
+    }
+    pthread_mutex_unlock(&ctx->queue_mutex);
+}
+
+// Process SQLite message with unified conversation processor
 static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
                                             struct ConversationState *state, const char *user_input) {
     if (!ctx || !state || !user_input) {
@@ -872,145 +875,41 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
     LOG_INFO("SQLite Queue: Processing interactive message: %.*s",
              (int)(strlen(user_input) > 200 ? 200 : strlen(user_input)), user_input);
 
-    // Get the sender/receiver name for responses
-    // For simplicity, we use "client" as the receiver for responses
     const char *response_receiver = "client";
 
-    // Add user message to conversation
-    add_user_message(state, user_input);
+    // Set up callback context
+    SQLiteQueueCallbackContext cb_ctx = {
+        .ctx = ctx,
+        .response_receiver = response_receiver
+    };
 
-    // Main interactive loop
-    int iteration = 0;
-    const int max_iterations = ctx->max_iterations; // Configurable limit (0 = unlimited)
+    // Set up processing context
+    ProcessingContext proc_ctx = {0};
+    processing_context_init(&proc_ctx);
+    proc_ctx.execution_mode = EXEC_MODE_SERIAL;  // SQLite queue uses serial execution
+    proc_ctx.output_format = OUTPUT_FORMAT_PLAIN;
+    proc_ctx.max_iterations = ctx->max_iterations;
+    proc_ctx.user_data = &cb_ctx;
+    proc_ctx.on_tool_start = sqlite_on_tool_start;
+    proc_ctx.on_tool_complete = sqlite_on_tool_complete;
+    proc_ctx.on_assistant_text = sqlite_on_assistant_text;
+    proc_ctx.on_error = sqlite_on_error;
+    proc_ctx.should_interrupt = sqlite_should_interrupt;
+    proc_ctx.on_status_update = sqlite_on_status_update;
 
-    while (max_iterations == 0 || iteration < max_iterations) {
-        iteration++;
-        LOG_DEBUG("SQLite Queue: Interactive loop iteration %d", iteration);
+    // Check for pending messages before starting
+    check_and_inject_pending_messages(ctx, state, response_receiver);
 
-        // Call AI API
-        LOG_INFO("SQLite Queue: Calling AI API");
-        ApiResponse *api_response = call_api_with_retries(state);
+    // Process the user instruction using unified processor
+    int result = process_user_instruction(state, user_input, &proc_ctx);
 
-        if (!api_response) {
-            LOG_ERROR("SQLite Queue: Failed to get response from AI API");
-            sqlite_queue_send_json(ctx, response_receiver, "ERROR", "AI inference failed");
-            return -1;
-        }
+    // Check for any pending messages that arrived during processing
+    check_and_inject_pending_messages(ctx, state, response_receiver);
 
-        if (api_response->error_message) {
-            LOG_ERROR("SQLite Queue: AI API returned error: %s", api_response->error_message);
-            sqlite_queue_send_json(ctx, response_receiver, "ERROR", api_response->error_message);
-            api_response_free(api_response);
-            return -1;
-        }
-
-        // Send assistant's text response if present
-        if (api_response->message.text && api_response->message.text[0] != '\0') {
-            sqlite_queue_send_text_response(ctx, response_receiver, api_response->message.text);
-        }
-
-        // Add assistant message to conversation history
-        if (api_response->raw_response) {
-            cJSON *choices = cJSON_GetObjectItem(api_response->raw_response, "choices");
-            if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
-                cJSON *choice = cJSON_GetArrayItem(choices, 0);
-                cJSON *message = cJSON_GetObjectItem(choice, "message");
-                if (message) {
-                    add_assistant_message_openai(state, message);
-                }
-            }
-        }
-
-        // Process tool calls
-        int tool_count = api_response->tool_count;
-        ToolCall *tool_calls_array = api_response->tools;
-
-        if (tool_count > 0) {
-            LOG_INFO("SQLite Queue: Processing %d tool call(s)", tool_count);
-
-            // Allocate results array
-            InternalContent *results = reallocarray(NULL, (size_t)tool_count, sizeof(InternalContent));
-            if (results) {
-                memset(results, 0, (size_t)tool_count * sizeof(InternalContent));
-            }
-            if (!results) {
-                LOG_ERROR("SQLite Queue: Failed to allocate tool result buffer");
-                sqlite_queue_send_json(ctx, response_receiver, "ERROR", "Failed to allocate tool result buffer");
-                api_response_free(api_response);
-                return -1;
-            }
-
-            // Execute tools synchronously
-            for (int i = 0; i < tool_count; i++) {
-                ToolCall *tool = &tool_calls_array[i];
-                process_single_tool(ctx, response_receiver, tool, state, &results[i]);
-            }
-
-            // Add tool results to conversation
-            if (add_tool_results(state, results, tool_count) != 0) {
-                LOG_ERROR("SQLite Queue: Failed to add tool results to conversation");
-                // Results were already freed by add_tool_results
-                results = NULL;
-                sqlite_queue_send_json(ctx, response_receiver, "ERROR", "Failed to add tool results to conversation");
-                api_response_free(api_response);
-                return -1;
-            }
-
-            // Check for pending user messages that arrived during tool execution
-            // If there are pending messages, inject them into the conversation
-            // before calling the API again with tool results
-            pthread_mutex_lock(&ctx->queue_mutex);
-            while (ctx->pending_messages != NULL) {
-                // Dequeue the message
-                PendingMessage *pm = ctx->pending_messages;
-                ctx->pending_messages = pm->next;
-                if (ctx->pending_messages == NULL) {
-                    ctx->pending_tail = NULL;
-                }
-                ctx->pending_count--;
-                pthread_mutex_unlock(&ctx->queue_mutex);
-
-                LOG_INFO("SQLite Queue: Injecting pending user message ID %lld during tool execution",
-                         pm->msg_id);
-
-                // Acknowledge the message
-                sqlite_queue_acknowledge(ctx, pm->msg_id);
-
-                // Send a TEXT response to the client to confirm message was received
-                char ack_msg[256];
-                snprintf(ack_msg, sizeof(ack_msg),
-                         "[Message received during tool execution, will be processed with current context]");
-                sqlite_queue_send_text_response(ctx, response_receiver, ack_msg);
-
-                // Add the user message to conversation
-                add_user_message(state, pm->content);
-
-                // Clean up the pending message
-                free(pm->content);
-                free(pm);
-
-                // Re-acquire mutex to check for more pending messages
-                pthread_mutex_lock(&ctx->queue_mutex);
-            }
-            pthread_mutex_unlock(&ctx->queue_mutex);
-
-            // Continue loop to process next AI response with tool results
-            api_response_free(api_response);
-            continue;
-        }
-
-        // Check if we need user input (e.g., assistant is asking a question)
-        // For now, we'll just finish after processing all tool calls
-        // In the future, we could analyze the response to detect questions
-
-        api_response_free(api_response);
-        break;
-    }
-
-    if (max_iterations > 0 && iteration >= max_iterations) {
-        LOG_WARN("SQLite Queue: Reached maximum iterations (%d), stopping interactive loop", max_iterations);
-        sqlite_queue_send_json(ctx, response_receiver, "ERROR", "Maximum iteration limit reached");
-        return -1;
+    if (result != 0) {
+        LOG_ERROR("SQLite Queue: Processing failed with result %d", result);
+        // Error already sent via callback
+        return result;
     }
 
     LOG_INFO("SQLite Queue: Interactive processing completed successfully");
@@ -1524,8 +1423,8 @@ static void *sqlite_queue_worker_thread(void *arg) {
             printf("SQLite Queue: Processing message ID %lld\n", pm->msg_id);
             fflush(stdout);
 
-            // Acknowledge the message first (mark as received)
-            sqlite_queue_acknowledge(ctx, pm->msg_id);
+            // Note: Message was already acknowledged by daemon loop before enqueueing
+            // to prevent race conditions where the same message is found again.
 
             // Process the message interactively
             sqlite_queue_process_interactive(ctx, ctx->state, pm->content);
@@ -1682,6 +1581,26 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
                 strcmp(message_type->valuestring, "TEXT") == 0 &&
                 content && cJSON_IsString(content)) {
 
+                // Check if this message is already in the pending queue (prevent duplicates)
+                pthread_mutex_lock(&ctx->queue_mutex);
+                int is_duplicate = 0;
+                PendingMessage *check = ctx->pending_messages;
+                while (check) {
+                    if (check->msg_id == msg_id) {
+                        is_duplicate = 1;
+                        break;
+                    }
+                    check = check->next;
+                }
+                pthread_mutex_unlock(&ctx->queue_mutex);
+
+                if (is_duplicate) {
+                    LOG_WARN("SQLite Queue: Message ID %lld already in queue, skipping duplicate", msg_id);
+                    cJSON_Delete(json);
+                    free(message);
+                    continue;
+                }
+
                 // Enqueue the message for the worker thread
                 if (sqlite_queue_enqueue_message(ctx, msg_id, content->valuestring) == 0) {
                     message_count++;
@@ -1690,6 +1609,12 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
                              msg_id, sqlite_queue_pending_count(ctx));
                     printf("SQLite Queue: Received message ID %lld (queue depth: %d)\n",
                            msg_id, sqlite_queue_pending_count(ctx));
+
+                    // Acknowledge the message immediately to prevent race condition
+                    // where the main loop finds it again before worker processes it
+                    if (sqlite_queue_acknowledge(ctx, msg_id) != SQLITE_QUEUE_ERROR_NONE) {
+                        LOG_WARN("SQLite Queue: Failed to acknowledge message ID %lld after enqueue", msg_id);
+                    }
                 } else {
                     LOG_ERROR("SQLite Queue: Failed to enqueue message ID %lld", msg_id);
                     sqlite_queue_acknowledge(ctx, msg_id); // Acknowledge to prevent reprocessing

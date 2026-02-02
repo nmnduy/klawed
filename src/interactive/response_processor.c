@@ -5,6 +5,7 @@
 #include "../ui/tool_output_display.h"
 #include "../conversation/message_builder.h"
 #include "../conversation/message_parser.h"
+#include "../conversation/conversation_processor.h"
 #include "../tools/tool_executor.h"
 #include "../tools/tool_registry.h"
 #include "../api/api_client.h"
