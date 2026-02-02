@@ -162,9 +162,14 @@ static void *tool_thread_func(void *arg) {
         t->result_block->is_error = cJSON_HasObjectItem(res, "error");
     }
 
-    // Call the completion callback if provided
-    if (t->tracker && t->tracker->ctx && t->tracker->ctx->on_tool_complete) {
-        t->tracker->ctx->on_tool_complete(t->tool_name, res, t->result_block->is_error, t->tracker->ctx->user_data);
+    // Call the completion callback if provided (prefer extended callback)
+    if (t->tracker && t->tracker->ctx) {
+        if (t->tracker->ctx->on_tool_complete_ex) {
+            t->tracker->ctx->on_tool_complete_ex(t->tool_use_id, t->tool_name, res,
+                                                 t->result_block->is_error, t->tracker->ctx->user_data);
+        } else if (t->tracker->ctx->on_tool_complete) {
+            t->tracker->ctx->on_tool_complete(t->tool_name, res, t->result_block->is_error, t->tracker->ctx->user_data);
+        }
     }
 
     tool_tracker_notify_completion(t);
@@ -262,17 +267,21 @@ static int execute_tools_serial(struct ConversationState *state,
         // Get tool details for display
         const char *tool_details = get_tool_description(tool->name, input);
 
-        // Notify start
-        if (ctx->on_tool_start) {
+        // Notify start (prefer extended callback if available)
+        if (ctx->on_tool_start_ex) {
+            ctx->on_tool_start_ex(tool->id, tool->name, tool->parameters, tool_details, ctx->user_data);
+        } else if (ctx->on_tool_start) {
             ctx->on_tool_start(tool->name, tool_details, ctx->user_data);
         }
 
         // Execute
         cJSON *tool_result = execute_tool(tool->name, input, state);
 
-        // Notify complete
-        if (ctx->on_tool_complete) {
-            int is_err = tool_result ? cJSON_HasObjectItem(tool_result, "error") : 1;
+        // Notify complete (prefer extended callback if available)
+        int is_err = tool_result ? cJSON_HasObjectItem(tool_result, "error") : 1;
+        if (ctx->on_tool_complete_ex) {
+            ctx->on_tool_complete_ex(tool->id, tool->name, tool_result, is_err, ctx->user_data);
+        } else if (ctx->on_tool_complete) {
             ctx->on_tool_complete(tool->name, tool_result, is_err, ctx->user_data);
         }
 
@@ -377,9 +386,11 @@ static int execute_tools_parallel(struct ConversationState *state,
             ? cJSON_Duplicate(tool->parameters, 1)
             : cJSON_CreateObject();
 
-        // Notify start
-        if (ctx->on_tool_start) {
-            const char *tool_details = get_tool_description(tool->name, input);
+        // Notify start (prefer extended callback if available)
+        const char *tool_details = get_tool_description(tool->name, input);
+        if (ctx->on_tool_start_ex) {
+            ctx->on_tool_start_ex(tool->id, tool->name, tool->parameters, tool_details, ctx->user_data);
+        } else if (ctx->on_tool_start) {
             ctx->on_tool_start(tool->name, tool_details, ctx->user_data);
         }
 

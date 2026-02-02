@@ -676,8 +676,7 @@ static int sqlite_queue_send_json(SQLiteQueueContext *ctx, const char *receiver,
     return result;
 }
 
-// Helper function to send a tool result response (unused with unified processor)
-__attribute__((unused))
+// Helper function to send a tool result response
 static int sqlite_queue_send_tool_result(SQLiteQueueContext *ctx, const char *receiver,
                                          const char *tool_name, const char *tool_id,
                                          cJSON *tool_output, int is_error) {
@@ -759,8 +758,7 @@ static int sqlite_queue_send_end_ai_turn(SQLiteQueueContext *ctx, const char *re
     return sqlite_queue_send_json(ctx, receiver, "END_AI_TURN", NULL);
 }
 
-// Helper function to send a tool execution request (unused with unified processor)
-__attribute__((unused))
+// Helper function to send a tool execution request
 static int sqlite_queue_send_tool_request(SQLiteQueueContext *ctx, const char *receiver,
                                          const char *tool_name, const char *tool_id,
                                          cJSON *tool_parameters) {
@@ -806,23 +804,31 @@ typedef struct {
     const char *response_receiver;
 } SQLiteQueueCallbackContext;
 
-// Callback implementations for unified processor
-static void sqlite_on_tool_start(const char *tool_name, const char *tool_details, void *user_data) {
+// Extended callbacks with full tool context for sending TOOL/TOOL_RESULT messages
+static void sqlite_on_tool_start_ex(const char *tool_id, const char *tool_name,
+                                    cJSON *tool_parameters, const char *tool_details,
+                                    void *user_data) {
     (void)tool_details;
-    (void)user_data;
-    // TOOL request is sent by on_tool_complete with the result
-    LOG_INFO("SQLite Queue: Starting tool: %s", tool_name);
-    printf("SQLite Queue: Executing tool: %s\n", tool_name);
+    SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
+
+    LOG_INFO("SQLite Queue: Starting tool: %s (id: %s)", tool_name, tool_id);
+    printf("SQLite Queue: Executing tool: %s (id: %s)\n", tool_name, tool_id);
     fflush(stdout);
+
+    // Send TOOL message to the queue
+    sqlite_queue_send_tool_request(cb_ctx->ctx, cb_ctx->response_receiver,
+                                   tool_name, tool_id, tool_parameters);
 }
 
-static void sqlite_on_tool_complete(const char *tool_name, cJSON *result, int is_error, void *user_data) {
-    (void)result;
-    (void)user_data;
-    // For SQLite queue mode, we need to track tool_id - this is handled differently
-    // We'll send the TOOL_RESULT directly since we don't have tool_id in this callback
-    // The actual TOOL request/result pairing is handled in the unified processor
-    LOG_INFO("SQLite Queue: Tool completed: %s (error=%d)", tool_name, is_error);
+static void sqlite_on_tool_complete_ex(const char *tool_id, const char *tool_name,
+                                       cJSON *result, int is_error, void *user_data) {
+    SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
+
+    LOG_INFO("SQLite Queue: Tool completed: %s (id: %s, error=%d)", tool_name, tool_id, is_error);
+
+    // Send TOOL_RESULT message to the queue
+    sqlite_queue_send_tool_result(cb_ctx->ctx, cb_ctx->response_receiver,
+                                  tool_name, tool_id, result, is_error);
 }
 
 static void sqlite_on_assistant_text(const char *text, void *user_data) {
@@ -903,8 +909,9 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
     proc_ctx.output_format = OUTPUT_FORMAT_PLAIN;
     proc_ctx.max_iterations = ctx->max_iterations;
     proc_ctx.user_data = &cb_ctx;
-    proc_ctx.on_tool_start = sqlite_on_tool_start;
-    proc_ctx.on_tool_complete = sqlite_on_tool_complete;
+    // Use extended callbacks to send TOOL/TOOL_RESULT messages to the queue
+    proc_ctx.on_tool_start_ex = sqlite_on_tool_start_ex;
+    proc_ctx.on_tool_complete_ex = sqlite_on_tool_complete_ex;
     proc_ctx.on_assistant_text = sqlite_on_assistant_text;
     proc_ctx.on_error = sqlite_on_error;
     proc_ctx.should_interrupt = sqlite_should_interrupt;

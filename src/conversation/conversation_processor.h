@@ -82,6 +82,30 @@ typedef struct {
     void (*on_tool_complete)(const char *tool_name, cJSON *result, int is_error, void *user_data);
 
     /**
+     * Extended callback: Called when a tool starts executing (with full tool context)
+     * @param tool_id Tool call ID for pairing with results
+     * @param tool_name Name of the tool being executed
+     * @param tool_parameters Tool input parameters (JSON object, may be NULL)
+     * @param tool_details Human-readable description of tool call
+     * @param user_data Context user_data
+     * @note If set, this is called instead of on_tool_start
+     */
+    void (*on_tool_start_ex)(const char *tool_id, const char *tool_name, cJSON *tool_parameters,
+                             const char *tool_details, void *user_data);
+
+    /**
+     * Extended callback: Called when a tool completes (with full tool context)
+     * @param tool_id Tool call ID for pairing with the request
+     * @param tool_name Name of the tool
+     * @param result Tool result (JSON object)
+     * @param is_error Whether the tool returned an error
+     * @param user_data Context user_data
+     * @note If set, this is called instead of on_tool_complete
+     */
+    void (*on_tool_complete_ex)(const char *tool_id, const char *tool_name, cJSON *result,
+                                int is_error, void *user_data);
+
+    /**
      * Called when assistant text is received
      * @param text Assistant's text response
      * @param user_data Context user_data
