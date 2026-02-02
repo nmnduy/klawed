@@ -1074,7 +1074,7 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
             }
 
             // Check for diff lines (no brackets, just colored by first character)
-            TUIColorPair diff_color = COLOR_PAIR_DEFAULT;
+            TUIColorPair diff_color = COLOR_PAIR_DIFF_CONTEXT;  // Dimmed gray for context lines
             size_t text_len = strlen(mutable_text);
 
             if (text_len > 0) {
