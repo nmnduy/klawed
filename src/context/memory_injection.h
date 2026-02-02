@@ -1,8 +1,7 @@
 /*
  * memory_injection.h - Memory context injection for system prompt
  *
- * Functions to inject memory context from memvid into the system prompt.
- * Only compiled when HAVE_MEMVID is defined.
+ * Functions to inject memory context from memory database into the system prompt.
  */
 
 #ifndef CONTEXT_MEMORY_INJECTION_H
@@ -10,10 +9,8 @@
 
 #include "../klawed_internal.h"
 
-#ifdef HAVE_MEMVID
-
 /**
- * Build memory context string from memvid searches.
+ * Build memory context string from memory database searches.
  * Queries for user preferences, active tasks, and project knowledge.
  * Caller must free the returned string.
  *
@@ -30,7 +27,5 @@ char* build_memory_context(const char *working_dir);
  * Returns: 0 on success (or if no memories to inject), -1 on error
  */
 int inject_memory_context(ConversationState *state);
-
-#endif /* HAVE_MEMVID */
 
 #endif /* CONTEXT_MEMORY_INJECTION_H */

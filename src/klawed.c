@@ -192,10 +192,8 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 // Arena allocator for per-thread memory management
 #include "arena.h"
 
-// Memvid persistent memory support (optional)
-#ifdef HAVE_MEMVID
-#include "memvid.h"
-#endif
+// Memory database support (SQLite-based, replaces memvid)
+#include "memory_db.h"
 
 // Background initialization for async resource loading
 #include "background_init.h"
@@ -546,7 +544,6 @@ typedef struct {
 cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
     (void)state;
 
-#ifdef HAVE_MEMVID
     // Extract required parameters
     cJSON *entity_json = cJSON_GetObjectItem(params, "entity");
     cJSON *slot_json = cJSON_GetObjectItem(params, "slot");
@@ -574,55 +571,31 @@ cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
                               ? memvid_file_json->valuestring : NULL;
 
     // Parse kind string to enum value
-    uint8_t kind = MEMVID_KIND_FACT;  // default
-    if (strcmp(kind_str, "fact") == 0) {
-        kind = MEMVID_KIND_FACT;
-    } else if (strcmp(kind_str, "preference") == 0) {
-        kind = MEMVID_KIND_PREFERENCE;
-    } else if (strcmp(kind_str, "event") == 0) {
-        kind = MEMVID_KIND_EVENT;
-    } else if (strcmp(kind_str, "profile") == 0) {
-        kind = MEMVID_KIND_PROFILE;
-    } else if (strcmp(kind_str, "relationship") == 0) {
-        kind = MEMVID_KIND_RELATIONSHIP;
-    } else if (strcmp(kind_str, "goal") == 0) {
-        kind = MEMVID_KIND_GOAL;
-    } else {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Invalid kind: must be one of fact, preference, event, profile, relationship, goal");
-        return error;
-    }
+    MemoryKind kind = memory_db_string_to_kind(kind_str);
 
     // Parse relation string to enum value
-    uint8_t relation = MEMVID_RELATION_SETS;  // default
-    if (strcmp(relation_str, "sets") == 0) {
-        relation = MEMVID_RELATION_SETS;
-    } else if (strcmp(relation_str, "updates") == 0) {
-        relation = MEMVID_RELATION_UPDATES;
-    } else if (strcmp(relation_str, "extends") == 0) {
-        relation = MEMVID_RELATION_EXTENDS;
-    } else if (strcmp(relation_str, "retracts") == 0) {
-        relation = MEMVID_RELATION_RETRACTS;
-    } else {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Invalid relation: must be one of sets, updates, extends, retracts");
-        return error;
-    }
+    MemoryRelation relation = memory_db_string_to_relation(relation_str);
 
     // Get handle - either global or custom file
     int using_custom_file = (memvid_file != NULL && memvid_file[0] != '\0');
-    MemvidHandle *handle = memvid_open_for_path(using_custom_file ? memvid_file : NULL);
+    MemoryDB *handle = memory_db_open_for_path(using_custom_file ? memvid_file : NULL);
     if (handle == NULL) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Memvid not initialized");
-        return error;
+        // Try to initialize global if not already done
+        if (!using_custom_file && memory_db_init_global(NULL) == 0) {
+            handle = memory_db_get_global();
+        }
+        if (handle == NULL) {
+            cJSON *error = cJSON_CreateObject();
+            cJSON_AddStringToObject(error, "error", "Memory database not initialized");
+            return error;
+        }
     }
 
-    int64_t card_id = memvid_put_memory(handle, entity, slot, value, kind, relation);
+    int64_t card_id = memory_db_store(handle, entity, slot, value, kind, relation);
     if (card_id < 0) {
-        const char *err_msg = memvid_last_error();
+        const char *err_msg = memory_db_last_error(handle);
         if (using_custom_file) {
-            memvid_close(handle);
+            memory_db_close(handle);
         }
         cJSON *error = cJSON_CreateObject();
         char error_buf[512];
@@ -632,12 +605,9 @@ cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
         return error;
     }
 
-    // Auto-commit to persist the memory
-    int commit_result = memvid_commit(handle);
-
     // Close custom file handle if used
     if (using_custom_file) {
-        memvid_close(handle);
+        memory_db_close(handle);
     }
 
     cJSON *result = cJSON_CreateObject();
@@ -647,16 +617,7 @@ cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
     cJSON_AddStringToObject(result, "slot", slot);
     cJSON_AddStringToObject(result, "kind", kind_str);
     cJSON_AddStringToObject(result, "relation", relation_str);
-    if (commit_result != 0) {
-        cJSON_AddStringToObject(result, "warning", "Memory stored but commit failed - may not persist");
-    }
     return result;
-#else
-    (void)params;
-    cJSON *error = cJSON_CreateObject();
-    cJSON_AddStringToObject(error, "error", "Memory tools not available - rebuild with MEMVID=1");
-    return error;
-#endif
 }
 
 /**
@@ -666,7 +627,6 @@ cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
 cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
     (void)state;
 
-#ifdef HAVE_MEMVID
     cJSON *entity_json = cJSON_GetObjectItem(params, "entity");
     cJSON *slot_json = cJSON_GetObjectItem(params, "slot");
     cJSON *memvid_file_json = cJSON_GetObjectItem(params, "memvid_file");
@@ -685,37 +645,33 @@ cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
 
     // Get handle - either global or custom file
     int using_custom_file = (memvid_file != NULL && memvid_file[0] != '\0');
-    MemvidHandle *handle = memvid_open_for_path(using_custom_file ? memvid_file : NULL);
+    MemoryDB *handle = memory_db_open_for_path(using_custom_file ? memvid_file : NULL);
     if (handle == NULL) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Memvid not initialized");
-        return error;
+        // Try to initialize global if not already done
+        if (!using_custom_file && memory_db_init_global(NULL) == 0) {
+            handle = memory_db_get_global();
+        }
+        if (handle == NULL) {
+            cJSON *error = cJSON_CreateObject();
+            cJSON_AddStringToObject(error, "error", "Memory database not initialized");
+            return error;
+        }
     }
 
-    // Call memvid API - returns JSON string or NULL
-    char *json_result = memvid_get_current(handle, entity, slot);
+    // Query the memory database
+    MemoryCard *card = memory_db_get_current(handle, entity, slot);
 
     // Close custom file handle if used
     if (using_custom_file) {
-        memvid_close(handle);
+        memory_db_close(handle);
     }
-    if (!json_result) {
+
+    if (!card) {
         cJSON *result = cJSON_CreateObject();
         cJSON_AddStringToObject(result, "status", "not_found");
         cJSON_AddStringToObject(result, "entity", entity);
         cJSON_AddStringToObject(result, "slot", slot);
         cJSON_AddNullToObject(result, "value");
-        return result;
-    }
-
-    // Parse the JSON result
-    cJSON *memory_data = cJSON_Parse(json_result);
-    memvid_free_string(json_result);
-
-    if (!memory_data) {
-        cJSON *result = cJSON_CreateObject();
-        cJSON_AddStringToObject(result, "status", "error");
-        cJSON_AddStringToObject(result, "error", "Failed to parse memory data");
         return result;
     }
 
@@ -725,40 +681,33 @@ cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
     cJSON_AddStringToObject(result, "entity", entity);
     cJSON_AddStringToObject(result, "slot", slot);
 
-    // Extract value from memory data
-    cJSON *value = cJSON_GetObjectItem(memory_data, "value");
-    if (value) {
-        cJSON_AddItemToObject(result, "value", cJSON_Duplicate(value, 1));
+    // Add value from card
+    if (card->value) {
+        cJSON *value_json = cJSON_Parse(card->value);
+        if (value_json) {
+            cJSON_AddItemToObject(result, "value", value_json);
+        } else {
+            cJSON_AddStringToObject(result, "value", card->value);
+        }
     } else {
         cJSON_AddNullToObject(result, "value");
     }
 
-    // Include card_id if present
-    cJSON *card_id = cJSON_GetObjectItem(memory_data, "card_id");
-    if (card_id && cJSON_IsNumber(card_id)) {
-        cJSON_AddNumberToObject(result, "card_id", card_id->valuedouble);
-    }
+    // Include card_id
+    cJSON_AddNumberToObject(result, "card_id", (double)card->card_id);
 
     // Include kind if present
-    cJSON *kind = cJSON_GetObjectItem(memory_data, "kind");
-    if (kind && cJSON_IsString(kind)) {
-        cJSON_AddStringToObject(result, "kind", kind->valuestring);
+    if (card->kind) {
+        cJSON_AddStringToObject(result, "kind", card->kind);
     }
 
     // Include timestamp if present
-    cJSON *timestamp = cJSON_GetObjectItem(memory_data, "timestamp");
-    if (timestamp && cJSON_IsString(timestamp)) {
-        cJSON_AddStringToObject(result, "timestamp", timestamp->valuestring);
+    if (card->timestamp) {
+        cJSON_AddStringToObject(result, "timestamp", card->timestamp);
     }
 
-    cJSON_Delete(memory_data);
+    memory_db_free_card(card);
     return result;
-#else
-    (void)params;
-    cJSON *error = cJSON_CreateObject();
-    cJSON_AddStringToObject(error, "error", "Memory tools not available - rebuild with MEMVID=1");
-    return error;
-#endif
 }
 
 /**
@@ -768,7 +717,6 @@ cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
 cJSON* tool_memory_search(cJSON *params, ConversationState *state) {
     (void)state;
 
-#ifdef HAVE_MEMVID
     cJSON *query_json = cJSON_GetObjectItem(params, "query");
     cJSON *top_k_json = cJSON_GetObjectItem(params, "top_k");
     cJSON *memvid_file_json = cJSON_GetObjectItem(params, "memvid_file");
@@ -793,56 +741,54 @@ cJSON* tool_memory_search(cJSON *params, ConversationState *state) {
 
     // Get handle - either global or custom file
     int using_custom_file = (memvid_file != NULL && memvid_file[0] != '\0');
-    MemvidHandle *handle = memvid_open_for_path(using_custom_file ? memvid_file : NULL);
+    MemoryDB *handle = memory_db_open_for_path(using_custom_file ? memvid_file : NULL);
     if (handle == NULL) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Memvid not initialized");
-        return error;
+        // Try to initialize global if not already done
+        if (!using_custom_file && memory_db_init_global(NULL) == 0) {
+            handle = memory_db_get_global();
+        }
+        if (handle == NULL) {
+            cJSON *error = cJSON_CreateObject();
+            cJSON_AddStringToObject(error, "error", "Memory database not initialized");
+            return error;
+        }
     }
 
-    // Call memvid API - returns JSON array string
-    char *json_result = memvid_search(handle, query, top_k);
+    // Query the memory database using FTS5
+    MemorySearchResult *search_result = memory_db_search(handle, query, top_k);
 
     // Close custom file handle if used
     if (using_custom_file) {
-        memvid_close(handle);
+        memory_db_close(handle);
     }
 
-    if (!json_result) {
-        cJSON *result = cJSON_CreateObject();
-        cJSON_AddStringToObject(result, "status", "success");
-        cJSON_AddStringToObject(result, "query", query);
-        cJSON_AddItemToObject(result, "results", cJSON_CreateArray());
-        cJSON_AddNumberToObject(result, "count", 0);
-        return result;
-    }
-
-    // Parse the JSON array result
-    cJSON *search_results = cJSON_Parse(json_result);
-    memvid_free_string(json_result);
-
-    if (!search_results || !cJSON_IsArray(search_results)) {
-        if (search_results) cJSON_Delete(search_results);
-        cJSON *result = cJSON_CreateObject();
-        cJSON_AddStringToObject(result, "status", "error");
-        cJSON_AddStringToObject(result, "error", "Failed to parse search results");
-        return result;
+    // Build results array
+    cJSON *results_array = cJSON_CreateArray();
+    if (search_result) {
+        for (size_t i = 0; i < search_result->count; i++) {
+            MemoryCard *card = &search_result->cards[i];
+            cJSON *item = cJSON_CreateObject();
+            cJSON_AddNumberToObject(item, "card_id", (double)card->card_id);
+            cJSON_AddStringToObject(item, "entity", card->entity ? card->entity : "");
+            cJSON_AddStringToObject(item, "slot", card->slot ? card->slot : "");
+            cJSON_AddStringToObject(item, "value", card->value ? card->value : "");
+            cJSON_AddStringToObject(item, "kind", card->kind ? card->kind : "fact");
+            cJSON_AddStringToObject(item, "relation", card->relation ? card->relation : "sets");
+            cJSON_AddStringToObject(item, "timestamp", card->timestamp ? card->timestamp : "");
+            cJSON_AddNumberToObject(item, "score", card->score);
+            cJSON_AddItemToArray(results_array, item);
+        }
+        memory_db_free_result(search_result);
     }
 
     // Build response
     cJSON *result = cJSON_CreateObject();
     cJSON_AddStringToObject(result, "status", "success");
     cJSON_AddStringToObject(result, "query", query);
-    cJSON_AddNumberToObject(result, "count", cJSON_GetArraySize(search_results));
-    cJSON_AddItemToObject(result, "results", search_results);
+    cJSON_AddNumberToObject(result, "count", cJSON_GetArraySize(results_array));
+    cJSON_AddItemToObject(result, "results", results_array);
 
     return result;
-#else
-    (void)params;
-    cJSON *error = cJSON_CreateObject();
-    cJSON_AddStringToObject(error, "error", "Memory tools not available - rebuild with MEMVID=1");
-    return error;
-#endif
 }
 
 #ifndef TEST_BUILD

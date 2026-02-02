@@ -11,7 +11,7 @@
 #include "logger.h"
 #include "context/system_prompt.h"
 #include "persistence.h"
-#include "memvid.h"
+#include "memory_db.h"
 #include "data_dir.h"
 
 /*
@@ -84,22 +84,18 @@ static void* init_database_thread(void *arg) {
 }
 
 /*
- * Background thread: Initialize memvid
+ * Background thread: Initialize memory database
  */
-static void* init_memvid_thread(void *arg) {
+static void* init_memory_db_thread(void *arg) {
     ConversationState *state = (ConversationState *)arg;
     BackgroundLoaders *bg = state->bg_loaders;
     struct timespec start, end;
 
     clock_gettime(CLOCK_MONOTONIC, &start);
-    LOG_DEBUG("[BG] Memvid initialization started");
+    LOG_DEBUG("[BG] Memory database initialization started");
 
-    // Initialize memvid
-#ifdef HAVE_MEMVID
-    int result = memvid_init_global(NULL);
-#else
-    int result = -1;  // Not available
-#endif
+    // Initialize memory database
+    int result = memory_db_init_global(NULL);
 
     // Store result
     pthread_mutex_lock(&bg->memvid_mutex);
@@ -112,9 +108,9 @@ static void* init_memvid_thread(void *arg) {
                       (end.tv_nsec - start.tv_nsec) / 1000000;
 
     if (result == 0) {
-        LOG_DEBUG("[BG] Memvid initialization completed in %ld ms", duration_ms);
+        LOG_DEBUG("[BG] Memory database initialization completed in %ld ms", duration_ms);
     } else {
-        LOG_DEBUG("[BG] Memvid initialization failed or not available after %ld ms", duration_ms);
+        LOG_DEBUG("[BG] Memory database initialization failed after %ld ms", duration_ms);
     }
 
     return NULL;
@@ -161,12 +157,12 @@ int start_background_loaders(ConversationState *state) {
         LOG_ERROR("Failed to start database background thread");
     }
 
-    // Start memvid initialization thread
-    if (pthread_create(&bg->memvid_thread, NULL, init_memvid_thread, state) == 0) {
+    // Start memory database initialization thread
+    if (pthread_create(&bg->memvid_thread, NULL, init_memory_db_thread, state) == 0) {
         bg->memvid_started = 1;
-        LOG_DEBUG("Background memvid initialization started");
+        LOG_DEBUG("Background memory database initialization started");
     } else {
-        LOG_ERROR("Failed to start memvid background thread");
+        LOG_ERROR("Failed to start memory database background thread");
     }
 
     struct timespec end;
@@ -174,7 +170,7 @@ int start_background_loaders(ConversationState *state) {
     long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
                       (end.tv_nsec - start.tv_nsec) / 1000000;
 
-    LOG_INFO("Background initialization started in %ld ms (system_prompt=%d, database=%d, memvid=%d)",
+    LOG_INFO("Background initialization started in %ld ms (system_prompt=%d, database=%d, memory_db=%d)",
              duration_ms, bg->system_prompt_started, bg->database_started, bg->memvid_started);
 
     return 0;
@@ -281,9 +277,9 @@ PersistenceDB* await_database_ready(ConversationState *state) {
 }
 
 /*
- * Check if memvid is ready (wait if not ready)
+ * Check if memory database is ready (wait if not ready)
  */
-int await_memvid_ready(ConversationState *state) {
+int await_memory_db_ready(ConversationState *state) {
     if (!state || !state->bg_loaders) {
         LOG_WARN("No background loaders initialized");
         return -1;
@@ -300,16 +296,16 @@ int await_memvid_ready(ConversationState *state) {
     pthread_mutex_unlock(&bg->memvid_mutex);
 
     if (ready) {
-        LOG_DEBUG("Memvid already ready (fast path)");
+        LOG_DEBUG("Memory database already ready (fast path)");
         return result;
     }
 
     // Wait for thread to complete
-    LOG_DEBUG("Waiting for memvid initialization to complete...");
+    LOG_DEBUG("Waiting for memory database initialization to complete...");
     if (bg->memvid_started) {
         pthread_join(bg->memvid_thread, NULL);
         bg->memvid_started = 0;
-        LOG_DEBUG("Memvid initialization completed (waited)");
+        LOG_DEBUG("Memory database initialization completed (waited)");
     }
 
     pthread_mutex_lock(&bg->memvid_mutex);
@@ -320,7 +316,7 @@ int await_memvid_ready(ConversationState *state) {
     clock_gettime(CLOCK_MONOTONIC, &end);
     long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
                       (end.tv_nsec - start.tv_nsec) / 1000000;
-    LOG_DEBUG("Memvid ready after %ld ms wait", duration_ms);
+    LOG_DEBUG("Memory database ready after %ld ms wait", duration_ms);
 
     return result;
 }

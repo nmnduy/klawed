@@ -11,9 +11,8 @@
 #include <time.h>
 #include <bsd/string.h>
 
-#ifdef HAVE_MEMVID
-#include "memvid.h"
-#endif
+/* Memory database (SQLite-based) for context retrieval */
+#include "memory_db.h"
 
 // Default configuration values
 #define DEFAULT_COMPACT_THRESHOLD 60    // 60% of token limit
