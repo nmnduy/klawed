@@ -24,14 +24,10 @@ int is_explore_mode_enabled(void) { return 0; }
 int is_web_agent_available(void) { return 0; }
 const char* explore_tool_web_search_schema(void) { return "{}"; }
 const char* explore_tool_web_read_schema(void) { return "{}"; }
-const char* explore_tool_context7_search_schema(void) { return "{}"; }
-const char* explore_tool_context7_docs_schema(void) { return "{}"; }
 
 // Stub for web tools
 char* tool_web_search(const char *query) { (void)query; return NULL; }
 char* tool_web_read(const char *url) { (void)url; return NULL; }
-char* tool_context7_search(const char *query) { (void)query; return NULL; }
-char* tool_context7_docs(const char *id) { (void)id; return NULL; }
 
 // Stub for memory tools
 char* tool_memory_store(const char *entity, const char *kind, const char *slot, const char *value) {
