@@ -45,6 +45,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libbsd-dev \
     libncursesw5-dev \
+    \
+    # sqlite-vector build dependencies
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go 1.22+ for web_browse_agent
@@ -56,27 +60,24 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:${PATH}"
 
-# Install Rust (needed for memvid-ffi)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-ENV PATH="/root/.cargo/bin:${PATH}"
-
 WORKDIR /build
 
 # Copy source code
 COPY . .
 
-# Build memvid-ffi Rust library
-RUN cd vendors/memvid-ffi && \
-    cargo build --release && \
-    ls -lh target/release/libmemvid_ffi.a && \
-    ls -lh target/release/libmemvid_ffi.so
+# Clone and build sqlite-vector extension for vector similarity search
+# sqlite-vector provides vector search capabilities for the memory system
+RUN git clone --depth 1 --branch v0.0.5 https://github.com/sqliteai/sqlite-vector.git && \
+    cd sqlite-vector && \
+    make && \
+    ls -lh vector0.so && \
+    # Copy to a known location for later
+    cp vector0.so /build/vendors/sqlite-vector/vector0.so
 
-# Build klawed with memvid enabled, ZMQ disabled (keeps it simple)
+# Build klawed (no longer needs MEMVID flag - uses SQLite-based memory system)
 RUN make clean && \
-    make MEMVID=1 ZMQ=0 && \
-    ls -lh build/klawed && \
-    # Verify memvid is linked
-    ldd build/klawed | grep -q memvid || echo "WARNING: memvid not dynamically linked (may be static)"
+    make && \
+    ls -lh build/klawed
 
 # Build web_browse_agent
 RUN cd tools/web_browse_agent && \
@@ -157,8 +158,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy klawed binary from builder
 COPY --from=builder /build/build/klawed /usr/local/bin/klawed
 
-# Copy memvid shared library from builder
-COPY --from=builder /build/vendors/memvid-ffi/target/release/libmemvid_ffi.so /usr/local/lib/libmemvid_ffi.so
+# Copy sqlite-vector extension from builder
+COPY --from=builder /build/vendors/sqlite-vector/vector0.so /usr/local/lib/vector0.so
 
 # Copy web_browse_agent binary from builder
 COPY --from=builder /build/tools/web_browse_agent/web_browse_agent /usr/local/bin/web_browse_agent

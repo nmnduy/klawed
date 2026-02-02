@@ -65,7 +65,7 @@ The container expects the following directory structure in `/workspace`:
 │   ├── logs/              # Application logs
 │   ├── mcp/               # MCP server logs
 │   ├── api_calls.db       # SQLite database for API call history
-│   └── memory.mv2         # Memvid memory file (if enabled)
+│   └── memory.db          # SQLite-based memory database with FTS5 full-text search
 ├── klawed_messages.db     # SQLite queue for messaging (when using --sqlite-queue)
 └── [user files]           # User's workspace files
 ```
@@ -113,6 +113,12 @@ Optional klawed configuration:
 - `KLAWED_BASH_TIMEOUT`: Bash command timeout in seconds (default: 30)
 - `KLAWED_MCP_ENABLED`: Enable MCP (Model Context Protocol) support
 - `DISABLE_PROMPT_CACHING`: Disable prompt caching if needed
+- `KLAWED_MEMORY_PATH`: Custom memory database path (default: `.klawed/memory.db`)
+- `KLAWED_AUTO_COMPACT`: Enable automatic context compaction (default: enabled)
+
+## Vector Search
+
+The sandbox includes `sqlite-vector` extension for vector similarity search in memory storage. Vector search is enabled automatically when the extension loads successfully. Falls back to FTS5 full-text search if vector extension is unavailable.
 
 See `KLAWED.md` for complete configuration options.
 

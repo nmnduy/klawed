@@ -2242,7 +2242,7 @@ ifndef GITHUB_ACTIONS
 	@codesign --force --deep --sign - $(INSTALL_PREFIX)/bin/klawed 2>/dev/null || echo "Warning: Code signing failed (non-fatal)"
 endif
 endif
-# Note: memvid is now statically linked, no shared library installation needed
+# Note: Memory system now uses SQLite + FTS5 (memory_db.c), no external libraries needed
 	@echo "✓ Installation complete! Run 'klawed' from anywhere."
 	@echo ""
 	@echo "Note: Make sure $(INSTALL_PREFIX)/bin is in your PATH:"
