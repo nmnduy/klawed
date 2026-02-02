@@ -1205,6 +1205,7 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/http_client_all.o $(HTTP_CLIENT_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/session_all.o $(SESSION_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/retry_logic_all.o $(RETRY_LOGIC_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/memory_db_all.o $(MEMORY_DB_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/compaction_all.o $(COMPACTION_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/data_dir_all.o $(DATA_DIR_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/file_utils_all.o $(FILE_UTILS_SRC); \
@@ -1226,6 +1227,7 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_definitions_all.o $(TOOL_DEFINITIONS_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/content_types_all.o $(CONTENT_TYPES_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/conversation_state_all.o $(CONVERSATION_STATE_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/conversation_processor_all.o $(CONVERSATION_PROCESSOR_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/message_builder_all.o $(MESSAGE_BUILDER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/message_parser_all.o $(MESSAGE_PARSER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/system_prompt_all.o $(CONTEXT_SYSTEM_PROMPT_SRC); \
@@ -1281,7 +1283,8 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/array_resize_all.o $(BUILD_DIR)/http_client_all.o \
 		$(BUILD_DIR)/session_all.o \
 		$(BUILD_DIR)/retry_logic_all.o \
-		$(BUILD_DIR)/memvid_all.o $(BUILD_DIR)/compaction_all.o \
+		$(BUILD_DIR)/memory_db_all.o \
+		$(BUILD_DIR)/compaction_all.o \
 		$(BUILD_DIR)/data_dir_all.o \
 		$(BUILD_DIR)/file_utils_all.o $(BUILD_DIR)/string_utils_all.o \
 		$(BUILD_DIR)/timestamp_utils_all.o $(BUILD_DIR)/format_utils_all.o \
@@ -1292,6 +1295,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/tool_subagent_all.o $(BUILD_DIR)/tool_registry_all.o \
 		$(BUILD_DIR)/tool_executor_all.o $(BUILD_DIR)/tool_definitions_all.o \
 		$(BUILD_DIR)/content_types_all.o $(BUILD_DIR)/conversation_state_all.o \
+		$(BUILD_DIR)/conversation_processor_all.o \
 		$(BUILD_DIR)/message_builder_all.o $(BUILD_DIR)/message_parser_all.o \
 		$(BUILD_DIR)/system_prompt_all.o $(BUILD_DIR)/environment_all.o \
 		$(BUILD_DIR)/klawed_md_all.o $(BUILD_DIR)/memory_injection_all.o \
@@ -2618,7 +2622,7 @@ TOOL_DEFINITIONS_TEST_OBJ = $(BUILD_DIR)/tool_definitions_test.o
 
 # Tool registry, executor, API client, and sqlite_queue are excluded from TEST_COMMON_OBJS because they need to be
 # compiled with -DTEST_BUILD to work properly with test builds. They use _TEST_OBJ variants instead.
-TEST_COMMON_OBJS = $(LOGGER_OBJ) $(CONFIG_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(DEEPSEEK_PROVIDER_OBJ) $(MOONSHOT_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(BEDROCK_CONVERSE_OBJ) $(TUI_OBJ) $(TUI_CORE_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_WINDOW_OBJ) $(TUI_RENDER_OBJ) $(TUI_MODES_OBJ) $(TUI_INPUT_OBJ) $(TUI_HISTORY_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_PASTE_OBJ) $(TUI_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(COMPACTION_OBJ) $(BACKGROUND_INIT_OBJ) $(DATA_DIR_OBJ) $(EXPLORE_TOOLS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_TEST_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ) $(PROVIDER_COMMAND_OBJ) $(CONFIG_COMMAND_OBJ)
+TEST_COMMON_OBJS = $(LOGGER_OBJ) $(CONFIG_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(TODO_OBJ) $(MESSAGE_QUEUE_OBJ) $(OPENAI_MESSAGES_OBJ) $(OPENAI_RESPONSES_OBJ) $(BASE64_OBJ) $(PROVIDER_OBJ) $(PROVIDER_CONFIG_LOADER_OBJ) $(OPENAI_PROVIDER_OBJ) $(BEDROCK_PROVIDER_OBJ) $(ANTHROPIC_PROVIDER_OBJ) $(DEEPSEEK_PROVIDER_OBJ) $(MOONSHOT_PROVIDER_OBJ) $(HTTP_CLIENT_OBJ) $(SESSION_OBJ) $(RETRY_LOGIC_OBJ) $(TOOL_UTILS_OBJ) $(PROCESS_UTILS_OBJ) $(SUBAGENT_MANAGER_OBJ) $(ARRAY_RESIZE_OBJ) $(HISTORY_FILE_OBJ) $(AWS_BEDROCK_OBJ) $(BEDROCK_CONVERSE_OBJ) $(TUI_OBJ) $(TUI_CORE_OBJ) $(TUI_CONVERSATION_OBJ) $(TUI_WINDOW_OBJ) $(TUI_RENDER_OBJ) $(TUI_MODES_OBJ) $(TUI_INPUT_OBJ) $(TUI_HISTORY_OBJ) $(TUI_COMPLETION_OBJ) $(TUI_PASTE_OBJ) $(TUI_SEARCH_OBJ) $(WINDOW_MANAGER_OBJ) $(COMPLETION_OBJ) $(COMMANDS_OBJ) $(THEME_EXPLORER_OBJ) $(HELP_MODAL_OBJ) $(BUILTIN_THEMES_OBJ) $(AI_WORKER_OBJ) $(VOICE_INPUT_OBJ) $(MCP_OBJ) $(FILE_SEARCH_OBJ) $(HISTORY_SEARCH_OBJ) $(DUMP_UTILS_OBJ) $(COMPACTION_OBJ) $(BACKGROUND_INIT_OBJ) $(DATA_DIR_OBJ) $(EXPLORE_TOOLS_OBJ) $(CONTENT_TYPES_OBJ) $(CONVERSATION_STATE_OBJ) $(CONVERSATION_PROCESSOR_OBJ) $(MESSAGE_BUILDER_OBJ) $(MESSAGE_PARSER_OBJ) $(FILE_UTILS_OBJ) $(STRING_UTILS_OBJ) $(TIMESTAMP_UTILS_OBJ) $(FORMAT_UTILS_OBJ) $(ENV_UTILS_OBJ) $(OUTPUT_UTILS_OBJ) $(DIFF_UTILS_OBJ) $(TOOL_SLEEP_OBJ) $(TOOL_TODO_OBJ) $(TOOL_IMAGE_OBJ) $(TOOL_SEARCH_OBJ) $(TOOL_FILESYSTEM_OBJ) $(TOOL_BASH_OBJ) $(TOOL_SUBAGENT_OBJ) $(CONTEXT_SYSTEM_PROMPT_OBJ) $(CONTEXT_ENVIRONMENT_OBJ) $(CONTEXT_KLAWED_MD_OBJ) $(CONTEXT_MEMORY_INJECTION_OBJ) $(UI_OUTPUT_OBJ) $(PRINT_HELPERS_OBJ) $(TOOL_OUTPUT_DISPLAY_OBJ) $(SESSION_TOKEN_USAGE_OBJ) $(SESSION_PERSISTENCE_OBJ) $(API_RESPONSE_OBJ) $(API_BUILDER_OBJ) $(API_CLIENT_TEST_OBJ) $(INTERACTIVE_LOOP_OBJ) $(INPUT_HANDLER_OBJ) $(RESPONSE_PROCESSOR_OBJ) $(COMMAND_DISPATCH_OBJ) $(ONESHOT_MODE_OBJ) $(ONESHOT_PROCESSOR_OBJ) $(ONESHOT_OUTPUT_OBJ) $(PROVIDER_COMMAND_OBJ) $(CONFIG_COMMAND_OBJ) $(MEMORY_DB_OBJ)
 
 test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET)
 	@echo ""
