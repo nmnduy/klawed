@@ -71,9 +71,9 @@ COPY . .
 RUN git clone --depth 1 --branch 0.9.60 https://github.com/sqliteai/sqlite-vector.git && \
     cd sqlite-vector && \
     make && \
-    ls -lh vector0.so && \
-    # Copy to a known location for later
-    cp vector0.so /build/vendors/sqlite-vector/vector0.so
+    ls -lh dist/vector.so && \
+    mkdir -p /build/vendors/sqlite-vector && \
+    cp dist/vector.so /build/vendors/sqlite-vector/vector0.so
 
 # Build klawed (no longer needs MEMVID flag - uses SQLite-based memory system)
 RUN make clean && \
