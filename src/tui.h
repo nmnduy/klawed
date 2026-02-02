@@ -37,7 +37,7 @@ typedef enum {
     COLOR_PAIR_FOREGROUND = 2, // Explicit foreground color
     COLOR_PAIR_USER = 3,       // Green for user role names
     COLOR_PAIR_ASSISTANT = 4,  // Blue for assistant role names
-    COLOR_PAIR_TOOL = 5,       // Cyan for tool execution indicators (softer)
+    COLOR_PAIR_TOOL = 5,       // Dim gray for tool execution indicators (subtle)
     COLOR_PAIR_ERROR = 6,      // Red for errors
     COLOR_PAIR_STATUS = 7,     // Cyan for status messages
     COLOR_PAIR_PROMPT = 8,     // Green for input prompt
