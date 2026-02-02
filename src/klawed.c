@@ -539,7 +539,7 @@ typedef struct {
 
 /**
  * tool_memory_store - Store a memory card about the user or project
- * params: { entity, slot, value, kind, relation (optional), memvid_file (optional) }
+ * params: { entity, slot, value, kind, relation (optional), memory_file (optional) }
  */
 cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
     (void)state;
@@ -550,7 +550,11 @@ cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
     cJSON *value_json = cJSON_GetObjectItem(params, "value");
     cJSON *kind_json = cJSON_GetObjectItem(params, "kind");
     cJSON *relation_json = cJSON_GetObjectItem(params, "relation");
-    cJSON *memvid_file_json = cJSON_GetObjectItem(params, "memvid_file");
+    // Support both memory_file (new) and memvid_file (legacy) for backward compatibility
+    cJSON *memory_file_json = cJSON_GetObjectItem(params, "memory_file");
+    if (!memory_file_json) {
+        memory_file_json = cJSON_GetObjectItem(params, "memvid_file");
+    }
 
     if (!entity_json || !cJSON_IsString(entity_json) ||
         !slot_json || !cJSON_IsString(slot_json) ||
@@ -567,8 +571,8 @@ cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
     const char *kind_str = kind_json->valuestring;
     const char *relation_str = relation_json && cJSON_IsString(relation_json)
                                ? relation_json->valuestring : "sets";
-    const char *memvid_file = memvid_file_json && cJSON_IsString(memvid_file_json)
-                              ? memvid_file_json->valuestring : NULL;
+    const char *memory_file = memory_file_json && cJSON_IsString(memory_file_json)
+                              ? memory_file_json->valuestring : NULL;
 
     // Parse kind string to enum value
     MemoryKind kind = memory_db_string_to_kind(kind_str);
@@ -577,8 +581,8 @@ cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
     MemoryRelation relation = memory_db_string_to_relation(relation_str);
 
     // Get handle - either global or custom file
-    int using_custom_file = (memvid_file != NULL && memvid_file[0] != '\0');
-    MemoryDB *handle = memory_db_open_for_path(using_custom_file ? memvid_file : NULL);
+    int using_custom_file = (memory_file != NULL && memory_file[0] != '\0');
+    MemoryDB *handle = memory_db_open_for_path(using_custom_file ? memory_file : NULL);
     if (handle == NULL) {
         // Try to initialize global if not already done
         if (!using_custom_file && memory_db_init_global(NULL) == 0) {
@@ -622,14 +626,18 @@ cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
 
 /**
  * tool_memory_recall - Recall the current value for an entity's attribute
- * params: { entity, slot, memvid_file (optional) }
+ * params: { entity, slot, memory_file (optional) }
  */
 cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
     (void)state;
 
     cJSON *entity_json = cJSON_GetObjectItem(params, "entity");
     cJSON *slot_json = cJSON_GetObjectItem(params, "slot");
-    cJSON *memvid_file_json = cJSON_GetObjectItem(params, "memvid_file");
+    // Support both memory_file (new) and memvid_file (legacy) for backward compatibility
+    cJSON *memory_file_json = cJSON_GetObjectItem(params, "memory_file");
+    if (!memory_file_json) {
+        memory_file_json = cJSON_GetObjectItem(params, "memvid_file");
+    }
 
     if (!entity_json || !cJSON_IsString(entity_json) ||
         !slot_json || !cJSON_IsString(slot_json)) {
@@ -640,12 +648,12 @@ cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
 
     const char *entity = entity_json->valuestring;
     const char *slot = slot_json->valuestring;
-    const char *memvid_file = memvid_file_json && cJSON_IsString(memvid_file_json)
-                              ? memvid_file_json->valuestring : NULL;
+    const char *memory_file = memory_file_json && cJSON_IsString(memory_file_json)
+                              ? memory_file_json->valuestring : NULL;
 
     // Get handle - either global or custom file
-    int using_custom_file = (memvid_file != NULL && memvid_file[0] != '\0');
-    MemoryDB *handle = memory_db_open_for_path(using_custom_file ? memvid_file : NULL);
+    int using_custom_file = (memory_file != NULL && memory_file[0] != '\0');
+    MemoryDB *handle = memory_db_open_for_path(using_custom_file ? memory_file : NULL);
     if (handle == NULL) {
         // Try to initialize global if not already done
         if (!using_custom_file && memory_db_init_global(NULL) == 0) {
@@ -712,14 +720,18 @@ cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
 
 /**
  * tool_memory_search - Search all memories by text query
- * params: { query, top_k (optional, default 10), memvid_file (optional) }
+ * params: { query, top_k (optional, default 10), memory_file (optional) }
  */
 cJSON* tool_memory_search(cJSON *params, ConversationState *state) {
     (void)state;
 
     cJSON *query_json = cJSON_GetObjectItem(params, "query");
     cJSON *top_k_json = cJSON_GetObjectItem(params, "top_k");
-    cJSON *memvid_file_json = cJSON_GetObjectItem(params, "memvid_file");
+    // Support both memory_file (new) and memvid_file (legacy) for backward compatibility
+    cJSON *memory_file_json = cJSON_GetObjectItem(params, "memory_file");
+    if (!memory_file_json) {
+        memory_file_json = cJSON_GetObjectItem(params, "memvid_file");
+    }
 
     if (!query_json || !cJSON_IsString(query_json)) {
         cJSON *error = cJSON_CreateObject();
@@ -736,12 +748,12 @@ cJSON* tool_memory_search(cJSON *params, ConversationState *state) {
         }
     }
 
-    const char *memvid_file = memvid_file_json && cJSON_IsString(memvid_file_json)
-                              ? memvid_file_json->valuestring : NULL;
+    const char *memory_file = memory_file_json && cJSON_IsString(memory_file_json)
+                              ? memory_file_json->valuestring : NULL;
 
     // Get handle - either global or custom file
-    int using_custom_file = (memvid_file != NULL && memvid_file[0] != '\0');
-    MemoryDB *handle = memory_db_open_for_path(using_custom_file ? memvid_file : NULL);
+    int using_custom_file = (memory_file != NULL && memory_file[0] != '\0');
+    MemoryDB *handle = memory_db_open_for_path(using_custom_file ? memory_file : NULL);
     if (handle == NULL) {
         // Try to initialize global if not already done
         if (!using_custom_file && memory_db_init_global(NULL) == 0) {
