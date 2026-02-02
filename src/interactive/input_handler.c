@@ -224,28 +224,9 @@ int submit_input_callback(const char *input, void *user_data) {
     if (worker) {
         if (ai_worker_submit(worker, input_copy) != 0) {
             ui_show_error(tui, queue, "Failed to queue instruction for processing");
-        } else {
-            if (ctx->instruction_queue) {
-                int depth = ai_queue_depth(ctx->instruction_queue);
-                if (depth > 0) {
-                    char status[128];
-                    if (ctx->instruction_queue_capacity > 0) {
-                        snprintf(status, sizeof(status),
-                                 "Instruction queued (%d/%d pending)",
-                                 depth,
-                                 ctx->instruction_queue_capacity);
-                    } else {
-                        snprintf(status, sizeof(status),
-                                 "Instruction queued (%d pending)", depth);
-                    }
-                    ui_set_status(tui, queue, status);
-                } else {
-                    ui_set_status(tui, queue, "Instruction submitted (processing...)");
-                }
-            } else {
-                ui_set_status(tui, queue, "Instruction queued for processing...");
-            }
         }
+        // Note: No status update needed - spinner is already showing, and
+        // users see queued messages appear in the conversation view
     } else {
         ui_set_status_varied(tui, queue, SPINNER_CONTEXT_API_CALL);
         ApiResponse *response = call_api_with_retries(state);
