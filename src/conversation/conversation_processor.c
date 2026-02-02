@@ -12,10 +12,9 @@
 #include "../tools/tool_registry.h"
 #include "../logger.h"
 #include "../arena.h"
-#include "../indicators.h"
 
 // Include for get_tool_details
-#include "../tools/tool_definitions.h"
+#include "../ui/tool_output_display.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -23,12 +22,6 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <bsd/string.h>
-
-// ============================================================================
-// Thread-Local for Tool Queue (for parallel execution)
-// ============================================================================
-
-extern _Thread_local TUIMessageQueue *g_active_tool_queue;
 
 // ============================================================================
 // Tool Execution Structures
@@ -49,7 +42,7 @@ typedef struct {
     char *tool_name;
     cJSON *input;
     struct ConversationState *state;
-    struct InternalContent *result_block;
+    InternalContent *result_block;
     ToolTracker *tracker;
     int notified;
     Arena *arena;
@@ -145,13 +138,8 @@ static void *tool_thread_func(void *arg) {
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
     pthread_cleanup_push(tool_thread_cleanup, arg);
 
-    // Store previous queue and set to NULL for parallel execution
-    TUIMessageQueue *previous_queue = g_active_tool_queue;
-    g_active_tool_queue = NULL;
-
     cJSON *res = execute_tool(t->tool_name, t->input, t->state);
 
-    g_active_tool_queue = previous_queue;
     cJSON_Delete(t->input);
     t->input = NULL;
 

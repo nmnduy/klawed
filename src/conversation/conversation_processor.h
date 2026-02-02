@@ -17,11 +17,11 @@
 #include <stddef.h>
 #include <cjson/cJSON.h>
 
-// Forward declarations
+// Include klawed_internal.h for type definitions (ApiResponse, ToolCall, InternalContent)
+#include "../klawed_internal.h"
+
+// Forward declaration
 struct ConversationState;
-struct ApiResponse;
-struct ToolCall;
-typedef struct InternalContent InternalContent;
 
 // ============================================================================
 // Execution Configuration
@@ -138,7 +138,7 @@ void processing_context_init(ProcessingContext *ctx);
  * @return 0 on success, -1 on error
  */
 int process_response_unified(struct ConversationState *state,
-                              struct ApiResponse *response,
+                              ApiResponse *response,
                               const ProcessingContext *ctx);
 
 /**
@@ -181,7 +181,7 @@ const char* get_tool_description(const char *tool_name, cJSON *input);
  * @return Number of tools executed, or -1 on error
  */
 int execute_tools_collect_results(struct ConversationState *state,
-                                   struct ToolCall *tools,
+                                   ToolCall *tools,
                                    int tool_count,
                                    const ProcessingContext *ctx,
                                    InternalContent **results_out);
