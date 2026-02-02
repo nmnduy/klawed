@@ -189,7 +189,10 @@ RUN go install github.com/playwright-community/playwright-go/cmd/playwright@late
     ls -lah ~/.cache/ms-playwright/ || true
 
 # Create workspace directory structure
-RUN mkdir -p /workspace/.klawed/logs /workspace/.klawed/mcp
+RUN mkdir -p /workspace/.klawed/logs /workspace/.klawed/mcp /var/log/web-agent
+
+# Create web_browse_agent session directory
+RUN mkdir -p /root/.web-agent/sessions
 
 # Set up default working directory
 WORKDIR /workspace
@@ -202,6 +205,10 @@ ENV LD_LIBRARY_PATH=/usr/local/lib \
     BROWSER_TYPE=CHROMIUM \
     BROWSER_HEADLESS=true \
     KLAWED_WEB_BROWSE_AGENT_PATH=/usr/local/bin/web_browse_agent \
+    # Point to system Chromium for Playwright
+    CHROMIUM_EXECUTABLE=/usr/bin/chromium \
+    # Enable web_browse_agent logging for debugging
+    WEB_AGENT_LOG_FILE=/var/log/web-agent/web-agent.log \
     # Playwright browsers are pre-installed in the image
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 

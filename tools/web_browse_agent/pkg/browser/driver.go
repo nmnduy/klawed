@@ -2,6 +2,7 @@ package browser
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -12,6 +13,11 @@ import (
 
 	"github.com/klawed/tools/web_browse_agent/pkg/ipc"
 )
+
+// getLogger returns a logger for the driver
+func getLogger() *log.Logger {
+	return logger
+}
 
 // Driver represents a browser driver process
 type Driver struct {
@@ -84,6 +90,10 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 
 // Start starts the driver process and IPC server
 func (d *Driver) Start() error {
+	logger.Printf("Starting driver for session %s", d.sessionID)
+	logger.Printf("Socket path: %s", d.socketPath)
+	logger.Printf("Headless: %v, UserDataDir: %s", d.headless, d.userDataDir)
+
 	// Create IPC server with activity tracking for idle timeout
 	ipcConfig := ipc.ServerConfig{
 		SocketPath: d.socketPath,
@@ -91,27 +101,35 @@ func (d *Driver) Start() error {
 	}
 	server, err := ipc.NewServer(ipcConfig)
 	if err != nil {
+		logger.Printf("ERROR: Failed to create IPC server: %v", err)
 		return fmt.Errorf("failed to create IPC server: %w", err)
 	}
+	logger.Printf("IPC server created")
 	d.ipcServer = server
 
 	// Initialize browser context
+	logger.Printf("Initializing browser context...")
 	ctx, err := NewBrowserContextWithConfig(BrowserContextConfig{
 		Headless:    d.headless,
 		UserDataDir: d.userDataDir,
 	})
 	if err != nil {
+		logger.Printf("ERROR: Failed to create browser context: %v", err)
 		return fmt.Errorf("failed to create browser context: %w", err)
 	}
+	logger.Printf("Browser context initialized successfully")
 	d.context = ctx
 
 	// Register command handlers
 	d.registerHandlers(server)
 
 	// Start IPC server
+	logger.Printf("Starting IPC server on socket: %s", d.socketPath)
 	if err := server.Start(); err != nil {
+		logger.Printf("ERROR: Failed to start IPC server: %v", err)
 		return fmt.Errorf("failed to start IPC server: %w", err)
 	}
+	logger.Printf("IPC server started successfully")
 
 	// Start cleanup goroutine
 	d.wg.Add(1)
@@ -465,14 +483,19 @@ func waitForInterrupt() chan os.Signal {
 // Idle timeout is inherited from WEB_AGENT_IDLE_TIMEOUT env var if set,
 // otherwise defaults to DefaultIdleTimeout (5 minutes).
 func StartDriverProcess(sessionID, socketPath string, headless bool, userDataDir string) (int, error) {
+	logger.Printf("StartDriverProcess called for session %s", sessionID)
+	logger.Printf("Socket path: %s, Headless: %v, UserDataDir: %s", socketPath, headless, userDataDir)
+
 	// Get parent PID for orphan detection
 	// Prefer KLAWED_PID env var, then fall back to our parent PID
 	var parentPID int
 	if klawedPID := os.Getenv("KLAWED_PID"); klawedPID != "" {
 		fmt.Sscanf(klawedPID, "%d", &parentPID)
+		logger.Printf("Using KLAWED_PID: %d", parentPID)
 	} else {
 		// Use parent PID of this CLI process (should be klawed when run via popen)
 		parentPID = os.Getppid()
+		logger.Printf("Using parent PID: %d", parentPID)
 	}
 
 	// Build command
@@ -499,40 +522,66 @@ func StartDriverProcess(sessionID, socketPath string, headless bool, userDataDir
 		}
 	}
 
-	// Redirect driver's stdout/stderr to /dev/null
-	// This is critical: if the driver inherits the parent's stdout/stderr,
-	// the parent process won't fully exit (from the perspective of 'timeout'
-	// and popen) until the driver closes those file descriptors.
-	// This causes blocking even though the CLI process itself has exited.
-	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	if err == nil {
-		cmd.Stdout = devNull
-		cmd.Stderr = devNull
-		// Note: devNull will be closed when cmd exits
+	logger.Printf("Driver command: %v", cmd.Args)
+
+	// Set up environment for the driver
+	cmd.Env = os.Environ()
+
+	// Redirect driver's stdout/stderr to a log file if WEB_AGENT_LOG_FILE is set
+	// Otherwise redirect to /dev/null
+	logFile := os.Getenv("WEB_AGENT_LOG_FILE")
+	if logFile != "" {
+		// Use the same log file but with driver prefix
+		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			cmd.Stdout = f
+			cmd.Stderr = f
+			logger.Printf("Driver output will be logged to: %s", logFile)
+		}
+	} else {
+		// Redirect to /dev/null
+		devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		if err == nil {
+			cmd.Stdout = devNull
+			cmd.Stderr = devNull
+			// Note: devNull will be closed when cmd exits
+		}
 	}
-	// If we can't open /dev/null, leave stdout/stderr unset (inherit nil = closed)
 
 	cmd.SysProcAttr = getSysProcAttr()
 
 	// Start process
+	logger.Printf("Starting driver process...")
 	if err := cmd.Start(); err != nil {
+		logger.Printf("ERROR: Failed to start driver process: %v", err)
 		return 0, fmt.Errorf("failed to start driver process: %w", err)
 	}
+	logger.Printf("Driver process started, PID: %d", cmd.Process.Pid)
 
 	// Wait a bit for the process to start
 	time.Sleep(500 * time.Millisecond)
 
 	// Check if process is still running
 	if cmd.Process == nil {
+		logger.Printf("ERROR: Driver process failed to start (process is nil)")
 		return 0, fmt.Errorf("driver process failed to start")
 	}
 
 	// Wait for socket to be created
-	for i := 0; i < 10; i++ {
+	logger.Printf("Waiting for driver socket to be created...")
+	for i := 0; i < 30; i++ {
 		if _, err := os.Stat(socketPath); err == nil {
+			logger.Printf("Driver socket created: %s", socketPath)
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	// Check if socket exists
+	if _, err := os.Stat(socketPath); err != nil {
+		logger.Printf("WARNING: Driver socket was not created: %s", socketPath)
+	} else {
+		logger.Printf("Driver is ready (PID: %d)", cmd.Process.Pid)
 	}
 
 	return cmd.Process.Pid, nil

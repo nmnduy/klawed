@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -11,6 +12,23 @@ import (
 	"syscall"
 	"time"
 )
+
+// ipcLogger for IPC operations
+var ipcLogger *log.Logger
+
+func init() {
+	// Initialize logger
+	logFile := os.Getenv("WEB_AGENT_LOG_FILE")
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			ipcLogger = log.New(f, "[ipc] ", log.LstdFlags|log.Lmicroseconds)
+		}
+	}
+	if ipcLogger == nil {
+		ipcLogger = log.New(os.Stderr, "[ipc] ", log.LstdFlags|log.Lmicroseconds)
+	}
+}
 
 // Server represents an IPC server that listens on a Unix domain socket
 type Server struct {
@@ -56,18 +74,24 @@ func NewServer(config ServerConfig) (*Server, error) {
 
 // Start starts the IPC server
 func (s *Server) Start() error {
+	ipcLogger.Printf("Starting IPC server on socket: %s", s.socketPath)
+
 	// Create listener
 	listener, err := net.Listen("unix", s.socketPath)
 	if err != nil {
+		ipcLogger.Printf("ERROR: Failed to listen on socket %s: %v", s.socketPath, err)
 		return fmt.Errorf("failed to listen on socket: %w", err)
 	}
 	s.listener = listener
+	ipcLogger.Printf("IPC server listening on: %s", s.socketPath)
 
 	// Set socket permissions (read/write for user and group)
 	if err := os.Chmod(s.socketPath, 0660); err != nil {
 		listener.Close()
+		ipcLogger.Printf("ERROR: Failed to set socket permissions: %v", err)
 		return fmt.Errorf("failed to set socket permissions: %w", err)
 	}
+	ipcLogger.Printf("Socket permissions set to 0660")
 
 	// Register default handlers
 	s.registerDefaultHandlers()
@@ -79,6 +103,7 @@ func (s *Server) Start() error {
 	// Handle signals for graceful shutdown
 	go s.handleSignals()
 
+	ipcLogger.Printf("IPC server started successfully")
 	return nil
 }
 
@@ -127,10 +152,12 @@ func (s *Server) GetHandler(command CommandType) (CommandHandler, bool) {
 // acceptConnections accepts incoming connections
 func (s *Server) acceptConnections() {
 	defer s.wg.Done()
+	ipcLogger.Printf("Accepting connections on %s", s.socketPath)
 
 	for {
 		select {
 		case <-s.shutdown:
+			ipcLogger.Printf("Shutting down connection acceptor")
 			return
 		default:
 			// Accept with timeout to allow shutdown check
@@ -144,10 +171,12 @@ func (s *Server) acceptConnections() {
 					continue
 				}
 				if !s.isShuttingDown() {
-					fmt.Fprintf(os.Stderr, "Failed to accept connection: %v\n", err)
+					ipcLogger.Printf("ERROR: Failed to accept connection: %v", err)
 				}
 				continue
 			}
+
+			ipcLogger.Printf("Accepted connection from %s", conn.RemoteAddr())
 
 			// Handle connection in goroutine
 			s.wg.Add(1)
@@ -161,6 +190,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
 	defer conn.Close()
 
+	ipcLogger.Printf("Handling connection from %s", conn.RemoteAddr())
 	decoder := json.NewDecoder(conn)
 	encoder := json.NewEncoder(conn)
 
@@ -172,33 +202,42 @@ func (s *Server) handleConnection(conn net.Conn) {
 		var req Request
 		if err := decoder.Decode(&req); err != nil {
 			if err == io.EOF {
+				ipcLogger.Printf("Client disconnected")
 				return // Client disconnected
 			}
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				ipcLogger.Printf("Request timeout")
 				// Send timeout response
 				resp, _ := NewResponse("", false, nil, "request timeout")
 				encoder.Encode(resp)
 				return
 			}
 			// Send error response
+			ipcLogger.Printf("Invalid request: %v", err)
 			resp, _ := NewResponse("", false, nil, fmt.Sprintf("invalid request: %v", err))
 			encoder.Encode(resp)
 			return
 		}
+
+		ipcLogger.Printf("Received command: %s", req.Command)
 
 		// Handle request
 		resp := s.handleRequest(&req)
 
 		// Send response
 		if err := encoder.Encode(resp); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to send response: %v\n", err)
+			ipcLogger.Printf("Failed to send response: %v", err)
 			return
 		}
+
+		ipcLogger.Printf("Response sent for command: %s (success: %v)", req.Command, resp.Success)
 	}
 }
 
 // handleRequest handles a single request
 func (s *Server) handleRequest(req *Request) *Response {
+	ipcLogger.Printf("Handling request: command=%s, id=%s", req.Command, req.ID)
+
 	// Track activity for idle timeout
 	if s.onActivityFunc != nil {
 		s.onActivityFunc()
@@ -207,17 +246,21 @@ func (s *Server) handleRequest(req *Request) *Response {
 	// Get handler for command
 	handler, ok := s.GetHandler(req.Command)
 	if !ok {
+		ipcLogger.Printf("Unknown command: %s", req.Command)
 		resp, _ := NewResponse(req.ID, false, nil, fmt.Sprintf("unknown command: %s", req.Command))
 		return resp
 	}
 
 	// Execute handler
+	ipcLogger.Printf("Executing handler for command: %s", req.Command)
 	resp, err := handler(req)
 	if err != nil {
+		ipcLogger.Printf("Handler error for command %s: %v", req.Command, err)
 		resp, _ = NewResponse(req.ID, false, nil, err.Error())
 		return resp
 	}
 
+	ipcLogger.Printf("Handler completed for command: %s", req.Command)
 	return resp
 }
 
