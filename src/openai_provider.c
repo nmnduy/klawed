@@ -67,16 +67,6 @@ static char* arena_strdup(Arena *arena, const char *str) {
 
 #include "openai_messages.h"
 
-// Helper to check if prompt caching is enabled
-static int is_prompt_caching_enabled(void) {
-    const char *disable_env = getenv("DISABLE_PROMPT_CACHING");
-    return !(disable_env && (strcmp(disable_env, "1") == 0 ||
-                             strcmp(disable_env, "true") == 0 ||
-                             strcmp(disable_env, "TRUE") == 0));
-}
-
-// Convert curl_slist headers to JSON string for logging
-
 
 // ============================================================================
 // Streaming Support for OpenAI
@@ -413,7 +403,10 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
     }
 
     // Build request JSON using appropriate format
-    int enable_caching = is_prompt_caching_enabled();
+    // Note: OpenAI-compatible APIs do NOT support Anthropic's cache_control field.
+    // We always pass enable_caching=0 for OpenAI provider since it's an Anthropic-specific
+    // extension that causes validation errors with strict OpenAI-compatible APIs (Fireworks, etc.)
+    int enable_caching = 0;
     cJSON *request = NULL;
 
     if (use_responses_api) {
