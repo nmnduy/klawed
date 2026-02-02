@@ -1,94 +1,170 @@
 # Makefile for manual provider configuration tests
 # These tests require actual API keys and are NOT part of the normal test suite
-#
-# This builds a minimal test executable that only tests provider initialization,
-# without pulling in the entire TUI and tool system.
-
-BUILD_DIR = ../build
-SRC_DIR = ../src
 
 CC = gcc
-CFLAGS = -Wall -Wextra -I$(SRC_DIR) -I.. \
+CFLAGS = -Wall -Wextra -I../src -I.. \
     $(shell pkg-config --cflags libcjson libcurl) \
-    -DTEST_BUILD -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE=1
+    -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE=1 -DTEST_BUILD
 
-# Platform detection
+LDFLAGS = $(shell pkg-config --libs libcjson libcurl) \
+    -lpthread -lcurl -lssl -lcrypto -lm
+
+# Platform detection for macOS
 UNAME_S := $(shell uname -s)
-
 ifeq ($(UNAME_S),Darwin)
     CFLAGS += -D_DARWIN_C_SOURCE
     HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null || echo "/opt/homebrew")
     CFLAGS += -I$(HOMEBREW_PREFIX)/include
-    LDFLAGS = -L$(HOMEBREW_PREFIX)/lib
+    LDFLAGS += -L$(HOMEBREW_PREFIX)/lib
 else
-    LDFLAGS =
+    LDFLAGS += -lbsd
 endif
 
-LDFLAGS += $(shell pkg-config --libs libcjson libcurl) \
-    -lpthread -lbsd -lsqlite3 -lcurl -lssl -lcrypto -lm
+BUILD_DIR = build
+TESTS = $(BUILD_DIR)/test_provider_configs $(BUILD_DIR)/test_provider_api_calls
 
-# Minimal source files for provider testing (avoids TUI conflicts)
-# These are carefully selected to avoid duplicate symbol definitions
-CORE_SOURCES = \
-    $(SRC_DIR)/config.c \
-    $(SRC_DIR)/logger.c \
-    $(SRC_DIR)/data_dir.c \
-    $(SRC_DIR)/base64.c \
-    $(SRC_DIR)/array_resize.c
+.PHONY: all clean check-deps help
 
-# Test executables
-TESTS = test_provider_configs
+all: check-deps $(BUILD_DIR) $(TESTS)
 
-.PHONY: all clean test list check-deps
-
-all: check-deps $(TESTS)
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
 check-deps:
 	@echo "Checking dependencies..."
 	@pkg-config --exists libcjson || (echo "Error: cJSON not found. Install libcjson-dev" && exit 1)
 	@pkg-config --exists libcurl || (echo "Error: libcurl not found. Install libcurl4-openssl-dev" && exit 1)
 
-# Provider configuration test - stub out the provider functions we need
-test_provider_configs: test_provider_configs.c test_provider_configs.h $(CORE_SOURCES)
-	@echo "Building test_provider_configs..."
-	@$(CC) $(CFLAGS) -o $@ test_provider_configs.c $(CORE_SOURCES) $(LDFLAGS)
-	@echo "Build successful: $@"
+# ============================================================================
+# Base source files (shared)
+# ============================================================================
+BASE_SOURCES = \
+    ../src/config.c \
+    ../src/logger.c \
+    ../src/data_dir.c \
+    ../src/base64.c \
+    ../src/array_resize.c
 
-# Run the test with all providers
-test: test_provider_configs
-	./test_provider_configs --test-all
+# ============================================================================
+# Provider source files (for API call tests)
+# ============================================================================
+PROVIDER_SOURCES = \
+    ../src/provider.c \
+    ../src/openai_provider.c \
+    ../src/anthropic_provider.c \
+    ../src/bedrock_provider.c \
+    ../src/deepseek_provider.c \
+    ../src/moonshot_provider.c \
+    ../src/aws_bedrock.c \
+    ../src/bedrock_converse.c \
+    ../src/http_client.c \
+    ../src/openai_messages.c \
+    ../src/openai_responses.c \
+    ../src/retry_logic.c
 
-# List providers
-list: test_provider_configs
-	./test_provider_configs --list
+# ============================================================================
+# Conversation support files
+# ============================================================================
+CONVERSATION_SOURCES = \
+    ../src/conversation/content_types.c \
+    ../src/conversation/conversation_state.c \
+    ../src/conversation/message_builder.c \
+    ../src/conversation/message_parser.c
+
+# ============================================================================
+# Tool support files
+# ============================================================================
+TOOL_SOURCES = \
+    ../src/tools/tool_definitions.c \
+    ../src/tools/tool_registry.c \
+    ../src/tools/tool_executor.c \
+    ../src/tools/tool_filesystem.c \
+    ../src/tools/tool_bash.c \
+    ../src/tools/tool_search.c \
+    ../src/tools/tool_sleep.c \
+    ../src/tools/tool_todo.c \
+    ../src/tools/tool_subagent.c \
+    ../src/tools/tool_image.c \
+    ../src/tool_utils.c \
+    ../src/process_utils.c
+
+# ============================================================================
+# API layer files
+# ============================================================================
+API_SOURCES = \
+    ../src/api/api_response.c \
+    ../src/api/api_builder.c \
+    ../src/api/api_client.c
+
+# ============================================================================
+# Utility files
+# ============================================================================
+UTIL_SOURCES = \
+    ../src/util/file_utils.c \
+    ../src/util/string_utils.c \
+    ../src/util/timestamp_utils.c \
+    ../src/util/format_utils.c \
+    ../src/util/env_utils.c \
+    ../src/util/output_utils.c \
+    ../src/util/diff_utils.c
+
+# ============================================================================
+# Context files
+# ============================================================================
+CONTEXT_SOURCES = \
+    ../src/context/system_prompt.c \
+    ../src/context/environment.c \
+    ../src/context/klawed_md.c
+
+# ============================================================================
+# UI stub files (minimal)
+# ============================================================================
+UI_SOURCES = \
+    ../src/ui/ui_output.c \
+    ../src/ui/print_helpers.c
+
+# ============================================================================
+# Arena implementation (needed for header-only arena.h)
+# We define ARENA_IMPLEMENTATION in the test file itself
+# ============================================================================
+TEST_STUBS = test_stubs.c
+
+# Combined sources for API call test
+API_CALL_SOURCES = \
+    $(BASE_SOURCES) \
+    $(PROVIDER_SOURCES) \
+    $(CONVERSATION_SOURCES) \
+    $(TOOL_SOURCES) \
+    $(API_SOURCES) \
+    $(UTIL_SOURCES) \
+    $(CONTEXT_SOURCES) \
+    $(UI_SOURCES) \
+    $(TEST_STUBS)
+
+# Configuration-only test (no API calls)
+$(BUILD_DIR)/test_provider_configs: test_provider_configs.c test_provider_configs.h $(BASE_SOURCES) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ test_provider_configs.c $(BASE_SOURCES) $(LDFLAGS)
+
+# API call test (makes real API calls using actual provider code!)
+$(BUILD_DIR)/test_provider_api_calls: test_provider_api_calls.c $(API_CALL_SOURCES) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ test_provider_api_calls.c $(API_CALL_SOURCES) $(LDFLAGS)
 
 clean:
-	rm -f $(TESTS)
+	rm -rf $(BUILD_DIR)
 
-# Help
 help:
-	@echo "Manual Provider Configuration Tests"
+	@echo "Manual Provider Test Suite"
 	@echo ""
 	@echo "Targets:"
-	@echo "  all             Build all tests (default)"
-	@echo "  check-deps      Verify required dependencies are installed"
-	@echo "  test            Run all provider tests"
-	@echo "  list            List provider configuration status"
-	@echo "  clean           Remove built files"
+	@echo "  all                    Build all tests"
+	@echo "  test_provider_configs  Build config validation test (safe)"
+	@echo "  test_provider_api_calls Build API call test (costs money!)"
+	@echo "  clean                  Remove built files"
 	@echo ""
 	@echo "Usage:"
-	@echo "  ./test_provider_configs [options]"
-	@echo "    --list        List all providers and their configuration status"
-	@echo "    --test-all    Test all configured providers"
-	@echo "    --sonnet      Test sonnet-4.5 (LM Studio local)"
-	@echo "    --minimax     Test minimax-2.1"
-	@echo "    --kimi        Test kimi-k2.5"
-	@echo "    --bedrock     Test AWS Bedrock"
+	@echo "  $(BUILD_DIR)/test_provider_configs --list"
+	@echo "  $(BUILD_DIR)/test_provider_configs --test-all"
 	@echo ""
-	@echo "Environment variables required:"
-	@echo "  MINIMAX_API_KEY         (for MiniMax API)"
-	@echo "  MOONSHOT_AI_API_KEY     (for Moonshot/Kimi API)"
-	@echo "  AWS_ACCESS_KEY_ID       (for Bedrock)"
-	@echo "  AWS_SECRET_ACCESS_KEY   (for Bedrock)"
-	@echo "  AWS_REGION              (for Bedrock, optional, defaults to us-west-2)"
-	@echo "  ANTHROPIC_MODEL         (for Bedrock model, optional)"
+	@echo "  export OPENAI_API_KEY='sk-...'"
+	@echo "  $(BUILD_DIR)/test_provider_api_calls --test-all"
+	@echo "  $(BUILD_DIR)/test_provider_api_calls --test-read --verbose"

@@ -1,0 +1,43 @@
+{
+	"active_provider":	"gpt-5.2-codex",
+	"providers":	{
+		"opus-4.5":	{
+			"provider_type":	"openai",
+			"provider_name":	"Local LM Studio",
+			"model":	"opus-4-5",
+			"api_base":	"http://192.168.1.45:8085/v1/chat/completions"
+		},
+		"sonnet-4.5":	{
+			"provider_type":	"openai",
+			"provider_name":	"Local LM Studio",
+			"model":	"sonnet-4-5",
+			"api_base":	"http://192.168.1.45:8085/v1/chat/completions"
+		},
+		"minimax-2.1":	{
+			"provider_type":	"anthropic",
+			"provider_name":	"MiniMax",
+			"model":	"MiniMax-M2.1",
+			"api_base":	"https://api.minimax.io/anthropic/v1/messages",
+			"api_key_env":	"MINIMAX_API_KEY"
+		},
+		"kimi-k2.5":	{
+			"provider_type":	"moonshot",
+			"provider_name":	"Moonshot AI",
+			"model":	"kimi-k2.5",
+			"api_base":	"https://api.moonshot.ai",
+			"api_key_env":	"MOONSHOT_AI_API_KEY"
+		},
+		"gpt-5.2-codex":	{
+			"provider_type":	"openai",
+			"provider_name":	"Local LM Studio",
+			"model":	"gpt-5.2-codex",
+			"api_base":	"http://192.168.1.45:8085/v1/chat/completions"
+		},
+		"sonnet-4.5-aws":	{
+			"provider_type":	"bedrock",
+			"provider_name":	"AWS Bedrock",
+			"model":	"us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+			"region":	"us-west-2"
+		}
+	}
+}
