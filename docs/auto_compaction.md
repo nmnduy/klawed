@@ -2,7 +2,7 @@
 
 ## Overview
 
-Auto-compaction is a context management system that prevents the conversation history from exceeding the model's token limit by automatically storing older messages in long-term memory (memvid) and replacing them with a summary notice. This allows Klawed to maintain indefinitely long conversations while keeping the active context window manageable.
+Auto-compaction is a context management system that prevents the conversation history from exceeding the model's token limit by automatically storing older messages in long-term memory (SQLite memory database) and replacing them with a summary notice. This allows Klawed to maintain indefinitely long conversations while keeping the active context window manageable.
 
 ## How It Works
 
@@ -13,7 +13,7 @@ When enabled, auto-compaction monitors the conversation token usage and triggers
    - What was being worked on
    - Current goals/objectives
    - Task state/progress
-3. **Store**: Older messages are stored in memvid as searchable long-term memory
+3. **Store**: Older messages are stored in the SQLite memory database as searchable long-term memory
 4. **Extract**: Tool usage statistics and token metrics are collected
 5. **Replace**: Compacted messages are replaced with a single system message containing:
    - AI-generated summary of compacted content
@@ -37,10 +37,10 @@ Auto-compaction uses **accurate token counts** from the API provider's usage dat
 
 ## Requirements
 
-- **Memvid library**: Must be compiled with memvid support (`HAVE_MEMVID`)
+- **SQLite memory database**: Memory system uses SQLite3 with FTS5 (always available)
 - **Auto-compact flag**: Enable via `--auto-compact` flag or `KLAWED_AUTO_COMPACT=1` environment variable
 
-If memvid is not available, auto-compaction will be automatically disabled even if the flag is set.
+The memory database is always available since it uses SQLite3 with FTS5, which is built into most SQLite installations.
 
 ## Configuration
 
@@ -85,12 +85,12 @@ export KLAWED_CONTEXT_LIMIT=125000  # Override model token limit (default: 12500
 
 ### Message Storage
 
-Compacted messages are stored in memvid with the following structure:
+Compacted messages are stored in the SQLite memory database with the following structure:
 
 - **Entity**: `session.{session_id}` or `conversation.history` (if no session)
 - **Slot**: `msg_{index}` where index is the message position
 - **Value**: `{role}: {content}` (e.g., "user: Write a function to...")
-- **Kind**: `event` (memvid memory type)
+- **Kind**: `event` (memory database memory type)
 
 ### Compaction Notice Format
 
@@ -161,6 +161,7 @@ Compaction is performed **before** each API call if the threshold is met. This e
 - **Core logic**: `src/compaction.c`, `src/compaction.h`
 - **Integration**: `src/klawed.c` (trigger logic in `call_api_with_retries()`)
 - **Internal types**: `src/klawed_internal.h` (ConversationState changes)
+- **Memory storage**: `src/memory_db.c`, `src/memory_db.h`
 - **Tests**: `tests/test_compaction.c`, `tests/test_compaction_stubs.c`
 - **Build**: `Makefile` (test target: `make test-compaction`)
 
@@ -172,7 +173,7 @@ Compaction is performed **before** each API call if the threshold is met. This e
 void compaction_init_config(CompactionConfig *config, int enabled);
 ```
 
-Initialize compaction configuration from environment variables. Sets defaults and validates memvid availability.
+Initialize compaction configuration from environment variables. Sets defaults and validates memory database availability.
 
 ### `compaction_should_trigger()`
 
@@ -190,7 +191,7 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
 
 Performs the compaction operation:
 1. Generates AI summary of messages being compacted (250-400 words)
-2. Stores old messages to memvid
+2. Stores old messages to SQLite memory database
 3. Collects tool usage statistics
 4. Generates compaction notice with summary
 5. Reorganizes message array
@@ -230,20 +231,18 @@ KLAWED_COMPACT_KEEP_RECENT=10 \
 KLAWED_CONTEXT_LIMIT=200000 \
 ./build/klawed --auto-compact "very long conversation"
 
-# Check if it would work (requires memvid)
-./build/klawed --auto-compact --version
-# If memvid not available, warning will be logged
+# Check version (memory system is always available)
+./build/klawed --version
 ```
 
-## Behavior Without Memvid
+## Memory System Behavior
 
-If auto-compact is enabled but memvid is not available:
+The SQLite memory database is always available:
 
-1. A warning is logged: `"Auto-compact enabled but memvid not available. Compaction disabled."`
-2. `config->enabled` is forced to 0
-3. `compaction_should_trigger()` always returns 0
-4. `compaction_perform()` logs warning and returns -1
-5. Conversation continues normally without compaction
+1. Messages are stored with FTS5 full-text search indexing
+2. `MemorySearch` can retrieve compacted messages by content
+3. Entity-based queries work with the same database
+4. Memory database path: `.klawed/memory.db` (customizable via `KLAWED_MEMORY_PATH`)
 
 ## Memory Safety
 
@@ -262,7 +261,7 @@ The implementation follows NASA C coding standards and project conventions:
 make test-compaction
 
 # Tests cover:
-# - Config initialization with/without memvid
+# - Config initialization
 # - Environment variable parsing
 # - Trigger threshold logic
 # - Message storage and retrieval
@@ -278,10 +277,12 @@ Potential improvements for future versions:
 2. **Selective compaction**: Keep messages referencing specific files/topics
 3. **Compaction history**: Track multiple compaction events per session
 4. **Auto-retrieval**: Automatically search memory when context is relevant
-5. **Summary caching**: Store summaries in memvid for faster retrieval
+5. **Summary caching**: Store summaries in memory database for faster retrieval
+6. **Vector search**: Use sqlite-vector for semantic similarity-based retrieval
 
 ## Related Documentation
 
-- [Memvid Integration](memvid.md) - Long-term memory storage
+- [SQLite Memory System](memory_db.md) - Long-term memory storage with FTS5
+- [Memory System Migration](memory-system-migration.md) - Migration from memvid to SQLite
 - [Session Management](session.md) - Session ID generation and tracking
 - [Database Rotation](database-rotation.md) - Related but different: rotates SQLite records

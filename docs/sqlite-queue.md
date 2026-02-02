@@ -361,7 +361,7 @@ Indicates that automatic context compaction has occurred (when `--auto-compact` 
 This message is sent:
 - When auto-compaction is enabled (`--auto-compact` flag or `KLAWED_AUTO_COMPACT=1`)
 - Before an API call when the token threshold is reached
-- After messages have been successfully stored in long-term memory (memvid)
+- After messages have been successfully stored in long-term memory (SQLite memory database)
 
 Clients can use this event to:
 - Display a notification that context has been compacted

@@ -550,11 +550,7 @@ cJSON* tool_memory_store(cJSON *params, ConversationState *state) {
     cJSON *value_json = cJSON_GetObjectItem(params, "value");
     cJSON *kind_json = cJSON_GetObjectItem(params, "kind");
     cJSON *relation_json = cJSON_GetObjectItem(params, "relation");
-    // Support both memory_file (new) and memvid_file (legacy) for backward compatibility
     cJSON *memory_file_json = cJSON_GetObjectItem(params, "memory_file");
-    if (!memory_file_json) {
-        memory_file_json = cJSON_GetObjectItem(params, "memvid_file");
-    }
 
     if (!entity_json || !cJSON_IsString(entity_json) ||
         !slot_json || !cJSON_IsString(slot_json) ||
@@ -633,11 +629,7 @@ cJSON* tool_memory_recall(cJSON *params, ConversationState *state) {
 
     cJSON *entity_json = cJSON_GetObjectItem(params, "entity");
     cJSON *slot_json = cJSON_GetObjectItem(params, "slot");
-    // Support both memory_file (new) and memvid_file (legacy) for backward compatibility
     cJSON *memory_file_json = cJSON_GetObjectItem(params, "memory_file");
-    if (!memory_file_json) {
-        memory_file_json = cJSON_GetObjectItem(params, "memvid_file");
-    }
 
     if (!entity_json || !cJSON_IsString(entity_json) ||
         !slot_json || !cJSON_IsString(slot_json)) {
@@ -727,11 +719,7 @@ cJSON* tool_memory_search(cJSON *params, ConversationState *state) {
 
     cJSON *query_json = cJSON_GetObjectItem(params, "query");
     cJSON *top_k_json = cJSON_GetObjectItem(params, "top_k");
-    // Support both memory_file (new) and memvid_file (legacy) for backward compatibility
     cJSON *memory_file_json = cJSON_GetObjectItem(params, "memory_file");
-    if (!memory_file_json) {
-        memory_file_json = cJSON_GetObjectItem(params, "memvid_file");
-    }
 
     if (!query_json || !cJSON_IsString(query_json)) {
         cJSON *error = cJSON_CreateObject();

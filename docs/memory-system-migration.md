@@ -81,7 +81,7 @@ CREATE TRIGGER memories_fts_delete AFTER DELETE ON memories ...
 | `MemoryRecall` | ✅ Migrated | Uses `memory_db_get_current()` |
 | `MemorySearch` | ✅ Migrated | Uses `memory_db_search()` with FTS5 |
 
-All tools support the optional `memvid_file` parameter (now a database path) for custom memory files.
+All tools support the optional `memory_file` parameter for custom memory database files. The legacy parameter name `memvid_file` is still accepted for backward compatibility.
 
 #### 4. Tool Definitions (`src/tools/tool_definitions.c`)
 **Status: COMPLETE**
