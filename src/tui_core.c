@@ -154,15 +154,7 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_ERROR, 20, default_bg);
             // Use dedicated tool color pair (distinct from assistant)
             // Unify tool color with status to reduce color variance
-            // Tool color: dim gray (blended 50% foreground + 50% background for subtle appearance)
-            int tool_dim_r = (g_theme.foreground_rgb.r * 5 + g_theme.background_rgb.r * 5) / 10;
-            int tool_dim_g = (g_theme.foreground_rgb.g * 5 + g_theme.background_rgb.g * 5) / 10;
-            int tool_dim_b = (g_theme.foreground_rgb.b * 5 + g_theme.background_rgb.b * 5) / 10;
-            init_color(26,
-                rgb_to_ncurses(tool_dim_r),
-                rgb_to_ncurses(tool_dim_g),
-                rgb_to_ncurses(tool_dim_b));
-            init_pair(NCURSES_PAIR_TOOL, 26, default_bg);
+            init_pair(NCURSES_PAIR_TOOL, 19, default_bg);
             init_pair(NCURSES_PAIR_PROMPT, 17, default_bg);  // Use USER color for prompt
             // TODO color pairs
             init_pair(NCURSES_PAIR_TODO_COMPLETED, 17, default_bg);    // Green (same as USER)
@@ -190,14 +182,8 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_ASSISTANT, (short)assistant_idx, default_bg);
             init_pair(NCURSES_PAIR_STATUS, (short)status_idx, default_bg);
             init_pair(NCURSES_PAIR_ERROR, (short)error_idx, default_bg);
-            // Tool color: derive dim gray from foreground color brightness
-            // Map foreground to grayscale range 232-255, then darken by ~40%
-            int fg_brightness = (g_theme.foreground_rgb.r + g_theme.foreground_rgb.g + g_theme.foreground_rgb.b) / 3;
-            int dim_brightness = (fg_brightness * 6) / 10;  // Darken by 40%
-            int tool_gray_idx = 232 + (dim_brightness * 23) / 255;
-            if (tool_gray_idx < 232) tool_gray_idx = 232;
-            if (tool_gray_idx > 255) tool_gray_idx = 255;
-            init_pair(NCURSES_PAIR_TOOL, (short)tool_gray_idx, default_bg);
+            // Use status color for tool tag to reduce color variance
+            init_pair(NCURSES_PAIR_TOOL, (short)status_idx, default_bg);
             init_pair(NCURSES_PAIR_PROMPT, (short)user_idx, default_bg);
             // TODO color pairs
             init_pair(NCURSES_PAIR_TODO_COMPLETED, (short)user_idx, default_bg);
@@ -219,8 +205,9 @@ static void init_ncurses_colors(void) {
             init_pair(NCURSES_PAIR_ASSISTANT, COLOR_CYAN, default_bg);
             init_pair(NCURSES_PAIR_STATUS, COLOR_YELLOW, default_bg);
             init_pair(NCURSES_PAIR_ERROR, COLOR_RED, default_bg);
-            // Tool color: use foreground color (best available on basic terminals)
-            init_pair(NCURSES_PAIR_TOOL, COLOR_WHITE, default_bg);
+            // Use magenta for tool tag (distinct from assistant cyan)
+            // Unify tool color with status color
+            init_pair(NCURSES_PAIR_TOOL, COLOR_YELLOW, default_bg);
             init_pair(NCURSES_PAIR_PROMPT, COLOR_GREEN, default_bg);
             // TODO color pairs
             init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, default_bg);
@@ -242,8 +229,9 @@ static void init_ncurses_colors(void) {
         init_pair(NCURSES_PAIR_STATUS, COLOR_YELLOW, default_bg);
         init_pair(NCURSES_PAIR_ERROR, COLOR_RED, default_bg);
         init_pair(NCURSES_PAIR_PROMPT, COLOR_GREEN, default_bg);
-        // Tool color: use foreground color (best available on basic terminals)
-        init_pair(NCURSES_PAIR_TOOL, COLOR_WHITE, default_bg);
+        // Ensure tool pair is initialized; use magenta for distinction
+        // Unify tool color with status color
+        init_pair(NCURSES_PAIR_TOOL, COLOR_YELLOW, default_bg);
         // TODO color pairs
         init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, default_bg);
         init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, default_bg);
