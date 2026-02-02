@@ -2,11 +2,31 @@ package browser
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/playwright-community/playwright-go"
 )
+
+// logger is a package-level logger for browser operations
+var logger *log.Logger
+
+func init() {
+	// Initialize logger - will log to stderr by default
+	// Can be redirected to file via WEB_AGENT_LOG_FILE env var
+	logFile := os.Getenv("WEB_AGENT_LOG_FILE")
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			logger = log.New(f, "[web-agent] ", log.LstdFlags|log.Lmicroseconds)
+		}
+	}
+	if logger == nil {
+		logger = log.New(os.Stderr, "[web-agent] ", log.LstdFlags|log.Lmicroseconds)
+	}
+}
 
 // BrowserContext manages a Playwright browser instance and its tabs
 type BrowserContext struct {
@@ -46,49 +66,115 @@ func NewBrowserContext(headless bool) (*BrowserContext, error) {
 	})
 }
 
+// findChromiumExecutable looks for Chromium browser in common locations
+func findChromiumExecutable() string {
+	// Check environment variable first
+	if envPath := os.Getenv("CHROMIUM_EXECUTABLE"); envPath != "" {
+		logger.Printf("Using CHROMIUM_EXECUTABLE from env: %s", envPath)
+		if _, err := os.Stat(envPath); err == nil {
+			return envPath
+		}
+		logger.Printf("Warning: CHROMIUM_EXECUTABLE points to non-existent file: %s", envPath)
+	}
+
+	// Common Chromium/Chrome paths on different systems
+	candidates := []string{
+		// Debian/Ubuntu system chromium
+		"/usr/bin/chromium",
+		"/usr/bin/chromium-browser",
+		// Chrome paths
+		"/usr/bin/google-chrome",
+		"/usr/bin/google-chrome-stable",
+		// macOS paths
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		// Additional Linux paths
+		"/snap/bin/chromium",
+		"/usr/lib/chromium/chromium",
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			logger.Printf("Found Chromium at: %s", path)
+			return path
+		}
+	}
+
+	logger.Printf("No system Chromium found, will use Playwright's bundled browser")
+	return ""
+}
+
 // NewBrowserContextWithConfig creates a new browser context with full configuration
 func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, error) {
+	logger.Printf("Creating browser context with config: Headless=%v, UserDataDir=%s",
+		config.Headless, config.UserDataDir)
+
 	// Initialize Playwright
+	logger.Printf("Starting Playwright...")
 	pw, err := playwright.Run()
 	if err != nil {
+		logger.Printf("ERROR: Failed to start Playwright: %v", err)
 		return nil, fmt.Errorf("failed to start Playwright: %w", err)
 	}
+	logger.Printf("Playwright started successfully")
 
 	var browser playwright.Browser
 	var context playwright.BrowserContext
 
+	// Find system Chromium or use bundled browser
+	chromiumPath := findChromiumExecutable()
+
 	// Use launchPersistentContext if userDataDir is specified for persistent storage
 	if config.UserDataDir != "" {
+		logger.Printf("Launching persistent context with user data dir: %s", config.UserDataDir)
 		// LaunchPersistentContext launches browser with persistent storage
-		context, err = pw.Chromium.LaunchPersistentContext(config.UserDataDir,
-			playwright.BrowserTypeLaunchPersistentContextOptions{
-				Headless: playwright.Bool(config.Headless),
-			})
+		launchOptions := playwright.BrowserTypeLaunchPersistentContextOptions{
+			Headless: playwright.Bool(config.Headless),
+		}
+		if chromiumPath != "" {
+			launchOptions.ExecutablePath = playwright.String(chromiumPath)
+			logger.Printf("Using Chromium executable: %s", chromiumPath)
+		}
+		context, err = pw.Chromium.LaunchPersistentContext(config.UserDataDir, launchOptions)
 		if err != nil {
+			logger.Printf("ERROR: Failed to launch persistent context: %v", err)
 			pw.Stop()
 			return nil, fmt.Errorf("failed to launch persistent context: %w", err)
 		}
+		logger.Printf("Persistent context launched successfully")
 		// Note: browser is nil when using persistent context
 		browser = nil
 	} else {
+		logger.Printf("Launching regular browser context")
 		// Regular launch without persistent storage
-		browser, err = pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
+		launchOptions := playwright.BrowserTypeLaunchOptions{
 			Headless: playwright.Bool(config.Headless),
-		})
+		}
+		if chromiumPath != "" {
+			launchOptions.ExecutablePath = playwright.String(chromiumPath)
+			logger.Printf("Using Chromium executable: %s", chromiumPath)
+		}
+		browser, err = pw.Chromium.Launch(launchOptions)
 		if err != nil {
+			logger.Printf("ERROR: Failed to launch browser: %v", err)
 			pw.Stop()
 			return nil, fmt.Errorf("failed to launch browser: %w", err)
 		}
+		logger.Printf("Browser launched successfully")
 
 		// Create browser context
+		logger.Printf("Creating new browser context")
 		context, err = browser.NewContext()
 		if err != nil {
+			logger.Printf("ERROR: Failed to create browser context: %v", err)
 			browser.Close()
 			pw.Stop()
 			return nil, fmt.Errorf("failed to create browser context: %w", err)
 		}
+		logger.Printf("Browser context created successfully")
 	}
 
+	logger.Printf("Browser context ready")
 	return &BrowserContext{
 		browser:     browser,
 		context:     context,

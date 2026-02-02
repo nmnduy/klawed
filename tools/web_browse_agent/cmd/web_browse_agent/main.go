@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,24 @@ import (
 	"github.com/klawed/tools/web_browse_agent/pkg/version"
 	"github.com/spf13/cobra"
 )
+
+// mainLogger is used for CLI-level logging
+var mainLogger *log.Logger
+
+func init() {
+	// Initialize logger - will log to stderr by default
+	// Can be redirected to file via WEB_AGENT_LOG_FILE env var
+	logFile := os.Getenv("WEB_AGENT_LOG_FILE")
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			mainLogger = log.New(f, "[web-agent-cli] ", log.LstdFlags|log.Lmicroseconds)
+		}
+	}
+	if mainLogger == nil {
+		mainLogger = log.New(os.Stderr, "[web-agent-cli] ", log.LstdFlags|log.Lmicroseconds)
+	}
+}
 
 var (
 	sessionID  string
@@ -87,6 +106,9 @@ Examples:
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
+	mainLogger.Printf("runCommand called with args: %v", args)
+	mainLogger.Printf("Session: %s, Headless: %v, JSON: %v", sessionID, headless, jsonOutput)
+
 	// Handle special case: no command provided
 	if len(args) == 0 {
 		return fmt.Errorf("no command provided. Use 'commands' to see available commands")
@@ -94,6 +116,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	commandName := args[0]
 	commandArgs := args[1:]
+	mainLogger.Printf("Command: %s, Args: %v", commandName, commandArgs)
 
 	// Handle 'help' command specially - doesn't need a running driver
 	if commandName == "help" {
@@ -106,23 +129,33 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get or create session
+	mainLogger.Printf("Getting or creating session: %s", sessionID)
 	sess, err := session.GetOrCreateSession(sessionID, headless)
 	if err != nil {
+		mainLogger.Printf("ERROR: Failed to get session: %v", err)
 		return fmt.Errorf("failed to get session: %w", err)
 	}
+	mainLogger.Printf("Session obtained: %s, DriverPID: %d, SocketPath: %s",
+		sess.ID, sess.DriverPID, sess.DriverSocketPath)
 
 	// Ensure driver is running
+	mainLogger.Printf("Ensuring driver is running...")
 	if err := ensureDriverRunning(sess); err != nil {
+		mainLogger.Printf("ERROR: Failed to start browser: %v", err)
 		return fmt.Errorf("failed to start browser: %w", err)
 	}
+	mainLogger.Printf("Driver is running (PID: %d)", sess.DriverPID)
 
 	// Execute command
+	mainLogger.Printf("Executing command: %s", commandName)
 	result, err := executeCommand(sess, commandName, commandArgs)
 	if err != nil {
+		mainLogger.Printf("ERROR: Command execution failed: %v", err)
 		return err
 	}
 
 	// Output result
+	mainLogger.Printf("Command executed successfully")
 	if jsonOutput {
 		fmt.Println(result)
 	} else {
@@ -133,9 +166,13 @@ func runCommand(cmd *cobra.Command, args []string) error {
 }
 
 func ensureDriverRunning(sess *session.Session) error {
+	mainLogger.Printf("Checking if driver is already running (PID: %d, Socket: %s)",
+		sess.DriverPID, sess.DriverSocketPath)
+
 	// Check if driver is already running
 	if sess.DriverPID > 0 && sess.DriverSocketPath != "" {
 		// Try to connect
+		mainLogger.Printf("Checking if existing driver is alive...")
 		client, err := ipc.NewClient(ipc.ClientConfig{
 			SocketPath: sess.DriverSocketPath,
 			Timeout:    time.Duration(timeout) * time.Second,
@@ -144,20 +181,25 @@ func ensureDriverRunning(sess *session.Session) error {
 			if err := client.Connect(); err == nil {
 				// Driver is alive
 				if err := client.Ping(); err == nil {
+					mainLogger.Printf("Existing driver is alive and responding")
 					client.Close()
 					return nil
 				}
 				client.Close()
 			}
 		}
+		mainLogger.Printf("Existing driver is not responding, will start new one")
 	}
 
 	// Start new driver
 	socketPath := filepath.Join(os.TempDir(), fmt.Sprintf("web-agent-%s.sock", sess.ID))
+	mainLogger.Printf("Starting new driver process (socket: %s)", socketPath)
 	pid, err := browser.StartDriverProcess(sess.ID, socketPath, headless, sess.UserDataDir)
 	if err != nil {
+		mainLogger.Printf("ERROR: Failed to start driver process: %v", err)
 		return fmt.Errorf("failed to start driver: %w", err)
 	}
+	mainLogger.Printf("Driver process started with PID: %d", pid)
 
 	// Update session with driver info
 	sess.SetDriverInfo(pid, socketPath)
@@ -165,12 +207,14 @@ func ensureDriverRunning(sess *session.Session) error {
 	// Save session with driver info
 	registry, err := session.GetRegistry()
 	if err != nil {
+		mainLogger.Printf("ERROR: Failed to get registry: %v", err)
 		return fmt.Errorf("failed to get registry: %w", err)
 	}
 
 	// Save the session with driver info to disk
 	sess.UpdateLastUsed()
 	if err := registry.Save(sess); err != nil {
+		mainLogger.Printf("ERROR: Failed to save session: %v", err)
 		return fmt.Errorf("failed to save session: %w", err)
 	}
 
@@ -179,6 +223,7 @@ func ensureDriverRunning(sess *session.Session) error {
 	}
 
 	// Wait a bit for the driver to be ready
+	mainLogger.Printf("Waiting for driver to be ready...")
 	for i := 0; i < 20; i++ {
 		client, err := ipc.NewClient(ipc.ClientConfig{
 			SocketPath: socketPath,
@@ -193,6 +238,7 @@ func ensureDriverRunning(sess *session.Session) error {
 			continue
 		}
 		if err := client.Ping(); err == nil {
+			mainLogger.Printf("Driver is ready and responding")
 			client.Close()
 			return nil
 		}
@@ -200,6 +246,7 @@ func ensureDriverRunning(sess *session.Session) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 
+	mainLogger.Printf("WARNING: Driver may not be fully ready, but proceeding anyway")
 	// If we get here, try to proceed anyway
 	_ = registry
 	return nil

@@ -17,6 +17,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <limits.h>
+#include <time.h>
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
 #include <bsd/string.h>
@@ -44,7 +45,15 @@ static const char* get_web_agent_path(void) {
         return env_path;
     }
 
-    const char *tools_path = "tools/web_browse_agent/bin/web_browse_agent";
+    const char *tools_path = "tools/web_browse_agent/web_browse_agent";
+    if (access(tools_path, X_OK) == 0) {
+        if (strlcpy(resolved_path, tools_path, sizeof(resolved_path)) < sizeof(resolved_path)) {
+            return resolved_path;
+        }
+    }
+
+    // Also check for bin subdirectory (legacy path)
+    tools_path = "tools/web_browse_agent/bin/web_browse_agent";
     if (access(tools_path, X_OK) == 0) {
         if (strlcpy(resolved_path, tools_path, sizeof(resolved_path)) < sizeof(resolved_path)) {
             return resolved_path;
@@ -106,139 +115,7 @@ int is_web_agent_available(void) {
     return access(agent_path, X_OK) == 0;
 }
 
-// Check if headless mode is enabled (default: true)
-static int is_headless_mode(void) {
-    // Prefer dedicated override for the browser agent; fallback to explore flag for compatibility
-    const char *headless = getenv("KLAWED_WEB_BROWSE_AGENT_HEADLESS");
-    if (!headless || headless[0] == '\0') {
-        headless = getenv("KLAWED_EXPLORE_HEADLESS");
-    }
-    // Default to headless when unset
-    if (!headless || headless[0] == '\0') {
-        return 1;
-    }
-    return strcmp(headless, "1") == 0 ||
-           strcasecmp(headless, "true") == 0 ||
-           strcasecmp(headless, "yes") == 0;
-}
 
-static char* execute_web_agent(const char *prompt, int *exit_code) {
-    if (!prompt) {
-        return NULL;
-    }
-
-    const char *agent_path = get_web_agent_path();
-    int headless = is_headless_mode();
-
-    // Build command with proper escaping (extra space for redirections)
-    size_t cmd_size = strlen(agent_path) + strlen(prompt) * 2 + 300;
-    char *command = malloc(cmd_size);
-    if (!command) {
-        return NULL;
-    }
-
-    // Escape the prompt for shell
-    size_t escaped_size = strlen(prompt) * 2 + 1;
-    char *escaped_prompt = malloc(escaped_size);
-    if (!escaped_prompt) {
-        free(command);
-        return NULL;
-    }
-
-    size_t j = 0;
-    for (size_t i = 0; prompt[i] && j < escaped_size - 2; i++) {
-        if (prompt[i] == '"' || prompt[i] == '\\' || prompt[i] == '$' || prompt[i] == '`') {
-            escaped_prompt[j++] = '\\';
-        }
-        escaped_prompt[j++] = prompt[i];
-    }
-    escaped_prompt[j] = '\0';
-
-    // Add </dev/null to prevent stdin interaction
-    snprintf(command, cmd_size, "timeout %d %s %s --no-browser \"%s\" </dev/null 2>&1",
-             WEB_AGENT_TIMEOUT,
-             agent_path,
-             headless ? "--headless" : "",
-             escaped_prompt);
-
-    free(escaped_prompt);
-
-    LOG_INFO("Executing web_browse_agent: %s", command);
-
-    // Temporarily redirect stderr to prevent direct terminal output in TUI mode
-    int saved_stderr = -1;
-    FILE *stderr_redirect = NULL;
-
-    if (g_active_tool_queue) {
-        saved_stderr = dup(STDERR_FILENO);
-        stderr_redirect = freopen("/dev/null", "w", stderr);
-        if (!stderr_redirect) {
-            LOG_WARN("Failed to redirect stderr, continuing without redirection");
-            if (saved_stderr != -1) {
-                close(saved_stderr);
-                saved_stderr = -1;
-            }
-        }
-    }
-
-    FILE *fp = popen(command, "r");
-    free(command);
-
-    if (!fp) {
-        LOG_ERROR("Failed to execute web_browse_agent: %s", strerror(errno));
-        // Restore stderr before returning
-        if (saved_stderr != -1) {
-            dup2(saved_stderr, STDERR_FILENO);
-            close(saved_stderr);
-            fflush(stderr);
-        }
-        return NULL;
-    }
-
-    // Read output
-    char *output = malloc(MAX_WEB_OUTPUT);
-    if (!output) {
-        pclose(fp);
-        // Restore stderr before returning
-        if (saved_stderr != -1) {
-            dup2(saved_stderr, STDERR_FILENO);
-            close(saved_stderr);
-            fflush(stderr);
-        }
-        return NULL;
-    }
-
-    size_t total = 0;
-    size_t n;
-    while ((n = fread(output + total, 1, MAX_WEB_OUTPUT - total - 1, fp)) > 0) {
-        total += n;
-        if (total >= MAX_WEB_OUTPUT - 1) {
-            break;
-        }
-    }
-    output[total] = '\0';
-
-    int status = pclose(fp);
-    if (exit_code) {
-        *exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-    }
-
-    // Restore stderr after command execution
-    if (saved_stderr != -1) {
-        dup2(saved_stderr, STDERR_FILENO);
-        close(saved_stderr);
-        fflush(stderr);
-    }
-
-    // Strip ANSI escape sequences to prevent terminal corruption
-    char *clean_output = strip_ansi_escapes(output);
-    if (clean_output) {
-        free(output);
-        return clean_output;
-    }
-
-    return output;
-}
 
 // HTTP response buffer for Context7 API
 typedef struct {
@@ -341,23 +218,16 @@ static char* url_encode(const char *str) {
 }
 
 // ============================================================================
-// Tool: web_search - Search the web using DuckDuckGo
+// Tool: web_search - Search the web using DuckDuckGo Lite
 // ============================================================================
 
 cJSON* tool_web_search(cJSON *params, void *state) {
-    (void)state;  // Unused
+    (void)state;
 
     if (!is_explore_mode_enabled()) {
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error",
             "web_search is only available in Explore mode. Set KLAWED_EXPLORE_MODE=1");
-        return error;
-    }
-
-    if (!is_web_agent_available()) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error",
-            "web_browse_agent binary not found. Build it with: cd tools/web_browse_agent && make");
         return error;
     }
 
@@ -378,62 +248,69 @@ cJSON* tool_web_search(cJSON *params, void *state) {
         if (max_results > 30) max_results = 30;
     }
 
-    // Build prompt for web_browse_agent
-    char prompt[2048];
-    snprintf(prompt, sizeof(prompt),
-        "Use web_search tool to search for: %s. Return up to %d results as JSON array "
-        "with title, url, and snippet fields. Output ONLY the JSON, no other text.",
-        query, max_results);
-
-    int exit_code;
-    char *output = execute_web_agent(prompt, &exit_code);
-
     cJSON *result = cJSON_CreateObject();
 
-    if (!output) {
-        cJSON_AddStringToObject(result, "error", "Failed to execute web search");
+    // Use DuckDuckGo Lite HTML interface
+    char *encoded_query = url_encode(query);
+    if (!encoded_query) {
+        cJSON_AddStringToObject(result, "error", "Failed to encode query");
         return result;
     }
 
-    if (exit_code != 0) {
-        cJSON_AddStringToObject(result, "warning",
-            "web_browse_agent exited with non-zero status");
+    char url[2048];
+    snprintf(url, sizeof(url), "https://lite.duckduckgo.com/lite/?q=%s", encoded_query);
+    free(encoded_query);
+
+    LOG_INFO("web_search: Searching DuckDuckGo Lite: %s", url);
+
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        cJSON_AddStringToObject(result, "error", "Failed to initialize HTTP client");
+        return result;
     }
 
-    // Try to extract JSON from output
-    char *json_start = strchr(output, '[');
-    char *json_end = strrchr(output, ']');
+    ResponseBuffer response = {0};
+    response.data = malloc(1);
+    if (!response.data) {
+        curl_easy_cleanup(curl);
+        cJSON_AddStringToObject(result, "error", "Out of memory");
+        return result;
+    }
+    response.data[0] = '\0';
 
-    if (json_start && json_end && json_end > json_start) {
-        // Extract and parse JSON array
-        size_t json_len = (size_t)(json_end - json_start) + 1;
-        char *json_str = malloc(json_len + 1);
-        if (json_str) {
-            memcpy(json_str, json_start, json_len);
-            json_str[json_len] = '\0';
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "klawed/1.0");
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 
-            cJSON *results_array = cJSON_Parse(json_str);
-            free(json_str);
+    CURLcode res = curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
 
-            if (results_array && cJSON_IsArray(results_array)) {
-                cJSON_AddItemToObject(result, "results", results_array);
-                cJSON_AddNumberToObject(result, "count", cJSON_GetArraySize(results_array));
-            } else {
-                if (results_array) cJSON_Delete(results_array);
-                cJSON_AddStringToObject(result, "raw_output", output);
-            }
-        }
-    } else {
-        // Return raw output if no JSON found
-        cJSON_AddStringToObject(result, "raw_output", output);
+    if (res != CURLE_OK) {
+        LOG_ERROR("web_search: DuckDuckGo request failed: %s", curl_easy_strerror(res));
+        free(response.data);
+        cJSON_AddStringToObject(result, "error", "Failed to fetch search results");
+        return result;
     }
 
-    free(output);
+    // Parse HTML results - DuckDuckGo Lite returns simple HTML with results
+    // Each result is in a <tr> with class "result-link" or similar
+    // For now, return the raw HTML and let the LLM parse it
+    cJSON_AddStringToObject(result, "search_engine", "DuckDuckGo Lite");
+    cJSON_AddStringToObject(result, "query", query);
+    cJSON_AddStringToObject(result, "html_results", response.data);
+    cJSON_AddNumberToObject(result, "max_requested", max_results);
+
+    free(response.data);
     return result;
 }
 
 // ============================================================================
-// Tool: web_read - Navigate to URL and extract content
+// Tool: web_read - Navigate to URL and extract content using web_browse_agent
 // ============================================================================
 
 cJSON* tool_web_read(cJSON *params, void *state) {
@@ -461,42 +338,67 @@ cJSON* tool_web_read(cJSON *params, void *state) {
     }
 
     const char *url = url_json->valuestring;
-    int max_length = 50000;
-
-    cJSON *max_json = cJSON_GetObjectItem(params, "max_length");
-    if (max_json && cJSON_IsNumber(max_json)) {
-        max_length = (int)max_json->valuedouble;
-        if (max_length < 1000) max_length = 1000;
-        if (max_length > 100000) max_length = 100000;
-    }
-
-    // Build prompt for web_browse_agent
-    char prompt[4096];
-    snprintf(prompt, sizeof(prompt),
-        "Navigate to %s using browser_navigate, then use get_page_content to extract "
-        "the main text content. Output the content with a citation header showing "
-        "the page title and URL. Limit output to %d characters.",
-        url, max_length);
-
-    int exit_code;
-    char *output = execute_web_agent(prompt, &exit_code);
 
     cJSON *result = cJSON_CreateObject();
 
-    if (!output) {
-        cJSON_AddStringToObject(result, "error", "Failed to read web page");
+    const char *agent_path = get_web_agent_path();
+    char session_id[64];
+    snprintf(session_id, sizeof(session_id), "klawed-read-%d", (int)time(NULL));
+
+    // Step 1: Open the URL
+    char cmd[4096];
+    snprintf(cmd, sizeof(cmd),
+             "timeout %d %s --session %s open \"%s\" </dev/null 2>&1",
+             WEB_AGENT_TIMEOUT, agent_path, session_id, url);
+
+    LOG_INFO("web_read: Opening URL: %s", url);
+    int status = system(cmd);
+    if (status != 0) {
+        cJSON_AddStringToObject(result, "error", "Failed to open URL");
+        cJSON_AddStringToObject(result, "url", url);
         return result;
     }
 
-    cJSON_AddStringToObject(result, "url", url);
-    cJSON_AddStringToObject(result, "content", output);
+    // Step 2: Get the HTML content
+    snprintf(cmd, sizeof(cmd),
+             "timeout %d %s --session %s html </dev/null 2>&1",
+             WEB_AGENT_TIMEOUT, agent_path, session_id);
 
-    if (exit_code != 0) {
-        cJSON_AddStringToObject(result, "warning",
-            "web_browse_agent exited with non-zero status");
+    LOG_INFO("web_read: Getting HTML content");
+    FILE *fp = popen(cmd, "r");
+    if (!fp) {
+        cJSON_AddStringToObject(result, "error", "Failed to get page content");
+        cJSON_AddStringToObject(result, "url", url);
+        return result;
     }
 
+    char *output = malloc(MAX_WEB_OUTPUT);
+    if (!output) {
+        pclose(fp);
+        cJSON_AddStringToObject(result, "error", "Out of memory");
+        cJSON_AddStringToObject(result, "url", url);
+        return result;
+    }
+
+    size_t total = 0;
+    size_t n;
+    while ((n = fread(output + total, 1, MAX_WEB_OUTPUT - total - 1, fp)) > 0) {
+        total += n;
+        if (total >= MAX_WEB_OUTPUT - 1) break;
+    }
+    output[total] = '\0';
+    pclose(fp);
+
+    // Step 3: End the session (best effort cleanup)
+    snprintf(cmd, sizeof(cmd),
+             "timeout 10 %s --session %s end-session </dev/null 2>&1",
+             agent_path, session_id);
+    int cleanup_status __attribute__((unused)) = system(cmd);
+
+    cJSON_AddStringToObject(result, "url", url);
+    cJSON_AddStringToObject(result, "content", output);
     free(output);
+
     return result;
 }
 
