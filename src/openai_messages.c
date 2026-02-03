@@ -610,7 +610,6 @@ void parse_openai_response(cJSON *response, InternalMessage *out) {
 
     if (count == 0) {
         LOG_WARN("Response has no content or tool_calls");
-        free(msg.contents);  // Free the empty allocation
         msg.contents = NULL;
         msg.content_count = 0;
         *out = msg;

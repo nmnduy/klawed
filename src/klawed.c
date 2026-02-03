@@ -1773,18 +1773,15 @@ int main(int argc, char *argv[]) {
             LOG_INFO("Attempting to resume session: %s", resume_session_id ? resume_session_id : "most recent");
 
             // Load session from database
+            // Note: session_load_from_db takes ownership of state->session_id (frees the old one)
+            // so we must set local session_id to NULL to avoid double-free
             if (session_load_from_db(state.persistence_db, resume_session_id, &state) == 0) {
                 LOG_INFO("Successfully resumed session: %s", state.session_id);
+                session_id = NULL;  // state.session_id is now the active session ID (old one was freed)
 
                 // Update session ID for logging
                 if (state.session_id) {
                     log_set_session_id(state.session_id);
-                }
-
-                // Update the local session_id variable to match the loaded session
-                if (session_id && state.session_id && strcmp(session_id, state.session_id) != 0) {
-                    free(session_id);
-                    session_id = NULL;  // state.session_id is now the active session ID
                 }
             } else {
                 LOG_ERROR("Failed to resume session");

@@ -78,6 +78,8 @@ int session_load_from_db(PersistenceDB *db, const char *session_id, Conversation
     clear_conversation(state);
 
     // Set the session ID
+    // Note: This takes ownership - we free any existing session_id and replace it with target_session_id.
+    // Callers must not use or free any pointer that was aliased to state->session_id after this call.
     if (state->session_id) {
         free(state->session_id);
     }
