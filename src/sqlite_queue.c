@@ -868,11 +868,6 @@ static void check_and_inject_pending_messages(SQLiteQueueContext *ctx,
         LOG_INFO("SQLite Queue: Injecting pending user message ID %lld", pm->msg_id);
         sqlite_queue_acknowledge(ctx, pm->msg_id);
 
-        char ack_msg[256];
-        snprintf(ack_msg, sizeof(ack_msg),
-                 "[Message received during processing, will be processed with current context]");
-        sqlite_queue_send_text_response(ctx, response_receiver, ack_msg);
-
         add_user_message(state, pm->content);
 
         free(pm->content);
