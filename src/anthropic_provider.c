@@ -902,7 +902,7 @@ static void anthropic_call_api(Provider *self, ConversationState *state, ApiCall
         }
         if (!openai_like) {
             result.error_message = strdup("Failed to parse Anthropic response");
-            result.is_retryable = 0;
+            result.is_retryable = 1;  // Malformed response might be transient, retry
             free(result.headers_json);
             result.headers_json = NULL;
             free(openai_req);

@@ -855,6 +855,7 @@ static void sqlite_on_status_update(const char *status, void *user_data) {
 static void check_and_inject_pending_messages(SQLiteQueueContext *ctx,
                                                struct ConversationState *state,
                                                const char *response_receiver) {
+    (void)response_receiver;
     pthread_mutex_lock(&ctx->queue_mutex);
     while (ctx->pending_messages != NULL) {
         PendingMessage *pm = ctx->pending_messages;
