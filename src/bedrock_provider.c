@@ -538,7 +538,7 @@ static void bedrock_execute_request(BedrockConfig *config, const char *converse_
 
         if (!openai_json) {
             result.error_message = strdup("Failed to parse Bedrock Converse response");
-            result.is_retryable = 0;
+            result.is_retryable = 1;  // Malformed response might be transient, retry
             char *tmp_headers = result.headers_json;
             result.headers_json = NULL;
             free(tmp_headers);  // Clean up headers JSON in error paths

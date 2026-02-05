@@ -630,7 +630,7 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
             raw_json = cJSON_Parse(result.raw_response);
             if (!raw_json) {
                 result.error_message = strdup("Failed to parse JSON response");
-                result.is_retryable = 0;
+                result.is_retryable = 1;  // Malformed response might be transient, retry
                 free(result.headers_json);  // Clean up headers JSON in error paths
                 result.headers_json = NULL;
                 *out = result; return;
