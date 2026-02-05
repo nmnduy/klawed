@@ -450,7 +450,7 @@ TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace docker-sandbox docker-push docker-rotate
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -2338,11 +2338,6 @@ help:
 	@echo "Code Formatting:"
 	@echo "  make fmt-whitespace - Remove trailing whitespaces from all source files"
 	@echo ""
-	@echo "Podman:"
-	@echo "  make docker-sandbox - Build Podman sandbox image for isolated execution"
-	@echo "  make docker-push - Transfer Podman image to filesurf-0 via save/load"
-	@echo "  make docker-rotate - Rotate images on filesurf-0 (keep only last 3)"
-	@echo ""
 	@echo "Dependencies:"
 	@echo "  - gcc or clang (or compatible C compiler)"
 	@echo "  - libcurl"
@@ -2812,102 +2807,3 @@ setup-voice: $(WHISPER_LIB) download-model
 	@ls -lh whisper_models/*.bin 2>/dev/null || echo "  (none yet - run make download-model)"
 	@echo ""
 
-#
-# Docker Sandbox Integration
-#
-
-# Build the Podman sandbox image with version tag
-.PHONY: docker-sandbox
-docker-sandbox: test comprehensive-scan
-	@echo ""
-	@echo "Building Podman sandbox image..."
-	@echo "Version: $(VERSION)"
-	@echo ""
-	@if ! command -v podman >/dev/null 2>&1; then \
-		echo "❌ Error: podman not found"; \
-		echo "Install Podman from: https://podman.io/getting-started/installation"; \
-		exit 1; \
-	fi
-	@podman build -f Dockerfile.sandbox -t klawed-sandbox:$(VERSION) -t klawed-sandbox:latest .
-	@echo ""
-	@echo "✓ Podman sandbox image built successfully"
-	@echo "  Image: klawed-sandbox:$(VERSION)"
-	@echo "  Image: klawed-sandbox:latest"
-	@echo ""
-	@echo "Usage examples:"
-	@echo "  podman run -it --rm -e OPENAI_API_KEY=\$$OPENAI_API_KEY klawed-sandbox:$(VERSION) \"your prompt\""
-	@echo "  podman run -it --rm -e OPENAI_API_KEY=\$$OPENAI_API_KEY -v \$$(pwd):/workspace klawed-sandbox:$(VERSION) \"analyze this code\""
-	@echo ""
-	@echo "See docs/docker-sandbox-deployment.md for deployment guide"
-	@echo ""
-
-# Transfer the Podman sandbox image to filesurf-0 host via podman save/load
-.PHONY: docker-push
-docker-push:
-	@echo ""
-	@echo "Transferring Podman sandbox image to filesurf-0..."
-	@echo "Version: $(VERSION)"
-	@echo ""
-	@if ! command -v podman >/dev/null 2>&1; then \
-		echo "❌ Error: podman not found"; \
-		echo "Install Podman from: https://podman.io/getting-started/installation"; \
-		exit 1; \
-	fi
-	@echo "Checking for podman on filesurf-0..."
-	@if ! ssh filesurf-0 'command -v podman >/dev/null 2>&1'; then \
-		echo "❌ Error: podman not found on filesurf-0"; \
-		echo "Install podman on the remote host: https://podman.io/getting-started/installation"; \
-		exit 1; \
-	fi
-	@echo ""
-	@echo "Checking if image klawed-sandbox:$(VERSION) exists locally..."
-	@if ! podman image exists klawed-sandbox:$(VERSION); then \
-		echo "Image not found locally, building..."; \
-		echo ""; \
-		$(MAKE) docker-sandbox; \
-	else \
-		echo "✓ Image klawed-sandbox:$(VERSION) exists locally"; \
-	fi
-	@echo ""
-	@echo "Transferring image klawed-sandbox:$(VERSION) to filesurf-0..."
-	@podman save klawed-sandbox:$(VERSION) | ssh filesurf-0 'podman load'
-	@echo ""
-	@echo "✓ Image transferred successfully to filesurf-0"
-	@echo "  Image: klawed-sandbox:$(VERSION)"
-	@echo ""
-	@echo "The image is now available on filesurf-0 and can be used with:"
-	@echo "  podman run -it --rm klawed-sandbox:$(VERSION)"
-	@echo ""
-
-# Rotate klawed images on filesurf-0 (keep only last 3)
-# Lists all klawed-sandbox images, sorts by creation date, and removes all but the 3 most recent
-.PHONY: docker-rotate
-docker-rotate:
-	@echo ""
-	@echo "Rotating klawed images on filesurf-0 (keeping last 3)..."
-	@echo ""
-	@if ! ssh filesurf-0 'command -v podman >/dev/null 2>&1'; then \
-		echo "❌ Error: podman not found on filesurf-0"; \
-		echo "Install podman on the remote host: https://podman.io/getting-started/installation"; \
-		exit 1; \
-	fi
-	@echo "Fetching klawed-sandbox images from filesurf-0..."
-	@ssh filesurf-0 'podman images --format "{{.ID}} {{.Repository}}:{{.Tag}} {{.CreatedAt}}" | grep "klawed-sandbox" | sort -k3 -r' | \
-		tail -n +4 | awk '{print $$1}' > /tmp/klawed_images_to_remove.txt || true
-	@if [ -s /tmp/klawed_images_to_remove.txt ]; then \
-		echo "Removing old images..."; \
-		while read -r image_id; do \
-			echo "  Removing image: $$image_id"; \
-			ssh filesurf-0 "podman rmi $$image_id" || echo "    (already removed or in use)"; \
-		done < /tmp/klawed_images_to_remove.txt; \
-		rm -f /tmp/klawed_images_to_remove.txt; \
-		echo ""; \
-		echo "✓ Old images removed"; \
-	else \
-		echo "No old images to remove (less than 4 images found)"; \
-		rm -f /tmp/klawed_images_to_remove.txt; \
-	fi
-	@echo ""
-	@echo "Remaining klawed-sandbox images on filesurf-0:"
-	@ssh filesurf-0 'podman images | grep "klawed-sandbox" || echo "  (none)"'
-	@echo ""
