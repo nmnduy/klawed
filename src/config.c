@@ -721,6 +721,8 @@ const char* config_provider_type_to_string(LLMProviderType type) {
             return "deepseek";
         case PROVIDER_MOONSHOT:
             return "moonshot";
+        case PROVIDER_KIMI_CODING_PLAN:
+            return "kimi_coding_plan";
         case PROVIDER_CUSTOM:
             return "custom";
         default:
@@ -741,6 +743,8 @@ LLMProviderType config_provider_type_from_string(const char *str) {
         return PROVIDER_DEEPSEEK;
     } else if (strcmp(str, "moonshot") == 0 || strcmp(str, "kimi") == 0) {
         return PROVIDER_MOONSHOT;
+    } else if (strcmp(str, "kimi_coding_plan") == 0) {
+        return PROVIDER_KIMI_CODING_PLAN;
     } else if (strcmp(str, "custom") == 0) {
         return PROVIDER_CUSTOM;
     }

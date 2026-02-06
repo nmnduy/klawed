@@ -33,6 +33,7 @@ typedef enum {
     PROVIDER_BEDROCK,       // AWS Bedrock
     PROVIDER_DEEPSEEK,      // DeepSeek API (OpenAI-compatible, discards reasoning_content)
     PROVIDER_MOONSHOT,      // Moonshot/Kimi API (OpenAI-compatible, preserves reasoning_content)
+    PROVIDER_KIMI_CODING_PLAN, // Kimi Coding Plan (OAuth device flow, preserves reasoning_content)
     PROVIDER_CUSTOM         // Custom provider
 } LLMProviderType;
 

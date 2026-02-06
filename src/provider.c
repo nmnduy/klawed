@@ -11,6 +11,7 @@
 #include "anthropic_provider.h"
 #include "deepseek_provider.h"
 #include "moonshot_provider.h"
+#include "kimi_coding_plan_provider.h"
 #include "config.h"
 #include "logger.h"
 #include "arena.h"
@@ -309,6 +310,11 @@ static int provider_config_has_api_key(const LLMProviderConfig *cfg) {
 
     // Bedrock providers use AWS credentials, not API keys
     if (cfg->provider_type == PROVIDER_BEDROCK || cfg->use_bedrock) {
+        return 1;
+    }
+
+    // Kimi Coding Plan uses OAuth, not API keys
+    if (cfg->provider_type == PROVIDER_KIMI_CODING_PLAN) {
         return 1;
     }
 
@@ -848,6 +854,35 @@ void provider_init(const char *model,
             LOG_INFO("Provider initialization successful: Moonshot (base URL: %s)", result->api_url);
             arena_destroy(arena);
             return;
+        } else if (provider_type == PROVIDER_KIMI_CODING_PLAN) {
+            LOG_INFO("Using Kimi Coding Plan provider (explicitly configured)");
+            Provider *prov = kimi_coding_plan_provider_create(model_to_use);
+            if (!prov) {
+                result->error_message = strdup("Failed to initialize Kimi Coding Plan provider (check logs for details)");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                arena_destroy(arena);
+                return;
+            }
+            KimiCodingPlanConfig *cfg = (KimiCodingPlanConfig *)prov->config;
+            if (!cfg || !cfg->api_base) {
+                result->error_message = strdup("Kimi Coding Plan provider initialized but API base is missing");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            result->provider = prov;
+            result->api_url = strdup(cfg->api_base);
+            if (!result->api_url) {
+                result->error_message = strdup("Failed to allocate memory for API URL");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            LOG_INFO("Provider initialization successful: Kimi Coding Plan (API base: %s)", result->api_url);
+            arena_destroy(arena);
+            return;
         } else if (provider_type == PROVIDER_CUSTOM) {
             // For custom, we need to check URL patterns
             use_anthropic = 0; // Default to OpenAI-compatible for custom
@@ -1143,6 +1178,36 @@ void provider_init_from_config(const char *provider_key,
             return;
         }
         LOG_INFO("Provider initialization successful: Moonshot (base URL: %s)", result->api_url);
+        return;
+    }
+
+    if (provider_type == PROVIDER_KIMI_CODING_PLAN) {
+        LOG_INFO("Creating Kimi Coding Plan provider from config...");
+        free(base_url);  // Kimi Coding Plan provider manages its own URL
+        Provider *prov = kimi_coding_plan_provider_create(model);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize Kimi Coding Plan provider (check logs for details)");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        KimiCodingPlanConfig *cfg = (KimiCodingPlanConfig *)prov->config;
+        if (!cfg || !cfg->api_base) {
+            result->error_message = strdup(
+                "Kimi Coding Plan provider initialized but API base is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(cfg->api_base);
+        if (!result->api_url) {
+            result->error_message = strdup("Failed to allocate memory for API URL");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: Kimi Coding Plan (API base: %s)", result->api_url);
         return;
     }
 
