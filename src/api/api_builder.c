@@ -89,6 +89,23 @@ char* build_request_json_from_state(ConversationState *state) {
         goto unlock;
     }
     for (int i = 0; i < state->count; i++) {
+        // Handle auto-compaction messages specially
+        if (state->messages[i].role == MSG_AUTO_COMPACTION) {
+            for (int j = 0; j < state->messages[i].content_count; j++) {
+                InternalContent *c = &state->messages[i].contents[j];
+                if (c->type == INTERNAL_TEXT && c->text) {
+                    cJSON *notice_msg = cJSON_CreateObject();
+                    if (notice_msg) {
+                        cJSON_AddStringToObject(notice_msg, "role", "system");
+                        cJSON_AddStringToObject(notice_msg, "content", c->text);
+                        cJSON_AddItemToArray(messages_array, notice_msg);
+                    }
+                    break;
+                }
+            }
+            continue; // Skip normal processing for this message
+        }
+
         cJSON *msg = cJSON_CreateObject();
         if (!msg) {
             LOG_ERROR("Failed to allocate message object");
@@ -101,7 +118,11 @@ char* build_request_json_from_state(ConversationState *state) {
             role = "system";
         } else if (state->messages[i].role == MSG_USER) {
             role = "user";
+        } else if (state->messages[i].role == MSG_ASSISTANT) {
+            role = "assistant";
         } else {
+            // Unknown role - log warning and treat as assistant (fallback)
+            LOG_WARN("Unhandled message role %d at index %d in api_builder, treating as assistant", state->messages[i].role, i);
             role = "assistant";
         }
         cJSON_AddStringToObject(msg, "role", role);
@@ -249,9 +270,9 @@ char* build_request_json_from_state(ConversationState *state) {
             if (tool_calls) {
                 cJSON_AddItemToObject(msg, "tool_calls", tool_calls);
             }
-        }
 
-        cJSON_AddItemToArray(messages_array, msg);
+            cJSON_AddItemToArray(messages_array, msg);
+        }
     }
 
     cJSON_AddItemToObject(request, "messages", messages_array);

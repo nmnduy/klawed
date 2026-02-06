@@ -481,6 +481,23 @@ cJSON* build_openai_request_with_reasoning(ConversationState *state, int enable_
 
             cJSON_AddItemToArray(messages_array, asst_msg);
         }
+        else if (msg->role == MSG_AUTO_COMPACTION) {
+            // Auto-compaction notice - send as system message so model sees it
+            for (int j = 0; j < msg->content_count; j++) {
+                InternalContent *c = &msg->contents[j];
+                if (c->type == INTERNAL_TEXT && c->text) {
+                    cJSON *notice_msg = cJSON_CreateObject();
+                    cJSON_AddStringToObject(notice_msg, "role", "system");
+                    cJSON_AddStringToObject(notice_msg, "content", c->text);
+                    cJSON_AddItemToArray(messages_array, notice_msg);
+                    break;
+                }
+            }
+        }
+        else {
+            // Unknown message role - log warning but skip the message
+            LOG_WARN("Unhandled message role %d at index %d, skipping", msg->role, i);
+        }
     }
 
     cJSON_AddItemToObject(request, "messages", messages_array);
