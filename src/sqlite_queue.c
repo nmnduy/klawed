@@ -9,6 +9,7 @@
 #include "klawed_internal.h"
 #include "conversation/conversation_processor.h"
 #include "logger.h"
+#include "compaction.h"
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -91,6 +92,7 @@
 // Forward declarations
 #ifndef TEST_BUILD
 static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx, struct ConversationState *state, const char *user_input);
+static int sqlite_queue_handle_compact_trigger(SQLiteQueueContext *ctx, struct ConversationState *state);
 #endif
 static void sqlite_queue_set_error(SQLiteQueueContext *ctx, SQLiteQueueErrorCode error_code, const char *format, ...);
 static const char* sqlite_queue_error_to_string(SQLiteQueueErrorCode error_code);
@@ -580,40 +582,61 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
 
         int process_result = 0;
 
-        if (message_type && cJSON_IsString(message_type) &&
-            strcmp(message_type->valuestring, "TEXT") == 0 &&
-            content && cJSON_IsString(content)) {
+        if (message_type && cJSON_IsString(message_type)) {
+            const char *msg_type = message_type->valuestring;
 
-            // Process text message with interactive tool call support
-            LOG_INFO("SQLite Queue: Processing TEXT message (length: %zu)", strlen(content->valuestring));
-            LOG_DEBUG("SQLite Queue: Message content: %.*s",
-                    (int)(strlen(content->valuestring) > 200 ? 200 : strlen(content->valuestring)),
-                    content->valuestring);
+            if (strcmp(msg_type, "TEXT") == 0 &&
+                content && cJSON_IsString(content)) {
 
-            // Print to console
-            printf("SQLite Queue: Processing TEXT message (length: %zu)\n", strlen(content->valuestring));
-            // Print first 100 chars of the message
-            int preview_len = (int)(strlen(content->valuestring) > 100 ? 100 : strlen(content->valuestring));
-            printf("Message preview: %.*s%s\n", preview_len, content->valuestring,
-                   strlen(content->valuestring) > 100 ? "..." : "");
-            fflush(stdout);
+                // Process text message with interactive tool call support
+                LOG_INFO("SQLite Queue: Processing TEXT message (length: %zu)", strlen(content->valuestring));
+                LOG_DEBUG("SQLite Queue: Message content: %.*s",
+                        (int)(strlen(content->valuestring) > 200 ? 200 : strlen(content->valuestring)),
+                        content->valuestring);
 
-            // Process interactively (handles tool calls recursively)
-            // Make a copy of the content string to avoid potential use-after-free
-            char *content_copy = strdup(content->valuestring);
-            if (!content_copy) {
-                LOG_ERROR("SQLite Queue: Failed to duplicate message content");
-                cJSON_Delete(json);
-                free((void *)message);
-                continue;
+                // Print to console
+                printf("SQLite Queue: Processing TEXT message (length: %zu)\n", strlen(content->valuestring));
+                // Print first 100 chars of the message
+                int preview_len = (int)(strlen(content->valuestring) > 100 ? 100 : strlen(content->valuestring));
+                printf("Message preview: %.*s%s\n", preview_len, content->valuestring,
+                       strlen(content->valuestring) > 100 ? "..." : "");
+                fflush(stdout);
+
+                // Process interactively (handles tool calls recursively)
+                // Make a copy of the content string to avoid potential use-after-free
+                char *content_copy = strdup(content->valuestring);
+                if (!content_copy) {
+                    LOG_ERROR("SQLite Queue: Failed to duplicate message content");
+                    cJSON_Delete(json);
+                    free((void *)message);
+                    continue;
+                }
+                process_result = sqlite_queue_process_interactive(ctx, state, content_copy);
+                free(content_copy);
+
+                if (process_result != 0) {
+                    LOG_ERROR("SQLite Queue: Interactive processing failed");
+                }
+
+            } else if (strcmp(msg_type, "TRIGGER_COMPACT") == 0) {
+                // Handle manual compaction trigger from client
+                LOG_INFO("SQLite Queue: Received TRIGGER_COMPACT message ID %lld", msg_id);
+                printf("SQLite Queue: Processing compaction trigger request\n");
+                fflush(stdout);
+
+                int compact_result = sqlite_queue_handle_compact_trigger(ctx, state);
+                if (compact_result == 0) {
+                    LOG_INFO("SQLite Queue: Compaction trigger processed successfully");
+                } else {
+                    LOG_ERROR("SQLite Queue: Compaction trigger failed");
+                }
+
+            } else {
+                LOG_WARN("SQLite Queue: Unknown or invalid message type: %s", msg_type);
+                LOG_DEBUG("SQLite Queue: Available fields - messageType: %s, content: %s",
+                         message_type ? "present" : "missing",
+                         content ? "present" : "missing");
             }
-            process_result = sqlite_queue_process_interactive(ctx, state, content_copy);
-            free(content_copy);
-
-            if (process_result != 0) {
-                LOG_ERROR("SQLite Queue: Interactive processing failed");
-            }
-
         } else {
             LOG_WARN("SQLite Queue: Invalid message format received");
             LOG_DEBUG("SQLite Queue: Available fields - messageType: %s, content: %s",
@@ -990,6 +1013,84 @@ int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *rec
 
     return result;
 }
+
+#ifndef TEST_BUILD
+/**
+ * Handle TRIGGER_COMPACT message from client
+ * Performs manual compaction on the current conversation state
+ */
+static int sqlite_queue_handle_compact_trigger(SQLiteQueueContext *ctx, struct ConversationState *state) {
+    if (!ctx || !state) {
+        LOG_ERROR("SQLite Queue: Invalid parameters for handle_compact_trigger");
+        return -1;
+    }
+
+    const char *response_receiver = "client";
+
+    // Check if we have a compaction config
+    if (!state->compaction_config) {
+        // Create a temporary config for manual compaction
+        state->compaction_config = reallocarray(NULL, 1, sizeof(CompactionConfig));
+        if (!state->compaction_config) {
+            LOG_ERROR("SQLite Queue: Failed to allocate compaction config");
+            sqlite_queue_send_json(ctx, response_receiver, "ERROR",
+                                   "Failed to allocate memory for compaction config");
+            return -1;
+        }
+        compaction_init_config(state->compaction_config, 1, state->model);
+        LOG_DEBUG("SQLite Queue: Created temporary compaction config for manual trigger");
+    }
+
+    // Update token count before compaction
+    compaction_update_token_count(state, state->compaction_config);
+
+    LOG_INFO("SQLite Queue: Performing manual compaction (triggered by client)");
+
+    // Perform compaction
+    CompactionResult result = {0};
+    int ret = compaction_perform(state, state->compaction_config, state->session_id, &result);
+
+    if (ret == 0 && result.success) {
+        LOG_INFO("SQLite Queue: Compaction successful - %d messages compacted, %.1f%% -> %.1f%%",
+                 result.messages_compacted, result.usage_before_pct, result.usage_after_pct);
+
+        // Send success response with details
+        char response_msg[512];
+        snprintf(response_msg, sizeof(response_msg),
+                 "Compaction successful: %d messages stored to memory. "
+                 "Tokens: %zu -> %zu (freed ~%zu). "
+                 "Usage: %.1f%% -> %.1f%%.",
+                 result.messages_compacted,
+                 result.tokens_before, result.tokens_after,
+                 result.tokens_before - result.tokens_after,
+                 result.usage_before_pct, result.usage_after_pct);
+
+        // Also send an AUTO_COMPACTION notice for consistency
+        sqlite_queue_send_compaction_notice(ctx, response_receiver,
+                                            result.messages_compacted,
+                                            result.tokens_before,
+                                            result.tokens_after,
+                                            result.usage_before_pct,
+                                            result.usage_after_pct);
+
+        return 0;
+
+    } else if (ret == 0) {
+        // Nothing to compact - not enough messages
+        LOG_INFO("SQLite Queue: No compaction needed - not enough messages");
+        sqlite_queue_send_json(ctx, response_receiver, "TEXT",
+                               "Compaction skipped: Not enough messages to compact "
+                               "(need at least keep_recent + system message)");
+        return 0;
+
+    } else {
+        LOG_ERROR("SQLite Queue: Compaction failed");
+        sqlite_queue_send_json(ctx, response_receiver, "ERROR",
+                               "Compaction failed - see klawed logs for details");
+        return -1;
+    }
+}
+#endif // TEST_BUILD
 
 /**
  * Helper structure to track pending tool calls during seeding.
@@ -1614,52 +1715,77 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
             cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
             cJSON *content = cJSON_GetObjectItem(json, "content");
 
-            if (message_type && cJSON_IsString(message_type) &&
-                strcmp(message_type->valuestring, "TEXT") == 0 &&
-                content && cJSON_IsString(content)) {
+            if (message_type && cJSON_IsString(message_type)) {
+                const char *msg_type = message_type->valuestring;
 
-                // Check if this message is already in the pending queue (prevent duplicates)
-                pthread_mutex_lock(&ctx->queue_mutex);
-                int is_duplicate = 0;
-                PendingMessage *check = ctx->pending_messages;
-                while (check) {
-                    if (check->msg_id == msg_id) {
-                        is_duplicate = 1;
-                        break;
+                if (strcmp(msg_type, "TEXT") == 0 &&
+                    content && cJSON_IsString(content)) {
+
+                    // Check if this message is already in the pending queue (prevent duplicates)
+                    pthread_mutex_lock(&ctx->queue_mutex);
+                    int is_duplicate = 0;
+                    PendingMessage *check = ctx->pending_messages;
+                    while (check) {
+                        if (check->msg_id == msg_id) {
+                            is_duplicate = 1;
+                            break;
+                        }
+                        check = check->next;
                     }
-                    check = check->next;
-                }
-                pthread_mutex_unlock(&ctx->queue_mutex);
+                    pthread_mutex_unlock(&ctx->queue_mutex);
 
-                if (is_duplicate) {
-                    LOG_WARN("SQLite Queue: Message ID %lld already in queue, skipping duplicate", msg_id);
-                    cJSON_Delete(json);
-                    free(message);
-                    continue;
-                }
-
-                // Enqueue the message for the worker thread
-                if (sqlite_queue_enqueue_message(ctx, msg_id, content->valuestring) == 0) {
-                    message_count++;
-                    error_count = 0;
-                    LOG_INFO("SQLite Queue: Enqueued message ID %lld for processing (queue depth: %d)",
-                             msg_id, sqlite_queue_pending_count(ctx));
-                    printf("SQLite Queue: Received message ID %lld (queue depth: %d)\n",
-                           msg_id, sqlite_queue_pending_count(ctx));
-
-                    // Acknowledge the message immediately to prevent race condition
-                    // where the main loop finds it again before worker processes it
-                    if (sqlite_queue_acknowledge(ctx, msg_id) != SQLITE_QUEUE_ERROR_NONE) {
-                        LOG_WARN("SQLite Queue: Failed to acknowledge message ID %lld after enqueue", msg_id);
+                    if (is_duplicate) {
+                        LOG_WARN("SQLite Queue: Message ID %lld already in queue, skipping duplicate", msg_id);
+                        cJSON_Delete(json);
+                        free(message);
+                        continue;
                     }
+
+                    // Enqueue the message for the worker thread
+                    if (sqlite_queue_enqueue_message(ctx, msg_id, content->valuestring) == 0) {
+                        message_count++;
+                        error_count = 0;
+                        LOG_INFO("SQLite Queue: Enqueued message ID %lld for processing (queue depth: %d)",
+                                 msg_id, sqlite_queue_pending_count(ctx));
+                        printf("SQLite Queue: Received message ID %lld (queue depth: %d)\n",
+                               msg_id, sqlite_queue_pending_count(ctx));
+
+                        // Acknowledge the message immediately to prevent race condition
+                        // where the main loop finds it again before worker processes it
+                        if (sqlite_queue_acknowledge(ctx, msg_id) != SQLITE_QUEUE_ERROR_NONE) {
+                            LOG_WARN("SQLite Queue: Failed to acknowledge message ID %lld after enqueue", msg_id);
+                        }
+                    } else {
+                        LOG_ERROR("SQLite Queue: Failed to enqueue message ID %lld", msg_id);
+                        sqlite_queue_acknowledge(ctx, msg_id); // Acknowledge to prevent reprocessing
+                        error_count++;
+                    }
+
+                } else if (strcmp(msg_type, "TRIGGER_COMPACT") == 0) {
+                    // Handle manual compaction trigger from client (direct processing in daemon mode)
+                    LOG_INFO("SQLite Queue: Received TRIGGER_COMPACT message ID %lld in daemon mode", msg_id);
+                    printf("SQLite Queue: Processing compaction trigger request\n");
+                    fflush(stdout);
+
+                    // Acknowledge the message first
+                    sqlite_queue_acknowledge(ctx, msg_id);
+
+                    // Perform compaction directly (no need to enqueue - compaction is quick)
+                    int compact_result = sqlite_queue_handle_compact_trigger(ctx, state);
+                    if (compact_result == 0) {
+                        LOG_INFO("SQLite Queue: Daemon mode compaction trigger processed successfully");
+                    } else {
+                        LOG_ERROR("SQLite Queue: Daemon mode compaction trigger failed");
+                    }
+
                 } else {
-                    LOG_ERROR("SQLite Queue: Failed to enqueue message ID %lld", msg_id);
-                    sqlite_queue_acknowledge(ctx, msg_id); // Acknowledge to prevent reprocessing
-                    error_count++;
+                    // Unknown message type - acknowledge and skip
+                    LOG_WARN("SQLite Queue: Ignoring unknown message type '%s' ID %lld", msg_type, msg_id);
+                    sqlite_queue_acknowledge(ctx, msg_id);
                 }
             } else {
-                // Non-TEXT message or invalid format - acknowledge and skip
-                LOG_WARN("SQLite Queue: Ignoring non-TEXT message ID %lld", msg_id);
+                // Invalid message format - acknowledge and skip
+                LOG_WARN("SQLite Queue: Ignoring invalid message format ID %lld", msg_id);
                 sqlite_queue_acknowledge(ctx, msg_id);
             }
 
