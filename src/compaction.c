@@ -131,102 +131,104 @@ static char* build_conversation_text(const InternalMessage *messages, int messag
 }
 
 /**
- * Extract text content from API response JSON
- * Supports both OpenAI and Anthropic response formats
+ * Helper to create a temporary ConversationState for summarization
+ * This creates a minimal state with just the system and user messages needed for summarization
  */
-static char* extract_response_text(const char *response_body) {
-    if (!response_body) {
+static ConversationState* create_temp_conversation_state(ConversationState *main_state,
+                                                          const char *conversation_text) {
+    if (!main_state || !conversation_text) {
         return NULL;
     }
 
-    cJSON *json = cJSON_Parse(response_body);
-    if (!json) {
-        LOG_WARN("Failed to parse summarization response JSON");
+    ConversationState *temp_state = calloc(1, sizeof(ConversationState));
+    if (!temp_state) {
+        LOG_ERROR("Failed to allocate temporary conversation state");
         return NULL;
     }
 
-    char *result = NULL;
+    // Copy essential configuration from main state
+    temp_state->api_key = main_state->api_key;
+    temp_state->api_url = main_state->api_url;
+    temp_state->model = main_state->model;
+    temp_state->provider = main_state->provider;
+    temp_state->max_tokens = main_state->max_tokens;
+    temp_state->max_retry_duration_ms = main_state->max_retry_duration_ms;
+    temp_state->working_dir = main_state->working_dir;
 
-    // Try OpenAI format: choices[0].message.content
-    cJSON *choices = cJSON_GetObjectItem(json, "choices");
-    if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
-        cJSON *first_choice = cJSON_GetArrayItem(choices, 0);
-        cJSON *message = cJSON_GetObjectItem(first_choice, "message");
-        if (message) {
-            cJSON *content = cJSON_GetObjectItem(message, "content");
-            if (content && cJSON_IsString(content) && content->valuestring) {
-                result = strdup(content->valuestring);
-            }
-        }
+    // Build system message content (the summarization prompt)
+    size_t system_content_len = strlen(SUMMARIZATION_PROMPT) + strlen(conversation_text) + 1;
+    char *system_content = malloc(system_content_len);
+    if (!system_content) {
+        LOG_ERROR("Failed to allocate system message content");
+        free(temp_state);
+        return NULL;
+    }
+    strlcpy(system_content, SUMMARIZATION_PROMPT, system_content_len);
+    strlcat(system_content, conversation_text, system_content_len);
+
+    // Create system message (index 0)
+    temp_state->messages[0].role = MSG_SYSTEM;
+    temp_state->messages[0].content_count = 1;
+    temp_state->messages[0].contents = calloc(1, sizeof(InternalContent));
+    if (!temp_state->messages[0].contents) {
+        LOG_ERROR("Failed to allocate system message contents");
+        free(system_content);
+        free(temp_state);
+        return NULL;
+    }
+    temp_state->messages[0].contents[0].type = INTERNAL_TEXT;
+    temp_state->messages[0].contents[0].text = system_content;
+
+    // Create user message (index 1) - just a simple request to summarize
+    const char *user_text = "Please provide a summary of the above conversation.";
+    temp_state->messages[1].role = MSG_USER;
+    temp_state->messages[1].content_count = 1;
+    temp_state->messages[1].contents = calloc(1, sizeof(InternalContent));
+    if (!temp_state->messages[1].contents) {
+        LOG_ERROR("Failed to allocate user message contents");
+        free(temp_state->messages[0].contents[0].text);
+        free(temp_state->messages[0].contents);
+        free(temp_state);
+        return NULL;
+    }
+    temp_state->messages[1].contents[0].type = INTERNAL_TEXT;
+    temp_state->messages[1].contents[0].text = strdup(user_text);
+    if (!temp_state->messages[1].contents[0].text) {
+        LOG_ERROR("Failed to duplicate user message text");
+        free(temp_state->messages[1].contents);
+        free(temp_state->messages[0].contents[0].text);
+        free(temp_state->messages[0].contents);
+        free(temp_state);
+        return NULL;
     }
 
-    // Try Anthropic format: content[0].text
-    if (!result) {
-        cJSON *content_array = cJSON_GetObjectItem(json, "content");
-        if (content_array && cJSON_IsArray(content_array) && cJSON_GetArraySize(content_array) > 0) {
-            cJSON *first_content = cJSON_GetArrayItem(content_array, 0);
-            cJSON *text = cJSON_GetObjectItem(first_content, "text");
-            if (text && cJSON_IsString(text) && text->valuestring) {
-                result = strdup(text->valuestring);
-            }
-        }
-    }
+    temp_state->count = 2;
 
-    cJSON_Delete(json);
-    return result;
+    return temp_state;
 }
 
 /**
- * Build a minimal API request JSON for summarization
- * Uses OpenAI-compatible format (works with Anthropic via compatibility layer)
+ * Free a temporary ConversationState (only frees what was allocated by create_temp_conversation_state)
  */
-static char* build_summarization_request(const char *model, const char *conversation_text, int max_tokens) {
-    cJSON *request = cJSON_CreateObject();
-    if (!request) {
-        return NULL;
+static void free_temp_conversation_state(ConversationState *temp_state) {
+    if (!temp_state) {
+        return;
     }
 
-    // Add model
-    cJSON_AddStringToObject(request, "model", model ? model : "claude-sonnet-4-20250514");
-
-    // Add max_completion_tokens (target ~400 words = ~600 tokens, with buffer)
-    // Using max_completion_tokens instead of deprecated max_tokens for compatibility
-    // with reasoning models (o1, o3, kimi-k2, etc.)
-    cJSON_AddNumberToObject(request, "max_completion_tokens", max_tokens > 0 ? max_tokens : 800);
-
-    // Build messages array
-    cJSON *messages = cJSON_CreateArray();
-    if (!messages) {
-        cJSON_Delete(request);
-        return NULL;
+    // Free message contents
+    for (int i = 0; i < temp_state->count; i++) {
+        InternalMessage *msg = &temp_state->messages[i];
+        for (int j = 0; j < msg->content_count; j++) {
+            if (msg->contents[j].text) {
+                free(msg->contents[j].text);
+            }
+        }
+        if (msg->contents) {
+            free(msg->contents);
+        }
     }
 
-    // Single user message with summarization request
-    cJSON *user_msg = cJSON_CreateObject();
-    cJSON_AddStringToObject(user_msg, "role", "user");
-
-    // Build full prompt
-    size_t prompt_len = strlen(SUMMARIZATION_PROMPT) + strlen(conversation_text) + 1;
-    char *full_prompt = malloc(prompt_len);
-    if (!full_prompt) {
-        cJSON_Delete(user_msg);
-        cJSON_Delete(messages);
-        cJSON_Delete(request);
-        return NULL;
-    }
-    strlcpy(full_prompt, SUMMARIZATION_PROMPT, prompt_len);
-    strlcat(full_prompt, conversation_text, prompt_len);
-
-    cJSON_AddStringToObject(user_msg, "content", full_prompt);
-    free(full_prompt);
-
-    cJSON_AddItemToArray(messages, user_msg);
-    cJSON_AddItemToObject(request, "messages", messages);
-
-    char *result = cJSON_PrintUnformatted(request);
-    cJSON_Delete(request);
-
-    return result;
+    free(temp_state);
 }
 
 int compaction_generate_summary(ConversationState *state,
@@ -244,9 +246,10 @@ int compaction_generate_summary(ConversationState *state,
         return -1;
     }
 
-    // Check if provider is available
-    if (!state->provider || !state->api_url || !state->api_key) {
-        LOG_WARN("compaction_generate_summary: provider not initialized");
+    // Check if provider is available (don't need to check state->provider as call_api_with_retries
+    // will handle provider lazy initialization)
+    if (!state->api_url || !state->api_key) {
+        LOG_WARN("compaction_generate_summary: API URL or key not initialized");
         return -1;
     }
 
@@ -259,90 +262,57 @@ int compaction_generate_summary(ConversationState *state,
         return -1;
     }
 
-    // Build API request
-    char *request_json = build_summarization_request(state->model, conversation_text, 800);
+    // Create temporary conversation state for summarization
+    ConversationState *temp_state = create_temp_conversation_state(state, conversation_text);
     free(conversation_text);
 
-    if (!request_json) {
-        LOG_ERROR("Failed to build summarization request");
+    if (!temp_state) {
+        LOG_ERROR("Failed to create temporary conversation state for summarization");
         return -1;
     }
 
-    // Set up HTTP request headers
-    struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, "Content-Type: application/json");
+    // Make API call using the main API client with retry logic
+    // This reuses all the retry, authentication, and response handling from normal API calls
+    LOG_DEBUG("Making summarization API call via call_api_with_retries");
 
-    // Add authorization header
-    char auth_header[512];
-    snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", state->api_key);
-    headers = curl_slist_append(headers, auth_header);
+    ApiResponse *response = call_api_with_retries(temp_state);
 
-    // Add Anthropic version header if using Anthropic API
-    if (state->api_url && strstr(state->api_url, "anthropic.com")) {
-        curl_slist_free_all(headers);
-        headers = NULL;
-        headers = curl_slist_append(headers, "Content-Type: application/json");
-        headers = curl_slist_append(headers, "anthropic-version: 2023-06-01");
-        snprintf(auth_header, sizeof(auth_header), "x-api-key: %s", state->api_key);
-        headers = curl_slist_append(headers, auth_header);
-    }
+    // Free the temporary conversation state (don't use conversation_free as it assumes
+    // full initialization and ownership of all fields)
+    free_temp_conversation_state(temp_state);
 
-    if (!headers) {
-        LOG_ERROR("Failed to setup HTTP headers for summarization");
-        free(request_json);
+    if (!response) {
+        LOG_ERROR("Summarization API call failed");
         return -1;
     }
 
-    // Execute HTTP request
-    HttpRequest req = {0};
-    req.url = state->api_url;
-    req.method = "POST";
-    req.body = request_json;
-    req.headers = headers;
-    req.connect_timeout_ms = 30000;  // 30 seconds
-    req.total_timeout_ms = 120000;   // 2 minutes for summarization
-
-    LOG_DEBUG("Making summarization API call to %s", state->api_url);
-
-    HttpResponse *http_resp = http_client_execute(&req, NULL, NULL);
-
-    // Clean up request resources
-    free(request_json);
-    curl_slist_free_all(headers);
-
-    if (!http_resp) {
-        LOG_ERROR("Summarization HTTP request failed");
+    // Check for errors in the response
+    if (response->error_message) {
+        LOG_ERROR("Summarization API error: %s", response->error_message);
+        api_response_free(response);
         return -1;
     }
 
-    // Check for errors
-    if (http_resp->error_message) {
-        LOG_ERROR("Summarization API error: %s", http_resp->error_message);
-        http_response_free(http_resp);
-        return -1;
-    }
-
-    if (http_resp->status_code < 200 || http_resp->status_code >= 300) {
-        LOG_ERROR("Summarization API returned status %ld", http_resp->status_code);
-        if (http_resp->body) {
-            LOG_DEBUG("Response body: %s", http_resp->body);
-        }
-        http_response_free(http_resp);
-        return -1;
-    }
-
-    // Extract summary text from response
-    char *summary_text = extract_response_text(http_resp->body);
-    http_response_free(http_resp);
-
-    if (!summary_text) {
-        LOG_ERROR("Failed to extract summary from API response");
+    // Extract summary text from the assistant's message
+    char *summary_text = response->message.text;
+    if (!summary_text || summary_text[0] == '\0') {
+        LOG_ERROR("Failed to extract summary from API response (no text content)");
+        api_response_free(response);
         return -1;
     }
 
     // Copy to output buffer, respecting size limit
-    strlcpy(summary_out, summary_text, summary_size);
-    free(summary_text);
+    // We need to strdup since api_response_free will free the message.text
+    char *summary_copy = strdup(summary_text);
+    api_response_free(response);
+
+    if (!summary_copy) {
+        LOG_ERROR("Failed to duplicate summary text");
+        return -1;
+    }
+
+    strlcpy(summary_out, summary_copy, summary_size);
+    free(summary_copy);
 
     LOG_INFO("Successfully generated compaction summary (%zu chars)", strlen(summary_out));
 
