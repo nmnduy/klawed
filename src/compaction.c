@@ -189,8 +189,10 @@ static char* build_summarization_request(const char *model, const char *conversa
     // Add model
     cJSON_AddStringToObject(request, "model", model ? model : "claude-sonnet-4-20250514");
 
-    // Add max_tokens (target ~400 words = ~600 tokens, with buffer)
-    cJSON_AddNumberToObject(request, "max_tokens", max_tokens > 0 ? max_tokens : 800);
+    // Add max_completion_tokens (target ~400 words = ~600 tokens, with buffer)
+    // Using max_completion_tokens instead of deprecated max_tokens for compatibility
+    // with reasoning models (o1, o3, kimi-k2, etc.)
+    cJSON_AddNumberToObject(request, "max_completion_tokens", max_tokens > 0 ? max_tokens : 800);
 
     // Build messages array
     cJSON *messages = cJSON_CreateArray();
