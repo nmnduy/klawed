@@ -9,6 +9,62 @@
 #include <ctype.h>
 
 /**
+ * Truncate a string to max_bytes, ensuring we don't split UTF-8 multi-byte characters.
+ * Walks backwards to find a valid UTF-8 character boundary.
+ *
+ * UTF-8 encoding rules:
+ * - 1-byte ASCII: 0xxxxxxx
+ * - 2-byte: 110xxxxx 10xxxxxx
+ * - 3-byte: 1110xxxx 10xxxxxx 10xxxxxx
+ * - 4-byte: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+ * - Continuation bytes: 10xxxxxx
+ */
+char* truncate_utf8(const char *str, size_t max_bytes) {
+    if (!str || max_bytes == 0) {
+        return NULL;
+    }
+
+    size_t len = strlen(str);
+    if (len <= max_bytes) {
+        // String is already within limit
+        return strdup(str);
+    }
+
+    // Find a valid UTF-8 boundary at or before max_bytes
+    size_t truncate_at = max_bytes;
+
+    // Walk backwards to find a valid UTF-8 character start
+    while (truncate_at > 0) {
+        unsigned char c = (unsigned char)str[truncate_at];
+
+        // Check if this is a continuation byte (10xxxxxx)
+        if ((c & 0xC0) != 0x80) {
+            // Found a start byte (not a continuation byte)
+            break;
+        }
+
+        truncate_at--;
+    }
+
+    // If we walked all the way back to 0, we have invalid UTF-8
+    // In that case, just truncate at max_bytes anyway
+    if (truncate_at == 0) {
+        truncate_at = max_bytes;
+    }
+
+    // Allocate and copy
+    char *result = malloc(truncate_at + 1);
+    if (!result) {
+        return NULL;
+    }
+
+    memcpy(result, str, truncate_at);
+    result[truncate_at] = '\0';
+
+    return result;
+}
+
+/**
  * Strip ANSI escape sequences from string
  */
 char* strip_ansi_escapes(const char *input) {
@@ -93,5 +149,4 @@ char* strdup_trim(const char *str) {
     trim_whitespace(dup);
     return dup;
 }
-
 
