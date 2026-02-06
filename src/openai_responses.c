@@ -202,6 +202,29 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
                 cJSON_Delete(content_array);
             }
         }
+        else if (msg->role == MSG_AUTO_COMPACTION) {
+            // Auto-compaction notice - add as a user message so model sees it
+            for (int j = 0; j < msg->content_count; j++) {
+                InternalContent *c = &msg->contents[j];
+                if (c->type == INTERNAL_TEXT && c->text) {
+                    cJSON *notice_item = cJSON_CreateObject();
+                    cJSON_AddStringToObject(notice_item, "type", "message");
+                    cJSON_AddStringToObject(notice_item, "role", "user");
+                    cJSON *content_array = cJSON_CreateArray();
+                    cJSON *content_obj = cJSON_CreateObject();
+                    cJSON_AddStringToObject(content_obj, "type", "input_text");
+                    cJSON_AddStringToObject(content_obj, "text", c->text);
+                    cJSON_AddItemToArray(content_array, content_obj);
+                    cJSON_AddItemToObject(notice_item, "content", content_array);
+                    cJSON_AddItemToArray(input_array, notice_item);
+                    break;
+                }
+            }
+        }
+        else {
+            // Unknown message role - log warning but skip the message
+            LOG_WARN("Unhandled message role %d at index %d in Responses API, skipping", msg->role, i);
+        }
     }
 
     cJSON_AddItemToObject(request, "input", input_array);
