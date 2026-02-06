@@ -50,6 +50,7 @@ All messages in the `message` field are JSON objects with a `messageType` field.
 | Type | Description | Direction |
 |------|-------------|-----------|
 | `TEXT` | Text prompt or response | Client → Klawed, Klawed → Client |
+| `TRIGGER_COMPACT` | Request manual context compaction | Client → Klawed |
 | `TOOL` | Tool execution request | Klawed → Client |
 | `TOOL_RESULT` | Tool execution result | Klawed → Client |
 | `API_CALL` | API call in progress (waiting for AI response) | Klawed → Client |
@@ -224,6 +225,51 @@ Send a text prompt to klawed:
   "content": "Write a hello world program in C"
 }
 ```
+
+#### TRIGGER_COMPACT Message
+
+Request manual context compaction to free up context window:
+
+```json
+{
+  "messageType": "TRIGGER_COMPACT"
+}
+```
+
+**Response:**
+
+Klawed responds with either:
+- An `AUTO_COMPACTION` message on success (containing statistics)
+- A `TEXT` message if there was nothing to compact (not enough messages)
+- An `ERROR` message if compaction failed
+
+**Example flow:**
+
+Client sends:
+```json
+{
+  "messageType": "TRIGGER_COMPACT"
+}
+```
+
+Klawed responds on success:
+```json
+{
+  "messageType": "AUTO_COMPACTION",
+  "messagesCompacted": 45,
+  "tokensBefore": 92450,
+  "tokensAfter": 28760,
+  "tokensFreed": 63690,
+  "usageBeforePct": 73.9,
+  "usageAfterPct": 23.0,
+  "content": "Context compaction: 45 messages stored to memory..."
+}
+```
+
+**Notes:**
+- Manual compaction works independently of auto-compaction settings
+- It requires at least `keep_recent + 1` messages (system message + recent messages) in the conversation
+- The response format matches automatic compaction notifications
 
 ### Output Messages (Klawed → Client)
 
@@ -536,9 +582,11 @@ class KlawedSQLiteClient:
         self.receiver = receiver
         self.conn = sqlite3.connect(db_path)
     
-    def send_message(self, message_type, content):
+    def send_message(self, message_type, content=None):
         """Send a message to klawed."""
-        message = {"messageType": message_type, "content": content}
+        message = {"messageType": message_type}
+        if content is not None:
+            message["content"] = content
         message_str = json.dumps(message)
         
         cursor = self.conn.cursor()
@@ -547,7 +595,39 @@ class KlawedSQLiteClient:
             (self.sender, self.receiver, message_str)
         )
         self.conn.commit()
-        print(f"Sent: {content[:100]}...")
+        if content:
+            print(f"Sent: {content[:100]}...")
+        else:
+            print(f"Sent: {message_type}")
+    
+    def trigger_compact(self, timeout=30):
+        """Trigger manual context compaction."""
+        print("Requesting context compaction...")
+        self.send_message("TRIGGER_COMPACT")
+        
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            messages = self.receive_messages()
+            for msg_id, message in messages:
+                msg_type = message.get("messageType")
+                
+                if msg_type == "AUTO_COMPACTION":
+                    messages_compact = message.get("messagesCompacted", 0)
+                    tokens_freed = message.get("tokensFreed", 0)
+                    print(f"Compaction complete: {messages_compact} messages, {tokens_freed} tokens freed")
+                    self.acknowledge(msg_id)
+                    return True
+                elif msg_type == "ERROR":
+                    print(f"Compaction error: {message.get('content', '')}")
+                    self.acknowledge(msg_id)
+                    return False
+                else:
+                    self.acknowledge(msg_id)
+            
+            time.sleep(0.3)
+        
+        print("Compaction timeout")
+        return False
     
     def receive_messages(self, max_messages=10):
         """Poll for messages from klawed."""
@@ -651,8 +731,11 @@ class KlawedSQLiteClient:
         self.receiver = receiver
         self.conn = sqlite3.connect(db_path)
     
-    def send_message(self, message_type, content):
-        message = {"messageType": message_type, "content": content}
+    def send_message(self, message_type, content=None):
+        """Send a message to klawed."""
+        message = {"messageType": message_type}
+        if content is not None:
+            message["content"] = content
         message_str = json.dumps(message)
         
         cursor = self.conn.cursor()
@@ -661,7 +744,57 @@ class KlawedSQLiteClient:
             (self.sender, self.receiver, message_str)
         )
         self.conn.commit()
-        print(f"[SEND {message_type}] {content[:100]}...")
+        if content:
+            print(f"[SEND {message_type}] {content[:100]}...")
+        else:
+            print(f"[SEND {message_type}]")
+    
+    def trigger_compact(self, timeout=30):
+        """Trigger manual context compaction and wait for result."""
+        print("\n[TRIGGER_COMPACT] Requesting context compaction...")
+        self.send_message("TRIGGER_COMPACT")
+        
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            messages = self.receive_messages()
+            for msg_id, message in messages:
+                msg_type = message.get("messageType")
+                
+                if msg_type == "AUTO_COMPACTION":
+                    messages_compacted = message.get("messagesCompacted", 0)
+                    tokens_before = message.get("tokensBefore", 0)
+                    tokens_after = message.get("tokensAfter", 0)
+                    usage_before = message.get("usageBeforePct", 0)
+                    usage_after = message.get("usageAfterPct", 0)
+                    
+                    print(f"[COMPACTION SUCCESS] {messages_compacted} messages compacted")
+                    print(f"  Tokens: {tokens_before:.0f} → {tokens_after:.0f} (freed ~{tokens_before - tokens_after:.0f})")
+                    print(f"  Usage: {usage_before:.1f}% → {usage_after:.1f}%")
+                    
+                    self.acknowledge(msg_id)
+                    return True
+                    
+                elif msg_type == "TEXT":
+                    content = message.get("content", "")
+                    if "compaction" in content.lower() or "compact" in content.lower():
+                        print(f"[COMPACTION INFO] {content}")
+                        self.acknowledge(msg_id)
+                        return True
+                        
+                elif msg_type == "ERROR":
+                    content = message.get("content", "")
+                    print(f"[COMPACTION FAILED] {content}")
+                    self.acknowledge(msg_id)
+                    return False
+                    
+                else:
+                    # Acknowledge other message types
+                    self.acknowledge(msg_id)
+            
+            time.sleep(0.1)
+        
+        print("[COMPACTION TIMEOUT] No response received")
+        return False
     
     def receive_messages(self):
         cursor = self.conn.cursor()
@@ -785,6 +918,12 @@ if __name__ == "__main__":
         # Example: Multi-turn conversation
         client.send_and_wait("Now tell me about the src/ directory")
         
+        
+        # Example: Trigger manual compaction after long conversation
+        client.send_and_wait("Create a detailed summary of the entire project")
+        client.trigger_compact()  # Free up context space
+        client.send_and_wait("Now create a list of TODO items based on the summary")
+        
     finally:
         client.close()
 ```
@@ -820,6 +959,34 @@ if __name__ == "__main__":
    ```sql
    UPDATE messages SET sent = 1 WHERE id = <message_id>;
    ```
+
+### Manual Compaction Trigger
+
+**Client sends compaction request:**
+```sql
+INSERT INTO messages (sender, receiver, message, sent)
+VALUES ('client', 'klawed', '{"messageType":"TRIGGER_COMPACT"}', 0);
+```
+
+**Klawed responds with compaction result:**
+```sql
+-- Compaction statistics
+INSERT INTO messages (sender, receiver, message, sent)
+VALUES ('klawed', 'client', '{
+  "messageType": "AUTO_COMPACTION",
+  "messagesCompacted": 45,
+  "tokensBefore": 92450,
+  "tokensAfter": 28760,
+  "tokensFreed": 63690,
+  "usageBeforePct": 73.9,
+  "usageAfterPct": 23.0,
+  "content": "Context compaction: 45 messages stored to memory..."
+}', 0);
+
+-- End of turn
+INSERT INTO messages (sender, receiver, message, sent)
+VALUES ('klawed', 'client', '{"messageType":"END_AI_TURN"}', 0);
+```
 
 ### Interactive Processing with Tool Calls
 
