@@ -1,6 +1,9 @@
 #ifndef STRING_UTILS_H
 #define STRING_UTILS_H
 
+#include <stddef.h>
+
+
 /**
  * String Utilities
  *
@@ -31,5 +34,16 @@ char* trim_whitespace(char *str);
 char* strdup_trim(const char *str);
 
 
+
+/**
+ * Truncate a string to max_bytes, ensuring we don't split UTF-8 multi-byte characters.
+ * Walks backwards to find a valid UTF-8 character boundary.
+ *
+ * @param str String to truncate
+ * @param max_bytes Maximum bytes to keep (must be > 0)
+ * @return Dynamically allocated truncated string, or NULL on error
+ *         Caller must free() the returned string
+ */
+char* truncate_utf8(const char *str, size_t max_bytes);
 
 #endif // STRING_UTILS_H
