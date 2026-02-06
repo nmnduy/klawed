@@ -535,23 +535,39 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
 
 // Helper to render a single visual line segment with border
 // Returns bytes consumed from segment
+// is_continuation: if true, uses spaces instead of border char (for wrapped line continuations)
 static void render_bordered_segment(TUIState *tui, const char *segment, size_t len,
-                                    int border_pair, const char *border_str, bool add_newline) {
+                                    int border_pair, const char *border_str, bool add_newline,
+                                    bool is_continuation) {
     WINDOW *pad = tui->wm.conv_pad;
     (void)border_pair;  // Unused, kept for API compatibility
 
-    // Render border character only (│) with border color - no space
-    if (has_colors()) {
-        wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
+    // Render border character (│) with border color - no space
+    // For continuation lines, use two spaces instead to indicate line continuation
+    if (is_continuation) {
+        // Continuation line: use two spaces (no border visual)
+        // Still use foreground color for consistency
+        if (has_colors()) {
+            wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
+        waddstr(pad, "  ");
+        if (has_colors()) {
+            wattroff(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
+    } else {
+        // First line of a wrapped segment: use border character
+        if (has_colors()) {
+            wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
+        }
+        waddstr(pad, "│");
+        if (has_colors()) {
+            wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
+            // Reset to foreground color (no background) for the space and text
+            wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
+        // Add space after border with foreground color (no background)
+        waddch(pad, ' ');
     }
-    waddstr(pad, "│");
-    if (has_colors()) {
-        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-        // Reset to foreground color (no background) for the space and text
-        wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-    }
-    // Add space after border with foreground color (no background)
-    waddch(pad, ' ');
     (void)border_str;  // No longer used - we render │ and space separately
 
     // Render text content with search highlighting if active
@@ -673,7 +689,7 @@ static void render_text_with_left_border(TUIState *tui, const char *text, int te
 
         if (line_len == 0) {
             // Empty line - just render border and newline
-            render_bordered_segment(tui, "", 0, border_pair, border_str, (*p == '\n'));
+            render_bordered_segment(tui, "", 0, border_pair, border_str, (*p == '\n'), false);
         } else {
             // Check if the line needs wrapping
             int line_display_width = 0;
@@ -690,22 +706,25 @@ static void render_text_with_left_border(TUIState *tui, const char *text, int te
             }
 
             if (line_display_width <= content_width) {
-                // Line fits - render normally
-                render_bordered_segment(tui, line_start, line_len, border_pair, border_str, (*p == '\n'));
+                // Line fits - render normally (not a continuation)
+                render_bordered_segment(tui, line_start, line_len, border_pair, border_str, (*p == '\n'), false);
             } else {
                 // Line needs wrapping - break into chunks
                 const char *chunk_start = line_start;
                 size_t remaining = line_len;
+                bool is_first_chunk = true;
 
                 while (remaining > 0) {
                     size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
                     bool is_last_chunk = (chunk_bytes >= remaining);
                     bool add_nl = is_last_chunk && (*p == '\n');
 
-                    render_bordered_segment(tui, chunk_start, chunk_bytes, border_pair, border_str, true);
+                    // First chunk gets border, continuation chunks get spaces
+                    render_bordered_segment(tui, chunk_start, chunk_bytes, border_pair, border_str, true, !is_first_chunk);
 
                     chunk_start += chunk_bytes;
                     remaining -= chunk_bytes;
+                    is_first_chunk = false;
 
                     // Suppress unused - add_nl used for clarity but last chunk newline
                     // is handled by adding newline to all wrapped segments
