@@ -8,6 +8,7 @@
 #include "../message_queue.h"
 #include "../subagent_manager.h"
 #include "../data_dir.h"
+#include "../util/string_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -458,19 +459,23 @@ cJSON* tool_check_subagent_progress(cJSON *params, ConversationState *state) {
                     size_t line_len = strlen(line);
 
                     // Truncate line if it exceeds character limit
+                    // Ensure UTF-8 safety: use truncate_utf8 to avoid splitting multi-byte chars
                     if ((int)line_len > max_line_chars) {
-                        // Find a good place to truncate (preserve newline if present)
-                        int truncate_pos = max_line_chars - 15;  // Leave space for "...[truncated]"
-                        if (truncate_pos < 0) truncate_pos = 0;
+                        // Reserve space for "...[truncated]" and potential newline
+                        size_t suffix_len = strlen("...[truncated]") + 2;  // +2 for \n\0
+                        size_t trunc_target = (size_t)max_line_chars > suffix_len ?
+                                               (size_t)max_line_chars - suffix_len : 0;
 
-                        // Try to avoid breaking in the middle of a word
-                        while (truncate_pos > 0 && truncate_pos < (int)line_len &&
-                               !isspace((unsigned char)line[truncate_pos]) &&
-                               truncate_pos > max_line_chars - 50) {
-                            truncate_pos--;
+                        if (trunc_target > 0) {
+                            // Use UTF-8 safe truncation
+                            char *truncated = truncate_utf8(line, trunc_target);
+                            if (truncated) {
+                                // Copy back to line buffer with suffix
+                                strlcpy(line, truncated, sizeof(line));
+                                free(truncated);
+                            }
                         }
 
-                        line[truncate_pos] = '\0';
                         strlcat(line, "...[truncated]", sizeof(line));
 
                         // Add back newline if original line had one

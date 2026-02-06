@@ -177,12 +177,13 @@ cJSON* tool_bash(cJSON *params, ConversationState *state) {
     int truncated = 0;
     if (output_size >= BASH_OUTPUT_MAX_SIZE) {
         truncated = 1;
-        // Truncate the output to the maximum size
+        // Truncate the output to the maximum size, ensuring we don't split UTF-8 characters
         if (output_size > BASH_OUTPUT_MAX_SIZE) {
-            output = realloc(output, BASH_OUTPUT_MAX_SIZE + 1);
-            if (output) {
-                output[BASH_OUTPUT_MAX_SIZE] = '\0';
-                output_size = BASH_OUTPUT_MAX_SIZE;
+            char *truncated_output = truncate_utf8(output, BASH_OUTPUT_MAX_SIZE);
+            if (truncated_output) {
+                free(output);
+                output = truncated_output;
+                output_size = strlen(output);
             }
         }
     }
