@@ -2,8 +2,12 @@
  * sqlite_queue.c - SQLite message queue implementation for Klawed
  */
 
-// For pthread_timedjoin_np
+// Platform detection for pthread features
+#if defined(__APPLE__)
+#define USE_PTHREAD_JOIN_NO_TIMEOUT 1
+#else
 #define _GNU_SOURCE
+#endif
 
 #include "sqlite_queue.h"
 #include "klawed_internal.h"
@@ -238,10 +242,15 @@ void sqlite_queue_cleanup(SQLiteQueueContext *ctx) {
 
     // Wait for worker thread to finish (with timeout)
     if (ctx->worker_thread) {
+#ifdef USE_PTHREAD_JOIN_NO_TIMEOUT
+        // macOS doesn't have pthread_timedjoin_np, use regular pthread_join
+        pthread_join(ctx->worker_thread, NULL);
+#else
         struct timespec timeout;
         clock_gettime(CLOCK_REALTIME, &timeout);
         timeout.tv_sec += 2;  // 2 second timeout
         pthread_timedjoin_np(ctx->worker_thread, NULL, &timeout);
+#endif
     }
 
     // Free any pending messages
@@ -1806,10 +1815,15 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     pthread_mutex_unlock(&ctx->queue_mutex);
 
     // Wait for worker thread to finish (with timeout)
+#ifdef USE_PTHREAD_JOIN_NO_TIMEOUT
+    // macOS doesn't have pthread_timedjoin_np, use regular pthread_join
+    pthread_join(ctx->worker_thread, NULL);
+#else
     struct timespec timeout;
     clock_gettime(CLOCK_REALTIME, &timeout);
     timeout.tv_sec += 5;  // 5 second timeout
     pthread_timedjoin_np(ctx->worker_thread, NULL, &timeout);
+#endif
 
     LOG_INFO("SQLite Queue: =========================================");
     LOG_INFO("SQLite Queue: SQLite queue daemon mode stopping");
