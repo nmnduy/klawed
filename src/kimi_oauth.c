@@ -44,6 +44,7 @@ static char* get_device_model(void);
 static char* get_device_name(void);
 static KimiOAuthToken* load_token_from_disk(void);
 static int save_token_to_disk(const KimiOAuthToken *token);
+static int reload_token_from_disk_if_newer(KimiOAuthManager *manager);
 static KimiDeviceAuth* request_device_authorization(KimiOAuthManager *manager);
 static KimiOAuthToken* poll_for_token(KimiOAuthManager *manager,
                                        const KimiDeviceAuth *device_auth);
@@ -794,14 +795,86 @@ static KimiOAuthToken* poll_for_token(KimiOAuthManager *manager,
 }
 
 /**
+ * Atomically load the latest token from disk if it has been updated.
+ * This checks if the on-disk token is newer than the in-memory token.
+ * Returns 1 if a new token was loaded, 0 otherwise.
+ */
+static int reload_token_from_disk_if_newer(KimiOAuthManager *manager) {
+    if (!manager) return 0;
+
+    KimiOAuthToken *disk_token = load_token_from_disk();
+    if (!disk_token) {
+        return 0;
+    }
+
+    int loaded_newer = 0;
+
+    // Check if disk token is different (has different refresh_token or later expires_at)
+    if (!manager->token) {
+        // No in-memory token, use disk token
+        manager->token = disk_token;
+        loaded_newer = 1;
+        LOG_INFO("Loaded token from disk (no in-memory token)");
+    } else {
+        // Compare refresh tokens - if different, disk has a newer rotated token
+        int refresh_different = 1;
+        if (manager->token->refresh_token && disk_token->refresh_token) {
+            refresh_different = strcmp(manager->token->refresh_token, disk_token->refresh_token) != 0;
+        }
+
+        // Or check if disk token has a later expiration (might be slightly different logic)
+        int expires_later = disk_token->expires_at > manager->token->expires_at;
+
+        if (refresh_different || expires_later) {
+            // Disk token is newer, swap it in
+            KimiOAuthToken *old_token = manager->token;
+            manager->token = disk_token;
+            kimi_oauth_token_free(old_token);
+            loaded_newer = 1;
+            LOG_INFO("Reloaded newer token from disk (refresh_token changed: %d, expires_later: %d)",
+                     refresh_different, expires_later);
+        } else {
+            // Disk token is same or older, free it
+            kimi_oauth_token_free(disk_token);
+        }
+    }
+
+    return loaded_newer;
+}
+
+/**
  * Refresh token using refresh_token
  * IMPORTANT: refresh_token rotates on each refresh - always save the new one!
+ *
+ * Before refreshing, this reloads from disk to check if another process
+ * already refreshed. After refreshing, it saves to disk immediately.
  */
 static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager) {
-    if (!manager || !manager->token || !manager->token->refresh_token) {
+    if (!manager) {
+        LOG_ERROR("Cannot refresh: no manager");
+        return NULL;
+    }
+
+    // First, reload from disk to see if another process already refreshed
+    // This handles the case where multiple instances are running (subagents)
+    reload_token_from_disk_if_newer(manager);
+
+    if (!manager->token || !manager->token->refresh_token) {
         LOG_ERROR("Cannot refresh: no refresh token available");
         return NULL;
     }
+
+    // Check if token is still within refresh threshold after potential disk reload
+    time_t now = time(NULL);
+    time_t remaining = manager->token->expires_at - now;
+    if (remaining >= KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+        LOG_DEBUG("Token already fresh after disk reload (%ld seconds remaining), skipping refresh", (long)remaining);
+        return NULL;  // Return NULL to indicate no refresh needed, caller should use existing token
+    }
+
+    // Remember the refresh_token we're about to use
+    char *original_refresh_token = manager->token->refresh_token ?
+        strdup(manager->token->refresh_token) : NULL;
 
     // Build request body
     char body[2048];
@@ -825,6 +898,29 @@ static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager) {
 
     if (!response) {
         LOG_ERROR("Token refresh request failed");
+        free(original_refresh_token);
+        return NULL;
+    }
+
+    // Handle 401 - another process may have refreshed and rotated the token
+    if (http_status == 401) {
+        LOG_WARN("Token refresh returned 401, checking if another process refreshed...");
+        free(response);
+
+        // Reload from disk to get the potentially new token
+        if (reload_token_from_disk_if_newer(manager)) {
+            // Check if the new token is valid
+            if (manager->token && manager->token->access_token) {
+                time_t new_remaining = manager->token->expires_at - time(NULL);
+                if (new_remaining > 0) {
+                    LOG_INFO("Found valid refreshed token from disk, using it");
+                    free(original_refresh_token);
+                    return NULL;  // Return NULL - caller should use the reloaded token
+                }
+            }
+        }
+
+        free(original_refresh_token);
         return NULL;
     }
 
@@ -832,6 +928,7 @@ static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager) {
         LOG_ERROR("Token refresh failed with status %ld: %s",
                   http_status, response);
         free(response);
+        free(original_refresh_token);
         return NULL;
     }
 
@@ -840,6 +937,7 @@ static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager) {
 
     if (!json) {
         LOG_ERROR("Failed to parse refresh response");
+        free(original_refresh_token);
         return NULL;
     }
 
@@ -848,6 +946,7 @@ static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager) {
     if (error && cJSON_IsString(error)) {
         LOG_ERROR("Token refresh error: %s", error->valuestring);
         cJSON_Delete(json);
+        free(original_refresh_token);
         return NULL;
     }
 
@@ -855,6 +954,7 @@ static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager) {
     KimiOAuthToken *token = calloc(1, sizeof(KimiOAuthToken));
     if (!token) {
         cJSON_Delete(json);
+        free(original_refresh_token);
         return NULL;
     }
 
@@ -886,11 +986,19 @@ static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager) {
     if (!token->access_token || !token->refresh_token) {
         LOG_ERROR("Refresh response missing required fields");
         kimi_oauth_token_free(token);
+        free(original_refresh_token);
         return NULL;
+    }
+
+    // Verify the refresh_token actually changed (security check)
+    if (original_refresh_token && strcmp(original_refresh_token, token->refresh_token) == 0) {
+        LOG_WARN("Refresh token did not rotate - this is unexpected but continuing");
     }
 
     LOG_INFO("Token refreshed successfully (new expires_at: %ld)",
              (long)token->expires_at);
+
+    free(original_refresh_token);
     return token;
 }
 
@@ -939,8 +1047,16 @@ static void* refresh_thread_func(void *arg) {
 
                     // Free old token
                     kimi_oauth_token_free(old_token);
+                    LOG_INFO("Background refresh successful, token rotated");
                 } else {
-                    LOG_ERROR("Background token refresh failed");
+                    // refresh_token_internal may have reloaded from disk
+                    // Check if we now have a fresh token
+                    time_t new_remaining = manager->token ? manager->token->expires_at - time(NULL) : 0;
+                    if (new_remaining >= KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+                        LOG_INFO("Background refresh: token was refreshed by another process (from disk)");
+                    } else {
+                        LOG_ERROR("Background token refresh failed");
+                    }
                 }
             }
         }
@@ -1131,6 +1247,11 @@ int kimi_oauth_login(KimiOAuthManager *manager) {
 
 /**
  * Get current access token (refreshes if needed)
+ * Returns NULL if the token is expired and refresh failed, indicating
+ * that re-authentication is required.
+ *
+ * This function always reloads from disk first to handle the case where
+ * another process (e.g., a subagent) has already refreshed the token.
  */
 const char* kimi_oauth_get_access_token(KimiOAuthManager *manager) {
     if (!manager) return NULL;
@@ -1138,16 +1259,25 @@ const char* kimi_oauth_get_access_token(KimiOAuthManager *manager) {
     pthread_mutex_lock(&manager->token_mutex);
 
     if (!manager->token || !manager->token->access_token) {
-        pthread_mutex_unlock(&manager->token_mutex);
-        return NULL;
+        // Try to load from disk even if we don't have an in-memory token
+        reload_token_from_disk_if_newer(manager);
+
+        if (!manager->token || !manager->token->access_token) {
+            pthread_mutex_unlock(&manager->token_mutex);
+            return NULL;
+        }
     }
+
+    // Always reload from disk first to catch updates from other processes
+    // This is critical for subagent scenarios where multiple instances run
+    reload_token_from_disk_if_newer(manager);
 
     // Check if token needs refresh
     time_t now = time(NULL);
-    if (manager->token->expires_at > 0 &&
-        manager->token->expires_at - now < KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+    time_t expires_in = manager->token->expires_at > 0 ? manager->token->expires_at - now : INT_MAX;
 
-        LOG_INFO("Access token expiring soon, refreshing...");
+    if (expires_in < KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+        LOG_INFO("Access token expiring in %ld seconds, refreshing...", (long)expires_in);
         KimiOAuthToken *new_token = refresh_token_internal(manager);
 
         if (new_token) {
@@ -1161,7 +1291,21 @@ const char* kimi_oauth_get_access_token(KimiOAuthManager *manager) {
 
             kimi_oauth_token_free(old_token);
         } else {
-            LOG_WARN("Token refresh failed, returning current token");
+            // refresh_token_internal may have reloaded from disk if another process refreshed
+            // Re-check expiration after potential reload
+            if (manager->token && manager->token->expires_at > 0) {
+                expires_in = manager->token->expires_at - now;
+            }
+
+            // Refresh failed - check if token is already expired
+            if (expires_in <= 0) {
+                LOG_ERROR("Token is expired and refresh failed - re-authentication required");
+                pthread_mutex_unlock(&manager->token_mutex);
+                return NULL;
+            }
+            // Token is still valid for a short time, use it
+            LOG_WARN("Token refresh failed, using current token (%ld seconds remaining)",
+                     (long)expires_in);
         }
     }
 
@@ -1173,11 +1317,15 @@ const char* kimi_oauth_get_access_token(KimiOAuthManager *manager) {
 
 /**
  * Force token refresh
+ * Reloads from disk first to handle multi-process scenarios.
  */
 int kimi_oauth_refresh(KimiOAuthManager *manager) {
     if (!manager) return -1;
 
     pthread_mutex_lock(&manager->token_mutex);
+
+    // Reload from disk first in case another process already refreshed
+    reload_token_from_disk_if_newer(manager);
 
     if (!manager->token || !manager->token->refresh_token) {
         pthread_mutex_unlock(&manager->token_mutex);
@@ -1185,8 +1333,26 @@ int kimi_oauth_refresh(KimiOAuthManager *manager) {
         return -1;
     }
 
+    // Check if refresh is actually needed after disk reload
+    time_t now = time(NULL);
+    time_t remaining = manager->token->expires_at - now;
+    if (remaining >= KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+        LOG_INFO("Token already fresh after disk reload, skipping forced refresh");
+        pthread_mutex_unlock(&manager->token_mutex);
+        return 0;
+    }
+
     KimiOAuthToken *new_token = refresh_token_internal(manager);
     if (!new_token) {
+        // Check if we got a valid token from disk during the refresh attempt
+        if (manager->token && manager->token->access_token) {
+            time_t new_remaining = manager->token->expires_at - now;
+            if (new_remaining >= KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+                LOG_INFO("Token was refreshed by another process (from disk)");
+                pthread_mutex_unlock(&manager->token_mutex);
+                return 0;
+            }
+        }
         pthread_mutex_unlock(&manager->token_mutex);
         return -1;
     }
@@ -1242,6 +1408,30 @@ void kimi_oauth_stop_refresh_thread(KimiOAuthManager *manager) {
     manager->refresh_thread_started = 0;
 
     LOG_DEBUG("Refresh thread stopped");
+}
+
+/**
+ * Public API: Reload token from disk to pick up changes from other processes.
+ * This is useful when a 401 error is received - another process may have
+ * already refreshed the token.
+ *
+ * @param manager OAuth manager
+ * @return 1 if a new token was loaded, 0 if no change
+ */
+int kimi_oauth_reload_from_disk(KimiOAuthManager *manager) {
+    if (!manager) return 0;
+
+    pthread_mutex_lock(&manager->token_mutex);
+    int result = reload_token_from_disk_if_newer(manager);
+    pthread_mutex_unlock(&manager->token_mutex);
+
+    if (result) {
+        LOG_INFO("Reloaded token from disk (public API)");
+    } else {
+        LOG_DEBUG("Token unchanged after disk reload (public API)");
+    }
+
+    return result;
 }
 
 /**

@@ -742,9 +742,35 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
 
     // Check for token expiration (401 Unauthorized)
     if (result.http_status == 401) {
-        LOG_INFO("Kimi: Token may have expired, attempting refresh...");
-        if (kimi_oauth_refresh(config->oauth_manager) == 0) {
-            result.is_retryable = 1;  // Allow retry with new token
+        LOG_INFO("Kimi: Token may have expired, attempting recovery...");
+
+        // First, reload from disk - another process (subagent) may have refreshed
+        int reloaded = kimi_oauth_reload_from_disk(config->oauth_manager);
+        if (reloaded) {
+            LOG_INFO("Kimi: Reloaded updated token from disk (refreshed by another process)");
+            result.is_retryable = 1;  // Allow retry with new token from disk
+        } else {
+            // No newer token on disk, try to refresh ourselves
+            LOG_INFO("Kimi: No newer token on disk, attempting refresh...");
+            if (kimi_oauth_refresh(config->oauth_manager) == 0) {
+                LOG_INFO("Kimi: Token refreshed successfully");
+                result.is_retryable = 1;  // Allow retry with new token
+            } else {
+                // Refresh failed - try one more disk reload in case refresh raced
+                reloaded = kimi_oauth_reload_from_disk(config->oauth_manager);
+                if (reloaded) {
+                    LOG_INFO("Kimi: Found refreshed token on disk after failed refresh");
+                    result.is_retryable = 1;
+                } else {
+                    // Refresh failed - clear invalid token to force re-authentication
+                    LOG_ERROR("Kimi: Token refresh failed, clearing credentials for re-authentication");
+                    kimi_oauth_logout(config->oauth_manager);
+                    // Replace error message to guide user
+                    free(result.error_message);
+                    result.error_message = strdup("Kimi OAuth token expired or revoked. Please run again to re-authenticate.");
+                    result.is_retryable = 0;  // Don't retry automatically
+                }
+            }
         }
     }
 
