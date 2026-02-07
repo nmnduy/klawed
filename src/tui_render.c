@@ -1491,6 +1491,8 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     if (total_count == 0) {
         if (tui->wm.todo_win) {
             window_manager_hide_todo_window(&tui->wm);
+            // Refresh to clear the hidden window from screen
+            window_manager_refresh_all(&tui->wm);
         }
         return 0;
     }
