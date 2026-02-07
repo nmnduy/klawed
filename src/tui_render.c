@@ -1460,7 +1460,7 @@ void tui_refresh(TUIState *tui) {
 
 // UTF-8 icons for TODO banner (using colorizable characters)
 #define TODO_ICON_CURRENT  "▶"    // Right-pointing triangle (colorizable)
-#define TODO_ICON_PENDING  "●"    // Filled circle (colorizable)
+#define TODO_ICON_PENDING  "○"    // Unfilled circle (colorizable)
 
 int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     if (!tui || !tui->is_initialized) {
