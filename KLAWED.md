@@ -184,6 +184,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_IS_SUBAGENT` - Internal flag set automatically when running as a subagent (1/true/yes=subagent mode). Excludes Subagent, CheckSubagentProgress, and InterruptSubagent tools to prevent recursion
   - `KLAWED_DISABLE_TOOLS` - Comma-separated list of tool names to disable (e.g., "UploadImage,Subagent"). Disabled tools won't appear in tool definitions and will return an error if called
   - `KLAWED_ONESHOT_FORMAT` - Output format for one-shot mode: `human` (clean, human-readable, default) or `json`/`machine` (HTML+JSON for machine parsing)
+  - `KLAWED_ONESHOT_STYLE` - Visual style for one-shot mode: `boxes` (Unicode box-drawing, default), `compact` (minimal single-line output), or `minimal` (ultra-minimal)
   - `KLAWED_LLM_PROVIDER` - Select which named LLM provider to use from configuration (e.g., "sonnet-4.5-bedrock")
   - `KLAWED_NARROW_SCREEN_THRESHOLD` - Screen width threshold (in characters) below which status text is hidden to make space for token count and scroll percentage (default: 80, 0=always hide status text)
 - **API Limits**:
