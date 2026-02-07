@@ -651,9 +651,6 @@ void tui_render_todo_list(TUIState *tui, const TodoList *list) {
         return;  // No todos to display
     }
 
-    // Add header line
-    tui_add_conversation_line(tui, "[Assistant]", "Here are the current tasks:", COLOR_PAIR_ASSISTANT);
-
     // Render each todo item with its status-specific color
     for (size_t i = 0; i < list->count; i++) {
         const TodoItem *item = &list->items[i];

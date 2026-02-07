@@ -174,9 +174,6 @@ char* todo_render_to_string(const TodoList *list) {
 
     size_t offset = 0;
 
-    offset += (size_t)snprintf(result + offset, buffer_size - offset,
-                               "Here are the current tasks:\n");
-
     // Get color codes for bullet points
     char color_completed[32] = {0};
     char color_in_progress[32] = {0};
@@ -254,9 +251,6 @@ char* todo_render_to_string_plain(const TodoList *list) {
     }
 
     size_t offset = 0;
-
-    offset += (size_t)snprintf(result + offset, buffer_size - offset,
-                               "Here are the current tasks:\n");
 
     // Render each item with plain text bullets (no ANSI codes)
     for (size_t i = 0; i < list->count; i++) {
