@@ -139,6 +139,15 @@ void kimi_oauth_stop_refresh_thread(KimiOAuthManager *manager);
 void kimi_oauth_logout(KimiOAuthManager *manager);
 
 /**
+ * Reload token from disk to pick up changes from other processes.
+ * Call this when receiving 401 errors before retrying.
+ *
+ * @param manager OAuth manager
+ * @return 1 if a new token was loaded, 0 if no change
+ */
+int kimi_oauth_reload_from_disk(KimiOAuthManager *manager);
+
+/**
  * Get device headers for API requests
  * Caller must free returned headers with curl_slist_free_all
  *
