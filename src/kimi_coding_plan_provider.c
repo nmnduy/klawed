@@ -50,6 +50,28 @@ static char* arena_strdup(Arena *arena, const char *str) {
     return new_str;
 }
 
+/**
+ * OAuth message callback - displays messages to TUI if available, otherwise console
+ * This allows the OAuth flow to show browser login prompts in the conversation TUI
+ */
+static void kimi_oauth_message_callback(void *user_data, const char *message, int is_error) {
+    ConversationState *state = (ConversationState *)user_data;
+
+    if (state && state->tui) {
+        // Display in TUI conversation
+        TUIColorPair color = is_error ? COLOR_PAIR_ERROR : COLOR_PAIR_STATUS;
+        tui_add_conversation_line(state->tui, "[System]", message, color);
+        tui_refresh(state->tui);
+    } else {
+        // Fallback to console output
+        if (is_error) {
+            fprintf(stderr, "%s\n", message);
+        } else {
+            printf("%s\n", message);
+        }
+    }
+}
+
 // Progress callback for interrupt handling
 static int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
                              curl_off_t ultotal, curl_off_t ulnow) {
@@ -344,6 +366,10 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
         *out = result;
         return;
     }
+
+    // Set up TUI message callback for OAuth operations
+    // This ensures browser login prompts appear in the conversation TUI
+    kimi_oauth_set_message_callback(config->oauth_manager, kimi_oauth_message_callback, state);
 
     // Get access token (will refresh if needed)
     const char *access_token = kimi_oauth_get_access_token(config->oauth_manager);

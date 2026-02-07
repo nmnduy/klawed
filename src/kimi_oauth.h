@@ -17,6 +17,16 @@
 #include <pthread.h>
 #include <time.h>
 
+/**
+ * Callback type for displaying messages during OAuth flow
+ * Used to redirect output to TUI instead of console
+ *
+ * @param user_data User-provided context (e.g., TUI state)
+ * @param message Message to display
+ * @param is_error 1 if this is an error message, 0 for normal/info
+ */
+typedef void (*KimiOAuthMessageCallback)(void *user_data, const char *message, int is_error);
+
 // OAuth Configuration
 #define KIMI_OAUTH_CLIENT_ID "17e5f671-d194-4dfb-9706-5516cb48c098"
 #define KIMI_VERSION "1.8.0"
@@ -65,6 +75,8 @@ typedef struct {
     volatile int refresh_thread_running; // Flag to stop refresh thread
     volatile int refresh_thread_started; // Flag indicating thread was started
     char *device_id;                    // Persistent device identifier
+    KimiOAuthMessageCallback message_callback;  // Optional callback for messages (TUI)
+    void *message_callback_user_data;   // User data for message callback
 } KimiOAuthManager;
 
 /**
@@ -74,6 +86,18 @@ typedef struct {
  * @return Initialized manager, or NULL on error
  */
 KimiOAuthManager* kimi_oauth_manager_create(void);
+
+/**
+ * Set message display callback for OAuth operations
+ * When set, messages will be sent to this callback instead of printed to console
+ *
+ * @param manager OAuth manager
+ * @param callback Message callback function (NULL to disable)
+ * @param user_data User data passed to callback
+ */
+void kimi_oauth_set_message_callback(KimiOAuthManager *manager,
+                                      KimiOAuthMessageCallback callback,
+                                      void *user_data);
 
 /**
  * Destroy OAuth manager and stop background refresh
