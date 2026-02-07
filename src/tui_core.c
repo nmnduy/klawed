@@ -120,6 +120,12 @@ static void init_ncurses_colors(void) {
                 rgb_to_ncurses(g_theme.search_rgb.g),
                 rgb_to_ncurses(g_theme.search_rgb.b));
 
+            // TODO accent color (magenta/color5 - distinct from assistant cyan)
+            init_color(27,
+                rgb_to_ncurses(g_theme.todo_accent_rgb.r),
+                rgb_to_ncurses(g_theme.todo_accent_rgb.g),
+                rgb_to_ncurses(g_theme.todo_accent_rgb.b));
+
             // Input background color (theme background with subtle user color tint)
             // Blend 5% of user color into background for subtle highlight
             int bg_r = (g_theme.background_rgb.r * 95 + g_theme.user_rgb.r * 5) / 100;
@@ -168,7 +174,7 @@ static void init_ncurses_colors(void) {
             // TODO color pairs
             init_pair(NCURSES_PAIR_TODO_COMPLETED, 17, default_bg);    // Green (same as USER)
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, 19, default_bg);  // Yellow (same as STATUS)
-            init_pair(NCURSES_PAIR_TODO_PENDING, 18, default_bg);      // Cyan (same as ASSISTANT)
+            init_pair(NCURSES_PAIR_TODO_PENDING, 27, default_bg);      // Magenta (TODO accent - distinct from assistant)
             init_pair(NCURSES_PAIR_SEARCH, 22, default_bg);            // Search highlight (color5 from theme)
             init_pair(NCURSES_PAIR_INPUT_BG, 16, 23);          // Foreground on subtle background
             init_pair(NCURSES_PAIR_INPUT_BORDER, 24, default_bg);      // Border/accent color
@@ -187,6 +193,7 @@ static void init_ncurses_colors(void) {
             int status_idx = rgb_to_256_index(g_theme.status_rgb);
             int error_idx = rgb_to_256_index(g_theme.error_rgb);
             int search_idx = rgb_to_256_index(g_theme.search_rgb);
+            int todo_accent_idx = rgb_to_256_index(g_theme.todo_accent_rgb);
 
             init_pair(NCURSES_PAIR_FOREGROUND, (short)fg_idx, default_bg);
             init_pair(NCURSES_PAIR_USER, (short)user_idx, default_bg);
@@ -199,7 +206,7 @@ static void init_ncurses_colors(void) {
             // TODO color pairs
             init_pair(NCURSES_PAIR_TODO_COMPLETED, (short)user_idx, default_bg);
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, (short)status_idx, default_bg);
-            init_pair(NCURSES_PAIR_TODO_PENDING, (short)assistant_idx, default_bg);
+            init_pair(NCURSES_PAIR_TODO_PENDING, (short)todo_accent_idx, default_bg);  // Magenta - distinct from assistant
             init_pair(NCURSES_PAIR_SEARCH, (short)search_idx, default_bg);  // Search highlight (color5 from theme)
             init_pair(NCURSES_PAIR_INPUT_BG, (short)fg_idx, (short)236);   // Foreground on dark gray (236 in 256 palette)
             init_pair(NCURSES_PAIR_INPUT_BORDER, (short)user_idx, default_bg);  // Border color (user/green)
@@ -231,7 +238,7 @@ static void init_ncurses_colors(void) {
             // TODO color pairs
             init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, default_bg);
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, default_bg);
-            init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, default_bg);
+            init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_MAGENTA, default_bg);  // Magenta - distinct from assistant cyan
             init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, default_bg);  // Fallback: magenta for search highlights
             init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
             init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, default_bg);  // Fallback: green border (user color)
@@ -256,7 +263,7 @@ static void init_ncurses_colors(void) {
         // TODO color pairs
         init_pair(NCURSES_PAIR_TODO_COMPLETED, COLOR_GREEN, default_bg);
         init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, COLOR_YELLOW, default_bg);
-        init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_CYAN, default_bg);
+        init_pair(NCURSES_PAIR_TODO_PENDING, COLOR_MAGENTA, default_bg);  // Magenta - distinct from assistant cyan
         init_pair(NCURSES_PAIR_SEARCH, COLOR_MAGENTA, default_bg);  // Fallback: magenta for search highlights
         init_pair(NCURSES_PAIR_INPUT_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
         init_pair(NCURSES_PAIR_INPUT_BORDER, COLOR_GREEN, default_bg);  // Fallback: green border (user color)
