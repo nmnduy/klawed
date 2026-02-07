@@ -268,7 +268,10 @@ void add_memory_tools(cJSON *tool_array, ToolSchemaFormat format) {
         "(3) User mentions something you may have stored before.";
 
     const char *search_desc =
-        "Search all memories by text query. Use this when: (1) You need to find related past context but don't know the specific entity/slot; "
+        "Search all memories by text query using FTS5 full-text search. "
+        "The query can contain: plain words (matches any field), quoted phrases for exact matches, "
+        "AND/OR operators, and field prefixes like 'entity:project*' or 'slot:deploy'. "
+        "Use this when: (1) You need to find related past context but don't know the specific entity/slot; "
         "(2) User asks about something you may have discussed before; "
         "(3) After auto-compaction notice - search for relevant past conversation context; "
         "(4) Starting a complex task and want to check for relevant project knowledge.";
