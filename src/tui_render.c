@@ -1537,7 +1537,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         }
 
-        // Truncate and draw task text in status color
+        // Truncate and draw task text in regular foreground color
         char task_buf[256];
         size_t task_len = strlen(task_text);
         if (task_len > (size_t)max_task_len) {
@@ -1547,11 +1547,11 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         }
 
         if (has_colors()) {
-            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
         mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
         if (has_colors()) {
-            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
 
         row++;
@@ -1583,7 +1583,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
 
-        // Truncate and draw task text in dimmed status color
+        // Truncate and draw task text in regular foreground color
         char task_buf[256];
         size_t task_len = strlen(task_text);
         if (task_len > (size_t)max_task_len) {
@@ -1593,11 +1593,11 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         }
 
         if (has_colors()) {
-            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
         mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
         if (has_colors()) {
-            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
 
         row++;
@@ -1620,11 +1620,11 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         }
 
         if (has_colors()) {
-            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
         mvwaddnstr(win, row, 4, more_buf, (int)strlen(more_buf));
         if (has_colors()) {
-            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
     }
 
