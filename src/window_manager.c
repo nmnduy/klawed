@@ -360,6 +360,21 @@ int window_manager_resize_screen(WindowManager *wm) {
 
     LOG_DEBUG("[WM] Recreated input window");
 
+    // Recreate TODO window if it was visible before resize
+    if (wm->todo_height > 0) {
+        // Position: below input, above status
+        int todo_y = input_y - wm->todo_height;
+        if (todo_y < 0) todo_y = 0;
+        wm->todo_win = newwin(wm->todo_height, wm->screen_width, todo_y, 0);
+        if (!wm->todo_win) {
+            LOG_WARN("[WM] Failed to recreate TODO window after resize");
+            wm->todo_height = 0;
+        } else {
+            keypad(wm->todo_win, TRUE);
+            LOG_DEBUG("[WM] Recreated TODO window (h=%d, y=%d)", wm->todo_height, todo_y);
+        }
+    }
+
     // Restore scroll offset (clamped to new valid range)
     wm->conv_scroll_offset = old_scroll_offset;
     int max_scroll = wm->conv_pad_content_lines - wm->conv_viewport_height;
