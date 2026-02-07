@@ -19,6 +19,7 @@
 
 // OAuth Configuration
 #define KIMI_OAUTH_CLIENT_ID "17e5f671-d194-4dfb-9706-5516cb48c098"
+#define KIMI_VERSION "1.8.0"
 #define KIMI_OAUTH_HOST "https://auth.kimi.com"
 #define KIMI_API_BASE "https://api.kimi.com/coding/v1"
 

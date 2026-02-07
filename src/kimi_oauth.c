@@ -34,7 +34,6 @@
 #define KIMI_DEVICE_AUTH_ENDPOINT KIMI_OAUTH_HOST "/api/oauth/device_authorization"
 #define KIMI_TOKEN_ENDPOINT KIMI_OAUTH_HOST "/api/oauth/token"
 #define KIMI_PLATFORM "kimi_cli"
-#define KIMI_VERSION "1.0.0"
 
 // ============================================================================
 // Internal Helper Declarations
@@ -147,10 +146,11 @@ static char* get_credentials_dir(void) {
 }
 
 /**
- * Generate a random UUID v4
+ * Generate a random UUID v4 in hex format (no dashes)
+ * Matches Python's uuid.uuid4().hex - 32 hex characters
  */
-static char* generate_uuid(void) {
-    char *uuid = malloc(37);  // 36 chars + null
+static char* generate_uuid_hex(void) {
+    char *uuid = malloc(33);  // 32 chars + null
     if (!uuid) return NULL;
 
     // Generate 16 random bytes
@@ -161,8 +161,8 @@ static char* generate_uuid(void) {
     bytes[6] = (unsigned char)((bytes[6] & 0x0F) | 0x40);  // version 4
     bytes[8] = (unsigned char)((bytes[8] & 0x3F) | 0x80);  // variant 1
 
-    snprintf(uuid, 37,
-             "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+    snprintf(uuid, 33,
+             "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
              bytes[0], bytes[1], bytes[2], bytes[3],
              bytes[4], bytes[5],
              bytes[6], bytes[7],
@@ -170,6 +170,47 @@ static char* generate_uuid(void) {
              bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]);
 
     return uuid;
+}
+
+/**
+ * Sanitize header value to ASCII only
+ * Matches Python's _ascii_header_value() - strips non-ASCII chars
+ */
+static char* sanitize_ascii_header(const char *value, const char *fallback) {
+    if (!value) return strdup(fallback);
+
+    // Check if value contains only ASCII
+    int has_non_ascii = 0;
+    for (size_t i = 0; value[i]; i++) {
+        if ((unsigned char)value[i] > 127) {
+            has_non_ascii = 1;
+            break;
+        }
+    }
+
+    if (!has_non_ascii) {
+        return strdup(value);
+    }
+
+    // Filter out non-ASCII characters
+    char *sanitized = malloc(strlen(value) + 1);
+    if (!sanitized) return strdup(fallback);
+
+    size_t j = 0;
+    for (size_t i = 0; value[i]; i++) {
+        if ((unsigned char)value[i] <= 127) {
+            sanitized[j++] = value[i];
+        }
+    }
+    sanitized[j] = '\0';
+
+    // If empty after sanitization, use fallback
+    if (j == 0) {
+        free(sanitized);
+        return strdup(fallback);
+    }
+
+    return sanitized;
 }
 
 /**
@@ -195,12 +236,12 @@ static char* get_or_create_device_id(void) {
     }
     free(kimi_dir);
 
-    // Try to read existing device ID
+    // Try to read existing device ID (32 hex chars)
     FILE *f = fopen(device_id_path, "r");
     if (f) {
-        char *device_id = malloc(64);
+        char *device_id = malloc(36);
         if (device_id) {
-            if (fgets(device_id, 64, f) != NULL) {
+            if (fgets(device_id, 36, f) != NULL) {
                 // Trim newline
                 size_t len = strlen(device_id);
                 while (len > 0 && (device_id[len - 1] == '\n' ||
@@ -209,7 +250,7 @@ static char* get_or_create_device_id(void) {
                     len--;
                 }
                 fclose(f);
-                if (len > 0) {
+                if (len == 32) {
                     LOG_DEBUG("Loaded existing device ID: %s", device_id);
                     return device_id;
                 }
@@ -219,8 +260,8 @@ static char* get_or_create_device_id(void) {
         fclose(f);
     }
 
-    // Generate new device ID
-    char *device_id = generate_uuid();
+    // Generate new device ID (hex format, no dashes)
+    char *device_id = generate_uuid_hex();
     if (!device_id) {
         LOG_ERROR("Failed to generate device ID");
         return NULL;
@@ -251,6 +292,7 @@ static char* get_or_create_device_id(void) {
 /**
  * Get device model string: "OS version arch"
  * e.g., "Linux 6.1.0 x86_64"
+ * Matches kimi-cli's _device_model() function
  */
 static char* get_device_model(void) {
     struct utsname info;
@@ -263,6 +305,21 @@ static char* get_device_model(void) {
 
     snprintf(model, 256, "%s %s %s", info.sysname, info.release, info.machine);
     return model;
+}
+
+/**
+ * Get OS version string - matches Python's platform.version()
+ * Returns the kernel version string (uname().version)
+ * e.g., "#1 SMP PREEMPT_DYNAMIC Debian 6.1.158-1 (2025-11-09)"
+ */
+static char* get_os_version(void) {
+    struct utsname info;
+    if (uname(&info) != 0) {
+        return strdup("unknown");
+    }
+
+    // info.version contains the kernel version string
+    return strdup(info.version);
 }
 
 /**
@@ -1225,47 +1282,62 @@ void kimi_oauth_logout(KimiOAuthManager *manager) {
 /**
  * Get device headers for API requests
  * Caller must free with curl_slist_free_all
+ *
+ * Headers match kimi-cli's _common_headers():
+ * - X-Msh-Platform: "kimi_cli" (fixed)
+ * - X-Msh-Version: actual version from package
+ * - X-Msh-Device-Name: sanitized hostname
+ * - X-Msh-Device-Model: "Linux 6.1.0 x86_64" (system + release + arch)
+ * - X-Msh-Os-Version: "#1 SMP PREEMPT_DYNAMIC..." (kernel version string)
+ * - X-Msh-Device-Id: 32-char hex UUID (uuid.uuid4().hex format)
  */
 struct curl_slist* kimi_oauth_get_device_headers(KimiOAuthManager *manager) {
     if (!manager || !manager->device_id) return NULL;
 
     struct curl_slist *headers = NULL;
 
-    // X-Msh-Platform
+    // X-Msh-Platform (fixed value)
     headers = curl_slist_append(headers, "X-Msh-Platform: " KIMI_PLATFORM);
 
     // X-Msh-Version
     headers = curl_slist_append(headers, "X-Msh-Version: " KIMI_VERSION);
 
-    // X-Msh-Device-Name (hostname)
-    char *device_name = get_device_name();
-    if (device_name) {
+    // X-Msh-Device-Name (hostname with ASCII sanitization)
+    char *device_name_raw = get_device_name();
+    char *device_name = sanitize_ascii_header(device_name_raw, "unknown");
+    free(device_name_raw);
+    {
         char header[256];
         snprintf(header, sizeof(header), "X-Msh-Device-Name: %s", device_name);
         headers = curl_slist_append(headers, header);
-        free(device_name);
     }
+    free(device_name);
 
-    // X-Msh-Device-Model (OS version arch)
-    char *device_model = get_device_model();
-    if (device_model) {
+    // X-Msh-Device-Model (OS version arch with ASCII sanitization)
+    char *device_model_raw = get_device_model();
+    char *device_model = sanitize_ascii_header(device_model_raw, "Unknown");
+    free(device_model_raw);
+    {
         char header[256];
         snprintf(header, sizeof(header), "X-Msh-Device-Model: %s", device_model);
         headers = curl_slist_append(headers, header);
-        free(device_model);
     }
+    free(device_model);
 
-    // X-Msh-Os-Version (kernel version)
-    struct utsname info;
-    if (uname(&info) == 0) {
-        char header[256];
-        snprintf(header, sizeof(header), "X-Msh-Os-Version: %s", info.release);
+    // X-Msh-Os-Version (kernel version string - matches Python's platform.version())
+    char *os_version_raw = get_os_version();
+    char *os_version = sanitize_ascii_header(os_version_raw, "unknown");
+    free(os_version_raw);
+    {
+        char header[512];
+        snprintf(header, sizeof(header), "X-Msh-Os-Version: %s", os_version);
         headers = curl_slist_append(headers, header);
     }
+    free(os_version);
 
-    // X-Msh-Device-Id
+    // X-Msh-Device-Id (32-char hex UUID)
     {
-        char header[256];
+        char header[64];
         snprintf(header, sizeof(header), "X-Msh-Device-Id: %s", manager->device_id);
         headers = curl_slist_append(headers, header);
     }
