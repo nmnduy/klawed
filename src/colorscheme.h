@@ -30,7 +30,8 @@ typedef enum {
     COLORSCHEME_DIFF_REMOVE,   // Removed lines in diffs (red)
     COLORSCHEME_DIFF_HEADER,   // Diff metadata/headers (cyan)
     COLORSCHEME_DIFF_CONTEXT,  // Line numbers and context (dim)
-    COLORSCHEME_SEARCH         // Search highlight (magenta/color5)
+    COLORSCHEME_SEARCH,        // Search highlight (magenta/color5)
+    COLORSCHEME_TODO_ACCENT    // TODO list accent color (magenta - distinct from assistant cyan)
 } ColorschemeElement;
 
 // RGB color structure (0-255 values)
@@ -55,6 +56,7 @@ typedef struct {
     RGB diff_header_rgb; // Diff metadata (cyan)
     RGB diff_context_rgb; // Line numbers/context (dim gray)
     RGB search_rgb;      // Search highlight (magenta/color5)
+    RGB todo_accent_rgb; // TODO list accent color (magenta/color5 - distinct from assistant)
 } Theme;
 
 // Global theme state (non-static so it's shared across compilation units)
@@ -175,6 +177,9 @@ static int get_colorscheme_color(ColorschemeElement element, char *buf, size_t b
         case COLORSCHEME_SEARCH:
             rgb = g_theme.search_rgb;
             break;
+        case COLORSCHEME_TODO_ACCENT:
+            rgb = g_theme.todo_accent_rgb;
+            break;
         default:
             return -1;
     }
@@ -229,8 +234,10 @@ static int load_kitty_theme_buf(const char *buf_data, Theme *theme) {
             } else if (strcmp(key, "color1") == 0) {
                 theme->error_rgb = rgb; parsed_count++;
             } else if (strcmp(key, "color5") == 0) {
-                // Magenta (color5) for search highlighting
-                theme->search_rgb = rgb; parsed_count++;
+                // Magenta (color5) for search highlighting and TODO accent
+                theme->search_rgb = rgb;
+                theme->todo_accent_rgb = rgb;
+                parsed_count++;
             } else if (strcmp(key, "color6") == 0) {
                 theme->header_rgb = rgb;
                 if (found_foreground) theme->assistant_rgb = rgb;
@@ -346,10 +353,11 @@ static int load_kitty_theme(const char *filepath, Theme *theme) {
                 LOG_DEBUG("[THEME]   -> Set error_rgb = RGB(%d,%d,%d)", rgb.r, rgb.g, rgb.b);
             }
             else if (strcmp(key, "color5") == 0) {
-                // Magenta (color5) for search highlighting
+                // Magenta (color5) for search highlighting and TODO accent
                 theme->search_rgb = rgb;
+                theme->todo_accent_rgb = rgb;
                 parsed_count++;
-                LOG_DEBUG("[THEME]   -> Set search_rgb = RGB(%d,%d,%d)", rgb.r, rgb.g, rgb.b);
+                LOG_DEBUG("[THEME]   -> Set search_rgb and todo_accent_rgb = RGB(%d,%d,%d)", rgb.r, rgb.g, rgb.b);
             }
             else if (strcmp(key, "color6") == 0) {
                 theme->header_rgb = rgb;

@@ -43,7 +43,7 @@ typedef enum {
     COLOR_PAIR_PROMPT = 8,     // Green for input prompt
     COLOR_PAIR_TODO_COMPLETED = 9,   // Green for completed tasks
     COLOR_PAIR_TODO_IN_PROGRESS = 10, // Yellow for in-progress tasks
-    COLOR_PAIR_TODO_PENDING = 11,     // Cyan/Blue for pending tasks
+    COLOR_PAIR_TODO_PENDING = 11,     // Magenta for pending tasks (distinct from assistant cyan)
     COLOR_PAIR_SEARCH = 12,           // Highlight color for search matches
     COLOR_PAIR_TOOL_DIM = 13,         // Dimmed gray for tool text (arguments)
     COLOR_PAIR_DIFF_CONTEXT = 14      // Dimmed gray for diff context lines
