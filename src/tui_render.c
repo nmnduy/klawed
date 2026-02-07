@@ -1469,22 +1469,12 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
 
     // Count incomplete todos (pending or in_progress)
     size_t incomplete_count = 0;
-    size_t in_progress_count = 0;
-    size_t pending_count = 0;
-    const char *current_task = NULL;
 
     if (list && list->count > 0) {
         for (size_t i = 0; i < list->count; i++) {
-            if (list->items[i].status == TODO_IN_PROGRESS) {
+            if (list->items[i].status == TODO_IN_PROGRESS ||
+                list->items[i].status == TODO_PENDING) {
                 incomplete_count++;
-                in_progress_count++;
-                // Track the first in-progress task as the "current" one
-                if (!current_task) {
-                    current_task = list->items[i].active_form;
-                }
-            } else if (list->items[i].status == TODO_PENDING) {
-                incomplete_count++;
-                pending_count++;
             }
         }
     }
@@ -1498,8 +1488,8 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     }
 
     // Calculate needed height: 1 line for header + 1 line per task (up to max)
-    // Show at most 3 tasks to save space
-    size_t max_display_tasks = 3;
+    // Show at most 4 tasks to save space
+    size_t max_display_tasks = 4;
     size_t display_tasks = incomplete_count > max_display_tasks ? max_display_tasks : incomplete_count;
     int needed_height = (int)(1 + display_tasks);
 
@@ -1515,25 +1505,30 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     int width = tui->wm.screen_width;
     int row = 0;
 
-    // Draw a subtle horizontal line at the top to separate from conversation
-    if (has_colors()) {
-        wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
-    }
-    for (int col = 0; col < width && col < 100; col++) {
-        mvwaddch(win, row, col, ACS_HLINE);
-    }
-    if (has_colors()) {
-        wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
-    }
-    row++;
+    // Render all incomplete tasks (in_progress first, then pending)
+    // Using single theme color (STATUS) with left border style like assistant messages
+    size_t tasks_shown = 0;
+    int max_task_len = width - 5;  // Border + space + icon + padding
+    if (max_task_len < 20) max_task_len = 20;
+    if (max_task_len > 250) max_task_len = 250;
 
-    // Render current task with icon or summary of pending tasks
-    if (current_task) {
-        // Show the current in-progress task with a "playing/current" icon
+    // First pass: show in_progress tasks
+    for (size_t i = 0; i < list->count && tasks_shown < max_display_tasks; i++) {
+        if (list->items[i].status != TODO_IN_PROGRESS) continue;
+
         const char *icon = TODO_ICON_CURRENT;
-        int icon_width = 1;  // These Unicode symbols are 1 display column
+        const char *task_text = list->items[i].active_form;
 
-        // Draw the icon and text in status color (uses theme's status color)
+        // Draw left border in status color (like assistant message border style)
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+        }
+        mvwaddstr(win, row, 0, "│");
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+        }
+
+        // Draw the icon in status color
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         }
@@ -1542,47 +1537,94 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         }
 
-        // Truncate task if too long
+        // Truncate and draw task text in status color
         char task_buf[256];
-        int max_task_len = width - 6;  // Icon + padding
-        if (max_task_len < 20) max_task_len = 20;
-        if (max_task_len > 250) max_task_len = 250;
-
-        size_t task_len = strlen(current_task);
+        size_t task_len = strlen(task_text);
         if (task_len > (size_t)max_task_len) {
-            snprintf(task_buf, sizeof(task_buf), "%.*s...", max_task_len - 3, current_task);
+            snprintf(task_buf, sizeof(task_buf), "%.*s...", max_task_len - 3, task_text);
         } else {
-            snprintf(task_buf, sizeof(task_buf), "%s", current_task);
+            snprintf(task_buf, sizeof(task_buf), "%s", task_text);
         }
 
-        // Draw the task name in status color (uses theme)
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
-        mvwaddnstr(win, row, 2 + icon_width + 1, task_buf, (int)strlen(task_buf));
+        mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
-    } else if (pending_count > 0) {
-        // No in-progress, show summary with pending icon
-        char summary[256];
-        const char *icon = TODO_ICON_PENDING;
-        int icon_width = 1;
 
-        if (pending_count == 1) {
-            snprintf(summary, sizeof(summary), "1 task pending");
-        } else {
-            snprintf(summary, sizeof(summary), "%zu tasks pending", pending_count);
+        row++;
+        tasks_shown++;
+    }
+
+    // Second pass: show pending tasks
+    for (size_t i = 0; i < list->count && tasks_shown < max_display_tasks; i++) {
+        if (list->items[i].status != TODO_PENDING) continue;
+
+        const char *icon = TODO_ICON_PENDING;
+        const char *task_text = list->items[i].content;
+
+        // Draw left border in status color
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        mvwaddstr(win, row, 0, "│");
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
 
-        // Draw icon and text in assistant color (uses theme)
+        // Draw the icon in status color
         if (has_colors()) {
-            wattron(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
         mvwaddstr(win, row, 2, icon);
-        mvwaddnstr(win, row, 2 + icon_width + 1, summary, (int)strlen(summary));
         if (has_colors()) {
-            wattroff(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+
+        // Truncate and draw task text in dimmed status color
+        char task_buf[256];
+        size_t task_len = strlen(task_text);
+        if (task_len > (size_t)max_task_len) {
+            snprintf(task_buf, sizeof(task_buf), "%.*s...", max_task_len - 3, task_text);
+        } else {
+            snprintf(task_buf, sizeof(task_buf), "%s", task_text);
+        }
+
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+
+        row++;
+        tasks_shown++;
+    }
+
+    // If we have more tasks than we can show, indicate it
+    if (incomplete_count > max_display_tasks) {
+        char more_buf[64];
+        size_t more_count = incomplete_count - max_display_tasks;
+        snprintf(more_buf, sizeof(more_buf), "... and %zu more", more_count);
+
+        // Draw left border for the "more" line too
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        mvwaddstr(win, row, 0, "│");
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        mvwaddnstr(win, row, 4, more_buf, (int)strlen(more_buf));
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
     }
 
