@@ -1495,11 +1495,13 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         return 0;
     }
 
-    // Calculate needed height: 1 line for header + 1 line per task (up to max)
+    // Calculate needed height: 1 line per task (up to max)
     // Show at most 4 tasks to save space
     size_t max_display_tasks = 4;
     size_t display_tasks = total_count > max_display_tasks ? max_display_tasks : total_count;
-    int needed_height = (int)(1 + display_tasks + 1);  // +1 for "TODO" header
+    // +1 padding when there are pending items
+    size_t padding_lines = (pending_count > 0) ? 1 : 0;
+    int needed_height = (int)(display_tasks + 1 + padding_lines);
 
     // Show the TODO window
     if (window_manager_show_todo_window(&tui->wm, needed_height) != 0) {
@@ -1511,7 +1513,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     werase(win);
 
     int width = tui->wm.screen_width;
-    int row = 0;
+    int row = (pending_count > 0) ? 1 : 0;  // Add padding line when there are pending items
 
     // Render all tasks (in_progress first, then pending, then completed)
     // Using single theme color (STATUS) with left border style like assistant messages
@@ -1519,17 +1521,6 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     int max_task_len = width - 5;  // Border + space + icon + padding
     if (max_task_len < 20) max_task_len = 20;
     if (max_task_len > 250) max_task_len = 250;
-
-    // Draw "TODO" header
-    if (has_colors()) {
-        wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
-    }
-    mvwaddstr(win, row, 0, "│");
-    mvwaddstr(win, row, 2, "TODO");
-    if (has_colors()) {
-        wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
-    }
-    row++;
 
     // First pass: show in_progress tasks
     for (size_t i = 0; i < list->count && tasks_shown < max_display_tasks; i++) {
