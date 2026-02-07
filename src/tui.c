@@ -274,10 +274,7 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
     werase(tui->wm.conv_pad);
     window_manager_set_content_lines(&tui->wm, 0);
 
-    // Add a system message indicating the clear
-    tui_add_conversation_line(tui, "[System]", "Conversation history cleared", COLOR_PAIR_STATUS);
-
-    // Show mascot banner again (useful info like current directory)
+    // Show mascot banner first (useful info like current directory)
     // Try to get version/model/working_dir from parameters or TUI state
     const char *ver = version;
     const char *mod = model;
@@ -294,6 +291,9 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
     if (mod && dir) {
         tui_show_startup_banner(tui, ver ? ver : "?", mod, dir);
     }
+
+    // Add a system message indicating the clear (after mascot)
+    tui_add_conversation_line(tui, "[System]", "Conversation history cleared", COLOR_PAIR_STATUS);
 
     // Refresh all windows to ensure consistent state
     window_manager_refresh_all(&tui->wm);
