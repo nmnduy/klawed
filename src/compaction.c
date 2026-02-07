@@ -601,6 +601,41 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         return 0;
     }
 
+    // Adjust compact_end to ensure we don't split tool call/result pairs
+    // If the message at compact_end is an assistant with tool calls, we need to keep
+    // it and all subsequent tool results. Move compact_end backward until we find
+    // a safe boundary (either a USER message without pending tool calls, or the start).
+    while (compact_end >= compact_start) {
+        InternalMessage *msg = &state->messages[compact_end];
+
+        // Check if this is an assistant message with tool calls
+        int has_tool_calls = 0;
+        if (msg->role == MSG_ASSISTANT) {
+            for (int j = 0; j < msg->content_count; j++) {
+                if (msg->contents[j].type == INTERNAL_TOOL_CALL) {
+                    has_tool_calls = 1;
+                    break;
+                }
+            }
+        }
+
+        if (has_tool_calls) {
+            // Can't compact this message - it has tool calls that need their results
+            // Move compact_end backward and check again
+            LOG_DEBUG("Cannot compact message %d (assistant with tool calls), adjusting boundary", compact_end);
+            compact_end--;
+        } else {
+            // Safe to compact up to this message
+            break;
+        }
+    }
+
+    // Check if we still have anything to compact after adjustment
+    if (compact_end < compact_start) {
+        LOG_INFO("Cannot compact - all candidate messages have pending tool calls");
+        return 0;
+    }
+
     int compacted_count = compact_end - compact_start + 1;
 
     LOG_INFO("Compacting messages %d-%d (keeping last %d messages)",
