@@ -800,11 +800,10 @@ void process_response(ConversationState *state,
         }
 
         if (todo_write_executed && state->todo_list && state->todo_list->count > 0) {
-            // For TUI without queue, use colored rendering
-            if (tui && !queue) {
-                tui_render_todo_list(tui, state->todo_list);
-            } else {
-                // For queue or non-TUI, use plain text rendering
+            // Skip rendering todo list in interactive TUI mode - the todo banner
+            // at the bottom of the screen already shows the current status.
+            // Only render for queue mode or non-TUI mode.
+            if (!tui || queue) {
                 char *todo_text = queue ? todo_render_to_string_plain(state->todo_list)
                                         : todo_render_to_string(state->todo_list);
                 if (todo_text) {
