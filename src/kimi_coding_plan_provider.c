@@ -421,6 +421,9 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
         headers = NULL;  // Will create new list below
     }
 
+    // Add User-Agent header (required - Kimi validates this)
+    headers = curl_slist_append(headers, "User-Agent: KimiCLI/" KIMI_VERSION);
+
     // Add content type
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
