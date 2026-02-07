@@ -1362,6 +1362,12 @@ int tui_event_loop(TUIState *tui, const char *prompt,
             doupdate();
         }
 
+        // Render TODO banner if there are incomplete todos
+        // This shows/hides the TODO window as needed
+        if (tui->conversation_state && tui->conversation_state->todo_list) {
+            tui_render_todo_banner(tui, tui->conversation_state->todo_list);
+        }
+
         // 5. Sleep to maintain frame rate
         struct timespec frame_end;
         clock_gettime(CLOCK_MONOTONIC, &frame_end);
