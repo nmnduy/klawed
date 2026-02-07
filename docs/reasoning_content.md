@@ -14,6 +14,7 @@ klawed now supports `reasoning_content` for Moonshot/Kimi thinking models. The i
 | Provider | Model | `reasoning_content` Handling |
 |----------|-------|------------------------------|
 | **Moonshot/Kimi** | kimi-k2-thinking, kimi-k2.5 | **MUST include** in subsequent requests |
+| **Kimi Coding Plan** | kimi-for-coding | **MUST include** in subsequent requests |
 | **DeepSeek** | deepseek-reasoner | **MUST NOT include** (causes 400 error) |
 | **OpenAI** | o1, o1-mini, o1-preview, o3-mini | Uses different mechanism (no reasoning_content) |
 
@@ -21,6 +22,7 @@ klawed now supports `reasoning_content` for Moonshot/Kimi thinking models. The i
 
 The provider type automatically determines the behavior:
 - `"provider_type": "moonshot"` → preserves `reasoning_content`
+- `"provider_type": "kimi_coding_plan"` → preserves `reasoning_content`
 - `"provider_type": "deepseek"` → discards `reasoning_content`
 - `"provider_type": "openai"` → discards `reasoning_content` (default)
 
@@ -39,6 +41,22 @@ The provider type automatically determines the behavior:
   }
 }
 ```
+
+### Example Kimi Coding Plan Configuration
+
+```json
+{
+  "providers": {
+    "kimi-for-coding": {
+      "provider_type": "kimi_coding_plan",
+      "provider_name": "Kimi Coding Plan",
+      "model": "kimi-for-coding"
+    }
+  }
+}
+```
+
+**Note:** Kimi Coding Plan uses OAuth device flow authentication. No API key is required - you'll be prompted to authorize via browser on first use. The OAuth token will be stored in `~/.kimi/credentials/kimi-code.json`.
 
 ### Technical Details
 
@@ -79,7 +97,7 @@ The streaming parser in `src/openai_provider.c` accumulates `reasoning_content` 
 If you see these errors, check:
 
 1. **"thinking is enabled but reasoning_content is missing in assistant tool call message"** (HTTP 400)
-   - Solution: Ensure `provider_type` is set to `"moonshot"` in your configuration
+   - Solution: Ensure `provider_type` is set to `"moonshot"` or `"kimi_coding_plan"` in your configuration
 
 2. **"Invalid response format: no choices or output"** (HTTP 200 with empty response)
    - This can happen if the API is overloaded or has issues

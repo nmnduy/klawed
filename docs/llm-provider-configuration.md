@@ -64,6 +64,8 @@ You can define multiple named provider configurations and switch between them:
   - `"openai"`: OpenAI-compatible API
   - `"anthropic"`: Anthropic API
   - `"bedrock"`: AWS Bedrock
+  - `"kimi_coding_plan"`: Kimi Coding Plan (OAuth device flow, requires browser auth)
+  - `"moonshot"`: Moonshot/Kimi API (OpenAI-compatible, for kimi-k2.5, etc.)
   - `"custom"`: Custom provider (defaults to OpenAI-compatible)
 
 - **provider_name**: Display name for the provider (optional)
@@ -232,6 +234,30 @@ The system will:
   "llm_provider": {
     "provider_type": "bedrock",
     "model": "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+  }
+}
+```
+
+#### Kimi Coding Plan Configuration
+```json
+{
+  "llm_provider": {
+    "provider_type": "kimi_coding_plan",
+    "model": "kimi-for-coding"
+  }
+}
+```
+
+**Note:** Kimi Coding Plan uses OAuth device flow for authentication. On first use, you'll be prompted to authorize via browser. The OAuth token will be stored in `~/.kimi/credentials/` for subsequent use.
+
+#### Moonshot/Kimi API Configuration (for kimi-k2.5)
+```json
+{
+  "llm_provider": {
+    "provider_type": "moonshot",
+    "model": "kimi-k2.5",
+    "api_base": "https://api.moonshot.ai",
+    "api_key_env": "MOONSHOT_AI_API_KEY"
   }
 }
 ```
