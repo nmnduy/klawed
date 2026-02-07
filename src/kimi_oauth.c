@@ -1109,6 +1109,35 @@ KimiOAuthManager* kimi_oauth_manager_create(void) {
 }
 
 /**
+ * Set message display callback for OAuth operations
+ */
+void kimi_oauth_set_message_callback(KimiOAuthManager *manager,
+                                      KimiOAuthMessageCallback callback,
+                                      void *user_data) {
+    if (!manager) return;
+    manager->message_callback = callback;
+    manager->message_callback_user_data = user_data;
+}
+
+/**
+ * Helper to display a message via callback or printf
+ */
+static void oauth_display_message(KimiOAuthManager *manager, const char *message, int is_error) {
+    if (!manager || !message) return;
+
+    if (manager->message_callback) {
+        manager->message_callback(manager->message_callback_user_data, message, is_error);
+    } else {
+        // Default: print to console
+        if (is_error) {
+            fprintf(stderr, "%s\n", message);
+        } else {
+            printf("%s\n", message);
+        }
+    }
+}
+
+/**
  * Destroy OAuth manager
  */
 void kimi_oauth_manager_destroy(KimiOAuthManager *manager) {
@@ -1171,27 +1200,31 @@ int kimi_oauth_login(KimiOAuthManager *manager) {
     }
 
     // Display authorization message
-    printf("\n");
-    printf("========================================\n");
-    printf("KIMI CODING PLAN AUTHORIZATION\n");
-    printf("========================================\n");
-    printf("\n");
+    oauth_display_message(manager, "", 0);
+    oauth_display_message(manager, "========================================", 0);
+    oauth_display_message(manager, "KIMI CODING PLAN AUTHORIZATION", 0);
+    oauth_display_message(manager, "========================================", 0);
+    oauth_display_message(manager, "", 0);
 
+    char msg_buf[512];
     if (auth->verification_uri_complete) {
-        printf("Please visit: %s\n", auth->verification_uri_complete);
+        snprintf(msg_buf, sizeof(msg_buf), "Please visit: %s", auth->verification_uri_complete);
+        oauth_display_message(manager, msg_buf, 0);
     } else if (auth->verification_uri) {
-        printf("Please visit: %s?user_code=%s\n",
+        snprintf(msg_buf, sizeof(msg_buf), "Please visit: %s?user_code=%s",
                auth->verification_uri, auth->user_code);
+        oauth_display_message(manager, msg_buf, 0);
     } else {
-        printf("Please visit: https://kimi.com/device?user_code=%s\n",
+        snprintf(msg_buf, sizeof(msg_buf), "Please visit: https://kimi.com/device?user_code=%s",
                auth->user_code);
+        oauth_display_message(manager, msg_buf, 0);
     }
 
-    printf("\n");
-    printf("User Code: %s\n", auth->user_code);
-    printf("\n");
-    printf("Opening browser automatically...\n");
-    fflush(stdout);
+    oauth_display_message(manager, "", 0);
+    snprintf(msg_buf, sizeof(msg_buf), "User Code: %s", auth->user_code);
+    oauth_display_message(manager, msg_buf, 0);
+    oauth_display_message(manager, "", 0);
+    oauth_display_message(manager, "Opening browser automatically...", 0);
 
     // Open browser
     char cmd[512];
@@ -1213,16 +1246,15 @@ int kimi_oauth_login(KimiOAuthManager *manager) {
         LOG_DEBUG("Browser launch returned: %d", sys_result);
     }
 
-    printf("Waiting for authorization...\n");
-    printf("\n");
-    fflush(stdout);
+    oauth_display_message(manager, "Waiting for authorization...", 0);
+    oauth_display_message(manager, "", 0);
 
     // Poll for token
     KimiOAuthToken *token = poll_for_token(manager, auth);
     kimi_device_auth_free(auth);
 
     if (!token) {
-        printf("Authorization failed or timed out.\n");
+        oauth_display_message(manager, "Authorization failed or timed out.", 1);
         return -1;
     }
 
@@ -1239,8 +1271,8 @@ int kimi_oauth_login(KimiOAuthManager *manager) {
         LOG_WARN("Failed to save token to disk");
     }
 
-    printf("Authorization successful!\n");
-    printf("\n");
+    oauth_display_message(manager, "Authorization successful!", 0);
+    oauth_display_message(manager, "", 0);
 
     return 0;
 }
