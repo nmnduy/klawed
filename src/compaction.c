@@ -781,8 +781,13 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
     int recent_count = state->count - recent_start;
 
     // Move recent messages right after the notice (position 2 onwards)
-    for (int i = 0; i < recent_count; i++) {
-        state->messages[2 + i] = state->messages[recent_start + i];
+    // Use memmove to handle overlapping memory regions safely
+    if (recent_count > 0 && recent_start != 2) {
+        memmove(&state->messages[2], &state->messages[recent_start],
+                (size_t)recent_count * sizeof(InternalMessage));
+        // Zero out the old positions to prevent double-free issues
+        memset(&state->messages[2 + recent_count], 0,
+               (size_t)(state->count - (2 + recent_count)) * sizeof(InternalMessage));
     }
 
     // Insert notice at position 1 (right after system message)
