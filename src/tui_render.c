@@ -1491,7 +1491,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     // Show at most 4 tasks to save space
     size_t max_display_tasks = 4;
     size_t display_tasks = incomplete_count > max_display_tasks ? max_display_tasks : incomplete_count;
-    int needed_height = (int)(1 + display_tasks);
+    int needed_height = (int)(1 + display_tasks + 1);  // +1 for "TODO" header
 
     // Show the TODO window
     if (window_manager_show_todo_window(&tui->wm, needed_height) != 0) {
@@ -1511,6 +1511,17 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     int max_task_len = width - 5;  // Border + space + icon + padding
     if (max_task_len < 20) max_task_len = 20;
     if (max_task_len > 250) max_task_len = 250;
+
+    // Draw "TODO" header
+    if (has_colors()) {
+        wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+    }
+    mvwaddstr(win, row, 0, "│");
+    mvwaddstr(win, row, 2, "TODO");
+    if (has_colors()) {
+        wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+    }
+    row++;
 
     // First pass: show in_progress tasks
     for (size_t i = 0; i < list->count && tasks_shown < max_display_tasks; i++) {
