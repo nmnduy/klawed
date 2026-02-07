@@ -10,6 +10,7 @@
 #include "data_dir.h"
 
 #include <bsd/string.h>
+#include <ctype.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -540,6 +541,116 @@ MemoryCard* memory_db_get_current(MemoryDB *mdb, const char *entity, const char 
 /*
  * Search memories using FTS5
  */
+/*
+ * Enhance a query for better FTS5 matching.
+ * Adds prefix wildcards to terms that don't already have FTS5 operators.
+ * For example: "staging build" -> "staging* build*"
+ * Preserves existing FTS5 syntax: quotes, AND/OR, column:prefix, etc.
+ */
+static char* enhance_fts5_query(const char *query) {
+    if (!query || !query[0]) {
+        return strdup("");
+    }
+
+    size_t query_len = strlen(query);
+    /* Allocate enough space for the enhanced query (can grow by ~2x with wildcards) */
+    char *enhanced = malloc(query_len * 3 + 1);
+    if (!enhanced) {
+        return strdup(query);
+    }
+
+    size_t out_pos = 0;
+    size_t i = 0;
+    int in_quotes = 0;
+    int term_start = -1;
+
+    while (i <= query_len) {
+        char c = query[i];
+
+        /* Check for quote boundaries */
+        if (c == '"') {
+            in_quotes = !in_quotes;
+            /* Copy the quote and any preceding term */
+            if (term_start >= 0 && !in_quotes) {
+                /* End of quoted term - copy it as-is */
+                size_t term_len = i - (size_t)term_start;
+                memcpy(enhanced + out_pos, query + term_start, term_len);
+                out_pos += term_len;
+                term_start = -1;
+            }
+            enhanced[out_pos++] = c;
+            i++;
+            continue;
+        }
+
+        if (in_quotes) {
+            /* Inside quotes - just track position, copy later */
+            if (term_start < 0) {
+                term_start = (int)i;
+            }
+            i++;
+            continue;
+        }
+
+        /* Check for word boundaries outside quotes */
+        if (c == '\0' || c == ' ' || c == '\t' || c == '\n') {
+            if (term_start >= 0) {
+                /* End of a term */
+                size_t term_len = i - (size_t)term_start;
+
+                /* Check if term already has FTS5 operators */
+                int has_operator = 0;
+                if (term_len > 0) {
+                    /* Check for column: prefix, wildcards, or boolean operators */
+                    for (size_t j = 0; j < term_len; j++) {
+                        char tc = query[term_start + (int)j];
+                        if (tc == ':' || tc == '*' || tc == '^') {
+                            has_operator = 1;
+                            break;
+                        }
+                    }
+                    /* Check for boolean operators (case-insensitive) */
+                    if (term_len == 2 || term_len == 3) {
+                        char buf[4] = {0};
+                        for (size_t j = 0; j < term_len && j < 3; j++) {
+                            buf[j] = (char)tolower((unsigned char)query[term_start + (int)j]);
+                        }
+                        if (strcmp(buf, "and") == 0 || strcmp(buf, "or") == 0 || strcmp(buf, "not") == 0) {
+                            has_operator = 1;
+                        }
+                    }
+                }
+
+                /* Copy the term */
+                memcpy(enhanced + out_pos, query + term_start, term_len);
+                out_pos += term_len;
+
+                /* Add wildcard if no operator present and term is alphanumeric */
+                if (!has_operator && term_len > 0) {
+                    char last_char = query[term_start + (int)term_len - 1];
+                    if (isalnum((unsigned char)last_char)) {
+                        enhanced[out_pos++] = '*';
+                    }
+                }
+
+                term_start = -1;
+            }
+            /* Copy the whitespace */
+            if (c != '\0') {
+                enhanced[out_pos++] = c;
+            }
+        } else {
+            if (term_start < 0) {
+                term_start = (int)i;
+            }
+        }
+        i++;
+    }
+
+    enhanced[out_pos] = '\0';
+    return enhanced;
+}
+
 MemorySearchResult* memory_db_search(MemoryDB *mdb, const char *query, uint32_t top_k) {
     if (mdb == NULL || query == NULL) {
         return NULL;
@@ -560,11 +671,11 @@ MemorySearchResult* memory_db_search(MemoryDB *mdb, const char *query, uint32_t 
         return NULL;
     }
 
-    rc = sqlite3_step(check_stmt);
+    int has_fts = (sqlite3_step(check_stmt) == SQLITE_ROW);
     sqlite3_finalize(check_stmt);
 
     const char *sql;
-    if (rc == SQLITE_ROW) {
+    if (has_fts) {
         /* Use FTS5 for search */
         sql =
             "SELECT m.id, m.entity, m.slot, m.value, m.kind, m.relation, m.timestamp,"
@@ -592,10 +703,12 @@ MemorySearchResult* memory_db_search(MemoryDB *mdb, const char *query, uint32_t 
         return NULL;
     }
 
-    if (rc == SQLITE_ROW) {
-        /* FTS5 search - bind query directly */
-        sqlite3_bind_text(stmt, 1, query, -1, SQLITE_STATIC);
+    if (has_fts) {
+        /* FTS5 search - enhance query with prefix wildcards */
+        char *enhanced_query = enhance_fts5_query(query);
+        sqlite3_bind_text(stmt, 1, enhanced_query, -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmt, 2, (int)top_k);
+        free(enhanced_query);
     } else {
         /* LIKE search - bind pattern with wildcards */
         char *pattern = malloc(strlen(query) + 3);
