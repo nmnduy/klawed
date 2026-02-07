@@ -55,4 +55,16 @@ void oneshot_print_human_format(const char *tool_name,
  */
 void oneshot_get_timestamp(char *buffer, size_t buffer_size);
 
+/**
+ * Print tool output formatted based on tool type
+ * Helper function for formatting different tool results
+ * @param tool_name Name of the tool
+ * @param tool_result JSON result from tool
+ * @param summary Output buffer for summary text
+ * @param summary_size Size of summary buffer
+ * @param is_compact Use compact output style
+ */
+void print_tool_output_formatted(const char *tool_name, cJSON *tool_result,
+                                  char *summary, size_t summary_size, int is_compact);
+
 #endif // ONESHOT_OUTPUT_H
