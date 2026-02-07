@@ -8,6 +8,7 @@
 #include "memory_db.h"
 #include "logger.h"
 #include "data_dir.h"
+#include "util/alloc_utils.h"
 
 #include <bsd/string.h>
 #include <ctype.h>
@@ -93,6 +94,7 @@ static const char *MEMORY_VECTOR_SCHEMA_SQL =
 /*
  * Set error message on database handle
  */
+__attribute__((format(printf, 2, 3)))
 static void memory_db_set_error(MemoryDB *mdb, const char *fmt, ...) {
     if (!mdb) return;
 
