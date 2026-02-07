@@ -21,7 +21,8 @@ const WindowManagerConfig DEFAULT_WINDOW_CONFIG = {
     // No gap between status and input by default
     .padding = 0,
     .conv_h_padding = 0,    // No right padding (scrollbar removed)
-    .initial_pad_capacity = 1000
+    .initial_pad_capacity = 1000,
+    .max_todo_height = 5    // Maximum TODO window height
 };
 
 // ============================================================================
@@ -47,8 +48,12 @@ static void calculate_layout(WindowManager *wm) {
         if (wm->input_height < 0) wm->input_height = 0;
     }
 
+    // Calculate total height needed for bottom windows (input + todo + status)
+    int todo_height = wm->todo_height;  // May be 0 if hidden
+
     // Determine if we have space for status window (placed at bottom below input)
-    int available_without_status = screen_height - wm->input_height - wm->config.padding;
+    // Account for TODO window if visible
+    int available_without_status = screen_height - wm->input_height - todo_height - wm->config.padding;
     if (available_without_status < 0) available_without_status = 0;
 
     int desired_status_height = wm->config.status_height;
@@ -58,8 +63,8 @@ static void calculate_layout(WindowManager *wm) {
         // Not enough room for both conversation and status; drop status
         wm->status_height = 0;
         available_with_status = available_without_status;
-        LOG_DEBUG("[WM] No space for status window (screen_h=%d, input_h=%d)",
-                  screen_height, wm->input_height);
+        LOG_DEBUG("[WM] No space for status window (screen_h=%d, input_h=%d, todo_h=%d)",
+                  screen_height, wm->input_height, todo_height);
     } else {
         wm->status_height = desired_status_height;
     }
@@ -70,9 +75,9 @@ static void calculate_layout(WindowManager *wm) {
         wm->conv_viewport_height = (available_with_status > 0) ? 1 : 0;
     }
 
-    LOG_DEBUG("[WM] Layout: screen=%dx%d, conv_viewport=%d, status=%d, input=%d, pad=%d",
+    LOG_DEBUG("[WM] Layout: screen=%dx%d, conv_viewport=%d, status=%d, todo=%d, input=%d, pad=%d",
               wm->screen_width, wm->screen_height,
-              wm->conv_viewport_height, wm->status_height,
+              wm->conv_viewport_height, wm->status_height, todo_height,
               wm->input_height, wm->config.padding);
 }
 
@@ -147,8 +152,10 @@ int window_manager_init(WindowManager *wm, const WindowManagerConfig *config) {
     // Get initial screen dimensions
     getmaxyx(stdscr, wm->screen_height, wm->screen_width);
 
-    // Set initial input height
+    // Set initial input height and todo height (hidden initially)
     wm->input_height = wm->config.min_input_height;
+    wm->todo_height = 0;
+    wm->todo_win = NULL;
 
     // Calculate layout
     calculate_layout(wm);
@@ -232,6 +239,11 @@ void window_manager_destroy(WindowManager *wm) {
     if (wm->status_win) {
         delwin(wm->status_win);
         wm->status_win = NULL;
+    }
+
+    if (wm->todo_win) {
+        delwin(wm->todo_win);
+        wm->todo_win = NULL;
     }
 
     if (wm->input_win) {
@@ -733,4 +745,136 @@ void window_manager_get_status(WindowManager *wm, char *buffer, size_t buffer_si
              wm->conv_pad_content_lines, wm->conv_pad_capacity,
              wm->conv_scroll_offset, window_manager_get_max_scroll(wm),
              wm->status_height, wm->input_height);
+}
+
+// ============================================================================
+// TODO Window Operations
+// ============================================================================
+
+int window_manager_show_todo_window(WindowManager *wm, int height) {
+    if (!wm || !wm->is_initialized) {
+        LOG_ERROR("[WM] Cannot show TODO window on uninitialized window manager");
+        return -1;
+    }
+
+    // Clamp height to max
+    if (height > wm->config.max_todo_height) {
+        height = wm->config.max_todo_height;
+    }
+    if (height < 1) {
+        height = 1;
+    }
+
+    // If already showing with same height, just return success
+    if (wm->todo_win && wm->todo_height == height) {
+        return 0;
+    }
+
+    // Hide existing TODO window if present
+    if (wm->todo_win) {
+        delwin(wm->todo_win);
+        wm->todo_win = NULL;
+    }
+
+    wm->todo_height = height;
+
+    // Recalculate layout with TODO window
+    calculate_layout(wm);
+
+    // Recreate input window (it moved up)
+    if (wm->input_win) {
+        delwin(wm->input_win);
+    }
+    int input_y = wm->screen_height - wm->input_height - wm->status_height;
+    if (input_y < 0) input_y = 0;
+    wm->input_win = newwin(wm->input_height, wm->screen_width, input_y, 0);
+    if (!wm->input_win) {
+        LOG_ERROR("[WM] Failed to recreate input window after showing TODO window");
+        return -1;
+    }
+    keypad(wm->input_win, TRUE);
+
+    // Recreate status window if needed
+    if (wm->status_win) {
+        delwin(wm->status_win);
+        wm->status_win = NULL;
+    }
+    if (wm->status_height > 0) {
+        int status_y = input_y + wm->input_height;
+        wm->status_win = newwin(wm->status_height, wm->screen_width, status_y, 0);
+        if (!wm->status_win) {
+            LOG_WARN("[WM] Failed to recreate status window after showing TODO window");
+            wm->status_height = 0;
+        }
+    }
+
+    // Create TODO window between status and input
+    // Position: below input, above status
+    int todo_y = input_y - height;
+    if (todo_y < 0) todo_y = 0;
+    wm->todo_win = newwin(height, wm->screen_width, todo_y, 0);
+    if (!wm->todo_win) {
+        LOG_ERROR("[WM] Failed to create TODO window");
+        wm->todo_height = 0;
+        return -1;
+    }
+    keypad(wm->todo_win, TRUE);
+
+    LOG_DEBUG("[WM] Created TODO window (h=%d, w=%d, y=%d)",
+              height, wm->screen_width, todo_y);
+
+    return 0;
+}
+
+void window_manager_hide_todo_window(WindowManager *wm) {
+    if (!wm || !wm->is_initialized) {
+        return;
+    }
+
+    if (!wm->todo_win) {
+        return;  // Already hidden
+    }
+
+    LOG_DEBUG("[WM] Hiding TODO window");
+
+    delwin(wm->todo_win);
+    wm->todo_win = NULL;
+    wm->todo_height = 0;
+
+    // Recalculate layout without TODO window
+    calculate_layout(wm);
+
+    // Recreate input window (it moved down)
+    if (wm->input_win) {
+        delwin(wm->input_win);
+    }
+    int input_y = wm->screen_height - wm->input_height - wm->status_height;
+    if (input_y < 0) input_y = 0;
+    wm->input_win = newwin(wm->input_height, wm->screen_width, input_y, 0);
+    if (wm->input_win) {
+        keypad(wm->input_win, TRUE);
+    }
+
+    // Recreate status window if needed
+    if (wm->status_win) {
+        delwin(wm->status_win);
+        wm->status_win = NULL;
+    }
+    if (wm->status_height > 0) {
+        int status_y = input_y + wm->input_height;
+        wm->status_win = newwin(wm->status_height, wm->screen_width, status_y, 0);
+        if (!wm->status_win) {
+            LOG_WARN("[WM] Failed to recreate status window after hiding TODO window");
+            wm->status_height = 0;
+        }
+    }
+}
+
+void window_manager_refresh_todo(WindowManager *wm) {
+    if (!wm || !wm->is_initialized || !wm->todo_win) {
+        return;
+    }
+
+    touchwin(wm->todo_win);
+    wrefresh(wm->todo_win);
 }
