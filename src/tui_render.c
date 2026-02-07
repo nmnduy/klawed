@@ -1453,3 +1453,140 @@ void tui_refresh(TUIState *tui) {
     if (!tui || !tui->is_initialized) return;
     window_manager_refresh_all(&tui->wm);
 }
+
+// ============================================================================
+// TODO Banner Rendering
+// ============================================================================
+
+// UTF-8 icons for TODO banner (using colorizable characters)
+#define TODO_ICON_CURRENT  "▶"    // Right-pointing triangle (colorizable)
+#define TODO_ICON_PENDING  "●"    // Filled circle (colorizable)
+
+int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
+    if (!tui || !tui->is_initialized) {
+        return 0;
+    }
+
+    // Count incomplete todos (pending or in_progress)
+    size_t incomplete_count = 0;
+    size_t in_progress_count = 0;
+    size_t pending_count = 0;
+    const char *current_task = NULL;
+
+    if (list && list->count > 0) {
+        for (size_t i = 0; i < list->count; i++) {
+            if (list->items[i].status == TODO_IN_PROGRESS) {
+                incomplete_count++;
+                in_progress_count++;
+                // Track the first in-progress task as the "current" one
+                if (!current_task) {
+                    current_task = list->items[i].active_form;
+                }
+            } else if (list->items[i].status == TODO_PENDING) {
+                incomplete_count++;
+                pending_count++;
+            }
+        }
+    }
+
+    // If no incomplete todos, hide the TODO window
+    if (incomplete_count == 0) {
+        if (tui->wm.todo_win) {
+            window_manager_hide_todo_window(&tui->wm);
+        }
+        return 0;
+    }
+
+    // Calculate needed height: 1 line for header + 1 line per task (up to max)
+    // Show at most 3 tasks to save space
+    size_t max_display_tasks = 3;
+    size_t display_tasks = incomplete_count > max_display_tasks ? max_display_tasks : incomplete_count;
+    int needed_height = (int)(1 + display_tasks);
+
+    // Show the TODO window
+    if (window_manager_show_todo_window(&tui->wm, needed_height) != 0) {
+        return 0;
+    }
+
+    // Clear and render the TODO banner
+    WINDOW *win = tui->wm.todo_win;
+    werase(win);
+
+    int width = tui->wm.screen_width;
+    int row = 0;
+
+    // Draw a subtle horizontal line at the top to separate from conversation
+    if (has_colors()) {
+        wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+    }
+    for (int col = 0; col < width && col < 100; col++) {
+        mvwaddch(win, row, col, ACS_HLINE);
+    }
+    if (has_colors()) {
+        wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
+    }
+    row++;
+
+    // Render current task with icon or summary of pending tasks
+    if (current_task) {
+        // Show the current in-progress task with a "playing/current" icon
+        const char *icon = TODO_ICON_CURRENT;
+        int icon_width = 1;  // These Unicode symbols are 1 display column
+
+        // Draw the icon and text in status color (uses theme's status color)
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+        }
+        mvwaddstr(win, row, 2, icon);
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+        }
+
+        // Truncate task if too long
+        char task_buf[256];
+        int max_task_len = width - 6;  // Icon + padding
+        if (max_task_len < 20) max_task_len = 20;
+        if (max_task_len > 250) max_task_len = 250;
+
+        size_t task_len = strlen(current_task);
+        if (task_len > (size_t)max_task_len) {
+            snprintf(task_buf, sizeof(task_buf), "%.*s...", max_task_len - 3, current_task);
+        } else {
+            snprintf(task_buf, sizeof(task_buf), "%s", current_task);
+        }
+
+        // Draw the task name in status color (uses theme)
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        mvwaddnstr(win, row, 2 + icon_width + 1, task_buf, (int)strlen(task_buf));
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+    } else if (pending_count > 0) {
+        // No in-progress, show summary with pending icon
+        char summary[256];
+        const char *icon = TODO_ICON_PENDING;
+        int icon_width = 1;
+
+        if (pending_count == 1) {
+            snprintf(summary, sizeof(summary), "1 task pending");
+        } else {
+            snprintf(summary, sizeof(summary), "%zu tasks pending", pending_count);
+        }
+
+        // Draw icon and text in assistant color (uses theme)
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+        }
+        mvwaddstr(win, row, 2, icon);
+        mvwaddnstr(win, row, 2 + icon_width + 1, summary, (int)strlen(summary));
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+        }
+    }
+
+    wnoutrefresh(win);
+
+    return 1;
+}

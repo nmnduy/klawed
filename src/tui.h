@@ -276,6 +276,11 @@ void tui_drain_message_queue(TUIState *tui, const char *prompt, void *msg_queue)
 // Each item will be rendered with its status-specific color
 void tui_render_todo_list(TUIState *tui, const TodoList *list);
 
+// Render TODO banner at bottom of screen (between status and input)
+// Shows incomplete todos persistently when they exist
+// Returns 1 if banner was rendered (incomplete todos exist), 0 otherwise
+int tui_render_todo_banner(TUIState *tui, const TodoList *list);
+
 // Render active subagent processes with their status and log tail
 // This should be called during event loop redraws to show real-time subagent output
 void tui_render_active_subagents(TUIState *tui);

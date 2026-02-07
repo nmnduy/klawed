@@ -26,6 +26,7 @@ typedef struct {
     int padding;              // Padding between windows
     int conv_h_padding;       // Right padding for conversation box
     int initial_pad_capacity; // Initial pad capacity (lines)
+    int max_todo_height;      // Maximum TODO window height (default 5)
 } WindowManagerConfig;
 
 // Window manager state
@@ -48,6 +49,10 @@ typedef struct {
     // Input window
     WINDOW *input_win;
     int input_height;           // Current input window height
+
+    // TODO window (shown when there are incomplete todos)
+    WINDOW *todo_win;
+    int todo_height;            // Current TODO window height (0 when hidden)
 
     // Configuration
     WindowManagerConfig config;
@@ -103,6 +108,22 @@ void window_manager_refresh_input(WindowManager *wm);
 
 // Refresh all windows
 void window_manager_refresh_all(WindowManager *wm);
+
+// ============================================================================
+// TODO Window Operations
+// ============================================================================
+
+// Show the TODO window with specified height
+// Creates and positions the TODO window above the input window
+// Returns: 0 on success, -1 on failure
+int window_manager_show_todo_window(WindowManager *wm, int height);
+
+// Hide the TODO window
+// Destroys the TODO window and adjusts layout
+void window_manager_hide_todo_window(WindowManager *wm);
+
+// Refresh the TODO window (must be called after content changes)
+void window_manager_refresh_todo(WindowManager *wm);
 
 // ============================================================================
 // Scrolling Operations
