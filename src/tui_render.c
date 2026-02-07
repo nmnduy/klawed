@@ -1468,20 +1468,27 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         return 0;
     }
 
-    // Count incomplete todos (pending or in_progress)
-    size_t incomplete_count = 0;
+    // Count todos by status
+    size_t in_progress_count = 0;
+    size_t pending_count = 0;
+    size_t completed_count = 0;
 
     if (list && list->count > 0) {
         for (size_t i = 0; i < list->count; i++) {
-            if (list->items[i].status == TODO_IN_PROGRESS ||
-                list->items[i].status == TODO_PENDING) {
-                incomplete_count++;
+            if (list->items[i].status == TODO_IN_PROGRESS) {
+                in_progress_count++;
+            } else if (list->items[i].status == TODO_PENDING) {
+                pending_count++;
+            } else if (list->items[i].status == TODO_COMPLETED) {
+                completed_count++;
             }
         }
     }
 
-    // If no incomplete todos, hide the TODO window
-    if (incomplete_count == 0) {
+    size_t total_count = in_progress_count + pending_count + completed_count;
+
+    // If no todos at all, hide the TODO window
+    if (total_count == 0) {
         if (tui->wm.todo_win) {
             window_manager_hide_todo_window(&tui->wm);
         }
@@ -1491,7 +1498,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     // Calculate needed height: 1 line for header + 1 line per task (up to max)
     // Show at most 4 tasks to save space
     size_t max_display_tasks = 4;
-    size_t display_tasks = incomplete_count > max_display_tasks ? max_display_tasks : incomplete_count;
+    size_t display_tasks = total_count > max_display_tasks ? max_display_tasks : total_count;
     int needed_height = (int)(1 + display_tasks + 1);  // +1 for "TODO" header
 
     // Show the TODO window
@@ -1506,7 +1513,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     int width = tui->wm.screen_width;
     int row = 0;
 
-    // Render all incomplete tasks (in_progress first, then pending)
+    // Render all tasks (in_progress first, then pending, then completed)
     // Using single theme color (STATUS) with left border style like assistant messages
     size_t tasks_shown = 0;
     int max_task_len = width - 5;  // Border + space + icon + padding
@@ -1616,10 +1623,56 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         tasks_shown++;
     }
 
+    // Third pass: show completed tasks
+    for (size_t i = 0; i < list->count && tasks_shown < max_display_tasks; i++) {
+        if (list->items[i].status != TODO_COMPLETED) continue;
+
+        const char *icon = TODO_ICON_COMPLETED;
+        const char *task_text = list->items[i].content;
+
+        // Draw left border in status color (dimmed for completed)
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        mvwaddstr(win, row, 0, "│");
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+
+        // Draw the icon in status color
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+        mvwaddstr(win, row, 2, icon);
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+        }
+
+        // Truncate and draw task text in regular foreground color
+        char task_buf[256];
+        size_t task_len = strlen(task_text);
+        if (task_len > (size_t)max_task_len) {
+            snprintf(task_buf, sizeof(task_buf), "%.*s...", max_task_len - 3, task_text);
+        } else {
+            snprintf(task_buf, sizeof(task_buf), "%s", task_text);
+        }
+
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
+        mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
+
+        row++;
+        tasks_shown++;
+    }
+
     // If we have more tasks than we can show, indicate it
-    if (incomplete_count > max_display_tasks) {
+    if (total_count > max_display_tasks) {
         char more_buf[64];
-        size_t more_count = incomplete_count - max_display_tasks;
+        size_t more_count = total_count - max_display_tasks;
         snprintf(more_buf, sizeof(more_buf), "... and %zu more", more_count);
 
         // Draw left border for the "more" line too
