@@ -19,10 +19,12 @@ typedef struct ConversationState ConversationState;
  * @param tool_name Name of the tool that was executed
  * @param tool_details Brief details about the tool invocation (can be NULL)
  * @param tool_result JSON result object from the tool
+ * @param skip_header If non-zero, skip printing the tool name header (useful when already printed)
  */
 void print_human_readable_tool_output(const char *tool_name,
                                       const char *tool_details,
-                                      cJSON *tool_result);
+                                      cJSON *tool_result,
+                                      int skip_header);
 
 /**
  * Extract tool details string from tool arguments
