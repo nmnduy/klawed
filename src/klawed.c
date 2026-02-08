@@ -1338,61 +1338,72 @@ int main(int argc, char *argv[]) {
     UnifiedProviderConfig unified_config;
     provider_config_load(&unified_config);
 
-    // Check for dump conversation flags
+    // Check for dump conversation flags (can appear anywhere in argv)
 #ifndef TEST_BUILD
-    if ((argc == 2 || argc == 3 || argc == 4) &&
-        (strcmp(argv[1], "-d") == 0 || strcmp(argv[1], "--dump-conversation") == 0 ||
-         strcmp(argv[1], "-dj") == 0 || strcmp(argv[1], "--dump-json") == 0 ||
-         strcmp(argv[1], "-dm") == 0 || strcmp(argv[1], "--dump-md") == 0)) {
-
-        // Determine format based on flag
-        const char *format = "default";
-        if (strcmp(argv[1], "-dj") == 0 || strcmp(argv[1], "--dump-json") == 0) {
-            format = "json";
-        } else if (strcmp(argv[1], "-dm") == 0 || strcmp(argv[1], "--dump-md") == 0) {
-            format = "markdown";
+    const char *dump_session_id = NULL;
+    const char *dump_format = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--dump-conversation") == 0) {
+            dump_format = "default";
+            // Check if next arg is a session ID (not a flag)
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                dump_session_id = argv[i + 1];
+            }
+            break;
+        } else if (strcmp(argv[i], "-dj") == 0 || strcmp(argv[i], "--dump-json") == 0) {
+            dump_format = "json";
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                dump_session_id = argv[i + 1];
+            }
+            break;
+        } else if (strcmp(argv[i], "-dm") == 0 || strcmp(argv[i], "--dump-md") == 0) {
+            dump_format = "markdown";
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                dump_session_id = argv[i + 1];
+            }
+            break;
         }
-
-        // Determine session ID (position depends on number of args)
-        const char *session_id = NULL;
-        if (argc == 3) {
-            // Format: klawed -d <session_id> or klawed -dj <session_id>
-            session_id = argv[2];
-        } else if (argc == 4) {
-            // Format: klawed -d --format json <session_id> (legacy style, not currently used)
-            // For now, treat as session_id in position 3
-            session_id = argv[3];
-        }
-        // argc == 2: use most recent session
-
-        return session_dump_conversation(session_id, format);
+    }
+    if (dump_format) {
+        return session_dump_conversation(dump_session_id, dump_format);
     }
 #endif
 
-    // Check for resume session flag
+    // Check for resume session flag (can appear anywhere in argv)
 #ifndef TEST_BUILD
     int resume_session = 0;
     const char *resume_session_id = NULL;
-    if ((argc == 2 || argc == 3) && (strcmp(argv[1], "-r") == 0 || strcmp(argv[1], "--resume") == 0)) {
-        resume_session = 1;
-        resume_session_id = (argc == 3) ? argv[2] : NULL;  // NULL = most recent session
-        LOG_INFO("Resume session mode enabled, session_id: %s", resume_session_id ? resume_session_id : "most recent");
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-r") == 0 || strcmp(argv[i], "--resume") == 0) {
+            resume_session = 1;
+            // Check if next arg is a session ID (not a flag)
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                resume_session_id = argv[i + 1];
+            }
+            // NULL = most recent session
+            LOG_INFO("Resume session mode enabled, session_id: %s", resume_session_id ? resume_session_id : "most recent");
+            break;
+        }
     }
 #endif
 
-    // Check for list sessions flag
+    // Check for list sessions flag (can appear anywhere in argv)
 #ifndef TEST_BUILD
     int list_sessions = 0;
     int session_limit = 10;  // Default limit
-    if ((argc == 2 || argc == 3) && (strcmp(argv[1], "-l") == 0 || strcmp(argv[1], "--list-sessions") == 0)) {
-        list_sessions = 1;
-        if (argc == 3) {
-            session_limit = atoi(argv[2]);
-            if (session_limit <= 0) {
-                session_limit = 0;  // 0 means no limit
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--list-sessions") == 0) {
+            list_sessions = 1;
+            // Check if next arg is a limit number (not a flag)
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                session_limit = atoi(argv[i + 1]);
+                if (session_limit <= 0) {
+                    session_limit = 0;  // 0 means no limit
+                }
             }
+            LOG_INFO("List sessions mode enabled, limit: %d", session_limit);
+            break;
         }
-        LOG_INFO("List sessions mode enabled, limit: %d", session_limit);
     }
 #endif
 
