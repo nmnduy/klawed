@@ -959,7 +959,8 @@ static void sqlite_on_tool_complete_ex(const char *tool_id, const char *tool_nam
     }
 
     // Use the human-readable formatter for tool output (mirrors TUI display)
-    print_human_readable_tool_output(tool_name, tool_details ? tool_details : "", result);
+    // Skip header since tool name was already printed at tool start
+    print_human_readable_tool_output(tool_name, tool_details ? tool_details : "", result, 1);
 
     // Send TOOL_RESULT message to the queue
     sqlite_queue_send_tool_result(cb_ctx->ctx, cb_ctx->response_receiver,
@@ -1014,6 +1015,26 @@ static void check_and_inject_pending_messages(SQLiteQueueContext *ctx,
     pthread_mutex_unlock(&ctx->queue_mutex);
 }
 
+// Callback for real-time steering injection point.
+// Called after tool results are added but before next API call.
+// This is a safe point to inject user messages without breaking tool-result pairs.
+static void sqlite_on_after_tool_results(struct ConversationState *state, void *user_data) {
+    SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
+    SQLiteQueueContext *ctx = cb_ctx->ctx;
+
+    // Check for pending messages and inject them into the conversation.
+    // This enables real-time steering - user messages sent during tool execution
+    // will be seen by the LLM in the next API call.
+    pthread_mutex_lock(&ctx->queue_mutex);
+    int pending_count = ctx->pending_count;
+    pthread_mutex_unlock(&ctx->queue_mutex);
+
+    if (pending_count > 0) {
+        LOG_INFO("SQLite Queue: Real-time steering injection point - %d pending message(s)", pending_count);
+        check_and_inject_pending_messages(ctx, state, cb_ctx->response_receiver);
+    }
+}
+
 // Process SQLite message with unified conversation processor
 static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
                                             struct ConversationState *state, const char *user_input) {
@@ -1047,6 +1068,8 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
     proc_ctx.on_error = sqlite_on_error;
     proc_ctx.should_interrupt = sqlite_should_interrupt;
     proc_ctx.on_status_update = sqlite_on_status_update;
+    // Enable real-time steering by injecting pending messages at safe points
+    proc_ctx.on_after_tool_results = sqlite_on_after_tool_results;
 
     // Check for pending messages before starting
     check_and_inject_pending_messages(ctx, state, response_receiver);
