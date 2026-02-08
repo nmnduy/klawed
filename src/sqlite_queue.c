@@ -9,11 +9,16 @@
 #define _GNU_SOURCE
 #endif
 
+#define COLORSCHEME_EXTERN  // Use extern declarations for colorscheme globals
+
 #include "sqlite_queue.h"
 #include "klawed_internal.h"
 #include "conversation/conversation_processor.h"
 #include "logger.h"
 #include "compaction.h"
+#include "colorscheme.h"
+#include "fallback_colors.h"
+#include "ui/tool_output_display.h"
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -562,9 +567,20 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
         LOG_DEBUG("SQLite Queue: Raw message (first 500 chars): %.*s",
                  (int)(strlen(message) > 500 ? 500 : strlen(message)), message);
 
-        // Print to console
-        printf("SQLite Queue: Received %zu bytes\n", strlen(message));
-        fflush(stdout);
+        // Print to console with subtle formatting
+        char status_color[32] = {0};
+        const char *status_color_start = NULL;
+
+        if (get_colorscheme_color(COLORSCHEME_STATUS, status_color, sizeof(status_color)) == 0) {
+            status_color_start = status_color;
+        } else {
+            status_color_start = ANSI_FALLBACK_STATUS;
+        }
+
+        LOG_DEBUG("SQLite Queue: Received %zu bytes", strlen(message));
+        // Only print processing info in verbose/debug mode to reduce noise
+        // printf("%s[SQLite Queue]%s Received %zu bytes\n", status_color_start, ANSI_RESET, strlen(message));
+        // fflush(stdout);
 
         // Parse JSON message
         LOG_DEBUG("SQLite Queue: Parsing JSON message");
@@ -603,12 +619,27 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
                         (int)(strlen(content->valuestring) > 200 ? 200 : strlen(content->valuestring)),
                         content->valuestring);
 
-                // Print to console
-                printf("SQLite Queue: Processing TEXT message (length: %zu)\n", strlen(content->valuestring));
-                // Print first 100 chars of the message
-                int preview_len = (int)(strlen(content->valuestring) > 100 ? 100 : strlen(content->valuestring));
-                printf("Message preview: %.*s%s\n", preview_len, content->valuestring,
-                       strlen(content->valuestring) > 100 ? "..." : "");
+                // Print user message to console (like TUI shows user input)
+                char user_color[32] = {0};
+                char text_color[32] = {0};
+                const char *user_color_start = NULL;
+                const char *text_color_start = NULL;
+
+                if (get_colorscheme_color(COLORSCHEME_USER, user_color, sizeof(user_color)) == 0) {
+                    user_color_start = user_color;
+                } else {
+                    user_color_start = ANSI_FALLBACK_USER;
+                }
+
+                if (get_colorscheme_color(COLORSCHEME_FOREGROUND, text_color, sizeof(text_color)) == 0) {
+                    text_color_start = text_color;
+                } else {
+                    text_color_start = ANSI_FALLBACK_FOREGROUND;
+                }
+
+                printf("\n%s[User]%s %s%s%s\n",
+                       user_color_start, ANSI_RESET,
+                       text_color_start, content->valuestring, ANSI_RESET);
                 fflush(stdout);
 
                 // Process interactively (handles tool calls recursively)
@@ -768,12 +799,31 @@ static int sqlite_queue_send_text_response(SQLiteQueueContext *ctx, const char *
 
     LOG_INFO("SQLite Queue: Sending assistant text response");
 
-    // Print to console
-    printf("\n--- AI Response ---\n");
-    // Print first 200 chars of the response
-    int preview_len = (int)(strlen(p) > 200 ? 200 : strlen(p));
-    printf("%.*s%s\n", preview_len, p, strlen(p) > 200 ? "..." : "");
-    printf("--- End of AI Response ---\n");
+    // Print to console with TUI-like formatting
+    // Use colorscheme colors with ANSI fallback for console output
+    char assistant_color[32] = {0};
+    char text_color[32] = {0};
+    const char *assistant_color_start = NULL;
+    const char *text_color_start = NULL;
+
+    // Get assistant color for the role name
+    if (get_colorscheme_color(COLORSCHEME_ASSISTANT, assistant_color, sizeof(assistant_color)) == 0) {
+        assistant_color_start = assistant_color;
+    } else {
+        assistant_color_start = ANSI_FALLBACK_ASSISTANT;
+    }
+
+    // Get foreground color for the text content
+    if (get_colorscheme_color(COLORSCHEME_FOREGROUND, text_color, sizeof(text_color)) == 0) {
+        text_color_start = text_color;
+    } else {
+        text_color_start = ANSI_FALLBACK_FOREGROUND;
+    }
+
+    // Print assistant message in TUI format: [Assistant] text
+    printf("\n%s[Assistant]%s %s%s%s\n",
+           assistant_color_start, ANSI_RESET,
+           text_color_start, p, ANSI_RESET);
     fflush(stdout);
 
     return sqlite_queue_send_json(ctx, receiver, "TEXT", p);
@@ -840,12 +890,50 @@ typedef struct {
 static void sqlite_on_tool_start_ex(const char *tool_id, const char *tool_name,
                                     cJSON *tool_parameters, const char *tool_details,
                                     void *user_data) {
-    (void)tool_details;
     SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
 
     LOG_INFO("SQLite Queue: Starting tool: %s (id: %s)", tool_name, tool_id);
-    printf("SQLite Queue: Executing tool: %s (id: %s)\n", tool_name, tool_id);
+
+    // Get tool details from parameters if not provided
+    const char *details = tool_details;
+    char *generated_details = NULL;
+    if (!details && tool_parameters) {
+        generated_details = get_tool_details(tool_name, tool_parameters);
+        details = generated_details;
+    }
+
+    // Print to console with TUI-like formatting
+    // Use colorscheme colors with ANSI fallback for console output
+    char tool_color[32] = {0};
+    char text_color[32] = {0};
+    const char *tool_color_start = NULL;
+    const char *text_color_start = NULL;
+
+    // Get tool color (use TOOL color for the bullet/name)
+    if (get_colorscheme_color(COLORSCHEME_TOOL, tool_color, sizeof(tool_color)) == 0) {
+        tool_color_start = tool_color;
+    } else {
+        tool_color_start = ANSI_FALLBACK_TOOL;
+    }
+
+    // Get foreground color for details
+    if (get_colorscheme_color(COLORSCHEME_FOREGROUND, text_color, sizeof(text_color)) == 0) {
+        text_color_start = text_color;
+    } else {
+        text_color_start = ANSI_FALLBACK_FOREGROUND;
+    }
+
+    // Print tool execution in TUI format: ● ToolName details
+    printf("\n%s● %s%s", tool_color_start, tool_name, ANSI_RESET);
+    if (details && strlen(details) > 0) {
+        printf(" %s%s%s", text_color_start, details, ANSI_RESET);
+    }
+    printf("\n");
     fflush(stdout);
+
+    if (generated_details) {
+        // generated_details is a static buffer from get_tool_details, no need to free
+    }
 
     // Send TOOL message to the queue
     sqlite_queue_send_tool_request(cb_ctx->ctx, cb_ctx->response_receiver,
@@ -857,6 +945,20 @@ static void sqlite_on_tool_complete_ex(const char *tool_id, const char *tool_nam
     SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
 
     LOG_INFO("SQLite Queue: Tool completed: %s (id: %s, error=%d)", tool_name, tool_id, is_error);
+
+    // Print tool result to console using the same formatter as the TUI
+    // Get tool details for display
+    char *tool_details = NULL;
+    if (result) {
+        // Try to extract details from result if available
+        cJSON *args = cJSON_GetObjectItem(result, "arguments");
+        if (args) {
+            tool_details = get_tool_details(tool_name, args);
+        }
+    }
+
+    // Use the human-readable formatter for tool output (mirrors TUI display)
+    print_human_readable_tool_output(tool_name, tool_details ? tool_details : "", result);
 
     // Send TOOL_RESULT message to the queue
     sqlite_queue_send_tool_result(cb_ctx->ctx, cb_ctx->response_receiver,
@@ -964,6 +1066,19 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
 
     // Send END_AI_TURN event to indicate klawed is waiting for further instruction
     sqlite_queue_send_end_ai_turn(ctx, response_receiver);
+
+    // Print subtle prompt indicator for console mode
+    char status_color[32] = {0};
+    const char *status_color_start = NULL;
+
+    if (get_colorscheme_color(COLORSCHEME_STATUS, status_color, sizeof(status_color)) == 0) {
+        status_color_start = status_color;
+    } else {
+        status_color_start = ANSI_FALLBACK_STATUS;
+    }
+
+    printf("\n%s[Ready]%s Waiting for next message...\n", status_color_start, ANSI_RESET);
+    fflush(stdout);
 
     return 0;
 }
@@ -1546,8 +1661,8 @@ static void *sqlite_queue_worker_thread(void *arg) {
 
         if (pm) {
             LOG_INFO("SQLite Queue: Worker processing message ID %lld", pm->msg_id);
-            printf("SQLite Queue: Processing message ID %lld\n", pm->msg_id);
-            fflush(stdout);
+            // Only log processing at debug level to reduce console noise
+            LOG_DEBUG("SQLite Queue: Processing message ID %lld", pm->msg_id);
 
             // Note: Message was already acknowledged by daemon loop before enqueueing
             // to prevent race conditions where the same message is found again.
@@ -1555,8 +1670,7 @@ static void *sqlite_queue_worker_thread(void *arg) {
             sqlite_queue_process_interactive(ctx, ctx->state, pm->content);
 
             LOG_INFO("SQLite Queue: Worker completed message ID %lld", pm->msg_id);
-            printf("SQLite Queue: Completed message ID %lld\n", pm->msg_id);
-            fflush(stdout);
+            LOG_DEBUG("SQLite Queue: Completed message ID %lld", pm->msg_id);
 
             free(pm->content);
             free(pm);
@@ -1651,8 +1765,17 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     LOG_INFO("SQLite Queue: Sender name: %s", ctx->sender_name);
     LOG_INFO("SQLite Queue: =========================================");
 
-    // Print to console as well
-    printf("SQLite Queue daemon started on %s\n", ctx->db_path);
+    // Print to console with status formatting
+    char status_color[32] = {0};
+    const char *status_color_start = NULL;
+
+    if (get_colorscheme_color(COLORSCHEME_STATUS, status_color, sizeof(status_color)) == 0) {
+        status_color_start = status_color;
+    } else {
+        status_color_start = ANSI_FALLBACK_STATUS;
+    }
+
+    printf("\n%s[SQLite Queue]%s Daemon started on %s\n", status_color_start, ANSI_RESET, ctx->db_path);
     printf("Sender name: %s\n", ctx->sender_name);
 
     // Conversation seeding disabled to prevent tool use/result mismatch errors
@@ -1668,7 +1791,14 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
         return -1;
     }
 
-    printf("Waiting for messages...\n");
+    // Reuse the status_color variables already declared above
+    if (get_colorscheme_color(COLORSCHEME_STATUS, status_color, sizeof(status_color)) == 0) {
+        status_color_start = status_color;
+    } else {
+        status_color_start = ANSI_FALLBACK_STATUS;
+    }
+
+    printf("%s[Ready]%s Waiting for messages...\n", status_color_start, ANSI_RESET);
     fflush(stdout);
 
     int message_count = 0;
@@ -1756,8 +1886,9 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
                         error_count = 0;
                         LOG_INFO("SQLite Queue: Enqueued message ID %lld for processing (queue depth: %d)",
                                  msg_id, sqlite_queue_pending_count(ctx));
-                        printf("SQLite Queue: Received message ID %lld (queue depth: %d)\n",
-                               msg_id, sqlite_queue_pending_count(ctx));
+                        // Only log at debug level to reduce console noise
+                        LOG_DEBUG("SQLite Queue: Received message ID %lld (queue depth: %d)",
+                                  msg_id, sqlite_queue_pending_count(ctx));
 
                         // Acknowledge the message immediately to prevent race condition
                         // where the main loop finds it again before worker processes it
@@ -1831,9 +1962,19 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     LOG_INFO("SQLite Queue: Total errors: %d", error_count);
     LOG_INFO("SQLite Queue: =========================================");
 
-    printf("\nSQLite Queue daemon stopped\n");
+    // Print shutdown message with status formatting
+    // Variables status_color and status_color_start already declared at function start
+    if (get_colorscheme_color(COLORSCHEME_STATUS, status_color, sizeof(status_color)) == 0) {
+        status_color_start = status_color;
+    } else {
+        status_color_start = ANSI_FALLBACK_STATUS;
+    }
+
+    printf("\n%s[SQLite Queue]%s Daemon stopped\n", status_color_start, ANSI_RESET);
     printf("Total messages processed: %d\n", message_count);
-    printf("Total errors: %d\n", error_count);
+    if (error_count > 0) {
+        printf("Total errors: %d\n", error_count);
+    }
     fflush(stdout);
 
     return 0;
