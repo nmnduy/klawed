@@ -195,33 +195,36 @@ char* todo_render_to_string(const TodoList *list) {
     }
 
     // Render each item with colored bullets and indentation
+    // First pass: in_progress items (highest priority)
     for (size_t i = 0; i < list->count; i++) {
         const TodoItem *item = &list->items[i];
 
-        switch (item->status) {
-            default:
-                LOG_WARN("Unknown TODO status: %d", (int)item->status);
-                offset += (size_t)snprintf(result + offset, buffer_size - offset,
-                                 "    %s• %s%s\n",
-                                 color_foreground, ANSI_RESET, item->content);
-                break;
-            case TODO_COMPLETED:
-                offset += (size_t)snprintf(result + offset, buffer_size - offset,
-                                 "    %s✓%s %s\n",
-                                 color_completed, color_foreground, item->content);
-                break;
+        if (item->status == TODO_IN_PROGRESS) {
+            offset += (size_t)snprintf(result + offset, buffer_size - offset,
+                             "    %s⋯%s %s\n",
+                             color_in_progress, color_foreground, item->active_form);
+        }
+    }
 
-            case TODO_IN_PROGRESS:
-                offset += (size_t)snprintf(result + offset, buffer_size - offset,
-                                 "    %s⋯%s %s\n",
-                                 color_in_progress, color_foreground, item->active_form);
-                break;
+    // Second pass: pending items
+    for (size_t i = 0; i < list->count; i++) {
+        const TodoItem *item = &list->items[i];
 
-            case TODO_PENDING:
-                offset += (size_t)snprintf(result + offset, buffer_size - offset,
-                                 "    %s○%s %s\n",
-                                 color_pending, color_foreground, item->content);
-                break;
+        if (item->status == TODO_PENDING) {
+            offset += (size_t)snprintf(result + offset, buffer_size - offset,
+                             "    %s○%s %s\n",
+                             color_pending, color_foreground, item->content);
+        }
+    }
+
+    // Third pass: completed items (lowest priority)
+    for (size_t i = 0; i < list->count; i++) {
+        const TodoItem *item = &list->items[i];
+
+        if (item->status == TODO_COMPLETED) {
+            offset += (size_t)snprintf(result + offset, buffer_size - offset,
+                             "    %s✓%s %s\n",
+                             color_completed, color_foreground, item->content);
         }
     }
 
@@ -253,29 +256,33 @@ char* todo_render_to_string_plain(const TodoList *list) {
     size_t offset = 0;
 
     // Render each item with plain text bullets (no ANSI codes)
+    // First pass: in_progress items (highest priority)
     for (size_t i = 0; i < list->count; i++) {
         const TodoItem *item = &list->items[i];
 
-        switch (item->status) {
-            default:
-                LOG_WARN("Unknown TODO status: %d", (int)item->status);
-                offset += (size_t)snprintf(result + offset, buffer_size - offset,
-                                 "    • %s\n", item->content);
-                break;
-            case TODO_COMPLETED:
-                offset += (size_t)snprintf(result + offset, buffer_size - offset,
-                                 "    ✓ %s\n", item->content);
-                break;
+        if (item->status == TODO_IN_PROGRESS) {
+            offset += (size_t)snprintf(result + offset, buffer_size - offset,
+                             "    ⋯ %s\n", item->active_form);
+        }
+    }
 
-            case TODO_IN_PROGRESS:
-                offset += (size_t)snprintf(result + offset, buffer_size - offset,
-                                 "    ⋯ %s\n", item->active_form);
-                break;
+    // Second pass: pending items
+    for (size_t i = 0; i < list->count; i++) {
+        const TodoItem *item = &list->items[i];
 
-            case TODO_PENDING:
-                offset += (size_t)snprintf(result + offset, buffer_size - offset,
-                                 "    ○ %s\n", item->content);
-                break;
+        if (item->status == TODO_PENDING) {
+            offset += (size_t)snprintf(result + offset, buffer_size - offset,
+                             "    ○ %s\n", item->content);
+        }
+    }
+
+    // Third pass: completed items (lowest priority)
+    for (size_t i = 0; i < list->count; i++) {
+        const TodoItem *item = &list->items[i];
+
+        if (item->status == TODO_COMPLETED) {
+            offset += (size_t)snprintf(result + offset, buffer_size - offset,
+                             "    ✓ %s\n", item->content);
         }
     }
 
