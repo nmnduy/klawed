@@ -157,12 +157,12 @@ char* build_system_prompt(ConversationState *state) {
         offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
             "\n<system-reminder>\n"
             "As you answer the user's questions, you can use the following context:\n"
-            "# klawedMd\n"
+            "# KLAWED.md\n"
             "Codebase and user instructions are shown below. Be sure to adhere to these instructions. "
             "IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n\n"
             "Contents of %s/KLAWED.md (project instructions, checked into the codebase):\n\n"
             "%s\n\n"
-            "      IMPORTANT: this context may or may not be relevant to your tasks. "
+            "IMPORTANT: this context may or may not be relevant to your tasks. "
             "You should not respond to this context unless it is highly relevant to your task.\n"
             "</system-reminder>\n",
             working_dir, klawed_md);

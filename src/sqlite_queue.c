@@ -1114,7 +1114,7 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
 int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *receiver,
                                        int messages_compacted, size_t tokens_before,
                                         size_t tokens_after, double usage_before_pct,
-                                        double usage_after_pct) {
+                                        double usage_after_pct, const char *summary) {
     if (!ctx || !receiver) {
         LOG_ERROR("SQLite Queue: Invalid parameters for send_compaction_notice");
         return -1;
@@ -1133,6 +1133,11 @@ int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *rec
     cJSON_AddNumberToObject(notice_json, "tokensFreed", (double)(tokens_before - tokens_after));
     cJSON_AddNumberToObject(notice_json, "usageBeforePct", usage_before_pct);
     cJSON_AddNumberToObject(notice_json, "usageAfterPct", usage_after_pct);
+
+    // Add AI-generated summary if available
+    if (summary && summary[0] != '\0') {
+        cJSON_AddStringToObject(notice_json, "summary", summary);
+    }
 
     // Build human-readable content message
     char content_msg[512];
@@ -1158,6 +1163,49 @@ int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *rec
     int result = sqlite_queue_send(ctx, receiver, notice_str, strlen(notice_str));
     free(notice_str);
     cJSON_Delete(notice_json);
+
+    // ALSO save as a TEXT message so it gets seeded into conversation state
+    // This ensures the AI sees the compaction notice in the conversation history
+    cJSON *text_json = cJSON_CreateObject();
+    if (text_json) {
+        cJSON_AddStringToObject(text_json, "messageType", "TEXT");
+        // Build full content with summary for the conversation history
+        char text_content[4600];
+        if (summary && summary[0] != '\0') {
+            snprintf(text_content, sizeof(text_content),
+                "## Context Compaction Notice\n\n"
+                "%d earlier messages have been stored in memory. "
+                "Use MemorySearch to retrieve relevant past context if needed.\n\n"
+                "### Summary of Compacted Context\n\n"
+                "%s\n\n"
+                "---\n"
+                "**Tokens**: %zu → %zu (freed ~%zu tokens)\n"
+                "**Context usage**: %.1f%% → %.1f%%",
+                messages_compacted,
+                summary,
+                tokens_before, tokens_after, tokens_before - tokens_after,
+                usage_before_pct, usage_after_pct);
+        } else {
+            snprintf(text_content, sizeof(text_content),
+                "## Context Compaction Notice\n\n"
+                "%d earlier messages have been stored in memory. "
+                "Use MemorySearch to retrieve relevant past context if needed.\n\n"
+                "---\n"
+                "**Tokens**: %zu → %zu (freed ~%zu tokens)\n"
+                "**Context usage**: %.1f%% → %.1f%%",
+                messages_compacted,
+                tokens_before, tokens_after, tokens_before - tokens_after,
+                usage_before_pct, usage_after_pct);
+        }
+        cJSON_AddStringToObject(text_json, "content", text_content);
+        char *text_str = cJSON_PrintUnformatted(text_json);
+        if (text_str) {
+            // Send to ourselves so it gets seeded into conversation state
+            sqlite_queue_send(ctx, ctx->sender_name, text_str, strlen(text_str));
+            free(text_str);
+        }
+        cJSON_Delete(text_json);
+    }
 
     return result;
 }
@@ -1219,7 +1267,8 @@ static int sqlite_queue_handle_compact_trigger(SQLiteQueueContext *ctx, struct C
                                             result.tokens_before,
                                             result.tokens_after,
                                             result.usage_before_pct,
-                                            result.usage_after_pct);
+                                            result.usage_after_pct,
+                                            result.summary[0] != '\0' ? result.summary : NULL);
 
         return 0;
 

@@ -36,6 +36,7 @@ typedef struct CompactionResult {
     size_t tokens_after;      // Token count after compaction
     double usage_before_pct;  // Context usage % before
     double usage_after_pct;   // Context usage % after
+    char summary[4096];       // AI-generated summary of compacted context
 } CompactionResult;
 
 /**

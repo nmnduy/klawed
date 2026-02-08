@@ -225,12 +225,13 @@ int sqlite_queue_init_schema(SQLiteQueueContext *ctx);
  * @param tokens_after Token count after compaction
  * @param usage_before_pct Context usage percentage before
  * @param usage_after_pct Context usage percentage after
+ * @param summary AI-generated summary of compacted context (can be NULL)
  * @return 0 on success, -1 on failure
  */
 int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *receiver,
                                        int messages_compacted, size_t tokens_before,
                                         size_t tokens_after, double usage_before_pct,
-                                        double usage_after_pct);
+                                        double usage_after_pct, const char *summary);
 
 /**
  * Check if there are pending user messages in the queue.
