@@ -160,6 +160,7 @@ TEST_ARENA_TARGET = $(BUILD_DIR)/test_arena
 TEST_CONFIG_TARGET = $(BUILD_DIR)/test_config
 TEST_CONFIG_MERGE_TARGET = $(BUILD_DIR)/test_config_merge
 TEST_MEMORY_DB_TARGET = $(BUILD_DIR)/test_memory_db
+TEST_MEMORY_RETRACT_TARGET = $(BUILD_DIR)/test_memory_retract
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 TEST_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_sqlite_queue
@@ -447,6 +448,7 @@ TEST_DUPLICATE_TOOL_DETECTION_SRC = tests/test_duplicate_tool_detection.c
 TEST_ARRAY_RESIZE_SRC = tests/test_array_resize.c
 TEST_ARENA_SRC = tests/test_arena.c
 TEST_MEMORY_DB_SRC = tests/test_memory_db.c
+TEST_MEMORY_RETRACT_SRC = tests/test_memory_retract.c
 TEST_TOKEN_USAGE_SRC = tests/test_token_usage.c
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
 TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
@@ -745,6 +747,12 @@ test-memory-db: check-deps $(TEST_MEMORY_DB_TARGET)
 	@echo "Running Memory DB tests..."
 	@echo ""
 	@./$(TEST_MEMORY_DB_TARGET)
+
+test-memory-retract: check-deps $(TEST_MEMORY_RETRACT_TARGET)
+	@echo ""
+	@echo "Running Memory Retraction tests..."
+	@echo ""
+	@./$(TEST_MEMORY_RETRACT_TARGET)
 
 test-token-usage: check-deps $(TEST_TOKEN_USAGE_TARGET)
 	@echo ""
@@ -2015,6 +2023,14 @@ $(TEST_MEMORY_DB_TARGET): $(TEST_MEMORY_DB_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $
 	@$(CC) $(CFLAGS) -o $(TEST_MEMORY_DB_TARGET) $(TEST_MEMORY_DB_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Memory DB test build successful!"
+
+# Test target for Memory Retraction - tests relation: "retracts" functionality
+$(TEST_MEMORY_RETRACT_TARGET): $(TEST_MEMORY_RETRACT_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Memory Retraction test suite..."
+	@$(CC) $(CFLAGS) -o $(TEST_MEMORY_RETRACT_TARGET) $(TEST_MEMORY_RETRACT_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Memory Retraction test build successful!"
 	@echo ""
 
 # Test target for Token Usage - tests token usage tracking functionality
