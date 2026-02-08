@@ -20,17 +20,20 @@
 
 void print_human_readable_tool_output(const char *tool_name,
                                       const char *tool_details,
-                                      cJSON *tool_result) {
+                                      cJSON *tool_result,
+                                      int skip_header) {
     if (!tool_name) return;
 
-    // Print tool header - more concise format
-    printf("→ ");
-    if (tool_details && strlen(tool_details) > 0) {
-        printf("%s: %s\n", tool_name, tool_details);
-    } else {
-        printf("%s\n", tool_name);
+    // Print tool header - more concise format (unless skipped)
+    if (!skip_header) {
+        printf("→ ");
+        if (tool_details && strlen(tool_details) > 0) {
+            printf("%s: %s\n", tool_name, tool_details);
+        } else {
+            printf("%s\n", tool_name);
+        }
+        fflush(stdout);
     }
-    fflush(stdout);
 
     // Print tool result based on tool type
     if (tool_result) {
