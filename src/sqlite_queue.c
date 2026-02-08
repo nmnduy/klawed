@@ -16,6 +16,7 @@
 #include "conversation/conversation_processor.h"
 #include "logger.h"
 #include "compaction.h"
+#include "background_init.h"
 #include "colorscheme.h"
 #include "fallback_colors.h"
 #include "ui/tool_output_display.h"
@@ -1764,6 +1765,19 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     LOG_INFO("SQLite Queue: Database path: %s", ctx->db_path);
     LOG_INFO("SQLite Queue: Sender name: %s", ctx->sender_name);
     LOG_INFO("SQLite Queue: =========================================");
+
+    // Ensure persistence database is initialized before starting daemon mode
+    // This is required for API call logging and session management
+    if (!state->persistence_db) {
+        LOG_INFO("SQLite Queue: Waiting for persistence database to be ready...");
+        state->persistence_db = await_database_ready(state);
+        if (!state->persistence_db) {
+            LOG_ERROR("SQLite Queue: Persistence database not available, API calls will not be logged");
+            // Continue anyway - the daemon can still function without persistence
+        } else {
+            LOG_INFO("SQLite Queue: Persistence database ready");
+        }
+    }
 
     // Print to console with status formatting
     char status_color[32] = {0};
