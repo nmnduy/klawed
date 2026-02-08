@@ -13,6 +13,7 @@
 #include "../subagent_manager.h"
 #include "../arena.h"
 #include "../indicators.h"
+#include "../window_manager.h"
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -858,6 +859,11 @@ void process_response(ConversationState *state,
             LOG_ERROR("API call returned NULL after tool execution");
         }
 
+        // AI turn completed - hide todo banner in TUI mode
+        if (tui) {
+            window_manager_hide_todo_window(&tui->wm);
+        }
+
         clock_gettime(CLOCK_MONOTONIC, &proc_end);
         long proc_ms = (proc_end.tv_sec - proc_start.tv_sec) * 1000 +
                        (proc_end.tv_nsec - proc_start.tv_nsec) / 1000000;
@@ -866,7 +872,11 @@ void process_response(ConversationState *state,
         return;
     }
 
-    // No tools - just log completion time
+    // No tools - AI turn completed, hide todo banner in TUI mode
+    if (tui) {
+        window_manager_hide_todo_window(&tui->wm);
+    }
+
     clock_gettime(CLOCK_MONOTONIC, &proc_end);
     long proc_ms = (proc_end.tv_sec - proc_start.tv_sec) * 1000 +
                    (proc_end.tv_nsec - proc_start.tv_nsec) / 1000000;
