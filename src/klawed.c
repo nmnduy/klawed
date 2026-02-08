@@ -1423,11 +1423,23 @@ int main(int argc, char *argv[]) {
     int sqlite_daemon_mode = 0;
     const char *sqlite_db_path = NULL;
     const char *sqlite_sender_name = NULL;
+    int sqlite_queue_flag_argc = 0;  // Track how many args consumed by --sqlite-queue
 
-    if (argc == 3 && (strcmp(argv[1], "--sqlite-queue") == 0)) {
-        sqlite_daemon_mode = 1;
-        sqlite_db_path = argv[2];
-        LOG_INFO("SQLite queue daemon mode enabled, database: %s", sqlite_db_path);
+    // Search for --sqlite-queue anywhere in argv (not just position 1)
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--sqlite-queue") == 0) {
+            if (i + 1 < argc) {
+                sqlite_daemon_mode = 1;
+                sqlite_db_path = argv[i + 1];
+                sqlite_queue_flag_argc = 2;  // --sqlite-queue and the db path
+                LOG_INFO("SQLite queue daemon mode enabled, database: %s", sqlite_db_path);
+            } else {
+                LOG_ERROR("--sqlite-queue flag requires a database path argument");
+                fprintf(stderr, "Error: --sqlite-queue flag requires a database path\n");
+                return 1;
+            }
+            break;
+        }
     }
 
     // Also check environment variable for SQLite queue
@@ -1472,8 +1484,9 @@ int main(int argc, char *argv[]) {
         socket_ipc_enabled = 1;
     }
 
-    // Compute effective argc after removing provider flag arguments
-    int effective_argc = argc - provider_flag_argc;
+    // Compute effective argc after removing flag arguments
+    // Both --provider/-p and --sqlite-queue consume 2 args each
+    int effective_argc = argc - provider_flag_argc - sqlite_queue_flag_argc;
 
     if (effective_argc == 2 && !resume_session && !list_sessions && !socket_ipc_enabled) {
         // Single argument provided - treat as prompt for single command mode
