@@ -166,6 +166,7 @@ TEST_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_sqlite_queue
 TEST_SQLITE_QUEUE_SEEDING_TARGET = $(BUILD_DIR)/test_sqlite_queue_seeding
 TEST_PROVIDER_INIT_FROM_CONFIG_TARGET = $(BUILD_DIR)/test_provider_init_from_config
 TEST_DATA_DIR_TARGET = $(BUILD_DIR)/test_data_dir
+TEST_REALTIME_STEERING_TARGET = $(BUILD_DIR)/test_realtime_steering
 QUERY_TOOL = $(BUILD_DIR)/query_logs
 SRC = src/klawed.c
 ARRAY_RESIZE_SRC = src/array_resize.c
@@ -452,6 +453,7 @@ TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
 TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
 TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
 TEST_SQLITE_QUEUE_SEEDING_SRC = tests/test_sqlite_queue_seeding.c
+TEST_REALTIME_STEERING_SRC = tests/test_realtime_steering.c
 TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
@@ -471,7 +473,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-realtime-steering
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -705,6 +707,12 @@ test-arena: check-deps $(TEST_ARENA_TARGET)
 	@echo "Running Arena Allocator tests..."
 	@echo ""
 	@./$(TEST_ARENA_TARGET)
+
+test-realtime-steering: check-deps $(TEST_REALTIME_STEERING_TARGET)
+	@echo ""
+	@echo "Running Real-Time Steering tests..."
+	@echo ""
+	@./$(TEST_REALTIME_STEERING_TARGET)
 
 test-config: check-deps $(TEST_CONFIG_TARGET)
 	@echo ""
@@ -1924,6 +1932,12 @@ $(TEST_ARENA_TARGET): $(TEST_ARENA_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Arena Allocator test suite..."
 	@$(CC) $(CFLAGS) -DARENA_IMPLEMENTATION -o $(TEST_ARENA_TARGET) $(TEST_ARENA_SRC) $(LDFLAGS)
+	@echo ""
+
+$(TEST_REALTIME_STEERING_TARGET): $(TEST_REALTIME_STEERING_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Real-Time Steering test suite..."
+	@$(CC) $(CFLAGS) -o $(TEST_REALTIME_STEERING_TARGET) $(TEST_REALTIME_STEERING_SRC) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Arena Allocator test build successful!"
 	@echo ""

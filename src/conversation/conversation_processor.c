@@ -618,6 +618,13 @@ int process_response_unified(struct ConversationState *state,
                 return -1;
             }
 
+            // Safe injection point for real-time steering:
+            // All tool-result pairs are complete. Callback can inject user messages
+            // that will be visible to the LLM in the next API call.
+            if (ctx->on_after_tool_results) {
+                ctx->on_after_tool_results(state, ctx->user_data);
+            }
+
             // Call API again with tool results
             if (ctx->on_status_update) {
                 ctx->on_status_update("Processing tool results...", ctx->user_data);

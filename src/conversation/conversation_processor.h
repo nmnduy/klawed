@@ -133,6 +133,15 @@ typedef struct {
      */
     void (*on_status_update)(const char *status, void *user_data);
 
+    /**
+     * Called after tool results are added to conversation but before next API call.
+     * This is a safe injection point for real-time steering - all tool-result pairs
+     * are complete at this point.
+     * @param state Conversation state (can be modified to inject messages)
+     * @param user_data Context user_data
+     */
+    void (*on_after_tool_results)(struct ConversationState *state, void *user_data);
+
 } ProcessingContext;
 
 // ============================================================================
