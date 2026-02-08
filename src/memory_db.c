@@ -521,6 +521,14 @@ MemoryCard* memory_db_get_current(MemoryDB *mdb, const char *entity, const char 
     MemoryCard *card = NULL;
     rc = sqlite3_step(stmt);
     if (rc == SQLITE_ROW) {
+        /* Check if the memory has been retracted */
+        int relation_val = sqlite3_column_int(stmt, 5);
+        if (relation_val == MEMORY_RELATION_RETRACTS) {
+            /* Memory was retracted - return NULL */
+            sqlite3_finalize(stmt);
+            return NULL;
+        }
+
         card = calloc(1, sizeof(MemoryCard));
         if (card != NULL) {
             card->card_id = sqlite3_column_int64(stmt, 0);
@@ -528,7 +536,6 @@ MemoryCard* memory_db_get_current(MemoryDB *mdb, const char *entity, const char 
             card->slot = strdup((const char *)sqlite3_column_text(stmt, 2));
             card->value = strdup((const char *)sqlite3_column_text(stmt, 3));
             int kind_val = sqlite3_column_int(stmt, 4);
-            int relation_val = sqlite3_column_int(stmt, 5);
             card->kind = strdup(memory_db_kind_to_string((MemoryKind)kind_val));
             card->relation = strdup(memory_db_relation_to_string((MemoryRelation)relation_val));
             card->timestamp = strdup((const char *)sqlite3_column_text(stmt, 6));
@@ -678,21 +685,41 @@ MemorySearchResult* memory_db_search(MemoryDB *mdb, const char *query, uint32_t 
 
     const char *sql;
     if (has_fts) {
-        /* Use FTS5 for search */
+        /* Use FTS5 for search, filtering out retracted memories.
+         * A memory is considered retracted if:
+         * 1. Its own relation is 'retracts', OR
+         * 2. There exists a newer memory for the same entity:slot with relation 'retracts'
+         */
         sql =
             "SELECT m.id, m.entity, m.slot, m.value, m.kind, m.relation, m.timestamp,"
             "       rank as score"
             " FROM memories_fts"
             " JOIN memories m ON memories_fts.rowid = m.id"
             " WHERE memories_fts MATCH ?"
+            "   AND m.relation != 3"
+            "   AND NOT EXISTS ("
+            "       SELECT 1 FROM memories m2"
+            "       WHERE m2.entity = m.entity"
+            "         AND m2.slot = m.slot"
+            "         AND m2.relation = 3"
+            "         AND m2.id > m.id"
+            "   )"
             " ORDER BY rank"
             " LIMIT ?;";
     } else {
-        /* Fallback to simple LIKE search */
+        /* Fallback to simple LIKE search, filtering out retracted memories */
         sql =
             "SELECT id, entity, slot, value, kind, relation, timestamp, 0.0 as score"
-            " FROM memories"
-            " WHERE value LIKE ? OR entity LIKE ? OR slot LIKE ?"
+            " FROM memories m"
+            " WHERE (value LIKE ? OR entity LIKE ? OR slot LIKE ?)"
+            "   AND relation != 3"
+            "   AND NOT EXISTS ("
+            "       SELECT 1 FROM memories m2"
+            "       WHERE m2.entity = m.entity"
+            "         AND m2.slot = m.slot"
+            "         AND m2.relation = 3"
+            "         AND m2.id > m.id"
+            "   )"
             " ORDER BY id DESC"
             " LIMIT ?;";
     }
@@ -768,11 +795,23 @@ MemorySearchResult* memory_db_get_entity_memories(MemoryDB *mdb, const char *ent
         return NULL;
     }
 
+    /* Filter out retracted memories. A memory is retracted if:
+     * 1. Its own relation is 'retracts', OR
+     * 2. There exists a newer memory for the same entity:slot with relation 'retracts'
+     */
     const char *sql =
-        "SELECT id, entity, slot, value, kind, relation, timestamp"
-        " FROM memories"
-        " WHERE entity = ?"
-        " ORDER BY id DESC;";
+        "SELECT m.id, m.entity, m.slot, m.value, m.kind, m.relation, m.timestamp"
+        " FROM memories m"
+        " WHERE m.entity = ?"
+        "   AND m.relation != 3"
+        "   AND NOT EXISTS ("
+        "       SELECT 1 FROM memories m2"
+        "       WHERE m2.entity = m.entity"
+        "         AND m2.slot = m.slot"
+        "         AND m2.relation = 3"
+        "         AND m2.id > m.id"
+        "   )"
+        " ORDER BY m.id DESC;";
 
     sqlite3_stmt *stmt;
     int rc = sqlite3_prepare_v2(mdb->db, sql, -1, &stmt, NULL);
