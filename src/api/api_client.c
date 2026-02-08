@@ -315,7 +315,8 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
                         compaction_result.tokens_before,
                         compaction_result.tokens_after,
                         compaction_result.usage_before_pct,
-                        compaction_result.usage_after_pct
+                        compaction_result.usage_after_pct,
+                        compaction_result.summary[0] != '\0' ? compaction_result.summary : NULL
                     );
                 }
             } else {

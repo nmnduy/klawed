@@ -747,6 +747,7 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         result->tokens_after = tokens_after;
         result->usage_before_pct = usage_percent;
         result->usage_after_pct = after_percent;
+        strlcpy(result->summary, summary, sizeof(result->summary));
     }
 
     // Free the messages being compacted

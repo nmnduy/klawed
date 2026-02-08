@@ -262,6 +262,7 @@ Klawed responds on success:
   "tokensFreed": 63690,
   "usageBeforePct": 73.9,
   "usageAfterPct": 23.0,
+  "summary": "The user asked about file organization...",
   "content": "Context compaction: 45 messages stored to memory..."
 }
 ```
@@ -391,6 +392,7 @@ Indicates that automatic context compaction has occurred (when `--auto-compact` 
   "tokensFreed": 63690,
   "usageBeforePct": 73.9,
   "usageAfterPct": 23.0,
+  "summary": "The user asked about file organization...",
   "content": "Context compaction: 45 messages stored to memory. Tokens: 92450 → 28760 (freed ~63690 tokens). Usage: 73.9% → 23.0%."
 }
 ```
@@ -402,6 +404,7 @@ Indicates that automatic context compaction has occurred (when `--auto-compact` 
 - `tokensFreed`: Number of tokens freed by compaction
 - `usageBeforePct`: Context usage percentage before compaction
 - `usageAfterPct`: Context usage percentage after compaction
+- `summary`: AI-generated summary of the compacted context (what was stored to memory)
 - `content`: Human-readable summary of the compaction event
 
 This message is sent:
@@ -980,6 +983,7 @@ VALUES ('klawed', 'client', '{
   "tokensFreed": 63690,
   "usageBeforePct": 73.9,
   "usageAfterPct": 23.0,
+  "summary": "The user asked about file organization...",
   "content": "Context compaction: 45 messages stored to memory..."
 }', 0);
 
