@@ -803,10 +803,9 @@ void process_response(ConversationState *state,
         if (todo_write_executed && state->todo_list && state->todo_list->count > 0) {
             // Skip rendering todo list in interactive TUI mode - the todo banner
             // at the bottom of the screen already shows the current status.
-            // Only render for queue mode or non-TUI mode.
-            if (!tui || queue) {
-                char *todo_text = queue ? todo_render_to_string_plain(state->todo_list)
-                                        : todo_render_to_string(state->todo_list);
+            // Only render for non-TUI mode (when both tui and queue are NULL).
+            if (!tui && !queue) {
+                char *todo_text = todo_render_to_string(state->todo_list);
                 if (todo_text) {
                     ui_append_line(tui, queue, "[Assistant]", todo_text, COLOR_PAIR_ASSISTANT);
                     free(todo_text);
