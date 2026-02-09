@@ -37,7 +37,7 @@ static int use_transparent_bg = 0;  // Flag to enable transparent background mod
 // Initialize color support for the banner
 static void init_banner_colors(void) {
     if (colors_initialized) return;
-    
+
     // Clear cache
     color_cache_count = 0;
     for (int i = 0; i < MAX_COLOR_CACHE; i++) {
@@ -45,7 +45,7 @@ static void init_banner_colors(void) {
         color_cache[i].bg = (short)-1;
         color_cache[i].pair_num = -1;
     }
-    
+
     colors_initialized = 1;
 }
 
@@ -105,18 +105,18 @@ static int get_color_pair(short fg, short bg) {
 // Returns pointer to after the sequence, or NULL if not a valid sequence
 static const char *parse_ansi_sequence(const char *p, short *fg, short *bg, int *is_reset) {
     *is_reset = 0;
-    
+
     // Check for escape sequence start: ESC[
     if (*p != '\x1b' || *(p+1) != '[') {
         return NULL;
     }
-    
+
     p += 2; // Skip ESC[
-    
+
     // Parse the sequence
     int codes[10] = {0};
     int code_count = 0;
-    
+
     while (code_count < 10) {
         // Read number
         if (*p >= '0' && *p <= '9') {
@@ -127,7 +127,7 @@ static const char *parse_ansi_sequence(const char *p, short *fg, short *bg, int 
             }
             code_count++;
         }
-        
+
         // Check for separator or end
         if (*p == ';') {
             p++;
@@ -141,14 +141,14 @@ static const char *parse_ansi_sequence(const char *p, short *fg, short *bg, int 
             break;
         }
     }
-    
+
     // Process the codes
     if (code_count == 0) {
         // Just ^[[m - reset
         *is_reset = 1;
         return p;
     }
-    
+
     // Check for 256-color sequences: ^[[38;5;N m (fg) or ^[[48;5;N m (bg)
     if (code_count >= 3) {
         if (codes[0] == 38 && codes[1] == 5) {
@@ -159,12 +159,12 @@ static const char *parse_ansi_sequence(const char *p, short *fg, short *bg, int 
             *bg = (short)codes[2];
         }
     }
-    
+
     // Handle reset code ^[[0m
     if (code_count == 1 && codes[0] == 0) {
         *is_reset = 1;
     }
-    
+
     return p;
 }
 
@@ -174,16 +174,16 @@ int vltrn_render_banner(WINDOW *win, const char *filepath, int start_y, int star
     // Set global flag for transparency mode
     use_transparent_bg = transparent_bg;
     if (!win || !filepath) return -1;
-    
+
     FILE *fp = fopen(filepath, "r");
     if (!fp) return -1;
-    
+
     short current_fg = COLOR_WHITE;
     short current_bg = COLOR_BLACK;
     int y = start_y;
     int x = start_x;
     int max_x = start_x;
-    
+
     char line[8192];
     while (fgets(line, sizeof(line), fp) && y < 50) {
         const char *p = line;
@@ -194,7 +194,7 @@ int vltrn_render_banner(WINDOW *win, const char *filepath, int start_y, int star
                 // Parse ANSI sequence
                 int is_reset = 0;
                 const char *next = parse_ansi_sequence(p, &current_fg, &current_bg, &is_reset);
-                
+
                 if (next) {
                     p = next;
                     if (is_reset) {
@@ -216,11 +216,11 @@ int vltrn_render_banner(WINDOW *win, const char *filepath, int start_y, int star
                 p++;
             }
         }
-        
+
         if (x > max_x) max_x = x;
         y++;
     }
-    
+
     fclose(fp);
     return y; // Return final Y position
 }
@@ -228,19 +228,19 @@ int vltrn_render_banner(WINDOW *win, const char *filepath, int start_y, int star
 // Show the VLTRN greeting screen
 void vltrn_show_greeting(TUIState *tui) {
     if (!tui || !tui->is_initialized) return;
-    
+
     // Check if VLTRN_MODE is enabled
     const char *vltrn_mode = getenv("VLTRN_MODE");
     if (!vltrn_mode || strcmp(vltrn_mode, "1") != 0) {
         return;
     }
-    
+
     // Clear screen
     werase(tui->wm.conv_pad);
-    
+
     // Try to render the colored ANSI art
     int end_y = 1;
-    
+
     if (has_colors() && COLORS >= 256) {
         // Use full 256-color version with transparent background
         end_y = vltrn_render_banner(tui->wm.conv_pad,
@@ -263,7 +263,7 @@ void vltrn_show_greeting(TUIState *tui) {
             end_y = y;
         }
     }
-    
+
     // Add VLTRN branding and quote below the art
     end_y += 1;
     int brand_y = end_y++;
