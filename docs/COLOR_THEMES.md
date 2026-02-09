@@ -13,6 +13,7 @@ The TUI uses **Kitty terminal's theme format**, but themes are **embedded in the
 - `ayu` — Dark blue theme with warm accents
 - `belafonte-night` — Dark red/purple theme with earthy tones
 - `molokai` — Vibrant theme with bright colors inspired by Monokai
+- `bl1nk` — Dark theme with vibrant pink and purple accents
 
 ## Theme Explorer (Interactive Preview)
 
