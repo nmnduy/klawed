@@ -1513,9 +1513,10 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     }
 
     size_t total_count = in_progress_count + pending_count + completed_count;
+    size_t incomplete_count = in_progress_count + pending_count;
 
-    // If no todos at all, hide the TODO window
-    if (total_count == 0) {
+    // If no todos at all, or all todos are completed, hide the TODO window
+    if (total_count == 0 || incomplete_count == 0) {
         if (tui->wm.todo_win) {
             window_manager_hide_todo_window(&tui->wm);
             // Refresh to clear the hidden window from screen
