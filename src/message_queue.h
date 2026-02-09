@@ -24,7 +24,8 @@ typedef enum {
     TUI_MSG_STATUS,         /* Update status line */
     TUI_MSG_CLEAR,          /* Clear conversation display */
     TUI_MSG_ERROR,          /* Display error message */
-    TUI_MSG_TODO_UPDATE    /* Update TODO list */
+    TUI_MSG_TODO_UPDATE,    /* Update TODO list */
+    TUI_MSG_TODO_HIDE       /* Hide TODO banner (AI idle) */
 } TUIMessageType;
 
 /**

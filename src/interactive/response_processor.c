@@ -861,6 +861,9 @@ void process_response(ConversationState *state,
         // AI turn completed - hide todo banner in TUI mode
         if (tui) {
             window_manager_hide_todo_window(&tui->wm);
+        } else if (queue) {
+            // Worker thread: post message to main thread to hide banner
+            post_tui_message(queue, TUI_MSG_TODO_HIDE, NULL);
         }
 
         clock_gettime(CLOCK_MONOTONIC, &proc_end);
@@ -874,6 +877,9 @@ void process_response(ConversationState *state,
     // No tools - AI turn completed, hide todo banner in TUI mode
     if (tui) {
         window_manager_hide_todo_window(&tui->wm);
+    } else if (queue) {
+        // Worker thread: post message to main thread to hide banner
+        post_tui_message(queue, TUI_MSG_TODO_HIDE, NULL);
     }
 
     clock_gettime(CLOCK_MONOTONIC, &proc_end);
