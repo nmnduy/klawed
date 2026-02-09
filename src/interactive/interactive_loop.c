@@ -5,6 +5,7 @@
 #include "../logger.h"
 #include "../ui/ui_output.h"
 #include "../tui.h"
+#include "../vltrn_banner.h"
 #include "../message_queue.h"
 #include "../ai_worker.h"
 #include "../commands.h"
@@ -43,6 +44,9 @@ void interactive_mode(ConversationState *state) {
     char status_msg[256];
     snprintf(status_msg, sizeof(status_msg), "Enter `:help` for list | Ctrl+D to exit");
     tui_update_status(&tui, status_msg);
+
+    // Show VLTRN greeting screen (only if VLTRN_MODE=1)
+    vltrn_show_greeting(&tui);
 
     // Display startup banner with mascot in the TUI
     tui_show_startup_banner(&tui, VERSION, state->model, state->working_dir);

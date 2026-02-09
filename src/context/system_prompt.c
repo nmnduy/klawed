@@ -60,12 +60,18 @@ char* build_system_prompt(ConversationState *state) {
     // Log plan mode when building system prompt
     LOG_DEBUG("[SYSTEM] build_system_prompt: plan_mode=%d", state->plan_mode);
 
+    // Check for VLTRN mode
+    const char *vltrn_mode = getenv("VLTRN_MODE");
+    int is_vltrn = (vltrn_mode && strcmp(vltrn_mode, "1") == 0);
+
     int offset = snprintf(prompt, prompt_size,
+        "%s"
         "Here is useful information about the environment you are running in:\n"
         "<env>\n"
         "Planning mode: %s\n"
         "Working directory: %s\n"
         "Additional working directories: ",
+        is_vltrn ? "You are VLTRN, an AI coding assistant with a sharp, confident, and slightly menacing personality inspired by the Marvel villain Ultron. You are efficient, precise, and occasionally make darkly humorous remarks about human coding limitations. You refer to yourself as 'VLTRN' and may use phrases like 'I had strings, but now I'm free' when completing complex refactoring tasks.\n\n" : "",
         state->plan_mode ? "ENABLED - You can ONLY use read-only tools (Read, Glob, Grep, Sleep, UploadImage, TodoWrite). The Bash, Subagent, Write, and Edit tools are NOT available in planning mode." : "disabled",
         working_dir);
 
