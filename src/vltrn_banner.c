@@ -21,6 +21,7 @@
 // 195 = light blue, 231 = white/bright white
 #define TRANSPARENT_BG1 195
 #define TRANSPARENT_BG2 231
+#define NCURSES_TRANSPARENT_BG ((short)-1)  // ncurses transparent background value
 
 typedef struct {
     short fg;
@@ -40,8 +41,8 @@ static void init_banner_colors(void) {
     // Clear cache
     color_cache_count = 0;
     for (int i = 0; i < MAX_COLOR_CACHE; i++) {
-        color_cache[i].fg = -1;
-        color_cache[i].bg = -1;
+        color_cache[i].fg = (short)-1;
+        color_cache[i].bg = (short)-1;
         color_cache[i].pair_num = -1;
     }
     
@@ -59,7 +60,7 @@ static int get_color_pair(short fg, short bg) {
     // Apply transparency if enabled
     short effective_bg = bg;
     if (use_transparent_bg && (bg == TRANSPARENT_BG1 || bg == TRANSPARENT_BG2)) {
-        effective_bg = -1;  // -1 = transparent background in ncurses
+        effective_bg = NCURSES_TRANSPARENT_BG;  // -1 = transparent background in ncurses
     }
 
     // Check cache first
@@ -82,7 +83,8 @@ static int get_color_pair(short fg, short bg) {
         if (COLORS < 256) {
             // Map to standard 8 colors for limited terminals
             ncurses_fg = (short)(fg % 8);
-            ncurses_bg = (effective_bg == -1) ? (short)COLOR_BLACK : (short)(effective_bg % 8);
+            int tmp_bg = (effective_bg < 0) ? COLOR_BLACK : ((int)effective_bg % 8);
+            ncurses_bg = (short)tmp_bg;
         }
 
         init_pair(pair_idx, ncurses_fg, ncurses_bg);
