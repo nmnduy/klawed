@@ -1116,6 +1116,13 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
             // Placeholder for future TODO list integration
             break;
 
+        case TUI_MSG_TODO_HIDE:
+            // Hide TODO banner when AI becomes idle
+            if (tui->wm.todo_win) {
+                window_manager_hide_todo_window(&tui->wm);
+            }
+            break;
+
 
 
         default:
