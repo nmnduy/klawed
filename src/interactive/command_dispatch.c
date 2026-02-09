@@ -104,9 +104,30 @@ int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char *comman
         int rc = system(shell_cmd);
         (void)rc;  // We don't display the return code
 
-        // For :vim, we wait for a keypress but don't show the prompt
-        // since vim is an interactive editor that manages its own screen
-        getchar();
+        // Vim-style: wait for Enter before resuming
+        printf("\nPress ENTER or type command to continue");
+        fflush(stdout);
+
+        // Read a line from stdin
+        char *line = NULL;
+        size_t linecap = 0;
+        ssize_t linelen = getline(&line, &linecap, stdin);
+
+        if (linelen == -1) {
+            // Handle EOF or error
+            LOG_DEBUG("EOF or error reading from stdin after shell command");
+        } else if (linelen > 0 && line[linelen-1] == '\n') {
+            line[linelen-1] = '\0';
+            linelen--;
+        }
+
+        // If user typed a command (not just Enter), run it
+        if (linelen > 0) {
+            int rc2 = system(line);
+            (void)rc2;
+        }
+
+        free(line);
 
         // Resume TUI
         if (tui_resume(tui) != 0) {
@@ -325,9 +346,29 @@ int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char *comman
             int vim_rc = system(shell_cmd);
             (void)vim_rc;
 
-            // For :git, we wait for a keypress but don't show the prompt
-            // since vim-fugitive is an interactive editor that manages its own screen
-            getchar();
+            // Vim-style: wait for Enter before resuming
+            printf("\nPress ENTER or type command to continue");
+            fflush(stdout);
+
+            // Read a line from stdin
+            char *line = NULL;
+            size_t linecap = 0;
+            ssize_t linelen = getline(&line, &linecap, stdin);
+
+            if (linelen == -1) {
+                LOG_DEBUG("EOF or error reading from stdin after shell command");
+            } else if (linelen > 0 && line[linelen-1] == '\n') {
+                line[linelen-1] = '\0';
+                linelen--;
+            }
+
+            // If user typed a command (not just Enter), run it
+            if (linelen > 0) {
+                int rc2 = system(line);
+                (void)rc2;
+            }
+
+            free(line);
 
             // Resume TUI
             if (tui_resume(tui) != 0) {
