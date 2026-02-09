@@ -269,6 +269,8 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
     free(tui->last_search_pattern);
     tui->last_search_pattern = NULL;
 
+    // Reset tool tracking
+    tui_conversation_reset_tool_tracking(tui);
 
     // Clear pad and reset content lines
     werase(tui->wm.conv_pad);

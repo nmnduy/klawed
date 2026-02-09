@@ -16,6 +16,7 @@
 #include "tui.h"
 #include "tui_input.h"
 #include "tui_window.h"
+#include "tui_conversation.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
 #include "fallback_colors.h"
@@ -734,6 +735,8 @@ static void render_text_with_left_border(TUIState *tui, const char *text, int te
     (void)text_pair;  // Suppress unused warning (background pair used instead)
 }
 
+
+
 int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
     if (!tui || !tui->wm.conv_pad) {
         return -1;
@@ -797,6 +800,10 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
 
     // For user messages, add padding line before and caret prefix
     if (is_user_message) {
+        // Reset tool tracking - user messages break the tool output chain
+        free(tui->last_tool_name);
+        tui->last_tool_name = NULL;
+
         // Add one blank line for top padding
         waddch(tui->wm.conv_pad, '\n');
 
@@ -809,6 +816,9 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
         }
     } else if (is_assistant_message) {
+        // Reset tool tracking - assistant messages break the tool output chain
+        free(tui->last_tool_name);
+        tui->last_tool_name = NULL;
         // Assistant message: check response style
         if (tui->response_style == RESPONSE_STYLE_BORDER) {
             // Border style: use left border decoration (│ ) on each line
@@ -833,11 +843,24 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     } else {
         // Write prefix for other (non-user, non-assistant) messages
         if (prefix && prefix[0] != '\0') {
+            // Use the conversation module to get the appropriate display prefix
+            // This handles tree connector logic for consecutive same-tool outputs
+            const char *display_prefix = tui_conversation_get_tool_display_prefix(tui, prefix);
+
+            // Check if we're using the tree connector (└─)
+            int is_tree_connector = (display_prefix != prefix);
+
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
-            waddstr(tui->wm.conv_pad, prefix);
-            waddch(tui->wm.conv_pad, ' ');
+
+            waddstr(tui->wm.conv_pad, display_prefix);
+
+            // Add space after prefix, but not for tree connector (it already includes space)
+            if (!is_tree_connector) {
+                waddch(tui->wm.conv_pad, ' ');
+            }
+
             if (has_colors()) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
@@ -937,6 +960,10 @@ void redraw_conversation(TUIState *tui) {
     // Clear the pad
     werase(tui->wm.conv_pad);
     window_manager_set_content_lines(&tui->wm, 0);
+
+    // Reset tool tracking for fresh redraw
+    free(tui->last_tool_name);
+    tui->last_tool_name = NULL;
 
     // Re-render all entries
     for (int i = 0; i < tui->entries_count; i++) {
