@@ -246,7 +246,34 @@ const BuiltInTheme built_in_themes[] = {
       "color14               #50cdfe\n"
       "color7                #bbbbbb\n"
       "color15               #ffffff\n"
-      "selection_foreground #121212\n" }
+      "selection_foreground #121212\n" },
+    { "bl1nk",
+      "## name: bl1nk\n"
+      "## author: dhay3\n"
+      "## license: CC0 1.0\n"
+      "## upstream: https://github.com/dhay3/kitty-bl1nk/blob/main/bl1nk.conf\n"
+      "\n"
+      "background              #111111\n"
+      "foreground              #A0A0A0\n"
+      "selection_foreground    none\n"
+      "selection_background    none\n"
+      "cursor                  none\n"
+      "color0                  #1A1C1D\n"
+      "color8                  #505354\n"
+      "color1                  #FF5894\n"
+      "color9                  #F92571\n"
+      "color2                  #B5E354\n"
+      "color10                 #81B313\n"
+      "color3                  #F5921D\n"
+      "color11                 #FEED6B\n"
+      "color4                  #4E81AA\n"
+      "color12                 #0B72C1\n"
+      "color5                  #8B54FE\n"
+      "color13                 #9D6EFE\n"
+      "color6                  #465456\n"
+      "color14                 #889BA1\n"
+      "color7                  #CBCBC5\n"
+      "color15                 #F8F8F2\n" }
 };
 
 const size_t built_in_themes_count = sizeof(built_in_themes) / sizeof(built_in_themes[0]);
