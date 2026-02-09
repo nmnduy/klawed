@@ -344,7 +344,10 @@ static int cmd_themes(ConversationState *state, const char *args) {
             // Try to reload the theme immediately
             if (init_colorscheme(selected) == 0) {
                 g_theme_loaded = 1;
-                LOG_INFO("[CMD_THEMES] Theme applied successfully");
+                LOG_INFO("[CMD_THEMES] Theme colorscheme loaded successfully");
+                // Reload ncurses color pairs with new theme colors
+                tui_reload_colors();
+                LOG_INFO("[CMD_THEMES] TUI colors reloaded");
                 // Redraw the TUI to reflect the new theme
                 tui_resume(state->tui);
                 tui_refresh(state->tui);

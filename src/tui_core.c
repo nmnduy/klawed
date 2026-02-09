@@ -51,7 +51,7 @@ static short rgb_to_ncurses(int value) {
 }
 
 // Initialize ncurses color pairs from theme
-static void init_ncurses_colors(void) {
+void tui_reload_colors(void) {
     // Check if terminal supports colors
     if (!has_colors()) {
         LOG_DEBUG("[TUI] Terminal does not support colors");
@@ -370,7 +370,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
     }
 
     // Initialize colors from colorscheme
-    init_ncurses_colors();
+    tui_reload_colors();
 
     // Get screen dimensions to calculate max input height
     int screen_height, screen_width;
