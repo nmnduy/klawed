@@ -307,6 +307,10 @@ int tui_get_vim_fugitive_available(TUIState *tui);
 // This spawns a thread to check without blocking the main thread
 void tui_start_vim_fugitive_check(TUIState *tui);
 
+// Reload TUI colors from current theme
+// Call this after changing the theme to apply new colors immediately
+void tui_reload_colors(void);
+
 // Internal functions (used across TUI modules during refactoring)
 // These will eventually move to their respective specialized modules
 
