@@ -72,34 +72,39 @@ typedef struct {
 } TextDiffusionConfig;
 
 // Get monotonic time in nanoseconds
-static inline uint64_t text_diffusion_time_ns(void) {
+__attribute__((unused))
+static uint64_t text_diffusion_time_ns(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
 }
 
 // Simple random number generator (per-instance to avoid global state)
-static inline unsigned int text_diffusion_rand(TextDiffusionConfig *config) {
+__attribute__((unused))
+static unsigned int text_diffusion_rand(TextDiffusionConfig *config) {
     // LCG parameters (same as glibc)
     config->rand_seed = config->rand_seed * 1103515245 + 12345;
     return (config->rand_seed >> 16) & 0x7FFF;
 }
 
 // Get random float between 0.0 and 1.0
-static inline float text_diffusion_randf(TextDiffusionConfig *config) {
+__attribute__((unused))
+static float text_diffusion_randf(TextDiffusionConfig *config) {
     unsigned int r = text_diffusion_rand(config);
     return (float)r / 32767.0f;
 }
 
 // Get random noise character
-static inline char text_diffusion_noise_char(TextDiffusionConfig *config) {
+__attribute__((unused))
+static char text_diffusion_noise_char(TextDiffusionConfig *config) {
     int noise_len = (int)sizeof(TEXT_DIFFUSION_NOISE_CHARS) - 1;
     int idx = (int)(text_diffusion_rand(config) % (unsigned int)noise_len);
     return TEXT_DIFFUSION_NOISE_CHARS[idx];
 }
 
 // Check if character is punctuation
-static inline int text_diffusion_is_punctuation(char c) {
+__attribute__((unused))
+static int text_diffusion_is_punctuation(char c) {
     return (c == '.' || c == ',' || c == '!' || c == '?' ||
             c == ':' || c == ';' || c == '-' || c == '\'' ||
             c == '"' || c == '(' || c == ')' || c == '[' ||
@@ -107,7 +112,8 @@ static inline int text_diffusion_is_punctuation(char c) {
 }
 
 // Initialize diffusion config with defaults
-static inline void text_diffusion_init(TextDiffusionConfig *config) {
+__attribute__((unused))
+static void text_diffusion_init(TextDiffusionConfig *config) {
     if (!config) return;
 
     memset(config, 0, sizeof(TextDiffusionConfig));
@@ -125,7 +131,8 @@ static inline void text_diffusion_init(TextDiffusionConfig *config) {
 }
 
 // Set new target text and start animation
-static inline void text_diffusion_set_target(TextDiffusionConfig *config,
+__attribute__((unused))
+static void text_diffusion_set_target(TextDiffusionConfig *config,
                                               const char *text) {
     if (!config || !text) return;
 
@@ -185,7 +192,8 @@ static inline void text_diffusion_set_target(TextDiffusionConfig *config,
 
 // Update diffusion animation
 // Returns 1 if display changed, 0 if no change
-static inline int text_diffusion_update(TextDiffusionConfig *config) {
+__attribute__((unused))
+static int text_diffusion_update(TextDiffusionConfig *config) {
     if (!config) return 0;
 
     // Nothing to do if idle or complete
@@ -251,7 +259,8 @@ static inline int text_diffusion_update(TextDiffusionConfig *config) {
 }
 
 // Get current display text
-static inline const char* text_diffusion_get_display(const TextDiffusionConfig *config) {
+__attribute__((unused))
+static const char* text_diffusion_get_display(const TextDiffusionConfig *config) {
     if (!config) return "";
 
     // If no target set, return empty string
@@ -263,19 +272,22 @@ static inline const char* text_diffusion_get_display(const TextDiffusionConfig *
 }
 
 // Check if animation is active
-static inline int text_diffusion_is_active(const TextDiffusionConfig *config) {
+__attribute__((unused))
+static int text_diffusion_is_active(const TextDiffusionConfig *config) {
     if (!config) return 0;
     return config->state == TEXT_DIFFUSION_REVEALING;
 }
 
 // Check if animation is complete
-static inline int text_diffusion_is_complete(const TextDiffusionConfig *config) {
+__attribute__((unused))
+static int text_diffusion_is_complete(const TextDiffusionConfig *config) {
     if (!config) return 1;
     return config->state == TEXT_DIFFUSION_COMPLETE || config->state == TEXT_DIFFUSION_IDLE;
 }
 
 // Reset to idle state (clears animation)
-static inline void text_diffusion_reset(TextDiffusionConfig *config) {
+__attribute__((unused))
+static void text_diffusion_reset(TextDiffusionConfig *config) {
     if (!config) return;
 
     config->state = TEXT_DIFFUSION_IDLE;
@@ -286,7 +298,8 @@ static inline void text_diffusion_reset(TextDiffusionConfig *config) {
 }
 
 // Skip animation and show final text immediately
-static inline void text_diffusion_skip(TextDiffusionConfig *config) {
+__attribute__((unused))
+static void text_diffusion_skip(TextDiffusionConfig *config) {
     if (!config) return;
 
     if (config->target_len > 0) {
@@ -300,7 +313,8 @@ static inline void text_diffusion_skip(TextDiffusionConfig *config) {
 }
 
 // Set animation duration
-static inline void text_diffusion_set_duration(TextDiffusionConfig *config,
+__attribute__((unused))
+static void text_diffusion_set_duration(TextDiffusionConfig *config,
                                                 float seconds) {
     if (!config) return;
     if (seconds < 0.1f) seconds = 0.1f;
@@ -309,7 +323,8 @@ static inline void text_diffusion_set_duration(TextDiffusionConfig *config,
 }
 
 // Set reveal spread (0.0 = uniform, 1.0 = very spread out)
-static inline void text_diffusion_set_spread(TextDiffusionConfig *config,
+__attribute__((unused))
+static void text_diffusion_set_spread(TextDiffusionConfig *config,
                                               float spread) {
     if (!config) return;
     if (spread < 0.0f) spread = 0.0f;
