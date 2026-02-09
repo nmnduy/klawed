@@ -1306,8 +1306,8 @@ int main(int argc, char *argv[]) {
         printf("    KLAWED_GREP_DISPLAY_LIMIT Optional: Max grep results to display (default: 20)\n");
         printf("    KLAWED_GLOB_DISPLAY_LIMIT Optional: Max glob results to display (default: 10)\n");
         printf("    KLAWED_AUTO_COMPACT       Optional: Enable automatic context compaction (1=true, 0=false)\n");
-        printf("    KLAWED_COMPACT_THRESHOLD  Optional: Trigger compaction at this %% of max messages (default: 60)\n");
-        printf("    KLAWED_COMPACT_KEEP_RECENT Optional: Number of recent messages to keep (default: 20)\n\n");
+        printf("    KLAWED_COMPACT_THRESHOLD  Optional: Trigger compaction at this %% of max messages (default: 75)\n");
+        printf("    KLAWED_COMPACT_KEEP_RECENT Optional: Number of recent messages to keep (default: 100)\n\n");
 
         printf("  SQLite Queue Mode:\n");
         printf("    KLAWED_SQLITE_DB_PATH  Optional: Path to SQLite database for message queue\n");

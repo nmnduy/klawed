@@ -13,8 +13,8 @@
 #include <bsd/string.h>
 
 // Default configuration values
-#define DEFAULT_COMPACT_THRESHOLD 60    // 60% of token limit
-#define DEFAULT_KEEP_RECENT 20          // Keep last 20 messages
+#define DEFAULT_COMPACT_THRESHOLD 75    // 75% of token limit
+#define DEFAULT_KEEP_RECENT 100         // Keep last 100 messages
 #define DEFAULT_TOKEN_LIMIT 125000      // Default model token limit (125k)
 
 /**
