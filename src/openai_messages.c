@@ -36,12 +36,15 @@ static int insert_message_at(ConversationState *state, int insert_pos, InternalM
         return -1;
     }
 
-    // Shift messages from insert_pos to end
-    for (int i = state->count; i > insert_pos; i--) {
-        state->messages[i] = state->messages[i - 1];
+    // Shift messages from insert_pos to end using memmove to avoid pointer aliasing
+    // This properly moves the InternalMessage structs without duplicating the contents pointers
+    if (insert_pos < state->count) {
+        memmove(&state->messages[insert_pos + 1],
+                &state->messages[insert_pos],
+                (size_t)(state->count - insert_pos) * sizeof(InternalMessage));
     }
 
-    // Insert the new message
+    // Insert the new message (move, not copy - msg's contents pointer is transferred)
     state->messages[insert_pos] = *msg;
     state->count++;
 

@@ -40,4 +40,31 @@ MessageType tui_conversation_get_message_type(const char *prefix);
 // Returns appropriate TUIColorPair based on prefix content
 TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix);
 
+// ============================================================================
+// Tool Output Connector (Tree Drawing) Functions
+// ============================================================================
+
+// Extract tool name from tool prefix
+// Format: "● ToolName" (● is UTF-8: 0xE2 0x97 0x8F)
+// Returns allocated string with tool name, or NULL if not a tool prefix
+// Caller must free the returned string
+char* tui_conversation_extract_tool_name(const char *prefix);
+
+// Check if a prefix is a tool message (starts with ●)
+// Returns 1 if tool message, 0 otherwise
+int tui_conversation_is_tool_message(const char *prefix);
+
+// Determine the display prefix for a tool message
+// If same tool as last output, returns "└─"
+// Otherwise returns the full prefix
+// Updates last_tool_name in TUIState
+// Returns the prefix to use (may be the input prefix or "└─")
+// Note: The returned string is either a static "└─" or the input prefix
+// Caller should not free the returned string
+const char* tui_conversation_get_tool_display_prefix(TUIState *tui, const char *prefix);
+
+// Reset tool tracking state
+// Should be called when conversation is cleared or on message type change
+void tui_conversation_reset_tool_tracking(TUIState *tui);
+
 #endif // TUI_CONVERSATION_H
