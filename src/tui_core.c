@@ -509,6 +509,9 @@ int tui_init(TUIState *tui, ConversationState *state) {
         LOG_WARN("[TUI] Failed to initialize vim-fugitive mutex");
     }
 
+    // Initialize tool output connection tracking
+    tui->last_tool_name = NULL;
+
     tui->is_initialized = 1;
 
     LOG_DEBUG("[TUI] Initialized (screen=%dx%d, conv_h=%d, status_h=%d, input_h=%d)",
@@ -598,6 +601,10 @@ void tui_cleanup(TUIState *tui) {
         history_file_close(tui->history_file);
         tui->history_file = NULL;
     }
+
+    // Free tool name tracking
+    free(tui->last_tool_name);
+    tui->last_tool_name = NULL;
 }
 
 int tui_suspend(TUIState *tui) {

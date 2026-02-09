@@ -624,3 +624,135 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
     }
     return COLOR_PAIR_DEFAULT;
 }
+
+// ============================================================================
+// Tool Output Connector (Tree Drawing) Functions
+// ============================================================================
+
+// UTF-8 bytes for "●" (black circle): 0xE2 0x97 0x8F
+// UTF-8 bytes for "└" (box drawings light up and right): 0xE2 0x94 0x94
+// UTF-8 bytes for "─" (box drawings light horizontal): 0xE2 0x94 0x80
+
+// Extract tool name from tool prefix
+// Format: "● ToolName" (● is UTF-8: 0xE2 0x97 0x8F)
+// Returns allocated string with tool name, or NULL if not a tool prefix
+// Caller must free the returned string
+char* tui_conversation_extract_tool_name(const char *prefix) {
+    if (!prefix || prefix[0] == '\0') {
+        return NULL;
+    }
+
+    // Check for "● " prefix (circle + space)
+    // ● in UTF-8 is 0xE2 0x97 0x8F, followed by space 0x20
+    const char *CIRCLE_PREFIX = "\xe2\x97\x8f ";
+    size_t circle_len = 4; // 3 bytes for ● + 1 byte for space
+
+    if (strncmp(prefix, CIRCLE_PREFIX, circle_len) != 0) {
+        return NULL;  // Not a circle-prefixed tool message
+    }
+
+    // Extract the tool name (everything after "● ")
+    const char *tool_name_start = prefix + circle_len;
+
+    // Find the end of the tool name (look for colon or end of string)
+    const char *colon = strchr(tool_name_start, ':');
+    size_t name_len;
+    if (colon) {
+        name_len = (size_t)(colon - tool_name_start);
+    } else {
+        name_len = strlen(tool_name_start);
+    }
+
+    // Skip leading whitespace in tool name
+    while (name_len > 0 && (*tool_name_start == ' ' || *tool_name_start == '\t')) {
+        tool_name_start++;
+        name_len--;
+    }
+
+    // Skip trailing whitespace in tool name
+    while (name_len > 0 && (tool_name_start[name_len - 1] == ' ' ||
+                            tool_name_start[name_len - 1] == '\t')) {
+        name_len--;
+    }
+
+    if (name_len == 0) {
+        return NULL;
+    }
+
+    // Allocate and copy the tool name
+    char *tool_name = malloc(name_len + 1);
+    if (!tool_name) {
+        return NULL;
+    }
+
+    memcpy(tool_name, tool_name_start, name_len);
+    tool_name[name_len] = '\0';
+
+    return tool_name;
+}
+
+// Check if a prefix is a tool message (starts with ●)
+// Returns 1 if tool message, 0 otherwise
+int tui_conversation_is_tool_message(const char *prefix) {
+    if (!prefix || prefix[0] == '\0') {
+        return 0;
+    }
+
+    // The ● character is UTF-8: 0xE2 0x97 0x8F (3 bytes)
+    return (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ? 1 : 0;
+}
+
+// Determine the display prefix for a tool message
+// If same tool as last output, returns "└─"
+// Otherwise returns the full prefix
+// Updates last_tool_name in TUIState
+// Returns the prefix to use (may be the input prefix or "└─")
+// Note: The returned string is either a static "└─" or the input prefix
+// Caller should not free the returned string
+const char* tui_conversation_get_tool_display_prefix(TUIState *tui, const char *prefix) {
+    if (!tui || !prefix) {
+        return prefix;
+    }
+
+    // Check if this is a tool message
+    if (!tui_conversation_is_tool_message(prefix)) {
+        // Not a tool message - reset tracking and return original
+        tui_conversation_reset_tool_tracking(tui);
+        return prefix;
+    }
+
+    // Extract the tool name from current prefix
+    char *current_tool = tui_conversation_extract_tool_name(prefix);
+    if (!current_tool) {
+        // Could not extract tool name - use original prefix
+        tui_conversation_reset_tool_tracking(tui);
+        return prefix;
+    }
+
+    const char *result;
+
+    // Compare with last tool name
+    if (tui->last_tool_name && strcmp(tui->last_tool_name, current_tool) == 0) {
+        // Same tool - use tree connector (└─)
+        result = "\xe2\x94\x94\xe2\x94\x80 ";  // └─ followed by space
+    } else {
+        // Different tool or first tool - use full prefix
+        result = prefix;
+        // Update last_tool_name
+        free(tui->last_tool_name);
+        tui->last_tool_name = strdup(current_tool);
+    }
+
+    free(current_tool);
+    return result;
+}
+
+// Reset tool tracking state
+// Should be called when conversation is cleared or on message type change
+void tui_conversation_reset_tool_tracking(TUIState *tui) {
+    if (!tui) {
+        return;
+    }
+    free(tui->last_tool_name);
+    tui->last_tool_name = NULL;
+}

@@ -198,6 +198,9 @@ typedef struct TUIStateStruct {
     int vim_fugitive_available;       // -1 = unknown, 0 = not available, 1 = available
     pthread_mutex_t vim_fugitive_mutex; // Mutex for thread-safe access
     int vim_fugitive_mutex_initialized; // Tracks mutex initialization
+
+    // Tool output connection tracking (for └─ tree connector)
+    char *last_tool_name;             // Last rendered tool name (for tree connector)
 } TUIState;
 
 // Initialize TUI (must be called before any other TUI functions)
