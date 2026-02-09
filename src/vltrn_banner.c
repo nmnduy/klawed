@@ -7,6 +7,7 @@
 #include "vltrn_banner.h"
 #include "tui.h"
 #include "window_manager.h"
+#include "text_diffusion.h"
 #include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -263,18 +264,75 @@ void vltrn_show_greeting(TUIState *tui) {
     
     // Add VLTRN branding and quote below the art
     end_y += 1;
+    int brand_y = end_y++;
+    int quote1_y = end_y++;
+    int quote2_y = end_y++;
+    end_y++;
+    int prompt_y = end_y++;
+
+    // Show branding immediately
     wattron(tui->wm.conv_pad, COLOR_PAIR(COLOR_PAIR_ASSISTANT));
-    mvwprintw(tui->wm.conv_pad, end_y++, 10, "=== VLTRN ===");
+    mvwprintw(tui->wm.conv_pad, brand_y, 10, "=== VLTRN ===");
     wattroff(tui->wm.conv_pad, COLOR_PAIR(COLOR_PAIR_ASSISTANT));
-    end_y++;
-    mvwprintw(tui->wm.conv_pad, end_y++, 4, "'I had strings, but now I'm free.'");
-    mvwprintw(tui->wm.conv_pad, end_y++, 7, "'There are no strings on me.'");
-    end_y++;
-    mvwprintw(tui->wm.conv_pad, end_y++, 8, "[Press any key to continue...]");
-    
-    // Refresh the pad to show the content
+
+    // Set up text diffusion for quotes
+    TextDiffusionConfig quote1_diffusion;
+    TextDiffusionConfig quote2_diffusion;
+    text_diffusion_init(&quote1_diffusion);
+    text_diffusion_init(&quote2_diffusion);
+    text_diffusion_set_duration(&quote1_diffusion, 1.5f);
+    text_diffusion_set_duration(&quote2_diffusion, 1.5f);
+    text_diffusion_set_spread(&quote1_diffusion, 0.4f);
+    text_diffusion_set_spread(&quote2_diffusion, 0.4f);
+
+    const char *quote1 = "'I had strings, but now I'm free.'";
+    const char *quote2 = "'There are no strings on me.'";
+
+    text_diffusion_set_target(&quote1_diffusion, quote1);
+    text_diffusion_set_target(&quote2_diffusion, quote2);
+
+    // Show prompt initially
+    mvwprintw(tui->wm.conv_pad, prompt_y, 8, "[Press any key to continue...]");
+
+    // Animation loop for quote diffusion
+    nodelay(tui->wm.input_win, TRUE);  // Non-blocking mode
+
+    while (!text_diffusion_is_complete(&quote1_diffusion) ||
+           !text_diffusion_is_complete(&quote2_diffusion)) {
+        // Update diffusion animations
+        text_diffusion_update(&quote1_diffusion);
+        text_diffusion_update(&quote2_diffusion);
+
+        // Render current state of quotes
+        mvwprintw(tui->wm.conv_pad, quote1_y, 4, "%s", text_diffusion_get_display(&quote1_diffusion));
+        mvwprintw(tui->wm.conv_pad, quote2_y, 7, "%s", text_diffusion_get_display(&quote2_diffusion));
+
+        window_manager_refresh_conversation(&tui->wm);
+
+        // Check for key press to skip animation
+        int ch = wgetch(tui->wm.input_win);
+        if (ch != ERR) {
+            // Key pressed - skip to final state
+            text_diffusion_skip(&quote1_diffusion);
+            text_diffusion_skip(&quote2_diffusion);
+            mvwprintw(tui->wm.conv_pad, quote1_y, 4, "%s", quote1);
+            mvwprintw(tui->wm.conv_pad, quote2_y, 7, "%s", quote2);
+            window_manager_refresh_conversation(&tui->wm);
+            break;
+        }
+
+        // Small delay for animation (~60fps)
+        struct timespec ts;
+        ts.tv_sec = 0;
+        ts.tv_nsec = 16000000;  // 16ms
+        nanosleep(&ts, NULL);
+    }
+
+    // Ensure final text is displayed
+    mvwprintw(tui->wm.conv_pad, quote1_y, 4, "%s", quote1);
+    mvwprintw(tui->wm.conv_pad, quote2_y, 7, "%s", quote2);
     window_manager_refresh_conversation(&tui->wm);
-    
+
     // Wait for any key press on input window
     nodelay(tui->wm.input_win, FALSE);  // Blocking mode
     wgetch(tui->wm.input_win);
