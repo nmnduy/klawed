@@ -787,6 +787,10 @@ void tui_render_active_subagents(TUIState *tui) {
 void tui_show_startup_banner(TUIState *tui, const char *version, const char *model, const char *working_dir) {
     if (!tui || !tui->is_initialized) return;
 
+    // Check if VLTRN mode is enabled
+    const char *vltrn_mode = getenv("VLTRN_MODE");
+    int is_vltrn = (vltrn_mode && strcmp(vltrn_mode, "1") == 0);
+
     // Format banner lines with ASCII art cat mascot
     char line1[256];
     char line2[256];
@@ -794,7 +798,8 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     char tip_line[512];
 
     // Create content lines without box borders
-    snprintf(line1, sizeof(line1), "  /\\_/\\   klawed v%s", version ? version : "?");
+    const char *name = is_vltrn ? "vltrn" : "klawed";
+    snprintf(line1, sizeof(line1), "  /\\_/\\   %s v%s", name, version ? version : "?");
     snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
     snprintf(line3, sizeof(line3), "  > ^ <    %s", working_dir);
 
@@ -802,9 +807,12 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
 
     // Add banner lines to conversation window (without box)
-    tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
-    tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
-    tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
+    // Skip cat mascot in VLTRN mode
+    if (!is_vltrn) {
+        tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
+    }
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);  // Blank line
 
     // Tips array: randomly select one to display at startup
@@ -848,6 +856,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
 }
 
+// Simple cache for ANSI color pairs to avoid recreating them
 void tui_start_vim_fugitive_check(TUIState *tui) {
     if (!tui) return;
 
