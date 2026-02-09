@@ -1,11 +1,24 @@
 /*
- * Klawed - Pure C Implementation
- * A lightweight coding agent that interacts with OpenAI-compatible APIs
+ * Copyright (c) 2025 [Your Company Name]. All rights reserved.
  *
- * Compilation: make
- * Usage: ./klawed "your prompt here"
+ * This software is proprietary and confidential. Unauthorized copying,
+ * modification, distribution, or use of this software, in whole or in part,
+ * is strictly prohibited without prior written permission from the copyright
+ * holder.
  *
- * Dependencies: libcurl, cJSON, pthread
+ * This software is licensed under the End User License Agreement (EULA).
+ * See LICENSE file for complete terms.
+ *
+ * For licensing information, please contact:
+ * [Your Company Name]
+ * [Your Email]
+ * [Your Website]
+ *
+ * This software incorporates third-party components. See THIRD_PARTY_NOTICES
+ * for attribution and licensing information.
+ *
+ * Klawed - Professional Coding Agent
+ * A high-performance AI coding assistant built in pure C
  */
 
 #ifndef __APPLE__
