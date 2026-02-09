@@ -58,21 +58,21 @@ The memory database is always available since it uses SQLite3 with FTS5, which i
 export KLAWED_AUTO_COMPACT=1              # Enable (1/true/yes)
 
 # Configure thresholds
-export KLAWED_COMPACT_THRESHOLD=60        # Trigger at 60% of model token limit (default: 60)
-export KLAWED_COMPACT_KEEP_RECENT=20      # Keep last 20 messages (default: 20)
+export KLAWED_COMPACT_THRESHOLD=75        # Trigger at 75% of model token limit (default: 75)
+export KLAWED_COMPACT_KEEP_RECENT=100     # Keep last 100 messages (default: 100)
 export KLAWED_CONTEXT_LIMIT=125000  # Override model token limit (default: 125000)
 ```
 
 ### Configuration Parameters
 
 - **`KLAWED_COMPACT_THRESHOLD`**: Percentage of model token limit at which to trigger compaction
-  - Default: 60 (triggers at 75,000 tokens for 125k limit)
+  - Default: 75 (triggers at 93,750 tokens for 125k limit)
   - Range: 1-100
   - Lower values = more aggressive compaction
   - Example: 80% threshold on 125k model = triggers at 100,000 tokens
 
 - **`KLAWED_COMPACT_KEEP_RECENT`**: Number of recent messages to keep after compaction
-  - Default: 20
+  - Default: 100
   - Minimum: 1 (always keeps system message)
   - These messages remain in the active context window
 
