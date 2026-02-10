@@ -48,7 +48,7 @@ static int reload_token_from_disk_if_newer(KimiOAuthManager *manager);
 static KimiDeviceAuth* request_device_authorization(KimiOAuthManager *manager);
 static KimiOAuthToken* poll_for_token(KimiOAuthManager *manager,
                                        const KimiDeviceAuth *device_auth);
-static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager);
+static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager, int force);
 static void* refresh_thread_func(void *arg);
 static char* get_kimi_dir(void);
 static char* get_credentials_dir(void);
@@ -849,7 +849,7 @@ static int reload_token_from_disk_if_newer(KimiOAuthManager *manager) {
  * Before refreshing, this reloads from disk to check if another process
  * already refreshed. After refreshing, it saves to disk immediately.
  */
-static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager) {
+static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager, int force) {
     if (!manager) {
         LOG_ERROR("Cannot refresh: no manager");
         return NULL;
@@ -865,11 +865,14 @@ static KimiOAuthToken* refresh_token_internal(KimiOAuthManager *manager) {
     }
 
     // Check if token is still within refresh threshold after potential disk reload
-    time_t now = time(NULL);
-    time_t remaining = manager->token->expires_at - now;
-    if (remaining >= KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
-        LOG_DEBUG("Token already fresh after disk reload (%ld seconds remaining), skipping refresh", (long)remaining);
-        return NULL;  // Return NULL to indicate no refresh needed, caller should use existing token
+    // Skip this check if force=1 (e.g., after receiving 401 from API)
+    if (!force) {
+        time_t now = time(NULL);
+        time_t remaining = manager->token->expires_at - now;
+        if (remaining >= KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+            LOG_DEBUG("Token already fresh after disk reload (%ld seconds remaining), skipping refresh", (long)remaining);
+            return NULL;  // Return NULL to indicate no refresh needed, caller should use existing token
+        }
     }
 
     // Remember the refresh_token we're about to use
@@ -1034,7 +1037,7 @@ static void* refresh_thread_func(void *arg) {
                 LOG_INFO("Token expires in %ld seconds, refreshing...",
                          (long)remaining);
 
-                KimiOAuthToken *new_token = refresh_token_internal(manager);
+                KimiOAuthToken *new_token = refresh_token_internal(manager, 0);
                 if (new_token) {
                     // Swap tokens
                     KimiOAuthToken *old_token = manager->token;
@@ -1310,7 +1313,7 @@ const char* kimi_oauth_get_access_token(KimiOAuthManager *manager) {
 
     if (expires_in < KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
         LOG_INFO("Access token expiring in %ld seconds, refreshing...", (long)expires_in);
-        KimiOAuthToken *new_token = refresh_token_internal(manager);
+        KimiOAuthToken *new_token = refresh_token_internal(manager, 0);
 
         if (new_token) {
             KimiOAuthToken *old_token = manager->token;
@@ -1351,7 +1354,7 @@ const char* kimi_oauth_get_access_token(KimiOAuthManager *manager) {
  * Force token refresh
  * Reloads from disk first to handle multi-process scenarios.
  */
-int kimi_oauth_refresh(KimiOAuthManager *manager) {
+int kimi_oauth_refresh(KimiOAuthManager *manager, int force) {
     if (!manager) return -1;
 
     pthread_mutex_lock(&manager->token_mutex);
@@ -1365,16 +1368,16 @@ int kimi_oauth_refresh(KimiOAuthManager *manager) {
         return -1;
     }
 
-    // Check if refresh is actually needed after disk reload
+    // Check if refresh is actually needed after disk reload (unless force=1)
     time_t now = time(NULL);
     time_t remaining = manager->token->expires_at - now;
-    if (remaining >= KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+    if (!force && remaining >= KIMI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
         LOG_INFO("Token already fresh after disk reload, skipping forced refresh");
         pthread_mutex_unlock(&manager->token_mutex);
         return 0;
     }
 
-    KimiOAuthToken *new_token = refresh_token_internal(manager);
+    KimiOAuthToken *new_token = refresh_token_internal(manager, force);
     if (!new_token) {
         // Check if we got a valid token from disk during the refresh attempt
         if (manager->token && manager->token->access_token) {
