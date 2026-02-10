@@ -778,7 +778,7 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
         } else {
             // No newer token on disk, try to refresh ourselves
             LOG_INFO("Kimi: No newer token on disk, attempting refresh...");
-            if (kimi_oauth_refresh(config->oauth_manager) == 0) {
+            if (kimi_oauth_refresh(config->oauth_manager, 1) == 0) {
                 LOG_INFO("Kimi: Token refreshed successfully");
                 result.is_retryable = 1;  // Allow retry with new token
             } else {
