@@ -1069,8 +1069,8 @@ Provider* bedrock_provider_create(const char *model) {
         return NULL;
     }
 
-    // Initialize Bedrock configuration using existing function
-    BedrockConfig *config = bedrock_config_init(model);
+    // Initialize Bedrock configuration using explicit init (bypasses KLAWED_USE_BEDROCK env check)
+    BedrockConfig *config = bedrock_config_init_ex(model, NULL);
     if (!config) {
         LOG_ERROR("Bedrock provider: failed to initialize Bedrock configuration");
         return NULL;

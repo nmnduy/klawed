@@ -664,36 +664,55 @@ char* bedrock_converse_convert_request(const char *openai_request) {
 
     /* === Ensure first message is a user message ===
      * AWS Bedrock Converse API requires the conversation to start with a user message.
-     * If the first message is an assistant message (can happen with session resume
-     * or certain conversation patterns), we need to prepend a placeholder user message.
+     * If the first message is not a user message (can happen with session resume,
+     * tool results, or certain conversation patterns), prepend a placeholder.
      */
     int converse_msg_count = cJSON_GetArraySize(converse_messages);
-    if (converse_msg_count > 0) {
-        cJSON *first_msg = cJSON_GetArrayItem(converse_messages, 0);
-        if (first_msg) {
-            cJSON *first_role = cJSON_GetObjectItem(first_msg, "role");
-            if (first_role && cJSON_IsString(first_role) &&
-                strcmp(first_role->valuestring, "assistant") == 0) {
-                LOG_WARN("First message is assistant, prepending placeholder user message for Bedrock compatibility");
+    int needs_placeholder = 0;
+    const char *first_role_str = "(empty)";
 
-                /* Create placeholder user message */
-                cJSON *placeholder = cJSON_CreateObject();
-                if (placeholder) {
-                    cJSON_AddStringToObject(placeholder, "role", "user");
-                    cJSON *placeholder_content = cJSON_CreateArray();
-                    if (placeholder_content) {
-                        cJSON *text_block = cJSON_CreateObject();
-                        if (text_block) {
-                            cJSON_AddStringToObject(text_block, "text", "(continuing conversation)");
-                            cJSON_AddItemToArray(placeholder_content, text_block);
-                        }
-                        cJSON_AddItemToObject(placeholder, "content", placeholder_content);
-                    }
-                    /* Insert at the beginning of the array */
-                    cJSON_InsertItemInArray(converse_messages, 0, placeholder);
-                    converse_msg_count++;
+    if (converse_msg_count == 0) {
+        LOG_WARN("No messages in conversation, will add placeholder user message");
+        needs_placeholder = 1;
+    } else {
+        cJSON *first_msg = cJSON_GetArrayItem(converse_messages, 0);
+        if (!first_msg) {
+            LOG_WARN("First message is null, will add placeholder user message");
+            needs_placeholder = 1;
+        } else {
+            cJSON *first_role = cJSON_GetObjectItem(first_msg, "role");
+            if (!first_role || !cJSON_IsString(first_role)) {
+                LOG_WARN("First message has no role, will add placeholder user message");
+                needs_placeholder = 1;
+            } else {
+                first_role_str = first_role->valuestring;
+                if (strcmp(first_role_str, "user") != 0) {
+                    LOG_WARN("First message is '%s', not 'user' - prepending placeholder for Bedrock compatibility",
+                             first_role_str);
+                    needs_placeholder = 1;
                 }
             }
+        }
+    }
+
+    if (needs_placeholder) {
+        /* Create placeholder user message */
+        cJSON *placeholder = cJSON_CreateObject();
+        if (placeholder) {
+            cJSON_AddStringToObject(placeholder, "role", "user");
+            cJSON *placeholder_content = cJSON_CreateArray();
+            if (placeholder_content) {
+                cJSON *text_block = cJSON_CreateObject();
+                if (text_block) {
+                    cJSON_AddStringToObject(text_block, "text", "(continuing conversation)");
+                    cJSON_AddItemToArray(placeholder_content, text_block);
+                }
+                cJSON_AddItemToObject(placeholder, "content", placeholder_content);
+            }
+            /* Insert at the beginning of the array */
+            cJSON_InsertItemInArray(converse_messages, 0, placeholder);
+            converse_msg_count++;
+            LOG_INFO("Prepended placeholder user message for Bedrock compatibility");
         }
     }
 

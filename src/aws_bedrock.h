@@ -89,6 +89,19 @@ int bedrock_is_enabled(void);
 BedrockConfig* bedrock_config_init(const char *model_id);
 
 /**
+ * Initialize Bedrock configuration with explicit parameters
+ * This bypasses the KLAWED_USE_BEDROCK environment variable check
+ *
+ * Parameters:
+ *   model_id - The Bedrock model ID (required)
+ *   region - AWS region (optional, uses AWS_REGION env var or default if NULL)
+ *
+ * Returns: Configured BedrockConfig pointer, or NULL on error
+ * Caller must free with bedrock_config_free()
+ */
+BedrockConfig* bedrock_config_init_ex(const char *model_id, const char *region);
+
+/**
  * Free Bedrock configuration and all associated memory
  */
 void bedrock_config_free(BedrockConfig *config);

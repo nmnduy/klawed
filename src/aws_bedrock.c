@@ -261,6 +261,69 @@ BedrockConfig* bedrock_config_init(const char *model_id) {
     return config;
 }
 
+BedrockConfig* bedrock_config_init_ex(const char *model_id, const char *region) {
+    LOG_INFO("Bedrock config init (explicit) requested (model=%s, region=%s)",
+             model_id ? model_id : "(null)",
+             region ? region : "(auto)");
+
+    BedrockConfig *config = calloc(1, sizeof(BedrockConfig));
+    if (!config) {
+        LOG_ERROR("Failed to allocate BedrockConfig");
+        return NULL;
+    }
+
+    config->enabled = 1;
+
+    // Use provided region, or fall back to environment/default
+    const char *region_to_use = region;
+    if (!region_to_use) {
+        region_to_use = getenv(ENV_AWS_REGION);
+        if (!region_to_use) {
+            region_to_use = "us-west-2";  // Default region
+            LOG_WARN("AWS_REGION not set, using default: %s", region_to_use);
+        } else {
+            LOG_INFO("Bedrock config: using AWS region from %s=%s",
+                     ENV_AWS_REGION, region_to_use);
+        }
+    } else {
+        LOG_INFO("Bedrock config: using explicit AWS region: %s", region_to_use);
+    }
+    config->region = strdup(region_to_use);
+
+    // Get model ID
+    if (model_id) {
+        config->model_id = strdup(model_id);
+        LOG_INFO("Bedrock config: model id set to %s", config->model_id);
+    } else {
+        LOG_ERROR("Model ID is required for Bedrock");
+        bedrock_config_free(config);
+        return NULL;
+    }
+
+    // Build endpoint URL
+    config->endpoint = bedrock_build_endpoint(region_to_use, model_id);
+    if (!config->endpoint) {
+        LOG_ERROR("Failed to build Bedrock endpoint");
+        bedrock_config_free(config);
+        return NULL;
+    }
+    LOG_INFO("Bedrock config: computed endpoint %s", config->endpoint);
+
+    // Load credentials (if available - may be null, will authenticate on first API call)
+    const char *profile = getenv(ENV_AWS_PROFILE);
+    LOG_INFO("Bedrock config: loading credentials (profile=%s)",
+             profile ? profile : "default");
+    config->creds = bedrock_load_credentials(profile, region_to_use);
+    if (!config->creds) {
+        LOG_WARN("No AWS credentials found during init - will authenticate on first API call");
+        LOG_INFO("Bedrock config initialized without credentials: region=%s, model=%s", region_to_use, model_id);
+    } else {
+        LOG_INFO("Bedrock config initialized with credentials: region=%s, model=%s", region_to_use, model_id);
+    }
+
+    return config;
+}
+
 void bedrock_config_free(BedrockConfig *config) {
     if (!config) return;
 
