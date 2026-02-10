@@ -463,8 +463,10 @@ TEST_TUI_TOOL_CONNECTOR_SRC = tests/test_tui_tool_connector.c
 TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
+TEST_BEDROCK_CONVERSE_SRC = tests/test_bedrock_converse.c
+TEST_BEDROCK_CONVERSE_TARGET = $(BUILD_DIR)/test_bedrock_converse
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config test-bedrock-converse query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -479,7 +481,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-realtime-steering test-tui-tool-connector
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-realtime-steering test-tui-tool-connector test-bedrock-converse
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -671,6 +673,12 @@ test-base64: check-deps $(TEST_BASE64_TARGET)
 	@echo "Running Base64 encoding/decoding tests..."
 	@echo ""
 	@./$(TEST_BASE64_TARGET)
+
+test-bedrock-converse: check-deps $(TEST_BEDROCK_CONVERSE_TARGET)
+	@echo ""
+	@echo "Running Bedrock Converse format tests..."
+	@echo ""
+	@./$(TEST_BEDROCK_CONVERSE_TARGET)
 
 test-history-file: check-deps $(TEST_HISTORY_FILE_TARGET)
 	@echo ""
@@ -2113,6 +2121,19 @@ $(TEST_BASE64_TARGET): $(BASE64_SRC) $(TEST_BASE64_SRC)
 	@$(CC) -o $(TEST_BASE64_TARGET) $(BUILD_DIR)/base64_test.o $(BUILD_DIR)/test_base64.o $(LDFLAGS)
 	@echo ""
 	@echo "✓ Base64 test build successful!"
+	@echo ""
+
+# Test target for Bedrock Converse API format conversion
+$(TEST_BEDROCK_CONVERSE_TARGET): $(BEDROCK_CONVERSE_SRC) $(TEST_BEDROCK_CONVERSE_SRC) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Bedrock Converse implementation..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/bedrock_converse_test.o $(BEDROCK_CONVERSE_SRC)
+	@echo "Compiling Bedrock Converse test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bedrock_converse.o $(TEST_BEDROCK_CONVERSE_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_BEDROCK_CONVERSE_TARGET) $(BUILD_DIR)/bedrock_converse_test.o $(BUILD_DIR)/test_bedrock_converse.o $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Bedrock Converse test build successful!"
 	@echo ""
 
 # Test target for OpenAI message format validation
