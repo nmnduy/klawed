@@ -662,8 +662,43 @@ char* bedrock_converse_convert_request(const char *openai_request) {
         }
     }
 
+    /* === Ensure first message is a user message ===
+     * AWS Bedrock Converse API requires the conversation to start with a user message.
+     * If the first message is an assistant message (can happen with session resume
+     * or certain conversation patterns), we need to prepend a placeholder user message.
+     */
+    int converse_msg_count = cJSON_GetArraySize(converse_messages);
+    if (converse_msg_count > 0) {
+        cJSON *first_msg = cJSON_GetArrayItem(converse_messages, 0);
+        if (first_msg) {
+            cJSON *first_role = cJSON_GetObjectItem(first_msg, "role");
+            if (first_role && cJSON_IsString(first_role) &&
+                strcmp(first_role->valuestring, "assistant") == 0) {
+                LOG_WARN("First message is assistant, prepending placeholder user message for Bedrock compatibility");
+
+                /* Create placeholder user message */
+                cJSON *placeholder = cJSON_CreateObject();
+                if (placeholder) {
+                    cJSON_AddStringToObject(placeholder, "role", "user");
+                    cJSON *placeholder_content = cJSON_CreateArray();
+                    if (placeholder_content) {
+                        cJSON *text_block = cJSON_CreateObject();
+                        if (text_block) {
+                            cJSON_AddStringToObject(text_block, "text", "(continuing conversation)");
+                            cJSON_AddItemToArray(placeholder_content, text_block);
+                        }
+                        cJSON_AddItemToObject(placeholder, "content", placeholder_content);
+                    }
+                    /* Insert at the beginning of the array */
+                    cJSON_InsertItemInArray(converse_messages, 0, placeholder);
+                    converse_msg_count++;
+                }
+            }
+        }
+    }
+
     cJSON_AddItemToObject(converse, "messages", converse_messages);
-    LOG_DEBUG("Converted %d messages", cJSON_GetArraySize(converse_messages));
+    LOG_DEBUG("Converted %d messages", converse_msg_count);
 
     /* === Build inferenceConfig === */
     cJSON *inference_config = cJSON_CreateObject();
