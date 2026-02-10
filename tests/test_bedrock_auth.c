@@ -170,12 +170,89 @@ static void test_custom_auth_command(void) {
     unsetenv("AWS_AUTH_COMMAND");
 }
 
+static void test_bedrock_config_init_ex_bypasses_env_check(void) {
+    printf("\nTest: bedrock_config_init_ex bypasses KLAWED_USE_BEDROCK check\n");
+    unsetenv("KLAWED_USE_BEDROCK");
+    setenv("AWS_ACCESS_KEY_ID", "AKIATEST", 1);
+    setenv("AWS_SECRET_ACCESS_KEY", "SECRET_TEST", 1);
+    unsetenv("AWS_SESSION_TOKEN");
+
+    // bedrock_config_init should fail without KLAWED_USE_BEDROCK
+    BedrockConfig *config1 = bedrock_config_init("test-model");
+    ASSERT_TRUE(config1 == NULL, "bedrock_config_init fails without KLAWED_USE_BEDROCK");
+
+    // bedrock_config_init_ex should succeed without KLAWED_USE_BEDROCK
+    BedrockConfig *config2 = bedrock_config_init_ex("test-model", NULL);
+    ASSERT_TRUE(config2 != NULL, "bedrock_config_init_ex succeeds without KLAWED_USE_BEDROCK");
+    ASSERT_TRUE(config2->enabled == 1, "Config is enabled");
+    ASSERT_TRUE(strcmp(config2->model_id, "test-model") == 0, "Model ID set correctly");
+    ASSERT_TRUE(config2->region != NULL, "Region is set");
+    ASSERT_TRUE(config2->endpoint != NULL, "Endpoint is built");
+
+    bedrock_config_free(config2);
+    unsetenv("AWS_ACCESS_KEY_ID");
+    unsetenv("AWS_SECRET_ACCESS_KEY");
+}
+
+static void test_bedrock_config_init_ex_with_explicit_region(void) {
+    printf("\nTest: bedrock_config_init_ex with explicit region\n");
+    setenv("AWS_ACCESS_KEY_ID", "AKIATEST", 1);
+    setenv("AWS_SECRET_ACCESS_KEY", "SECRET_TEST", 1);
+
+    // Test with explicit region
+    BedrockConfig *config = bedrock_config_init_ex("test-model", "eu-west-1");
+    ASSERT_TRUE(config != NULL, "Config created with explicit region");
+    ASSERT_TRUE(strcmp(config->region, "eu-west-1") == 0, "Explicit region is used");
+    ASSERT_TRUE(strstr(config->endpoint, "eu-west-1") != NULL, "Endpoint uses explicit region");
+
+    bedrock_config_free(config);
+    unsetenv("AWS_ACCESS_KEY_ID");
+    unsetenv("AWS_SECRET_ACCESS_KEY");
+}
+
+static void test_bedrock_config_init_ex_null_region_uses_env(void) {
+    printf("\nTest: bedrock_config_init_ex with NULL region uses AWS_REGION env\n");
+    setenv("AWS_ACCESS_KEY_ID", "AKIATEST", 1);
+    setenv("AWS_SECRET_ACCESS_KEY", "SECRET_TEST", 1);
+    setenv("AWS_REGION", "ap-southeast-1", 1);
+
+    // Test with NULL region - should use AWS_REGION env var
+    BedrockConfig *config = bedrock_config_init_ex("test-model", NULL);
+    ASSERT_TRUE(config != NULL, "Config created with NULL region");
+    ASSERT_TRUE(strcmp(config->region, "ap-southeast-1") == 0, "AWS_REGION env var is used");
+
+    bedrock_config_free(config);
+    unsetenv("AWS_ACCESS_KEY_ID");
+    unsetenv("AWS_SECRET_ACCESS_KEY");
+    unsetenv("AWS_REGION");
+}
+
+static void test_bedrock_config_init_ex_null_region_uses_default(void) {
+    printf("\nTest: bedrock_config_init_ex with NULL region uses default when env not set\n");
+    setenv("AWS_ACCESS_KEY_ID", "AKIATEST", 1);
+    setenv("AWS_SECRET_ACCESS_KEY", "SECRET_TEST", 1);
+    unsetenv("AWS_REGION");
+
+    // Test with NULL region and no AWS_REGION env - should use default
+    BedrockConfig *config = bedrock_config_init_ex("test-model", NULL);
+    ASSERT_TRUE(config != NULL, "Config created with NULL region (default)");
+    ASSERT_TRUE(strcmp(config->region, "us-west-2") == 0, "Default region us-west-2 is used");
+
+    bedrock_config_free(config);
+    unsetenv("AWS_ACCESS_KEY_ID");
+    unsetenv("AWS_SECRET_ACCESS_KEY");
+}
+
 int main(void) {
     test_env_credentials_no_validation();
     test_sso_cached_credentials_no_validation();
     test_no_cached_credentials_returns_null();
     test_authenticate_sets_credentials();
     test_custom_auth_command();
+    test_bedrock_config_init_ex_bypasses_env_check();
+    test_bedrock_config_init_ex_with_explicit_region();
+    test_bedrock_config_init_ex_null_region_uses_env();
+    test_bedrock_config_init_ex_null_region_uses_default();
 
     printf("\nTests run: %d, passed: %d, failed: %d\n",
            tests_run, tests_passed, tests_run - tests_passed);
