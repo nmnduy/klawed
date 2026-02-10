@@ -136,9 +136,10 @@ const char* kimi_oauth_get_access_token(KimiOAuthManager *manager);
  * Force token refresh
  *
  * @param manager OAuth manager
+ * @param force If 1, refresh regardless of token expiration time; if 0, only refresh if expiring soon
  * @return 0 on success, -1 on error
  */
-int kimi_oauth_refresh(KimiOAuthManager *manager);
+int kimi_oauth_refresh(KimiOAuthManager *manager, int force);
 
 /**
  * Start background token refresh thread
