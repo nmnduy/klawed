@@ -301,29 +301,6 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         // Send API_CALL message to indicate waiting for API response
         send_api_call_message(state, state->model, state->provider->name);
 
-        // Check and perform compaction if needed (before API call)
-        if (state->compaction_config && compaction_should_trigger(state, state->compaction_config)) {
-            LOG_INFO("Context compaction triggered before API call");
-            CompactionResult compaction_result = {0};
-            if (compaction_perform(state, state->compaction_config, state->session_id, &compaction_result) == 0) {
-                // Send compaction notice to sqlite-queue reader if in queue mode
-                if (compaction_result.success && state->sqlite_queue_context && state->sqlite_queue_context->enabled) {
-                    sqlite_queue_send_compaction_notice(
-                        state->sqlite_queue_context,
-                        "client",  // Send to client
-                        compaction_result.messages_compacted,
-                        compaction_result.tokens_before,
-                        compaction_result.tokens_after,
-                        compaction_result.usage_before_pct,
-                        compaction_result.usage_after_pct,
-                        compaction_result.summary[0] != '\0' ? compaction_result.summary : NULL
-                    );
-                }
-            } else {
-                LOG_WARN("Compaction failed, continuing with API call");
-            }
-        }
-
 #ifdef HAVE_MEMVID
         // Inject/refresh memory context before each API call
         if (inject_memory_context(state) == 0) {

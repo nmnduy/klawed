@@ -14,6 +14,8 @@
 #include "../arena.h"
 #include "../indicators.h"
 #include "../window_manager.h"
+#include "../compaction.h"
+#include "../sqlite_queue.h"
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -866,6 +868,28 @@ void process_response(ConversationState *state,
             post_tui_message(queue, TUI_MSG_TODO_HIDE, NULL);
         }
 
+        // Check if compaction is needed at end of AI turn
+        if (state->compaction_config && compaction_should_trigger(state, state->compaction_config)) {
+            LOG_INFO("Context compaction triggered at end of AI turn");
+            CompactionResult compaction_result = {0};
+            if (compaction_perform(state, state->compaction_config, state->session_id, &compaction_result) == 0) {
+                if (compaction_result.success && state->sqlite_queue_context && state->sqlite_queue_context->enabled) {
+                    sqlite_queue_send_compaction_notice(
+                        state->sqlite_queue_context,
+                        "client",
+                        compaction_result.messages_compacted,
+                        compaction_result.tokens_before,
+                        compaction_result.tokens_after,
+                        compaction_result.usage_before_pct,
+                        compaction_result.usage_after_pct,
+                        compaction_result.summary[0] != '\0' ? compaction_result.summary : NULL
+                    );
+                }
+            } else {
+                LOG_WARN("Compaction failed at end of AI turn");
+            }
+        }
+
         clock_gettime(CLOCK_MONOTONIC, &proc_end);
         long proc_ms = (proc_end.tv_sec - proc_start.tv_sec) * 1000 +
                        (proc_end.tv_nsec - proc_start.tv_nsec) / 1000000;
@@ -880,6 +904,28 @@ void process_response(ConversationState *state,
     } else if (queue) {
         // Worker thread: post message to main thread to hide banner
         post_tui_message(queue, TUI_MSG_TODO_HIDE, NULL);
+    }
+
+    // Check if compaction is needed at end of AI turn
+    if (state->compaction_config && compaction_should_trigger(state, state->compaction_config)) {
+        LOG_INFO("Context compaction triggered at end of AI turn");
+        CompactionResult compaction_result = {0};
+        if (compaction_perform(state, state->compaction_config, state->session_id, &compaction_result) == 0) {
+            if (compaction_result.success && state->sqlite_queue_context && state->sqlite_queue_context->enabled) {
+                sqlite_queue_send_compaction_notice(
+                    state->sqlite_queue_context,
+                    "client",
+                    compaction_result.messages_compacted,
+                    compaction_result.tokens_before,
+                    compaction_result.tokens_after,
+                    compaction_result.usage_before_pct,
+                    compaction_result.usage_after_pct,
+                    compaction_result.summary[0] != '\0' ? compaction_result.summary : NULL
+                );
+            }
+        } else {
+            LOG_WARN("Compaction failed at end of AI turn");
+        }
     }
 
     clock_gettime(CLOCK_MONOTONIC, &proc_end);
