@@ -203,13 +203,13 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
             }
         }
         else if (msg->role == MSG_AUTO_COMPACTION) {
-            // Auto-compaction notice - add as a user message so model sees it
+            // Auto-compaction notice - send as system message so model sees it but doesn't respond
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
                 if (c->type == INTERNAL_TEXT && c->text) {
                     cJSON *notice_item = cJSON_CreateObject();
                     cJSON_AddStringToObject(notice_item, "type", "message");
-                    cJSON_AddStringToObject(notice_item, "role", "user");
+                    cJSON_AddStringToObject(notice_item, "role", "system");
                     cJSON *content_array = cJSON_CreateArray();
                     cJSON *content_obj = cJSON_CreateObject();
                     cJSON_AddStringToObject(content_obj, "type", "input_text");
