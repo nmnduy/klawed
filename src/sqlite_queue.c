@@ -672,6 +672,19 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
                     LOG_ERROR("SQLite Queue: Compaction trigger failed");
                 }
 
+            } else if (strcmp(msg_type, "INTERRUPT") == 0) {
+                // Handle interrupt request from client
+                LOG_INFO("SQLite Queue: Received INTERRUPT message ID %lld", msg_id);
+                printf("SQLite Queue: Interrupt requested by client\n");
+                fflush(stdout);
+
+                int interrupt_result = sqlite_queue_interrupt(ctx);
+                if (interrupt_result == 0) {
+                    LOG_INFO("SQLite Queue: Interrupt processed successfully");
+                } else {
+                    LOG_ERROR("SQLite Queue: Interrupt failed");
+                }
+
             } else {
                 LOG_WARN("SQLite Queue: Unknown or invalid message type: %s", msg_type);
                 LOG_DEBUG("SQLite Queue: Available fields - messageType: %s, content: %s",
