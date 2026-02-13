@@ -150,12 +150,17 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
     }
 
     // Add blank line if transitioning between different message types
+    // OR between consecutive AI assistant messages
     // (but not for empty lines or unknown types, and not if previous was empty/unknown)
     int should_add_spacing = 0;
     if (current_type != MSG_TYPE_EMPTY && current_type != MSG_TYPE_UNKNOWN &&
-        previous_type != MSG_TYPE_EMPTY && previous_type != MSG_TYPE_UNKNOWN &&
-        current_type != previous_type) {
-        should_add_spacing = 1;
+        previous_type != MSG_TYPE_EMPTY && previous_type != MSG_TYPE_UNKNOWN) {
+        if (current_type != previous_type) {
+            should_add_spacing = 1;
+        } else if (current_type == MSG_TYPE_ASSISTANT && previous_type == MSG_TYPE_ASSISTANT) {
+            // Add spacing between consecutive AI text responses
+            should_add_spacing = 1;
+        }
     }
 
     // Get pad dimensions for capacity estimation
