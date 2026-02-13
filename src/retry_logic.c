@@ -66,6 +66,9 @@ int is_context_length_error(const char *error_message, const char *error_type) {
     if (strstr(error_message, "maximum context length") != NULL ||
         (strstr(error_message, "context length") != NULL && strstr(error_message, "tokens") != NULL) ||
         strstr(error_message, "too many tokens") != NULL ||
+        // OpenAI token limit exceeded pattern
+        strstr(error_message, "exceeded model token limit") != NULL ||
+        strstr(error_message, "token limit") != NULL ||
         // LiteLLM / Bedrock patterns
         strstr(error_message, "ContextWindowExceededError") != NULL ||
         strstr(error_message, "Context Window Error") != NULL ||

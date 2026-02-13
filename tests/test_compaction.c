@@ -150,8 +150,8 @@ static void test_init_config_defaults(void) {
 
     // With memory_db, enabled is honored as passed
     assert(config.enabled == 1);
-    assert(config.threshold_percent == 60);  // Default threshold
-    assert(config.keep_recent == 20);        // Default keep_recent
+    assert(config.threshold_percent == 75);  // Default threshold
+    assert(config.keep_recent == 100);        // Default keep_recent
     assert(config.last_compacted_index == -1);
 
     PASS();
@@ -164,8 +164,8 @@ static void test_init_config_disabled(void) {
     compaction_init_config(&config, 0, NULL);
 
     assert(config.enabled == 0);
-    assert(config.threshold_percent == 60);
-    assert(config.keep_recent == 20);
+    assert(config.threshold_percent == 75);
+    assert(config.keep_recent == 100);
 
     PASS();
 }
@@ -201,8 +201,8 @@ static void test_init_config_invalid_env(void) {
     compaction_init_config(&config, 1, NULL);
 
     // Should use defaults when env values are invalid
-    assert(config.threshold_percent == 60);
-    assert(config.keep_recent == 20);
+    assert(config.threshold_percent == 75);
+    assert(config.keep_recent == 100);
 
     // Clean up
     unsetenv("KLAWED_COMPACT_THRESHOLD");
