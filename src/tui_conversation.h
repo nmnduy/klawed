@@ -12,6 +12,7 @@
 #define TUI_CONVERSATION_H
 
 #include "tui.h"
+#include "klawed_internal.h"
 
 // Forward declarations
 typedef struct TUIStateStruct TUIState;
@@ -66,5 +67,13 @@ const char* tui_conversation_get_tool_display_prefix(TUIState *tui, const char *
 // Reset tool tracking state
 // Should be called when conversation is cleared or on message type change
 void tui_conversation_reset_tool_tracking(TUIState *tui);
+
+// Populate TUI conversation from ConversationState
+// This is used when resuming a session to display the conversation history
+// Parameters:
+//   tui: TUI state to populate
+//   state: Conversation state containing loaded messages
+// Returns 0 on success, -1 on error
+int tui_populate_from_conversation(TUIState *tui, ConversationState *state);
 
 #endif // TUI_CONVERSATION_H
