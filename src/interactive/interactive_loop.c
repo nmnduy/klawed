@@ -5,6 +5,7 @@
 #include "../logger.h"
 #include "../ui/ui_output.h"
 #include "../tui.h"
+#include "../tui_conversation.h"
 #include "../vltrn_banner.h"
 #include "../message_queue.h"
 #include "../ai_worker.h"
@@ -50,6 +51,11 @@ void interactive_mode(ConversationState *state) {
 
     // Display startup banner with mascot in the TUI
     tui_show_startup_banner(&tui, VERSION, state->model, state->working_dir);
+
+    // If resuming a session, populate the TUI with conversation history
+    if (state->count > 1) {  // > 1 to account for system message
+        tui_populate_from_conversation(&tui, state);
+    }
 
     const size_t TUI_QUEUE_CAPACITY = 256;
     const size_t AI_QUEUE_CAPACITY = 16;

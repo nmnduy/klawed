@@ -761,3 +761,208 @@ void tui_conversation_reset_tool_tracking(TUIState *tui) {
     free(tui->last_tool_name);
     tui->last_tool_name = NULL;
 }
+
+// Helper: Format tool parameters for display
+static char* format_tool_params(cJSON *params) {
+    if (!params) {
+        return strdup("{}");
+    }
+    char *str = cJSON_PrintUnformatted(params);
+    if (!str) {
+        return strdup("{}");
+    }
+    return str;
+}
+
+// Helper: Format tool output for display
+static char* format_tool_output(cJSON *output, int is_error) {
+    if (!output) {
+        return strdup("(no output)");
+    }
+    
+    // Check if output has an "error" field
+    cJSON *error = cJSON_GetObjectItem(output, "error");
+    if (error && cJSON_IsString(error)) {
+        char *result = NULL;
+        if (is_error) {
+            int len = snprintf(NULL, 0, "Error: %s", error->valuestring);
+            result = malloc((size_t)(len + 1));
+            if (result) {
+                snprintf(result, (size_t)(len + 1), "Error: %s", error->valuestring);
+            }
+        } else {
+            result = strdup(error->valuestring);
+        }
+        return result ? result : strdup("(error)");
+    }
+    
+    // Try to extract common fields for display
+    cJSON *stdout_obj = cJSON_GetObjectItem(output, "stdout");
+    cJSON *stderr_obj = cJSON_GetObjectItem(output, "stderr");
+    cJSON *result_obj = cJSON_GetObjectItem(output, "result");
+    
+    if (stdout_obj && cJSON_IsString(stdout_obj) && strlen(stdout_obj->valuestring) > 0) {
+        return strdup(stdout_obj->valuestring);
+    }
+    if (result_obj && cJSON_IsString(result_obj)) {
+        return strdup(result_obj->valuestring);
+    }
+    if (stderr_obj && cJSON_IsString(stderr_obj) && strlen(stderr_obj->valuestring) > 0) {
+        char *result = NULL;
+        int len = snprintf(NULL, 0, "Error: %s", stderr_obj->valuestring);
+        result = malloc((size_t)(len + 1));
+        if (result) {
+            snprintf(result, (size_t)(len + 1), "Error: %s", stderr_obj->valuestring);
+        }
+        return result ? result : strdup("(stderr)");
+    }
+    
+    // Fallback: return formatted JSON
+    char *str = cJSON_PrintUnformatted(output);
+    return str ? str : strdup("(output)");
+}
+
+// Populate TUI conversation from ConversationState
+// This is used when resuming a session to display the conversation history
+int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
+    if (!tui || !state) {
+        LOG_ERROR("[TUI] Invalid parameters to tui_populate_from_conversation");
+        return -1;
+    }
+    
+    if (!tui->is_initialized) {
+        LOG_ERROR("[TUI] TUI not initialized");
+        return -1;
+    }
+    
+    LOG_INFO("[TUI] Populating conversation from state with %d messages", state->count);
+    
+    // Reset tool tracking before populating
+    tui_conversation_reset_tool_tracking(tui);
+    
+    int user_messages_added = 0;
+    int assistant_messages_added = 0;
+    int tool_calls_added = 0;
+    int tool_responses_added = 0;
+    
+    for (int i = 0; i < state->count; i++) {
+        InternalMessage *msg = &state->messages[i];
+        
+        switch (msg->role) {
+            case MSG_USER: {
+                // User message - check if it's tool results or regular text
+                int has_tool_results = 0;
+                for (int j = 0; j < msg->content_count; j++) {
+                    if (msg->contents[j].type == INTERNAL_TOOL_RESPONSE) {
+                        has_tool_results = 1;
+                        break;
+                    }
+                }
+                
+                if (has_tool_results) {
+                    // This is a tool results message - display each result
+                    for (int j = 0; j < msg->content_count; j++) {
+                        InternalContent *content = &msg->contents[j];
+                        if (content->type != INTERNAL_TOOL_RESPONSE) {
+                            continue;
+                        }
+                        
+                        const char *tool_name = content->tool_name ? content->tool_name : "tool";
+                        char prefix[128];
+                        snprintf(prefix, sizeof(prefix), "\xe2\x97\x8f %s", tool_name);
+                        
+                        char *output_text = format_tool_output(content->tool_output, content->is_error);
+                        TUIColorPair color = content->is_error ? COLOR_PAIR_ERROR : COLOR_PAIR_TOOL;
+                        
+                        tui_add_conversation_line(tui, prefix, output_text ? output_text : "", color);
+                        tool_responses_added++;
+                        
+                        free(output_text);
+                    }
+                } else {
+                    // Regular user message
+                    for (int j = 0; j < msg->content_count; j++) {
+                        InternalContent *content = &msg->contents[j];
+                        if (content->type == INTERNAL_TEXT && content->text) {
+                            tui_add_conversation_line(tui, "[User]", content->text, COLOR_PAIR_USER);
+                            user_messages_added++;
+                        }
+                    }
+                }
+                break;
+            }
+            
+            case MSG_ASSISTANT: {
+                // Assistant message - can have text and/or tool calls
+                int text_content_added = 0;
+                
+                for (int j = 0; j < msg->content_count; j++) {
+                    InternalContent *content = &msg->contents[j];
+                    
+                    switch (content->type) {
+                        case INTERNAL_TEXT:
+                            if (content->text && strlen(content->text) > 0) {
+                                tui_add_conversation_line(tui, "[Assistant]", content->text, COLOR_PAIR_ASSISTANT);
+                                text_content_added = 1;
+                                assistant_messages_added++;
+                            }
+                            break;
+                            
+                        case INTERNAL_TOOL_CALL:
+                            if (content->tool_name) {
+                                char prefix[128];
+                                snprintf(prefix, sizeof(prefix), "\xe2\x97\x8f %s", content->tool_name);
+                                
+                                char *params_str = format_tool_params(content->tool_params);
+                                tui_add_conversation_line(tui, prefix, params_str ? params_str : "{}", COLOR_PAIR_TOOL);
+                                tool_calls_added++;
+                                
+                                free(params_str);
+                            }
+                            break;
+                            
+                        case INTERNAL_TOOL_RESPONSE:
+                        case INTERNAL_IMAGE:
+                            // Tool responses and images are not expected in assistant messages
+                            break;
+                            
+                        default:
+                            // Unknown content type - skip
+                            break;
+                    }
+                }
+                
+                // If no text content was added but there were tool calls, 
+                // add an empty assistant line for proper spacing
+                if (!text_content_added && msg->content_count > 0) {
+                    int has_only_tool_calls = 1;
+                    for (int j = 0; j < msg->content_count; j++) {
+                        if (msg->contents[j].type != INTERNAL_TOOL_CALL) {
+                            has_only_tool_calls = 0;
+                            break;
+                        }
+                    }
+                    if (has_only_tool_calls) {
+                        // Add empty assistant line for visual separation
+                        tui_add_conversation_line(tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
+                    }
+                }
+                break;
+            }
+            
+            case MSG_SYSTEM:
+            case MSG_AUTO_COMPACTION:
+                // Skip system messages
+                break;
+                
+            default:
+                // Unknown message role - skip
+                break;
+        }
+    }
+    
+    LOG_INFO("[TUI] Conversation population complete: %d user, %d assistant, %d tool calls, %d tool responses",
+             user_messages_added, assistant_messages_added, tool_calls_added, tool_responses_added);
+    
+    return 0;
+}
