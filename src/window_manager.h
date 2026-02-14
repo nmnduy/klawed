@@ -139,6 +139,10 @@ void window_manager_scroll_to_bottom(WindowManager *wm);
 // Scroll to top of conversation
 void window_manager_scroll_to_top(WindowManager *wm);
 
+// Scroll to a specific content line (0 = first line)
+// The target line will be positioned at the top of the viewport if possible
+void window_manager_scroll_to_line(WindowManager *wm, int line);
+
 // Get current scroll position (0 = top, max = bottom)
 int window_manager_get_scroll_offset(WindowManager *wm);
 

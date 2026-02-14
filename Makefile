@@ -1277,6 +1277,7 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_subagent_all.o $(TOOL_SUBAGENT_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_registry_all.o $(TOOL_REGISTRY_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_executor_all.o $(TOOL_EXECUTOR_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/dynamic_tools_all.o $(DYNAMIC_TOOLS_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tool_definitions_all.o $(TOOL_DEFINITIONS_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/content_types_all.o $(CONTENT_TYPES_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/conversation_state_all.o $(CONVERSATION_STATE_SRC); \
@@ -1350,7 +1351,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/tool_image_all.o $(BUILD_DIR)/tool_search_all.o \
 		$(BUILD_DIR)/tool_filesystem_all.o $(BUILD_DIR)/tool_bash_all.o \
 		$(BUILD_DIR)/tool_subagent_all.o $(BUILD_DIR)/tool_registry_all.o \
-		$(BUILD_DIR)/tool_executor_all.o $(BUILD_DIR)/tool_definitions_all.o \
+		$(BUILD_DIR)/tool_executor_all.o $(BUILD_DIR)/dynamic_tools_all.o $(BUILD_DIR)/tool_definitions_all.o \
 		$(BUILD_DIR)/content_types_all.o $(BUILD_DIR)/conversation_state_all.o \
 		$(BUILD_DIR)/conversation_processor_all.o \
 		$(BUILD_DIR)/message_builder_all.o $(BUILD_DIR)/message_parser_all.o \

@@ -114,6 +114,9 @@ typedef struct TUIStateStruct {
     int entries_count;
     int entries_capacity;
 
+    // Track the starting line of the last assistant message for scroll-to-response feature
+    int last_assistant_line;  // Content line where last [Assistant] message starts (-1 if none)
+
     // Status state
     char *status_message;    // Current status text (owned by TUI)
     int status_visible;      // Whether status should be shown
@@ -239,6 +242,10 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
 // Scroll conversation up/down
 // direction: positive = scroll down, negative = scroll up
 void tui_scroll_conversation(TUIState *tui, int direction);
+
+// Scroll to the last assistant message (for end-of-turn positioning)
+// Scrolls so the last [Assistant] message is at the top of the viewport
+void tui_scroll_to_last_assistant(TUIState *tui);
 
 // Poll for input (non-blocking)
 // Returns character code if input available, -1 otherwise

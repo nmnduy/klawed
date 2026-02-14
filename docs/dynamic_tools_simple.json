@@ -1,0 +1,52 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "HelloWorld",
+      "description": "A simple greeting tool that returns a personalized hello message",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the person to greet"
+          },
+          "language": {
+            "type": "string",
+            "enum": ["en", "es", "fr", "de", "ja"],
+            "default": "en",
+            "description": "Language code for the greeting"
+          }
+        },
+        "required": ["name"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "FormatJson",
+      "description": "Formats and validates JSON data with optional indentation",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "string",
+            "description": "JSON string to format"
+          },
+          "indent": {
+            "type": "integer",
+            "default": 2,
+            "description": "Number of spaces for indentation"
+          },
+          "sort_keys": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to sort object keys alphabetically"
+          }
+        },
+        "required": ["json"]
+      }
+    }
+  }
+]

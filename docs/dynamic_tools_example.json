@@ -1,0 +1,86 @@
+{
+  "_comment": "Example dynamic tools configuration for klawed",
+  "_description": "Place this file at .klawed/dynamic_tools.json or ~/.klawed/dynamic_tools.json",
+  "_env_override": "Set KLAWED_DYNAMIC_TOOLS env var to use a custom path",
+
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "CustomCalculator",
+        "description": "A simple calculator that performs basic arithmetic operations",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "type": "string",
+              "enum": ["add", "subtract", "multiply", "divide"],
+              "description": "The arithmetic operation to perform"
+            },
+            "a": {
+              "type": "number",
+              "description": "First operand"
+            },
+            "b": {
+              "type": "number",
+              "description": "Second operand"
+            }
+          },
+          "required": ["operation", "a", "b"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "GetCurrentTime",
+        "description": "Returns the current time in various formats and timezones",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "description": "Timezone (e.g., 'UTC', 'America/New_York', 'Europe/London'). Defaults to local timezone."
+            },
+            "format": {
+              "type": "string",
+              "enum": ["iso", "rfc2822", "unix", "human"],
+              "description": "Output format. Default is 'iso'."
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "FetchUrl",
+        "description": "Fetches content from a URL. Note: This is a schema-only example. The actual implementation would need to be provided by an external service or MCP server.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "The URL to fetch"
+            },
+            "method": {
+              "type": "string",
+              "enum": ["GET", "POST", "PUT", "DELETE"],
+              "default": "GET",
+              "description": "HTTP method"
+            },
+            "headers": {
+              "type": "object",
+              "description": "Optional HTTP headers"
+            },
+            "body": {
+              "type": "string",
+              "description": "Optional request body (for POST/PUT)"
+            }
+          },
+          "required": ["url"]
+        }
+      }
+    }
+  ]
+}
