@@ -109,4 +109,11 @@ int compaction_generate_summary(struct ConversationState *state,
                                 char *summary_out,
                                 size_t summary_size);
 
+#ifdef TEST_BUILD
+/**
+ * Expose internal functions for testing
+ */
+void free_temp_conversation_state(struct ConversationState *temp_state);
+#endif
+
 #endif /* COMPACTION_H */

@@ -1420,7 +1420,7 @@ memscan: analyze sanitize-all
 	@echo ""
 
 # Comprehensive bug finding - runs ALL available analysis tools
-comprehensive-scan: analyze sanitize-all valgrind
+comprehensive-scan: analyze sanitize-all valgrind test-memory-null-fix
 	@echo ""
 	@echo "=========================================="
 	@echo "Comprehensive Bug Finding Scan Complete"
@@ -1436,6 +1436,7 @@ comprehensive-scan: analyze sanitize-all valgrind
 		echo "    Note: On Apple Silicon (M1/M2/M3), valgrind may not work properly."; \
 		echo "    Consider using sanitizers instead: make sanitize-all"; \
 	fi
+	@echo "  ✓ Memory NULL fix regression tests"
 	@echo ""
 	@echo "Additional tools available (install manually):"
 	@command -v clang-tidy >/dev/null 2>&1 && echo "  ✓ clang-tidy (static analysis)" || echo "  ○ clang-tidy (not installed)"
@@ -1858,9 +1859,9 @@ $(TEST_TODO_WRITE_TARGET): $(SRC) $(TEST_TODO_WRITE_SRC) $(TEST_COMMON_OBJS)
 $(TEST_COMPACTION_TARGET): $(COMPACTION_SRC) $(TEST_COMPACTION_SRC) tests/test_compaction_stubs.c
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling compaction test suite..."
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/compaction_test.o $(COMPACTION_SRC)
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_compaction.o $(TEST_COMPACTION_SRC)
-	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_compaction_stubs.o tests/test_compaction_stubs.c
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/compaction_test.o $(COMPACTION_SRC)
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/test_compaction.o $(TEST_COMPACTION_SRC)
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/test_compaction_stubs.o tests/test_compaction_stubs.c
 	@echo "Linking test executable..."
 	@$(CC) -o $(TEST_COMPACTION_TARGET) $(BUILD_DIR)/compaction_test.o $(BUILD_DIR)/test_compaction.o $(BUILD_DIR)/test_compaction_stubs.o $(LDFLAGS)
 	@echo ""
