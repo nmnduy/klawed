@@ -17,6 +17,7 @@
 #include "arena.h"
 #include "tool_utils.h"
 #include "tools/tool_definitions.h"
+#include "dynamic_tools.h"
 #include "util/string_utils.h"
 
 #include <stdio.h>
@@ -1268,6 +1269,43 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
     #else
     (void)state;  // Suppress unused parameter warning in test builds
     #endif
+
+    // Load and add dynamic tools from JSON file
+    DynamicToolsRegistry dynamic_registry;
+    dynamic_tools_init(&dynamic_registry);
+
+    char dynamic_tools_path[DYNAMIC_TOOLS_PATH_MAX];
+    if (dynamic_tools_get_path(dynamic_tools_path, sizeof(dynamic_tools_path)) == 0) {
+        LOG_INFO("Loading dynamic tools from: %s", dynamic_tools_path);
+        int loaded = dynamic_tools_load_from_file(&dynamic_registry, dynamic_tools_path);
+        if (loaded > 0) {
+            // Add dynamic tools in Responses API format (flat structure)
+            for (int i = 0; i < dynamic_registry.count; i++) {
+                const DynamicToolDef *tool_def = &dynamic_registry.tools[i];
+                cJSON *tool = cJSON_CreateObject();
+                if (!tool) continue;
+
+                cJSON_AddStringToObject(tool, "type", "function");
+                cJSON_AddStringToObject(tool, "name", tool_def->name);
+                cJSON_AddStringToObject(tool, "description", tool_def->description);
+
+                if (tool_def->parameters) {
+                    cJSON_AddItemToObject(tool, "parameters", cJSON_Duplicate(tool_def->parameters, 1));
+                }
+
+                cJSON_AddItemToArray(tool_array, tool);
+            }
+            LOG_INFO("Added %d dynamic tool(s) to Responses API tool definitions", dynamic_registry.count);
+        } else if (loaded == 0) {
+            LOG_DEBUG("No dynamic tools found in %s", dynamic_tools_path);
+        } else {
+            LOG_WARN("Failed to load dynamic tools from %s", dynamic_tools_path);
+        }
+    } else {
+        LOG_DEBUG("No dynamic tools file found (checked KLAWED_DYNAMIC_TOOLS env, local .klawed/dynamic_tools.json, and ~/.klawed/dynamic_tools.json)");
+    }
+
+    dynamic_tools_cleanup(&dynamic_registry);
 
     return tool_array;
 }
