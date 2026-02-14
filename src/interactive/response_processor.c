@@ -16,6 +16,7 @@
 #include "../window_manager.h"
 #include "../compaction.h"
 #include "../sqlite_queue.h"
+#include "../tui.h"
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -890,6 +891,11 @@ void process_response(ConversationState *state,
             }
         }
 
+        // Scroll to the last assistant message at end of AI turn
+        if (tui) {
+            tui_scroll_to_last_assistant(tui);
+        }
+
         clock_gettime(CLOCK_MONOTONIC, &proc_end);
         long proc_ms = (proc_end.tv_sec - proc_start.tv_sec) * 1000 +
                        (proc_end.tv_nsec - proc_start.tv_nsec) / 1000000;
@@ -926,6 +932,11 @@ void process_response(ConversationState *state,
         } else {
             LOG_WARN("Compaction failed at end of AI turn");
         }
+    }
+
+    // Scroll to the last assistant message at end of AI turn
+    if (tui) {
+        tui_scroll_to_last_assistant(tui);
     }
 
     clock_gettime(CLOCK_MONOTONIC, &proc_end);
