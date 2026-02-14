@@ -647,6 +647,25 @@ void window_manager_scroll_to_top(WindowManager *wm) {
     LOG_DEBUG("[WM] Scrolled to top");
 }
 
+void window_manager_scroll_to_line(WindowManager *wm, int line) {
+    if (!wm || !wm->is_initialized) {
+        return;
+    }
+
+    // Clamp to valid range
+    int max_scroll = window_manager_get_max_scroll(wm);
+    if (line < 0) {
+        line = 0;
+    } else if (line > max_scroll) {
+        line = max_scroll;
+    }
+
+    wm->conv_scroll_offset = line;
+    window_manager_refresh_conversation(wm);
+
+    LOG_DEBUG("[WM] Scrolled to line %d (max_scroll=%d)", line, max_scroll);
+}
+
 int window_manager_get_scroll_offset(WindowManager *wm) {
     if (!wm || !wm->is_initialized) {
         return 0;

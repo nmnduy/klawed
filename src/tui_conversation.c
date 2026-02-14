@@ -135,6 +135,12 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
                   scroll_offset, max_scroll, was_at_bottom);
     }
 
+    // Track the starting line of assistant messages for scroll-to-response feature
+    if (prefix && strcmp(prefix, "[Assistant]") == 0) {
+        tui->last_assistant_line = window_manager_get_content_lines(&tui->wm);
+        LOG_DEBUG("[TUI] Tracking assistant message at line %d", tui->last_assistant_line);
+    }
+
     // Check if we need to add spacing between different message types
     // Look at the most recent non-empty entry to determine if spacing is needed
     MessageType current_type = tui_conversation_get_message_type(prefix);
@@ -965,4 +971,22 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
              user_messages_added, assistant_messages_added, tool_calls_added, tool_responses_added);
 
     return 0;
+}
+
+// Scroll to the last assistant message (for end-of-turn positioning)
+// Scrolls so the last [Assistant] message is at the top of the viewport
+void tui_scroll_to_last_assistant(TUIState *tui) {
+    if (!tui || !tui->is_initialized) {
+        return;
+    }
+
+    // Check if we have a tracked assistant message
+    if (tui->last_assistant_line < 0) {
+        LOG_DEBUG("[TUI] No assistant message to scroll to");
+        return;
+    }
+
+    // Scroll to the line where the last assistant message starts
+    LOG_INFO("[TUI] Scrolling to last assistant message at line %d", tui->last_assistant_line);
+    window_manager_scroll_to_line(&tui->wm, tui->last_assistant_line);
 }

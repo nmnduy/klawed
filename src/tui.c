@@ -272,6 +272,9 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
     // Reset tool tracking
     tui_conversation_reset_tool_tracking(tui);
 
+    // Reset assistant line tracking
+    tui->last_assistant_line = -1;
+
     // Clear pad and reset content lines
     werase(tui->wm.conv_pad);
     window_manager_set_content_lines(&tui->wm, 0);
