@@ -16,6 +16,7 @@
 #include "../logger.h"
 #include "../api/api_builder.h"
 #include "../explore_tools.h"
+#include "../dynamic_tools.h"
 
 #ifndef TEST_BUILD
 #include "../mcp.h"
@@ -906,6 +907,28 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
             LOG_WARN("web_browse_agent binary not found - web_search and web_read tools disabled");
         }
     }
+
+    // Load and add dynamic tools from JSON file
+    DynamicToolsRegistry dynamic_registry;
+    dynamic_tools_init(&dynamic_registry);
+
+    char dynamic_tools_path[DYNAMIC_TOOLS_PATH_MAX];
+    if (dynamic_tools_get_path(dynamic_tools_path, sizeof(dynamic_tools_path)) == 0) {
+        LOG_INFO("Loading dynamic tools from: %s", dynamic_tools_path);
+        int loaded = dynamic_tools_load_from_file(&dynamic_registry, dynamic_tools_path);
+        if (loaded > 0) {
+            int added = dynamic_tools_add_to_array(&dynamic_registry, tool_array);
+            LOG_INFO("Added %d dynamic tool(s) to tool definitions", added);
+        } else if (loaded == 0) {
+            LOG_DEBUG("No dynamic tools found in %s", dynamic_tools_path);
+        } else {
+            LOG_WARN("Failed to load dynamic tools from %s", dynamic_tools_path);
+        }
+    } else {
+        LOG_DEBUG("No dynamic tools file found (checked KLAWED_DYNAMIC_TOOLS env, local .klawed/dynamic_tools.json, and ~/.klawed/dynamic_tools.json)");
+    }
+
+    dynamic_tools_cleanup(&dynamic_registry);
 
     return tool_array;
 }
