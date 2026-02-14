@@ -21,7 +21,7 @@ Project instructions for Klawed when working with this codebase.
 
 **Core Systems:**
 - **API providers**: `src/openai_provider.c`, `src/anthropic_provider.c`, `src/bedrock_provider.c`, `src/aws_bedrock.c`
-- **Tools**: Built-in tools in `src/klawed.c`, common utilities in `src/tool_utils.c`
+- **Tools**: Built-in tools in `src/klawed.c`, common utilities in `src/tool_utils.c`, dynamic tool definitions from JSON via `KLAWED_DYNAMIC_TOOLS` env or `.klawed/dynamic_tools.json`
 - **Subagent**: `src/subagent_manager.c`, `docs/subagent.md` (task delegation with fresh context, supports per-subagent provider selection)
 - **Explore Subagent**: `src/explore_tools.c`, `docs/explore-subagent.md` (web research mode with web_browse_agent)
 - **MCP**: `src/mcp.c`, `src/mcp.h`, `docs/mcp.md` (external tool servers)
@@ -221,4 +221,3 @@ You are encouraged to commit at the end of your completed coding task if changes
 Git commit conventions:
 - When AI commits changes, use all lowercase for the main commit message (subject line)
 - Keep commit bodies concise - don't write overly long commit messages
-- Do not stage any markdown files. I will read them and decide whether to commit them.
