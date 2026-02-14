@@ -210,7 +210,11 @@ static ConversationState* create_temp_conversation_state(ConversationState *main
 /**
  * Free a temporary ConversationState (only frees what was allocated by create_temp_conversation_state)
  */
+#ifdef TEST_BUILD
+void free_temp_conversation_state(ConversationState *temp_state) {
+#else
 static void free_temp_conversation_state(ConversationState *temp_state) {
+#endif
     if (!temp_state) {
         return;
     }
@@ -221,11 +225,14 @@ static void free_temp_conversation_state(ConversationState *temp_state) {
         for (int j = 0; j < msg->content_count; j++) {
             if (msg->contents[j].text) {
                 free(msg->contents[j].text);
+                msg->contents[j].text = NULL;
             }
         }
         if (msg->contents) {
             free(msg->contents);
+            msg->contents = NULL;
         }
+        msg->content_count = 0;
     }
 
     free(temp_state);
