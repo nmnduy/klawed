@@ -798,6 +798,104 @@ static void test_free_temp_conversation_state_null_input(void) {
 // ============================================================================
 // Main test runner
 // ============================================================================
+// Test for multiple compactions (catches bug where first user message
+// never gets compacted after first compaction)
+// ============================================================================
+
+static void test_double_compaction_preserves_boundary(void) {
+    TEST("Double compaction preserves first user message and compaction notice");
+
+    ConversationState *state = calloc(1, sizeof(ConversationState));
+    assert(state != NULL);
+
+    // First, create a state simulating a session that's been running
+    // 0: System
+    // 1-100: Alternating user/assistant messages
+    int initial_count = 101;
+    create_test_message(&state->messages[0], MSG_SYSTEM, "System prompt");
+    for (int i = 1; i < initial_count; i++) {
+        char buf[64];
+        if (i % 2 == 1) {
+            snprintf(buf, sizeof(buf), "User message %d", i);
+            create_test_message(&state->messages[i], MSG_USER, buf);
+        } else {
+            snprintf(buf, sizeof(buf), "Assistant response %d", i);
+            create_test_message(&state->messages[i], MSG_ASSISTANT, buf);
+        }
+    }
+    state->count = initial_count;
+
+    CompactionConfig config = {
+        .enabled = 1,
+        .threshold_percent = 60,
+        .keep_recent = 20,
+        .last_compacted_index = -1,
+        .model_token_limit = 125000,
+        .current_tokens = 80000
+    };
+
+    // FIRST COMPACTION
+    int result = compaction_perform(state, &config, "test-session", NULL);
+    assert(result == 0);
+
+    // After first compaction: [0: system] [1: notice] [2-21: recent (20 messages)]
+    int count_after_first = state->count;
+    assert(count_after_first == 22);  // 1 + 1 + 20
+    assert(state->messages[0].role == MSG_SYSTEM);
+    assert(state->messages[1].role == MSG_AUTO_COMPACTION);
+    printf("  After 1st compaction: %d messages (system + notice + %d recent)\n",
+           count_after_first, count_after_first - 2);
+
+    // Simulate continuing the conversation - add more messages
+    // Add 50 more messages to trigger another compaction
+    for (int i = count_after_first; i < count_after_first + 50; i++) {
+        char buf[64];
+        if (i % 2 == 1) {
+            snprintf(buf, sizeof(buf), "New user message %d", i);
+            create_test_message(&state->messages[i], MSG_USER, buf);
+        } else {
+            snprintf(buf, sizeof(buf), "New assistant response %d", i);
+            create_test_message(&state->messages[i], MSG_ASSISTANT, buf);
+        }
+    }
+    state->count = count_after_first + 50;  // 22 + 50 = 72 messages
+
+    // SECOND COMPACTION
+    result = compaction_perform(state, &config, "test-session", NULL);
+    assert(result == 0);
+
+    // After second compaction:
+    // - Should still have system at 0
+    // - Should have a NEW compaction notice at 1 (the old one got compacted)
+    // - Should have 20 recent messages
+    // - The first user message (original msg 1) should be compacted into the notice
+    int count_after_second = state->count;
+    assert(count_after_second == 22);  // Still 1 + 1 + 20
+    assert(state->messages[0].role == MSG_SYSTEM);
+    assert(state->messages[1].role == MSG_AUTO_COMPACTION);
+    printf("  After 2nd compaction: %d messages (system + notice + %d recent)\n",
+           count_after_second, count_after_second - 2);
+
+    // CRITICAL: The second compaction should NOT have tried to compact
+    // the compaction notice itself. If it did, we'd have:
+    // - More than 22 messages (notice not being found/preserved)
+    // - Or the first user message still at position 2 (never compacted)
+
+    // Verify no message at position 2 has role MSG_AUTO_COMPACTION
+    // (which would indicate the old notice wasn't properly handled)
+    for (int i = 2; i < state->count; i++) {
+        assert(state->messages[i].role != MSG_AUTO_COMPACTION);
+    }
+
+    // Clean up
+    for (int i = 0; i < state->count; i++) {
+        free_test_message(&state->messages[i]);
+    }
+    free(state);
+    PASS();
+}
+
+// ============================================================================
 
 int main(void) {
     printf("======================================\n");
@@ -836,6 +934,9 @@ int main(void) {
     // Memory safety tests
     test_compaction_memory_safety();
     test_compaction_with_overlapping_regions();
+
+    // Double compaction test (catches boundary preservation bug)
+    test_double_compaction_preserves_boundary();
 
     // free_temp_conversation_state tests
     test_free_temp_conversation_state_nulls_pointers();

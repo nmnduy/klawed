@@ -593,14 +593,31 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         return -1;
     }
 
-    if (state->count <= config->keep_recent + 1) { // +1 for system message
-        // Not enough messages to compact
+    // Calculate which messages to compact
+    // Find the last compaction notice - we never compact past that point
+    // This ensures the first user message and compaction notice are preserved
+    int compact_start = 1; // Default: start after message 0
+    for (int i = state->count - 1; i >= 0; i--) {
+        if (state->messages[i].role == MSG_AUTO_COMPACTION) {
+            // Found a compaction notice, start after it
+            compact_start = i + 1;
+            LOG_DEBUG("Found compaction notice at position %d, starting compaction from position %d", i, compact_start);
+            break;
+        }
+    }
+
+    // Need enough messages to compact: keep_recent + the compaction boundary message(s)
+    // After first compaction, we have: [0: first user] [1: compaction notice] [2+: recent]
+    // So we need at least keep_recent + 2 messages before compacting again
+    int min_messages_to_preserve = (compact_start > 1) ? compact_start + config->keep_recent
+                                                       : 1 + config->keep_recent;
+    if (state->count <= min_messages_to_preserve) {
+        LOG_DEBUG("Not enough messages to compact: count=%d, need > %d", state->count, min_messages_to_preserve);
         return 0;
     }
 
-    // Calculate which messages to compact
-    // Always keep: message 0 (system) + last keep_recent messages
-    int compact_start = 1; // Start after system message
+    // Calculate compact_end to keep keep_recent messages at the end
+    // The messages we keep are: [0:compact_start-1] (preserved) + [compact_end+1:count-1] (recent)
     int compact_end = state->count - config->keep_recent - 1; // Last index to compact
 
     if (compact_end < compact_start) {
