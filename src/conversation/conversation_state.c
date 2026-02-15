@@ -112,16 +112,17 @@ void clear_conversation(ConversationState *state) {
         return;
     }
 
-    // Keep the system message (first message)
-    int system_msg_count = 0;
+    // Keep the system/compaction message at position 0 (if present)
+    int preserve_count = 0;
 
-    if (state->count > 0 && state->messages[0].role == MSG_SYSTEM) {
-        // System message remains intact
-        system_msg_count = 1;
+    if (state->count > 0 && (state->messages[0].role == MSG_SYSTEM ||
+                              state->messages[0].role == MSG_AUTO_COMPACTION)) {
+        // System message or compaction notice remains intact at position 0
+        preserve_count = 1;
     }
 
     // Free all other message content
-    for (int i = system_msg_count; i < state->count; i++) {
+    for (int i = preserve_count; i < state->count; i++) {
         for (int j = 0; j < state->messages[i].content_count; j++) {
             InternalContent *cb = &state->messages[i].contents[j];
             free(cb->text);
@@ -144,8 +145,8 @@ void clear_conversation(ConversationState *state) {
         state->messages[i].content_count = 0;
     }
 
-    // Reset message count (keeping system message)
-    state->count = system_msg_count;
+    // Reset message count (keeping system/compaction message)
+    state->count = preserve_count;
 
     // Clear todo list
     if (state->todo_list) {
