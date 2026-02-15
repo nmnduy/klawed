@@ -49,8 +49,9 @@ int data_dir_build_path(char *buf, size_t buf_size, const char *subpath) {
 
 /*
  * Create directory recursively (like mkdir -p)
+ * This is a public version that works on any path.
  */
-static int mkdir_recursive(const char *path) {
+int mkdir_recursive_path(const char *path) {
     char tmp[1024];
     char *p = NULL;
     size_t len;
@@ -94,7 +95,7 @@ int data_dir_ensure(const char *subpath) {
         return -1;
     }
 
-    return mkdir_recursive(path);
+    return mkdir_recursive_path(path);
 }
 
 int data_dir_is_no_storage_mode(void) {

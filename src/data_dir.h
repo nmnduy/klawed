@@ -55,4 +55,13 @@ int data_dir_ensure(const char *subpath);
  */
 int data_dir_is_no_storage_mode(void);
 
+/*
+ * Create a directory recursively (equivalent to mkdir -p).
+ * Creates all parent directories as needed.
+ *
+ * @param path The directory path to create
+ * @return 0 on success, -1 on failure (errno is set)
+ */
+int mkdir_recursive_path(const char *path);
+
 #endif /* DATA_DIR_H */
