@@ -20,7 +20,7 @@
 typedef struct CompactionConfig {
     int enabled;              // Whether auto-compaction is enabled
     int threshold_percent;    // Trigger at this % of model token limit (default: 60)
-    int keep_recent;          // Number of recent messages to keep (default: 20)
+    int keep_recent;          // Number of recent messages to keep (default: 100)
     int last_compacted_index; // Last message index that was compacted
     int model_token_limit;    // Model's context limit in tokens (default: 125000)
     size_t current_tokens;    // Current estimated token count in conversation
