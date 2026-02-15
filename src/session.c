@@ -74,8 +74,16 @@ int session_load_from_db(PersistenceDB *db, const char *session_id, Conversation
     LOG_DEBUG("session_load_from_db: statement bound");
 
     LOG_DEBUG("session_load_from_db: calling clear_conversation");
-    // Clear existing conversation state (except system message)
+    // Clear existing conversation state (except system/compaction message at position 0)
     clear_conversation(state);
+
+    // Ensure we have a system message at position 0
+    // If clear_conversation didn't preserve one, add a default system message
+    if (state->count == 0) {
+        const char *default_system = "You are a helpful AI assistant.";
+        add_system_message(state, default_system);
+        LOG_DEBUG("session_load_from_db: added default system message");
+    }
 
     // Set the session ID
     // Note: This takes ownership - we free any existing session_id and replace it with target_session_id.
