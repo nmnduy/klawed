@@ -30,58 +30,6 @@
 extern _Thread_local TUIMessageQueue *g_active_tool_queue;
 
 // ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Create directories recursively (equivalent to mkdir -p)
- * Creates all parent directories as needed.
- *
- * @param path The directory path to create
- * @param mode The permissions for newly created directories
- * @return 0 on success, -1 on failure (errno is set)
- */
-static int mkdir_p(const char *path, mode_t mode) {
-    char *path_copy = strdup(path);
-    if (!path_copy) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    char *p = path_copy;
-
-    // Skip leading slash for absolute paths
-    if (*p == '/') {
-        p++;
-    }
-
-    while (*p) {
-        // Find the next slash
-        if (*p == '/') {
-            *p = '\0';
-
-            // Try to create this directory level
-            if (mkdir(path_copy, mode) != 0 && errno != EEXIST) {
-                free(path_copy);
-                return -1;
-            }
-
-            *p = '/';
-        }
-        p++;
-    }
-
-    // Create the final directory component
-    int result = 0;
-    if (mkdir(path_copy, mode) != 0 && errno != EEXIST) {
-        result = -1;
-    }
-
-    free(path_copy);
-    return result;
-}
-
-// ============================================================================
 // Subagent Tool
 // ============================================================================
 
@@ -191,7 +139,7 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     }
 
     // Create directory if it doesn't exist (recursively create parent directories)
-    if (mkdir_p(log_dir, 0755) != 0 && errno != EEXIST) {
+    if (mkdir_recursive_path(log_dir) != 0) {
         cJSON *error = cJSON_CreateObject();
         char err_msg[256];
         snprintf(err_msg, sizeof(err_msg), "Failed to create subagent log directory: %s", strerror(errno));
