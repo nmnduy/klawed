@@ -34,13 +34,14 @@ static inline size_t estimate_tokens(const char *text) {
 // Summarization prompt template
 static const char *SUMMARIZATION_PROMPT =
     "You are summarizing a conversation segment that is being archived. "
-    "Provide a concise summary (250-400 words) that captures:\n\n"
-    "1. **What was being worked on**: Summarize the main activities and tasks performed\n"
-    "2. **Current goals/objectives**: What the user is trying to accomplish\n"
-    "3. **Task state/progress**: Current status, what has been completed, what remains\n\n"
-    "Focus on actionable context that would help continue the work. "
-    "Be specific about file names, function names, and technical details mentioned. "
-    "Write in a clear, professional style.\n\n"
+    "This summary MUST capture the CURRENT STATE and OBJECTIVES above all else.\n\n"
+    "REQUIRED - Include these sections:\n"
+    "1. **CURRENT OBJECTIVE (MOST IMPORTANT)**: What is the user trying to accomplish RIGHT NOW? "
+    "   This is the primary purpose of the current work. State it clearly and prominently.\n"
+    "2. **What was being worked on**: Main activities, files modified, and tasks performed\n"
+    "3. **Task state/progress**: What has been completed and what remains\n\n"
+    "CRITICAL: The current objective is the MOST IMPORTANT part. Future context retrieval depends on it. "
+    "Be specific about file names, function names, and technical details mentioned.\n\n"
     "Here is the conversation to summarize:\n\n";
 
 /**
@@ -91,6 +92,13 @@ static char* build_conversation_text(const InternalMessage *messages, int messag
 
     for (int i = 0; i < message_count; i++) {
         const InternalMessage *msg = &messages[i];
+
+        // Skip compaction notices when building conversation for summarization
+        // They contain metadata, not actual work content
+        if (msg->role == MSG_AUTO_COMPACTION) {
+            continue;
+        }
+
         const char *role = get_role_string(msg->role);
 
         // Add role header
@@ -594,23 +602,15 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
     }
 
     // Calculate which messages to compact
-    // Find the last compaction notice - we never compact past that point
-    // This ensures the first user message and compaction notice are preserved
-    int compact_start = 1; // Default: start after message 0
-    for (int i = state->count - 1; i >= 0; i--) {
-        if (state->messages[i].role == MSG_AUTO_COMPACTION) {
-            // Found a compaction notice, start after it
-            compact_start = i + 1;
-            LOG_DEBUG("Found compaction notice at position %d, starting compaction from position %d", i, compact_start);
-            break;
-        }
-    }
+    // Always preserve system message at position 0
+    // Old compaction notices will be compacted (replaced by the new one)
+    // This allows the first user message and old notices to be archived
+    int compact_start = 1; // Start after system message (position 0 is always preserved)
 
-    // Need enough messages to compact: keep_recent + the compaction boundary message(s)
-    // After first compaction, we have: [0: first user] [1: compaction notice] [2+: recent]
-    // So we need at least keep_recent + 2 messages before compacting again
-    int min_messages_to_preserve = (compact_start > 1) ? compact_start + config->keep_recent
-                                                       : 1 + config->keep_recent;
+    // Need enough messages to compact: keep_recent + system + notice + recent
+    // Structure after compaction: [system] [new_notice] [recent messages]
+    // We always preserve: system (1) + new_notice (1) + keep_recent recent messages
+    int min_messages_to_preserve = 2 + config->keep_recent;
     if (state->count <= min_messages_to_preserve) {
         LOG_DEBUG("Not enough messages to compact: count=%d, need > %d", state->count, min_messages_to_preserve);
         return 0;
