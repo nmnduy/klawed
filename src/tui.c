@@ -803,9 +803,18 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
                 input_redraw(tui, prompt);
             }
         }
-    } else if (ch == '\t' || ch == 9) {  // Tab key - trigger autocomplete
-        // Handle tab completion for commands starting with '/' or ':'
-        if (input->buffer && (input->buffer[0] == '/' || input->buffer[0] == ':')) {
+    } else if (ch == '\t' || ch == 9) {  // Tab key - trigger autocomplete or insert tab
+        // In INSERT mode, always insert tab character (don't trigger completion)
+        // This prevents pasted text with tabs from triggering unwanted completion
+        if (tui->mode == TUI_MODE_INSERT) {
+            unsigned char tab = '\t';
+            if (tui_input_insert_char(input, &tab, 1) == 0) {
+                if (!input->paste_mode) {
+                    input_redraw(tui, prompt);
+                }
+            }
+        } else if (input->buffer && (input->buffer[0] == '/' || input->buffer[0] == ':')) {
+            // Handle tab completion for commands starting with '/' or ':' (non-insert modes)
             tui_handle_tab_completion(tui, prompt);
         } else {
             // Insert tab character
