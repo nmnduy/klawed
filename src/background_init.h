@@ -21,6 +21,29 @@ struct PersistenceDB;
 int start_background_loaders(ConversationState *state);
 
 /*
+ * Insert or replace system message at position 0 of the message array.
+ *
+ * This function handles the logic of inserting a system message at the
+ * correct position, handling edge cases like:
+ * - Empty message array (just append)
+ * - Existing system message at position 0 (replace)
+ * - Existing non-system messages (shift down and insert at 0)
+ * - Full message array (replace first message)
+ *
+ * Parameters:
+ *   messages     - Array of InternalMessage (must have room for MAX_MESSAGES)
+ *   count        - Pointer to current message count (will be updated)
+ *   system_text  - The system message text (will be owned by the message array)
+ *
+ * Returns:
+ *   0 on success, -1 on error
+ *
+ * Note: This function does NOT lock the conversation state - the caller
+ * is responsible for thread safety.
+ */
+int insert_system_message(InternalMessage *messages, int *count, char *system_text);
+
+/*
  * Wait for system prompt to be ready and add it to conversation
  */
 void await_system_prompt_ready(ConversationState *state);
