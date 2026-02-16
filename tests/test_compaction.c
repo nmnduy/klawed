@@ -796,6 +796,107 @@ static void test_free_temp_conversation_state_null_input(void) {
 }
 
 // ============================================================================
+// Test tool usage counting in compaction notice
+// ============================================================================
+
+static void test_tool_usage_counting(void) {
+    TEST("Tool usage counting in compaction notice");
+
+    ConversationState *state = calloc(1, sizeof(ConversationState));
+    assert(state != NULL);
+
+    // Create a state with mixed tool calls:
+    // 0: System
+    // 1: User
+    // 2: Assistant with Read tool call
+    // 3: Tool result
+    // 4: User
+    // 5: Assistant with Write tool call
+    // 6: Tool result
+    // 7: User
+    // 8: Assistant with Edit + Bash tool calls (multiple in one message)
+    // 9-10: Tool results
+    // 11-30: More messages to trigger compaction
+
+    create_test_message(&state->messages[0], MSG_SYSTEM, "System prompt");
+    create_test_message(&state->messages[1], MSG_USER, "User 1");
+    create_tool_call_message(&state->messages[2], "Read", "call_1");
+    create_tool_result_message(&state->messages[3], "call_1", "Result 1");
+    create_test_message(&state->messages[4], MSG_USER, "User 2");
+    create_tool_call_message(&state->messages[5], "Write", "call_2");
+    create_tool_result_message(&state->messages[6], "call_2", "Result 2");
+    create_test_message(&state->messages[7], MSG_USER, "User 3");
+
+    // Assistant with multiple tool calls (Edit + Bash)
+    state->messages[8].role = MSG_ASSISTANT;
+    state->messages[8].content_count = 2;
+    state->messages[8].contents = calloc(2, sizeof(InternalContent));
+    assert(state->messages[8].contents != NULL);
+    state->messages[8].contents[0].type = INTERNAL_TOOL_CALL;
+    state->messages[8].contents[0].tool_name = strdup("Edit");
+    state->messages[8].contents[0].tool_id = strdup("call_3");
+    state->messages[8].contents[1].type = INTERNAL_TOOL_CALL;
+    state->messages[8].contents[1].tool_name = strdup("Bash");
+    state->messages[8].contents[1].tool_id = strdup("call_4");
+
+    create_tool_result_message(&state->messages[9], "call_3", "Result 3");
+    create_tool_result_message(&state->messages[10], "call_4", "Result 4");
+
+    // Fill rest with simple messages
+    for (int i = 11; i < 30; i++) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "Message %d", i);
+        create_test_message(&state->messages[i], (i % 2 == 1) ? MSG_USER : MSG_ASSISTANT, buf);
+    }
+    state->count = 30;
+
+    CompactionConfig config = {
+        .enabled = 1,
+        .threshold_percent = 60,
+        .keep_recent = 5,
+        .last_compacted_index = -1,
+        .model_token_limit = 125000,
+        .current_tokens = 80000
+    };
+
+    // Capture the result to verify tool counts
+    CompactionResult result = {0};
+    int ret = compaction_perform(state, &config, "test-session", &result);
+    assert(ret == 0);
+    assert(result.success == 1);
+
+    // The compaction should have counted:
+    // - 1 Read (message 2)
+    // - 1 Write (message 5)
+    // - 1 Edit (message 8, first content)
+    // - 1 Bash (message 8, second content)
+    // These should be in the summary text of the compaction notice (message 1)
+
+    // Verify the notice message exists
+    assert(state->messages[1].role == MSG_AUTO_COMPACTION);
+    assert(state->messages[1].content_count > 0);
+    assert(state->messages[1].contents[0].text != NULL);
+
+    // Check that the notice contains expected tool counts
+    const char *notice_text = state->messages[1].contents[0].text;
+    printf("  Compaction notice excerpt: %.200s...\n", notice_text);
+
+    // The notice should mention the tools that were used
+    // Look for patterns like "Read (1)", "Write (1)", "Edit (1)", "Bash (1)"
+    assert(strstr(notice_text, "Read (1)") != NULL);
+    assert(strstr(notice_text, "Write (1)") != NULL);
+    assert(strstr(notice_text, "Edit (1)") != NULL);
+    assert(strstr(notice_text, "Bash (1)") != NULL);
+
+    // Clean up
+    for (int i = 0; i < state->count; i++) {
+        free_test_message(&state->messages[i]);
+    }
+    free(state);
+    PASS();
+}
+
+// ============================================================================
 // Main test runner
 // ============================================================================
 // Test for multiple compactions (catches bug where first user message
@@ -941,6 +1042,9 @@ int main(void) {
     // free_temp_conversation_state tests
     test_free_temp_conversation_state_nulls_pointers();
     test_free_temp_conversation_state_null_input();
+
+    // Tool usage counting test
+    test_tool_usage_counting();
 
     printf("\n======================================\n");
     printf("All tests passed!\n");

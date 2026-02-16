@@ -685,19 +685,29 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         const InternalMessage *msg = &state->messages[i];
 
         // Count tool usage by checking INTERNAL_TOOL_CALL content blocks
+        LOG_DEBUG("compaction_perform: Processing message %d: role=%d, content_count=%d",
+                  i, msg->role, msg->content_count);
         if (msg->role == MSG_ASSISTANT && msg->contents) {
             for (int j = 0; j < msg->content_count; j++) {
+                LOG_DEBUG("compaction_perform:   content[%d]: type=%d, tool_name=%s",
+                          j, msg->contents[j].type,
+                          msg->contents[j].tool_name ? msg->contents[j].tool_name : "(null)");
                 if (msg->contents[j].type == INTERNAL_TOOL_CALL &&
                     msg->contents[j].tool_name) {
                     const char *tool_name = msg->contents[j].tool_name;
+                    LOG_DEBUG("compaction_perform:   found tool call: %s", tool_name);
                     if (strcmp(tool_name, "Write") == 0) write_count++;
                     else if (strcmp(tool_name, "Edit") == 0) edit_count++;
+                    else if (strcmp(tool_name, "MultiEdit") == 0) edit_count++;
                     else if (strcmp(tool_name, "Bash") == 0) bash_count++;
                     else if (strcmp(tool_name, "Read") == 0) read_count++;
                 }
             }
         }
     }
+
+    LOG_INFO("compaction_perform: Tool usage counts: Read=%d, Write=%d, Edit=%d, Bash=%d",
+             read_count, write_count, edit_count, bash_count);
 
     // Calculate token information
     size_t tokens_before = config->current_tokens;
