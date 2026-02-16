@@ -177,6 +177,82 @@ int start_background_loaders(ConversationState *state) {
 }
 
 /*
+ * Insert or replace system message at position 0 of the message array.
+ *
+ * This function handles the logic of inserting a system message at the
+ * correct position, handling edge cases like:
+ * - Empty message array (just append)
+ * - Existing system message at position 0 (replace)
+ * - Existing non-system messages (shift down and insert at 0)
+ * - Full message array (replace first message)
+ *
+ * Parameters:
+ *   messages     - Array of InternalMessage (must have room for MAX_MESSAGES)
+ *   count        - Pointer to current message count (will be updated)
+ *   system_text  - The system message text (will be owned by the message array)
+ *
+ * Returns:
+ *   0 on success, -1 on error
+ *
+ * Note: This function does NOT lock the conversation state - the caller
+ * is responsible for thread safety.
+ */
+int insert_system_message(InternalMessage *messages, int *count, char *system_text) {
+    if (!messages || !count || !system_text) {
+        return -1;
+    }
+
+    int current_count = *count;
+
+    // If messages already exist, insert system message at position 0
+    if (current_count > 0) {
+        // Check if position 0 is already a system message
+        if (messages[0].role == MSG_SYSTEM) {
+            // Replace existing system message
+            free(messages[0].contents[0].text);
+            messages[0].contents[0].text = system_text;
+            return 0;
+        }
+
+        // Insert at position 0 by shifting existing messages
+        if (current_count < MAX_MESSAGES) {
+            // Shift all messages down by 1
+            memmove(&messages[1], &messages[0],
+                    (size_t)current_count * sizeof(InternalMessage));
+            (*count)++;
+
+            // Insert system message at position 0
+            messages[0].role = MSG_SYSTEM;
+            messages[0].contents = calloc(1, sizeof(InternalContent));
+            messages[0].content_count = 1;
+            messages[0].contents[0].type = INTERNAL_TEXT;
+            messages[0].contents[0].text = system_text;
+            return 0;
+        }
+
+        // Conversation full, replace first message
+        LOG_WARN("Conversation full, replacing first message with system prompt");
+        free(messages[0].contents[0].text);
+        free(messages[0].contents);
+        messages[0].role = MSG_SYSTEM;
+        messages[0].contents = calloc(1, sizeof(InternalContent));
+        messages[0].content_count = 1;
+        messages[0].contents[0].type = INTERNAL_TEXT;
+        messages[0].contents[0].text = system_text;
+        return 0;
+    }
+
+    // No existing messages, just append
+    messages[0].role = MSG_SYSTEM;
+    messages[0].contents = calloc(1, sizeof(InternalContent));
+    messages[0].content_count = 1;
+    messages[0].contents[0].type = INTERNAL_TEXT;
+    messages[0].contents[0].text = system_text;
+    *count = 1;
+    return 0;
+}
+
+/*
  * Wait for system prompt to be ready and add it to conversation
  */
 void await_system_prompt_ready(ConversationState *state) {
@@ -218,53 +294,7 @@ void await_system_prompt_ready(ConversationState *state) {
             LOG_ERROR("Failed to acquire conversation lock for system prompt insertion");
             free(system_prompt);
         } else {
-            // If messages already exist, insert system message at position 0
-            // This allows async loading while ensuring correct message order
-            if (state->count > 0) {
-                // Check if position 0 is already a system message
-                if (state->messages[0].role == MSG_SYSTEM) {
-                    // Replace existing system message
-                    free(state->messages[0].contents[0].text);
-                    state->messages[0].contents[0].text = system_prompt;
-                    system_prompt = NULL;
-                } else {
-                    // Insert at position 0 by shifting existing messages
-                    if (state->count < MAX_MESSAGES) {
-                        // Shift all messages down by 1
-                        memmove(&state->messages[1], &state->messages[0],
-                                (size_t)state->count * sizeof(InternalMessage));
-                        state->count++;
-
-                        // Insert system message at position 0
-                        state->messages[0].role = MSG_SYSTEM;
-                        state->messages[0].contents = calloc(1, sizeof(InternalContent));
-                        state->messages[0].content_count = 1;
-                        state->messages[0].contents[0].type = INTERNAL_TEXT;
-                        state->messages[0].contents[0].text = system_prompt;
-                        system_prompt = NULL;
-                    } else {
-                        // Conversation full, replace first message
-                        LOG_WARN("Conversation full, replacing first message with system prompt");
-                        free(state->messages[0].contents[0].text);
-                        free(state->messages[0].contents);
-                        state->messages[0].role = MSG_SYSTEM;
-                        state->messages[0].contents = calloc(1, sizeof(InternalContent));
-                        state->messages[0].content_count = 1;
-                        state->messages[0].contents[0].type = INTERNAL_TEXT;
-                        state->messages[0].contents[0].text = system_prompt;
-                        system_prompt = NULL;
-                    }
-                }
-            } else {
-                // No existing messages, just append
-                state->messages[0].role = MSG_SYSTEM;
-                state->messages[0].contents = calloc(1, sizeof(InternalContent));
-                state->messages[0].content_count = 1;
-                state->messages[0].contents[0].type = INTERNAL_TEXT;
-                state->messages[0].contents[0].text = system_prompt;
-                system_prompt = NULL;
-                state->count = 1;
-            }
+            insert_system_message(state->messages, &state->count, system_prompt);
             conversation_state_unlock(state);
         }
     }
