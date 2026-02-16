@@ -1364,13 +1364,15 @@ int tui_event_loop(TUIState *tui, const char *prompt,
         // Update spinner animation if active
         status_spinner_tick(tui);
 
-        // After spinner update, ensure cursor stays in input window
-        // status_spinner_tick uses wnoutrefresh, so we need to sync the screen
-        // and ensure the cursor is positioned in the input window, not the status bar
-        if (tui->status_spinner_active && tui->wm.input_win && tui->mode != TUI_MODE_NORMAL) {
-            // Use wnoutrefresh to update virtual screen without moving physical cursor
-            wnoutrefresh(tui->wm.input_win);
-            // Sync virtual screen to physical, cursor will be at input window's position
+        // After spinner update, sync the virtual screen to physical to show the animation.
+        // The spinner uses wnoutrefresh (to avoid cursor movement), so we need doupdate()
+        // to actually display the changes on screen. This should happen in ANY mode.
+        if (tui->status_spinner_active) {
+            // In INSERT/COMMAND modes, also refresh input window to keep cursor positioned there
+            if (tui->wm.input_win && tui->mode != TUI_MODE_NORMAL) {
+                wnoutrefresh(tui->wm.input_win);
+            }
+            // Sync virtual screen to physical - this displays the spinner in all modes
             doupdate();
         }
 
