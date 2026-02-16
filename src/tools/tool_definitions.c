@@ -275,7 +275,8 @@ void add_memory_tools(cJSON *tool_array, ToolSchemaFormat format) {
         "Use this when: (1) You need to find related past context but don't know the specific entity/slot; "
         "(2) User asks about something you may have discussed before; "
         "(3) After auto-compaction notice - search for relevant past conversation context; "
-        "(4) Starting a complex task and want to check for relevant project knowledge.";
+        "(4) Starting a complex task and want to check for relevant project knowledge; "
+        "(5) After a context compaction event, use this tool to retrieve potentially relevant context.";
 
     append_memory_tool(tool_array, format, "MemoryStore", store_desc, build_memory_store_params());
     append_memory_tool(tool_array, format, "MemoryRecall", recall_desc, build_memory_recall_params());
