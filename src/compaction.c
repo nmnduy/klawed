@@ -683,18 +683,19 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
 
         // Extract structured information from assistant messages (tool calls)
         const InternalMessage *msg = &state->messages[i];
-        const char *text = get_message_text(msg);
 
-        // Simple tool usage counting - look for tool call patterns
-        if (msg->role == MSG_ASSISTANT && text) {
-            if (strstr(text, "\"name\": \"Write\"") != NULL ||
-                strstr(text, "\"name\":\"Write\"") != NULL) write_count++;
-            if (strstr(text, "\"name\": \"Edit\"") != NULL ||
-                strstr(text, "\"name\":\"Edit\"") != NULL) edit_count++;
-            if (strstr(text, "\"name\": \"Bash\"") != NULL ||
-                strstr(text, "\"name\":\"Bash\"") != NULL) bash_count++;
-            if (strstr(text, "\"name\": \"Read\"") != NULL ||
-                strstr(text, "\"name\":\"Read\"") != NULL) read_count++;
+        // Count tool usage by checking INTERNAL_TOOL_CALL content blocks
+        if (msg->role == MSG_ASSISTANT && msg->contents) {
+            for (int j = 0; j < msg->content_count; j++) {
+                if (msg->contents[j].type == INTERNAL_TOOL_CALL &&
+                    msg->contents[j].tool_name) {
+                    const char *tool_name = msg->contents[j].tool_name;
+                    if (strcmp(tool_name, "Write") == 0) write_count++;
+                    else if (strcmp(tool_name, "Edit") == 0) edit_count++;
+                    else if (strcmp(tool_name, "Bash") == 0) bash_count++;
+                    else if (strcmp(tool_name, "Read") == 0) read_count++;
+                }
+            }
         }
     }
 
