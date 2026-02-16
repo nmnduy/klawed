@@ -467,8 +467,10 @@ TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 TEST_BEDROCK_CONVERSE_SRC = tests/test_bedrock_converse.c
 TEST_BEDROCK_CONVERSE_TARGET = $(BUILD_DIR)/test_bedrock_converse
+TEST_INSERT_SYSTEM_MESSAGE_SRC = tests/test_insert_system_message.c
+TEST_INSERT_SYSTEM_MESSAGE_TARGET = $(BUILD_DIR)/test_insert_system_message
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config test-bedrock-converse query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config test-bedrock-converse test-insert-system-message query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -483,7 +485,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-realtime-steering test-tui-tool-connector test-bedrock-converse
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-realtime-steering test-tui-tool-connector test-bedrock-converse test-insert-system-message
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -681,6 +683,12 @@ test-bedrock-converse: check-deps $(TEST_BEDROCK_CONVERSE_TARGET)
 	@echo "Running Bedrock Converse format tests..."
 	@echo ""
 	@./$(TEST_BEDROCK_CONVERSE_TARGET)
+
+test-insert-system-message: check-deps $(TEST_INSERT_SYSTEM_MESSAGE_TARGET)
+	@echo ""
+	@echo "Running insert_system_message tests..."
+	@echo ""
+	@./$(TEST_INSERT_SYSTEM_MESSAGE_TARGET)
 
 test-history-file: check-deps $(TEST_HISTORY_FILE_TARGET)
 	@echo ""
@@ -2146,6 +2154,21 @@ $(TEST_BEDROCK_CONVERSE_TARGET): $(BEDROCK_CONVERSE_SRC) $(TEST_BEDROCK_CONVERSE
 	@$(CC) -o $(TEST_BEDROCK_CONVERSE_TARGET) $(BUILD_DIR)/bedrock_converse_test.o $(BUILD_DIR)/test_bedrock_converse.o $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bedrock Converse test build successful!"
+	@echo ""
+
+# Test target for insert_system_message function
+$(TEST_INSERT_SYSTEM_MESSAGE_TARGET): $(BACKGROUND_INIT_SRC) $(TEST_INSERT_SYSTEM_MESSAGE_SRC) tests/test_background_init_stubs.c
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling background_init implementation..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/background_init_test.o $(BACKGROUND_INIT_SRC)
+	@echo "Compiling insert_system_message test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_insert_system_message.o $(TEST_INSERT_SYSTEM_MESSAGE_SRC)
+	@echo "Compiling background_init stubs..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_background_init_stubs.o tests/test_background_init_stubs.c
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_INSERT_SYSTEM_MESSAGE_TARGET) $(BUILD_DIR)/background_init_test.o $(BUILD_DIR)/test_insert_system_message.o $(BUILD_DIR)/test_background_init_stubs.o $(LDFLAGS)
+	@echo ""
+	@echo "✓ insert_system_message test build successful!"
 	@echo ""
 
 # Test target for OpenAI message format validation
