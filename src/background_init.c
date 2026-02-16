@@ -208,27 +208,84 @@ void await_system_prompt_ready(ConversationState *state) {
 
     // Add system prompt to conversation
     pthread_mutex_lock(&bg->system_prompt_mutex);
-    if (bg->system_prompt_result) {
-        add_system_message(state, bg->system_prompt_result);
-        free(bg->system_prompt_result);
-        bg->system_prompt_result = NULL;
+    char *system_prompt = bg->system_prompt_result;
+    bg->system_prompt_result = NULL;
+    pthread_mutex_unlock(&bg->system_prompt_mutex);
 
-        struct timespec end;
-        clock_gettime(CLOCK_MONOTONIC, &end);
-        long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
-                          (end.tv_nsec - start.tv_nsec) / 1000000;
-        LOG_DEBUG("System prompt added to conversation (total wait: %ld ms)", duration_ms);
+    if (system_prompt) {
+        // Use conversation lock for thread-safe message array modification
+        if (conversation_state_lock(state) != 0) {
+            LOG_ERROR("Failed to acquire conversation lock for system prompt insertion");
+            free(system_prompt);
+        } else {
+            // If messages already exist, insert system message at position 0
+            // This allows async loading while ensuring correct message order
+            if (state->count > 0) {
+                // Check if position 0 is already a system message
+                if (state->messages[0].role == MSG_SYSTEM) {
+                    // Replace existing system message
+                    free(state->messages[0].contents[0].text);
+                    state->messages[0].contents[0].text = system_prompt;
+                    system_prompt = NULL;
+                } else {
+                    // Insert at position 0 by shifting existing messages
+                    if (state->count < MAX_MESSAGES) {
+                        // Shift all messages down by 1
+                        memmove(&state->messages[1], &state->messages[0],
+                                (size_t)state->count * sizeof(InternalMessage));
+                        state->count++;
 
-        // Debug: print if requested
-        if (getenv("DEBUG_PROMPT")) {
+                        // Insert system message at position 0
+                        state->messages[0].role = MSG_SYSTEM;
+                        state->messages[0].contents = calloc(1, sizeof(InternalContent));
+                        state->messages[0].content_count = 1;
+                        state->messages[0].contents[0].type = INTERNAL_TEXT;
+                        state->messages[0].contents[0].text = system_prompt;
+                        system_prompt = NULL;
+                    } else {
+                        // Conversation full, replace first message
+                        LOG_WARN("Conversation full, replacing first message with system prompt");
+                        free(state->messages[0].contents[0].text);
+                        free(state->messages[0].contents);
+                        state->messages[0].role = MSG_SYSTEM;
+                        state->messages[0].contents = calloc(1, sizeof(InternalContent));
+                        state->messages[0].content_count = 1;
+                        state->messages[0].contents[0].type = INTERNAL_TEXT;
+                        state->messages[0].contents[0].text = system_prompt;
+                        system_prompt = NULL;
+                    }
+                }
+            } else {
+                // No existing messages, just append
+                state->messages[0].role = MSG_SYSTEM;
+                state->messages[0].contents = calloc(1, sizeof(InternalContent));
+                state->messages[0].content_count = 1;
+                state->messages[0].contents[0].type = INTERNAL_TEXT;
+                state->messages[0].contents[0].text = system_prompt;
+                system_prompt = NULL;
+                state->count = 1;
+            }
+            conversation_state_unlock(state);
+        }
+    }
+
+    struct timespec end;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long duration_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                      (end.tv_nsec - start.tv_nsec) / 1000000;
+    LOG_DEBUG("System prompt added to conversation (total wait: %ld ms)", duration_ms);
+
+    // Debug: print if requested
+    if (getenv("DEBUG_PROMPT")) {
+        if (conversation_state_lock(state) == 0) {
             if (state->count > 0 && state->messages[0].role == MSG_SYSTEM &&
                 state->messages[0].content_count > 0 && state->messages[0].contents[0].text) {
                 printf("\n=== SYSTEM PROMPT (DEBUG) ===\n%s\n=== END SYSTEM PROMPT ===\n\n",
                        state->messages[0].contents[0].text);
             }
+            conversation_state_unlock(state);
         }
     }
-    pthread_mutex_unlock(&bg->system_prompt_mutex);
 }
 
 /*
