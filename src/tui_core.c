@@ -795,6 +795,12 @@ void tui_render_active_subagents(TUIState *tui) {
 void tui_show_startup_banner(TUIState *tui, const char *version, const char *model, const char *working_dir) {
     if (!tui || !tui->is_initialized) return;
 
+    // Defensive check: model and working_dir must not be NULL
+    if (!model || !working_dir) {
+        LOG_ERROR("[TUI] Cannot show startup banner: model or working_dir is NULL");
+        return;
+    }
+
     // Check if VLTRN mode is enabled
     const char *vltrn_mode = getenv("VLTRN_MODE");
     int is_vltrn = (vltrn_mode && strcmp(vltrn_mode, "1") == 0);

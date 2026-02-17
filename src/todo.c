@@ -33,9 +33,11 @@ int todo_init(TodoList *list) {
     list->count = 0;
     list->capacity = INITIAL_CAPACITY;
 
-    list->items = malloc(INITIAL_CAPACITY * sizeof(TodoItem));
+    list->items = reallocarray(NULL, INITIAL_CAPACITY, sizeof(TodoItem));
     if (!list->items) {
-        // Allocation failed, but count and capacity are already set to safe values
+        // Allocation failed - reset to safe empty state
+        list->count = 0;
+        list->capacity = 0;
         return -1;
     }
 
