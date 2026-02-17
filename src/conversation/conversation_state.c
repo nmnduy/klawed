@@ -78,6 +78,18 @@ void conversation_state_destroy(ConversationState *state) {
         state->subagent_manager = NULL;
     }
 
+    // Try to lock the mutex before destroying it to ensure it's not locked by another thread.
+    // If we can't lock it (e.g., it's already locked or in a bad state), we still proceed
+    // with destruction but log a warning. This is a best-effort approach to avoid undefined
+    // behavior when destroying a locked mutex.
+    int lock_result = pthread_mutex_trylock(&state->conv_mutex);
+    if (lock_result != 0) {
+        LOG_WARN("Mutex may be locked by another thread during destroy (result=%d)", lock_result);
+    } else {
+        // Successfully locked, now unlock before destroying
+        pthread_mutex_unlock(&state->conv_mutex);
+    }
+
     pthread_mutex_destroy(&state->conv_mutex);
     state->conv_mutex_initialized = 0;
 }
@@ -151,11 +163,17 @@ void clear_conversation(ConversationState *state) {
     // Clear todo list
     if (state->todo_list) {
         todo_free(state->todo_list);
+        // Reset the todo list to a known safe state before reinitializing
+        state->todo_list->items = NULL;
+        state->todo_list->count = 0;
+        state->todo_list->capacity = 0;
         if (todo_init(state->todo_list) != 0) {
-            LOG_ERROR("Failed to reinitialize todo list after clear");
-            // The list is in a safe empty state (todo_free zeroed it)
+            LOG_ERROR("Failed to reinitialize todo list after clear - todo operations may fail");
+            // The list is in a safe empty state (items is NULL, count/capacity are 0)
+            // todo_add handles this gracefully by reallocating when needed
+        } else {
+            LOG_DEBUG("Todo list cleared and reinitialized");
         }
-        LOG_DEBUG("Todo list cleared and reinitialized");
     }
 
     conversation_state_unlock(state);
