@@ -2391,7 +2391,7 @@ install: $(TARGET)
 ifeq ($(UNAME_S),Darwin)
 ifndef GITHUB_ACTIONS
 	@echo "Signing binary for macOS..."
-	@codesign --force --deep --sign - $(INSTALL_PREFIX)/bin/klawed 2>/dev/null || echo "Warning: Code signing failed (non-fatal)"
+	@codesign --force --deep --sign - --options runtime $(INSTALL_PREFIX)/bin/klawed 2>/dev/null || echo "Warning: Code signing failed (non-fatal)"
 endif
 endif
 # Note: Memory system now uses SQLite + FTS5 (memory_db.c), no external libraries needed
