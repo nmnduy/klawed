@@ -136,6 +136,7 @@ TEST_COMPACTION_TARGET = $(BUILD_DIR)/test_compaction
 TEST_TIMING_TARGET = $(BUILD_DIR)/test_tool_timing
 TEST_PASTE_TARGET = $(BUILD_DIR)/test_paste
 TEST_RETRY_JITTER_TARGET = $(BUILD_DIR)/test_retry_jitter
+TEST_CONTEXT_LENGTH_ERROR_TARGET = $(BUILD_DIR)/test_context_length_error
 TEST_OPENAI_FORMAT_TARGET = $(BUILD_DIR)/test_openai_format
 TEST_OPENAI_RESPONSES_TARGET = $(BUILD_DIR)/test_openai_responses
 TEST_OPENAI_RESPONSE_PARSING_TARGET = $(BUILD_DIR)/test_openai_response_parsing
@@ -410,6 +411,7 @@ TEST_TODO_WRITE_SRC = tests/test_todo_write.c
 TEST_COMPACTION_SRC = tests/test_compaction.c
 TEST_PASTE_SRC = tests/test_paste.c
 TEST_RETRY_JITTER_SRC = tests/test_retry_jitter.c
+TEST_CONTEXT_LENGTH_ERROR_SRC = tests/test_context_length_error.c
 TEST_OPENAI_FORMAT_SRC = tests/test_openai_format.c
 TEST_OPENAI_RESPONSES_SRC = tests/test_openai_responses.c
 TEST_OPENAI_RESPONSE_PARSING_SRC = tests/test_openai_response_parsing.c
@@ -546,6 +548,12 @@ test-retry-jitter: check-deps $(TEST_RETRY_JITTER_TARGET)
 	@echo "Running Retry Jitter tests..."
 	@echo ""
 	@./$(TEST_RETRY_JITTER_TARGET)
+
+test-context-length-error: check-deps $(TEST_CONTEXT_LENGTH_ERROR_TARGET)
+	@echo ""
+	@echo "Running Context Length Error tests..."
+	@echo ""
+	@./$(TEST_CONTEXT_LENGTH_ERROR_TARGET)
 
 test-timing: check-deps $(TEST_TIMING_TARGET)
 	@echo ""
@@ -2103,6 +2111,15 @@ $(TEST_RETRY_JITTER_TARGET): $(TEST_RETRY_JITTER_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_RETRY_JITTER_TARGET) $(TEST_RETRY_JITTER_SRC) -lm
 	@echo ""
 	@echo "✓ Retry Jitter test build successful!"
+	@echo ""
+
+# Test target for Context Length Error - tests error detection patterns
+$(TEST_CONTEXT_LENGTH_ERROR_TARGET): $(TEST_CONTEXT_LENGTH_ERROR_SRC) $(RETRY_LOGIC_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Context Length Error test suite..."
+	@$(CC) $(CFLAGS) -o $(TEST_CONTEXT_LENGTH_ERROR_TARGET) $(TEST_CONTEXT_LENGTH_ERROR_SRC) $(RETRY_LOGIC_OBJ)
+	@echo ""
+	@echo "✓ Context Length Error test build successful!"
 	@echo ""
 
 # Test target for tool timing - ensures no 60-second delays
