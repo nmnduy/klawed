@@ -505,6 +505,22 @@ int window_manager_resize_input(WindowManager *wm, int desired_content_lines) {
             wm->status_height = 0;
         }
     }
+
+    // Recreate todo window if visible (it may need to move with input window)
+    if (wm->todo_win && wm->todo_height > 0) {
+        delwin(wm->todo_win);
+        wm->todo_win = NULL;
+        int todo_y = input_y - wm->todo_height;
+        if (todo_y < 0) todo_y = 0;
+        wm->todo_win = newwin(wm->todo_height, wm->screen_width, todo_y, 0);
+        if (!wm->todo_win) {
+            LOG_WARN("[WM] Failed to recreate todo window after input resize");
+            wm->todo_height = 0;
+        } else {
+            keypad(wm->todo_win, TRUE);
+        }
+    }
+
     if (!wm->input_win) {
         LOG_ERROR("[WM] Failed to recreate input window");
         return -1;
