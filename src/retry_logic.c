@@ -7,6 +7,8 @@
 
 #include "retry_logic.h"
 #include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
 #include <curl/curl.h>
 
 /**
@@ -52,6 +54,7 @@ int is_curl_error_retryable(CURLcode curl_code) {
  * Check if an error message indicates a context length error
  *
  * Detects various forms of context length/token limit errors from API providers.
+ * Performs case-insensitive matching to handle variations in error messages.
  *
  * @param error_message Error message text (may be NULL)
  * @param error_type Error type from API response (may be NULL)
@@ -62,27 +65,47 @@ int is_context_length_error(const char *error_message, const char *error_type) {
         return 0;
     }
 
-    // Check for context length/token limit patterns in error message
-    if (strstr(error_message, "maximum context length") != NULL ||
-        (strstr(error_message, "context length") != NULL && strstr(error_message, "tokens") != NULL) ||
-        strstr(error_message, "too many tokens") != NULL ||
+    // Create lowercase copy of error message for case-insensitive matching
+    size_t msg_len = strlen(error_message);
+    char *msg_lower = malloc(msg_len + 1);
+    if (msg_lower) {
+        for (size_t i = 0; i < msg_len; i++) {
+            msg_lower[i] = (char)tolower((unsigned char)error_message[i]);
+        }
+        msg_lower[msg_len] = '\0';
+    }
+
+    // Use lowercased message if available, otherwise fall back to original
+    const char *msg_to_check = msg_lower ? msg_lower : error_message;
+    int is_context_error = 0;
+
+    // Check for context length/token limit patterns in error message (lowercased)
+    if (strstr(msg_to_check, "maximum context length") != NULL ||
+        (strstr(msg_to_check, "context length") != NULL && strstr(msg_to_check, "tokens") != NULL) ||
+        strstr(msg_to_check, "too many tokens") != NULL ||
         // OpenAI token limit exceeded pattern
-        strstr(error_message, "exceeded model token limit") != NULL ||
-        strstr(error_message, "token limit") != NULL ||
+        strstr(msg_to_check, "exceeded model token limit") != NULL ||
+        strstr(msg_to_check, "token limit") != NULL ||
         // LiteLLM / Bedrock patterns
-        strstr(error_message, "ContextWindowExceededError") != NULL ||
-        strstr(error_message, "Context Window Error") != NULL ||
-        strstr(error_message, "Input is too long") != NULL) {
-        return 1;
+        strstr(msg_to_check, "contextwindowexceedederror") != NULL ||
+        strstr(msg_to_check, "context window error") != NULL ||
+        strstr(msg_to_check, "input is too long") != NULL) {
+        is_context_error = 1;
     }
 
     // Check for invalid_request_error with token-related message
-    if (error_type && strcmp(error_type, "invalid_request_error") == 0 &&
-        strstr(error_message, "tokens") != NULL) {
-        return 1;
+    if (!is_context_error && error_type &&
+        strcasecmp(error_type, "invalid_request_error") == 0 &&
+        strstr(msg_to_check, "tokens") != NULL) {
+        is_context_error = 1;
     }
 
-    return 0;
+    // msg_lower is either allocated buffer or NULL (never error_message)
+    // free(NULL) is safe (no-op), but check explicitly for clarity
+    if (msg_lower) {
+        free(msg_lower);
+    }
+    return is_context_error;
 }
 
 /**
