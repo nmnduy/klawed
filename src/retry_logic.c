@@ -81,6 +81,7 @@ int is_context_length_error(const char *error_message, const char *error_type) {
 
     // Check for context length/token limit patterns in error message (lowercased)
     if (strstr(msg_to_check, "maximum context length") != NULL ||
+        strstr(msg_to_check, "context length exceeded") != NULL ||
         (strstr(msg_to_check, "context length") != NULL && strstr(msg_to_check, "tokens") != NULL) ||
         strstr(msg_to_check, "too many tokens") != NULL ||
         // OpenAI token limit exceeded pattern
