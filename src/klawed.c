@@ -1738,6 +1738,8 @@ int main(int argc, char *argv[]) {
 
     // Initialize conversation state
     ConversationState state = {0};
+    int exit_code = 0;  // Declared early for use in error paths
+
     if (conversation_state_init(&state) != 0) {
         LOG_ERROR("Failed to initialize conversation state synchronization");
         fprintf(stderr, "Error: Unable to initialize conversation state\n");
@@ -1827,171 +1829,144 @@ int main(int argc, char *argv[]) {
                 } else {
                     fprintf(stderr, "Error: Failed to resume most recent session. No sessions found in database.\n");
                 }
-
-                // Clean up and exit
-                cleanup_background_loaders(&state);
-                conversation_free(&state);
-                free(session_id);
-                if (state.persistence_db) {
-                    persistence_close(state.persistence_db);
-                }
-                memory_db_cleanup_global();
-                curl_global_cleanup();
-                log_shutdown();
-                return 1;
+                exit_code = 1;
             }
         } else {
             LOG_ERROR("Database not available for session resume");
             fprintf(stderr, "Error: Database not available. Cannot resume session.\n");
-
-            // Clean up and exit
-            cleanup_background_loaders(&state);
-            conversation_free(&state);
-            free(session_id);
-            memory_db_cleanup_global();
-            curl_global_cleanup();
-            log_shutdown();
-            return 1;
-        }
-    }
-#endif
-
-#ifndef TEST_BUILD
-    // Defer provider initialization to first API call to avoid blocking TUI startup.
-    // state.api_url currently points at base URL from env; it will be replaced on init.
-    state.provider = NULL;
-
-    // Load MCP configuration if enabled
-    if (mcp_is_enabled()) {
-        LOG_DEBUG("MCP: MCP is enabled, loading configuration");
-        const char *mcp_config_path = getenv("KLAWED_MCP_CONFIG");
-        LOG_DEBUG("MCP: Using config path: %s", mcp_config_path ? mcp_config_path : "(default)");
-        state.mcp_config = mcp_load_config(mcp_config_path);
-
-        if (state.mcp_config) {
-            LOG_INFO("MCP: Loaded %d server(s) from config", state.mcp_config->server_count);
-
-            // Connect to all configured servers
-            for (int i = 0; i < state.mcp_config->server_count; i++) {
-                MCPServer *server = state.mcp_config->servers[i];
-                LOG_DEBUG("MCP: Attempting to connect to server '%s'", server->name);
-                if (mcp_connect_server(server) == 0) {
-                    LOG_DEBUG("MCP: Connected to server '%s', discovering tools", server->name);
-                    // Discover tools from connected server
-                    int tool_count = mcp_discover_tools(server);
-                    if (tool_count > 0) {
-                        LOG_INFO("MCP: Server '%s' provides %d tool(s)", server->name, tool_count);
-                        // Log individual tool names
-                        for (int j = 0; j < tool_count; j++) {
-                            if (server->tools[j]) {
-                                LOG_DEBUG("MCP: Server '%s' tool %d: '%s'", server->name, j, server->tools[j]);
-                            }
-                        }
-                    } else if (tool_count == 0) {
-                        LOG_DEBUG("MCP: Server '%s' provides no tools", server->name);
-                    } else {
-                        LOG_WARN("MCP: Failed to discover tools from server '%s'", server->name);
-                    }
-                } else {
-                    LOG_WARN("MCP: Failed to connect to server '%s'", server->name);
-                }
-            }
-
-            // Log status
-            char *status = mcp_get_status(state.mcp_config);
-            if (status) {
-                LOG_INFO("MCP Status: %s", status);
-                free(status);
-            }
-        } else {
-            LOG_DEBUG("MCP: No servers configured or failed to load config");
-        }
-    } else {
-        state.mcp_config = NULL;
-        LOG_DEBUG("MCP: Disabled (set KLAWED_MCP_ENABLED=1 to enable)");
-    }
-#else
-    state.provider = NULL;
-    state.mcp_config = NULL;
-#endif
-
-    // Check for allocation failures
-    if (!state.api_key || !state.api_url || !state.model || !state.todo_list) {
-        LOG_ERROR("Failed to allocate memory for conversation state");
-        fprintf(stderr, "Error: Memory allocation failed\n");
-        free(state.api_key);
-        free(state.api_url);
-        free(state.model);
-        free(state.working_dir);
-        if (state.todo_list) {
-            free(state.todo_list);
-        }
-        conversation_state_destroy(&state);
-        memory_db_cleanup_global();
-        curl_global_cleanup();
-        return 1;
-    }
-
-    if (!state.working_dir) {
-        LOG_ERROR("Failed to get current working directory");
-        free(state.api_key);
-        free(state.api_url);
-        free(state.model);
-        conversation_state_destroy(&state);
-        memory_db_cleanup_global();
-        curl_global_cleanup();
-        return 1;
-    }
-
-    LOG_INFO("API URL initialized: %s", state.api_url);
-
-    // DISABLED: System prompt building moved to background loading
-    // This expensive operation (scanning git, environment, directories) is now done asynchronously
-    // Build and add system prompt with environment context
-    // char *system_prompt = build_system_prompt(&state);
-    // if (system_prompt) {
-    //     add_system_message(&state, system_prompt);
-    //     free(system_prompt);
-    //     LOG_DEBUG("System prompt added with environment context");
-    //
-    //     // Note: Memory context injection is now done before each API call in api_client.c
-    //     // This ensures the memory context is always fresh and up-to-date
-    //
-    //     // Debug: print system prompt if DEBUG_PROMPT environment variable is set
-    //     if (getenv("DEBUG_PROMPT")) {
-    //         // Print the final system prompt (may include injected memory context)
-    //         if (state.count > 0 && state.messages[0].role == MSG_SYSTEM &&
-    //             state.messages[0].content_count > 0 && state.messages[0].contents[0].text) {
-    //             printf("\n=== SYSTEM PROMPT (DEBUG) ===\n%s\n=== END SYSTEM PROMPT ===\n\n",
-    //                    state.messages[0].contents[0].text);
-    //         }
-    //     }
-    // } else {
-    //     LOG_WARN("Failed to build system prompt");
-    // }
-    // Note: System prompt will be added by background loader when ready
-
-    // Run in appropriate mode
-    int exit_code = 0;
-    if (sqlite_daemon_mode) {
-        // SQLite queue daemon mode
-        LOG_INFO("Starting SQLite queue daemon mode on %s", sqlite_db_path);
-        SQLiteQueueContext *sqlite_ctx = sqlite_queue_init(sqlite_db_path, sqlite_sender_name);
-        if (!sqlite_ctx) {
-            LOG_ERROR("Failed to initialize SQLite queue");
             exit_code = 1;
-        } else {
-            sqlite_ctx->daemon_mode = true;
-            state.sqlite_queue_context = sqlite_ctx;
-            exit_code = sqlite_queue_daemon_mode(sqlite_ctx, &state);
-            state.sqlite_queue_context = NULL;
-            sqlite_queue_cleanup(sqlite_ctx);
         }
     }
-    else if (is_single_command_mode) {
-        exit_code = oneshot_execute(&state, single_command);
-    } else {
-        interactive_mode(&state);
+#endif
+
+    // Continue with initialization if session resume succeeded (or wasn't requested)
+    if (exit_code == 0) {
+#ifndef TEST_BUILD
+        // Defer provider initialization to first API call to avoid blocking TUI startup.
+        // state.api_url currently points at base URL from env; it will be replaced on init.
+        state.provider = NULL;
+
+        // Load MCP configuration if enabled
+        if (mcp_is_enabled()) {
+            LOG_DEBUG("MCP: MCP is enabled, loading configuration");
+            const char *mcp_config_path = getenv("KLAWED_MCP_CONFIG");
+            LOG_DEBUG("MCP: Using config path: %s", mcp_config_path ? mcp_config_path : "(default)");
+            state.mcp_config = mcp_load_config(mcp_config_path);
+
+            if (state.mcp_config) {
+                LOG_INFO("MCP: Loaded %d server(s) from config", state.mcp_config->server_count);
+
+                // Connect to all configured servers
+                for (int i = 0; i < state.mcp_config->server_count; i++) {
+                    MCPServer *server = state.mcp_config->servers[i];
+                    LOG_DEBUG("MCP: Attempting to connect to server '%s'", server->name);
+                    if (mcp_connect_server(server) == 0) {
+                        LOG_DEBUG("MCP: Connected to server '%s', discovering tools", server->name);
+                        // Discover tools from connected server
+                        int tool_count = mcp_discover_tools(server);
+                        if (tool_count > 0) {
+                            LOG_INFO("MCP: Server '%s' provides %d tool(s)", server->name, tool_count);
+                            // Log individual tool names
+                            for (int j = 0; j < tool_count; j++) {
+                                if (server->tools[j]) {
+                                    LOG_DEBUG("MCP: Server '%s' tool %d: '%s'", server->name, j, server->tools[j]);
+                                }
+                            }
+                        } else if (tool_count == 0) {
+                            LOG_DEBUG("MCP: Server '%s' provides no tools", server->name);
+                        } else {
+                            LOG_WARN("MCP: Failed to discover tools from server '%s'", server->name);
+                        }
+                    } else {
+                        LOG_WARN("MCP: Failed to connect to server '%s'", server->name);
+                    }
+                }
+
+                // Log status
+                char *status = mcp_get_status(state.mcp_config);
+                if (status) {
+                    LOG_INFO("MCP Status: %s", status);
+                    free(status);
+                }
+            } else {
+                LOG_DEBUG("MCP: No servers configured or failed to load config");
+            }
+        } else {
+            state.mcp_config = NULL;
+            LOG_DEBUG("MCP: Disabled (set KLAWED_MCP_ENABLED=1 to enable)");
+        }
+#else
+        state.provider = NULL;
+        state.mcp_config = NULL;
+#endif
+
+        // Check for allocation failures
+        if (exit_code == 0 && (!state.api_key || !state.api_url || !state.model || !state.todo_list)) {
+            LOG_ERROR("Failed to allocate memory for conversation state");
+            fprintf(stderr, "Error: Memory allocation failed\n");
+            exit_code = 1;
+        }
+
+        if (exit_code == 0 && !state.working_dir) {
+            LOG_ERROR("Failed to get current working directory");
+            exit_code = 1;
+        }
+
+        if (exit_code == 0) {
+            LOG_INFO("API URL initialized: %s", state.api_url);
+        }
+
+        // DISABLED: System prompt building moved to background loading
+        // This expensive operation (scanning git, environment, directories) is now done asynchronously
+        // Build and add system prompt with environment context
+        // char *system_prompt = build_system_prompt(&state);
+        // if (system_prompt) {
+        //     add_system_message(&state, system_prompt);
+        //     free(system_prompt);
+        //     LOG_DEBUG("System prompt added with environment context");
+        //
+        //     // Note: Memory context injection is now done before each API call in api_client.c
+        //     // This ensures the memory context is always fresh and up-to-date
+        //
+        //     // Debug: print system prompt if DEBUG_PROMPT environment variable is set
+        //     if (getenv("DEBUG_PROMPT")) {
+        //         // Print the final system prompt (may include injected memory context)
+        //         if (state.count > 0 && state.messages[0].role == MSG_SYSTEM &&
+        //             state.messages[0].content_count > 0 && state.messages[0].contents[0].text) {
+        //             printf("\n=== SYSTEM PROMPT (DEBUG) ===\n%s\n=== END SYSTEM PROMPT ===\n\n",
+        //                    state.messages[0].contents[0].text);
+        //         }
+        //     }
+        // } else {
+        //     LOG_WARN("Failed to build system prompt");
+        // }
+        // Note: System prompt will be added by background loader when ready
+
+        // Run in appropriate mode
+        if (sqlite_daemon_mode) {
+            // SQLite queue daemon mode
+            LOG_INFO("Starting SQLite queue daemon mode on %s", sqlite_db_path);
+            SQLiteQueueContext *sqlite_ctx = sqlite_queue_init(sqlite_db_path, sqlite_sender_name);
+            if (!sqlite_ctx) {
+                LOG_ERROR("Failed to initialize SQLite queue");
+                exit_code = 1;
+            } else {
+                sqlite_ctx->daemon_mode = true;
+                state.sqlite_queue_context = sqlite_ctx;
+                exit_code = sqlite_queue_daemon_mode(sqlite_ctx, &state);
+                state.sqlite_queue_context = NULL;
+                sqlite_queue_cleanup(sqlite_ctx);
+            }
+        }
+
+        // Skip main execution if there was an error
+        if (exit_code == 0) {
+            if (is_single_command_mode) {
+                exit_code = oneshot_execute(&state, single_command);
+            } else {
+                interactive_mode(&state);
+            }
+        }
     }
 
     // Cleanup background loaders (wait for threads to complete)
