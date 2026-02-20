@@ -44,18 +44,18 @@ void api_timing_init(APITimingTracker *tracker);
 
 /**
  * Record a new API call result
- * 
+ *
  * @param tracker    The timing tracker
  * @param duration_ms Response time in milliseconds
  * @param input_tokens Number of prompt/input tokens in the request
- * 
+ *
  * If input_tokens is 0, the call is skipped (avoid division by zero)
  */
 void api_timing_record(APITimingTracker *tracker, long duration_ms, int input_tokens);
 
 /**
  * Get the current baseline normalized time
- * 
+ *
  * Returns the rolling average of normalized times.
  * Returns 0.0 if no data has been recorded yet.
  */
@@ -63,16 +63,16 @@ double api_timing_get_baseline(const APITimingTracker *tracker);
 
 /**
  * Calculate suggested spinner speed multiplier based on current API performance
- * 
+ *
  * @param tracker       The timing tracker
  * @param current_duration_ms  Current API call duration
  * @param input_tokens  Current request's input tokens
- * 
+ *
  * Returns a multiplier for the base spinner speed:
  *   > 1.0 = API is slower than baseline -> faster spinner
  *   < 1.0 = API is faster than baseline -> slower spinner
  *   = 1.0 = API is at baseline
- * 
+ *
  * The multiplier is clamped between 0.2 and 3.0 to prevent extreme speeds.
  */
 double api_timing_get_speed_multiplier(const APITimingTracker *tracker,
