@@ -6,7 +6,6 @@
 
 #include "api_client.h"
 #include "api_response.h"
-#include "api_timing.h"
 #include "../background_init.h"
 #include "../logger.h"
 #include "../provider.h"
@@ -351,14 +350,6 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
                 if (state->compaction_config) {
                     compaction_update_token_count(state, state->compaction_config);
                 }
-
-                // Record API timing for dynamic spinner speed
-                // Estimate input tokens from request JSON size (~4 chars/token)
-                int estimated_tokens = 0;
-                if (result.request_json) {
-                    estimated_tokens = (int)(strlen(result.request_json) / 4);
-                }
-                api_timing_record(&state->api_timing, result.duration_ms, estimated_tokens);
             }
 
             // Cleanup and return
