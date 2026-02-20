@@ -8,7 +8,6 @@
 #include "../todo.h"
 #include "../subagent_manager.h"
 #include "../compaction.h"
-#include "../api/api_timing.h"
 #include <stdlib.h>
 #include <string.h>
 #include <bsd/string.h>
@@ -36,9 +35,6 @@ int conversation_state_init(ConversationState *state) {
 
     // Initialize compaction config (NULL by default)
     state->compaction_config = NULL;
-
-    // Initialize API timing tracker for dynamic spinner speed
-    api_timing_init(&state->api_timing);
 
     // Initialize subagent manager
     state->subagent_manager = malloc(sizeof(SubagentManager));
