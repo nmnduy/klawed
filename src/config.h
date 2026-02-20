@@ -21,7 +21,7 @@
 #define CONFIG_API_KEY_ENV_MAX 128
 
 // Maximum number of provider configurations
-#define CONFIG_MAX_PROVIDERS 10
+#define CONFIG_MAX_PROVIDERS 15
 // Maximum length for provider key/name
 #define CONFIG_PROVIDER_KEY_MAX 64
 
