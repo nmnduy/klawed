@@ -793,7 +793,7 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
     // Create compaction notice message with MSG_AUTO_COMPACTION type
     InternalMessage notice_msg = {0};
     notice_msg.role = MSG_AUTO_COMPACTION;
-    notice_msg.contents = malloc(sizeof(InternalContent));
+    notice_msg.contents = calloc(1, sizeof(InternalContent));
     if (!notice_msg.contents) {
         LOG_ERROR("Failed to allocate memory for compaction notice");
         return -1;

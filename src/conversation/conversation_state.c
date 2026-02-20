@@ -155,6 +155,22 @@ void clear_conversation(ConversationState *state) {
                 cJSON_Delete(cb->tool_output);
                 cb->tool_output = NULL;
             }
+            if (cb->reasoning_content) {
+                free(cb->reasoning_content);
+                cb->reasoning_content = NULL;
+            }
+            if (cb->image_path) {
+                free(cb->image_path);
+                cb->image_path = NULL;
+            }
+            if (cb->mime_type) {
+                free(cb->mime_type);
+                cb->mime_type = NULL;
+            }
+            if (cb->base64_data) {
+                free(cb->base64_data);
+                cb->base64_data = NULL;
+            }
         }
         free(state->messages[i].contents);
         state->messages[i].contents = NULL;
@@ -205,6 +221,22 @@ void conversation_free(ConversationState *state) {
             if (cb->tool_output) {
                 cJSON_Delete(cb->tool_output);
                 cb->tool_output = NULL;
+            }
+            if (cb->reasoning_content) {
+                free(cb->reasoning_content);
+                cb->reasoning_content = NULL;
+            }
+            if (cb->image_path) {
+                free(cb->image_path);
+                cb->image_path = NULL;
+            }
+            if (cb->mime_type) {
+                free(cb->mime_type);
+                cb->mime_type = NULL;
+            }
+            if (cb->base64_data) {
+                free(cb->base64_data);
+                cb->base64_data = NULL;
             }
         }
         free(state->messages[i].contents);
