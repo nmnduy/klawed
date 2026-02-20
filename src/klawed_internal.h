@@ -21,6 +21,7 @@
 #endif
 
 #include "sqlite_queue.h"
+#include "api/api_timing.h"
 
 // ============================================================================
 // Configuration Constants
@@ -264,6 +265,9 @@ typedef struct ConversationState {
 
     // Context compaction configuration
     struct CompactionConfig *compaction_config;  // Auto-compaction settings (NULL if not enabled)
+
+    // API timing tracker for dynamic spinner speed
+    APITimingTracker api_timing;  // Tracks rolling average of normalized API response times
 } ConversationState;
 
 // ============================================================================
