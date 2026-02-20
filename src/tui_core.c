@@ -413,6 +413,8 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->status_spinner_active = 0;
     tui->status_spinner_frame = 0;
     tui->status_spinner_last_update_ns = 0;
+    tui->status_spinner_speed = 40.0;  // Default angular velocity (rad/s)
+    tui->status_spinner_started_ns = 0;
 
     // Initialize text diffusion effect
     text_diffusion_init(&tui->status_text_diffusion);
