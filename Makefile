@@ -1319,7 +1319,6 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/api_response_all.o $(API_RESPONSE_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/api_builder_all.o $(API_BUILDER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/api_client_all.o $(API_CLIENT_SRC); \
-	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/api_timing_all.o $(API_TIMING_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/interactive_loop_all.o $(INTERACTIVE_LOOP_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/input_handler_all.o $(INPUT_HANDLER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/response_processor_all.o $(RESPONSE_PROCESSOR_SRC); \
@@ -1383,7 +1382,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/klawed_md_all.o $(BUILD_DIR)/memory_injection_all.o \
 		$(BUILD_DIR)/ui_output_all.o $(BUILD_DIR)/print_helpers_all.o $(BUILD_DIR)/tool_output_display_all.o \
 		$(BUILD_DIR)/session_token_usage_all.o $(BUILD_DIR)/session_persistence_all.o \
-		$(BUILD_DIR)/api_response_all.o $(BUILD_DIR)/api_builder_all.o $(BUILD_DIR)/api_client_all.o $(BUILD_DIR)/api_timing_all.o \
+		$(BUILD_DIR)/api_response_all.o $(BUILD_DIR)/api_builder_all.o $(BUILD_DIR)/api_client_all.o \
 		$(BUILD_DIR)/interactive_loop_all.o $(BUILD_DIR)/input_handler_all.o \
 		$(BUILD_DIR)/response_processor_all.o $(BUILD_DIR)/command_dispatch_all.o \
 		$(BUILD_DIR)/oneshot_mode_all.o $(BUILD_DIR)/oneshot_processor_all.o $(BUILD_DIR)/oneshot_output_all.o $(BUILD_DIR)/oneshot_ui_all.o \
