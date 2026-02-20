@@ -66,6 +66,7 @@ The `/provider` command is more focused on provider management (listing, switchi
 - If the provider doesn't exist in configuration, an error is shown
 - If provider initialization fails, the configuration is still saved but the session continues with the old provider
 - Provider keys are limited to 64 characters (defined by `CONFIG_PROVIDER_KEY_MAX`)
+- Maximum of 15 providers is supported (combined from global and local config). If you exceed this limit, extra providers will be silently ignored.
 
 ## Environment Variable Override
 

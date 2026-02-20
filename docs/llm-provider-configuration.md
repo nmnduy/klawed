@@ -84,7 +84,7 @@ You can define multiple named provider configurations and switch between them:
 
 - **active_provider**: The key of the provider to use by default (e.g., "sonnet-4.5-bedrock")
 
-- **providers**: An object containing named provider configurations. Each key is a provider name, and the value is a provider configuration object with the fields above.
+- **providers**: An object containing named provider configurations. Each key is a provider name, and the value is a provider configuration object with the fields above. Maximum of **15 providers** is supported (combined from global and local config files). If you exceed this limit, a warning will be logged and extra providers will be silently ignored.
 
 ## Configuration File Locations
 
