@@ -156,6 +156,8 @@ static void status_spinner_stop(TUIState *tui) {
     tui->status_spinner_spring_initialized = 0;
     tui->status_spinner_pos = 0.0;
     tui->status_spinner_vel = 0.0;
+    tui->status_spinner_speed = 40.0;  // Reset to default speed
+    tui->status_spinner_started_ns = 0;
 }
 
 // ============================================================================

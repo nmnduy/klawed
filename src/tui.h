@@ -124,6 +124,10 @@ typedef struct TUIStateStruct {
     int status_spinner_frame;         // Current spinner frame index
     uint64_t status_spinner_last_update_ns; // Last spinner frame update timestamp
 
+    // Dynamic spinner speed based on API response time
+    double status_spinner_speed;            // Angular velocity (rad/s), varies with API response time
+    uint64_t status_spinner_started_ns;     // When the spinner started (for calculating speed)
+
     // Spring physics for smooth spinner animation
     double status_spinner_pos;        // Current angular position (float, for smooth animation)
     double status_spinner_vel;        // Current angular velocity
