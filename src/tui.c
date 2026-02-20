@@ -44,7 +44,6 @@
 #include <bsd/string.h>
 #include "message_queue.h"
 #include "history_file.h"
-#include "api/api_timing.h"
 #include "array_resize.h"
 #include "subagent_manager.h"
 #include "commands.h"
@@ -102,9 +101,6 @@ static void status_spinner_tick(TUIState *tui) {
 
     uint64_t now = monotonic_time_ns();
 
-    // Base angular velocity: ~40 rad/s = ~6 rotations/second
-    const double base_speed = 40.0;
-
     // Initialize spring on first tick
     if (!tui->status_spinner_spring_initialized) {
         tui->status_spinner_pos = 0.0;
@@ -113,9 +109,6 @@ static void status_spinner_tick(TUIState *tui) {
         spring_init(&tui->status_spinner_spring, 1.0/60.0, 15.0, 0.25);
         tui->status_spinner_spring_initialized = 1;
         tui->status_spinner_last_update_ns = now;
-        // Initialize spinner speed and start time
-        tui->status_spinner_speed = base_speed;
-        tui->status_spinner_started_ns = now;
         return;
     }
 
@@ -126,37 +119,10 @@ static void status_spinner_tick(TUIState *tui) {
         delta_s = 0.1;
     }
 
-    // Calculate target speed based on actual API response time if available
-    double target_speed = base_speed;
-
-    // Get API timing from conversation state if available
-    if (tui->conversation_state) {
-        // Estimate elapsed time since API call started (spinner started)
-        double elapsed_s = (double)(now - tui->status_spinner_started_ns) / 1e9;
-
-        // Estimate input tokens from conversation size (~4 chars/token)
-        int estimated_tokens = 0;
-        if (tui->conversation_state->count > 0) {
-            // Rough estimate based on message count
-            estimated_tokens = tui->conversation_state->count * 100;
-        }
-
-        // Get speed multiplier from API timing tracker
-        // This compares current wait time to rolling average of past API calls
-        double multiplier = api_timing_get_speed_multiplier(
-            &tui->conversation_state->api_timing,
-            (long)(elapsed_s * 1000),  // Convert to ms
-            estimated_tokens
-        );
-
-        target_speed = base_speed * multiplier;
-    }
-
-    // Smoothly transition speed using simple lerp
-    tui->status_spinner_speed = tui->status_spinner_speed * 0.95 + target_speed * 0.05;
-
     // Target angle increases continuously for spinning effect
-    double angular_velocity = tui->status_spinner_speed;
+    // Use a slightly randomized angular velocity to add organic feel
+    // ~40 rad/s base speed = ~6 rotations per second
+    double angular_velocity = 40.0;
     double target_pos = tui->status_spinner_pos + delta_s * angular_velocity;
 
     // Update spring with scaled time step
