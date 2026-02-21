@@ -507,7 +507,7 @@ void processing_context_init(ProcessingContext *ctx) {
     memset(ctx, 0, sizeof(ProcessingContext));
     ctx->execution_mode = EXEC_MODE_SERIAL;
     ctx->output_format = OUTPUT_FORMAT_PLAIN;
-    ctx->max_iterations = 100;  // Default limit
+    ctx->max_iterations = 2000;  // Default limit
 }
 
 int execute_tools_collect_results(struct ConversationState *state,
