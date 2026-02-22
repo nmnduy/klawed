@@ -1096,6 +1096,8 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
     if (result != 0) {
         LOG_ERROR("SQLite Queue: Processing failed with result %d", result);
         // Error already sent via callback
+        // Still send END_AI_TURN so client knows we're ready for next instruction
+        sqlite_queue_send_end_ai_turn(ctx, response_receiver);
         return result;
     }
 
@@ -2015,6 +2017,23 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
                         LOG_INFO("SQLite Queue: Daemon mode compaction trigger processed successfully");
                     } else {
                         LOG_ERROR("SQLite Queue: Daemon mode compaction trigger failed");
+                    }
+
+                } else if (strcmp(msg_type, "INTERRUPT") == 0) {
+                    // Handle interrupt request from client (direct processing in daemon mode)
+                    LOG_INFO("SQLite Queue: Received INTERRUPT message ID %lld in daemon mode", msg_id);
+                    printf("SQLite Queue: Interrupt requested by client\n");
+                    fflush(stdout);
+
+                    // Acknowledge the message first
+                    sqlite_queue_acknowledge(ctx, msg_id);
+
+                    // Process the interrupt
+                    int interrupt_result = sqlite_queue_interrupt(ctx);
+                    if (interrupt_result == 0) {
+                        LOG_INFO("SQLite Queue: Daemon mode interrupt processed successfully");
+                    } else {
+                        LOG_ERROR("SQLite Queue: Daemon mode interrupt failed");
                     }
 
                 } else {
