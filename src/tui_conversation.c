@@ -907,6 +907,11 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
 
                     switch (content->type) {
                         case INTERNAL_TEXT:
+                            // Display reasoning content first (if present) - for thinking models
+                            if (content->reasoning_content && strlen(content->reasoning_content) > 0) {
+                                tui_add_conversation_line(tui, "⟨Reasoning⟩", content->reasoning_content, COLOR_PAIR_TOOL_DIM);
+                            }
+                            // Display regular text content
                             if (content->text && strlen(content->text) > 0) {
                                 tui_add_conversation_line(tui, "[Assistant]", content->text, COLOR_PAIR_ASSISTANT);
                                 text_content_added = 1;

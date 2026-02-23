@@ -105,6 +105,8 @@ typedef struct {
     int tool_calls_count;            // Number of tool calls
     cJSON *tool_calls_array;         // Array of accumulated tool calls
     Arena *arena;                    // Arena for all allocations
+    int reasoning_line_added;        // Whether we've added a [Reasoning] line to TUI
+    int assistant_line_added;        // Whether we've added an [Assistant] line to TUI
 } KimiStreamingContext;
 
 static void kimi_streaming_context_init(KimiStreamingContext *ctx, ConversationState *state) {
@@ -220,6 +222,7 @@ static int kimi_streaming_event_handler(StreamEvent *event, void *userdata) {
                             // Initialize TUI on first content
                             if (ctx->accumulated_size == 0 && ctx->state && ctx->state->tui) {
                                 tui_add_conversation_line(ctx->state->tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
+                                ctx->assistant_line_added = 1;
                             }
 
                             memcpy(ctx->accumulated_text + ctx->accumulated_size,
@@ -254,10 +257,21 @@ static int kimi_streaming_event_handler(StreamEvent *event, void *userdata) {
                         }
 
                         if (ctx->accumulated_reasoning && needed <= ctx->reasoning_capacity) {
+                            // Initialize reasoning line in TUI on first content
+                            if (ctx->reasoning_size == 0 && ctx->state && ctx->state->tui) {
+                                tui_add_conversation_line(ctx->state->tui, "⟨Reasoning⟩", "", COLOR_PAIR_TOOL_DIM);
+                                ctx->reasoning_line_added = 1;
+                            }
+
                             memcpy(ctx->accumulated_reasoning + ctx->reasoning_size,
                                   reasoning_content->valuestring, new_len);
                             ctx->reasoning_size += new_len;
                             ctx->accumulated_reasoning[ctx->reasoning_size] = '\0';
+
+                            // Stream reasoning to TUI if available
+                            if (ctx->state && ctx->state->tui) {
+                                tui_update_last_conversation_line(ctx->state->tui, reasoning_content->valuestring);
+                            }
 
                             LOG_DEBUG("Accumulated reasoning_content: %zu bytes", ctx->reasoning_size);
                         }
