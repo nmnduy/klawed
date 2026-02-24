@@ -531,9 +531,63 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                     // In bordered mode at line start, add the border first
                     render_streaming_border(tui->wm.conv_pad);
                 } else {
-                    // For non-bordered messages, shouldn't happen in streaming
-                    LOG_WARN("[TUI] Streaming update but at start of line");
-                    return;
+                    // For non-bordered messages (reasoning, tools, etc.),
+                    // render the prefix first before writing text
+                    // Map TUIColorPair to ncurses color pair
+                    int mapped_pair = NCURSES_PAIR_FOREGROUND;
+                    switch (last_entry->color_pair) {
+                        case COLOR_PAIR_DEFAULT:
+                        case COLOR_PAIR_FOREGROUND:
+                            mapped_pair = NCURSES_PAIR_FOREGROUND;
+                            break;
+                        case COLOR_PAIR_USER:
+                            mapped_pair = NCURSES_PAIR_USER;
+                            break;
+                        case COLOR_PAIR_ASSISTANT:
+                            mapped_pair = NCURSES_PAIR_ASSISTANT;
+                            break;
+                        case COLOR_PAIR_TOOL:
+                            mapped_pair = NCURSES_PAIR_TOOL;
+                            break;
+                        case COLOR_PAIR_STATUS:
+                            mapped_pair = NCURSES_PAIR_STATUS;
+                            break;
+                        case COLOR_PAIR_ERROR:
+                            mapped_pair = NCURSES_PAIR_ERROR;
+                            break;
+                        case COLOR_PAIR_PROMPT:
+                            mapped_pair = NCURSES_PAIR_PROMPT;
+                            break;
+                        case COLOR_PAIR_TODO_COMPLETED:
+                            mapped_pair = NCURSES_PAIR_TODO_COMPLETED;
+                            break;
+                        case COLOR_PAIR_TODO_IN_PROGRESS:
+                            mapped_pair = NCURSES_PAIR_TODO_IN_PROGRESS;
+                            break;
+                        case COLOR_PAIR_TODO_PENDING:
+                            mapped_pair = NCURSES_PAIR_TODO_PENDING;
+                            break;
+                        case COLOR_PAIR_SEARCH:
+                            mapped_pair = NCURSES_PAIR_SEARCH;
+                            break;
+                        case COLOR_PAIR_TOOL_DIM:
+                            mapped_pair = NCURSES_PAIR_TOOL_DIM;
+                            break;
+                        case COLOR_PAIR_DIFF_CONTEXT:
+                            mapped_pair = NCURSES_PAIR_DIFF_CONTEXT;
+                            break;
+                        default:
+                            mapped_pair = NCURSES_PAIR_FOREGROUND;
+                            break;
+                    }
+                    if (has_colors()) {
+                        wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                    }
+                    waddstr(tui->wm.conv_pad, last_entry->prefix);
+                    waddch(tui->wm.conv_pad, ' ');
+                    if (has_colors()) {
+                        wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                    }
                 }
             }
 
