@@ -162,12 +162,14 @@ static const int WAVE_VARIANT_COUNT = (int)(sizeof(WAVE_VARIANT_INDICES)/sizeof(
 // Global spinner variant: wave form only
 static spinner_variant_t GLOBAL_SPINNER_VARIANT = {NULL,0};
 static void init_global_spinner_variant(void) {
-    static int init = 0;
-    if (init) return;
-    srand((unsigned)time(NULL));
-    // Default to first wave variant, actual frame selection happens per-cycle
-    GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[5];
-    init = 1;
+    static int seeded = 0;
+    if (!seeded) {
+        srand((unsigned)time(NULL));
+        seeded = 1;
+    }
+    // Pick a random wave variant each time (so each spinner session looks different)
+    int idx = WAVE_VARIANT_INDICES[rand() % WAVE_VARIANT_COUNT];
+    GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[idx];
 }
 
 // Get a random wave variant

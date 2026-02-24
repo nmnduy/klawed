@@ -136,6 +136,8 @@ static void status_spinner_start(TUIState *tui) {
     }
     if (!tui->status_spinner_active) {
         tui->status_spinner_frame = 0;
+        // Pick a fresh random spinner variant for this thinking session
+        init_global_spinner_variant();
         // Initialize spinner effect with pulse
         spinner_effect_init(&tui->status_spinner_effect, SPINNER_EFFECT_PULSE,
                             SPINNER_COLOR_SOLID,
