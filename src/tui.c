@@ -77,6 +77,10 @@ static int g_paste_timeout_ms = 400;    // idle time to finalize paste
 // ============================================================================
 
 static const spinner_variant_t* status_spinner_variant(void) {
+    if (GLOBAL_SPINNER_VARIANT.frames && GLOBAL_SPINNER_VARIANT.count > 0) {
+        return &GLOBAL_SPINNER_VARIANT;
+    }
+    // Fallback: initialize if not yet set (shouldn't normally happen)
     init_global_spinner_variant();
     if (GLOBAL_SPINNER_VARIANT.frames && GLOBAL_SPINNER_VARIANT.count > 0) {
         return &GLOBAL_SPINNER_VARIANT;
@@ -120,9 +124,9 @@ static void status_spinner_tick(TUIState *tui) {
     }
 
     // Target angle increases continuously for spinning effect
-    // Use a slightly randomized angular velocity to add organic feel
-    // ~40 rad/s base speed = ~6 rotations per second
-    double angular_velocity = 40.0;
+    // ~8 frames/s base speed - enough to look animated but slow enough
+    // to visually distinguish the active variant pattern
+    double angular_velocity = 8.0;
     double target_pos = tui->status_spinner_pos + delta_s * angular_velocity;
 
     // Update spring with scaled time step
