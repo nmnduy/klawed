@@ -103,7 +103,7 @@ static int utf8_display_width(const char *str) {
 // ============================================================================
 
 static const spinner_variant_t* status_spinner_variant(void) {
-    init_global_spinner_variant();
+    // Use the already-initialized global variant (initialized once when spinner starts)
     if (GLOBAL_SPINNER_VARIANT.frames && GLOBAL_SPINNER_VARIANT.count > 0) {
         return &GLOBAL_SPINNER_VARIANT;
     }

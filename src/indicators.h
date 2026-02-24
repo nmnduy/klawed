@@ -172,12 +172,6 @@ static void init_global_spinner_variant(void) {
     GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[idx];
 }
 
-// Get a random wave variant
-static spinner_variant_t get_random_wave_variant(void) {
-    int idx = WAVE_VARIANT_INDICES[rand() % WAVE_VARIANT_COUNT];
-    return SPINNER_VARIANTS[idx];
-}
-
 // Spinner object
 typedef struct {
     pthread_t thread;
@@ -245,10 +239,13 @@ static void *spinner_thread_func(void *arg) {
             current_speed = s->speed_multiplier;
         }
 
-        // Randomly pick a wave variant for this frame
-        spinner_variant_t variant = get_random_wave_variant();
-        const char **frames = variant.frames;
-        int frame_count = variant.count;
+        // Use the global spinner variant (initialized once when spinner starts)
+        const char **frames = GLOBAL_SPINNER_VARIANT.frames;
+        int frame_count = GLOBAL_SPINNER_VARIANT.count;
+        if (!frames || frame_count <= 0) {
+            frames = SPINNER_FRAMES;
+            frame_count = SPINNER_FRAME_COUNT;
+        }
 
         // Update effect phase
         spinner_effect_update_phase(&s->effect_config, delta_time, idx, frame_count);
