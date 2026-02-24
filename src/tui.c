@@ -125,7 +125,7 @@ static void status_spinner_tick(TUIState *tui) {
 
     // Target angle increases continuously for spinning effect
     // ~20 rad/s = ~3.2 rotations per second - smooth and readable
-    double angular_velocity = 20.0;
+    double angular_velocity = 27.0;
     double target_pos = tui->status_spinner_pos + delta_s * angular_velocity;
 
     // Update spring with scaled time step
