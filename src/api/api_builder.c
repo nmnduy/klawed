@@ -264,6 +264,8 @@ char* build_request_json_from_state(ConversationState *state) {
                         }
                     }
                 }
+                // Add the user message to the messages array
+                cJSON_AddItemToArray(messages_array, msg);
             }
         } else {
             // Assistant messages
