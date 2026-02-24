@@ -163,7 +163,42 @@ char* build_request_json_from_state(ConversationState *state) {
             }
 
             if (has_tool_results) {
-                // For tool results, we need to add them as "tool" role messages
+                // First, add any text content as a user message
+                int has_text_content = 0;
+                for (int j = 0; j < state->messages[i].content_count; j++) {
+                    InternalContent *cb = &state->messages[i].contents[j];
+                    if (cb->type == INTERNAL_TEXT && cb->text && cb->text[0]) {
+                        has_text_content = 1;
+                        break;
+                    }
+                }
+
+                if (has_text_content) {
+                    // Add user message with text content
+                    cJSON *content_array = cJSON_CreateArray();
+                    for (int j = 0; j < state->messages[i].content_count; j++) {
+                        InternalContent *cb = &state->messages[i].contents[j];
+                        if (cb->type == INTERNAL_TEXT && cb->text && cb->text[0]) {
+                            cJSON *text_block = cJSON_CreateObject();
+                            cJSON_AddStringToObject(text_block, "type", "text");
+                            cJSON_AddStringToObject(text_block, "text", cb->text);
+
+                            // Add cache_control to the last user message
+                            if (i == state->count - 1) {
+                                add_cache_control(text_block);
+                            }
+
+                            cJSON_AddItemToArray(content_array, text_block);
+                        }
+                    }
+                    cJSON_AddItemToObject(msg, "content", content_array);
+                    cJSON_AddItemToArray(messages_array, msg);
+                } else {
+                    // No text content, free the unused msg object
+                    cJSON_Delete(msg);
+                }
+
+                // Then add tool results as separate "tool" role messages
                 for (int j = 0; j < state->messages[i].content_count; j++) {
                     InternalContent *cb = &state->messages[i].contents[j];
                     if (cb->type == INTERNAL_TOOL_RESPONSE) {
@@ -177,9 +212,7 @@ char* build_request_json_from_state(ConversationState *state) {
                         cJSON_AddItemToArray(messages_array, tool_msg);
                     }
                 }
-                // Free the msg object we created but won't use
-                cJSON_Delete(msg);
-                continue; // Skip adding the user message itself
+                continue; // Continue to next message
             } else {
                 // Regular user message - handle text and image content
                 if (state->messages[i].content_count > 0) {
