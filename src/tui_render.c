@@ -336,6 +336,17 @@ void render_status_window(TUIState *tui) {
         LOG_FINE("[TUI] Rendering token display: %s (mode=%d)", token_str, tui->mode);
     }
 
+    // Prepare help text for NORMAL mode (shown when no active status)
+    char help_str[64] = {0};
+    int help_str_len = 0;
+    int help_display_width = 0;
+    if (tui->mode == TUI_MODE_NORMAL && !has_spinner && status_text_len == 0) {
+        // Show concise help text guiding users
+        snprintf(help_str, sizeof(help_str), " i=insert  j/k=scroll  /=search ");
+        help_str_len = (int)strlen(help_str);
+        help_display_width = utf8_display_width(help_str);
+    }
+
     // Layout: spinner + status message on the LEFT, indicators on the RIGHT
     // Left side: spinner + LLM status message
     // Right side (in order from right): plan mode, scroll %, token usage
@@ -395,6 +406,20 @@ void render_status_window(TUIState *tui) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
             wattroff(tui->wm.status_win, A_BOLD);
+        }
+    } else if (help_str_len > 0) {
+        // Render help text centered in the available space
+        int available_width = right_start_col - left_col;
+        if (help_display_width <= available_width) {
+            int help_col = left_col + (available_width - help_display_width) / 2;
+            if (help_col < left_col) help_col = left_col;
+            if (has_colors()) {
+                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+            }
+            mvwaddnstr(tui->wm.status_win, 0, help_col, help_str, help_str_len);
+            if (has_colors()) {
+                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+            }
         }
     }
 
