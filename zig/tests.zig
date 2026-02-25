@@ -89,6 +89,8 @@ pub const interactive_loop = @import("interactive/interactive_loop.zig");
 pub const oneshot_output = @import("oneshot/output.zig");
 pub const oneshot_processor = @import("oneshot/processor.zig");
 pub const oneshot_mode = @import("oneshot/mode.zig");
+pub const websocket = @import("websocket.zig");
+pub const websocket_mode = @import("websocket_mode.zig");
 pub const main_mod = @import("main.zig");
 
 // TUI modules (Phase 9)

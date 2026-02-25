@@ -29,6 +29,7 @@ const version_mod = @import("version.zig");
 const commands_mod = @import("commands.zig");
 const interactive_loop = @import("interactive/interactive_loop.zig");
 const oneshot_mode = @import("oneshot/mode.zig");
+const websocket_mode = @import("websocket_mode.zig");
 
 // ---------------------------------------------------------------------------
 // Version
@@ -55,6 +56,9 @@ pub const CliArgs = struct {
     resume_session: ?[]const u8 = null,
     /// True if the user requested --resume with no ID.
     resume_latest: bool = false,
+    /// WebSocket listen address "host:port" or just ":port".
+    /// When set, run in WebSocket daemon mode.
+    ws_addr: ?[]const u8 = null,
 };
 
 pub fn parseArgs(args: []const []const u8) CliArgs {
@@ -80,6 +84,9 @@ pub fn parseArgs(args: []const []const u8) CliArgs {
             } else {
                 result.resume_latest = true;
             }
+        } else if (std.mem.eql(u8, arg, "--websocket") or std.mem.eql(u8, arg, "-w")) {
+            i += 1;
+            if (i < args.len) result.ws_addr = args[i];
         } else if (arg.len > 0 and arg[0] != '-') {
             // First positional argument is the one-shot prompt.
             if (result.prompt == null) {
@@ -105,6 +112,7 @@ fn printHelp(prog_name: []const u8, writer: anytype) !void {
         \\  {s} "PROMPT"                 Execute single command and exit
         \\  {s} -p, --provider NAME      Use named provider from config
         \\  {s} -r, --resume [ID]        Resume a previous session
+        \\  {s} -w, --websocket ADDR     Run WebSocket daemon (e.g. :9999)
         \\  {s} -h, --help               Show this help
         \\  {s} --version                Show version
         \\  {s} --auto-compact           Enable auto context compaction
@@ -117,6 +125,8 @@ fn printHelp(prog_name: []const u8, writer: anytype) !void {
         \\  KLAWED_LOG_LEVEL     Optional: DEBUG/INFO/WARN/ERROR
         \\  KLAWED_BASH_TIMEOUT  Optional: Bash command timeout (seconds)
         \\  KLAWED_AUTO_COMPACT  Optional: 1 to enable auto-compaction
+        \\  KLAWED_WS_HOST       Optional: WebSocket bind host (default 0.0.0.0)
+        \\  KLAWED_WS_PORT       Optional: WebSocket bind port (default 9999)
         \\
         \\Interactive Tips:
         \\  Type /help for slash commands (/clear, /exit, /provider, ...)
@@ -125,8 +135,14 @@ fn printHelp(prog_name: []const u8, writer: anytype) !void {
         \\
     , .{
         KLAWED_VERSION,
-        prog_name, prog_name, prog_name, prog_name,
-        prog_name, prog_name, prog_name,
+        prog_name,
+        prog_name,
+        prog_name,
+        prog_name,
+        prog_name,
+        prog_name,
+        prog_name,
+        prog_name,
     });
 }
 
@@ -246,6 +262,60 @@ pub fn main() !void {
         try stdout.print("[auto-compact enabled]\n", .{});
     }
 
+    // ---- WEBSOCKET DAEMON MODE ----
+    if (cli.ws_addr != null or std.posix.getenv("KLAWED_WS_PORT") != null) {
+        var ws_cfg = websocket_mode.WsConfig.fromEnv();
+
+        // Parse host:port from --websocket ADDR if provided.
+        if (cli.ws_addr) |addr_str| {
+            // Accept ":PORT", "HOST:PORT", or just "PORT".
+            if (std.mem.lastIndexOf(u8, addr_str, ":")) |colon| {
+                if (colon > 0) ws_cfg.host = addr_str[0..colon];
+                const port_str = addr_str[colon + 1 ..];
+                ws_cfg.port = std.fmt.parseInt(u16, port_str, 10) catch ws_cfg.port;
+            } else {
+                ws_cfg.port = std.fmt.parseInt(u16, addr_str, 10) catch ws_cfg.port;
+            }
+        }
+
+        try stdout.print("klawed-zig {s} [websocket mode] listening on {s}:{d}\n", .{
+            KLAWED_VERSION,
+            ws_cfg.host,
+            ws_cfg.port,
+        });
+
+        var global_shutdown = std.atomic.Value(bool).init(false);
+
+        // Stub process callback (real AI wiring is done in the TUI phase).
+        const stubProcessMessage: websocket_mode.ProcessMessageFn = struct {
+            fn process(
+                alloc: std.mem.Allocator,
+                json: []const u8,
+                out: *websocket_mode.WsOutChannel,
+                interrupt: *websocket_mode.InterruptFlag,
+                _: ?*anyopaque,
+            ) void {
+                _ = interrupt;
+                const content = websocket_mode.extractContent(json) orelse "(no content)";
+                const reply = websocket_mode.buildTextMessage(alloc, "TEXT", content) catch return;
+                defer alloc.free(reply);
+                out.push(reply) catch {};
+                const end = websocket_mode.buildEndTurnMessage(alloc) catch return;
+                defer alloc.free(end);
+                out.push(end) catch {};
+            }
+        }.process;
+
+        try websocket_mode.runWsDaemon(
+            allocator,
+            ws_cfg,
+            stubProcessMessage,
+            null,
+            &global_shutdown,
+        );
+        return;
+    }
+
     // ---- ONE-SHOT MODE ----
     if (cli.prompt) |prompt| {
         const oneshot_cfg = oneshot_mode.configFromEnv();
@@ -362,4 +432,22 @@ test "parseArgs: combined flags and prompt" {
     const cli = parseArgs(args);
     try std.testing.expect(cli.auto_compact);
     try std.testing.expectEqualStrings("do a thing", cli.prompt.?);
+}
+
+test "parseArgs: --websocket with address" {
+    const args: []const []const u8 = &.{ "klawed-zig", "--websocket", "0.0.0.0:9999" };
+    const cli = parseArgs(args);
+    try std.testing.expectEqualStrings("0.0.0.0:9999", cli.ws_addr.?);
+}
+
+test "parseArgs: -w short flag" {
+    const args: []const []const u8 = &.{ "klawed-zig", "-w", ":8080" };
+    const cli = parseArgs(args);
+    try std.testing.expectEqualStrings(":8080", cli.ws_addr.?);
+}
+
+test "parseArgs: --websocket without address leaves null" {
+    const args: []const []const u8 = &.{ "klawed-zig", "--websocket" };
+    const cli = parseArgs(args);
+    try std.testing.expectEqual(@as(?[]const u8, null), cli.ws_addr);
 }

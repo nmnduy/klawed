@@ -25,6 +25,7 @@ Project instructions for Klawed when working with this codebase.
 - **Subagent**: `zig/subagent_manager.zig`, `docs/subagent.md` (task delegation with fresh context, supports per-subagent provider selection)
 - **Explore Subagent**: `zig/explore_tools.zig`, `docs/explore-subagent.md` (web research mode with web_browse_agent)
 - **MCP**: `zig/mcp.zig`, `docs/mcp.md` (external tool servers)
+- **WebSocket mode**: `zig/websocket.zig` (RFC 6455 framing), `zig/websocket_mode.zig` (daemon runner), `docs/websocket.md` (ephemeral IPC with interrupt support)
 - **TODO system**: `zig/tools/todo.zig`
 - **TUI**: `zig/tui.zig`, `zig/tui/`, `docs/keyboard-shortcuts.md`
 - **Memory system**: `zig/memory_db.zig` (SQLite-based persistent memory with FTS5)
@@ -157,6 +158,12 @@ export OPENAI_API_KEY="your-api-key"
 - **MCP**: `KLAWED_MCP_ENABLED=1` to enable (disabled by default), `KLAWED_MCP_CONFIG` for config path
   - `KLAWED_MCP_INIT_TIMEOUT` - Timeout for MCP server initialization in seconds (default: 10, 0=no timeout, overrides config file)
   - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
+- **WebSocket daemon**:
+  - `KLAWED_WS_HOST` - Bind host (default: `0.0.0.0`)
+  - `KLAWED_WS_PORT` - Bind port, also enables WS mode when set (default: `9999`)
+  - `KLAWED_WS_SENDER` - Sender name in JSON messages (default: `klawed`)
+  - `KLAWED_WS_MAX_MSG_SIZE` - Max inbound message size in bytes (default: `4194304`)
+  - `KLAWED_WS_MAX_QUEUE` - Outbound message queue capacity (default: `1000`)
 - **Memory**: `KLAWED_MEMORY_PATH` for custom memory database location (default: `.klawed/memory.db`)
 - **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes)
   - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of model token limit (default: 75)
