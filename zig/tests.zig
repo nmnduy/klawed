@@ -1,4 +1,4 @@
-//! Root test file for klawed Zig modules (Phase 2 + Phase 3 + Phase 4 + Phase 5).
+//! Root test file for klawed Zig modules (Phase 2 + Phase 3 + Phase 4 + Phase 5 + Phase 6).
 //!
 //! Running `zig build test` compiles this file and executes all `test` blocks
 //! found in each imported module.  `std.testing.refAllDecls` is used to also
@@ -48,6 +48,17 @@ pub const http_client = @import("http_client.zig");
 pub const sse_parser = @import("api/sse_parser.zig");
 pub const api_response = @import("api/api_response.zig");
 pub const api_client = @import("api/api_client.zig");
+
+// Conversation & Context (Phase 6)
+pub const content_types = @import("conversation/content_types.zig");
+pub const conversation_state = @import("conversation/state.zig");
+pub const conversation_message = @import("conversation/message.zig");
+pub const conversation_processor = @import("conversation/processor.zig");
+pub const context_environment = @import("context/environment.zig");
+pub const context_klawed_md = @import("context/klawed_md.zig");
+pub const context_system_prompt = @import("context/system_prompt.zig");
+pub const context_memory_injection = @import("context/memory_injection.zig");
+pub const compaction = @import("compaction.zig");
 
 // Pull all test blocks from every imported module into this compilation unit.
 test {

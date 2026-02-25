@@ -1,6 +1,6 @@
 # Zig Migration Plan
 
-> **Status**: Phase 5 complete — Phase 6 next  
+> **Status**: Phase 6 complete — Phase 7 next  
 > **Scope**: Full rewrite of klawed from C11 to Zig  
 > **Estimated effort**: Large (months of focused engineering)  
 > **Primary motivation**: Eliminate manual memory management, leverage comptime type safety, and replace the growing `libbsd` band-aids with first-class language guarantees.
@@ -160,16 +160,16 @@ Each module: write tests alongside the port using `test "name" { ... }` blocks.
 ### Phase 6 — Conversation & Context
 **Goal**: Core agent message model in Zig with tagged unions for content types.
 
-- [ ] `src/conversation/content_types.c` → `zig-src/conversation/content_types.zig`  
+- [x] `src/conversation/content_types.c` → `zig-src/conversation/content_types.zig`  
   Define `ContentBlock = union(enum) { text, tool_use, tool_result, image, ... }`
-- [ ] `src/conversation/conversation_state.c` → `zig-src/conversation/state.zig`
-- [ ] `src/conversation/message_builder.c` + `message_parser.c` → `zig-src/conversation/message.zig`
-- [ ] `src/conversation/conversation_processor.c` → `zig-src/conversation/processor.zig`
-- [ ] `src/context/system_prompt.c` → `zig-src/context/system_prompt.zig`
-- [ ] `src/context/environment.c` → `zig-src/context/environment.zig`
-- [ ] `src/context/klawed_md.c` → `zig-src/context/klawed_md.zig`
-- [ ] `src/context/memory_injection.c` → `zig-src/context/memory_injection.zig`
-- [ ] `src/compaction.c` → `zig-src/compaction.zig`
+- [x] `src/conversation/conversation_state.c` → `zig-src/conversation/state.zig`
+- [x] `src/conversation/message_builder.c` + `message_parser.c` → `zig-src/conversation/message.zig`
+- [x] `src/conversation/conversation_processor.c` → `zig-src/conversation/processor.zig`
+- [x] `src/context/system_prompt.c` → `zig-src/context/system_prompt.zig`
+- [x] `src/context/environment.c` → `zig-src/context/environment.zig`
+- [x] `src/context/klawed_md.c` → `zig-src/context/klawed_md.zig`
+- [x] `src/context/memory_injection.c` → `zig-src/context/memory_injection.zig`
+- [x] `src/compaction.c` → `zig-src/compaction.zig`
 
 ---
 
