@@ -15,10 +15,15 @@
 #   help           — print this message
 #
 # All other targets that existed in the old C Makefile (sanitize, valgrind,
-# clang-tidy, memscan, ci-*, version bump, etc.) have been removed.
+# clang-tidy, memscan, ci-*, etc.) have been removed.
+# Version bump targets (bump-patch, bump-minor, bump-major) are preserved below.
 # Use "zig build --help" for the full list of available build steps.
 
-.PHONY: all build test debug install clean fmt-whitespace check-deps help
+.PHONY: all build test debug install clean fmt-whitespace check-deps help \
+        bump-patch bump-minor bump-major show-version update-version _apply-version
+
+VERSION_FILE := VERSION
+VERSION      := $(shell cat $(VERSION_FILE) 2>/dev/null | tr -d '[:space:]')
 
 all: build
 
@@ -60,7 +65,64 @@ help:
 	@echo "  make fmt-whitespace  Format Zig sources (zig fmt zig/)"
 	@echo "  make check-deps   Verify zig, libcurl, sqlite3 are installed"
 	@echo ""
+	@echo "Version management:"
+	@echo "  make show-version                    Show current version"
+	@echo "  make bump-patch                      Bump patch  (e.g. 0.29.33 → 0.29.34)"
+	@echo "  make bump-minor                      Bump minor, reset patch (e.g. 0.29.33 → 0.30.0)"
+	@echo "  make bump-major                      Bump major, reset minor+patch (e.g. 0.29.33 → 1.0.0)"
+	@echo "  make update-version NEW_VERSION=x.y.z  Set an explicit version"
+	@echo ""
 	@echo "Quick start:"
 	@echo "  export OPENAI_API_KEY=your-key"
 	@echo "  make && ./zig-out/bin/klawed \"your prompt\""
 	@echo ""
+
+show-version:
+	@echo "Version: $(VERSION)"
+	@echo "Version file: $(VERSION_FILE)"
+
+update-version:
+	@if [ -z "$(NEW_VERSION)" ]; then \
+		echo "Error: NEW_VERSION parameter required"; \
+		echo "Usage: make update-version NEW_VERSION=1.2.3"; \
+		exit 1; \
+	fi
+	@$(MAKE) _apply-version _V="$(NEW_VERSION)"
+
+bump-patch:
+	@MAJOR=$$(echo "$(VERSION)" | sed 's/\([0-9]*\)\..*/\1/'); \
+	MINOR=$$(echo "$(VERSION)" | sed 's/[0-9]*\.\([0-9]*\)\..*/\1/'); \
+	PATCH=$$(echo "$(VERSION)" | sed 's/[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/'); \
+	NEW="$$MAJOR.$$MINOR.$$((PATCH + 1))"; \
+	$(MAKE) _apply-version _V="$$NEW"
+
+bump-minor:
+	@MAJOR=$$(echo "$(VERSION)" | sed 's/\([0-9]*\)\..*/\1/'); \
+	MINOR=$$(echo "$(VERSION)" | sed 's/[0-9]*\.\([0-9]*\)\..*/\1/'); \
+	NEW="$$MAJOR.$$((MINOR + 1)).0"; \
+	$(MAKE) _apply-version _V="$$NEW"
+
+bump-major:
+	@MAJOR=$$(echo "$(VERSION)" | sed 's/\([0-9]*\)\..*/\1/'); \
+	NEW="$$((MAJOR + 1)).0.0"; \
+	$(MAKE) _apply-version _V="$$NEW"
+
+# Internal helper — do not call directly.
+# Updates VERSION file and all version literals in zig/version.zig.
+_apply-version:
+	@V="$(_V)"; \
+	MAJOR=$$(echo "$$V" | sed 's/\([0-9]*\)\..*/\1/'); \
+	MINOR=$$(echo "$$V" | sed 's/[0-9]*\.\([0-9]*\)\..*/\1/'); \
+	PATCH=$$(echo "$$V" | sed 's/[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/'); \
+	echo "$(VERSION) → $$V"; \
+	echo "$$V" > $(VERSION_FILE); \
+	sed -i "s/pub const VERSION: \[\]const u8 = \"[^\"]*\";/pub const VERSION: []const u8 = \"$$V\";/" zig/version.zig; \
+	sed -i "s/expectEqualStrings(\"[0-9.]*\", VERSION)/expectEqualStrings(\"$$V\", VERSION)/" zig/version.zig; \
+	sed -i "s/test \"VERSION: matches [^\"]*\"/test \"VERSION: matches $$V\"/" zig/version.zig; \
+	sed -i "s/expectEqual(@as(u32, [0-9]*), version\.major)/expectEqual(@as(u32, $$MAJOR), version.major)/" zig/version.zig; \
+	sed -i "s/expectEqual(@as(u32, [0-9]*), version\.minor)/expectEqual(@as(u32, $$MINOR), version.minor)/" zig/version.zig; \
+	sed -i "s/expectEqual(@as(u32, [0-9]*), version\.patch)/expectEqual(@as(u32, $$PATCH), version.patch)/" zig/version.zig; \
+	echo "✓ VERSION → $$V"; \
+	echo "✓ zig/version.zig updated"; \
+	echo ""; \
+	echo "Next: git add VERSION zig/version.zig && git commit -m \"chore: bump version to $$V\""
