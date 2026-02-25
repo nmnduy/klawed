@@ -556,7 +556,8 @@ fn globalConfigPath(allocator: std.mem.Allocator) !?[]u8 {
         else => return err,
     };
     defer allocator.free(home);
-    return std.fs.path.join(allocator, &.{ home, global_config_dir, config_file_name });
+    const path = try std.fs.path.join(allocator, &.{ home, global_config_dir, config_file_name });
+    return path;
 }
 
 /// Returns the absolute path to the local data-dir config file.

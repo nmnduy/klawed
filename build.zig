@@ -284,4 +284,24 @@ pub fn build(b: *std.Build) void {
     const debug_step = b.step("debug", "Build debug binary (klawed-debug)");
     const debug_install = b.addInstallArtifact(debug_exe, .{});
     debug_step.dependOn(&debug_install.step);
+
+    // ---------------------------------------------------------------------------
+    // "klawed-zig" step — Phase 8: Zig-native binary
+    // ---------------------------------------------------------------------------
+    // Builds a Zig-native executable that wires together all zig/ modules.
+    // This is the Phase 8 integration target; Phase 9 adds the TUI.
+    const zig_exe = b.addExecutable(.{
+        .name = "klawed-zig",
+        .root_source_file = b.path("zig/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    // Link libraries needed by the zig/ modules (sqlite3 for persistence,
+    // curl for HTTP client, ssl/crypto for TLS).
+    zig_exe.linkSystemLibrary("sqlite3");
+    zig_exe.linkSystemLibrary("curl");
+    zig_exe.linkSystemLibrary("ssl");
+    zig_exe.linkSystemLibrary("crypto");
+    b.installArtifact(zig_exe);
 }

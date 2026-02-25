@@ -1,4 +1,4 @@
-//! Root test file for klawed Zig modules (Phase 2 + Phase 3 + Phase 4 + Phase 5 + Phase 6 + Phase 7).
+//! Root test file for klawed Zig modules (Phase 2–8).
 //!
 //! Running `zig build test` compiles this file and executes all `test` blocks
 //! found in each imported module.  `std.testing.refAllDecls` is used to also
@@ -74,6 +74,22 @@ pub const tool_registry = @import("tools/registry.zig");
 pub const subagent_manager = @import("subagent_manager.zig");
 pub const explore_tools = @import("explore_tools.zig");
 pub const mcp = @import("mcp.zig");
+
+// Agent core & entry point (Phase 8)
+pub const message_queue = @import("message_queue.zig");
+pub const ai_worker = @import("ai_worker.zig");
+pub const completion = @import("completion.zig");
+pub const dump_utils = @import("dump_utils.zig");
+pub const process_utils = @import("process_utils.zig");
+pub const commands = @import("commands.zig");
+pub const interactive_input_handler = @import("interactive/input_handler.zig");
+pub const interactive_command_dispatch = @import("interactive/command_dispatch.zig");
+pub const interactive_response_processor = @import("interactive/response_processor.zig");
+pub const interactive_loop = @import("interactive/interactive_loop.zig");
+pub const oneshot_output = @import("oneshot/output.zig");
+pub const oneshot_processor = @import("oneshot/processor.zig");
+pub const oneshot_mode = @import("oneshot/mode.zig");
+pub const main_mod = @import("main.zig");
 
 // Pull all test blocks from every imported module into this compilation unit.
 test {
