@@ -75,7 +75,7 @@ Note: The `KLAWED_LLM_PROVIDER` environment variable takes precedence over the c
 ## Example Session
 
 ```
-$ ./zig-out/bin/klawed
+$ ./build/klawed
 > /provider
 Current LLM Provider: gpt-4
   Type: OpenAI

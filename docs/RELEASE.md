@@ -1,12 +1,6 @@
 # Release Process Guide
 
-> **Note (v2.0.0-zig)**: The project has been fully migrated from C to Zig. Build commands
-> have changed from `make` → `zig build` and `make test` → `zig build test`. The binary
-> is now at `zig-out/bin/klawed` instead of `build/klawed`. Many version-bump `make` targets
-> described in this document relied on C-era Makefile targets that no longer exist; they are
-> preserved here for historical reference. For new releases use `zig build` and git tags directly.
-
-This document explains how automated releases work for klawed, including the centralized version management system.
+This document explains how automated releases work for Claude C - Pure C Edition, including the centralized version management system.
 
 ## Version Management System
 
@@ -71,7 +65,7 @@ printf("Full version: %s\n", KLAWED_VERSION_FULL);
 The main executable supports `--version` flag:
 
 ```bash
-./zig-out/bin/klawed --version
+./build/klawed --version
 # Output: Claude C version 0.0.2 (built 2025-10-28)
 ```
 
@@ -322,13 +316,15 @@ Planned support for:
 Before creating a release:
 
 ### Pre-release Checklist
-- [ ] All tests pass: `zig build test`
+- [ ] All tests pass: `make test`
+- [ ] Memory tests pass: `make memscan`
 - [ ] Documentation updated (README.md, CHANGELOG.md)
 - [ ] CHANGELOG.md updated with changes since last release
 - [ ] License file present
 - [ ] No sensitive information in binaries
 - [ ] **Version bumped and tagged**:
-  - Update `VERSION` file, commit, then `git tag -a vX.Y.Z -m "release message"`
+  - For patch releases: `make bump-patch` (handles everything automatically)
+  - For major/minor releases: `make update-version VERSION=1.0.0` + manual commit/tag
 
 ### Post-release Checklist
 - [ ] Release created successfully
@@ -357,7 +353,7 @@ If you see version mismatches:
 
 3. **Verify binary version**:
    ```bash
-   ./zig-out/bin/klawed --version
+   ./build/klawed --version
    ```
 
 ### Build Issues
@@ -540,7 +536,7 @@ cmake --build . --config Release
 ```bash
 # Linux
 mkdir klawed-linux-x86_64
-cp zig-out/bin/klawed klawed-linux-x86_64/
+cp build/klawed klawed-linux-x86_64/
 cp README.md LICENSE klawed-linux-x86_64/
 tar -czf klawed-linux-x86_64.tar.gz klawed-linux-x86_64/
 

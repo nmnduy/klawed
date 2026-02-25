@@ -143,7 +143,7 @@ void memory_db_free_result(MemorySearchResult *result);
 ```bash
 # Use custom memory location
 export KLAWED_MEMORY_PATH="/path/to/my/memory.db"
-./zig-out/bin/klawed "remember that I prefer Python"
+./build/klawed "remember that I prefer Python"
 ```
 
 ## Tools Integration

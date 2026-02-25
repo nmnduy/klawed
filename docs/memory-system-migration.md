@@ -236,10 +236,11 @@ To verify the migration is complete:
 
 ```bash
 # 1. Build the project
-zig build
+make clean
+make  # Should build successfully
 
 # 2. Verify memory tools work
-echo '{"entity": "test", "slot": "migration", "value": "complete", "kind": "fact"}' | ./zig-out/bin/klawed "store this memory"
+echo '{"entity": "test", "slot": "migration", "value": "complete", "kind": "fact"}' | ./build/klawed "store this memory"
 
 # 3. Verify database is created
 ls -la .klawed/memory.db  # Should exist
@@ -247,8 +248,8 @@ ls -la .klawed/memory.db  # Should exist
 # 4. Verify FTS5 is working
 sqlite3 .klawed/memory.db "SELECT * FROM memories_fts;"  # Should show indexed content
 
-# 5. Run tests
-zig build test
+# 5. Run memory-related tests
+make test-memory-db
 ```
 
 ---

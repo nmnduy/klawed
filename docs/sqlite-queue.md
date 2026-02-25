@@ -161,7 +161,7 @@ The implementation also supports interruption:
 ### Command Line Usage
 
 ```bash
-./zig-out/bin/klawed --sqlite-queue /path/to/messages.db
+./build/klawed --sqlite-queue /path/to/messages.db
 ```
 
 ### Environment Variables
@@ -181,19 +181,19 @@ The implementation also supports interruption:
 
 **Option 1: Command line**
 ```bash
-./zig-out/bin/klawed --sqlite-queue /path/to/messages.db
+./build/klawed --sqlite-queue /path/to/messages.db
 ```
 
 **Option 2: Environment variables**
 ```bash
 export KLAWED_SQLITE_DB_PATH=/path/to/messages.db
 export KLAWED_SQLITE_SENDER="klawed"
-./zig-out/bin/klawed
+./build/klawed
 ```
 
 **With custom sender name:**
 ```bash
-./zig-out/bin/klawed --sqlite-queue /path/to/messages.db
+./build/klawed --sqlite-queue /path/to/messages.db
 export KLAWED_SQLITE_SENDER="my_agent"
 ```
 

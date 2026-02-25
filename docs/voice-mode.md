@@ -42,11 +42,14 @@ This will:
 ### 3. Build with Voice Support
 
 ```bash
+# Clean previous build
+make clean
+
 # Build with voice enabled
-zig build -Dvoice=true
+make VOICE=1
 
 # Run
-./zig-out/bin/klawed
+./build/klawed
 ```
 
 ### 4. Use Voice Mode
@@ -180,7 +183,9 @@ arecord -l
 
 ### Files
 
-- `zig/voice_input.zig` - Voice input implementation (build with `-Dvoice=true`)
+- `src/voice_input.h` - Public API (unchanged)
+- `src/voice_input.c` - Whisper.cpp implementation
+- `src/voice_stub.c` - Stub when `VOICE=0`
 - `external/whisper.cpp/` - Git submodule
 - `whisper_models/` - Downloaded models (gitignored)
 
@@ -218,7 +223,9 @@ When a new version is released:
    git fetch --tags
    git checkout v1.9.0  # example new version
    cd ../..
-   zig build -Dvoice=true
+   make clean-whisper
+   make setup-voice
+   make VOICE=1
    # Test thoroughly
    ```
 
@@ -292,8 +299,11 @@ git submodule update --init --recursive
 ### Build Fails
 
 ```bash
-# Rebuild with voice
-zig build -Dvoice=true
+# Clean whisper build
+make clean-whisper
+
+# Rebuild
+make setup-voice
 ```
 
 ### Model Not Found

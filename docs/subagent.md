@@ -282,7 +282,7 @@ Available providers are loaded from your configuration file (`.klawed/config.jso
 
 ## Implementation Details
 
-**Location**: `zig/tools/subagent.zig` and `zig/subagent_manager.zig`
+**Location**: `src/klawed.c` - `tool_subagent()`, `tool_check_subagent_progress()`, `tool_interrupt_subagent()` functions
 
 **Key features:**
 - Uses `fork()` and `exec()` for non-blocking process execution

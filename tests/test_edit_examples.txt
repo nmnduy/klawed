@@ -1,0 +1,24 @@
+# Test File for Enhanced Edit Tool
+
+## Simple Text
+This is a test file.
+The word test appears multiple times.
+We use test to test the edit tool.
+Test test test!
+
+## Code Example
+int oldVar = 5;
+int oldVar2 = 10;
+printf("Value: %d", oldVar);
+
+## TODO Comments
+// TODO: Fix this bug
+// TODO: Add error handling
+// TODO: Optimize performance
+
+## Numbers
+Replace 123 with NUMBER
+Replace 456 with NUMBER
+Replace 789 with NUMBER
+
+## End of file

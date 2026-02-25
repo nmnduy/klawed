@@ -8,7 +8,7 @@ Claude Code now supports real-time streaming of responses using Server-Sent Even
 
 The streaming implementation consists of several layers:
 
-### 1. HTTP Client Layer (`zig/http_client.zig`)
+### 1. HTTP Client Layer (`src/http_client.c`)
 
 **SSE Parser:**
 - Parses Server-Sent Events (SSE) line-by-line
@@ -58,7 +58,7 @@ typedef enum {
 
 ### 3. Provider Layers
 
-#### Anthropic Provider (`zig/providers/anthropic.zig`)
+#### Anthropic Provider (`src/anthropic_provider.c`)
 
 **StreamingContext:**
 - Accumulates text deltas from `content_block_delta` events
@@ -71,7 +71,7 @@ typedef enum {
 - Dispatches text deltas to TUI via `tui_update_last_conversation_line()`
 - Builds synthetic response from accumulated data for logging
 
-#### OpenAI Provider (`zig/providers/openai.zig`)
+#### OpenAI Provider (`src/openai_provider.c`)
 
 **OpenAIStreamingContext:**
 - Accumulates text deltas from OpenAI chunk events
@@ -85,7 +85,7 @@ typedef enum {
 - Accumulates `delta.tool_calls` for function calling
 - Builds synthetic OpenAI-format response for compatibility
 
-#### Bedrock Provider (`zig/providers/bedrock.zig`)
+#### Bedrock Provider (`src/bedrock_provider.c`)
 
 **BedrockStreamingContext:**
 - Accumulates text deltas from content_block_delta events
@@ -105,7 +105,7 @@ typedef enum {
 - AWS SigV4 signature is computed for the streaming endpoint URL
 - Supports all Bedrock credential sources (env vars, SSO, config files)
 
-### 4. TUI Layer (`zig/tui.zig`)
+### 4. TUI Layer (`src/tui.c`)
 
 **Streaming Display:**
 - `tui_update_last_conversation_line()`: Appends text to last conversation entry
@@ -121,7 +121,7 @@ Set the environment variable:
 
 ```bash
 export KLAWED_ENABLE_STREAMING=1
-./zig-out/bin/klawed "your prompt"
+./build/klawed "your prompt"
 ```
 
 Or in your shell configuration:
@@ -337,7 +337,7 @@ Enable debug logging to see streaming events:
 
 ```bash
 export KLAWED_LOG_LEVEL=DEBUG
-./zig-out/bin/klawed "test prompt"
+./build/klawed "test prompt"
 ```
 
 Look for log messages like:
@@ -354,7 +354,7 @@ To test streaming without changing code:
 export KLAWED_ENABLE_STREAMING=1
 
 # Test with a prompt that generates longer response
-./zig-out/bin/klawed "Write a detailed explanation of how TCP works"
+./build/klawed "Write a detailed explanation of how TCP works"
 
 # You should see text appearing incrementally
 ```
@@ -390,9 +390,9 @@ The streaming callback checks `state->interrupt_requested` on each event. When u
 
 ## Code References
 
-- **HTTP Client**: `zig/http_client.zig` - SSE parser and streaming execution
-- **Anthropic Provider**: `zig/providers/anthropic.zig` - Anthropic event handling and text accumulation
-- **OpenAI Provider**: `zig/providers/openai.zig` - OpenAI chunk handling and response reconstruction  
-- **TUI**: `zig/tui.zig` - `tui_update_last_conversation_line()`
-- **Types**: `zig/http_client.zig` - `StreamEvent`, `StreamEventType`
-- **State**: `zig/conversation/state.zig` - `ConversationState.tui` pointer
+- **HTTP Client**: `src/http_client.c` - SSE parser and streaming execution
+- **Anthropic Provider**: `src/anthropic_provider.c` - Anthropic event handling and text accumulation
+- **OpenAI Provider**: `src/openai_provider.c` - OpenAI chunk handling and response reconstruction  
+- **TUI**: `src/tui.c` - `tui_update_last_conversation_line()`
+- **Types**: `src/http_client.h` - `StreamEvent`, `StreamEventType`
+- **State**: `src/klawed_internal.h` - `ConversationState.tui` pointer

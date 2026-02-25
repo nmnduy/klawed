@@ -16,16 +16,16 @@ Klawed can run as a daemon that accepts connections via Unix domain sockets. Thi
 ### Command Line
 
 ```bash
-./zig-out/bin/klawed -u /tmp/klawed.sock
+./build/klawed -u /tmp/klawed.sock
 # or
-./zig-out/bin/klawed --uds /tmp/klawed.sock
+./build/klawed --uds /tmp/klawed.sock
 ```
 
 ### Environment Variable
 
 ```bash
 export KLAWED_UNIX_SOCKET_PATH=/tmp/klawed.sock
-./zig-out/bin/klawed
+./build/klawed
 ```
 
 The socket file is created at the specified path. If the file already exists, it will be removed and recreated.
@@ -457,7 +457,7 @@ public class KlawedClient implements AutoCloseable {
 javac KlawedClient.java
 
 # Start Klawed daemon in another terminal
-./zig-out/bin/klawed -u /tmp/klawed.sock
+./build/klawed -u /tmp/klawed.sock
 
 # Run the Java client
 java KlawedClient /tmp/klawed.sock
@@ -499,13 +499,14 @@ If the connection is lost, clients should:
 UDS support is included by default. To verify it's enabled:
 
 ```bash
-./zig-out/bin/klawed --help | grep uds
+./build/klawed --help | grep uds
 ```
 
 If UDS support is missing, rebuild with:
 
 ```bash
-zig build
+make clean
+make
 ```
 
 ## See Also
