@@ -1,6 +1,6 @@
 # Zig Migration Plan
 
-> **Status**: Phase 6 complete — Phase 7 next  
+> **Status**: Phase 7 complete — Phase 8 next  
 > **Scope**: Full rewrite of klawed from C11 to Zig  
 > **Estimated effort**: Large (months of focused engineering)  
 > **Primary motivation**: Eliminate manual memory management, leverage comptime type safety, and replace the growing `libbsd` band-aids with first-class language guarantees.
@@ -176,22 +176,22 @@ Each module: write tests alongside the port using `test "name" { ... }` blocks.
 ### Phase 7 — Tools
 **Goal**: All built-in tool implementations in Zig.
 
-- [ ] `src/tools/tool_bash.c` → `zig-src/tools/bash.zig`  
-  Use `std.process.Child` for subprocess management + timeout via `std.time`
-- [ ] `src/tools/tool_filesystem.c` → `zig-src/tools/filesystem.zig`  
-  (Read, Write, Edit, MultiEdit, Glob) — use `std.fs`, `std.mem.replace`
-- [ ] `src/tools/tool_search.c` → `zig-src/tools/search.zig`  
-  (Grep) — use `std.fs.Dir.walk` + `std.mem.indexOf`
-- [ ] `src/tools/tool_subagent.c` → `zig-src/tools/subagent.zig`
-- [ ] `src/tools/tool_todo.c` + `src/todo.c` → `zig-src/tools/todo.zig`
-- [ ] `src/tools/tool_image.c` → `zig-src/tools/image.zig`
-- [ ] `src/tools/tool_sleep.c` → `zig-src/tools/sleep.zig`
-- [ ] `src/tools/tool_definitions.c` + `tool_executor.c` + `tool_registry.c` → `zig-src/tools/registry.zig`
-- [ ] `src/dynamic_tools.c` → `zig-src/tools/dynamic.zig`
-- [ ] `src/tool_utils.c` → `zig-src/tools/utils.zig`
-- [ ] `src/subagent_manager.c` → `zig-src/subagent_manager.zig`
-- [ ] `src/explore_tools.c` → `zig-src/explore_tools.zig`
-- [ ] `src/mcp.c` → `zig-src/mcp.zig`  
+- [x] `src/tools/tool_bash.c` → `zig/tools/bash.zig`  
+  Use `std.process.Child` for subprocess management + timeout via killer thread
+- [x] `src/tools/tool_filesystem.c` → `zig/tools/filesystem.zig`  
+  (Read, Write, Edit, MultiEdit, Glob) — use `std.fs`, `std.mem.indexOf`
+- [x] `src/tools/tool_search.c` → `zig/tools/search.zig`  
+  (Grep) — delegates to system `rg`/`ag`/`grep` via subprocess
+- [x] `src/tools/tool_subagent.c` → `zig/tools/subagent.zig`
+- [x] `src/tools/tool_todo.c` + `src/todo.c` → `zig/tools/todo.zig`
+- [x] `src/tools/tool_image.c` → `zig/tools/image.zig`
+- [x] `src/tools/tool_sleep.c` → `zig/tools/sleep.zig`
+- [x] `src/tools/tool_definitions.c` + `tool_executor.c` + `tool_registry.c` → `zig/tools/registry.zig`
+- [x] `src/dynamic_tools.c` → `zig/tools/dynamic.zig`
+- [x] `src/tool_utils.c` → `zig/tools/utils.zig`
+- [x] `src/subagent_manager.c` → `zig/subagent_manager.zig`
+- [x] `src/explore_tools.c` → `zig/explore_tools.zig`
+- [x] `src/mcp.c` → `zig/mcp.zig`  
   Replace pthread with `std.Thread`; JSON-RPC via `std.json`
 
 ---
