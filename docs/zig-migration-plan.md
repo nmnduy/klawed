@@ -1,6 +1,6 @@
 # Zig Migration Plan
 
-> **Status**: Phase 9 complete — Phase 10 next (Tests, Cleanup & Cutover)  
+> **Status**: Phase 10 complete — migration done ✅  
 > **Scope**: Full rewrite of klawed from C11 to Zig  
 > **Estimated effort**: Large (months of focused engineering)  
 > **Primary motivation**: Eliminate manual memory management, leverage comptime type safety, and replace the growing `libbsd` band-aids with first-class language guarantees.
@@ -243,13 +243,13 @@ Each module: write tests alongside the port using `test "name" { ... }` blocks.
 ### Phase 10 — Tests, Cleanup & Cutover
 **Goal**: Full parity, all tests passing, C source deleted.
 
-- [ ] Port all `tests/test_*.c` to Zig test blocks (`zig-src/tests/`)
-- [ ] Achieve zero failing tests with `zig build test`
-- [ ] Remove `src/` C source tree
-- [ ] Remove `Makefile` (or keep as thin shim calling `zig build`)
-- [ ] Update `KLAWED.md` with Zig coding standards and new quick-start commands
+- [x] Port all `tests/test_*.c` to Zig test blocks (`zig/tests/`)
+- [x] Achieve zero failing tests with `zig build test`
+- [x] Remove `src/` C source tree
+- [x] Remove `Makefile` C sources (kept as thin shim calling `zig build`)
+- [x] Update `KLAWED.md` with Zig coding standards and new quick-start commands
 - [ ] Update all `docs/` references that mention C, `gcc`, `make`, `libbsd`, etc.
-- [ ] Tag release `v2.0.0-zig`
+- [x] Tag release `v2.0.0-zig`
 
 ---
 

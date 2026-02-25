@@ -106,6 +106,57 @@ pub const test_dump_utils = @import("tests/test_dump_utils.zig");
 pub const test_compaction = @import("tests/test_compaction.zig");
 pub const test_edit = @import("tests/test_edit.zig");
 pub const test_diff_colors = @import("tests/test_diff_colors.zig");
+// Phase 10 — bash / filesystem tools
+pub const test_bash_timeout = @import("tests/test_bash_timeout.zig");
+pub const test_bash_stderr = @import("tests/test_bash_stderr.zig");
+pub const test_bash_truncation = @import("tests/test_bash_truncation.zig");
+pub const test_read = @import("tests/test_read.zig");
+pub const test_edit_diff_integration = @import("tests/test_edit_diff_integration.zig");
+pub const test_edit_regex_enhancements = @import("tests/test_edit_regex_enhancements.zig");
+pub const test_write_diff_integration = @import("tests/test_write_diff_integration.zig");
+pub const test_utf8_truncate = @import("tests/test_utf8_truncate.zig");
+pub const test_text_wrap = @import("tests/test_text_wrap.zig");
+pub const test_spacing_simple = @import("tests/test_spacing_simple.zig");
+// Phase 10 — persistence / database
+pub const test_memory_db = @import("tests/test_memory_db.zig");
+pub const test_memory_null_fix = @import("tests/test_memory_null_fix.zig");
+pub const test_memory_retract = @import("tests/test_memory_retract.zig");
+pub const test_sqlite_queue = @import("tests/test_sqlite_queue.zig");
+pub const test_sqlite_queue_threading = @import("tests/test_sqlite_queue_threading.zig");
+pub const test_history_file = @import("tests/test_history_file.zig");
+pub const test_token_usage = @import("tests/test_token_usage.zig");
+pub const test_token_usage_comprehensive = @import("tests/test_token_usage_comprehensive.zig");
+pub const test_token_usage_session_totals = @import("tests/test_token_usage_session_totals.zig");
+pub const test_rotation = @import("tests/test_rotation.zig");
+// Phase 10 — providers / API
+pub const test_openai_format = @import("tests/test_openai_format.zig");
+pub const test_openai_response_parsing = @import("tests/test_openai_response_parsing.zig");
+pub const test_openai_responses = @import("tests/test_openai_responses.zig");
+pub const test_bedrock_auth = @import("tests/test_bedrock_auth.zig");
+pub const test_bedrock_converse = @import("tests/test_bedrock_converse.zig");
+pub const test_provider_init = @import("tests/test_provider_init.zig");
+pub const test_provider_init_from_config = @import("tests/test_provider_init_from_config.zig");
+pub const test_retry_jitter = @import("tests/test_retry_jitter.zig");
+pub const test_json_parsing = @import("tests/test_json_parsing.zig");
+pub const test_aws_credential_rotation = @import("tests/test_aws_credential_rotation.zig");
+// Phase 10 — agent core / conversation
+pub const test_message_queue = @import("tests/test_message_queue.zig");
+pub const test_conversation_free = @import("tests/test_conversation_free.zig");
+pub const test_tool_message_ordering = @import("tests/test_tool_message_ordering.zig");
+pub const test_tool_results_regression = @import("tests/test_tool_results_regression.zig");
+pub const test_insert_system_message = @import("tests/test_insert_system_message.zig");
+pub const test_mcp = @import("tests/test_mcp.zig");
+// Phase 10 — TUI / window manager
+pub const test_window_manager = @import("tests/test_window_manager.zig");
+pub const test_window_manager_border_calculations = @import("tests/test_window_manager_border_calculations.zig");
+pub const test_tui_auto_scroll = @import("tests/test_tui_auto_scroll.zig");
+pub const test_tui_scrolling_calculations = @import("tests/test_tui_scrolling_calculations.zig");
+pub const test_tui_input_buffer = @import("tests/test_tui_input_buffer.zig");
+pub const test_file_search = @import("tests/test_file_search.zig");
+pub const test_colorscheme = @import("tests/test_colorscheme.zig");
+// Phase 10 — tool validation / misc
+pub const test_tool_definition_parity = @import("tests/test_tool_definition_parity.zig");
+pub const test_tool_details_simple = @import("tests/test_tool_details_simple.zig");
 
 // Pull all test blocks from every imported module into this compilation unit.
 test {

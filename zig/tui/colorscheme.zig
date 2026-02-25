@@ -20,7 +20,7 @@ pub const Rgb = struct {
     /// Returns null if parsing fails
     pub fn parse(hex: []const u8) ?Rgb {
         // Skip leading '#' if present
-        const start = if (hex.len > 0 and hex[0] == '#') 1 else 0;
+        const start: usize = if (hex.len > 0 and hex[0] == '#') 1 else 0;
         const hex_str = hex[start..];
 
         // Must have exactly 6 hex digits
@@ -37,14 +37,14 @@ pub const Rgb = struct {
     /// Supports both grayscale (232-255) and RGB cube (16-231)
     pub fn to256ColorIndex(self: Rgb) u8 {
         // Check if it's grayscale
-        const avg = @divTrunc(@as(i16, self.r) + @as(i16, self.g) + @as(i16, self.b), 3);
+        const avg = @divTrunc(@as(i16, self.r) + @as(i16, self.g) + @as(i16, self.b), @as(i16, 3));
         const r_diff = if (self.r > avg) self.r - avg else avg - self.r;
         const g_diff = if (self.g > avg) self.g - avg else avg - self.g;
         const b_diff = if (self.b > avg) self.b - avg else avg - self.b;
 
         if (r_diff < 10 and g_diff < 10 and b_diff < 10) {
             // Grayscale: use colors 232-255 (24 shades)
-            const gray_index: u8 = @intCast((avg * 23) / 255);
+            const gray_index: u8 = @intCast(@divTrunc(avg * @as(i16, 23), @as(i16, 255)));
             return 232 + gray_index;
         }
 

@@ -253,10 +253,11 @@ pub fn parseResponse(allocator: std.mem.Allocator, line: []const u8) !?JsonRpcRe
             .integer => |i| i,
             else => return null,
         };
-        const message = switch (err_obj.get("message") orelse return null) {
+        const message_raw = switch (err_obj.get("message") orelse return null) {
             .string => |s| s,
             else => return null,
         };
+        const message = try allocator.dupe(u8, message_raw);
         return JsonRpcResponse{
             .id = id,
             .result = null,

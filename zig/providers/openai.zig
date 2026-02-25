@@ -475,8 +475,8 @@ fn deserializeResponse(
                                 try content.appendSlice(cv.string);
                             }
                         }
-                        // Reasoning content
-                        if (reasoning_mode != .discard) {
+                        // Reasoning content — only capture in .preserve mode
+                        if (reasoning_mode == .preserve) {
                             if (msg.object.get("reasoning_content")) |rc| {
                                 if (rc == .string and rc.string.len > 0) {
                                     try reasoning_buf.appendSlice(rc.string);

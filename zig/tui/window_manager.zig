@@ -97,7 +97,7 @@ pub const WindowManager = struct {
             _ = c.delwin(win);
             self.conv_win = null;
         }
-        if (self.stdscr) |win| {
+        if (self.stdscr) |_| {
             _ = c.endwin();
             self.stdscr = null;
         }
