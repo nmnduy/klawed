@@ -18,7 +18,7 @@ const std = @import("std");
 ///
 /// When built via `zig build`, the `build.zig` script reads the actual VERSION
 /// file and passes it through `addOptions` so this constant is always current.
-pub const VERSION: []const u8 = "0.29.33";
+pub const VERSION: []const u8 = "0.29.35";
 
 /// Semantic version components.
 pub const SemVer = struct {
@@ -56,14 +56,14 @@ test "VERSION: no trailing newline" {
     try std.testing.expect(VERSION[VERSION.len - 1] != '\r');
 }
 
-test "VERSION: matches 0.29.33" {
-    try std.testing.expectEqualStrings("0.29.33", VERSION);
+test "VERSION: matches 0.29.35" {
+    try std.testing.expectEqualStrings("0.29.35", VERSION);
 }
 
 test "version: semver components" {
     try std.testing.expectEqual(@as(u32, 0), version.major);
     try std.testing.expectEqual(@as(u32, 29), version.minor);
-    try std.testing.expectEqual(@as(u32, 33), version.patch);
+    try std.testing.expectEqual(@as(u32, 35), version.patch);
 }
 
 test "version: round-trip formatting" {
