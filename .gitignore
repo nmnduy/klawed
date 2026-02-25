@@ -27,6 +27,8 @@ dist/
 # Core dumps
 core
 core.*
+# But allow zig/tui/core.zig (would otherwise match "core.*")
+!zig/tui/core.zig
 
 # Editor/IDE files
 .vscode/

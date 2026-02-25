@@ -86,7 +86,7 @@ pub const RenderState = struct {
         y: i32,
         prefix: ?[]const u8,
         text: []const u8,
-        color_pair: core.NCURSES_PAIR_USER,
+        color_pair: core.ColorPairNum,
     ) i32 {
         _ = self;
         _ = color_pair;
