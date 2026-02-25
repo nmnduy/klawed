@@ -27,10 +27,10 @@ const render = @import("render.zig");
 pub const ConversationEntry = struct {
     prefix: ?[]const u8, // Role prefix (e.g., "[User]", "[Assistant]")
     text: []const u8, // Message text
-    color_pair: core.ColorPairNum, // Color for display
+    color_pair: core.NCURSES_PAIR_USER, // Color for display
 
     /// Initialize a new conversation entry
-    pub fn init(prefix: ?[]const u8, text: []const u8, color: core.ColorPairNum) ConversationEntry {
+    pub fn init(prefix: ?[]const u8, text: []const u8, color: core.NCURSES_PAIR_USER) ConversationEntry {
         return ConversationEntry{
             .prefix = prefix,
             .text = text,
@@ -87,7 +87,7 @@ pub const ConversationState = struct {
     }
 
     /// Add a conversation entry
-    pub fn addEntry(self: *ConversationState, prefix: ?[]const u8, text: []const u8, color: core.ColorPairNum) !void {
+    pub fn addEntry(self: *ConversationState, prefix: ?[]const u8, text: []const u8, color: core.NCURSES_PAIR_USER) !void {
         // Duplicate the strings
         const prefix_copy = if (prefix) |p| try self.allocator.dupe(u8, p) else null;
         errdefer if (prefix_copy) |p| self.allocator.free(p);
