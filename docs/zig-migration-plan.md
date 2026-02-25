@@ -1,6 +1,6 @@
 # Zig Migration Plan
 
-> **Status**: Phase 3 complete — Phase 4 next  
+> **Status**: Phase 4 complete — Phase 5 next  
 > **Scope**: Full rewrite of klawed from C11 to Zig  
 > **Estimated effort**: Large (months of focused engineering)  
 > **Primary motivation**: Eliminate manual memory management, leverage comptime type safety, and replace the growing `libbsd` band-aids with first-class language guarantees.
@@ -127,18 +127,18 @@ Each module: write tests alongside the port using `test "name" { ... }` blocks.
 ### Phase 4 — Configuration & Providers
 **Goal**: JSON config loading and all LLM provider implementations in Zig.
 
-- [ ] `src/config.c` / `src/config_command.c` → `zig-src/config.zig`  
+- [x] `src/config.c` / `src/config_command.c` → `zig/config.zig`  
   Replace `cJSON` with `std.json`; use `std.json.parseFromSlice` with arena allocation
-- [ ] `src/provider_config_loader.c` → `zig-src/provider_config_loader.zig`
-- [ ] Define `Provider` as a `union(enum)` — eliminates the current stringly-typed dispatch
-- [ ] `src/openai_provider.c` + `src/openai_messages.c` + `src/openai_responses.c` → `zig-src/providers/openai.zig`
-- [ ] `src/anthropic_provider.c` → `zig-src/providers/anthropic.zig`
-- [ ] `src/bedrock_provider.c` + `src/bedrock_converse.c` + `src/aws_bedrock.c` → `zig-src/providers/bedrock.zig`  
-  Replace OpenSSL HMAC with `std.crypto.auth.hmac.HmacSha256`
-- [ ] `src/deepseek_provider.c` → `zig-src/providers/deepseek.zig`
-- [ ] `src/moonshot_provider.c` → `zig-src/providers/moonshot.zig`
-- [ ] `src/kimi_oauth.c` + `src/kimi_coding_plan_provider.c` → `zig-src/providers/kimi.zig`
-- [ ] `src/provider.c` → `zig-src/provider.zig` (dispatch table / vtable pattern using Zig interfaces)
+- [x] `src/provider_config_loader.c` → `zig/provider_config_loader.zig`
+- [x] Define `Provider` as a `union(enum)` — eliminates the current stringly-typed dispatch
+- [x] `src/openai_provider.c` + `src/openai_messages.c` + `src/openai_responses.c` → `zig/providers/openai.zig`
+- [x] `src/anthropic_provider.c` → `zig/providers/anthropic.zig`
+- [x] `src/bedrock_provider.c` + `src/bedrock_converse.c` + `src/aws_bedrock.c` → `zig/providers/bedrock.zig`  
+  Replace OpenSSL HMAC with `std.crypto.auth.hmac.sha2.HmacSha256`
+- [x] `src/deepseek_provider.c` → `zig/providers/deepseek.zig`
+- [x] `src/moonshot_provider.c` → `zig/providers/moonshot.zig`
+- [x] `src/kimi_oauth.c` + `src/kimi_coding_plan_provider.c` → `zig/providers/kimi.zig`
+- [x] `src/provider.c` → `zig/provider.zig` (dispatch table / vtable pattern using Zig interfaces)
 
 ---
 

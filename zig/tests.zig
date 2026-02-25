@@ -1,4 +1,4 @@
-//! Root test file for klawed Zig modules (Phase 2 + Phase 3).
+//! Root test file for klawed Zig modules (Phase 2 + Phase 3 + Phase 4).
 //!
 //! Running `zig build test` compiles this file and executes all `test` blocks
 //! found in each imported module.  `std.testing.refAllDecls` is used to also
@@ -30,6 +30,17 @@ pub const persistence = @import("persistence.zig");
 pub const sqlite_queue = @import("sqlite_queue.zig");
 pub const memory_db = @import("memory_db.zig");
 pub const session = @import("session.zig");
+
+// Configuration & providers (Phase 4)
+pub const config = @import("config.zig");
+pub const provider_config_loader = @import("provider_config_loader.zig");
+pub const provider = @import("provider.zig");
+pub const openai_provider = @import("providers/openai.zig");
+pub const anthropic_provider = @import("providers/anthropic.zig");
+pub const bedrock_provider = @import("providers/bedrock.zig");
+pub const deepseek_provider = @import("providers/deepseek.zig");
+pub const moonshot_provider = @import("providers/moonshot.zig");
+pub const kimi_provider = @import("providers/kimi.zig");
 
 // Pull all test blocks from every imported module into this compilation unit.
 test {
