@@ -1,6 +1,6 @@
 # Zig Migration Plan
 
-> **Status**: Phase 7 complete — Phase 8 next  
+> **Status**: Phase 8 complete — Phase 9 next (TUI)  
 > **Scope**: Full rewrite of klawed from C11 to Zig  
 > **Estimated effort**: Large (months of focused engineering)  
 > **Primary motivation**: Eliminate manual memory management, leverage comptime type safety, and replace the growing `libbsd` band-aids with first-class language guarantees.
@@ -199,17 +199,17 @@ Each module: write tests alongside the port using `test "name" { ... }` blocks.
 ### Phase 8 — Agent Core Loop
 **Goal**: The main agent loop and interactive/oneshot modes in Zig.
 
-- [ ] `src/interactive/input_handler.c` + `command_dispatch.c` + `interactive_loop.c` → `zig-src/interactive/`
-- [ ] `src/interactive/response_processor.c` → `zig-src/interactive/response_processor.zig`
-- [ ] `src/oneshot_mode.c` + `oneshot_output.c` + `oneshot_processor.c` + `oneshot_ui.c` → `zig-src/oneshot/`
-- [ ] `src/commands.c` + `src/config_command.c` + `src/provider_command.c` → `zig-src/commands.zig`
-- [ ] `src/ai_worker.c` + `src/background_init.c` → `zig-src/ai_worker.zig`  
+- [x] `src/interactive/input_handler.c` + `command_dispatch.c` + `interactive_loop.c` → `zig/interactive/`
+- [x] `src/interactive/response_processor.c` → `zig/interactive/response_processor.zig`
+- [x] `src/oneshot_mode.c` + `oneshot_output.c` + `oneshot_processor.c` + `oneshot_ui.c` → `zig/oneshot/`
+- [x] `src/commands.c` + `src/config_command.c` + `src/provider_command.c` → `zig/commands.zig`
+- [x] `src/ai_worker.c` + `src/background_init.c` → `zig/ai_worker.zig`  
   `std.Thread` + `std.Thread.Mutex` + `std.Thread.Condition`
-- [ ] `src/message_queue.c` → `zig-src/message_queue.zig`
-- [ ] `src/completion.c` → `zig-src/completion.zig`
-- [ ] `src/dump_utils.c` → `zig-src/dump_utils.zig`
-- [ ] `src/process_utils.c` → `zig-src/process_utils.zig`
-- [ ] `src/klawed.c` → `zig-src/main.zig` (entry point, ~100 lines after all modules extracted)
+- [x] `src/message_queue.c` → `zig/message_queue.zig`
+- [x] `src/completion.c` → `zig/completion.zig`
+- [x] `src/dump_utils.c` → `zig/dump_utils.zig`
+- [x] `src/process_utils.c` → `zig/process_utils.zig`
+- [x] `src/klawed.c` → `zig/main.zig` (entry point, ~370 lines)
 
 ---
 
