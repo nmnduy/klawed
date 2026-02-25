@@ -1,6 +1,6 @@
 # Zig Migration Plan
 
-> **Status**: Phase 2 complete — Phase 3 next  
+> **Status**: Phase 3 complete — Phase 4 next  
 > **Scope**: Full rewrite of klawed from C11 to Zig  
 > **Estimated effort**: Large (months of focused engineering)  
 > **Primary motivation**: Eliminate manual memory management, leverage comptime type safety, and replace the growing `libbsd` band-aids with first-class language guarantees.
@@ -110,17 +110,17 @@ Each module: write tests alongside the port using `test "name" { ... }` blocks.
 ### Phase 3 — Data & Persistence Layer
 **Goal**: All database and serialization code in Zig with proper error unions.
 
-- [ ] `src/migrations.c` / `src/token_usage_db_migrations.c` → `zig-src/migrations.zig`  
+- [x] `src/migrations.c` / `src/token_usage_db_migrations.c` → `zig-src/migrations.zig`  
   Wrap `sqlite3` with a thin Zig error-union API: `fn exec(db: *Db, sql: []const u8) !void`
-- [ ] `src/persistence.c` → `zig-src/persistence.zig`
-- [ ] `src/sqlite_queue.c` → `zig-src/sqlite_queue.zig`  
+- [x] `src/persistence.c` → `zig-src/persistence.zig`
+- [x] `src/sqlite_queue.c` → `zig-src/sqlite_queue.zig`  
   Replace pthread mutex with `std.Thread.Mutex`
-- [ ] `src/token_usage_db.c` → `zig-src/token_usage_db.zig`
-- [ ] `src/memory_db.c` → `zig-src/memory_db.zig`  
+- [x] `src/token_usage_db.c` → `zig-src/token_usage_db.zig`
+- [x] `src/memory_db.c` → `zig-src/memory_db.zig`  
   FTS5 queries stay in SQL strings; Zig error unions replace `int` return codes
-- [ ] `src/session.c` + `src/session_persistence.c` → `zig-src/session.zig`
-- [ ] `src/history_file.c` → `zig-src/history_file.zig`
-- [ ] `src/data_dir.c` → `zig-src/data_dir.zig`
+- [x] `src/session.c` + `src/session_persistence.c` → `zig-src/session.zig`
+- [x] `src/history_file.c` → `zig-src/history_file.zig`
+- [x] `src/data_dir.c` → `zig-src/data_dir.zig`
 
 ---
 
