@@ -869,6 +869,12 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         }
     } else {
         // Write prefix for other (non-user, non-assistant) messages
+        // If text is empty (streaming placeholder), skip rendering — tui_update_last_conversation_line
+        // will render the prefix when the first text chunk arrives (cursor at col 0).
+        // This matches the [Assistant] border-mode behavior and prevents a spurious empty prefix line.
+        if ((!text || text[0] == '\0') && prefix && prefix[0] != '\0') {
+            goto skip_newline;
+        }
         if (prefix && prefix[0] != '\0') {
             // Use the conversation module to get the appropriate display prefix
             // This handles tree connector logic for consecutive same-tool outputs
