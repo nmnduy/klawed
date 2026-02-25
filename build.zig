@@ -222,6 +222,8 @@ pub fn build(b: *std.Build) void {
     });
     // Phase 3 modules use sqlite3 via @cImport.
     unit_tests.linkSystemLibrary("sqlite3");
+    // Phase 5 modules use libcurl via @cImport.
+    unit_tests.linkSystemLibrary("curl");
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run Zig unit tests (zig/tests.zig)");
     test_step.dependOn(&run_unit_tests.step);

@@ -1,6 +1,6 @@
 # Zig Migration Plan
 
-> **Status**: Phase 4 complete — Phase 5 next  
+> **Status**: Phase 5 complete — Phase 6 next  
 > **Scope**: Full rewrite of klawed from C11 to Zig  
 > **Estimated effort**: Large (months of focused engineering)  
 > **Primary motivation**: Eliminate manual memory management, leverage comptime type safety, and replace the growing `libbsd` band-aids with first-class language guarantees.
@@ -145,11 +145,15 @@ Each module: write tests alongside the port using `test "name" { ... }` blocks.
 ### Phase 5 — HTTP & Streaming
 **Goal**: Network layer with proper error handling and streaming SSE.
 
-- [ ] `src/http_client.c` → `zig-src/http_client.zig`  
+- [x] `src/http_client.c` → `zig/http_client.zig`  
   Keep libcurl via `@cImport` initially; wrap in Zig error unions
-- [ ] `src/retry_logic.c` → `zig-src/retry_logic.zig`
-- [ ] SSE streaming: define a proper `StreamEvent` tagged union
-- [ ] `src/api/api_builder.c` + `src/api/api_client.c` + `src/api/api_response.c` → `zig-src/api/`
+- [x] `src/retry_logic.c` → `zig/retry_logic.zig`
+- [x] SSE streaming: define a proper `StreamEvent` tagged union (`zig/api/sse_parser.zig`)
+- [x] `src/api/api_builder.c` + `src/api/api_client.c` + `src/api/api_response.c` → `zig/api/`  
+  - `zig/api/sse_parser.zig` — pure SSE line parser emitting `OwnedEvent` values  
+  - `zig/api/api_response.zig` — unified `ApiResponse` type + per-provider JSON parsing  
+  - `zig/api/api_client.zig` — HTTP dispatch with header building and exponential-backoff retry
+- [x] Wire `OpenAIProvider.sendRequest` and `AnthropicProvider.sendRequest` to `http_client`
 
 ---
 

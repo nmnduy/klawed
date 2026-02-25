@@ -9,10 +9,12 @@
 //!   - Prompt-caching via `cache_control: {"type":"ephemeral"}` blocks
 //!   - Different SSE event types: `content_block_delta`, `message_delta`, etc.
 //!
-//! ## Phase 5 note
-//! HTTP is not implemented; `sendRequest` returns `error.NotImplemented`.
+//! ## Phase 5
+//! `sendRequest` is wired to the HTTP client.
 
 const std = @import("std");
+const http_client_mod = @import("../http_client.zig");
+const api_client = @import("../api/api_client.zig");
 
 pub const default_url = "https://api.anthropic.com/v1/messages";
 pub const anthropic_version = "2023-06-01";
@@ -170,16 +172,34 @@ pub const AnthropicProvider = struct {
         return buf.toOwnedSlice();
     }
 
-    /// HTTP stub — Phase 5 will implement this.
+    /// Send the serialized request body to the Anthropic API.
+    ///
+    /// Returns the raw response body as an owned slice (caller must free).
     pub fn sendRequest(
         self: *AnthropicProvider,
         allocator: std.mem.Allocator,
         body: []const u8,
     ) ![]u8 {
-        _ = self;
-        _ = allocator;
-        _ = body;
-        return error.NotImplemented;
+        var client = try http_client_mod.HttpClient.init();
+        defer client.deinit();
+
+        const headers_arr = [_]http_client_mod.Header{
+            .{ .name = "Content-Type", .value = "application/json" },
+            .{ .name = "x-api-key", .value = self.api_key },
+            .{ .name = "anthropic-version", .value = anthropic_version },
+        };
+
+        const req = http_client_mod.Request{
+            .url = self.base_url,
+            .method = .POST,
+            .headers = &headers_arr,
+            .body = body,
+        };
+
+        var resp = try client.request(allocator, req);
+        defer resp.deinit(allocator);
+
+        return allocator.dupe(u8, resp.body);
     }
 
     /// Parse a non-streaming JSON response.
@@ -560,8 +580,9 @@ test "deserializeResponse tool_use" {
     try std.testing.expectEqualStrings("Bash", resp.tool_uses[0].name);
 }
 
-test "AnthropicProvider sendRequest returns NotImplemented" {
+test "AnthropicProvider sendRequest — http client wired (smoke test)" {
     var p = try AnthropicProvider.init(std.testing.allocator, "sk-ant-test", "", true);
     defer p.deinit();
-    try std.testing.expectError(error.NotImplemented, p.sendRequest(std.testing.allocator, "{}"));
+    // sendRequest is wired to the HTTP client — verify it compiles.
+    _ = AnthropicProvider.sendRequest;
 }

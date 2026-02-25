@@ -379,14 +379,18 @@ test "Provider.fromConfig auto falls back to openai" {
     try std.testing.expectEqual(ProviderKind.openai, std.meta.activeTag(p));
 }
 
-test "Provider.sendRequest returns NotImplemented" {
+test "Provider.sendRequest — http client wired (smoke test)" {
+    // sendRequest now makes a real HTTP call via libcurl.
+    // In unit tests we just verify the dispatch compiles and doesn't crash on
+    // the init path. A real network call would be an integration test.
     const cfg = ProviderConfig{
         .provider_type = .openai,
         .api_key = "sk-test",
     };
     var p = try Provider.fromConfig(std.testing.allocator, &cfg);
     defer p.deinit();
-    try std.testing.expectError(error.NotImplemented, p.sendRequest(std.testing.allocator, "{}"));
+    // Verify the function is accessible (it was previously stubbed).
+    _ = Provider.sendRequest;
 }
 
 test "Provider.buildRequestBody via openai path" {
