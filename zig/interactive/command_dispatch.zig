@@ -31,10 +31,24 @@ pub const VimCommandResult = enum {
 ///
 /// Returns `VimCommandResult` indicating what the caller should do.
 /// `output_buf` (if non-null) receives the output for `:re !<cmd>`.
+/// `out_writer` (if non-null) is used for status/command output; defaults
+/// to stdout when null.  Pass a discard writer in tests to avoid segfaults
+/// when stdout is not available.
 pub fn handleVimCommand(
     allocator: std.mem.Allocator,
     command: []const u8,
     output_buf: ?*std.ArrayList(u8),
+) !VimCommandResult {
+    return handleVimCommandWriter(allocator, command, output_buf, null);
+}
+
+/// Like `handleVimCommand` but accepts an explicit `AnyWriter` for output.
+/// When `out_writer` is null the function writes to stdout (default behaviour).
+pub fn handleVimCommandWriter(
+    allocator: std.mem.Allocator,
+    command: []const u8,
+    output_buf: ?*std.ArrayList(u8),
+    out_writer: ?std.io.AnyWriter,
 ) !VimCommandResult {
     if (command.len == 0 or command[0] != ':') return .@"continue";
 
@@ -50,21 +64,35 @@ pub fn handleVimCommand(
 
     // Clear command.
     if (std.mem.eql(u8, cmd, "clear")) {
-        const stdout = std.io.getStdOut().writer();
-        try stdout.writeAll("[Status] Conversation cleared\n");
+        if (out_writer) |w| {
+            try w.writeAll("[Status] Conversation cleared\n");
+        } else {
+            const stdout = std.io.getStdOut().writer();
+            try stdout.writeAll("[Status] Conversation cleared\n");
+        }
         return .@"continue";
     }
 
     // Help command.
     if (std.mem.eql(u8, cmd, "help")) {
-        const stdout = std.io.getStdOut().writer();
-        try stdout.writeAll("Vim-style commands:\n");
-        try stdout.writeAll("  :q, :quit, :wq  - Exit\n");
-        try stdout.writeAll("  :clear          - Clear conversation\n");
-        try stdout.writeAll("  :!<cmd>         - Execute shell command\n");
-        try stdout.writeAll("  :re !<cmd>      - Read command output into input\n");
-        try stdout.writeAll("  :vim            - Open vim\n");
-        try stdout.writeAll("  :help           - Show this help\n");
+        if (out_writer) |w| {
+            try w.writeAll("Vim-style commands:\n");
+            try w.writeAll("  :q, :quit, :wq  - Exit\n");
+            try w.writeAll("  :clear          - Clear conversation\n");
+            try w.writeAll("  :!<cmd>         - Execute shell command\n");
+            try w.writeAll("  :re !<cmd>      - Read command output into input\n");
+            try w.writeAll("  :vim            - Open vim\n");
+            try w.writeAll("  :help           - Show this help\n");
+        } else {
+            const stdout = std.io.getStdOut().writer();
+            try stdout.writeAll("Vim-style commands:\n");
+            try stdout.writeAll("  :q, :quit, :wq  - Exit\n");
+            try stdout.writeAll("  :clear          - Clear conversation\n");
+            try stdout.writeAll("  :!<cmd>         - Execute shell command\n");
+            try stdout.writeAll("  :re !<cmd>      - Read command output into input\n");
+            try stdout.writeAll("  :vim            - Open vim\n");
+            try stdout.writeAll("  :help           - Show this help\n");
+        }
         return .@"continue";
     }
 
@@ -84,10 +112,16 @@ pub fn handleVimCommand(
         defer allocator.free(result.stdout);
         defer allocator.free(result.stderr);
 
-        const stdout = std.io.getStdOut().writer();
-        if (result.stdout.len > 0) try stdout.writeAll(result.stdout);
-        if (result.stderr.len > 0) try stdout.writeAll(result.stderr);
-        try stdout.writeAll("\nPress ENTER to continue...");
+        if (out_writer) |w| {
+            if (result.stdout.len > 0) try w.writeAll(result.stdout);
+            if (result.stderr.len > 0) try w.writeAll(result.stderr);
+            try w.writeAll("\nPress ENTER to continue...");
+        } else {
+            const stdout = std.io.getStdOut().writer();
+            if (result.stdout.len > 0) try stdout.writeAll(result.stdout);
+            if (result.stderr.len > 0) try stdout.writeAll(result.stderr);
+            try stdout.writeAll("\nPress ENTER to continue...");
+        }
         // In non-TUI mode, just continue.
         return .@"continue";
     }
@@ -153,19 +187,30 @@ test "handleVimCommand: :wq returns exit" {
 
 test "handleVimCommand: :clear returns continue" {
     const alloc = std.testing.allocator;
-    const result = try handleVimCommand(alloc, ":clear", null);
+    // Use a discard writer so the test does not write to stdout (which would
+    // segfault when stdout is not available in the test harness).
+    var discard_buf = std.ArrayList(u8).init(alloc);
+    defer discard_buf.deinit();
+    const discard_writer = discard_buf.writer().any();
+    const result = try handleVimCommandWriter(alloc, ":clear", null, discard_writer);
     try std.testing.expectEqual(VimCommandResult.@"continue", result);
 }
 
 test "handleVimCommand: :help returns continue" {
     const alloc = std.testing.allocator;
-    const result = try handleVimCommand(alloc, ":help", null);
+    var discard_buf = std.ArrayList(u8).init(alloc);
+    defer discard_buf.deinit();
+    const discard_writer = discard_buf.writer().any();
+    const result = try handleVimCommandWriter(alloc, ":help", null, discard_writer);
     try std.testing.expectEqual(VimCommandResult.@"continue", result);
 }
 
 test "handleVimCommand: :! echo hello" {
     const alloc = std.testing.allocator;
-    const result = try handleVimCommand(alloc, ":!echo hello", null);
+    var discard_buf = std.ArrayList(u8).init(alloc);
+    defer discard_buf.deinit();
+    const discard_writer = discard_buf.writer().any();
+    const result = try handleVimCommandWriter(alloc, ":!echo hello", null, discard_writer);
     try std.testing.expectEqual(VimCommandResult.@"continue", result);
 }
 

@@ -1,6 +1,6 @@
 # Zig Migration Plan
 
-> **Status**: Phase 8 complete — Phase 9 next (TUI)  
+> **Status**: Phase 9 complete — Phase 10 next (Tests, Cleanup & Cutover)  
 > **Scope**: Full rewrite of klawed from C11 to Zig  
 > **Estimated effort**: Large (months of focused engineering)  
 > **Primary motivation**: Eliminate manual memory management, leverage comptime type safety, and replace the growing `libbsd` band-aids with first-class language guarantees.
@@ -216,26 +216,26 @@ Each module: write tests alongside the port using `test "name" { ... }` blocks.
 ### Phase 9 — TUI
 **Goal**: Terminal UI fully in Zig. This is the largest, most ncurses-dependent phase.
 
-- [ ] `src/colorscheme.h` + `src/builtin_themes.c` + `src/theme_explorer.c` → `zig-src/tui/colorscheme.zig`
-- [ ] `src/ncurses_input.c` → `zig-src/tui/input.zig`
-- [ ] `src/tui_core.c` → `zig-src/tui/core.zig`
-- [ ] `src/tui_render.c` → `zig-src/tui/render.zig`
-- [ ] `src/tui_conversation.c` → `zig-src/tui/conversation.zig`
-- [ ] `src/tui_modes.c` → `zig-src/tui/modes.zig`
-- [ ] `src/tui_input.c` → `zig-src/tui/input_handler.zig`
-- [ ] `src/tui_completion.c` → `zig-src/tui/completion.zig`
-- [ ] `src/tui_history.c` → `zig-src/tui/history.zig`
-- [ ] `src/tui_paste.c` → `zig-src/tui/paste.zig`
-- [ ] `src/tui_search.c` → `zig-src/tui/search.zig`
-- [ ] `src/tui_window.c` → `zig-src/tui/window.zig`
-- [ ] `src/window_manager.c` → `zig-src/tui/window_manager.zig`
-- [ ] `src/file_search.c` → `zig-src/tui/file_search.zig`
-- [ ] `src/history_search.c` → `zig-src/tui/history_search.zig`
-- [ ] `src/help_modal.c` → `zig-src/tui/help_modal.zig`
-- [ ] `src/tui.c` → `zig-src/tui/tui.zig` (top-level TUI init/teardown)
-- [ ] `src/ui/print_helpers.c` + `tool_output_display.c` + `ui_output.c` → `zig-src/ui/`
-- [ ] `src/indicators.h` → `zig-src/tui/indicators.zig`
-- [ ] `src/vltrn_banner.c` → `zig-src/tui/banner.zig`
+- [x] `src/colorscheme.h` + `src/builtin_themes.c` + `src/theme_explorer.c` → `zig/tui/colorscheme.zig`, `builtin_themes.zig`, `theme_explorer.zig`
+- [x] `src/ncurses_input.c` → `zig/tui/input.zig`
+- [x] `src/tui_core.c` → `zig/tui/core.zig`
+- [x] `src/tui_render.c` → `zig/tui/render.zig`
+- [x] `src/tui_conversation.c` → `zig/tui/conversation.zig`
+- [x] `src/tui_modes.c` → `zig/tui/modes.zig`
+- [x] `src/tui_input.c` → `zig/tui/input_handler.zig` (integrated into input.zig)
+- [x] `src/tui_completion.c` → `zig/tui/completion.zig`
+- [x] `src/tui_history.c` → `zig/tui/history.zig`
+- [x] `src/tui_paste.c` → `zig/tui/paste.zig`
+- [x] `src/tui_search.c` → `zig/tui/search.zig`
+- [x] `src/tui_window.c` → `zig/tui/window.zig`
+- [x] `src/window_manager.c` → `zig/tui/window_manager.zig`
+- [x] `src/file_search.c` → `zig/tui/file_search.zig`
+- [x] `src/history_search.c` → `zig/tui/history_search.zig`
+- [x] `src/help_modal.c` → `zig/tui/help_modal.zig`
+- [x] `src/tui.c` → `zig/tui.zig` (top-level TUI module)
+- [x] `src/ui/print_helpers.c` + `tool_output_display.c` + `ui_output.c` → `zig/ui/`
+- [x] `src/indicators.h` → `zig/tui/indicators.zig`
+- [x] `src/vltrn_banner.c` → `zig/tui/banner.zig`
 - [ ] **Stretch**: evaluate `libvaxis` (pure Zig TUI) to eliminate the ncurses `@cImport`
 
 ---

@@ -91,6 +91,20 @@ pub const oneshot_processor = @import("oneshot/processor.zig");
 pub const oneshot_mode = @import("oneshot/mode.zig");
 pub const main_mod = @import("main.zig");
 
+// TUI modules (Phase 9)
+pub const tui_input = @import("tui/input.zig");
+pub const tui_core = @import("tui/core.zig");
+
+// Ported C test suites (Phase 10)
+pub const test_base64 = @import("tests/test_base64.zig");
+pub const test_todo = @import("tests/test_todo.zig");
+pub const test_config = @import("tests/test_config.zig");
+pub const test_data_dir = @import("tests/test_data_dir.zig");
+pub const test_dump_utils = @import("tests/test_dump_utils.zig");
+pub const test_compaction = @import("tests/test_compaction.zig");
+pub const test_edit = @import("tests/test_edit.zig");
+pub const test_diff_colors = @import("tests/test_diff_colors.zig");
+
 // Pull all test blocks from every imported module into this compilation unit.
 test {
     std.testing.refAllDecls(@This());

@@ -78,6 +78,31 @@ pub fn executeOneshot(
     api_ctx: ?*anyopaque,
     cfg: OneshotConfig,
 ) !i32 {
+    const stdout = std.io.getStdOut().writer();
+    return executeOneshotWriter(
+        allocator,
+        prompt,
+        initial_call,
+        executor,
+        follow_up,
+        api_ctx,
+        cfg,
+        stdout.any(),
+    );
+}
+
+/// Like `executeOneshot` but accepts an explicit `AnyWriter` for output.
+/// Use in tests to avoid writing to stdout.
+pub fn executeOneshotWriter(
+    allocator: std.mem.Allocator,
+    prompt: []const u8,
+    initial_call: InitialCallFn,
+    executor: ToolExecutorFn,
+    follow_up: FollowupFn,
+    api_ctx: ?*anyopaque,
+    cfg: OneshotConfig,
+    writer: std.io.AnyWriter,
+) !i32 {
     // Make the initial API call.
     const response = try initial_call(allocator, prompt, api_ctx) orelse {
         const stderr = std.io.getStdErr().writer();
@@ -92,13 +117,14 @@ pub fn executeOneshot(
         .max_rounds = cfg.max_rounds,
     };
 
-    return processor.processOneshotResponse(
+    return processor.processOneshotResponseWriter(
         allocator,
         response,
         executor,
         follow_up,
         api_ctx,
         opts,
+        writer,
     );
 }
 
@@ -130,7 +156,9 @@ test "executeOneshot: simple text response" {
         }
     }.f;
 
-    const code = try executeOneshot(
+    var buf = std.ArrayList(u8).init(alloc);
+    defer buf.deinit();
+    const code = try executeOneshotWriter(
         alloc,
         "hello",
         initial,
@@ -138,6 +166,7 @@ test "executeOneshot: simple text response" {
         followup,
         null,
         .{ .format = .human, .style = .minimal },
+        buf.writer().any(),
     );
 
     try std.testing.expectEqual(@as(i32, 0), code);
