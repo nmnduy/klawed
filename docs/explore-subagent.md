@@ -125,6 +125,5 @@ go run github.com/playwright-community/playwright-go/cmd/playwright@latest insta
 
 ## Implementation Files
 
-- `src/explore_tools.c` - C implementation of explore tools
-- `src/explore_tools.h` - Header file
+- `zig/explore_tools.zig` - Zig implementation of explore tools
 - `tools/web_browse_agent/` - Go web browser agent

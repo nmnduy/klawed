@@ -1,6 +1,6 @@
 # Color Theme Support
 
-The TUI uses **Kitty terminal's theme format**, but themes are **embedded in the binary** so Klawed ships with zero runtime theme dependencies. External `.conf` files still work for overrides, but the preferred path is to embed themes directly in `src/builtin_themes.c`.
+The TUI uses **Kitty terminal's theme format**, but themes are **embedded in the binary** so Klawed ships with zero runtime theme dependencies. External `.conf` files still work for overrides, but the preferred path is to embed themes directly in `zig/tui/builtin_themes.zig`.
 
 ## Built-in Themes (shipped in the binary)
 
@@ -77,9 +77,9 @@ error_fg #ff5555
    ```bash
    ./scripts/embed_kitty_theme.sh "my-theme" /path/or/url/to/theme.conf > /tmp/my-theme-snippet.c
    ```
-3. Paste the snippet into the `built_in_themes` array in `src/builtin_themes.c`.
+3. Add the theme to the `builtin_themes` array in `zig/tui/builtin_themes.zig`.
 4. Keep the name short (≤63 chars) and unique.
-5. Rebuild: `make` (or `gmake` on macOS if needed).
+5. Rebuild: `zig build`.
 
 > Tip: External themes are still supported via `KLAWED_THEME=/path/to/theme.conf`, but embedding keeps the binary self-contained.
 

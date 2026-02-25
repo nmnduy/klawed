@@ -17,137 +17,101 @@ Project instructions for Klawed when working with this codebase.
 ## Quick Navigation
 
 **Current tasks**: `./todo.md`
-**Main implementation**: `src/klawed.c` (core agent loop, API calls)
+**Main implementation**: `zig/main.zig` (entry point, CLI argument parsing)
 
 **Core Systems:**
-- **API providers**: `src/openai_provider.c`, `src/anthropic_provider.c`, `src/bedrock_provider.c`, `src/aws_bedrock.c`
-- **Tools**: Built-in tools in `src/klawed.c`, common utilities in `src/tool_utils.c`, dynamic tool definitions from JSON via `KLAWED_DYNAMIC_TOOLS` env or `.klawed/dynamic_tools.json`
-- **Subagent**: `src/subagent_manager.c`, `docs/subagent.md` (task delegation with fresh context, supports per-subagent provider selection)
-- **Explore Subagent**: `src/explore_tools.c`, `docs/explore-subagent.md` (web research mode with web_browse_agent)
-- **MCP**: `src/mcp.c`, `src/mcp.h`, `docs/mcp.md` (external tool servers)
-- **TODO system**: `src/todo.c`, `src/todo.h`
-- **TUI & Normal Mode**: `src/tui.c`, `src/tui.h`, `docs/keyboard-shortcuts.md`
-- **Arena allocator**: `src/arena.h` (region-based memory management, single-header library)
-- **Memory system**: `src/memory_db.c`, `src/memory_db.h` (SQLite-based persistent memory with FTS5)
-- **Memory injection**: `src/context/memory_injection.c`, `src/context/memory_injection.h` (automatic context injection before each API request)
-- **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management with API token tracking)
+- **API providers**: `zig/providers/openai.zig`, `zig/providers/anthropic.zig`, `zig/providers/bedrock.zig`, `zig/providers/deepseek.zig`
+- **Tools**: Built-in tools in `zig/tools/`, dynamic tool definitions from JSON via `KLAWED_DYNAMIC_TOOLS` env or `.klawed/dynamic_tools.json`
+- **Subagent**: `zig/subagent_manager.zig`, `docs/subagent.md` (task delegation with fresh context, supports per-subagent provider selection)
+- **Explore Subagent**: `zig/explore_tools.zig`, `docs/explore-subagent.md` (web research mode with web_browse_agent)
+- **MCP**: `zig/mcp.zig`, `docs/mcp.md` (external tool servers)
+- **TODO system**: `zig/tools/todo.zig`
+- **TUI**: `zig/tui.zig`, `zig/tui/`, `docs/keyboard-shortcuts.md`
+- **Memory system**: `zig/memory_db.zig` (SQLite-based persistent memory with FTS5)
+- **Memory injection**: `zig/context/memory_injection.zig` (automatic context injection before each API request)
+- **Auto-compaction**: `zig/compaction.zig`, `docs/auto_compaction.md` (automatic context management with API token tracking)
 
 **Vendors:**
 - **web_browse_agent**: `tools/web_browse_agent/` - Go-based web browser agent with Playwright
 
 **Data & State:**
-- **Database/Persistence**: `src/persistence.c`, `src/sqlite_queue.c`, `docs/sqlite-queue.md`
-- **Token usage database**: `src/token_usage_db.c`, `src/token_usage_db.h` (separate SQLite file for token tracking)
-- **HTTP client**: `src/http_client.c`, `src/http_client.h`
-- **Session management**: `src/session.c`, `src/session.h`
-- **History**: `src/history_file.c`, `src/history_file.h`
-- **Migration system**: `src/migrations.c`, `src/migrations.h`, `src/token_usage_db_migrations.c`
-- **Retry logic**: `src/retry_logic.c`, `src/retry_logic.h`
+- **Database/Persistence**: `zig/persistence.zig`, `zig/sqlite_queue.zig`, `docs/sqlite-queue.md`
+- **Token usage database**: `zig/token_usage_db.zig` (separate SQLite file for token tracking)
+- **HTTP client**: `zig/http_client.zig`
+- **Session management**: `zig/session.zig`
+- **History**: `zig/history_file.zig`
+- **Migration system**: `zig/migrations.zig`
+- **Retry logic**: `zig/retry_logic.zig`
 
 **User Interfaces:**
-- **Color themes**: `src/colorscheme.h`, `src/builtin_themes.c`, `docs/COLOR_THEMES.md`
-- **Token usage tracking**: `src/token_usage_db.c`, `docs/token-usage.md` (stored in separate `token_usage.db`)
-- **Window management**: `src/window_manager.c`, `src/window_manager.h`, `docs/window-management-refactor.md`
-- **Voice mode**: `src/voice_input.c`, `src/voice_stub.c`, `docs/voice-mode.md`
-- **Chat input**: `src/ncurses_input.c`, `src/ncurses_input.h`
-- **File search (Ctrl+F)**: `src/file_search.c`, `src/file_search.h` (fuzzy file finder popup)
+- **Color themes**: `zig/tui/colorscheme.zig`, `zig/tui/builtin_themes.zig`, `docs/COLOR_THEMES.md`
+- **Token usage tracking**: `zig/token_usage_db.zig`, `docs/token-usage.md` (stored in separate `token_usage.db`)
+- **Window management**: `zig/tui/window_manager.zig`, `docs/window-management-refactor.md`
+- **Voice mode**: `docs/voice-mode.md`
+- **Chat input**: `zig/tui/input.zig`
+- **File search (Ctrl+F)**: `zig/tui/file_search.zig` (fuzzy file finder popup)
 - **Streaming**: `docs/streaming.md` (real-time response display)
 
-**Tests**: `tests/test_*.c` (unit tests for all major components)
-**Build**: `Makefile`
-**Docker**: `Dockerfile.sandbox`, `docs/DOCKER_QUICKSTART.md`, `docs/docker-web-browser.md`, `docs/docker-sandbox-deployment.md`
+**Tests**: `zig/tests/test_*.zig` (unit tests for all major components)
+**Build**: `build.zig` (Zig build system), `Makefile` (thin shim)
+**Docker**: `Dockerfile.sandbox`, `docs/docker-web-browser.md`, `docs/docker-sandbox-deployment.md`
 
 ## Project Overview
 
-Pure C implementation of a coding agent using AI APIs (OpenAI, Anthropic, AWS Bedrock).
+Pure Zig implementation of a coding agent using AI APIs (OpenAI, Anthropic, AWS Bedrock).
+Migrated from C to Zig in v2.0.0-zig. See `docs/zig-migration-plan.md` for migration history.
 
 **Stack:**
-- C11 + POSIX
-- libcurl (HTTP), cJSON (parsing), pthread, ncurses (TUI)
+- Zig 0.12.1
+- libcurl (HTTP), sqlite3, openssl (via `@cImport` shims)
 - 8 core tools implemented (including Subagent for task delegation)
 - Prompt caching enabled by default
 - Bash command timeout protection (configurable via `KLAWED_BASH_TIMEOUT`)
 - Real-time streaming support (SSE) for Anthropic API
 
-## C Coding Standards
+## Zig Coding Standards
 
 **Key principles:**
-- Initialize all pointers to NULL
-- Zero-initialize structs with `= {0}`
-- Check all malloc/calloc returns
-
-**libbsd for safer C code:**
-
-libbsd is a newly introduced to this codebase. We will slowly transition to it. New code should use this library. It is to replace risky libc functions and add overflow-safe allocation and secure memory wiping.
-- **Install**: `apt install libbsd-dev` and link with `-lbsd`
-- **Functions to use**:
-  - `strlcpy(dst, src, size)` - safe string copy with guaranteed NUL termination
-  - `strlcat(dst, src, size)` - safe concatenation
-  - `strnlen(buf, max)` - bounded length check
-  - `reallocarray(ptr, nmemb, size)` - detects integer overflow during allocations and returns NULL safely
-  - `explicit_bzero(buf, len)` - securely erase memory without optimizer removal
-  - `arc4random()` / `arc4random_buf()` - strong randomness with no manual seeding
-- **Project rules**:
-  - Never use `strcpy`, `strcat`, or unchecked `strlen`. Replace with `strlcpy`, `strlcat`, `strnlen`
-  - For all resizable buffers and arrays, use `reallocarray` instead of `malloc(n*m)` or `realloc` to avoid overflow bugs
-  - When wiping secrets (passwords, tokens), use `explicit_bzero`
-  - Always check return values: `strlcpy`/`strlcat` return full source length; detect truncation when >= size. `reallocarray` returns NULL on overflow or OOM
-  - **Recommended dynamic buffer pattern**:
-    - Grow capacity using `reallocarray`
-    - Append using `strlcpy(dst + len, src, cap - len)`
-    - Update length safely
-
-**Required compilation:**
-- Flags: `-Wall -Wextra -Werror`
-- Sanitizers: `-fsanitize=address,undefined` for testing
-- Static analysis: `clang --analyze` or `gcc -fanalyzer`
+- All fallible functions return `!T` error unions — never silently ignore errors
+- Every allocating function takes an `allocator: std.mem.Allocator` parameter
+- Use `defer` and `errdefer` for cleanup — no manual free() sequencing
+- Strings are `[]const u8` slices (not null-terminated); use `std.mem.sliceTo(ptr, 0)` for C interop
+- Use `std.ArrayList(u8)` as a string builder; `std.ArrayList(T)` for dynamic arrays
+- Use `union(enum)` for variants (replaces C `int type + union` patterns)
+- Use comptime for platform differences (`builtin.os.tag == .linux`)
 
 **Testing requirements:**
-- Zero warnings, zero leaks (Valgrind)
-- All tests pass with sanitizers enabled
-- See `Makefile` for test targets
-- Run `make fmt-whitespace` once after making code changes.
+- Run `zig build test` — all tests must pass
+- Run `zig fmt zig/` (or `make fmt-whitespace`) after code changes
+- Zero test failures required before committing
 
-## NASA C Coding Standards
-
-1. **Simple control flow** - Avoid `goto`, `setjmp`/`longjmp`, and recursion where possible
-2. **Bounded loops** - All loops should have reasonable upper bounds
-3. **Minimize dynamic memory** - Use stack allocation when feasible
-4. **Function length limit** - Keep functions under ~60 lines where possible
-5. **Assertion density** - Add assertions for critical invariants
-6. **Minimal scope** - Declare at smallest possible scope
-7. **Return value & parameter checking** - Always check returns and validate parameters ✓
-8. **Limited preprocessor** - Only header includes and simple macros ✓
-9. **Careful pointer use** - Be mindful of pointer complexity
-10. **Zero warnings** - Compile with all warnings, pass static analysis ✓
-
-**Note:** These rules were discovered after the project has somewhat matured. You might see code that violates them. That's fine, we will incrementally refactor following the rules above. If it makes practical sense to use memory allocation, then use `src/arena.h`.
-
-**Full details:** `docs/nasa_c_coding_standards.md`
+**Build flags:**
+- Release: `zig build` (ReleaseSafe by default)
+- Debug: `zig build debug`
+- Tests: `zig build test`
 
 ## Building and Testing
 
-**Note for macOS users:** If you encounter errors like "invalid option -- 2" or "invalid option -- 0" when running `make`, you may have an old version of make (3.81) that has issues parsing paths with underscores. Install a newer version with `brew install make` and use `gmake` instead of `make`, or use the provided wrapper script `./make_wrapper.sh`.
-
 **Quick start:**
 ```bash
-make check-deps   # Verify dependencies (libcurl, cJSON, pthread)
-make              # Build: output to build/klawed
-make test         # Run unit tests (tests/ directory)
+make check-deps   # Verify dependencies (zig, libcurl, sqlite3)
+make              # Build: output to zig-out/bin/klawed
+make test         # Run unit tests (zig/tests/ directory)
 ```
 
-`make test` can take a while, most likely more than the default bash command timeout. So increase timeout value if required.
+`make test` (equivalently `zig build test`) can take a while. Increase the bash timeout if needed.
 
 **Running:**
 ```bash
 export OPENAI_API_KEY="your-api-key"
-./build/klawed "your prompt"
+./zig-out/bin/klawed "your prompt"
 ```
 
 **Test locations:**
-- `tests/test_edit.c` - Edit tool tests (regex, replace_all)
-- `tests/test_todo.c` - TODO list system tests
-- Build system: Uses `-DTEST_BUILD` to expose internal functions
+- `zig/tests/test_edit.zig` - Edit tool tests
+- `zig/tests/test_todo.zig` - TODO list system tests
+- `zig/tests/test_base64.zig`, `test_config.zig`, `test_data_dir.zig`, etc.
+- All tests run via `zig/tests.zig` as the root test file
 
 ## Configuration
 

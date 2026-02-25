@@ -48,7 +48,7 @@ The memory database is always available since it uses SQLite3 with FTS5, which i
 
 ```bash
 # Enable auto-compaction
-./build/klawed --auto-compact "your prompt"
+./zig-out/bin/klawed --auto-compact "your prompt"
 ```
 
 ### Environment Variables
@@ -159,12 +159,11 @@ Compaction is performed **at the end of an AI turn** when waiting for user input
 
 ## Source Files
 
-- **Core logic**: `src/compaction.c`, `src/compaction.h`
-- **Integration**: `src/klawed.c` (trigger logic in `call_api_with_retries()`)
-- **Internal types**: `src/klawed_internal.h` (ConversationState changes)
-- **Memory storage**: `src/memory_db.c`, `src/memory_db.h`
-- **Tests**: `tests/test_compaction.c`, `tests/test_compaction_stubs.c`
-- **Build**: `Makefile` (test target: `make test-compaction`)
+- **Core logic**: `zig/compaction.zig`
+- **Integration**: `zig/interactive/` (trigger logic in the agent loop)
+- **Memory storage**: `zig/memory_db.zig`
+- **Tests**: `zig/tests/test_compaction.zig`
+- **Build**: `build.zig` (test step: `zig build test`)
 
 ## API Reference
 
@@ -221,19 +220,19 @@ Returns 0 on success, -1 on error (summary_out will be empty on error).
 
 ```bash
 # Enable with defaults (trigger at 60% of 125k tokens = 75k tokens, keep 20 messages)
-./build/klawed --auto-compact "help me refactor this codebase"
+./zig-out/bin/klawed --auto-compact "help me refactor this codebase"
 
 # Aggressive compaction (trigger at 40% of 125k = 50k tokens, keep 10 messages)
 KLAWED_COMPACT_THRESHOLD=40 \
 KLAWED_COMPACT_KEEP_RECENT=10 \
-./build/klawed --auto-compact "long-running task"
+./zig-out/bin/klawed --auto-compact "long-running task"
 
 # Custom token limit (trigger at 60% of 200k = 120k tokens)
 KLAWED_CONTEXT_LIMIT=200000 \
-./build/klawed --auto-compact "very long conversation"
+./zig-out/bin/klawed --auto-compact "very long conversation"
 
 # Check version (memory system is always available)
-./build/klawed --version
+./zig-out/bin/klawed --version
 ```
 
 ## Memory System Behavior
@@ -258,8 +257,8 @@ The implementation follows NASA C coding standards and project conventions:
 ## Testing
 
 ```bash
-# Run compaction test suite
-make test-compaction
+# Run the full test suite (includes compaction tests)
+zig build test
 
 # Tests cover:
 # - Config initialization

@@ -85,7 +85,7 @@ Spinner* spinner = spinner_start_with_effect(
 );
 ```
 
-For the TUI status spinner (in `src/tui_render.c`):
+For the TUI status spinner (in `zig/tui/render.zig`):
 ```c
 tui->status_spinner_effect = spinner_effect_init(
     SPINNER_EFFECT_RAINBOW,  // Change this

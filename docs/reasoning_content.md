@@ -66,7 +66,7 @@ Moonshot/Kimi returns `content: ""` (empty string) when making tool calls with `
 - Send `content: ""` (empty string), NOT `content: null`
 - Include `reasoning_content` alongside the empty content
 
-This is handled in `src/openai_messages.c`:
+This is handled in `zig/providers/openai.zig`:
 ```c
 // Moonshot/Kimi: use empty string when reasoning_content is present
 if (include_reasoning_content && reasoning_content_str) {
@@ -80,7 +80,7 @@ The `reasoning_content` is stored in the `InternalContent` structure:
 - For text content blocks with `reasoning_content`
 - For tool-call-only messages (stored on the first tool call)
 
-See `src/klawed_internal.h`:
+See `zig/conversation/state.zig`:
 ```c
 typedef struct InternalContent {
     // ... other fields ...
@@ -90,7 +90,7 @@ typedef struct InternalContent {
 
 #### Streaming Support
 
-The streaming parser in `src/openai_provider.c` accumulates `reasoning_content` from SSE delta events and attaches it to the final response message.
+The streaming parser in `zig/providers/openai.zig` accumulates `reasoning_content` from SSE delta events and attaches it to the final response message.
 
 ### Known Error Messages
 
@@ -106,7 +106,7 @@ If you see these errors, check:
 
 ### References
 
-- `src/moonshot_provider.c` - Moonshot provider implementation
-- `src/openai_messages.c` - Request building with reasoning_content preservation
-- `src/conversation/message_parser.c` - Response parsing with reasoning_content extraction
-- `src/openai_provider.c` - Streaming support for reasoning_content
+- `zig/providers/moonshot.zig` - Moonshot provider implementation
+- `zig/providers/openai.zig` - Request building with reasoning_content preservation
+- `zig/conversation/message.zig` - Response parsing with reasoning_content extraction
+- `zig/providers/openai.zig` - Streaming support for reasoning_content
