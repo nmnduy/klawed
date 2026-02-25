@@ -210,10 +210,19 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     // ---------------------------------------------------------------------------
-    // "test" step — placeholder until Zig unit tests are written (Phase 2+)
+    // "test" step — Phase 2: run Zig unit tests for all zig/ modules
     // ---------------------------------------------------------------------------
-    const test_step = b.step("test", "Run unit tests (placeholder — Zig tests not yet written)");
-    _ = test_step; // will be populated in Phase 2
+    const unit_tests = b.addTest(.{
+        .root_source_file = b.path("zig/tests.zig"),
+        .target = target,
+        .optimize = optimize,
+        // Link libc so that @cImport (used in timestamp_utils, logger, env_utils)
+        // can find system headers.
+        .link_libc = true,
+    });
+    const run_unit_tests = b.addRunArtifact(unit_tests);
+    const test_step = b.step("test", "Run Zig unit tests (zig/tests.zig)");
+    test_step.dependOn(&run_unit_tests.step);
 
     // ---------------------------------------------------------------------------
     // "debug" step — build with debug optimizations (mirrors Makefile debug target)

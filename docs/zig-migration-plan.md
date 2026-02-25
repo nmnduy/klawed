@@ -1,6 +1,6 @@
 # Zig Migration Plan
 
-> **Status**: Phase 1 complete — Phase 2 next  
+> **Status**: Phase 2 complete — Phase 3 next  
 > **Scope**: Full rewrite of klawed from C11 to Zig  
 > **Estimated effort**: Large (months of focused engineering)  
 > **Primary motivation**: Eliminate manual memory management, leverage comptime type safety, and replace the growing `libbsd` band-aids with first-class language guarantees.
@@ -82,25 +82,26 @@ This de-risks the toolchain switch before any Zig code is written.
 **Goal**: Port the bottom of the dependency tree first — no risk of cascading breakage.
 
 Modules to port (in order):
-- [ ] `src/util/string_utils.c` → `zig-src/util/string_utils.zig`  
+- [x] `src/util/string_utils.c` → `zig/util/string_utils.zig`  
   Key wins: `std.mem`, `std.ascii`, slice bounds — no `strlcpy` needed
-- [ ] `src/util/timestamp_utils.c` → `zig-src/util/timestamp_utils.zig`
-- [ ] `src/util/format_utils.c` → `zig-src/util/format_utils.zig`  
+- [x] `src/util/timestamp_utils.c` → `zig/util/timestamp_utils.zig`
+- [x] `src/util/format_utils.c` → `zig/util/format_utils.zig`  
   Use `std.fmt.allocPrint` instead of `snprintf` + manual size checks
-- [ ] `src/util/env_utils.c` → `zig-src/util/env_utils.zig`  
+- [x] `src/util/env_utils.c` → `zig/util/env_utils.zig`  
   Use `std.process.getEnvVarOwned`
-- [ ] `src/util/file_utils.c` → `zig-src/util/file_utils.zig`  
+- [x] `src/util/file_utils.c` → `zig/util/file_utils.zig`  
   Use `std.fs` — directory creation, path joining, recursive mkdir
-- [ ] `src/util/diff_utils.c` → `zig-src/util/diff_utils.zig`
-- [ ] `src/util/output_utils.c` → `zig-src/util/output_utils.zig`
-- [ ] `src/base64.c` → `zig-src/base64.zig`  
+- [x] `src/util/diff_utils.c` → `zig/util/diff_utils.zig`
+- [x] `src/util/output_utils.c` → `zig/util/output_utils.zig`
+- [x] `src/base64.c` → `zig/base64.zig`  
   Use `std.base64`
-- [ ] `src/logger.c` → `zig-src/logger.zig`  
-  Use `std.log` with custom handler
-- [ ] `src/version.h` → `zig-src/version.zig` (comptime constant from `build.zig`)
-- [ ] Port `src/arena.h` → **delete**; use `std.heap.ArenaAllocator` everywhere
-- [ ] Port `src/array_resize.c` → **delete**; use `std.ArrayList`
-- [ ] Port `src/util/alloc_utils.h` → **delete**; use Zig allocator interface
+- [x] `src/logger.c` → `zig/logger.zig`  
+  Use `std.Thread.Mutex` instead of pthread; `std.fmt` for log formatting
+- [x] `src/version.h` → `zig/version.zig` (comptime constant baked in at build time)
+- [x] Port `src/arena.h` → **no port**; documented in `zig/util/arena.zig` as usage guide for `std.heap.ArenaAllocator`
+- [x] Port `src/array_resize.c` → **no port**; documented in `zig/util/array_list.zig` as usage guide for `std.ArrayList`
+- [x] Port `src/util/alloc_utils.h` → **no port**; Zig allocator interface replaces it entirely
+- [x] Wire `zig build test` step in `build.zig` to run `zig/tests.zig` (79 tests, all pass)
 
 Each module: write tests alongside the port using `test "name" { ... }` blocks.
 
