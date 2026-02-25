@@ -38,7 +38,7 @@ Where:
 
 ## Implementation
 
-The rendering logic is in `src/todo.c` in the `todo_render_to_string()` function:
+The rendering logic is in `zig/tools/todo.zig` in the `renderToString()` function:
 
 1. **Color code extraction**: Gets ANSI color codes from the colorscheme system
 2. **Fallback handling**: Uses standard ANSI colors if no theme is loaded
@@ -74,7 +74,7 @@ export KLAWED_THEME="/path/to/theme.conf"
 Run the TODO list tests to see the rendering in action:
 
 ```bash
-make test-todo
+zig build test
 ```
 
 The test suite includes a visual rendering test that displays TODO lists with different status combinations.

@@ -42,7 +42,7 @@ Interactive file finder for quickly inserting file paths into the input buffer.
 
 ## Configuration
 
-The search timeout can be adjusted via the `FILE_SEARCH_DEFAULT_TIMEOUT_MS` constant in `src/file_search.h` (default: 3000ms).
+The search timeout can be adjusted via the `FILE_SEARCH_DEFAULT_TIMEOUT_MS` constant in `zig/tui/file_search.zig` (default: 3000ms).
 
 ## Technical Details
 

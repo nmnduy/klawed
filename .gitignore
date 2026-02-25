@@ -3,6 +3,10 @@ claude
 
 tags
 
+# Zig build artifacts
+zig-cache/
+zig-out/
+
 # Object files
 *.o
 *.obj
