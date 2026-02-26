@@ -961,7 +961,7 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
         /* Reset state so perpetual_mode_run starts from a clean slate. */
         clear_conversation(ctx->state);
 
-        int rc = perpetual_mode_run(ctx->state, query);
+        int rc = perpetual_mode_run(ctx->state, query, ctx->tui_queue);
         if (rc != 0) {
             ui_show_error(NULL, ctx->tui_queue, "Perpetual mode run failed");
         }

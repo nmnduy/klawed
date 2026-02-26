@@ -231,7 +231,7 @@ int submit_input_callback(const char *input, void *user_data) {
         } else {
             ui_set_status_varied(tui, queue, SPINNER_CONTEXT_API_CALL);
             clear_conversation(state);
-            int rc = perpetual_mode_run(state, input_copy);
+            int rc = perpetual_mode_run(state, input_copy, queue);
             clear_conversation(state);
             ui_set_status(tui, queue, "");
             if (rc != 0) {
