@@ -757,10 +757,15 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
     cJSON_AddItemToArray(sleep_req, cJSON_CreateString("duration"));
     cJSON_AddItemToObject(sleep_params, "required", sleep_req);
 
-    cJSON *sleep_tool;
-    CREATE_TOOL(sleep_tool, "Sleep",
-                "Pauses execution for specified duration (seconds)",
-                sleep_params);
+    if (!is_tool_disabled("Sleep")) {
+        cJSON *sleep_tool;
+        CREATE_TOOL(sleep_tool, "Sleep",
+                    "Pauses execution for specified duration (seconds)",
+                    sleep_params);
+    } else {
+        cJSON_Delete(sleep_params);
+        LOG_INFO("Tool 'Sleep' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     // Read tool
     cJSON *read_params = cJSON_CreateObject();
@@ -783,10 +788,15 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
     cJSON_AddItemToArray(read_req, cJSON_CreateString("file_path"));
     cJSON_AddItemToObject(read_params, "required", read_req);
 
-    cJSON *read_tool;
-    CREATE_TOOL(read_tool, "Read",
-                "Reads a file from the filesystem with optional line range support",
-                read_params);
+    if (!is_tool_disabled("Read")) {
+        cJSON *read_tool;
+        CREATE_TOOL(read_tool, "Read",
+                    "Reads a file from the filesystem with optional line range support",
+                    read_params);
+    } else {
+        cJSON_Delete(read_params);
+        LOG_INFO("Tool 'Read' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     // Bash, Subagent, Write, and Edit tools - excluded in plan mode
     if (!plan_mode) {
@@ -809,19 +819,24 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
         cJSON_AddItemToArray(bash_req, cJSON_CreateString("command"));
         cJSON_AddItemToObject(bash_params, "required", bash_req);
 
-        cJSON *bash_tool;
-        CREATE_TOOL(bash_tool, "Bash",
-                    "Executes bash commands. Note: stderr is automatically redirected to stdout "
-                    "to prevent terminal corruption, so both stdout and stderr output will be "
-                    "captured in the 'output' field. Commands have a configurable timeout "
-                    "(default: 30 seconds) to prevent hanging. Use the 'timeout' parameter to "
-                    "override the default or set to 0 for no timeout. If the output exceeds "
-                    "12,228 bytes, it will be truncated and a 'truncation_warning' field "
-                    "will be added to the result.",
-                    bash_params);
+        if (!is_tool_disabled("Bash")) {
+            cJSON *bash_tool;
+            CREATE_TOOL(bash_tool, "Bash",
+                        "Executes bash commands. Note: stderr is automatically redirected to stdout "
+                        "to prevent terminal corruption, so both stdout and stderr output will be "
+                        "captured in the 'output' field. Commands have a configurable timeout "
+                        "(default: 30 seconds) to prevent hanging. Use the 'timeout' parameter to "
+                        "override the default or set to 0 for no timeout. If the output exceeds "
+                        "12,228 bytes, it will be truncated and a 'truncation_warning' field "
+                        "will be added to the result.",
+                        bash_params);
+        } else {
+            cJSON_Delete(bash_params);
+            LOG_INFO("Tool 'Bash' is disabled via KLAWED_DISABLE_TOOLS");
+        }
 
         // Subagent tool - exclude if running as subagent to prevent recursion
-        if (!is_subagent) {
+        if (!is_subagent && !is_tool_disabled("Subagent")) {
             cJSON *subagent_params = cJSON_CreateObject();
             cJSON_AddStringToObject(subagent_params, "type", "object");
             cJSON *subagent_props = cJSON_CreateObject();
@@ -869,6 +884,10 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
                         "(3) avoiding context limit issues. Note: The subagent has full tool access "
                         "including Write, Edit, and Bash.",
                         subagent_params);
+        } else if (!is_subagent) {
+            LOG_INFO("Tool 'Subagent' is disabled via KLAWED_DISABLE_TOOLS");
+        }
+        if (!is_subagent && !is_tool_disabled("CheckSubagentProgress")) {
 
             // CheckSubagentProgress tool
             cJSON *check_progress_params = cJSON_CreateObject();
@@ -897,6 +916,10 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
                         "Returns whether the subagent is still running and the tail of its output. "
                         "Use this to monitor long-running subagent tasks.",
                         check_progress_params);
+        } else if (!is_subagent) {
+            LOG_INFO("Tool 'CheckSubagentProgress' is disabled via KLAWED_DISABLE_TOOLS");
+        }
+        if (!is_subagent && !is_tool_disabled("InterruptSubagent")) {
 
             // InterruptSubagent tool
             cJSON *interrupt_params = cJSON_CreateObject();
@@ -918,6 +941,8 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
                         "that is stuck, taking too long, or no longer needed. "
                         "You can interrupt a subagent at any time.",
                         interrupt_params);
+        } else if (!is_subagent) {
+            LOG_INFO("Tool 'InterruptSubagent' is disabled via KLAWED_DISABLE_TOOLS");
         }
 
         // Write tool
@@ -938,13 +963,18 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
         cJSON_AddItemToArray(write_req, cJSON_CreateString("content"));
         cJSON_AddItemToObject(write_params, "required", write_req);
 
-        cJSON *write_tool;
-        CREATE_TOOL(write_tool, "Write",
-                    "Writes content to a file. To avoid hitting token limits, make smaller changes and call "
-                    "the Write tool multiple times with focused content instead of writing entire "
-                    "files at once. Break large operations into logical chunks (e.g., write a single "
-                    "function at a time, one section at a time).",
-                    write_params);
+        if (!is_tool_disabled("Write")) {
+            cJSON *write_tool;
+            CREATE_TOOL(write_tool, "Write",
+                        "Writes content to a file. To avoid hitting token limits, make smaller changes and call "
+                        "the Write tool multiple times with focused content instead of writing entire "
+                        "files at once. Break large operations into logical chunks (e.g., write a single "
+                        "function at a time, one section at a time).",
+                        write_params);
+        } else {
+            cJSON_Delete(write_params);
+            LOG_INFO("Tool 'Write' is disabled via KLAWED_DISABLE_TOOLS");
+        }
 
         // Edit tool
         cJSON *edit_params = cJSON_CreateObject();
@@ -969,14 +999,19 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
         cJSON_AddItemToArray(edit_req, cJSON_CreateString("new_string"));
         cJSON_AddItemToObject(edit_params, "required", edit_req);
 
-        cJSON *edit_tool;
-        CREATE_TOOL(edit_tool, "Edit",
-                    "Performs simple string replacement in files. Replaces the first occurrence of "
-                    "old_string with new_string. To avoid hitting token limits, make smaller changes and call "
-                    "the Edit tool multiple times with focused edits instead of making massive "
-                    "changes in a single call. Break large operations into logical chunks (e.g., "
-                    "edit one function at a time, one section at a time).",
-                    edit_params);
+        if (!is_tool_disabled("Edit")) {
+            cJSON *edit_tool;
+            CREATE_TOOL(edit_tool, "Edit",
+                        "Performs simple string replacement in files. Replaces the first occurrence of "
+                        "old_string with new_string. To avoid hitting token limits, make smaller changes and call "
+                        "the Edit tool multiple times with focused edits instead of making massive "
+                        "changes in a single call. Break large operations into logical chunks (e.g., "
+                        "edit one function at a time, one section at a time).",
+                        edit_params);
+        } else {
+            cJSON_Delete(edit_params);
+            LOG_INFO("Tool 'Edit' is disabled via KLAWED_DISABLE_TOOLS");
+        }
 
         // MultiEdit tool
         cJSON *multiedit_params = cJSON_CreateObject();
@@ -1013,12 +1048,17 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
         cJSON_AddItemToArray(multiedit_req, cJSON_CreateString("edits"));
         cJSON_AddItemToObject(multiedit_params, "required", multiedit_req);
 
-        cJSON *multiedit_tool;
-        CREATE_TOOL(multiedit_tool, "MultiEdit",
-                    "Performs multiple string replacements in a file. Applies edits sequentially in "
-                    "the order provided. Each edit replaces the first occurrence of old_string with "
-                    "new_string. Returns counts of successful and failed edits.",
-                    multiedit_params);
+        if (!is_tool_disabled("MultiEdit")) {
+            cJSON *multiedit_tool;
+            CREATE_TOOL(multiedit_tool, "MultiEdit",
+                        "Performs multiple string replacements in a file. Applies edits sequentially in "
+                        "the order provided. Each edit replaces the first occurrence of old_string with "
+                        "new_string. Returns counts of successful and failed edits.",
+                        multiedit_params);
+        } else {
+            cJSON_Delete(multiedit_params);
+            LOG_INFO("Tool 'MultiEdit' is disabled via KLAWED_DISABLE_TOOLS");
+        }
     }
 
     // Glob tool
@@ -1034,10 +1074,15 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
     cJSON_AddItemToArray(glob_req, cJSON_CreateString("pattern"));
     cJSON_AddItemToObject(glob_params, "required", glob_req);
 
-    cJSON *glob_tool;
-    CREATE_TOOL(glob_tool, "Glob",
-                "Finds files matching a pattern",
-                glob_params);
+    if (!is_tool_disabled("Glob")) {
+        cJSON *glob_tool;
+        CREATE_TOOL(glob_tool, "Glob",
+                    "Finds files matching a pattern",
+                    glob_params);
+    } else {
+        cJSON_Delete(glob_params);
+        LOG_INFO("Tool 'Glob' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     // Grep tool
     cJSON *grep_params = cJSON_CreateObject();
@@ -1056,13 +1101,18 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
     cJSON_AddItemToArray(grep_req, cJSON_CreateString("pattern"));
     cJSON_AddItemToObject(grep_params, "required", grep_req);
 
-    cJSON *grep_tool;
-    CREATE_TOOL(grep_tool, "Grep",
-                "Searches for patterns in files. Results limited to 100 matches by default "
-                "(configurable via KLAWED_GREP_MAX_RESULTS). Automatically excludes common "
-                "build directories, dependencies, and binary files (.git, node_modules, build/, "
-                "*.min.js, etc). Returns 'match_count' and 'warning' if truncated.",
-                grep_params);
+    if (!is_tool_disabled("Grep")) {
+        cJSON *grep_tool;
+        CREATE_TOOL(grep_tool, "Grep",
+                    "Searches for patterns in files. Results limited to 100 matches by default "
+                    "(configurable via KLAWED_GREP_MAX_RESULTS). Automatically excludes common "
+                    "build directories, dependencies, and binary files (.git, node_modules, build/, "
+                    "*.min.js, etc). Returns 'match_count' and 'warning' if truncated.",
+                    grep_params);
+    } else {
+        cJSON_Delete(grep_params);
+        LOG_INFO("Tool 'Grep' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     // UploadImage tool (conditionally added based on KLAWED_DISABLE_TOOLS)
     if (!is_tool_disabled("UploadImage")) {
@@ -1137,14 +1187,18 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
     cJSON_AddItemToArray(todo_req, cJSON_CreateString("todos"));
     cJSON_AddItemToObject(todo_params, "required", todo_req);
 
-    cJSON *todo_tool;
-    CREATE_TOOL(todo_tool, "TodoWrite",
-                "Creates and updates a task list to track progress on multi-step tasks",
-                todo_params);
-
-    // Add cache_control to TodoWrite if caching is enabled (cache breakpoint before dynamic tools)
-    if (enable_caching) {
-        add_cache_control(todo_tool);
+    if (!is_tool_disabled("TodoWrite")) {
+        cJSON *todo_tool;
+        CREATE_TOOL(todo_tool, "TodoWrite",
+                    "Creates and updates a task list to track progress on multi-step tasks",
+                    todo_params);
+        // Add cache_control to TodoWrite if caching is enabled (cache breakpoint before dynamic tools)
+        if (enable_caching) {
+            add_cache_control(todo_tool);
+        }
+    } else {
+        cJSON_Delete(todo_params);
+        LOG_INFO("Tool 'TodoWrite' is disabled via KLAWED_DISABLE_TOOLS");
     }
 
     // Memory tools (Responses format)
