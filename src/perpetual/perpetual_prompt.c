@@ -37,12 +37,27 @@ static int buf_append(char **buf, size_t *cap, size_t *len, const char *src)
 static int buf_appendf(char **buf, size_t *cap, size_t *len,
                        const char *fmt, ...)
 {
-    char tmp[1024] = {0};
+    /* Two-pass vsnprintf: first measure, then write. */
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(tmp, sizeof(tmp), fmt, ap);
+    int needed = vsnprintf(NULL, 0, fmt, ap);
     va_end(ap);
-    return buf_append(buf, cap, len, tmp);
+    if (needed < 0) {
+        return -1;
+    }
+
+    char *tmp = reallocarray(NULL, (size_t)needed + 1, 1);
+    if (!tmp) {
+        return -1;
+    }
+
+    va_start(ap, fmt);
+    vsnprintf(tmp, (size_t)needed + 1, fmt, ap);
+    va_end(ap);
+
+    int rc = buf_append(buf, cap, len, tmp);
+    free(tmp);
+    return rc;
 }
 
 /* Phase 1+2 recon/extract instructions (only when log exists). */

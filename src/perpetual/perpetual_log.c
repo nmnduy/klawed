@@ -50,9 +50,10 @@ static int ensure_parent_dirs(const char *file_path)
 
     strlcpy(buf, file_path, len + 1);
 
-    /* Walk forward and mkdir each component. */
-    for (size_t i = 1; i <= len; i++) {
-        if (buf[i] == '/' || buf[i] == '\0') {
+    /* Walk forward and mkdir each component up to (but not including) the
+     * final path element (the filename itself). */
+    for (size_t i = 1; i < len; i++) {
+        if (buf[i] == '/') {
             char saved = buf[i];
             buf[i] = '\0';
             if (make_dir(buf) != 0) {
