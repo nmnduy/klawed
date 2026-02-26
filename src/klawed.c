@@ -1545,19 +1545,20 @@ int main(int argc, char *argv[]) {
         // (but not if it's a resume flag without session ID)
         // Find the prompt argument (the one that's not part of -p flag)
         is_single_command_mode = 1;
-        if (provider_flag_argc > 0) {
-            // With -p flag: find the prompt (last argument that's not provider name)
-            // Could be: ./klawed -p provider "prompt" or ./klawed "prompt" -p provider
-            for (int i = 1; i < argc; i++) {
-                if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--provider") == 0) {
-                    i++;  // Skip provider name too
-                    continue;
-                }
-                single_command = argv[i];
-                break;
+        // Find the prompt by scanning argv and skipping all known flags and their args.
+        // This handles any combination of --perpetual, -p/--provider, --sqlite-queue, etc.
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--provider") == 0 ||
+                strcmp(argv[i], "--sqlite-queue") == 0) {
+                i++;  // Skip the associated value argument too
+                continue;
             }
-        } else {
-            single_command = argv[1];
+            if (strcmp(argv[i], "--perpetual") == 0 ||
+                strcmp(argv[i], "--auto-compact") == 0) {
+                continue;
+            }
+            single_command = argv[i];
+            break;
         }
         LOG_INFO("Single command mode enabled with prompt: %s", single_command);
     } else if (effective_argc > 2 && !resume_session && !list_sessions && !socket_ipc_enabled) {
