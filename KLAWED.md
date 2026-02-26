@@ -31,6 +31,7 @@ Project instructions for Klawed when working with this codebase.
 - **Memory system**: `src/memory_db.c`, `src/memory_db.h` (SQLite-based persistent memory with FTS5)
 - **Memory injection**: `src/context/memory_injection.c`, `src/context/memory_injection.h` (automatic context injection before each API request)
 - **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management with API token tracking)
+- **Perpetual mode**: `src/perpetual/`, `docs/perpetual-mode.md` (stateless+persistent mode: fresh context each request, growing `perpetual.md` log, root LLM orchestrates via Bash+Subagent tools)
 
 **Vendors:**
 - **web_browse_agent**: `tools/web_browse_agent/` - Go-based web browser agent with Playwright
