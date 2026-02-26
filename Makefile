@@ -1345,6 +1345,9 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/config_command_all.o $(CONFIG_COMMAND_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/background_init_all.o $(BACKGROUND_INIT_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/provider_command_all.o $(PROVIDER_COMMAND_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/perpetual_log_all.o $(PERPETUAL_LOG_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/perpetual_prompt_all.o $(PERPETUAL_PROMPT_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/perpetual_mode_all.o $(PERPETUAL_MODE_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -o $(BUILD_DIR)/klawed-allsan $(SRC) \
 		$(BUILD_DIR)/logger_all.o $(BUILD_DIR)/persistence_all.o $(BUILD_DIR)/migrations_all.o \
 		$(BUILD_DIR)/token_usage_db_all.o $(BUILD_DIR)/token_usage_db_migrations_all.o \
@@ -1401,6 +1404,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/response_processor_all.o $(BUILD_DIR)/command_dispatch_all.o \
 		$(BUILD_DIR)/oneshot_mode_all.o $(BUILD_DIR)/oneshot_processor_all.o $(BUILD_DIR)/oneshot_output_all.o $(BUILD_DIR)/oneshot_ui_all.o \
 		$(BUILD_DIR)/config_all.o $(BUILD_DIR)/config_command_all.o $(BUILD_DIR)/background_init_all.o $(BUILD_DIR)/provider_command_all.o \
+		$(BUILD_DIR)/perpetual_log_all.o $(BUILD_DIR)/perpetual_prompt_all.o $(BUILD_DIR)/perpetual_mode_all.o \
 		$(LDFLAGS) -fsanitize=address,undefined
 	@echo ""
 	@echo "✓ Build successful with combined sanitizers!"
