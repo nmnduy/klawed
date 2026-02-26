@@ -199,6 +199,18 @@ static int dispatch_bash_tool_calls(ConversationState *state,
         res->tool_id   = tc->id   ? strdup(tc->id)   : NULL;
         res->tool_name = tc->name ? strdup(tc->name) : NULL;
 
+        if ((tc->id && !res->tool_id) || (tc->name && !res->tool_name)) {
+            LOG_ERROR("perpetual: OOM duplicating tool id/name");
+            /* Free already-allocated slots before bailing. */
+            for (int j = 0; j <= i; j++) {
+                free(results[j].tool_id);
+                free(results[j].tool_name);
+                cJSON_Delete(results[j].tool_output);
+            }
+            free(results);
+            return -1;
+        }
+
         if (strcmp(tc->name, "Bash") == 0) {
             LOG_DEBUG("perpetual: dispatching Bash tool call id=%s", tc->id);
             cJSON *tool_result = tool_bash(tc->parameters, state);
@@ -282,11 +294,14 @@ static int run_response_loop(ConversationState *state, char **last_text_out)
         } else {
             /* No tool calls — conversation is complete. */
             api_response_free(response);
-            break;
+            return 0;
         }
     }
 
-    return 0;
+    /* Reached iteration limit without a tool-free response. */
+    LOG_ERROR("perpetual: hit MAX_LOOP_ITERATIONS (%d) without completing",
+              MAX_LOOP_ITERATIONS);
+    return 1;
 }
 
 /* ---------------------------------------------------------------------------
@@ -309,6 +324,11 @@ int perpetual_mode_run(ConversationState *state, const char *query)
 
     /* 2. Build system prompt. */
     long log_size = perpetual_log_size(log_path);
+    if (log_size < 0) {
+        LOG_WARN("perpetual_mode_run: could not stat log file '%s', treating as empty",
+                 log_path);
+        log_size = 0;
+    }
     char *system_prompt = perpetual_prompt_build(log_path, log_size);
     if (!system_prompt) {
         LOG_ERROR("perpetual_mode_run: failed to build system prompt");
