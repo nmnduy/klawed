@@ -251,6 +251,9 @@ static int subagent_manager_get_running_count(SubagentManager *manager) { (void)
 // Oneshot mode modules
 #include "oneshot/oneshot_mode.h"
 
+// Perpetual mode modules
+#include "perpetual/perpetual_mode.h"
+
 // Note: Conversation management functions are declared in klawed_internal.h
 // We don't include conversation/*.h here to avoid redundant declarations
 
@@ -1270,6 +1273,7 @@ int main(int argc, char *argv[]) {
 
         printf("  %s -h, --help                     Show this help message\n", argv[0]);
         printf("  %s --auto-compact               Enable automatic context compaction\n", argv[0]);
+        printf("  %s --perpetual                  Run in perpetual mode (stateless + persistent log)\n", argv[0]);
         printf("  %s --version                      Show version information\n\n", argv[0]);
         printf("Environment Variables:\n");
         printf("  API Configuration:\n");
@@ -1308,6 +1312,8 @@ int main(int argc, char *argv[]) {
         printf("    KLAWED_AUTO_COMPACT       Optional: Enable automatic context compaction (1=true, 0=false)\n");
         printf("    KLAWED_COMPACT_THRESHOLD  Optional: Trigger compaction at this %% of max messages (default: 75)\n");
         printf("    KLAWED_COMPACT_KEEP_RECENT Optional: Number of recent messages to keep (default: 100)\n\n");
+        printf("    KLAWED_PERPETUAL          Optional: Set to 1 to enable perpetual mode\n");
+        printf("    KLAWED_PERPETUAL_FILE     Optional: Path to perpetual log (default: .klawed/perpetual.md)\n\n");
 
         printf("  SQLite Queue Mode:\n");
         printf("    KLAWED_SQLITE_DB_PATH  Optional: Path to SQLite database for message queue\n");
@@ -1443,6 +1449,28 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Check for perpetual mode flag (can appear anywhere in argv)
+    int is_perpetual_mode = 0;
+    int perpetual_flag_argc = 0;  // Track how many args consumed by --perpetual
+    for (int i = 1; i < argc; i++) {
+        if (argv[i] && strcmp(argv[i], "--perpetual") == 0) {
+            is_perpetual_mode = 1;
+            perpetual_flag_argc = 1;
+            LOG_INFO("Perpetual mode enabled via command line flag");
+            break;
+        }
+    }
+    // Also check environment variable
+    if (!is_perpetual_mode) {
+        const char *perpetual_env = getenv("KLAWED_PERPETUAL");
+        if (perpetual_env && (strcmp(perpetual_env, "1") == 0 ||
+                              strcasecmp(perpetual_env, "true") == 0 ||
+                              strcasecmp(perpetual_env, "yes") == 0)) {
+            is_perpetual_mode = 1;
+            LOG_INFO("Perpetual mode enabled via environment variable");
+        }
+    }
+
     // Check for SQLite queue daemon mode
     int sqlite_daemon_mode = 0;
     const char *sqlite_db_path = NULL;
@@ -1509,8 +1537,8 @@ int main(int argc, char *argv[]) {
     }
 
     // Compute effective argc after removing flag arguments
-    // Both --provider/-p and --sqlite-queue consume 2 args each
-    int effective_argc = argc - provider_flag_argc - sqlite_queue_flag_argc;
+    // --provider/-p and --sqlite-queue consume 2 args each; --perpetual consumes 1
+    int effective_argc = argc - provider_flag_argc - sqlite_queue_flag_argc - perpetual_flag_argc;
 
     if (effective_argc == 2 && !resume_session && !list_sessions && !socket_ipc_enabled) {
         // Single argument provided - treat as prompt for single command mode
@@ -1961,7 +1989,9 @@ int main(int argc, char *argv[]) {
 
         // Skip main execution if there was an error
         if (exit_code == 0) {
-            if (is_single_command_mode) {
+            if (is_perpetual_mode) {
+                exit_code = perpetual_mode_run(&state, single_command ? single_command : "");
+            } else if (is_single_command_mode) {
                 exit_code = oneshot_execute(&state, single_command);
             } else {
                 interactive_mode(&state);
