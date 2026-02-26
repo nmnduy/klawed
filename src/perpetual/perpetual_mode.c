@@ -180,6 +180,22 @@ static int dispatch_bash_tool_calls(ConversationState *state,
 
     int bash_count = 0;
 
+    /* Add assistant message (with tool_calls) to conversation BEFORE results.
+     * Every other code path (response_processor, conversation_processor) does
+     * this via add_assistant_message_openai().  Without it add_tool_results()
+     * cannot find the matching assistant message and the subsequent API call
+     * gets tool-result blocks with no preceding tool_calls -> HTTP 400. */
+    if (response->raw_response) {
+        cJSON *choices = cJSON_GetObjectItem(response->raw_response, "choices");
+        if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
+            cJSON *choice = cJSON_GetArrayItem(choices, 0);
+            cJSON *message = cJSON_GetObjectItem(choice, "message");
+            if (message) {
+                add_assistant_message_openai(state, message);
+            }
+        }
+    }
+
     /* Allocate result array for all tool calls. */
     InternalContent *results = reallocarray(NULL,
                                             (size_t)response->tool_count,
