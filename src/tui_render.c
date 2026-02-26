@@ -325,14 +325,10 @@ void render_status_window(TUIState *tui) {
     int total_tokens = prompt_tokens + completion_tokens;
 
     // Show token count when non-zero, regardless of mode
+    // Format: "X↑ Y↓ tok" (prompt=input with up arrow, completion=output with down arrow)
     if (total_tokens > 0) {
-        // Show total tokens and cached tokens in the format: " Token: X (+Y cached)"
-        if (cached_tokens > 0) {
-            snprintf(token_str, sizeof(token_str), " Token: %d (+%d cached)",
-                     total_tokens, cached_tokens);
-        } else {
-            snprintf(token_str, sizeof(token_str), " Token: %d", total_tokens);
-        }
+        snprintf(token_str, sizeof(token_str), " %d\xe2\x86\x91 %d\xe2\x86\x93 tok",
+                 prompt_tokens, completion_tokens);
         token_str_len = (int)strlen(token_str);
         token_display_width = utf8_display_width(token_str);
         LOG_FINE("[TUI] Rendering token display: %s (mode=%d)", token_str, tui->mode);
