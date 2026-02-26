@@ -1992,7 +1992,7 @@ int main(int argc, char *argv[]) {
         if (exit_code == 0) {
             if (is_perpetual_mode && is_single_command_mode) {
                 // One-shot perpetual: prompt given on CLI, run once and exit
-                exit_code = perpetual_mode_run(&state, single_command);
+                exit_code = perpetual_mode_run(&state, single_command, NULL);
             } else if (is_perpetual_mode) {
                 // Interactive perpetual: TUI loop where each submission runs a
                 // fresh perpetual_mode_run via the worker thread
