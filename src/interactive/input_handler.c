@@ -7,6 +7,7 @@
 #include "../api/api_client.h"
 #include "../commands.h"
 #include "../context/system_prompt.h"
+#include "../perpetual/perpetual_mode.h"
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -219,6 +220,28 @@ int submit_input_callback(const char *input, void *user_data) {
     }
 
     ui_append_line(tui, queue, "[User]", input_copy, COLOR_PAIR_USER);
+
+    if (state->is_perpetual_mode) {
+        /* Perpetual mode: worker path handles it in ai_worker_handle_instruction.
+         * In the sync (no-worker) fallback, run perpetual_mode_run directly. */
+        if (worker) {
+            if (ai_worker_submit(worker, input_copy) != 0) {
+                ui_show_error(tui, queue, "Failed to queue instruction for processing");
+            }
+        } else {
+            ui_set_status_varied(tui, queue, SPINNER_CONTEXT_API_CALL);
+            clear_conversation(state);
+            int rc = perpetual_mode_run(state, input_copy);
+            clear_conversation(state);
+            ui_set_status(tui, queue, "");
+            if (rc != 0) {
+                ui_show_error(tui, queue, "Perpetual mode run failed");
+            }
+        }
+        free(input_copy);
+        return 0;
+    }
+
     add_user_message(state, input_copy);
 
     if (worker) {
