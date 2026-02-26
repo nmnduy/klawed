@@ -278,9 +278,21 @@ void add_memory_tools(cJSON *tool_array, ToolSchemaFormat format) {
         "(4) Starting a complex task and want to check for relevant project knowledge; "
         "(5) After a context compaction event, use this tool to retrieve potentially relevant context.";
 
-    append_memory_tool(tool_array, format, "MemoryStore", store_desc, build_memory_store_params());
-    append_memory_tool(tool_array, format, "MemoryRecall", recall_desc, build_memory_recall_params());
-    append_memory_tool(tool_array, format, "MemorySearch", search_desc, build_memory_search_params());
+    if (!is_tool_disabled("MemoryStore")) {
+        append_memory_tool(tool_array, format, "MemoryStore", store_desc, build_memory_store_params());
+    } else {
+        LOG_INFO("Tool 'MemoryStore' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+    if (!is_tool_disabled("MemoryRecall")) {
+        append_memory_tool(tool_array, format, "MemoryRecall", recall_desc, build_memory_recall_params());
+    } else {
+        LOG_INFO("Tool 'MemoryRecall' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+    if (!is_tool_disabled("MemorySearch")) {
+        append_memory_tool(tool_array, format, "MemorySearch", search_desc, build_memory_search_params());
+    } else {
+        LOG_INFO("Tool 'MemorySearch' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 }
 
 cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
@@ -296,6 +308,7 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     LOG_DEBUG("[TOOLS] get_tool_definitions: plan_mode=%d, is_subagent=%d", plan_mode, is_subagent);
 
     // Sleep tool
+    if (!is_tool_disabled("Sleep")) {
     cJSON *sleep_tool = cJSON_CreateObject();
     cJSON_AddStringToObject(sleep_tool, "type", "function");
     cJSON *sleep_func = cJSON_CreateObject();
@@ -318,8 +331,12 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         add_cache_control(sleep_tool);
     }
     cJSON_AddItemToArray(tool_array, sleep_tool);
+    } else {
+        LOG_INFO("Tool 'Sleep' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     // Read tool
+    if (!is_tool_disabled("Read")) {
     cJSON *read = cJSON_CreateObject();
     cJSON_AddStringToObject(read, "type", "function");
     cJSON *read_func = cJSON_CreateObject();
@@ -350,10 +367,14 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON_AddItemToObject(read_func, "parameters", read_params);
     cJSON_AddItemToObject(read, "function", read_func);
     cJSON_AddItemToArray(tool_array, read);
+    } else {
+        LOG_INFO("Tool 'Read' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     // Bash, Subagent, Write, and Edit tools - excluded in plan mode
     if (!plan_mode) {
         // Bash tool
+        if (!is_tool_disabled("Bash")) {
         cJSON *bash = cJSON_CreateObject();
         cJSON_AddStringToObject(bash, "type", "function");
         cJSON *bash_func = cJSON_CreateObject();
@@ -386,9 +407,12 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToObject(bash_func, "parameters", bash_params);
         cJSON_AddItemToObject(bash, "function", bash_func);
         cJSON_AddItemToArray(tool_array, bash);
+        } else {
+            LOG_INFO("Tool 'Bash' is disabled via KLAWED_DISABLE_TOOLS");
+        }
 
         // Subagent tool - exclude if running as subagent to prevent recursion
-        if (!is_subagent) {
+        if (!is_subagent && !is_tool_disabled("Subagent")) {
             cJSON *subagent = cJSON_CreateObject();
             cJSON_AddStringToObject(subagent, "type", "function");
             cJSON *subagent_func = cJSON_CreateObject();
@@ -444,6 +468,7 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
             cJSON_AddItemToArray(tool_array, subagent);
 
             // CheckSubagentProgress tool
+            if (!is_tool_disabled("CheckSubagentProgress")) {
             cJSON *check_progress = cJSON_CreateObject();
             cJSON_AddStringToObject(check_progress, "type", "function");
             cJSON *check_progress_func = cJSON_CreateObject();
@@ -477,8 +502,12 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
             cJSON_AddItemToObject(check_progress_func, "parameters", check_progress_params);
             cJSON_AddItemToObject(check_progress, "function", check_progress_func);
             cJSON_AddItemToArray(tool_array, check_progress);
+            } else {
+                LOG_INFO("Tool 'CheckSubagentProgress' is disabled via KLAWED_DISABLE_TOOLS");
+            }
 
             // InterruptSubagent tool
+            if (!is_tool_disabled("InterruptSubagent")) {
             cJSON *interrupt = cJSON_CreateObject();
             cJSON_AddStringToObject(interrupt, "type", "function");
             cJSON *interrupt_func = cJSON_CreateObject();
@@ -504,9 +533,15 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
             cJSON_AddItemToObject(interrupt_func, "parameters", interrupt_params);
             cJSON_AddItemToObject(interrupt, "function", interrupt_func);
             cJSON_AddItemToArray(tool_array, interrupt);
+            } else {
+                LOG_INFO("Tool 'InterruptSubagent' is disabled via KLAWED_DISABLE_TOOLS");
+            }
+        } else if (!is_subagent) {
+            LOG_INFO("Tool 'Subagent' is disabled via KLAWED_DISABLE_TOOLS");
         }
 
         // Write tool
+        if (!is_tool_disabled("Write")) {
         cJSON *write = cJSON_CreateObject();
         cJSON_AddStringToObject(write, "type", "function");
         cJSON *write_func = cJSON_CreateObject();
@@ -532,8 +567,12 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToObject(write_func, "parameters", write_params);
         cJSON_AddItemToObject(write, "function", write_func);
         cJSON_AddItemToArray(tool_array, write);
+        } else {
+            LOG_INFO("Tool 'Write' is disabled via KLAWED_DISABLE_TOOLS");
+        }
 
         // Edit tool (simplified - simple string replacement only)
+        if (!is_tool_disabled("Edit")) {
         cJSON *edit = cJSON_CreateObject();
         cJSON_AddStringToObject(edit, "type", "function");
         cJSON *edit_func = cJSON_CreateObject();
@@ -568,8 +607,12 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToObject(edit_func, "parameters", edit_params);
         cJSON_AddItemToObject(edit, "function", edit_func);
         cJSON_AddItemToArray(tool_array, edit);
+        } else {
+            LOG_INFO("Tool 'Edit' is disabled via KLAWED_DISABLE_TOOLS");
+        }
 
         // MultiEdit tool
+        if (!is_tool_disabled("MultiEdit")) {
         cJSON *multiedit = cJSON_CreateObject();
         cJSON_AddStringToObject(multiedit, "type", "function");
         cJSON *multiedit_func = cJSON_CreateObject();
@@ -616,9 +659,13 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToObject(multiedit_func, "parameters", multiedit_params);
         cJSON_AddItemToObject(multiedit, "function", multiedit_func);
         cJSON_AddItemToArray(tool_array, multiedit);
+        } else {
+            LOG_INFO("Tool 'MultiEdit' is disabled via KLAWED_DISABLE_TOOLS");
+        }
     }
 
     // Glob tool
+    if (!is_tool_disabled("Glob")) {
     cJSON *glob_tool = cJSON_CreateObject();
     cJSON_AddStringToObject(glob_tool, "type", "function");
     cJSON *glob_func = cJSON_CreateObject();
@@ -638,8 +685,12 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON_AddItemToObject(glob_func, "parameters", glob_params);
     cJSON_AddItemToObject(glob_tool, "function", glob_func);
     cJSON_AddItemToArray(tool_array, glob_tool);
+    } else {
+        LOG_INFO("Tool 'Glob' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     // Grep tool
+    if (!is_tool_disabled("Grep")) {
     cJSON *grep_tool = cJSON_CreateObject();
     cJSON_AddStringToObject(grep_tool, "type", "function");
     cJSON *grep_func = cJSON_CreateObject();
@@ -672,6 +723,9 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     cJSON_AddItemToObject(grep_func, "parameters", grep_params);
     cJSON_AddItemToObject(grep_tool, "function", grep_func);
     cJSON_AddItemToArray(tool_array, grep_tool);
+    } else {
+        LOG_INFO("Tool 'Grep' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     // UploadImage tool (conditionally added based on KLAWED_DISABLE_TOOLS)
     if (!is_tool_disabled("UploadImage")) {
@@ -700,6 +754,7 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     }
 
     // TodoWrite tool
+    if (!is_tool_disabled("TodoWrite")) {
     cJSON *todo_tool = cJSON_CreateObject();
     cJSON_AddStringToObject(todo_tool, "type", "function");
     cJSON *todo_func = cJSON_CreateObject();
@@ -768,6 +823,9 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
     }
 
     cJSON_AddItemToArray(tool_array, todo_tool);
+    } else {
+        LOG_INFO("Tool 'TodoWrite' is disabled via KLAWED_DISABLE_TOOLS");
+    }
 
     add_memory_tools(tool_array, TOOL_SCHEMA_MESSAGES);
 
