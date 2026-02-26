@@ -14,6 +14,8 @@
 #include "../data_dir.h"
 #include "../logger.h"
 #include "../tools/tool_bash.h"
+#include "../ui/ui_output.h"
+#include "../spinner_messages.h"
 
 #include <bsd/string.h>
 #include <bsd/stdlib.h>
@@ -172,7 +174,8 @@ static int parse_perpetual_summary(const char *text,
  * responses), or -1 on a fatal allocation error.
  */
 static int dispatch_bash_tool_calls(ConversationState *state,
-                                    ApiResponse *response)
+                                    ApiResponse *response,
+                                    TUIMessageQueue *tui_queue)
 {
     if (!response || response->tool_count == 0) {
         return 0;
@@ -229,6 +232,7 @@ static int dispatch_bash_tool_calls(ConversationState *state,
 
         if (strcmp(tc->name, "Bash") == 0) {
             LOG_DEBUG("perpetual: dispatching Bash tool call id=%s", tc->id);
+            ui_set_status_varied(NULL, tui_queue, SPINNER_CONTEXT_TOOL_RUNNING);
             cJSON *tool_result = tool_bash(tc->parameters, state);
             res->tool_output = tool_result; /* may be NULL on OOM */
             res->is_error    = (tool_result == NULL) ? 1 : 0;
@@ -271,11 +275,13 @@ static int dispatch_bash_tool_calls(ConversationState *state,
  * last_text_out: set to the final assistant text (malloc'd, caller frees).
  * Returns 0 on success, 1 on error.
  */
-static int run_response_loop(ConversationState *state, char **last_text_out)
+static int run_response_loop(ConversationState *state, char **last_text_out,
+                              TUIMessageQueue *tui_queue)
 {
     *last_text_out = NULL;
 
     for (int iteration = 0; iteration < MAX_LOOP_ITERATIONS; iteration++) {
+        ui_set_status_varied(NULL, tui_queue, SPINNER_CONTEXT_API_CALL);
         ApiResponse *response = call_api_with_retries(state);
         if (!response) {
             LOG_ERROR("perpetual: API call failed");
@@ -301,7 +307,7 @@ static int run_response_loop(ConversationState *state, char **last_text_out)
         int tool_count = response->tool_count;
 
         if (tool_count > 0) {
-            int dispatched = dispatch_bash_tool_calls(state, response);
+            int dispatched = dispatch_bash_tool_calls(state, response, tui_queue);
             api_response_free(response);
             if (dispatched < 0) {
                 return 1;
@@ -309,6 +315,11 @@ static int run_response_loop(ConversationState *state, char **last_text_out)
             /* Continue loop to get the next assistant turn. */
         } else {
             /* No tool calls — conversation is complete. */
+            /* Display the final assistant response in the TUI. */
+            if (*last_text_out && tui_queue) {
+                ui_append_line(NULL, tui_queue, "[Assistant]",
+                               *last_text_out, COLOR_PAIR_ASSISTANT);
+            }
             api_response_free(response);
             return 0;
         }
@@ -324,7 +335,8 @@ static int run_response_loop(ConversationState *state, char **last_text_out)
  * Public API
  * -------------------------------------------------------------------------*/
 
-int perpetual_mode_run(ConversationState *state, const char *query)
+int perpetual_mode_run(ConversationState *state, const char *query,
+                       TUIMessageQueue *tui_queue)
 {
     if (!state || !query) {
         LOG_ERROR("perpetual_mode_run: NULL state or query");
@@ -362,7 +374,7 @@ int perpetual_mode_run(ConversationState *state, const char *query)
 
     /* 5. Run the API loop until the assistant stops calling tools. */
     char *final_text = NULL;
-    int loop_rc = run_response_loop(state, &final_text);
+    int loop_rc = run_response_loop(state, &final_text, tui_queue);
     if (loop_rc != 0) {
         free(final_text);
         free(log_path);
