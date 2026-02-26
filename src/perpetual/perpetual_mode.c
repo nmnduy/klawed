@@ -196,8 +196,8 @@ static int dispatch_bash_tool_calls(ConversationState *state,
         /* Zero-initialise each result slot. */
         *res = (InternalContent){0};
         res->type      = INTERNAL_TOOL_RESPONSE;
-        res->tool_id   = tc->id;   /* borrowed — owned by response */
-        res->tool_name = tc->name; /* borrowed — owned by response */
+        res->tool_id   = tc->id   ? strdup(tc->id)   : NULL;
+        res->tool_name = tc->name ? strdup(tc->name) : NULL;
 
         if (strcmp(tc->name, "Bash") == 0) {
             LOG_DEBUG("perpetual: dispatching Bash tool call id=%s", tc->id);
@@ -220,13 +220,10 @@ static int dispatch_bash_tool_calls(ConversationState *state,
 
     int add_rc = add_tool_results(state, results, response->tool_count);
 
-    /* Free the tool_output values we own; do NOT free borrowed id/name. */
-    for (int i = 0; i < response->tool_count; i++) {
-        cJSON_Delete(results[i].tool_output);
-        results[i].tool_output = NULL;
-    }
-    free(results);
-
+    /* On success, add_tool_results takes ownership of results (including
+     * tool_id/tool_name heap-allocated via strdup above, and tool_output cJSON
+     * values).  On failure, free_internal_contents inside add_tool_results
+     * handles cleanup.  Either way do not free results here. */
     if (add_rc != 0) {
         LOG_ERROR("perpetual: add_tool_results failed");
         return -1;
