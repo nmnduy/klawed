@@ -17,6 +17,7 @@
 #include "../compaction.h"
 #include "../sqlite_queue.h"
 #include "../tui.h"
+#include "../perpetual/perpetual_mode.h"
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -950,7 +951,29 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
         return;
     }
 
-    ui_set_status_varied(NULL, ctx->tui_queue, SPINNER_CONTEXT_API_CALL);
+    /* Perpetual mode: each turn is a fully fresh run. */
+    if (ctx->state && ctx->state->is_perpetual_mode) {
+        const char *query = instruction->text ? instruction->text : "";
+        LOG_DEBUG("ai_worker_handle_instruction: perpetual run, query='%s'", query);
+
+        ui_set_status_varied(NULL, ctx->tui_queue, SPINNER_CONTEXT_API_CALL);
+
+        /* Reset state so perpetual_mode_run starts from a clean slate. */
+        clear_conversation(ctx->state);
+
+        int rc = perpetual_mode_run(ctx->state, query);
+        if (rc != 0) {
+            ui_show_error(NULL, ctx->tui_queue, "Perpetual mode run failed");
+        }
+
+        /* Clear again so the next turn starts clean. */
+        clear_conversation(ctx->state);
+
+        ui_set_status(NULL, ctx->tui_queue, "");
+        return;
+    }
+
+
 
     ApiResponse *response = call_api_with_retries(ctx->state);
 

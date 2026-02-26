@@ -1990,8 +1990,14 @@ int main(int argc, char *argv[]) {
 
         // Skip main execution if there was an error
         if (exit_code == 0) {
-            if (is_perpetual_mode) {
-                exit_code = perpetual_mode_run(&state, single_command ? single_command : "");
+            if (is_perpetual_mode && is_single_command_mode) {
+                // One-shot perpetual: prompt given on CLI, run once and exit
+                exit_code = perpetual_mode_run(&state, single_command);
+            } else if (is_perpetual_mode) {
+                // Interactive perpetual: TUI loop where each submission runs a
+                // fresh perpetual_mode_run via the worker thread
+                state.is_perpetual_mode = 1;
+                interactive_mode(&state);
             } else if (is_single_command_mode) {
                 exit_code = oneshot_execute(&state, single_command);
             } else {
