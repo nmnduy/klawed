@@ -21,15 +21,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Tools disabled in perpetual mode.
- * Kept: Bash, Subagent, CheckSubagentProgress, InterruptSubagent, Sleep.
- * Bash  — recon/grep the log, exec child processes
- * Subagent & friends — spawn and manage full action-taking subagents
- * Sleep — wait between subagent progress polls */
-#define PERPETUAL_DISABLED_TOOLS \
-    "Read,Write,Edit,MultiEdit,Glob,Grep,UploadImage," \
-    "TodoWrite,MemoryStore,MemoryRecall,MemorySearch"
-
 /* Maximum iterations for the API response loop (safety bound). */
 #define MAX_LOOP_ITERATIONS 200
 
@@ -319,12 +310,7 @@ int perpetual_mode_run(ConversationState *state, const char *query)
         return 1;
     }
 
-    /* 2. Restrict tools to Bash only. */
-    if (setenv("KLAWED_DISABLE_TOOLS", PERPETUAL_DISABLED_TOOLS, 1) != 0) {
-        LOG_WARN("perpetual_mode_run: setenv KLAWED_DISABLE_TOOLS failed");
-    }
-
-    /* 3. Build system prompt. */
+    /* 2. Build system prompt. */
     long log_size = perpetual_log_size(log_path);
     char *system_prompt = perpetual_prompt_build(log_path, log_size);
     if (!system_prompt) {
@@ -333,15 +319,15 @@ int perpetual_mode_run(ConversationState *state, const char *query)
         return 1;
     }
 
-    /* 4. Set system prompt on state. */
+    /* 3. Set system prompt on state. */
     add_system_message(state, system_prompt);
     free(system_prompt);
     system_prompt = NULL;
 
-    /* 5. Add user message. */
+    /* 4. Add user message. */
     add_user_message(state, query);
 
-    /* 6. Run the API loop until the assistant stops calling tools. */
+    /* 5. Run the API loop until the assistant stops calling tools. */
     char *final_text = NULL;
     int loop_rc = run_response_loop(state, &final_text);
     if (loop_rc != 0) {
@@ -350,7 +336,7 @@ int perpetual_mode_run(ConversationState *state, const char *query)
         return 1;
     }
 
-    /* 7. Parse PERPETUAL_SUMMARY block from the final assistant text. */
+    /* 6. Parse PERPETUAL_SUMMARY block from the final assistant text. */
     char *req_str   = NULL;
     char *sum_str   = NULL;
     char *files_str = NULL;
@@ -378,7 +364,7 @@ int perpetual_mode_run(ConversationState *state, const char *query)
         }
     }
 
-    /* 8. Append session to log (best-effort; do not fail on log error). */
+    /* 7. Append session to log (best-effort; do not fail on log error). */
     if (req_str && sum_str) {
         int log_rc = perpetual_log_append(log_path,
                                           state->session_id,
@@ -391,7 +377,7 @@ int perpetual_mode_run(ConversationState *state, const char *query)
         }
     }
 
-    /* 9. Clean up. */
+    /* 8. Clean up. */
     free(req_str);
     free(sum_str);
     free(files_str);

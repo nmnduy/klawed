@@ -41,7 +41,8 @@ Each request follows four phases:
 
 ## Root LLM Tool Set
 
-The root LLM in perpetual mode has exactly these tools:
+Perpetual mode doesn't enforce a specific tool set — it's up to you to restrict
+tools via `KLAWED_DISABLE_TOOLS` before invoking klawed. The recommended set is:
 
 | Tool | Purpose |
 |------|---------|
@@ -51,8 +52,13 @@ The root LLM in perpetual mode has exactly these tools:
 | `InterruptSubagent` | Stop a stuck subagent |
 | `Sleep` | Wait between progress checks |
 
-All other tools (Read, Write, Edit, Glob, Grep, TodoWrite, Memory*, etc.) are
-disabled. The root LLM is an orchestrator, not a worker — subagents do the work.
+Recommended invocation that restricts to just these tools:
+
+```bash
+KLAWED_PERPETUAL=1 \
+KLAWED_DISABLE_TOOLS="Read,Write,Edit,MultiEdit,Glob,Grep,UploadImage,TodoWrite,MemoryStore,MemoryRecall,MemorySearch" \
+klawed "add rate limiting to the API"
+```
 
 ## perpetual.md Format
 
@@ -81,6 +87,14 @@ Fields:
 
 ```bash
 KLAWED_PERPETUAL=1 klawed "add rate limiting to the API"
+```
+
+With recommended tool restrictions:
+
+```bash
+KLAWED_PERPETUAL=1 \
+KLAWED_DISABLE_TOOLS="Read,Write,Edit,MultiEdit,Glob,Grep,UploadImage,TodoWrite,MemoryStore,MemoryRecall,MemorySearch" \
+klawed "add rate limiting to the API"
 ```
 
 ### Enable via CLI flag
