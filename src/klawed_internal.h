@@ -248,6 +248,9 @@ typedef struct ConversationState {
     // Planning mode flag
     int plan_mode;                  // Whether planning mode is enabled
 
+    // Perpetual mode flag
+    int is_perpetual_mode;          // When set, each user turn runs a fresh perpetual_mode_run
+
     // TUI reference for streaming updates (NULL if not using TUI)
     TUIState *tui;                  // TUI state for real-time streaming display
 
