@@ -7,6 +7,7 @@
 #include "../tools/tool_bash.h"
 #include "../tool_utils.h"
 #include "../process_utils.h"
+#include "../help_modal.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -60,17 +61,29 @@ int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char *comman
         return 0;
     }
 
-    // Check for help command
+    // Check for help command - show the full help modal
     if (strcmp(cmd_copy, "help") == 0) {
-        ui_append_line(tui, queue, "[Help]", "Vim-style commands:", COLOR_PAIR_STATUS);
-        ui_append_line(tui, queue, "[Help]", "  :q, :quit, :wq - Exit klawed", COLOR_PAIR_STATUS);
-        ui_append_line(tui, queue, "[Help]", "  :clear - Clear conversation history", COLOR_PAIR_STATUS);
-        ui_append_line(tui, queue, "[Help]", "  :!<cmd> - Execute shell command (e.g., :!ls)", COLOR_PAIR_STATUS);
-        ui_append_line(tui, queue, "[Help]", "  :re !<cmd> - Execute command and insert output into input box", COLOR_PAIR_STATUS);
-        ui_append_line(tui, queue, "[Help]", "  :vim - Open vim editor (shortcut for :!vim)", COLOR_PAIR_STATUS);
-        ui_append_line(tui, queue, "[Help]", "  :git - Open vim-fugitive (requires vim-fugitive plugin)", COLOR_PAIR_STATUS);
-        ui_append_line(tui, queue, "[Help]", "  :help - Show this help", COLOR_PAIR_STATUS);
         free(cmd_copy);
+
+        if (tui_suspend(tui) != 0) {
+            LOG_ERROR("[CMD_HELP] Failed to suspend TUI");
+            return 0;
+        }
+
+        HelpModalState help_state;
+        if (help_modal_init(&help_state) != 0) {
+            LOG_ERROR("[CMD_HELP] Failed to initialize help modal");
+            tui_resume(tui);
+            return 0;
+        }
+
+        int max_y, max_x;
+        getmaxyx(stdscr, max_y, max_x);
+
+        help_modal_run(&help_state, max_y, max_x);
+        help_modal_cleanup(&help_state);
+        tui_resume(tui);
+
         return 0;
     }
 
