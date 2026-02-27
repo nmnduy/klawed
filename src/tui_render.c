@@ -322,31 +322,15 @@ void render_status_window(TUIState *tui) {
         LOG_FINE("[TUI] No persistence database connection available");
     }
 
-    int total_tokens = prompt_tokens + completion_tokens;
 
     // Show token count when non-zero, regardless of mode
-    // Adaptive format based on screen width and available data:
-    //   Full: "17715↑ 1181↓ (8432↑) tok" (cached tokens shown when width >= 60)
-    //   Mid:  "17715↑ 1181↓ tok"          (width >= 40)
-    //   Min:  "17715↑ tok"                 (width >= 20)
-    if (total_tokens > 0) {
-        if (cached_tokens > 0 && width >= 60) {
-            snprintf(token_str, sizeof(token_str), " %d\xe2\x86\x91 %d\xe2\x86\x93 (%d\xe2\x86\x91) tok",
-                     prompt_tokens, completion_tokens, cached_tokens);
-        } else if (width >= 40) {
-            snprintf(token_str, sizeof(token_str), " %d\xe2\x86\x91 %d\xe2\x86\x93 tok",
-                     prompt_tokens, completion_tokens);
-        } else if (width >= 20) {
-            snprintf(token_str, sizeof(token_str), " %d\xe2\x86\x91 tok",
-                     prompt_tokens);
-        }
-        if (token_str[0] != '\0') {
-            token_str_len = (int)strlen(token_str);
-            token_display_width = utf8_display_width(token_str);
-        }
+    // Format: "17715 tok" (prompt tokens only — output tokens are usually negligible)
+    if (prompt_tokens > 0) {
+        snprintf(token_str, sizeof(token_str), " %d tok", prompt_tokens);
+        token_str_len = (int)strlen(token_str);
+        token_display_width = utf8_display_width(token_str);
         LOG_FINE("[TUI] Rendering token display: %s (mode=%d, width=%d)", token_str, tui->mode, width);
     }
-
     // Prepare help text for NORMAL mode (shown when no active status)
     char help_str[64] = {0};
     int help_str_len = 0;
