@@ -14,7 +14,7 @@
 
 // Default configuration values
 #define DEFAULT_COMPACT_THRESHOLD 75    // 75% of token limit
-#define DEFAULT_KEEP_RECENT 100         // Keep last 100 messages
+#define DEFAULT_KEEP_RECENT 0           // Keep 0 recent messages (rely on compaction notice)
 #define DEFAULT_TOKEN_LIMIT 125000      // Default model token limit (125k)
 
 /**
@@ -348,9 +348,11 @@ void compaction_init_config(CompactionConfig *config, int enabled, const char *m
     }
 
     // Get keep_recent from environment or use default
+    // Supports 0 to keep no recent messages (rely entirely on compaction notice)
     const char *keep_recent_str = getenv("KLAWED_COMPACT_KEEP_RECENT");
-    if (keep_recent_str && atoi(keep_recent_str) > 0) {
-        config->keep_recent = atoi(keep_recent_str);
+    if (keep_recent_str && keep_recent_str[0] != '\0') {
+        int val = atoi(keep_recent_str);
+        config->keep_recent = (val >= 0) ? val : DEFAULT_KEEP_RECENT;
     } else {
         config->keep_recent = DEFAULT_KEEP_RECENT;
     }
@@ -607,8 +609,8 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
     // This allows the first user message and old notices to be archived
     int compact_start = 1; // Start after system message (position 0 is always preserved)
 
-    // Need enough messages to compact: keep_recent + system + notice + recent
-    // Structure after compaction: [system] [new_notice] [recent messages]
+    // Need enough messages to compact: system + notice + at least 1 message to archive
+    // Structure after compaction: [system] [new_notice] (+ keep_recent recent messages if > 0)
     // We always preserve: system (1) + new_notice (1) + keep_recent recent messages
     int min_messages_to_preserve = 2 + config->keep_recent;
     if (state->count <= min_messages_to_preserve) {
@@ -616,8 +618,8 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         return 0;
     }
 
-    // Calculate compact_end to keep keep_recent messages at the end
-    // The messages we keep are: [0:compact_start-1] (preserved) + [compact_end+1:count-1] (recent)
+    // Calculate compact_end: compact everything after system message except keep_recent tail
+    // When keep_recent=0, compact_end = state->count - 1 (compact all non-system messages)
     int compact_end = state->count - config->keep_recent - 1; // Last index to compact
 
     if (compact_end < compact_start) {
@@ -810,7 +812,7 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
     // Reorganize messages:
     // [0: system] [1..compact_end: compacted] [compact_end+1..count-1: recent]
     // becomes:
-    // [0: system] [1: notice] [2..keep_recent+1: recent messages]
+    // [0: system] [1: notice] [2..keep_recent+1: recent messages] (recent_count=0 when keep_recent=0)
 
     // Recent messages are from (compact_end + 1) to (state->count - 1)
     int recent_start = compact_end + 1;
