@@ -441,11 +441,11 @@ void render_status_window(TUIState *tui) {
     // Token usage
     if (token_str_len > 0 && right_col + token_display_width <= width) {
         if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
         }
         mvwaddnstr(tui->wm.status_win, 0, right_col, token_str, token_str_len);
         if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_ASSISTANT));
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
         }
         right_col += token_display_width;
     }
