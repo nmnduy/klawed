@@ -23,7 +23,7 @@ When enabled, auto-compaction monitors the conversation token usage and triggers
    - Tool usage summary
    - Token usage statistics (before/after, freed)
    - Context usage percentage
-6. **Continue**: Recent messages (default: last 20) remain in active context
+6. **Continue**: No recent messages are kept by default — the compaction notice and next user message are the entire new context
 7. **Retrieve**: AI can use `MemorySearch` tool to retrieve relevant past context
 
 ## Token Tracking
@@ -59,7 +59,7 @@ export KLAWED_AUTO_COMPACT=1              # Enable (1/true/yes)
 
 # Configure thresholds
 export KLAWED_COMPACT_THRESHOLD=75        # Trigger at 75% of model token limit (default: 75)
-export KLAWED_COMPACT_KEEP_RECENT=100     # Keep last 100 messages (default: 100)
+export KLAWED_COMPACT_KEEP_RECENT=0       # Keep 0 recent messages (default: 0 - rely on compaction notice)
 export KLAWED_CONTEXT_LIMIT=125000  # Override model token limit (default: 125000)
 ```
 
@@ -72,9 +72,9 @@ export KLAWED_CONTEXT_LIMIT=125000  # Override model token limit (default: 12500
   - Example: 80% threshold on 125k model = triggers at 100,000 tokens
 
 - **`KLAWED_COMPACT_KEEP_RECENT`**: Number of recent messages to keep after compaction
-  - Default: 100
-  - Minimum: 1 (always keeps system message)
-  - These messages remain in the active context window
+  - Default: 0 (keep no recent messages — rely entirely on the compaction notice and next user message)
+  - Minimum: 0
+  - These messages remain in the active context window alongside the compaction notice
 
 - **`KLAWED_CONTEXT_LIMIT`**: Override the model's token limit
   - Default: 125000 (125k tokens)
