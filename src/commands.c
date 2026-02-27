@@ -710,7 +710,7 @@ static Command help_cmd = {
     .description = "Show this help",
     .handler = cmd_help,
     .completer = NULL,
-    .needs_terminal = 0
+    .needs_terminal = 1
 };
 
 static Command voice_cmd = {
