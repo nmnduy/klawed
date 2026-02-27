@@ -975,6 +975,7 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
 
 
 
+    ui_set_status_varied(NULL, ctx->tui_queue, SPINNER_CONTEXT_API_CALL);
     ApiResponse *response = call_api_with_retries(ctx->state);
 
     ui_set_status(NULL, ctx->tui_queue, "");
