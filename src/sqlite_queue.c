@@ -1046,6 +1046,14 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
         return -1;
     }
 
+    // Clear any stale interrupt flag from a previous Stop before starting a new turn.
+    // Without this, call_api_with_retries' pre-call check fires immediately and the
+    // user's message is silently dropped (see docs/bug-interrupt-flag-not-cleared.md).
+    if (state->interrupt_requested) {
+        LOG_INFO("SQLite Queue: Clearing stale interrupt flag at start of new turn");
+        state->interrupt_requested = 0;
+    }
+
     LOG_INFO("SQLite Queue: Processing interactive message: %.*s",
              (int)(strlen(user_input) > 200 ? 200 : strlen(user_input)), user_input);
 
