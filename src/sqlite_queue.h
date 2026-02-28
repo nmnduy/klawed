@@ -158,30 +158,17 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
 int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *state);
 
 /**
- * Seed conversation history from existing messages in the database.
- * Called automatically at daemon boot to restore conversation context.
- * Reads at most 100 previous messages (sent=1) ordered chronologically.
- *
- * Handles the following message types:
- * - TEXT: User and assistant text messages
- * - TOOL: Assistant tool call requests (paired with TOOL_RESULT)
- * - TOOL_RESULT: Tool execution results (paired with TOOL calls)
- *
- * Tool Call Pairing:
- * - TOOL messages are tracked and paired with their corresponding TOOL_RESULT
- * - If a TOOL lacks a matching TOOL_RESULT (interrupted execution), a synthetic
- *   error result is injected to maintain API validity
- * - Orphaned TOOL_RESULT messages (no matching TOOL) are ignored
- *
- * Clients can pre-seed conversation by inserting messages with sent=1:
- * - User messages: sender='client', receiver='klawed'
- * - Assistant messages: sender='klawed', receiver='client'
+ * Restore conversation history from an existing SQLite queue database.
+ * Called automatically at daemon startup to resume after a crash or restart.
+ * Loads up to 200 most recent processed messages (sent=1) and reconstructs
+ * the conversation: user TEXT turns, assistant TEXT+TOOL turns, tool results.
+ * Interrupted tool calls (no matching TOOL_RESULT) get synthetic error results.
  *
  * @param ctx SQLite queue context
- * @param state Conversation state to seed
- * @return Number of messages seeded, or -1 on error
+ * @param state Conversation state to populate
+ * @return Number of message blocks restored, or -1 on error
  */
-int sqlite_queue_seed_conversation(SQLiteQueueContext *ctx, struct ConversationState *state);
+int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct ConversationState *state);
 
 /**
  * Check if SQLite queue is available (always true since SQLite is required)

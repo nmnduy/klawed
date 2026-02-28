@@ -197,12 +197,35 @@ export KLAWED_SQLITE_SENDER="klawed"
 export KLAWED_SQLITE_SENDER="my_agent"
 ```
 
-## Conversation Seeding (Currently Disabled)
+## Conversation Restore (Crash Recovery)
 
-> **Note**: Conversation seeding is currently disabled to prevent tool use/result mismatch errors that can occur when user messages are interleaved with tool execution in the message history. Klawed starts with a fresh conversation state in daemon mode.
+When klawed starts with an existing SQLite queue database, it automatically restores the conversation history before polling for new messages. This enables seamless crash recovery — klawed can resume a conversation exactly where it left off.
 
-Klawed previously supported seeding the conversation with pre-existing messages at boot time. This feature may be re-enabled in a future version with improved message ordering logic.
+### How It Works
 
+At daemon startup, klawed reads up to 200 most recent processed messages (`sent=1`) ordered chronologically and reconstructs the internal conversation state:
+
+- **User TEXT messages** (`sender != klawed`) → user turns
+- **Assistant TEXT messages** (`sender = klawed`) → assistant text content
+- **TOOL messages** (`sender = klawed`) → assistant tool call content (grouped with adjacent TEXT)
+- **TOOL_RESULT messages** (`sender = klawed`) → tool result user turns
+- **Other types** (API_CALL, END_AI_TURN, ERROR, AUTO_COMPACTION) → ignored
+
+### Tool Call Grouping
+
+Adjacent TEXT and TOOL messages from klawed are grouped into a single assistant message turn. TOOL_RESULT messages become user turns. This matches the exact structure the LLM API expects.
+
+### Interrupted Tool Calls
+
+If klawed crashed mid-tool-execution (a TOOL message exists with no corresponding TOOL_RESULT), synthetic error results are injected to keep the conversation API-valid:
+
+```json
+{"error": "Tool execution was interrupted - klawed restarted before result was received"}
+```
+
+### Unprocessed Messages
+
+Messages with `sent=0` (klawed output that was in-flight when it crashed, e.g. API_CALL) are **not** restored — only `sent=1` messages are loaded. This means if klawed crashed while waiting for an LLM response, the last user message is restored and klawed will re-answer it from scratch.
 ## Message Format Details
 
 ### Input Messages (Client → Klawed)

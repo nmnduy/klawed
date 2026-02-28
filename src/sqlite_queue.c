@@ -80,24 +80,14 @@
 #define COUNT_UNREAD_SQL \
     "SELECT COUNT(*) FROM messages WHERE sender = ? AND sent = 0;"
 
-// Select seed messages for conversation history (most recent 100, ordered chronologically)
-// Returns messages where sent=1 (already processed) for seeding conversation at boot
-// Note: We now load all message types (TEXT, TOOL, TOOL_RESULT) and pair them properly
-#define SELECT_SEED_MESSAGES_SQL \
-    "SELECT sender, message FROM (" \
-    "  SELECT sender, message, created_at FROM messages " \
-    "  WHERE sent = 1 AND messageType_filter = 'TEXT' " \
-    "  ORDER BY created_at DESC LIMIT 100" \
-    ") ORDER BY created_at ASC;"
-
-// Simpler version that works without messageType filtering (we filter in code)
-// Loads all message types so we can properly pair TOOL with TOOL_RESULT
-#define SELECT_SEED_MESSAGES_SIMPLE_SQL \
-    "SELECT sender, message FROM (" \
-    "  SELECT sender, message, created_at FROM messages " \
+// Restore conversation from the last N message rows (sent=1), ordered chronologically.
+// Loads TEXT, TOOL, and TOOL_RESULT types; other types are filtered in code.
+#define SELECT_RESTORE_MESSAGES_SQL \
+    "SELECT id, sender, message FROM (" \
+    "  SELECT id, sender, message FROM messages " \
     "  WHERE sent = 1 " \
-    "  ORDER BY created_at DESC LIMIT 100" \
-    ") ORDER BY created_at ASC;"
+    "  ORDER BY id DESC LIMIT 200" \
+    ") ORDER BY id ASC;"
 
 // Forward declarations
 #ifndef TEST_BUILD
@@ -1305,375 +1295,314 @@ static int sqlite_queue_handle_compact_trigger(SQLiteQueueContext *ctx, struct C
 #endif // TEST_BUILD
 
 /**
- * Helper structure to track pending tool calls during seeding.
- * We need to pair TOOL messages with their TOOL_RESULT to maintain
- * conversation integrity for the LLM API.
+ * Pending assistant turn accumulator used during conversation restore.
+ * Collects TEXT and TOOL_CALL content blocks belonging to one assistant
+ * turn before committing them to ConversationState.
  */
 typedef struct {
-    char *tool_id;
-    char *tool_name;
-    cJSON *tool_params;  // Owned, must be freed
-} PendingToolCall;
+    InternalContent *contents;
+    int count;
+    int capacity;
+} PendingAssistant;
 
-/**
- * Seed conversation history from existing messages in the database.
- * Called automatically at daemon boot to restore conversation context.
- * Handles TEXT, TOOL, and TOOL_RESULT messages with proper pairing.
- *
- * @param ctx SQLite queue context
- * @param state Conversation state to seed
- * @return Number of messages seeded, or -1 on error
+static int pending_assistant_append(PendingAssistant *pa, InternalContent item) {
+    if (pa->count >= pa->capacity) {
+        int new_cap = pa->capacity == 0 ? 4 : pa->capacity * 2;
+        InternalContent *tmp = reallocarray(pa->contents, (size_t)new_cap, sizeof(InternalContent));
+        if (!tmp) return -1;
+        pa->contents = tmp;
+        pa->capacity = new_cap;
+    }
+    pa->contents[pa->count++] = item;
+    return 0;
+}
+
+static void pending_assistant_free(PendingAssistant *pa) {
+    for (int i = 0; i < pa->count; i++) {
+        free(pa->contents[i].text);
+        free(pa->contents[i].tool_id);
+        free(pa->contents[i].tool_name);
+        if (pa->contents[i].tool_params) cJSON_Delete(pa->contents[i].tool_params);
+        if (pa->contents[i].tool_output) cJSON_Delete(pa->contents[i].tool_output);
+    }
+    free(pa->contents);
+    pa->contents = NULL;
+    pa->count = 0;
+    pa->capacity = 0;
+}
+
+/*
+ * Flush the pending assistant turn into state as a single MSG_ASSISTANT message.
+ * Transfers ownership of contents to state on success; resets pa.
+ * Returns 0 on success, -1 if MAX_MESSAGES reached (pa is freed on failure).
  */
+static int flush_pending_assistant(ConversationState *state, PendingAssistant *pa) {
+    if (pa->count == 0) return 0;
 
-int sqlite_queue_seed_conversation(SQLiteQueueContext *ctx, struct ConversationState *state) {
-    if (!ctx || !state) {
-        LOG_ERROR("SQLite Queue: Invalid parameters for seed_conversation");
+    if (state->count >= MAX_MESSAGES) {
+        LOG_ERROR("SQLite Queue restore: MAX_MESSAGES reached, cannot flush assistant turn");
+        pending_assistant_free(pa);
         return -1;
     }
 
-    // Open database if not already open
+    InternalMessage *msg = &state->messages[state->count];
+    msg->role = MSG_ASSISTANT;
+    msg->contents = pa->contents;
+    msg->content_count = pa->count;
+    state->count++;
+
+    /* Transfer ownership: reset pa without freeing contents */
+    pa->contents = NULL;
+    pa->count = 0;
+    pa->capacity = 0;
+
+    return 0;
+}
+
+/**
+ * Restore conversation history from an existing SQLite queue database.
+ * Called automatically at daemon startup to resume after a crash or restart.
+ * Loads up to 200 most recent processed messages (sent=1) and reconstructs
+ * the conversation: user TEXT turns, assistant TEXT+TOOL turns, tool results.
+ * Interrupted tool calls (no matching TOOL_RESULT) get synthetic error results.
+ *
+ * @param ctx SQLite queue context
+ * @param state Conversation state to populate
+ * @return Number of message blocks restored, or -1 on error
+ */
+int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct ConversationState *state) {
+    if (!ctx || !state) {
+        LOG_ERROR("SQLite Queue: restore_conversation: invalid parameters");
+        return -1;
+    }
+
     if (!ctx->db_handle && sqlite_queue_open_db(ctx) != 0) {
         return -1;
     }
 
     sqlite3 *db = (sqlite3 *)ctx->db_handle;
 
-    LOG_INFO("SQLite Queue: Checking for seed messages to restore conversation history");
-
-    // Prepare select statement
     sqlite3_stmt *stmt = NULL;
-    int rc = sqlite3_prepare_v2(db, SELECT_SEED_MESSAGES_SIMPLE_SQL, -1, &stmt, NULL);
+    int rc = sqlite3_prepare_v2(db, SELECT_RESTORE_MESSAGES_SQL, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
-        LOG_ERROR("SQLite Queue: Failed to prepare seed query: %s", sqlite3_errmsg(db));
+        LOG_ERROR("SQLite Queue: restore_conversation: prepare failed: %s", sqlite3_errmsg(db));
         return -1;
     }
 
-    int seeded_count = 0;
-
-    // Track pending tool calls that need results
-    // We use a simple array since we expect few pending calls at any time
-    PendingToolCall pending_tools[16] = {0};
-    int pending_count = 0;
-    const int max_pending = 16;
+    PendingAssistant pa = {0};
+    int restored = 0;
 
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-        const char *sender = (const char *)sqlite3_column_text(stmt, 0);
-        const char *message = (const char *)sqlite3_column_text(stmt, 1);
+        const char *sender  = (const char *)sqlite3_column_text(stmt, 1);
+        const char *message = (const char *)sqlite3_column_text(stmt, 2);
+        if (!sender || !message) continue;
 
-        if (!sender || !message) {
-            continue;
-        }
-
-        // Parse JSON message
         cJSON *json = cJSON_Parse(message);
-        if (!json) {
-            LOG_DEBUG("SQLite Queue: Skipping invalid JSON message during seeding");
-            continue;
-        }
+        if (!json) continue;
 
-        cJSON *message_type = cJSON_GetObjectItem(json, "messageType");
-        if (!message_type || !cJSON_IsString(message_type)) {
-            cJSON_Delete(json);
-            continue;
-        }
+        cJSON *jtype = cJSON_GetObjectItem(json, "messageType");
+        if (!jtype || !cJSON_IsString(jtype)) { cJSON_Delete(json); continue; }
+        const char *mt = jtype->valuestring;
 
-        const char *msg_type = message_type->valuestring;
-        int is_from_klawed = (strcmp(sender, ctx->sender_name) == 0);
+        int from_klawed = (strcmp(sender, ctx->sender_name) == 0);
 
-        // Handle TEXT messages
-        if (strcmp(msg_type, "TEXT") == 0) {
-            cJSON *content = cJSON_GetObjectItem(json, "content");
-            if (!content || !cJSON_IsString(content)) {
-                cJSON_Delete(json);
-                continue;
-            }
+        if (strcmp(mt, "TEXT") == 0) {
+            cJSON *jcontent = cJSON_GetObjectItem(json, "content");
+            if (!jcontent || !cJSON_IsString(jcontent)) { cJSON_Delete(json); continue; }
+            const char *text = jcontent->valuestring;
 
-            const char *text = content->valuestring;
-
-            // Skip empty or whitespace-only content
+            /* Skip empty / whitespace-only content */
             const char *p = text;
             while (*p && isspace((unsigned char)*p)) p++;
-            if (*p == '\0') {
-                cJSON_Delete(json);
-                continue;
-            }
+            if (*p == '\0') { cJSON_Delete(json); continue; }
 
-            if (is_from_klawed) {
-                // This is a message FROM klawed (assistant response with text)
-                if (state->count < MAX_MESSAGES) {
-                    InternalMessage *msg = &state->messages[state->count];
-                    msg->role = MSG_ASSISTANT;
-                    msg->content_count = 1;
-                    msg->contents = reallocarray(NULL, 1, sizeof(InternalContent));
-                    if (msg->contents) {
-                        memset(msg->contents, 0, sizeof(InternalContent));
-                        msg->contents[0].type = INTERNAL_TEXT;
-                        msg->contents[0].text = strdup(text);
-                        if (msg->contents[0].text) {
-                            state->count++;
-                            seeded_count++;
-                            LOG_DEBUG("SQLite Queue: Seeded assistant TEXT message");
-                        } else {
-                            free(msg->contents);
-                            msg->contents = NULL;
-                            msg->content_count = 0;
-                        }
-                    }
-                }
-            } else {
-                // This is a message TO klawed (user input)
-                // First, check if we have any pending tool calls without results.
-                // If so, this means the conversation was interrupted before the tool
-                // results were sent. We must inject synthetic error results to
-                // maintain API validity, then clear the pending list.
-                if (pending_count > 0) {
-                    LOG_WARN("SQLite Queue: %d pending tool call(s) without results found before user message, injecting synthetic errors", pending_count);
-
-                    if (state->count < MAX_MESSAGES && pending_count <= max_pending) {
-                        InternalContent *results = reallocarray(NULL, (size_t)pending_count, sizeof(InternalContent));
-                        if (results) {
-                            memset(results, 0, (size_t)pending_count * sizeof(InternalContent));
-
-                            for (int i = 0; i < pending_count; i++) {
-                                results[i].type = INTERNAL_TOOL_RESPONSE;
-                                results[i].tool_id = pending_tools[i].tool_id;
-                                results[i].tool_name = pending_tools[i].tool_name;
-                                results[i].is_error = 1;
-                                results[i].tool_output = cJSON_CreateObject();
-                                cJSON_AddStringToObject(results[i].tool_output, "error",
-                                    "Tool execution was interrupted - no result received before next user message");
-                                // Clear the entry so we don't free the strings we just transferred
-                                pending_tools[i].tool_id = NULL;
-                                pending_tools[i].tool_name = NULL;
-                                pending_tools[i].tool_params = NULL;
-                            }
-
-                            InternalMessage *msg = &state->messages[state->count];
-                            msg->role = MSG_USER;
-                            msg->contents = results;
-                            msg->content_count = pending_count;
-                            state->count++;
-                            seeded_count++;
-                            LOG_DEBUG("SQLite Queue: Added %d synthetic tool error results", pending_count);
-                        }
-                    }
-
-                    // Free any remaining pending tool data
-                    for (int i = 0; i < pending_count; i++) {
-                        free(pending_tools[i].tool_id);
-                        free(pending_tools[i].tool_name);
-                        if (pending_tools[i].tool_params) {
-                            cJSON_Delete(pending_tools[i].tool_params);
-                        }
-                    }
-                    pending_count = 0;
-                }
-
-                add_user_message(state, text);
-                seeded_count++;
-                LOG_DEBUG("SQLite Queue: Seeded user TEXT message");
-            }
-        }
-        // Handle TOOL messages (assistant requesting tool execution)
-        else if (strcmp(msg_type, "TOOL") == 0) {
-            if (!is_from_klawed) {
-                // TOOL messages should only come from klawed (assistant)
-                LOG_WARN("SQLite Queue: Ignoring TOOL message from non-klawed sender: %s", sender);
-                cJSON_Delete(json);
-                continue;
-            }
-
-            if (pending_count >= max_pending) {
-                LOG_WARN("SQLite Queue: Too many pending tool calls, dropping oldest");
-                // Drop the oldest pending tool
-                free(pending_tools[0].tool_id);
-                free(pending_tools[0].tool_name);
-                if (pending_tools[0].tool_params) {
-                    cJSON_Delete(pending_tools[0].tool_params);
-                }
-                // Shift remaining
-                for (int i = 1; i < pending_count; i++) {
-                    pending_tools[i - 1] = pending_tools[i];
-                }
-                pending_count--;
-            }
-
-            cJSON *tool_id = cJSON_GetObjectItem(json, "toolId");
-            cJSON *tool_name = cJSON_GetObjectItem(json, "toolName");
-            cJSON *tool_params = cJSON_GetObjectItem(json, "toolParameters");
-
-            if (!tool_id || !cJSON_IsString(tool_id) ||
-                !tool_name || !cJSON_IsString(tool_name)) {
-                LOG_WARN("SQLite Queue: TOOL message missing required fields");
-                cJSON_Delete(json);
-                continue;
-            }
-
-            pending_tools[pending_count].tool_id = strdup(tool_id->valuestring);
-            pending_tools[pending_count].tool_name = strdup(tool_name->valuestring);
-            if (tool_params && cJSON_IsObject(tool_params)) {
-                pending_tools[pending_count].tool_params = cJSON_Duplicate(tool_params, 1);
-            } else {
-                pending_tools[pending_count].tool_params = cJSON_CreateObject();
-            }
-            pending_count++;
-
-            LOG_DEBUG("SQLite Queue: Queued pending TOOL call: %s (id=%s)",
-                     tool_name->valuestring, tool_id->valuestring);
-        }
-        // Handle TOOL_RESULT messages (result of tool execution)
-        else if (strcmp(msg_type, "TOOL_RESULT") == 0) {
-            if (is_from_klawed) {
-                // TOOL_RESULT messages should come from client (via klawed forwarding)
-                // but they represent user-side content
-                LOG_WARN("SQLite Queue: Ignoring TOOL_RESULT message from klawed sender (should be from client)");
-                cJSON_Delete(json);
-                continue;
-            }
-
-            cJSON *tool_id = cJSON_GetObjectItem(json, "toolId");
-            cJSON *tool_name = cJSON_GetObjectItem(json, "toolName");
-            cJSON *tool_output = cJSON_GetObjectItem(json, "toolOutput");
-            cJSON *is_error = cJSON_GetObjectItem(json, "isError");
-
-            if (!tool_id || !cJSON_IsString(tool_id)) {
-                LOG_WARN("SQLite Queue: TOOL_RESULT message missing toolId");
-                cJSON_Delete(json);
-                continue;
-            }
-
-            // Find matching pending tool call
-            int found_idx = -1;
-            for (int i = 0; i < pending_count; i++) {
-                if (pending_tools[i].tool_id &&
-                    strcmp(pending_tools[i].tool_id, tool_id->valuestring) == 0) {
-                    found_idx = i;
+            if (from_klawed) {
+                /* Assistant text: accumulate into pending assistant turn */
+                InternalContent c = {0};
+                c.type = INTERNAL_TEXT;
+                c.text = strdup(text);
+                if (!c.text || pending_assistant_append(&pa, c) != 0) {
+                    free(c.text);
+                    LOG_ERROR("SQLite Queue: restore: OOM appending assistant text");
+                    cJSON_Delete(json);
                     break;
                 }
+            } else {
+                /* User text: flush pending assistant turn first, then add user message */
+                if (flush_pending_assistant(state, &pa) != 0) {
+                    cJSON_Delete(json);
+                    break;
+                }
+                if (state->count < MAX_MESSAGES) {
+                    add_user_message(state, text);
+                    restored++;
+                }
             }
 
-            if (found_idx < 0) {
-                // Orphaned TOOL_RESULT - no matching TOOL call found
-                // This can happen if the conversation was interrupted or cleaned up
-                LOG_WARN("SQLite Queue: TOOL_RESULT with id=%s has no matching TOOL call, ignoring",
-                        tool_id->valuestring);
+        } else if (strcmp(mt, "TOOL") == 0 && from_klawed) {
+            /* Assistant tool call: add to pending assistant turn */
+            cJSON *jtool_id     = cJSON_GetObjectItem(json, "toolId");
+            cJSON *jtool_name   = cJSON_GetObjectItem(json, "toolName");
+            cJSON *jtool_params = cJSON_GetObjectItem(json, "toolParameters");
+
+            if (!jtool_id || !cJSON_IsString(jtool_id) ||
+                !jtool_name || !cJSON_IsString(jtool_name)) {
+                LOG_WARN("SQLite Queue: restore: TOOL missing toolId/toolName, skipping");
                 cJSON_Delete(json);
                 continue;
             }
 
-            // Build tool result content
-            InternalContent result = {0};
-            result.type = INTERNAL_TOOL_RESPONSE;
-            result.tool_id = strdup(tool_id->valuestring);
-            result.tool_name = strdup(tool_name && cJSON_IsString(tool_name) ?
-                                      tool_name->valuestring : "unknown");
-            result.is_error = (is_error && cJSON_IsBool(is_error)) ? is_error->valueint : 0;
+            InternalContent c = {0};
+            c.type        = INTERNAL_TOOL_CALL;
+            c.tool_id     = strdup(jtool_id->valuestring);
+            c.tool_name   = strdup(jtool_name->valuestring);
+            c.tool_params = (jtool_params && cJSON_IsObject(jtool_params))
+                            ? cJSON_Duplicate(jtool_params, 1)
+                            : cJSON_CreateObject();
 
-            if (tool_output && !cJSON_IsNull(tool_output)) {
-                result.tool_output = cJSON_Duplicate(tool_output, 1);
-            } else {
-                result.tool_output = cJSON_CreateObject();
+            if (!c.tool_id || !c.tool_name || !c.tool_params ||
+                pending_assistant_append(&pa, c) != 0) {
+                free(c.tool_id);
+                free(c.tool_name);
+                if (c.tool_params) cJSON_Delete(c.tool_params);
+                LOG_ERROR("SQLite Queue: restore: OOM appending tool call");
+                cJSON_Delete(json);
+                break;
             }
 
-            // Remove this tool from pending and shift remaining
-            free(pending_tools[found_idx].tool_id);
-            free(pending_tools[found_idx].tool_name);
-            if (pending_tools[found_idx].tool_params) {
-                cJSON_Delete(pending_tools[found_idx].tool_params);
+        } else if (strcmp(mt, "TOOL_RESULT") == 0 && from_klawed) {
+            /* Tool result: flush pending assistant turn, then add MSG_USER with result */
+            if (flush_pending_assistant(state, &pa) != 0) {
+                cJSON_Delete(json);
+                break;
             }
 
-            for (int i = found_idx + 1; i < pending_count; i++) {
-                pending_tools[i - 1] = pending_tools[i];
-            }
-            pending_count--;
+            cJSON *jtool_id     = cJSON_GetObjectItem(json, "toolId");
+            cJSON *jtool_name   = cJSON_GetObjectItem(json, "toolName");
+            cJSON *jtool_output = cJSON_GetObjectItem(json, "toolOutput");
+            cJSON *jis_error    = cJSON_GetObjectItem(json, "isError");
 
-            // Add the tool result as a user message
+            if (!jtool_id || !cJSON_IsString(jtool_id)) {
+                LOG_WARN("SQLite Queue: restore: TOOL_RESULT missing toolId, skipping");
+                cJSON_Delete(json);
+                continue;
+            }
+
             if (state->count < MAX_MESSAGES) {
-                InternalContent *results = reallocarray(NULL, 1, sizeof(InternalContent));
-                if (results) {
-                    *results = result;
-
-                    InternalMessage *msg = &state->messages[state->count];
-                    msg->role = MSG_USER;
-                    msg->contents = results;
-                    msg->content_count = 1;
-                    state->count++;
-                    seeded_count++;
-                    LOG_DEBUG("SQLite Queue: Seeded TOOL_RESULT for %s", result.tool_name);
-                } else {
-                    // Free result on allocation failure
-                    free(result.tool_id);
-                    free(result.tool_name);
-                    if (result.tool_output) cJSON_Delete(result.tool_output);
+                InternalContent *result = calloc(1, sizeof(InternalContent));
+                if (!result) {
+                    LOG_ERROR("SQLite Queue: restore: OOM allocating tool result");
+                    cJSON_Delete(json);
+                    break;
                 }
-            } else {
-                // Free result if we can't add it
-                free(result.tool_id);
-                free(result.tool_name);
-                if (result.tool_output) cJSON_Delete(result.tool_output);
+                result->type        = INTERNAL_TOOL_RESPONSE;
+                result->tool_id     = strdup(jtool_id->valuestring);
+                result->tool_name   = strdup(jtool_name && cJSON_IsString(jtool_name)
+                                             ? jtool_name->valuestring : "unknown");
+                result->is_error    = (jis_error && cJSON_IsBool(jis_error))
+                                      ? jis_error->valueint : 0;
+                result->tool_output = (jtool_output && !cJSON_IsNull(jtool_output))
+                                      ? cJSON_Duplicate(jtool_output, 1)
+                                      : cJSON_CreateObject();
+
+                if (!result->tool_id || !result->tool_name || !result->tool_output) {
+                    free(result->tool_id);
+                    free(result->tool_name);
+                    if (result->tool_output) cJSON_Delete(result->tool_output);
+                    free(result);
+                    LOG_ERROR("SQLite Queue: restore: OOM allocating tool result fields");
+                    cJSON_Delete(json);
+                    break;
+                }
+
+                InternalMessage *msg = &state->messages[state->count];
+                msg->role          = MSG_USER;
+                msg->contents      = result;
+                msg->content_count = 1;
+                state->count++;
+                restored++;
             }
         }
-        // Ignore other message types (END_AI_TURN, ERROR, AUTO_COMPACTION, API_CALL, etc.)
+        /* Ignore API_CALL, END_AI_TURN, ERROR, AUTO_COMPACTION, etc. */
 
         cJSON_Delete(json);
     }
 
     sqlite3_finalize(stmt);
 
-    // Handle any remaining pending tool calls without results
-    // These represent interrupted tool executions - we need to inject synthetic
-    // error results to maintain API validity
-    if (pending_count > 0) {
-        LOG_WARN("SQLite Queue: %d pending tool call(s) without results at end of seeding, injecting synthetic errors", pending_count);
+    /* Flush any remaining pending assistant content (e.g. last text response) */
+    if (pa.count > 0) {
+        /* Check for tool calls without results (crash mid-tool-execution) */
+        int tool_call_count = 0;
+        for (int i = 0; i < pa.count; i++) {
+            if (pa.contents[i].type == INTERNAL_TOOL_CALL) tool_call_count++;
+        }
 
-        if (state->count < MAX_MESSAGES && pending_count <= max_pending) {
-            InternalContent *results = reallocarray(NULL, (size_t)pending_count, sizeof(InternalContent));
-            if (results) {
-                memset(results, 0, (size_t)pending_count * sizeof(InternalContent));
-
-                for (int i = 0; i < pending_count; i++) {
-                    results[i].type = INTERNAL_TOOL_RESPONSE;
-                    results[i].tool_id = pending_tools[i].tool_id;
-                    results[i].tool_name = pending_tools[i].tool_name;
-                    results[i].is_error = 1;
-                    results[i].tool_output = cJSON_CreateObject();
-                    cJSON_AddStringToObject(results[i].tool_output, "error",
-                        "Tool execution was interrupted - no result received before conversation ended");
-                    // Clear the entry so we don't free the strings we just transferred
-                    pending_tools[i].tool_id = NULL;
-                    pending_tools[i].tool_name = NULL;
+        /* Collect tool_id/tool_name before flush transfers ownership */
+        char *interrupted_ids[16]   = {NULL};
+        char *interrupted_names[16] = {NULL};
+        int ni = 0;
+        if (tool_call_count > 0 && tool_call_count <= 16) {
+            for (int i = 0; i < pa.count && ni < 16; i++) {
+                if (pa.contents[i].type == INTERNAL_TOOL_CALL) {
+                    interrupted_ids[ni]   = strdup(pa.contents[i].tool_id
+                                           ? pa.contents[i].tool_id   : "");
+                    interrupted_names[ni] = strdup(pa.contents[i].tool_name
+                                           ? pa.contents[i].tool_name : "unknown");
+                    ni++;
                 }
-
-                InternalMessage *msg = &state->messages[state->count];
-                msg->role = MSG_USER;
-                msg->contents = results;
-                msg->content_count = pending_count;
-                state->count++;
-                seeded_count++;
-                LOG_DEBUG("SQLite Queue: Added %d synthetic tool error results at end", pending_count);
             }
         }
 
-        // Free any remaining pending tool data
-        for (int i = 0; i < pending_count; i++) {
-            free(pending_tools[i].tool_id);
-            free(pending_tools[i].tool_name);
-            if (pending_tools[i].tool_params) {
-                cJSON_Delete(pending_tools[i].tool_params);
+        if (flush_pending_assistant(state, &pa) == 0) {
+            restored++;
+
+            /* Inject synthetic error results for interrupted tool calls */
+            if (tool_call_count > 0 && tool_call_count <= 16 && state->count < MAX_MESSAGES) {
+                InternalContent *results = calloc((size_t)tool_call_count, sizeof(InternalContent));
+                if (results) {
+                    for (int i = 0; i < tool_call_count; i++) {
+                        results[i].type        = INTERNAL_TOOL_RESPONSE;
+                        results[i].tool_id     = interrupted_ids[i];
+                        results[i].tool_name   = interrupted_names[i];
+                        results[i].is_error    = 1;
+                        results[i].tool_output = cJSON_CreateObject();
+                        cJSON_AddStringToObject(results[i].tool_output, "error",
+                            "Tool execution was interrupted - klawed restarted before result was received");
+                        /* Ownership transferred to results array */
+                        interrupted_ids[i]   = NULL;
+                        interrupted_names[i] = NULL;
+                    }
+                    InternalMessage *msg = &state->messages[state->count];
+                    msg->role          = MSG_USER;
+                    msg->contents      = results;
+                    msg->content_count = tool_call_count;
+                    state->count++;
+                    restored++;
+                    LOG_WARN("SQLite Queue: restore: injected %d synthetic tool error(s) for interrupted calls",
+                             tool_call_count);
+                }
             }
+        }
+
+        /* Free any ids/names not transferred (OOM path) */
+        for (int i = 0; i < ni; i++) {
+            free(interrupted_ids[i]);
+            free(interrupted_names[i]);
         }
     }
 
-    if (seeded_count > 0) {
-        LOG_INFO("SQLite Queue: Seeded %d message(s) from database history", seeded_count);
-        printf("SQLite Queue: Restored %d message(s) from conversation history\n", seeded_count);
+    if (restored > 0) {
+        LOG_INFO("SQLite Queue: Restored %d message block(s) from conversation history", restored);
+        printf("SQLite Queue: Restored %d message block(s) from conversation history\n", restored);
         fflush(stdout);
     } else {
-        LOG_INFO("SQLite Queue: No previous messages found to seed conversation");
+        LOG_INFO("SQLite Queue: No previous messages found, starting fresh");
     }
 
-    return seeded_count;
+    return restored;
 }
+
 
 /**
  * Get the number of pending messages in the queue.
@@ -1879,8 +1808,8 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     printf("\n%s[SQLite Queue]%s Daemon started on %s\n", status_color_start, ANSI_RESET, ctx->db_path);
     printf("Sender name: %s\n", ctx->sender_name);
 
-    // Conversation seeding disabled to prevent tool use/result mismatch errors
-    LOG_INFO("SQLite Queue: Conversation seeding disabled - starting with fresh state");
+    /* Restore conversation from database history (crash recovery) */
+    sqlite_queue_restore_conversation(ctx, state);
 
     // Store state in context for worker thread access
     ctx->state = state;
