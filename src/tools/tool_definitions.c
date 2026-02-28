@@ -478,8 +478,10 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
                 "Returns whether the subagent is still running and the tail of its output. "
                 "Use this to monitor long-running subagent tasks. The subagent will log "
                 "its progress and will stop and report if it encounters issues or needs "
-                "further instructions. Check progress at reasonable intervals (every 1-2 "
-                "minutes for complex tasks) rather than repeatedly.");
+                "further instructions. To conserve tokens, avoid checking too frequently: "
+                "each check reads and returns log tail content, costing tokens. For tasks "
+                "that take a while, sleep longer between checks (e.g., 3-5 minutes). "
+                "Only check frequently if the task is nearly done or time-sensitive.");
             cJSON *check_progress_params = cJSON_CreateObject();
             cJSON_AddStringToObject(check_progress_params, "type", "object");
             cJSON *check_progress_props = cJSON_CreateObject();
