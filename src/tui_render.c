@@ -409,11 +409,11 @@ void render_status_window(TUIState *tui) {
             int help_col = left_col + (available_width - help_display_width) / 2;
             if (help_col < left_col) help_col = left_col;
             if (has_colors()) {
-                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
             mvwaddnstr(tui->wm.status_win, 0, help_col, help_str, help_str_len);
             if (has_colors()) {
-                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
         }
     }
