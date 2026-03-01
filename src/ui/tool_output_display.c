@@ -717,9 +717,9 @@ void print_token_usage(ConversationState *state) {
         return;
     }
 
-    int prompt_tokens = 0;
-    int completion_tokens = 0;
-    int cached_tokens = 0;
+    int64_t prompt_tokens = 0;
+    int64_t completion_tokens = 0;
+    int64_t cached_tokens = 0;
 
     // Get token usage for this session
     int result = persistence_get_session_token_usage(
@@ -732,19 +732,19 @@ void print_token_usage(ConversationState *state) {
 
     if (result == 0) {
         // Calculate total tokens (excluding cached tokens since they're free)
-        int total_tokens = prompt_tokens + completion_tokens;
+        int64_t total_tokens = prompt_tokens + completion_tokens;
 
         // Print token usage summary
         fprintf(stderr, "\n=== Token Usage Summary ===\n");
         fprintf(stderr, "Session: %s\n", state->session_id ? state->session_id : "unknown");
-        fprintf(stderr, "Prompt tokens: %d\n", prompt_tokens);
-        fprintf(stderr, "Completion tokens: %d\n", completion_tokens);
+        fprintf(stderr, "Prompt tokens: %ld\n", (long)prompt_tokens);
+        fprintf(stderr, "Completion tokens: %ld\n", (long)completion_tokens);
         if (cached_tokens > 0) {
-            fprintf(stderr, "Cached tokens (free): %d\n", cached_tokens);
-            fprintf(stderr, "Total billed tokens: %d (excluding %d cached)\n",
-                    total_tokens, cached_tokens);
+            fprintf(stderr, "Cached tokens (free): %ld\n", (long)cached_tokens);
+            fprintf(stderr, "Total billed tokens: %ld (excluding %ld cached)\n",
+                    (long)total_tokens, (long)cached_tokens);
         } else {
-            fprintf(stderr, "Total tokens: %d\n", total_tokens);
+            fprintf(stderr, "Total tokens: %ld\n", (long)total_tokens);
         }
         fprintf(stderr, "===========================\n");
     } else {

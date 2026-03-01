@@ -13,6 +13,7 @@
 #define TOKEN_USAGE_DB_H
 
 #include <sqlite3.h>
+#include <stdint.h>
 #include <pthread.h>
 
 // Database schema for token_usage table:
@@ -77,12 +78,12 @@ int token_usage_db_log(
     TokenUsageDB *db,
     long long api_call_id,
     const char *session_id,
-    int prompt_tokens,
-    int completion_tokens,
-    int total_tokens,
-    int cached_tokens,
-    int prompt_cache_hit_tokens,
-    int prompt_cache_miss_tokens
+    int64_t prompt_tokens,
+    int64_t completion_tokens,
+    int64_t total_tokens,
+    int64_t cached_tokens,
+    int64_t prompt_cache_hit_tokens,
+    int64_t prompt_cache_miss_tokens
 );
 
 // Get total token usage for a session
@@ -99,9 +100,9 @@ int token_usage_db_log(
 int token_usage_db_get_session_usage(
     TokenUsageDB *db,
     const char *session_id,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *cached_tokens
+    int64_t *prompt_tokens,
+    int64_t *completion_tokens,
+    int64_t *cached_tokens
 );
 
 // Get cumulative token totals for a session (sums all records)
@@ -119,9 +120,9 @@ int token_usage_db_get_session_usage(
 int token_usage_db_get_session_totals(
     TokenUsageDB *db,
     const char *session_id,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *cached_tokens
+    int64_t *prompt_tokens,
+    int64_t *completion_tokens,
+    int64_t *cached_tokens
 );
 
 // Get prompt tokens from the most recent API call in the session
@@ -136,22 +137,7 @@ int token_usage_db_get_session_totals(
 int token_usage_db_get_last_prompt_tokens(
     TokenUsageDB *db,
     const char *session_id,
-    int *prompt_tokens
-);
-
-// Get cached tokens from the most recent API call in the session
-//
-// Parameters:
-//   db: Token usage database handle
-//   session_id: Session identifier
-//   cached_tokens: Output parameter for cached tokens from last call
-//
-// Returns:
-//   0 on success, -1 on error
-int token_usage_db_get_last_cached_tokens(
-    TokenUsageDB *db,
-    const char *session_id,
-    int *cached_tokens
+    int64_t *prompt_tokens
 );
 
 // Rotation functions for managing database size and age
@@ -197,12 +183,12 @@ int token_usage_db_auto_rotate(TokenUsageDB *db);
 //   0 on success, -1 if no token usage data found
 int token_usage_extract_from_response(
     const char *response_json,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *total_tokens,
-    int *cached_tokens,
-    int *prompt_cache_hit_tokens,
-    int *prompt_cache_miss_tokens
+    int64_t *prompt_tokens,
+    int64_t *completion_tokens,
+    int64_t *total_tokens,
+    int64_t *cached_tokens,
+    int64_t *prompt_cache_hit_tokens,
+    int64_t *prompt_cache_miss_tokens
 );
 
 #endif // TOKEN_USAGE_DB_H

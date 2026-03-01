@@ -22,9 +22,9 @@
 int persistence_get_session_token_usage(
     PersistenceDB *db,
     const char *session_id,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *cached_tokens
+    int64_t *prompt_tokens,
+    int64_t *completion_tokens,
+    int64_t *cached_tokens
 ) {
     if (!db || !prompt_tokens || !completion_tokens || !cached_tokens) {
         LOG_ERROR("Invalid parameters to persistence_get_session_token_usage");
@@ -50,9 +50,9 @@ int persistence_get_session_token_usage(
 int persistence_get_session_token_totals(
     PersistenceDB *db,
     const char *session_id,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *cached_tokens
+    int64_t *prompt_tokens,
+    int64_t *completion_tokens,
+    int64_t *cached_tokens
 ) {
     if (!db || !prompt_tokens || !completion_tokens || !cached_tokens) {
         LOG_ERROR("Invalid parameters to persistence_get_session_token_totals");
@@ -78,7 +78,7 @@ int persistence_get_session_token_totals(
 int persistence_get_last_prompt_tokens(
     PersistenceDB *db,
     const char *session_id,
-    int *prompt_tokens
+    int64_t *prompt_tokens
 ) {
     if (!db || !prompt_tokens) {
         LOG_ERROR("Invalid parameters to persistence_get_last_prompt_tokens");
@@ -92,29 +92,6 @@ int persistence_get_last_prompt_tokens(
 
     // No token usage database available
     *prompt_tokens = 0;
-    LOG_DEBUG("Token usage database not initialized");
-    return 0;
-}
-
-// Get cached tokens from the most recent API call in the session
-// Delegates to the separate token_usage database
-int persistence_get_last_cached_tokens(
-    PersistenceDB *db,
-    const char *session_id,
-    int *cached_tokens
-) {
-    if (!db || !cached_tokens) {
-        LOG_ERROR("Invalid parameters to persistence_get_last_cached_tokens");
-        return -1;
-    }
-
-    // Delegate to the separate token usage database
-    if (db->token_usage_db) {
-        return token_usage_db_get_last_cached_tokens(db->token_usage_db, session_id, cached_tokens);
-    }
-
-    // No token usage database available
-    *cached_tokens = 0;
     LOG_DEBUG("Token usage database not initialized");
     return 0;
 }
@@ -454,12 +431,12 @@ int persistence_log_api_call(
     if (strcmp(status, "success") == 0 && response_json && db->token_usage_db) {
         LOG_DEBUG("Attempting to extract token usage from successful API response");
 
-        int prompt_tokens = 0;
-        int completion_tokens = 0;
-        int total_tokens = 0;
-        int cached_tokens = 0;
-        int prompt_cache_hit_tokens = 0;
-        int prompt_cache_miss_tokens = 0;
+        int64_t prompt_tokens = 0;
+        int64_t completion_tokens = 0;
+        int64_t total_tokens = 0;
+        int64_t cached_tokens = 0;
+        int64_t prompt_cache_hit_tokens = 0;
+        int64_t prompt_cache_miss_tokens = 0;
 
         // Extract token usage from response JSON
         int extract_result = token_usage_extract_from_response(
@@ -475,8 +452,8 @@ int persistence_log_api_call(
         LOG_DEBUG("Token extraction result: %d (0=success, -1=no usage field)", extract_result);
 
         if (extract_result == 0) {
-            LOG_DEBUG("Token usage extracted: prompt=%d, completion=%d, total=%d, cached=%d",
-                     prompt_tokens, completion_tokens, total_tokens, cached_tokens);
+            LOG_DEBUG("Token usage extracted: prompt=%ld, completion=%ld, total=%ld, cached=%ld",
+                     (long)prompt_tokens, (long)completion_tokens, (long)total_tokens, (long)cached_tokens);
 
             // Warn if session_id is NULL - this should not happen in normal operation
             if (!session_id) {

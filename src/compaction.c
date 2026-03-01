@@ -451,7 +451,7 @@ size_t compaction_update_token_count(const ConversationState *state, CompactionC
 
     // First try to get actual token count from API usage tracking
     if (state->persistence_db && state->session_id) {
-        int prompt_tokens = 0;
+        int64_t prompt_tokens = 0;
         if (persistence_get_last_prompt_tokens(state->persistence_db, state->session_id, &prompt_tokens) == 0
             && prompt_tokens > 0) {
             total_tokens = (size_t)prompt_tokens;
@@ -487,7 +487,7 @@ int compaction_should_trigger(const ConversationState *state, const CompactionCo
 
     // If not cached or zero, try to get from persistence database
     if (current_tokens == 0 && state->persistence_db && state->session_id) {
-        int prompt_tokens = 0;
+        int64_t prompt_tokens = 0;
         if (persistence_get_last_prompt_tokens(state->persistence_db, state->session_id, &prompt_tokens) == 0) {
             current_tokens = (size_t)prompt_tokens;
             LOG_DEBUG("Using actual token count from API call: %zu tokens", current_tokens);

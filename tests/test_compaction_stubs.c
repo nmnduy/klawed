@@ -47,7 +47,7 @@ void http_response_free(HttpResponse *resp) {
 }
 
 // Persistence stub
-int persistence_get_last_prompt_tokens(PersistenceDB *db, const char *session_id, int *tokens_out) {
+int persistence_get_last_prompt_tokens(PersistenceDB *db, const char *session_id, int64_t *tokens_out) {
     (void)db;
     (void)session_id;
     if (tokens_out) {

@@ -12,6 +12,7 @@
 #include <sqlite3.h>
 #include <time.h>
 #include <pthread.h>
+#include <stdint.h>
 
 // Database schema for api_calls table:
 //
@@ -169,9 +170,9 @@ int persistence_auto_rotate(PersistenceDB *db);
 int persistence_get_session_token_usage(
     PersistenceDB *db,
     const char *session_id,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *cached_tokens
+    int64_t *prompt_tokens,
+    int64_t *completion_tokens,
+    int64_t *cached_tokens
 );
 
 // Get cumulative token totals for a session (sums all records)
@@ -189,9 +190,9 @@ int persistence_get_session_token_usage(
 int persistence_get_session_token_totals(
     PersistenceDB *db,
     const char *session_id,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *cached_tokens
+    int64_t *prompt_tokens,
+    int64_t *completion_tokens,
+    int64_t *cached_tokens
 );
 
 // Get prompt tokens from the most recent API call in the session
@@ -206,22 +207,7 @@ int persistence_get_session_token_totals(
 int persistence_get_last_prompt_tokens(
     PersistenceDB *db,
     const char *session_id,
-    int *prompt_tokens
-);
-
-// Get cached tokens from the most recent API call in the session
-//
-// Parameters:
-//   db: Persistence database handle
-//   session_id: Session identifier
-//   cached_tokens: Output parameter for cached tokens from last call
-//
-// Returns:
-//   0 on success, -1 on error or if no records found
-int persistence_get_last_cached_tokens(
-    PersistenceDB *db,
-    const char *session_id,
-    int *cached_tokens
+    int64_t *prompt_tokens
 );
 
 #endif // PERSISTENCE_H

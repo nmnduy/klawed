@@ -16,17 +16,18 @@
 #include "data_dir.h"
 
 // SQL schema for the token_usage table
+// Uses BIGINT to avoid overflow with high-volume usage (int64_t)
 static const char *SCHEMA_SQL =
     "CREATE TABLE IF NOT EXISTS token_usage ("
     "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
     "    api_call_id INTEGER,"
     "    session_id TEXT,"
-    "    prompt_tokens INTEGER DEFAULT 0,"
-    "    completion_tokens INTEGER DEFAULT 0,"
-    "    total_tokens INTEGER DEFAULT 0,"
-    "    cached_tokens INTEGER DEFAULT 0,"
-    "    prompt_cache_hit_tokens INTEGER DEFAULT 0,"
-    "    prompt_cache_miss_tokens INTEGER DEFAULT 0,"
+    "    prompt_tokens BIGINT DEFAULT 0,"
+    "    completion_tokens BIGINT DEFAULT 0,"
+    "    total_tokens BIGINT DEFAULT 0,"
+    "    cached_tokens BIGINT DEFAULT 0,"
+    "    prompt_cache_hit_tokens BIGINT DEFAULT 0,"
+    "    prompt_cache_miss_tokens BIGINT DEFAULT 0,"
     "    created_at INTEGER NOT NULL"
     ");";
 
@@ -39,12 +40,12 @@ static const char *INDEX_SQL =
 // Extract token usage from API response JSON
 int token_usage_extract_from_response(
     const char *response_json,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *total_tokens,
-    int *cached_tokens,
-    int *prompt_cache_hit_tokens,
-    int *prompt_cache_miss_tokens
+    int64_t *prompt_tokens,
+    int64_t *completion_tokens,
+    int64_t *total_tokens,
+    int64_t *cached_tokens,
+    int64_t *prompt_cache_hit_tokens,
+    int64_t *prompt_cache_miss_tokens
 ) {
     if (!response_json) {
         LOG_DEBUG("token_usage_extract: response_json is NULL");
@@ -90,17 +91,17 @@ int token_usage_extract_from_response(
 
     if (prompt_tokens_json && cJSON_IsNumber(prompt_tokens_json)) {
         *prompt_tokens = prompt_tokens_json->valueint;
-        LOG_DEBUG("token_usage_extract: found prompt_tokens = %d", *prompt_tokens);
+        LOG_DEBUG("token_usage_extract: found prompt_tokens = %ld", (long)*prompt_tokens);
     }
 
     if (completion_tokens_json && cJSON_IsNumber(completion_tokens_json)) {
         *completion_tokens = completion_tokens_json->valueint;
-        LOG_DEBUG("token_usage_extract: found completion_tokens = %d", *completion_tokens);
+        LOG_DEBUG("token_usage_extract: found completion_tokens = %ld", (long)*completion_tokens);
     }
 
     if (total_tokens_json && cJSON_IsNumber(total_tokens_json)) {
         *total_tokens = total_tokens_json->valueint;
-        LOG_DEBUG("token_usage_extract: found total_tokens = %d", *total_tokens);
+        LOG_DEBUG("token_usage_extract: found total_tokens = %ld", (long)*total_tokens);
     }
 
     // Extract cache-related token counts with provider-specific detection
@@ -110,7 +111,7 @@ int token_usage_extract_from_response(
     cJSON *direct_cached_tokens = cJSON_GetObjectItem(usage, "cached_tokens");
     if (direct_cached_tokens && cJSON_IsNumber(direct_cached_tokens)) {
         *cached_tokens = direct_cached_tokens->valueint;
-        LOG_DEBUG("token_usage_extract: found Moonshot-style cached_tokens = %d", *cached_tokens);
+        LOG_DEBUG("token_usage_extract: found Moonshot-style cached_tokens = %ld", (long)*cached_tokens);
     }
 
     // 2. DeepSeek-style: cached_tokens inside prompt_tokens_details
@@ -120,7 +121,7 @@ int token_usage_extract_from_response(
             cJSON *cached_tokens_json = cJSON_GetObjectItem(prompt_tokens_details, "cached_tokens");
             if (cached_tokens_json && cJSON_IsNumber(cached_tokens_json)) {
                 *cached_tokens = cached_tokens_json->valueint;
-                LOG_DEBUG("token_usage_extract: found DeepSeek-style cached_tokens = %d", *cached_tokens);
+                LOG_DEBUG("token_usage_extract: found DeepSeek-style cached_tokens = %ld", (long)*cached_tokens);
             }
         }
     }
@@ -130,7 +131,7 @@ int token_usage_extract_from_response(
         cJSON *cache_read_input_tokens = cJSON_GetObjectItem(usage, "cache_read_input_tokens");
         if (cache_read_input_tokens && cJSON_IsNumber(cache_read_input_tokens)) {
             *cached_tokens = cache_read_input_tokens->valueint;
-            LOG_DEBUG("token_usage_extract: using Anthropic-style cache_read_input_tokens = %d", *cached_tokens);
+            LOG_DEBUG("token_usage_extract: using Anthropic-style cache_read_input_tokens = %ld", (long)*cached_tokens);
         }
     }
 
@@ -140,18 +141,18 @@ int token_usage_extract_from_response(
 
     if (cache_hit_tokens_json && cJSON_IsNumber(cache_hit_tokens_json)) {
         *prompt_cache_hit_tokens = cache_hit_tokens_json->valueint;
-        LOG_DEBUG("token_usage_extract: found prompt_cache_hit_tokens = %d", *prompt_cache_hit_tokens);
+        LOG_DEBUG("token_usage_extract: found prompt_cache_hit_tokens = %ld", (long)*prompt_cache_hit_tokens);
     }
 
     if (cache_miss_tokens_json && cJSON_IsNumber(cache_miss_tokens_json)) {
         *prompt_cache_miss_tokens = cache_miss_tokens_json->valueint;
-        LOG_DEBUG("token_usage_extract: found prompt_cache_miss_tokens = %d", *prompt_cache_miss_tokens);
+        LOG_DEBUG("token_usage_extract: found prompt_cache_miss_tokens = %ld", (long)*prompt_cache_miss_tokens);
     }
 
     cJSON_Delete(json);
 
-    LOG_DEBUG("token_usage_extract: completed (prompt=%d, completion=%d, total=%d)",
-             *prompt_tokens, *completion_tokens, *total_tokens);
+    LOG_DEBUG("token_usage_extract: completed (prompt=%ld, completion=%ld, total=%ld)",
+             *prompt_tokens, *completion_tokens, (long)*total_tokens);
     return 0;
 }
 
@@ -341,12 +342,12 @@ int token_usage_db_log(
     TokenUsageDB *db,
     long long api_call_id,
     const char *session_id,
-    int prompt_tokens,
-    int completion_tokens,
-    int total_tokens,
-    int cached_tokens,
-    int prompt_cache_hit_tokens,
-    int prompt_cache_miss_tokens
+    int64_t prompt_tokens,
+    int64_t completion_tokens,
+    int64_t total_tokens,
+    int64_t cached_tokens,
+    int64_t prompt_cache_hit_tokens,
+    int64_t prompt_cache_miss_tokens
 ) {
     if (!db || !db->db) {
         LOG_ERROR("Invalid parameters to token_usage_db_log");
@@ -383,12 +384,12 @@ int token_usage_db_log(
         sqlite3_bind_null(stmt, 2);
     }
 
-    sqlite3_bind_int(stmt, 3, prompt_tokens);
-    sqlite3_bind_int(stmt, 4, completion_tokens);
-    sqlite3_bind_int(stmt, 5, total_tokens);
-    sqlite3_bind_int(stmt, 6, cached_tokens);
-    sqlite3_bind_int(stmt, 7, prompt_cache_hit_tokens);
-    sqlite3_bind_int(stmt, 8, prompt_cache_miss_tokens);
+    sqlite3_bind_int64(stmt, 3, prompt_tokens);
+    sqlite3_bind_int64(stmt, 4, completion_tokens);
+    sqlite3_bind_int64(stmt, 5, total_tokens);
+    sqlite3_bind_int64(stmt, 6, cached_tokens);
+    sqlite3_bind_int64(stmt, 7, prompt_cache_hit_tokens);
+    sqlite3_bind_int64(stmt, 8, prompt_cache_miss_tokens);
     sqlite3_bind_int64(stmt, 9, now);
 
     rc = sqlite3_step(stmt);
@@ -402,7 +403,7 @@ int token_usage_db_log(
     sqlite3_finalize(stmt);
     pthread_mutex_unlock(&db->mutex);
 
-    LOG_DEBUG("Token usage logged: prompt=%d, completion=%d, cached=%d",
+    LOG_DEBUG("Token usage logged: prompt=%ld, completion=%ld, cached=%ld",
               prompt_tokens, completion_tokens, cached_tokens);
     return 0;
 }
@@ -411,9 +412,9 @@ int token_usage_db_log(
 int token_usage_db_get_session_usage(
     TokenUsageDB *db,
     const char *session_id,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *cached_tokens
+    int64_t *prompt_tokens,
+    int64_t *completion_tokens,
+    int64_t *cached_tokens
 ) {
     if (!db || !db->db || !prompt_tokens || !completion_tokens || !cached_tokens) {
         LOG_ERROR("Invalid parameters to token_usage_db_get_session_usage");
@@ -459,13 +460,13 @@ int token_usage_db_get_session_usage(
 
     rc = sqlite3_step(stmt);
     if (rc == SQLITE_ROW) {
-        *prompt_tokens = sqlite3_column_int(stmt, 0);
-        *completion_tokens = sqlite3_column_int(stmt, 1);
-        *cached_tokens = sqlite3_column_int(stmt, 2);
+        *prompt_tokens = sqlite3_column_int64(stmt, 0);
+        *completion_tokens = sqlite3_column_int64(stmt, 1);
+        *cached_tokens = sqlite3_column_int64(stmt, 2);
 
-        LOG_FINE("Retrieved token usage for session %s: prompt=%d, completion=%d, cached=%d",
+        LOG_FINE("Retrieved token usage for session %s: prompt=%ld, completion=%ld, cached=%ld",
                  session_id ? session_id : "all",
-                 *prompt_tokens, *completion_tokens, *cached_tokens);
+                 *prompt_tokens, *completion_tokens, (long)*cached_tokens);
     } else if (rc == SQLITE_DONE) {
         LOG_FINE("No token usage records found for session %s",
                  session_id ? session_id : "all");
@@ -485,9 +486,9 @@ int token_usage_db_get_session_usage(
 int token_usage_db_get_session_totals(
     TokenUsageDB *db,
     const char *session_id,
-    int *prompt_tokens,
-    int *completion_tokens,
-    int *cached_tokens
+    int64_t *prompt_tokens,
+    int64_t *completion_tokens,
+    int64_t *cached_tokens
 ) {
     if (!db || !db->db || !prompt_tokens || !completion_tokens || !cached_tokens) {
         LOG_ERROR("Invalid parameters to token_usage_db_get_session_totals");
@@ -530,13 +531,13 @@ int token_usage_db_get_session_totals(
 
     rc = sqlite3_step(stmt);
     if (rc == SQLITE_ROW) {
-        *prompt_tokens = (int)sqlite3_column_int64(stmt, 0);
-        *completion_tokens = (int)sqlite3_column_int64(stmt, 1);
-        *cached_tokens = (int)sqlite3_column_int64(stmt, 2);
+        *prompt_tokens = sqlite3_column_int64(stmt, 0);
+        *completion_tokens = sqlite3_column_int64(stmt, 1);
+        *cached_tokens = sqlite3_column_int64(stmt, 2);
 
-        LOG_FINE("Retrieved token totals for session %s: prompt=%d, completion=%d, cached=%d",
+        LOG_FINE("Retrieved token totals for session %s: prompt=%ld, completion=%ld, cached=%ld",
                  session_id ? session_id : "all",
-                 *prompt_tokens, *completion_tokens, *cached_tokens);
+                 (long)*prompt_tokens, (long)*completion_tokens, (long)*cached_tokens);
     } else {
         LOG_ERROR("Failed to execute token totals query: %s", sqlite3_errmsg(db->db));
         sqlite3_finalize(stmt);
@@ -553,7 +554,7 @@ int token_usage_db_get_session_totals(
 int token_usage_db_get_last_prompt_tokens(
     TokenUsageDB *db,
     const char *session_id,
-    int *prompt_tokens
+    int64_t *prompt_tokens
 ) {
     if (!db || !db->db || !prompt_tokens) {
         LOG_ERROR("Invalid parameters to token_usage_db_get_last_prompt_tokens");
@@ -594,81 +595,14 @@ int token_usage_db_get_last_prompt_tokens(
 
     rc = sqlite3_step(stmt);
     if (rc == SQLITE_ROW) {
-        *prompt_tokens = sqlite3_column_int(stmt, 0);
-        LOG_DEBUG("Retrieved last prompt tokens for session %s: %d",
-                  session_id ? session_id : "all", *prompt_tokens);
+        *prompt_tokens = sqlite3_column_int64(stmt, 0);
+        LOG_DEBUG("Retrieved last prompt tokens for session %s: %ld",
+                  session_id ? session_id : "all", (long)*prompt_tokens);
     } else if (rc == SQLITE_DONE) {
         LOG_DEBUG("No token usage records found for session %s",
                   session_id ? session_id : "all");
     } else {
         LOG_ERROR("Failed to execute token usage query: %s", sqlite3_errmsg(db->db));
-        sqlite3_finalize(stmt);
-        pthread_mutex_unlock(&db->mutex);
-        return -1;
-    }
-
-    sqlite3_finalize(stmt);
-    pthread_mutex_unlock(&db->mutex);
-    return 0;
-}
-
-// Get last cached tokens
-int token_usage_db_get_last_cached_tokens(
-    TokenUsageDB *db,
-    const char *session_id,
-    int *cached_tokens
-) {
-    if (!db || !db->db || !cached_tokens) {
-        LOG_ERROR("Invalid parameters to token_usage_db_get_last_cached_tokens");
-        return -1;
-    }
-
-    *cached_tokens = 0;
-
-    pthread_mutex_lock(&db->mutex);
-
-    const char *sql;
-    sqlite3_stmt *stmt;
-    int rc;
-
-    if (session_id) {
-        sql = "SELECT cached_tokens, prompt_cache_hit_tokens "
-              "FROM token_usage "
-              "WHERE session_id = ? "
-              "ORDER BY created_at DESC, id DESC "
-              "LIMIT 1;";
-    } else {
-        sql = "SELECT cached_tokens, prompt_cache_hit_tokens "
-              "FROM token_usage "
-              "ORDER BY created_at DESC, id DESC "
-              "LIMIT 1;";
-    }
-
-    rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        LOG_ERROR("Failed to prepare cached tokens query: %s", sqlite3_errmsg(db->db));
-        pthread_mutex_unlock(&db->mutex);
-        return -1;
-    }
-
-    if (session_id) {
-        sqlite3_bind_text(stmt, 1, session_id, -1, SQLITE_TRANSIENT);
-    }
-
-    rc = sqlite3_step(stmt);
-    if (rc == SQLITE_ROW) {
-        *cached_tokens = sqlite3_column_int(stmt, 0);
-        // Fallback to prompt_cache_hit_tokens if cached_tokens is 0
-        if (*cached_tokens == 0) {
-            *cached_tokens = sqlite3_column_int(stmt, 1);
-        }
-        LOG_DEBUG("Retrieved last cached tokens for session %s: %d",
-                  session_id ? session_id : "all", *cached_tokens);
-    } else if (rc == SQLITE_DONE) {
-        LOG_DEBUG("No token usage records found for session %s",
-                  session_id ? session_id : "all");
-    } else {
-        LOG_ERROR("Failed to execute cached tokens query: %s", sqlite3_errmsg(db->db));
         sqlite3_finalize(stmt);
         pthread_mutex_unlock(&db->mutex);
         return -1;

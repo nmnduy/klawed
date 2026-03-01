@@ -304,17 +304,17 @@ void render_status_window(TUIState *tui) {
     int token_display_width = 0;
 
     // Query total prompt/completion tokens and cached tokens for this session
-    int prompt_tokens = 0;
-    int completion_tokens = 0;
-    int cached_tokens = 0;
+    int64_t prompt_tokens = 0;
+    int64_t completion_tokens = 0;
+    int64_t cached_tokens = 0;
     if (tui->persistence_db) {
         if (persistence_get_session_token_usage(tui->persistence_db,
                                                 tui->session_id,
                                                 &prompt_tokens,
                                                 &completion_tokens,
                                                 &cached_tokens) == 0) {
-            LOG_FINE("[TUI] Retrieved session token totals from DB: prompt=%d completion=%d cached=%d",
-                     prompt_tokens, completion_tokens, cached_tokens);
+            LOG_FINE("[TUI] Retrieved session token totals from DB: prompt=%ld completion=%ld cached=%ld",
+                     (long)prompt_tokens, (long)completion_tokens, (long)cached_tokens);
         } else {
             LOG_FINE("[TUI] Failed to retrieve session token totals from DB");
         }
@@ -326,7 +326,7 @@ void render_status_window(TUIState *tui) {
     // Show token count when non-zero, regardless of mode
     // Format: "17715 tok" (prompt tokens only — output tokens are usually negligible)
     if (prompt_tokens > 0) {
-        snprintf(token_str, sizeof(token_str), " %d tok", prompt_tokens);
+        snprintf(token_str, sizeof(token_str), " %ld tok", (long)prompt_tokens);
         token_str_len = (int)strlen(token_str);
         token_display_width = utf8_display_width(token_str);
         LOG_FINE("[TUI] Rendering token display: %s (mode=%d, width=%d)", token_str, tui->mode, width);
