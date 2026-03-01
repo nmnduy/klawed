@@ -18,8 +18,8 @@ void session_print_token_usage(ConversationState *state) {
     int completion_tokens = 0;
     int cached_tokens = 0;
 
-    // Get token usage for this session
-    int result = persistence_get_session_token_usage(
+    // Get cumulative token totals for this session
+    int result = persistence_get_session_token_totals(
         state->persistence_db,
         state->session_id,
         &prompt_tokens,
