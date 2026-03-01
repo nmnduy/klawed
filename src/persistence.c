@@ -45,6 +45,34 @@ int persistence_get_session_token_usage(
     return 0;
 }
 
+// Get cumulative token totals for a session (sums all records)
+// Delegates to the separate token_usage database
+int persistence_get_session_token_totals(
+    PersistenceDB *db,
+    const char *session_id,
+    int *prompt_tokens,
+    int *completion_tokens,
+    int *cached_tokens
+) {
+    if (!db || !prompt_tokens || !completion_tokens || !cached_tokens) {
+        LOG_ERROR("Invalid parameters to persistence_get_session_token_totals");
+        return -1;
+    }
+
+    // Delegate to the separate token usage database
+    if (db->token_usage_db) {
+        return token_usage_db_get_session_totals(
+            db->token_usage_db, session_id, prompt_tokens, completion_tokens, cached_tokens);
+    }
+
+    // No token usage database available
+    *prompt_tokens = 0;
+    *completion_tokens = 0;
+    *cached_tokens = 0;
+    LOG_DEBUG("Token usage database not initialized");
+    return 0;
+}
+
 // Get prompt tokens from the most recent API call in the session
 // Delegates to the separate token_usage database
 int persistence_get_last_prompt_tokens(

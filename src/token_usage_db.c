@@ -481,6 +481,74 @@ int token_usage_db_get_session_usage(
     return 0;
 }
 
+// Get cumulative token totals for a session (sums all records)
+int token_usage_db_get_session_totals(
+    TokenUsageDB *db,
+    const char *session_id,
+    int *prompt_tokens,
+    int *completion_tokens,
+    int *cached_tokens
+) {
+    if (!db || !db->db || !prompt_tokens || !completion_tokens || !cached_tokens) {
+        LOG_ERROR("Invalid parameters to token_usage_db_get_session_totals");
+        return -1;
+    }
+
+    *prompt_tokens = 0;
+    *completion_tokens = 0;
+    *cached_tokens = 0;
+
+    pthread_mutex_lock(&db->mutex);
+
+    const char *sql;
+    sqlite3_stmt *stmt;
+    int rc;
+
+    if (session_id) {
+        sql = "SELECT COALESCE(SUM(prompt_tokens), 0), "
+              "COALESCE(SUM(completion_tokens), 0), "
+              "COALESCE(SUM(cached_tokens), 0) "
+              "FROM token_usage "
+              "WHERE session_id = ?;";
+    } else {
+        sql = "SELECT COALESCE(SUM(prompt_tokens), 0), "
+              "COALESCE(SUM(completion_tokens), 0), "
+              "COALESCE(SUM(cached_tokens), 0) "
+              "FROM token_usage;";
+    }
+
+    rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("Failed to prepare token totals query: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
+        return -1;
+    }
+
+    if (session_id) {
+        sqlite3_bind_text(stmt, 1, session_id, -1, SQLITE_TRANSIENT);
+    }
+
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        *prompt_tokens = (int)sqlite3_column_int64(stmt, 0);
+        *completion_tokens = (int)sqlite3_column_int64(stmt, 1);
+        *cached_tokens = (int)sqlite3_column_int64(stmt, 2);
+
+        LOG_FINE("Retrieved token totals for session %s: prompt=%d, completion=%d, cached=%d",
+                 session_id ? session_id : "all",
+                 *prompt_tokens, *completion_tokens, *cached_tokens);
+    } else {
+        LOG_ERROR("Failed to execute token totals query: %s", sqlite3_errmsg(db->db));
+        sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
+        return -1;
+    }
+
+    sqlite3_finalize(stmt);
+    pthread_mutex_unlock(&db->mutex);
+    return 0;
+}
+
 // Get last prompt tokens
 int token_usage_db_get_last_prompt_tokens(
     TokenUsageDB *db,
