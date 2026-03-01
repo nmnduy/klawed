@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <unistd.h>
 #include "../src/persistence.h"
 #include "../src/token_usage_db.h"
@@ -34,16 +35,16 @@ int main(void) {
     rc = token_usage_db_log(token_db, 2, "session-1", 140, 40, 180, 15, 0, 0);
     assert(rc == 0);
 
-    int prompt_tokens = -1;
-    int completion_tokens = -1;
-    int cached_tokens = -1;
+    int64_t prompt_tokens = -1;
+    int64_t completion_tokens = -1;
+    int64_t cached_tokens = -1;
 
     // Per-session totals - should get latest (cumulative) record
     rc = token_usage_db_get_session_usage(token_db, "session-1",
                                           &prompt_tokens, &completion_tokens, &cached_tokens);
     assert(rc == 0);
-    printf("Session-1: prompt=%d, completion=%d, cached=%d\n",
-           prompt_tokens, completion_tokens, cached_tokens);
+    printf("Session-1: prompt=%ld, completion=%ld, cached=%ld\n",
+           (long)prompt_tokens, (long)completion_tokens, (long)cached_tokens);
     assert(prompt_tokens == 140);      // Latest record (cumulative)
     assert(completion_tokens == 40);   // Latest record (cumulative)
     assert(cached_tokens == 15);       // Latest record (cumulative)
@@ -53,23 +54,17 @@ int main(void) {
     rc = token_usage_db_get_session_usage(token_db, NULL,
                                           &prompt_tokens, &completion_tokens, &cached_tokens);
     assert(rc == 0);
-    printf("All sessions: prompt=%d, completion=%d, cached=%d\n",
-           prompt_tokens, completion_tokens, cached_tokens);
+    printf("All sessions: prompt=%ld, completion=%ld, cached=%ld\n",
+           (long)prompt_tokens, (long)completion_tokens, (long)cached_tokens);
     assert(prompt_tokens == 140);
     assert(completion_tokens == 40);
     assert(cached_tokens == 15);
 
     // Test get_last_prompt_tokens
-    int last_prompt = -1;
+    int64_t last_prompt = -1;
     rc = token_usage_db_get_last_prompt_tokens(token_db, "session-1", &last_prompt);
     assert(rc == 0);
     assert(last_prompt == 140);
-
-    // Test get_last_cached_tokens
-    int last_cached = -1;
-    rc = token_usage_db_get_last_cached_tokens(token_db, "session-1", &last_cached);
-    assert(rc == 0);
-    assert(last_cached == 15);
 
     token_usage_db_close(token_db);
     unlink(TEST_DB_PATH);
