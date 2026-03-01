@@ -174,6 +174,26 @@ int persistence_get_session_token_usage(
     int *cached_tokens
 );
 
+// Get cumulative token totals for a session (sums all records)
+// Use this for session summary reports, not for current context size
+//
+// Parameters:
+//   db: Persistence database handle
+//   session_id: Session identifier (NULL = get totals for all sessions)
+//   prompt_tokens: Output parameter for cumulative prompt tokens
+//   completion_tokens: Output parameter for cumulative completion tokens
+//   cached_tokens: Output parameter for cumulative cached tokens
+//
+// Returns:
+//   0 on success, -1 on error
+int persistence_get_session_token_totals(
+    PersistenceDB *db,
+    const char *session_id,
+    int *prompt_tokens,
+    int *completion_tokens,
+    int *cached_tokens
+);
+
 // Get prompt tokens from the most recent API call in the session
 //
 // Parameters:
