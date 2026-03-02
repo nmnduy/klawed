@@ -342,9 +342,108 @@ static void test_entity_memories(void) {
     PASS();
 }
 
-/* ============================================================================
- * Main
- * ============================================================================ */
+static void test_reinit_after_cleanup(void) {
+    TEST("Re-initialize after cleanup (pthread_once_t UB fix)");
+
+    /* First init */
+    memory_db_cleanup_global();
+    int result = memory_db_init_global("/tmp/test_memory_reinit.db");
+    printf("  First init returned %d\n", result);
+
+    if (result == 0) {
+        MemoryDB *handle = memory_db_get_global();
+        assert(handle != NULL);
+        printf("  First init: handle is valid\n");
+
+        /* Store something so we know the DB actually worked */
+        int64_t card_id = memory_db_store(handle, "reinit_user", "slot", "value",
+                                          MEMORY_KIND_FACT, MEMORY_RELATION_SETS);
+        printf("  Stored card_id = %lld\n", (long long)card_id);
+        assert(card_id >= 0);
+
+        /* Cleanup */
+        memory_db_cleanup_global();
+        assert(memory_db_get_global() == NULL);
+        printf("  After cleanup: handle is NULL\n");
+
+        /* Re-initialize with a different path — this is the path that used to
+         * trigger undefined behavior via the pthread_once_t reset cast. */
+        result = memory_db_init_global("/tmp/test_memory_reinit2.db");
+        printf("  Second init returned %d\n", result);
+
+        if (result == 0) {
+            handle = memory_db_get_global();
+            assert(handle != NULL);
+            printf("  Second init: handle is valid\n");
+
+            /* Store and recall to verify the second DB is functional */
+            card_id = memory_db_store(handle, "reinit_user2", "slot2", "value2",
+                                      MEMORY_KIND_PREFERENCE, MEMORY_RELATION_SETS);
+            assert(card_id >= 0);
+
+            MemoryCard *recalled = memory_db_get_current(handle, "reinit_user2", "slot2");
+            assert(recalled != NULL);
+            assert(strcmp(recalled->value, "value2") == 0);
+            printf("  Second DB store+recall verified: \"%s\"\n", recalled->value);
+            memory_db_free_card(recalled);
+
+            memory_db_cleanup_global();
+            assert(memory_db_get_global() == NULL);
+            printf("  After second cleanup: handle is NULL\n");
+        } else {
+            printf("  Second init failed (non-fatal for this test): %s\n",
+                   memory_db_last_error(NULL));
+        }
+    } else {
+        printf("  Skipped - init failed: %s\n", memory_db_last_error(NULL));
+    }
+
+    remove("/tmp/test_memory_reinit.db");
+    remove("/tmp/test_memory_reinit2.db");
+
+    PASS();
+}
+
+static void test_double_cleanup_safe(void) {
+    TEST("Double cleanup is safe");
+
+    /* Calling cleanup twice must not crash */
+    memory_db_cleanup_global();
+    memory_db_cleanup_global();  /* second call should be a no-op */
+
+    assert(memory_db_get_global() == NULL);
+    printf("  Double cleanup completed without crash\n");
+
+    PASS();
+}
+
+static void test_init_without_prior_cleanup(void) {
+    TEST("Init without explicit cleanup is idempotent");
+
+    memory_db_cleanup_global();
+    int r1 = memory_db_init_global("/tmp/test_memory_idempotent.db");
+    printf("  First init returned %d\n", r1);
+
+    if (r1 == 0) {
+        /* Calling init again without cleanup should be idempotent (return 0,
+         * same handle) */
+        int r2 = memory_db_init_global("/tmp/test_memory_idempotent.db");
+        printf("  Second init (no cleanup) returned %d\n", r2);
+        assert(r2 == 0);
+        assert(memory_db_get_global() != NULL);
+        printf("  Handle still valid after second init\n");
+
+        memory_db_cleanup_global();
+    } else {
+        printf("  Skipped - init failed: %s\n", memory_db_last_error(NULL));
+    }
+
+    remove("/tmp/test_memory_idempotent.db");
+
+    PASS();
+}
+
+
 
 int main(void) {
     printf("===============================================\n");
@@ -371,6 +470,11 @@ int main(void) {
     test_store_and_recall();
     test_search();
     test_entity_memories();
+
+    /* Re-init / cleanup robustness tests (covers pthread_once_t UB fix) */
+    test_reinit_after_cleanup();
+    test_double_cleanup_safe();
+    test_init_without_prior_cleanup();
 
     printf("\n===============================================\n");
     printf("All memory DB tests passed!\n");

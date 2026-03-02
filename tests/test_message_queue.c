@@ -386,6 +386,187 @@ static void test_ai_queue_shutdown(void) {
     TEST_PASS();
 }
 
+/* ========================================================================
+ * Streaming Message Tests (TUI_MSG_STREAM_START / TUI_MSG_STREAM_APPEND)
+ * ======================================================================== */
+
+static void test_post_tui_stream_start(void) {
+    TEST(test_post_tui_stream_start);
+
+    TUIMessageQueue queue = {0};
+    ASSERT(tui_msg_queue_init(&queue, 5) == 0);
+
+    /* Post a stream-start message with a label and color_pair */
+    ASSERT(post_tui_stream_start(&queue, "[Assistant]", 3) == 0);
+    ASSERT(queue.count == 1);
+
+    TUIMessage msg = {0};
+    ASSERT(poll_tui_message(&queue, &msg) == 1);
+    ASSERT(msg.type == TUI_MSG_STREAM_START);
+    ASSERT(strcmp(msg.text, "[Assistant]") == 0);
+    ASSERT(msg.color_pair == 3);
+
+    free(msg.text);
+    tui_msg_queue_free(&queue);
+
+    TEST_PASS();
+}
+
+static void test_post_tui_stream_append(void) {
+    TEST(test_post_tui_stream_append);
+
+    TUIMessageQueue queue = {0};
+    ASSERT(tui_msg_queue_init(&queue, 5) == 0);
+
+    /* Post a stream-append message via post_tui_message */
+    ASSERT(post_tui_message(&queue, TUI_MSG_STREAM_APPEND, "Hello") == 0);
+
+    TUIMessage msg = {0};
+    ASSERT(poll_tui_message(&queue, &msg) == 1);
+    ASSERT(msg.type == TUI_MSG_STREAM_APPEND);
+    ASSERT(strcmp(msg.text, "Hello") == 0);
+    /* color_pair should be 0 (default, unused for APPEND) */
+    ASSERT(msg.color_pair == 0);
+
+    free(msg.text);
+    tui_msg_queue_free(&queue);
+
+    TEST_PASS();
+}
+
+static void test_streaming_sequence(void) {
+    TEST(test_streaming_sequence);
+
+    TUIMessageQueue queue = {0};
+    ASSERT(tui_msg_queue_init(&queue, 16) == 0);
+
+    /* Simulate a full streaming response: START then several APPEND tokens */
+    ASSERT(post_tui_stream_start(&queue, "[Assistant]", 5) == 0);
+    ASSERT(post_tui_message(&queue, TUI_MSG_STREAM_APPEND, "Hello") == 0);
+    ASSERT(post_tui_message(&queue, TUI_MSG_STREAM_APPEND, ", ") == 0);
+    ASSERT(post_tui_message(&queue, TUI_MSG_STREAM_APPEND, "world!") == 0);
+    ASSERT(queue.count == 4);
+
+    const char *expected_types[] = {"START", "APPEND", "APPEND", "APPEND"};
+    TUIMessageType expected[] = {
+        TUI_MSG_STREAM_START,
+        TUI_MSG_STREAM_APPEND,
+        TUI_MSG_STREAM_APPEND,
+        TUI_MSG_STREAM_APPEND
+    };
+    const char *expected_text[] = {"[Assistant]", "Hello", ", ", "world!"};
+
+    for (int i = 0; i < 4; i++) {
+        TUIMessage msg = {0};
+        ASSERT(poll_tui_message(&queue, &msg) == 1);
+        ASSERT(msg.type == expected[i]);
+        ASSERT(strcmp(msg.text, expected_text[i]) == 0);
+        printf("  [%d] type=%s text=\"%s\" color_pair=%d\n",
+               i, expected_types[i], msg.text, msg.color_pair);
+        free(msg.text);
+    }
+
+    ASSERT(queue.count == 0);
+    tui_msg_queue_free(&queue);
+
+    TEST_PASS();
+}
+
+static void test_stream_start_color_pair_preserved(void) {
+    TEST(test_stream_start_color_pair_preserved);
+
+    TUIMessageQueue queue = {0};
+    ASSERT(tui_msg_queue_init(&queue, 5) == 0);
+
+    /* Different labels can have different color pairs */
+    ASSERT(post_tui_stream_start(&queue, "[Assistant]", 7) == 0);
+    ASSERT(post_tui_stream_start(&queue, "[Reasoning]", 2) == 0);
+
+    TUIMessage msg = {0};
+    ASSERT(poll_tui_message(&queue, &msg) == 1);
+    ASSERT(msg.type == TUI_MSG_STREAM_START);
+    ASSERT(msg.color_pair == 7);
+    free(msg.text);
+
+    ASSERT(poll_tui_message(&queue, &msg) == 1);
+    ASSERT(msg.type == TUI_MSG_STREAM_START);
+    ASSERT(msg.color_pair == 2);
+    free(msg.text);
+
+    tui_msg_queue_free(&queue);
+
+    TEST_PASS();
+}
+
+static void test_stream_start_null_label(void) {
+    TEST(test_stream_start_null_label);
+
+    TUIMessageQueue queue = {0};
+    ASSERT(tui_msg_queue_init(&queue, 5) == 0);
+
+    /* NULL label should be accepted (treated as empty) */
+    ASSERT(post_tui_stream_start(&queue, NULL, 0) == 0);
+
+    TUIMessage msg = {0};
+    ASSERT(poll_tui_message(&queue, &msg) == 1);
+    ASSERT(msg.type == TUI_MSG_STREAM_START);
+    /* text may be NULL or empty string depending on implementation */
+    free(msg.text);
+
+    tui_msg_queue_free(&queue);
+
+    TEST_PASS();
+}
+
+/* Thread data for streaming concurrency test */
+typedef struct {
+    TUIMessageQueue *queue;
+    int token_count;
+} StreamThreadData;
+
+static void* stream_producer_thread(void *arg) {
+    StreamThreadData *data = (StreamThreadData*)arg;
+
+    post_tui_stream_start(data->queue, "[Assistant]", 5);
+    for (int i = 0; i < data->token_count; i++) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "tok%d", i);
+        post_tui_message(data->queue, TUI_MSG_STREAM_APPEND, buf);
+        usleep(50);
+    }
+
+    return NULL;
+}
+
+static void test_streaming_concurrent(void) {
+    TEST(test_streaming_concurrent);
+
+    TUIMessageQueue queue = {0};
+    ASSERT(tui_msg_queue_init(&queue, 64) == 0);
+
+    StreamThreadData data = { &queue, 30 };
+    pthread_t producer;
+    ASSERT(pthread_create(&producer, NULL, stream_producer_thread, &data) == 0);
+
+    /* Consumer: drain all messages */
+    int total = 0;
+    while (total < 31) {  /* 1 START + 30 APPEND */
+        TUIMessage msg = {0};
+        if (poll_tui_message(&queue, &msg) == 1) {
+            ASSERT(msg.type == TUI_MSG_STREAM_START ||
+                   msg.type == TUI_MSG_STREAM_APPEND);
+            free(msg.text);
+            total++;
+        }
+        usleep(50);
+    }
+
+    pthread_join(producer, NULL);
+    tui_msg_queue_free(&queue);
+
+    TEST_PASS();
+}
+
 /* Multiple producer/consumer stress test */
 static void* ai_queue_stress_producer(void *arg) {
     AIInstructionQueue *queue = (AIInstructionQueue*)arg;
@@ -458,6 +639,15 @@ int main(void) {
     test_tui_msg_queue_null_text();
     test_tui_msg_queue_concurrent();
     test_tui_msg_queue_shutdown();
+
+    /* Streaming Message Tests */
+    printf("\n--- Streaming Message Tests ---\n");
+    test_post_tui_stream_start();
+    test_post_tui_stream_append();
+    test_streaming_sequence();
+    test_stream_start_color_pair_preserved();
+    test_stream_start_null_label();
+    test_streaming_concurrent();
 
     /* AI Instruction Queue Tests */
     printf("\n--- AI Instruction Queue Tests ---\n");
