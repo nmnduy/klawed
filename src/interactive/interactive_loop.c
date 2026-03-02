@@ -34,6 +34,7 @@ void interactive_mode(ConversationState *state) {
 
     // Link TUI to state for streaming support
     state->tui = &tui;
+    /* tui_queue will be set after queue initialization below */
 
     // Initialize command system
     commands_init();
@@ -72,6 +73,8 @@ void interactive_mode(ConversationState *state) {
         async_enabled = 0;
     } else {
         tui_queue_initialized = 1;
+        /* Route streaming TUI updates through the queue for thread safety */
+        state->tui_queue = &tui_queue;
     }
 
     if (async_enabled) {
@@ -105,6 +108,7 @@ void interactive_mode(ConversationState *state) {
             tui_msg_queue_shutdown(&tui_queue);
             tui_msg_queue_free(&tui_queue);
             tui_queue_initialized = 0;
+            state->tui_queue = NULL;
         }
     }
 
@@ -136,6 +140,7 @@ void interactive_mode(ConversationState *state) {
     if (tui_queue_initialized) {
         tui_msg_queue_shutdown(&tui_queue);
         tui_msg_queue_free(&tui_queue);
+        state->tui_queue = NULL;
     }
 
     // Socket IPC removed - will be reimplemented with ZMQ

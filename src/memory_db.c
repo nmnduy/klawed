@@ -14,6 +14,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +42,7 @@ struct MemoryDB {
 
 /* Global instance management */
 static MemoryDB *g_memory_db = NULL;
-static pthread_once_t g_memory_db_init_once = PTHREAD_ONCE_INIT;
+static bool g_memory_db_initialized = false;
 static pthread_mutex_t g_memory_db_mutex = PTHREAD_MUTEX_INITIALIZER;
 static char *g_memory_db_path = NULL;
 static int g_memory_db_init_result = -1;
@@ -301,7 +302,7 @@ void memory_db_close(MemoryDB *mdb) {
 }
 
 /*
- * Internal initialization function (called via pthread_once)
+ * Internal initialization function (called under g_memory_db_mutex)
  */
 static void memory_db_do_init(void) {
     const char *path = g_memory_db_path;
@@ -372,8 +373,11 @@ int memory_db_init_global(const char *path) {
         }
     }
 
-    /* Perform one-time initialization */
-    pthread_once(&g_memory_db_init_once, memory_db_do_init);
+    /* Perform one-time initialization (mutex already held) */
+    if (!g_memory_db_initialized) {
+        g_memory_db_initialized = true;
+        memory_db_do_init();
+    }
 
     pthread_mutex_unlock(&g_memory_db_mutex);
     return g_memory_db_init_result;
@@ -396,8 +400,8 @@ void memory_db_cleanup_global(void) {
         g_memory_db_path = NULL;
     }
 
-    /* Reset pthread_once so init can be called again if needed */
-    g_memory_db_init_once = (pthread_once_t)PTHREAD_ONCE_INIT;
+    /* Reset initialized flag so init can be called again if needed */
+    g_memory_db_initialized = false;
     g_memory_db_init_result = -1;
 
     pthread_mutex_unlock(&g_memory_db_mutex);

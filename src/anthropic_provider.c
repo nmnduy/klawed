@@ -10,6 +10,7 @@
 #include "logger.h"
 #include "http_client.h"
 #include "tui.h"  // For streaming TUI updates
+#include "message_queue.h"  // For thread-safe streaming updates
 #include "util/string_utils.h" // For trim_whitespace
 
 #include <stdio.h>
@@ -481,9 +482,13 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
             LOG_DEBUG("Stream: message_start");
 
             // Initialize TUI for streaming by adding an empty assistant line
-            if (ctx->state && ctx->state->tui) {
-                // Add assistant prefix with empty text - streaming will fill it in
-                tui_add_conversation_line(ctx->state->tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
+            if (ctx->state) {
+                if (ctx->state->tui_queue) {
+                    post_tui_stream_start(ctx->state->tui_queue, "[Assistant]", COLOR_PAIR_ASSISTANT);
+                } else if (ctx->state->tui) {
+                    // Add assistant prefix with empty text - streaming will fill it in
+                    tui_add_conversation_line(ctx->state->tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
+                }
             }
 
             break;
@@ -568,8 +573,12 @@ static int streaming_event_handler(StreamEvent *event, void *userdata) {
                                 ctx->accumulated_text[ctx->accumulated_size] = '\0';
 
                                 // Stream to TUI if available
-                                if (ctx->state && ctx->state->tui) {
-                                    tui_update_last_conversation_line(ctx->state->tui, text->valuestring);
+                                if (ctx->state) {
+                                    if (ctx->state->tui_queue) {
+                                        post_tui_message(ctx->state->tui_queue, TUI_MSG_STREAM_APPEND, text->valuestring);
+                                    } else if (ctx->state->tui) {
+                                        tui_update_last_conversation_line(ctx->state->tui, text->valuestring);
+                                    }
                                 }
                             }
                         }

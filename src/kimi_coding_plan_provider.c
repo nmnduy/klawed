@@ -15,6 +15,7 @@
 #include "arena.h"
 #include "retry_logic.h"
 #include "tui.h"
+#include "message_queue.h"  // For thread-safe streaming updates
 #include "util/string_utils.h"
 
 #include <stdio.h>
@@ -57,11 +58,16 @@ static char* arena_strdup(Arena *arena, const char *str) {
 static void kimi_oauth_message_callback(void *user_data, const char *message, int is_error) {
     ConversationState *state = (ConversationState *)user_data;
 
-    if (state && state->tui) {
+    if (state && (state->tui_queue || state->tui)) {
         // Display in TUI conversation
         TUIColorPair color = is_error ? COLOR_PAIR_ERROR : COLOR_PAIR_STATUS;
-        tui_add_conversation_line(state->tui, "[System]", message, color);
-        tui_refresh(state->tui);
+        if (state->tui_queue) {
+            post_tui_stream_start(state->tui_queue, "[System]", (int)color);
+            post_tui_message(state->tui_queue, TUI_MSG_STREAM_APPEND, message);
+        } else {
+            tui_add_conversation_line(state->tui, "[System]", message, color);
+            tui_refresh(state->tui);
+        }
     } else {
         // Fallback to console output
         if (is_error) {
@@ -220,8 +226,12 @@ static int kimi_streaming_event_handler(StreamEvent *event, void *userdata) {
 
                         if (ctx->accumulated_text && needed <= ctx->accumulated_capacity) {
                             // Initialize TUI on first content
-                            if (ctx->accumulated_size == 0 && ctx->state && ctx->state->tui) {
-                                tui_add_conversation_line(ctx->state->tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
+                            if (ctx->accumulated_size == 0 && ctx->state) {
+                                if (ctx->state->tui_queue) {
+                                    post_tui_stream_start(ctx->state->tui_queue, "[Assistant]", COLOR_PAIR_ASSISTANT);
+                                } else if (ctx->state->tui) {
+                                    tui_add_conversation_line(ctx->state->tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
+                                }
                                 ctx->assistant_line_added = 1;
                             }
 
@@ -231,8 +241,12 @@ static int kimi_streaming_event_handler(StreamEvent *event, void *userdata) {
                             ctx->accumulated_text[ctx->accumulated_size] = '\0';
 
                             // Stream to TUI if available
-                            if (ctx->state && ctx->state->tui) {
-                                tui_update_last_conversation_line(ctx->state->tui, content->valuestring);
+                            if (ctx->state) {
+                                if (ctx->state->tui_queue) {
+                                    post_tui_message(ctx->state->tui_queue, TUI_MSG_STREAM_APPEND, content->valuestring);
+                                } else if (ctx->state->tui) {
+                                    tui_update_last_conversation_line(ctx->state->tui, content->valuestring);
+                                }
                             }
                         }
                     }
@@ -258,8 +272,12 @@ static int kimi_streaming_event_handler(StreamEvent *event, void *userdata) {
 
                         if (ctx->accumulated_reasoning && needed <= ctx->reasoning_capacity) {
                             // Initialize reasoning line in TUI on first content
-                            if (ctx->reasoning_size == 0 && ctx->state && ctx->state->tui) {
-                                tui_add_conversation_line(ctx->state->tui, "⟨Reasoning⟩", "", COLOR_PAIR_TOOL_DIM);
+                            if (ctx->reasoning_size == 0 && ctx->state) {
+                                if (ctx->state->tui_queue) {
+                                    post_tui_stream_start(ctx->state->tui_queue, "⟨Reasoning⟩", COLOR_PAIR_TOOL_DIM);
+                                } else if (ctx->state->tui) {
+                                    tui_add_conversation_line(ctx->state->tui, "⟨Reasoning⟩", "", COLOR_PAIR_TOOL_DIM);
+                                }
                                 ctx->reasoning_line_added = 1;
                             }
 
@@ -269,8 +287,12 @@ static int kimi_streaming_event_handler(StreamEvent *event, void *userdata) {
                             ctx->accumulated_reasoning[ctx->reasoning_size] = '\0';
 
                             // Stream reasoning to TUI if available
-                            if (ctx->state && ctx->state->tui) {
-                                tui_update_last_conversation_line(ctx->state->tui, reasoning_content->valuestring);
+                            if (ctx->state) {
+                                if (ctx->state->tui_queue) {
+                                    post_tui_message(ctx->state->tui_queue, TUI_MSG_STREAM_APPEND, reasoning_content->valuestring);
+                                } else if (ctx->state->tui) {
+                                    tui_update_last_conversation_line(ctx->state->tui, reasoning_content->valuestring);
+                                }
                             }
 
                             LOG_DEBUG("Accumulated reasoning_content: %zu bytes", ctx->reasoning_size);
