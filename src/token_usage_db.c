@@ -91,17 +91,17 @@ int token_usage_extract_from_response(
 
     if (prompt_tokens_json && cJSON_IsNumber(prompt_tokens_json)) {
         *prompt_tokens = prompt_tokens_json->valueint;
-        LOG_DEBUG("token_usage_extract: found prompt_tokens = %ld", (long)*prompt_tokens);
+        LOG_DEBUG("token_usage_extract: found prompt_tokens = %lld", (long long)*prompt_tokens);
     }
 
     if (completion_tokens_json && cJSON_IsNumber(completion_tokens_json)) {
         *completion_tokens = completion_tokens_json->valueint;
-        LOG_DEBUG("token_usage_extract: found completion_tokens = %ld", (long)*completion_tokens);
+        LOG_DEBUG("token_usage_extract: found completion_tokens = %lld", (long long)*completion_tokens);
     }
 
     if (total_tokens_json && cJSON_IsNumber(total_tokens_json)) {
         *total_tokens = total_tokens_json->valueint;
-        LOG_DEBUG("token_usage_extract: found total_tokens = %ld", (long)*total_tokens);
+        LOG_DEBUG("token_usage_extract: found total_tokens = %lld", (long long)*total_tokens);
     }
 
     // Extract cache-related token counts with provider-specific detection
@@ -111,7 +111,7 @@ int token_usage_extract_from_response(
     cJSON *direct_cached_tokens = cJSON_GetObjectItem(usage, "cached_tokens");
     if (direct_cached_tokens && cJSON_IsNumber(direct_cached_tokens)) {
         *cached_tokens = direct_cached_tokens->valueint;
-        LOG_DEBUG("token_usage_extract: found Moonshot-style cached_tokens = %ld", (long)*cached_tokens);
+        LOG_DEBUG("token_usage_extract: found Moonshot-style cached_tokens = %lld", (long long)*cached_tokens);
     }
 
     // 2. DeepSeek-style: cached_tokens inside prompt_tokens_details
@@ -121,7 +121,7 @@ int token_usage_extract_from_response(
             cJSON *cached_tokens_json = cJSON_GetObjectItem(prompt_tokens_details, "cached_tokens");
             if (cached_tokens_json && cJSON_IsNumber(cached_tokens_json)) {
                 *cached_tokens = cached_tokens_json->valueint;
-                LOG_DEBUG("token_usage_extract: found DeepSeek-style cached_tokens = %ld", (long)*cached_tokens);
+                LOG_DEBUG("token_usage_extract: found DeepSeek-style cached_tokens = %lld", (long long)*cached_tokens);
             }
         }
     }
@@ -131,7 +131,7 @@ int token_usage_extract_from_response(
         cJSON *cache_read_input_tokens = cJSON_GetObjectItem(usage, "cache_read_input_tokens");
         if (cache_read_input_tokens && cJSON_IsNumber(cache_read_input_tokens)) {
             *cached_tokens = cache_read_input_tokens->valueint;
-            LOG_DEBUG("token_usage_extract: using Anthropic-style cache_read_input_tokens = %ld", (long)*cached_tokens);
+            LOG_DEBUG("token_usage_extract: using Anthropic-style cache_read_input_tokens = %lld", (long long)*cached_tokens);
         }
     }
 
@@ -141,18 +141,18 @@ int token_usage_extract_from_response(
 
     if (cache_hit_tokens_json && cJSON_IsNumber(cache_hit_tokens_json)) {
         *prompt_cache_hit_tokens = cache_hit_tokens_json->valueint;
-        LOG_DEBUG("token_usage_extract: found prompt_cache_hit_tokens = %ld", (long)*prompt_cache_hit_tokens);
+        LOG_DEBUG("token_usage_extract: found prompt_cache_hit_tokens = %lld", (long long)*prompt_cache_hit_tokens);
     }
 
     if (cache_miss_tokens_json && cJSON_IsNumber(cache_miss_tokens_json)) {
         *prompt_cache_miss_tokens = cache_miss_tokens_json->valueint;
-        LOG_DEBUG("token_usage_extract: found prompt_cache_miss_tokens = %ld", (long)*prompt_cache_miss_tokens);
+        LOG_DEBUG("token_usage_extract: found prompt_cache_miss_tokens = %lld", (long long)*prompt_cache_miss_tokens);
     }
 
     cJSON_Delete(json);
 
-    LOG_DEBUG("token_usage_extract: completed (prompt=%ld, completion=%ld, total=%ld)",
-             *prompt_tokens, *completion_tokens, (long)*total_tokens);
+    LOG_DEBUG("token_usage_extract: completed (prompt=%lld, completion=%lld, total=%lld)",
+             (long long)*prompt_tokens, (long long)*completion_tokens, (long long)*total_tokens);
     return 0;
 }
 
@@ -403,8 +403,8 @@ int token_usage_db_log(
     sqlite3_finalize(stmt);
     pthread_mutex_unlock(&db->mutex);
 
-    LOG_DEBUG("Token usage logged: prompt=%ld, completion=%ld, cached=%ld",
-              prompt_tokens, completion_tokens, cached_tokens);
+    LOG_DEBUG("Token usage logged: prompt=%lld, completion=%lld, cached=%lld",
+              (long long)prompt_tokens, (long long)completion_tokens, (long long)cached_tokens);
     return 0;
 }
 
@@ -464,9 +464,9 @@ int token_usage_db_get_session_usage(
         *completion_tokens = sqlite3_column_int64(stmt, 1);
         *cached_tokens = sqlite3_column_int64(stmt, 2);
 
-        LOG_FINE("Retrieved token usage for session %s: prompt=%ld, completion=%ld, cached=%ld",
+        LOG_FINE("Retrieved token usage for session %s: prompt=%lld, completion=%lld, cached=%lld",
                  session_id ? session_id : "all",
-                 *prompt_tokens, *completion_tokens, (long)*cached_tokens);
+                 (long long)*prompt_tokens, (long long)*completion_tokens, (long long)*cached_tokens);
     } else if (rc == SQLITE_DONE) {
         LOG_FINE("No token usage records found for session %s",
                  session_id ? session_id : "all");
@@ -535,9 +535,9 @@ int token_usage_db_get_session_totals(
         *completion_tokens = sqlite3_column_int64(stmt, 1);
         *cached_tokens = sqlite3_column_int64(stmt, 2);
 
-        LOG_FINE("Retrieved token totals for session %s: prompt=%ld, completion=%ld, cached=%ld",
+        LOG_FINE("Retrieved token totals for session %s: prompt=%lld, completion=%lld, cached=%lld",
                  session_id ? session_id : "all",
-                 (long)*prompt_tokens, (long)*completion_tokens, (long)*cached_tokens);
+                 (long long)*prompt_tokens, (long long)*completion_tokens, (long long)*cached_tokens);
     } else {
         LOG_ERROR("Failed to execute token totals query: %s", sqlite3_errmsg(db->db));
         sqlite3_finalize(stmt);
@@ -596,8 +596,8 @@ int token_usage_db_get_last_prompt_tokens(
     rc = sqlite3_step(stmt);
     if (rc == SQLITE_ROW) {
         *prompt_tokens = sqlite3_column_int64(stmt, 0);
-        LOG_DEBUG("Retrieved last prompt tokens for session %s: %ld",
-                  session_id ? session_id : "all", (long)*prompt_tokens);
+        LOG_DEBUG("Retrieved last prompt tokens for session %s: %lld",
+                  session_id ? session_id : "all", (long long)*prompt_tokens);
     } else if (rc == SQLITE_DONE) {
         LOG_DEBUG("No token usage records found for session %s",
                   session_id ? session_id : "all");
