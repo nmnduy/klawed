@@ -122,6 +122,15 @@ libbsd is a newly introduced to this codebase. We will slowly transition to it. 
 9. **Careful pointer use** - Be mindful of pointer complexity
 10. **Zero warnings** - Compile with all warnings, pass static analysis ✓
 
+**Thread-safe TUI updates (11)** - For code running in worker threads (especially streaming API responses), route all ncurses/TUI updates through the TUI message queue to avoid deadlocks. Use:
+- `post_tui_message()` - For adding lines, status updates, errors
+- `post_tui_stream_start()` / `TUI_MSG_STREAM_START` - For opening streaming lines with color
+- `TUI_MSG_STREAM_APPEND` - For appending incremental text
+
+Direct ncurses calls from worker threads can cause deadlocks due to ncurses' internal locking. The message queue provides thread-safe communication between worker threads and the main TUI thread.
+
+See: `src/message_queue.h`, `src/message_queue.c`
+
 **Note:** These rules were discovered after the project has somewhat matured. You might see code that violates them. That's fine, we will incrementally refactor following the rules above. If it makes practical sense to use memory allocation, then use `src/arena.h`.
 
 **Full details:** `docs/nasa_c_coding_standards.md`
