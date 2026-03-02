@@ -158,6 +158,7 @@ int poll_tui_message(TUIMessageQueue *queue, TUIMessage *msg) {
     msg->type = src->type;
     msg->text = src->text; /* Transfer ownership to caller */
     msg->priority = src->priority;
+    msg->color_pair = src->color_pair;
 
     src->text = NULL; /* Clear so we don't double-free */
     queue->tail = (queue->tail + 1) % queue->capacity;
@@ -191,6 +192,7 @@ int wait_tui_message(TUIMessageQueue *queue, TUIMessage *msg) {
     msg->type = src->type;
     msg->text = src->text; /* Transfer ownership to caller */
     msg->priority = src->priority;
+    msg->color_pair = src->color_pair;
 
     src->text = NULL; /* Clear so we don't double-free */
     queue->tail = (queue->tail + 1) % queue->capacity;
