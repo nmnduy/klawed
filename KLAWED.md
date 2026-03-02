@@ -126,6 +126,18 @@ libbsd is a newly introduced to this codebase. We will slowly transition to it. 
 
 **Full details:** `docs/nasa_c_coding_standards.md`
 
+## Thread-Safe TUI Updates
+
+For code running in worker threads (especially streaming API responses), route all ncurses/TUI updates through the TUI message queue to avoid deadlocks:
+
+- `post_tui_message()` - For adding lines, status updates, errors
+- `post_tui_stream_start()` / `TUI_MSG_STREAM_START` - For opening streaming lines with color
+- `TUI_MSG_STREAM_APPEND` - For appending incremental text
+
+Direct ncurses calls from worker threads can cause deadlocks due to ncurses' internal locking. The message queue provides thread-safe communication between worker threads and the main TUI thread.
+
+See: `src/message_queue.h`, `src/message_queue.c`
+
 ## Building and Testing
 
 **Note for macOS users:** If you encounter errors like "invalid option -- 2" or "invalid option -- 0" when running `make`, you may have an old version of make (3.81) that has issues parsing paths with underscores. Install a newer version with `brew install make` and use `gmake` instead of `make`, or use the provided wrapper script `./make_wrapper.sh`.
