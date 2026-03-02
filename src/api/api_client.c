@@ -209,6 +209,25 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
     // Ensure system prompt is ready before API call
     await_system_prompt_ready(state);
 
+    // Safety guard: validate conversation ends with a user/tool message.
+    // An API call where the last meaningful message is a system or compaction
+    // message (no user message) is always wrong and results in an API error.
+    {
+        int last_meaningful = -1;
+        for (int i = state->count - 1; i >= 0; i--) {
+            MessageRole r = state->messages[i].role;
+            if (r != MSG_SYSTEM && r != MSG_AUTO_COMPACTION) {
+                last_meaningful = i;
+                break;
+            }
+        }
+        if (last_meaningful < 0) {
+            LOG_ERROR("call_api_with_retries: no user/assistant message in state "
+                      "(count=%d) — refusing to send invalid request", state->count);
+            return NULL;
+        }
+    }
+
     // Log plan mode before API call
     LOG_DEBUG("[API] call_api_with_retries: plan_mode=%d", state->plan_mode);
 
