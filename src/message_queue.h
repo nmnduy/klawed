@@ -25,7 +25,9 @@ typedef enum {
     TUI_MSG_CLEAR,          /* Clear conversation display */
     TUI_MSG_ERROR,          /* Display error message */
     TUI_MSG_TODO_UPDATE,    /* Update TODO list */
-    TUI_MSG_TODO_HIDE       /* Hide TODO banner (AI idle) */
+    TUI_MSG_TODO_HIDE,      /* Hide TODO banner (AI idle) */
+    TUI_MSG_STREAM_START,   /* Open a new streaming line (thread-safe, from worker) */
+    TUI_MSG_STREAM_APPEND   /* Append incremental text to last streaming line */
 } TUIMessageType;
 
 /**
@@ -36,15 +38,14 @@ typedef struct {
     TUIMessageType type;
     char *text;             /* Owned by queue, freed after processing */
     int priority;           /* Higher = more urgent (reserved for future) */
-
-
+    int color_pair;         /* Color pair for TUI_MSG_STREAM_START */
 } TUIMessage;
 
 /**
  * Thread-safe circular buffer for TUI messages
  * Overflow policy: Drop oldest messages (FIFO eviction)
  */
-typedef struct {
+typedef struct TUIMessageQueue {
     TUIMessage *messages;   /* Circular buffer */
     size_t capacity;        /* Max messages before dropping oldest */
     size_t head;            /* Next write position */
@@ -76,6 +77,17 @@ int tui_msg_queue_init(TUIMessageQueue *queue, size_t capacity);
  * @return 0 on success, -1 on error
  */
 int post_tui_message(TUIMessageQueue *queue, TUIMessageType type, const char *text);
+
+/**
+ * Post a stream-start message to the TUI queue
+ * Signals main thread to open a new streaming line with the given label and color.
+ *
+ * @param queue     Queue to post to
+ * @param label     Label string (e.g. "[Assistant]"), will be copied
+ * @param color_pair ncurses color pair for the new line
+ * @return 0 on success, -1 on error
+ */
+int post_tui_stream_start(TUIMessageQueue *queue, const char *label, int color_pair);
 
 
 
