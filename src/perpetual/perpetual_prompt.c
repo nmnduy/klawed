@@ -36,6 +36,9 @@ static int buf_append(char **buf, size_t *cap, size_t *len, const char *src)
 /* Append a formatted string; returns 0 on success, -1 on OOM. */
 static int buf_appendf(char **buf, size_t *cap, size_t *len,
                        const char *fmt, ...)
+    __attribute__((format(printf, 4, 5)));
+static int buf_appendf(char **buf, size_t *cap, size_t *len,
+                       const char *fmt, ...)
 {
     /* Two-pass vsnprintf: first measure, then write. */
     va_list ap;
