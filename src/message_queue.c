@@ -90,6 +90,52 @@ int post_tui_message(TUIMessageQueue *queue, TUIMessageType type, const char *te
     return 0;
 }
 
+int post_tui_stream_start(TUIMessageQueue *queue, const char *label, int color_pair) {
+    if (!queue) {
+        return -1;
+    }
+
+    /* Copy label if provided */
+    char *label_copy = NULL;
+    if (label) {
+        label_copy = strdup(label);
+        if (!label_copy) {
+            return -1;
+        }
+    }
+
+    pthread_mutex_lock(&queue->mutex);
+
+    /* If queue is full, drop oldest message (FIFO eviction) */
+    if (queue->count == queue->capacity) {
+        TUIMessage *oldest = &queue->messages[queue->tail];
+        LOG_DEBUG("[TUI] Message queue at capacity (%zu) - dropping oldest message (type=%d)",
+                  queue->capacity,
+                  oldest->type);
+        free(oldest->text);
+        oldest->text = NULL;
+        queue->tail = (queue->tail + 1) % queue->capacity;
+        queue->count--;
+    }
+
+    /* Add new stream-start message at head */
+    TUIMessage *msg = &queue->messages[queue->head];
+    msg->type = TUI_MSG_STREAM_START;
+    msg->text = label_copy;
+    msg->priority = 0;
+    msg->color_pair = color_pair;
+
+    queue->head = (queue->head + 1) % queue->capacity;
+    queue->count++;
+
+    /* Signal waiting readers */
+    pthread_cond_signal(&queue->not_empty);
+
+    pthread_mutex_unlock(&queue->mutex);
+
+    return 0;
+}
+
 
 
 

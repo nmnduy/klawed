@@ -72,6 +72,10 @@ typedef struct Provider Provider;
 // We only use pointers to it, so forward declaration is sufficient
 typedef struct TUIStateStruct TUIState;
 
+// TUIMessageQueue is defined in message_queue.h
+// Forward declaration so ConversationState can hold a pointer without a full include
+typedef struct TUIMessageQueue TUIMessageQueue;
+
 // ============================================================================
 // Enums
 // ============================================================================
@@ -253,6 +257,9 @@ typedef struct ConversationState {
 
     // TUI reference for streaming updates (NULL if not using TUI)
     TUIState *tui;                  // TUI state for real-time streaming display
+
+    // Queue for thread-safe streaming TUI updates (NULL if not using TUI)
+    TUIMessageQueue *tui_queue;
 
 #ifdef HAVE_ZMQ
     // ZMQ socket context for IPC communication

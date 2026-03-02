@@ -1138,7 +1138,19 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
             }
             break;
 
+        case TUI_MSG_STREAM_START:
+            /* Open a new streaming line with label and color from worker thread */
+            tui_add_conversation_line(
+                tui,
+                msg->text ? msg->text : "",
+                "",
+                (TUIColorPair)msg->color_pair);
+            break;
 
+        case TUI_MSG_STREAM_APPEND:
+            /* Append incremental text token to last streaming line */
+            tui_update_last_conversation_line(tui, msg->text ? msg->text : "");
+            break;
 
         default:
             /* Unknown message type; ignore */
