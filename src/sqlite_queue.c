@@ -1177,48 +1177,12 @@ int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *rec
     free(notice_str);
     cJSON_Delete(notice_json);
 
-    // ALSO save as a TEXT message so it gets seeded into conversation state
-    // This ensures the AI sees the compaction notice in the conversation history
-    cJSON *text_json = cJSON_CreateObject();
-    if (text_json) {
-        cJSON_AddStringToObject(text_json, "messageType", "TEXT");
-        // Build full content with summary for the conversation history
-        char text_content[4600];
-        if (summary && summary[0] != '\0') {
-            snprintf(text_content, sizeof(text_content),
-                "## Context Compaction Notice\n\n"
-                "%d earlier messages have been stored in memory. "
-                "Use MemorySearch to retrieve relevant past context if needed.\n\n"
-                "### Summary of Compacted Context\n\n"
-                "%s\n\n"
-                "---\n"
-                "**Tokens**: %zu → %zu (freed ~%zu tokens)\n"
-                "**Context usage**: %.1f%% → %.1f%%",
-                messages_compacted,
-                summary,
-                tokens_before, tokens_after, tokens_before - tokens_after,
-                usage_before_pct, usage_after_pct);
-        } else {
-            snprintf(text_content, sizeof(text_content),
-                "## Context Compaction Notice\n\n"
-                "%d earlier messages have been stored in memory. "
-                "Use MemorySearch to retrieve relevant past context if needed.\n\n"
-                "---\n"
-                "**Tokens**: %zu → %zu (freed ~%zu tokens)\n"
-                "**Context usage**: %.1f%% → %.1f%%",
-                messages_compacted,
-                tokens_before, tokens_after, tokens_before - tokens_after,
-                usage_before_pct, usage_after_pct);
-        }
-        cJSON_AddStringToObject(text_json, "content", text_content);
-        char *text_str = cJSON_PrintUnformatted(text_json);
-        if (text_str) {
-            // Send to ourselves so it gets seeded into conversation state
-            sqlite_queue_send(ctx, ctx->sender_name, text_str, strlen(text_str));
-            free(text_str);
-        }
-        cJSON_Delete(text_json);
-    }
+    // NOTE: We do NOT self-send a TEXT message here. The compaction notice is
+    // already present in the conversation state as a MSG_AUTO_COMPACTION message
+    // (added directly by compaction_perform). Self-sending it as a TEXT would
+    // cause it to be processed as a user instruction, triggering a spurious LLM
+    // API call with an invalid payload (no user message following the compaction
+    // notice system message).
 
     return result;
 }
