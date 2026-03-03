@@ -414,6 +414,11 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->status_spinner_frame = 0;
     tui->status_spinner_last_update_ns = 0;
 
+    // Initialize pacman thinking style state
+    tui->pacman_dots_eaten = 0;
+    tui->pacman_direction = 1;
+    tui->pacman_max_dots = 0;
+
     // Initialize text diffusion effect
     text_diffusion_init(&tui->status_text_diffusion);
 
@@ -426,13 +431,17 @@ int tui_init(TUIState *tui, ConversationState *state) {
     if (config_load(&loaded_config) == 0) {
         tui->input_box_style = loaded_config.input_box_style;
         tui->response_style = loaded_config.response_style;
+        tui->thinking_style = loaded_config.thinking_style;
         LOG_DEBUG("[TUI] Loaded input_box_style from config: %s",
                   config_input_style_to_string(tui->input_box_style));
         LOG_DEBUG("[TUI] Loaded response_style from config: %s",
                   config_response_style_to_string(tui->response_style));
+        LOG_DEBUG("[TUI] Loaded thinking_style from config: %s",
+                  config_thinking_style_to_string(tui->thinking_style));
     } else {
         tui->input_box_style = INPUT_STYLE_HORIZONTAL;
         tui->response_style = RESPONSE_STYLE_BORDER;
+        tui->thinking_style = THINKING_STYLE_WAVE;
     }
 
     // Initialize command mode buffer

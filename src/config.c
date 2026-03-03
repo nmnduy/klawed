@@ -23,6 +23,7 @@ void config_init_defaults(KlawedConfig *config) {
     if (!config) return;
     config->input_box_style = INPUT_STYLE_HORIZONTAL;
     config->response_style = RESPONSE_STYLE_BORDER;
+    config->thinking_style = THINKING_STYLE_WAVE;
     config->theme[0] = '\0';  // Empty means use default or KLAWED_THEME env var
 
     // Initialize LLM provider defaults (legacy single-provider)
@@ -95,6 +96,25 @@ TUIResponseStyle config_response_style_from_string(const char *str) {
         return RESPONSE_STYLE_CARET;
     }
     return RESPONSE_STYLE_BORDER;
+}
+
+const char* config_thinking_style_to_string(TUIThinkingStyle style) {
+    switch (style) {
+        case THINKING_STYLE_PACMAN:
+            return "pacman";
+        case THINKING_STYLE_WAVE:
+        default:
+            return "wave";
+    }
+}
+
+TUIThinkingStyle config_thinking_style_from_string(const char *str) {
+    if (!str) return THINKING_STYLE_WAVE;
+
+    if (strcmp(str, "pacman") == 0) {
+        return THINKING_STYLE_PACMAN;
+    }
+    return THINKING_STYLE_WAVE;
 }
 
 /**
@@ -200,6 +220,13 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
     if (resp_style_item && cJSON_IsString(resp_style_item)) {
         config->response_style = config_response_style_from_string(resp_style_item->valuestring);
         LOG_DEBUG("[Config] Loaded response_style from %s: %s", label, resp_style_item->valuestring);
+    }
+
+    // Read thinking_style
+    cJSON *thinking_style_item = cJSON_GetObjectItem(root, "thinking_style");
+    if (thinking_style_item && cJSON_IsString(thinking_style_item)) {
+        config->thinking_style = config_thinking_style_from_string(thinking_style_item->valuestring);
+        LOG_DEBUG("[Config] Loaded thinking_style from %s: %s", label, thinking_style_item->valuestring);
     }
 
     // Read theme
@@ -494,6 +521,14 @@ int config_save(const KlawedConfig *config) {
         cJSON_SetValuestring(existing_resp_style, config_response_style_to_string(config->response_style));
     } else if (config->response_style != defaults.response_style) {
         cJSON_AddStringToObject(root, "response_style", config_response_style_to_string(config->response_style));
+    }
+
+    // Update thinking_style - only add if it differs from default or already exists
+    cJSON *existing_thinking_style = cJSON_GetObjectItem(root, "thinking_style");
+    if (existing_thinking_style) {
+        cJSON_SetValuestring(existing_thinking_style, config_thinking_style_to_string(config->thinking_style));
+    } else if (config->thinking_style != defaults.thinking_style) {
+        cJSON_AddStringToObject(root, "thinking_style", config_thinking_style_to_string(config->thinking_style));
     }
 
     // Update theme - only add if non-empty and (already exists or differs from default empty)

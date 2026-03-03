@@ -101,6 +101,12 @@ typedef enum {
     RESPONSE_STYLE_CARET     // Leading '>>> ' caret, no wrapping borders
 } TUIResponseStyle;
 
+// AI thinking style (visual appearance of thinking/spinner indicator)
+typedef enum {
+    THINKING_STYLE_WAVE,      // Rolling waveform visualizer (default)
+    THINKING_STYLE_PACMAN    // Pacman eating dots, distance shows context usage
+} TUIThinkingStyle;
+
 // TUI State
 typedef struct TUIStateStruct {
     // Centralized window manager (owns ncurses windows)
@@ -136,6 +142,11 @@ typedef struct TUIStateStruct {
     // Text diffusion effect for status messages
     TextDiffusionConfig status_text_diffusion; // Diffusion animation config
 
+    // Pacman thinking style state
+    int pacman_dots_eaten;       // Number of dots consumed by pacman
+    int pacman_direction;        // 1 = moving right, -1 = moving left
+    int pacman_max_dots;         // Maximum dots to display (calculated from context %)
+
 
     // Database connection for real-time token usage queries
     struct PersistenceDB *persistence_db;  // Database connection for token queries
@@ -148,6 +159,7 @@ typedef struct TUIStateStruct {
     TUIMode mode;            // Current input mode (NORMAL, INSERT, or COMMAND)
     TUIInputBoxStyle input_box_style; // Current input box visual style
     TUIResponseStyle response_style;  // Current response visual style
+    TUIThinkingStyle thinking_style;  // Current thinking/spinner visual style
     int normal_mode_last_key; // Previous key in normal mode (for gg, G combos)
     char *command_buffer;    // Buffer for command mode input (starts with ':')
     int command_buffer_len;  // Length of command buffer
