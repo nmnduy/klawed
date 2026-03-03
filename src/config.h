@@ -58,6 +58,7 @@ typedef struct {
 typedef struct {
     TUIInputBoxStyle input_box_style;
     TUIResponseStyle response_style;
+    TUIThinkingStyle thinking_style;
     char theme[CONFIG_THEME_MAX];
     LLMProviderConfig llm_provider;         // LLM provider configuration (legacy single-provider)
     NamedProviderConfig providers[CONFIG_MAX_PROVIDERS]; // Multiple named providers
@@ -119,6 +120,22 @@ const char* config_response_style_to_string(TUIResponseStyle style);
  * @return The style enum value, or RESPONSE_STYLE_BORDER if unknown
  */
 TUIResponseStyle config_response_style_from_string(const char *str);
+
+/**
+ * Convert thinking style to string
+ *
+ * @param style The thinking style enum value
+ * @return String name of the thinking style
+ */
+const char* config_thinking_style_to_string(TUIThinkingStyle style);
+
+/**
+ * Parse thinking style from string
+ *
+ * @param str String name of the style
+ * @return The style enum value, or THINKING_STYLE_WAVE if unknown
+ */
+TUIThinkingStyle config_thinking_style_from_string(const char *str);
 
 /**
  * Get provider type name as string

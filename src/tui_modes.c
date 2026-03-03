@@ -817,6 +817,29 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
             input_redraw(tui, prompt);
             break;
 
+        case 't':  // Toggle thinking style
+            // Toggle between wave and pacman style
+            if (tui->thinking_style == THINKING_STYLE_WAVE) {
+                tui->thinking_style = THINKING_STYLE_PACMAN;
+                tui_update_status(tui, "Thinking style: pacman (context: dot distance)");
+            } else {
+                tui->thinking_style = THINKING_STYLE_WAVE;
+                tui_update_status(tui, "Thinking style: wave");
+            }
+            // Save the new style to config
+            {
+                KlawedConfig cfg;
+                config_init_defaults(&cfg);
+                cfg.thinking_style = tui->thinking_style;
+                config_save(&cfg);
+            }
+            // Re-render to show the style change
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            break;
+
         default:
             /* Unhandled key in normal mode */
             break;

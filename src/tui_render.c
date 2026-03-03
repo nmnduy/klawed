@@ -158,6 +158,98 @@ static void status_spinner_stop(TUIState *tui) {
     tui->status_spinner_spring_initialized = 0;
     tui->status_spinner_pos = 0.0;
     tui->status_spinner_vel = 0.0;
+    // Reset pacman state
+    tui->pacman_dots_eaten = 0;
+    tui->pacman_direction = 1;
+}
+
+// ============================================================================
+// Pacman Thinking Style Rendering
+// ============================================================================
+
+// Get the maximum context tokens from env var or default (200k)
+static int get_pacman_max_context(void) {
+    const char *env = getenv("KLAWED_PACMAN_MAX_CONTEXT");
+    if (env) {
+        char *endptr;
+        long val = strtol(env, &endptr, 10);
+        if (endptr != env && *endptr == '\0' && val > 0 && val <= 10000000) {
+            return (int)val;
+        }
+    }
+    return 200000; // Default: 200k tokens
+}
+
+// Build the pacman string: "● ● ● ● ● ▶      "
+// Uses UTF-8 string copy to handle Unicode characters properly
+static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int prompt_tokens) {
+    if (!tui || !buf || buf_size == 0) return;
+
+    int max_context = get_pacman_max_context();
+    int max_dots = tui->pacman_max_dots;
+    if (max_dots <= 0) max_dots = 10; // Fallback
+
+    // Calculate how many dots should be eaten based on context usage
+    // More context = more dots eaten
+    int dots_to_eat = 0;
+    if (max_context > 0 && prompt_tokens > 0) {
+        double ratio = (double)prompt_tokens / (double)max_context;
+        if (ratio > 1.0) ratio = 1.0;
+        dots_to_eat = (int)(ratio * max_dots);
+        if (dots_to_eat > max_dots) dots_to_eat = max_dots;
+    }
+
+    // Animate: alternate between eating and moving
+    int frame = tui->status_spinner_frame;
+    int eating_frame = (frame / 4) % 2; // Alternate every 4 frames
+
+    // Update eaten count for animation
+    tui->pacman_dots_eaten = dots_to_eat;
+
+    // Build the pacman display using string operations for UTF-8
+    char tmp[16] = {0};
+    size_t idx = 0;
+    int i;
+
+    // Draw dots and pacman
+    for (i = 0; i < max_dots && idx < buf_size - 4; i++) {
+        if (i < tui->pacman_dots_eaten) {
+            // Dot eaten - dim dot as trail
+            strlcpy(tmp, "·", sizeof(tmp));
+        } else if (i == tui->pacman_dots_eaten && i < max_dots) {
+            // Pacman at current position - use ASCII for compatibility
+            strlcpy(tmp, eating_frame ? ">" : "●", sizeof(tmp));
+        } else {
+            // Uneaten dot
+            strlcpy(tmp, "·", sizeof(tmp));
+        }
+        size_t len = strlen(tmp);
+        if (idx + len < buf_size - 1) {
+            memcpy(buf + idx, tmp, len);
+            idx += len;
+        }
+    }
+
+    // Add space after pacman
+    if (idx < buf_size - 1) {
+        buf[idx++] = ' ';
+    }
+
+    buf[idx] = '\0';
+}
+
+// Initialize pacman state when thinking starts
+static void pacman_init(TUIState *tui, int available_width) {
+    if (!tui) return;
+
+    // Calculate max dots based on available width (leave room for text)
+    int max_dots = available_width - 20; // Leave space for status text
+    if (max_dots < 5) max_dots = 5;
+    if (max_dots > 30) max_dots = 30;
+
+    tui->pacman_max_dots = max_dots;
+    tui->pacman_dots_eaten = 0;
+    tui->pacman_direction = 1;
 }
 
 // ============================================================================
@@ -361,32 +453,73 @@ void render_status_window(TUIState *tui) {
     int left_limit = right_start_col;  // Don't overlap with right-side indicators
 
     if (has_spinner && spinner_frame_len > 0 && left_col + status_display_width <= left_limit) {
-        // Render spinner character with STATUS color (yellow)
-        if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
-        } else {
-            wattron(tui->wm.status_win, A_BOLD);
-        }
-        mvwaddnstr(tui->wm.status_win, 0, left_col, spinner_frame, spinner_frame_len);
-        if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
-        } else {
-            wattroff(tui->wm.status_win, A_BOLD);
-        }
-        left_col += utf8_display_width(spinner_frame);
+        // Check if we should render pacman style instead of regular spinner
+        if (tui->thinking_style == THINKING_STYLE_PACMAN) {
+            // Get prompt tokens from the already-calculated token totals above
+            // prompt_tokens is already available from the earlier calculation
 
-        // Render status text after spinner (if present)
-        if (status_text_len > 0 && left_col + utf8_display_width(status_text) <= left_limit) {
+            // Initialize pacman if needed
+            if (tui->pacman_max_dots <= 0) {
+                pacman_init(tui, left_limit);
+            }
+
+            // Build pacman frame
+            char pacman_buf[64] = {0};
+            build_pacman_frame(tui, pacman_buf, sizeof(pacman_buf), (int)prompt_tokens);
+            int pacman_len = (int)strlen(pacman_buf);
+
+            // Render pacman with STATUS color
             if (has_colors()) {
                 wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             } else {
                 wattron(tui->wm.status_win, A_BOLD);
             }
-            mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
+            mvwaddnstr(tui->wm.status_win, 0, left_col, pacman_buf, pacman_len);
             if (has_colors()) {
                 wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             } else {
                 wattroff(tui->wm.status_win, A_BOLD);
+            }
+            left_col += utf8_display_width(pacman_buf);
+
+            // Render status text after pacman
+            if (status_text_len > 0 && left_col + utf8_display_width(status_text) <= left_limit) {
+                if (has_colors()) {
+                    wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+                }
+                mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
+                if (has_colors()) {
+                    wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+                }
+            }
+        } else {
+            // Render regular spinner character with STATUS color (yellow)
+            if (has_colors()) {
+                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+            } else {
+                wattron(tui->wm.status_win, A_BOLD);
+            }
+            mvwaddnstr(tui->wm.status_win, 0, left_col, spinner_frame, spinner_frame_len);
+            if (has_colors()) {
+                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+            } else {
+                wattroff(tui->wm.status_win, A_BOLD);
+            }
+            left_col += utf8_display_width(spinner_frame);
+
+            // Render status text after spinner (if present)
+            if (status_text_len > 0 && left_col + utf8_display_width(status_text) <= left_limit) {
+                if (has_colors()) {
+                    wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+                } else {
+                    wattron(tui->wm.status_win, A_BOLD);
+                }
+                mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
+                if (has_colors()) {
+                    wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+                } else {
+                    wattroff(tui->wm.status_win, A_BOLD);
+                }
             }
         }
     } else if (status_text_len > 0 && status_display_width <= left_limit) {

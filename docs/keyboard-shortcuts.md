@@ -40,6 +40,8 @@ The TUI operates in different modes, similar to vim:
 
 ### UI Customization
 - `b` - Toggle input box style (cycles: bland → background → border → horizontal → bland)
+- `r` - Toggle response style (cycles: border → caret → border)
+- `t` - Toggle thinking style (cycles: wave → pacman → wave)
 
 ## Insert Mode Shortcuts
 
