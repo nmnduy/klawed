@@ -1,0 +1,9 @@
+{
+  "name": "com.klawed.browser_controller",
+  "description": "Klawed Browser Controller Native Messaging Host",
+  "path": "HOST_PATH",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://EXTENSION_ID_PLACEHOLDER/"
+  ]
+}

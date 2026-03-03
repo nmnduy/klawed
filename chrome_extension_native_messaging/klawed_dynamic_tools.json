@@ -1,0 +1,29 @@
+{
+  "_comment": "Dynamic tools configuration for Klawed Browser Controller.",
+  "_description": "Copy or symlink this to .klawed/dynamic_tools.json, or set KLAWED_DYNAMIC_TOOLS env var.",
+  "_setup": "Install the Chrome extension + Go host first: cd chrome_extension_native_messaging/host && make install EXTENSION_ID=<your-id>",
+
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "BrowserControl",
+        "description": "Control a real Chrome/Chromium browser that has the Klawed Browser Controller extension installed and connected.\n\nThe extension must be installed and connected (green dot in Chrome toolbar) for this tool to work.\n\nAvailable commands:\n  Navigation: navigate, goBack, goForward, reload, newTab, closeTab, switchTab\n  Tab info:   listTabs, getActiveTab\n  Page info:  getPageInfo, getPageSource, getReadableText\n  DOM:        click, type, getText, getHtml, getAttribute, findElements, getLinks, getForms\n  Forms:      fillForm, submitForm, pressKey\n  Scroll:     scroll, scrollBy, scrollToElement\n  JS:         evaluate\n  Wait:       waitForElement\n  Screenshot: screenshot\n  Debug:      ping, getInfo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "Browser command to execute. Examples: 'navigate', 'click', 'type', 'getPageSource', 'listTabs', 'screenshot', 'evaluate', 'getReadableText'"
+            },
+            "params": {
+              "type": "object",
+              "description": "Command-specific parameters. Examples:\n  navigate:     {\"url\": \"https://example.com\"}\n  click:        {\"selector\": \"#submit-btn\"}\n  type:         {\"selector\": \"input[name='q']\", \"text\": \"hello\"}\n  getText:      {\"selector\": \"h1\"}  (omit selector for whole page)\n  getAttribute: {\"selector\": \"a.link\", \"attribute\": \"href\"}\n  scroll:       {\"x\": 0, \"y\": 500}\n  scrollBy:     {\"dx\": 0, \"dy\": 300}\n  evaluate:     {\"code\": \"document.title\"}\n  waitForElement: {\"selector\": \".result\", \"timeout\": 5000}\n  findElements: {\"selector\": \"a[href]\"}\n  fillForm:     {\"data\": {\"#email\": \"user@example.com\", \"#pass\": \"secret\"}}\n  switchTab:    {\"tabId\": 123}\n  closeTab:     {\"tabId\": 123}\n  newTab:       {\"url\": \"https://example.com\"}"
+            }
+          },
+          "required": ["command"]
+        }
+      }
+    }
+  ]
+}
