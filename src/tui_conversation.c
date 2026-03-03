@@ -601,9 +601,13 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
             }
 
             // Update content lines
+            // If the cursor is mid-line (cur_x > 0), the current row has content
+            // and must be counted — so content_lines = cur_y + 1.
+            // If cur_x == 0, the cursor is on a fresh empty row (after a newline),
+            // meaning content occupies rows 0..cur_y-1, so content_lines = cur_y.
             getyx(tui->wm.conv_pad, cur_y, cur_x);
-            (void)cur_x;
-            window_manager_set_content_lines(&tui->wm, cur_y);
+            int content_lines = (cur_x > 0) ? cur_y + 1 : cur_y;
+            window_manager_set_content_lines(&tui->wm, content_lines);
         }
     } else {
         // No entries exist - create a new one

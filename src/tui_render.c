@@ -951,11 +951,11 @@ skip_newline:
     // Update total lines (get actual cursor position after wrapping)
     int cur_y, cur_x;
     getyx(tui->wm.conv_pad, cur_y, cur_x);
-    (void)cur_x;
 
     // Safety check: ensure cursor is within pad bounds
     int current_pad_height, current_pad_width;
     getmaxyx(tui->wm.conv_pad, current_pad_height, current_pad_width);
+    (void)current_pad_width;
     if (cur_y >= current_pad_height) {
         LOG_ERROR("[TUI] Cursor position %d exceeds pad height %d! Expanding pad.", cur_y, current_pad_height);
         // Emergency expansion with overflow check
@@ -968,9 +968,17 @@ skip_newline:
             // Try to recover by limiting to current capacity
             cur_y = current_pad_height - 1;
         }
+        cur_x = 0;  // Reset cur_x after clamping cur_y
     }
 
-    window_manager_set_content_lines(&tui->wm, cur_y);
+    // If the cursor is mid-line (cur_x > 0), the current row has content and
+    // must be counted — so content_lines = cur_y + 1.
+    // If cur_x == 0, the cursor is on a fresh empty row (after a newline),
+    // meaning content occupies rows 0..cur_y-1, so content_lines = cur_y.
+    {
+        int content_lines = (cur_x > 0) ? cur_y + 1 : cur_y;
+        window_manager_set_content_lines(&tui->wm, content_lines);
+    }
 
     return 0;
 }
