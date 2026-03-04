@@ -419,6 +419,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->pacman_direction = 1;
     tui->pacman_max_dots = 0;
     tui->pacman_anim_frame = 0;
+    tui->pacman_last_step_ns = 0;
 
     // Initialize text diffusion effect
     text_diffusion_init(&tui->status_text_diffusion);
