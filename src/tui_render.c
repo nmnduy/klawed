@@ -161,6 +161,7 @@ static void status_spinner_stop(TUIState *tui) {
     // Reset pacman state
     tui->pacman_dots_eaten = 0;
     tui->pacman_direction = 1;
+    tui->pacman_anim_frame = 0;
 }
 
 // ============================================================================
@@ -180,51 +181,95 @@ static int get_pacman_max_context(void) {
     return 200000; // Default: 200k tokens
 }
 
-// Build the pacman string: "· · · ᗧ · · · · ·"
-// Pacman moves left→right, eating dots as context fills.
-// Uses UTF-8 string ops to handle multibyte characters.
-// is_working: if true, animate mouth open/closed. if false, keep static.
+// Build the pacman bar.
+//
+// Layout (total width = max_dots + 2, e.g. 18 for max_dots=16):
+//
+//   pos 0   : origin marker "·"  (always a dot; becomes blank only if pacman is at 0)
+//   pos 1…anchor : sweep zone — dots when uneaten, blank when eaten
+//   pos anchor   : Pac-Man "ᗧ" (mouth open) or "●" (mouth closed)
+//   pos anchor+1…max_dots-1 : uneaten dots "·"
+//   pos max_dots : end sentinel "•"
+//
+// anchor  = floor(ratio * (max_dots - 1)), clamped 0…max_dots-1
+// ratio   = prompt_tokens / max_context
+//
+// Idle (is_working=0):
+//   Pac-Man sits at anchor, mouth closed "●", static.
+//   Origin "·" visible at pos 0 if anchor > 0.
+//
+// Working (is_working=1):
+//   pacman_dots_eaten sweeps 0 → anchor then resets to 0.
+//   The sweep advances one step per PACMAN_ANIM_STRIDE spinner frames.
+//   Positions [0, pacman_dots_eaten) are blank (eaten trail).
+//   Position pacman_dots_eaten is Pac-Man (mouth alternates ᗧ/● every 3 frames).
+//   Positions (pacman_dots_eaten, anchor] are uneaten dots "·".
+//   Positions (anchor, max_dots-1] are always-uneaten dots "·".
+//   If sweep position == 0, origin shows Pac-Man; otherwise origin shows "·".
+//
+#define PACMAN_ANIM_STRIDE 3  // spinner frames between each sweep step
+
 static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int prompt_tokens, int is_working) {
     if (!tui || !buf || buf_size == 0) return;
 
     int max_context = get_pacman_max_context();
     int max_dots = tui->pacman_max_dots;
-    if (max_dots <= 0) max_dots = 8; // Fallback
+    if (max_dots <= 0) max_dots = 16; // Fallback
 
-    // Calculate how many dots should be eaten based on context usage
-    // More context = pacman further right (more dots eaten behind him)
-    int dots_to_eat = 0;
+    // Compute anchor: how far right Pac-Man rests when idle
+    int anchor = 0;
     if (max_context > 0 && prompt_tokens > 0) {
         double ratio = (double)prompt_tokens / (double)max_context;
         if (ratio > 1.0) ratio = 1.0;
-        dots_to_eat = (int)(ratio * (max_dots - 1));
-        if (dots_to_eat >= max_dots) dots_to_eat = max_dots - 1;
+        anchor = (int)(ratio * (max_dots - 1));
+        if (anchor >= max_dots) anchor = max_dots - 1;
     }
 
-    // Animate pacman mouth: open (ᗧ) / closed (●)
-    // Only animate when working (has spinner), static when idle
-    int mouth_open = 0;
+    // Advance sweep animation when working
+    if (is_working) {
+        tui->pacman_anim_frame++;
+        if (tui->pacman_anim_frame >= PACMAN_ANIM_STRIDE) {
+            tui->pacman_anim_frame = 0;
+            tui->pacman_dots_eaten++;
+            if (tui->pacman_dots_eaten > anchor) {
+                tui->pacman_dots_eaten = 0; // Loop back
+            }
+        }
+    } else {
+        // Idle: Pac-Man sits at anchor
+        tui->pacman_dots_eaten = anchor;
+        tui->pacman_anim_frame = 0;
+    }
+
+    int sweep = tui->pacman_dots_eaten; // Current Pac-Man position (0..anchor)
+
+    // Mouth: open (ᗧ) / closed (●)
+    // Animate when working; always open-mouth when idle (ᗧ = classic open face)
+    int mouth_open;
     if (is_working) {
         int frame = tui->status_spinner_frame;
-        mouth_open = (frame / 3) % 2; // Alternate every 3 frames
+        mouth_open = (frame / 3) % 2;
     } else {
-        mouth_open = 0; // Static closed mouth when idle
+        mouth_open = 1; // idle: open mouth "ᗧ" facing right
     }
 
-    tui->pacman_dots_eaten = dots_to_eat;
-
-    // Build the display string using UTF-8 string ops
+    // Build the display string
+    // Layout: positions 0…max_dots-1 then sentinel "•"
     char tmp[16] = {0};
     size_t idx = 0;
     int i;
 
-    for (i = 0; i < max_dots && idx < buf_size - 8; i++) {
-        if (i < tui->pacman_dots_eaten) {
-            // Eaten dots — leave a small gap (space) behind pacman
-            strlcpy(tmp, " ", sizeof(tmp));
-        } else if (i == tui->pacman_dots_eaten) {
-            // Pacman: ᗧ (mouth open) or ● (mouth closed)
+    for (i = 0; i <= max_dots && idx < buf_size - 8; i++) {
+        if (i == max_dots) {
+            // End sentinel
+            strlcpy(tmp, "•", sizeof(tmp));
+        } else if (i == sweep) {
+            // Pac-Man's current position
             strlcpy(tmp, mouth_open ? "ᗧ" : "●", sizeof(tmp));
+        } else if (i < sweep) {
+            // Eaten trail — blank, EXCEPT position 0 always keeps the origin dot
+            // when Pac-Man has moved past it (i.e. sweep > 0)
+            strlcpy(tmp, (i == 0) ? "·" : " ", sizeof(tmp));
         } else {
             // Uneaten dot
             strlcpy(tmp, "·", sizeof(tmp));
@@ -244,12 +289,13 @@ static void pacman_init(TUIState *tui, int available_width) {
     if (!tui) return;
     (void)available_width;
 
-    // Fixed short bar: pacman + 15 dots
+    // Fixed bar width: 16 dot positions + 1 sentinel "•"
     int max_dots = 16;
 
     tui->pacman_max_dots = max_dots;
     tui->pacman_dots_eaten = 0;
     tui->pacman_direction = 1;
+    tui->pacman_anim_frame = 0;
 }
 
 // ============================================================================
