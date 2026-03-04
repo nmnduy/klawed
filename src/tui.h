@@ -146,7 +146,8 @@ typedef struct TUIStateStruct {
     int pacman_dots_eaten;       // Animation sweep position (0..anchor, loops when working)
     int pacman_direction;        // 1 = moving right, -1 = moving left (unused, kept for compat)
     int pacman_max_dots;         // Total bar width (dots + pac-man + sentinel)
-    int pacman_anim_frame;       // Sub-frame counter for controlling sweep speed
+    int pacman_anim_frame;       // Sub-frame counter for mouth open/close animation
+    uint64_t pacman_last_step_ns; // Timestamp of last sweep step (for time-based animation)
 
 
     // Database connection for real-time token usage queries
