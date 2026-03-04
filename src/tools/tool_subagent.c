@@ -244,6 +244,11 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
             fprintf(stderr, "Warning: Failed to set KLAWED_IS_SUBAGENT environment variable: %s\n", strerror(errno));
         }
 
+        // Subagents always run in oneshot mode - clear sqlite-queue env vars
+        // so the child does not inherit and re-enter sqlite-queue daemon mode.
+        unsetenv("KLAWED_SQLITE_DB_PATH");
+        unsetenv("KLAWED_SQLITE_SENDER");
+
         // Set LLM provider if specified in parameters
         if (provider && provider[0] != '\0') {
             if (setenv("KLAWED_LLM_PROVIDER", provider, 1) != 0) {
