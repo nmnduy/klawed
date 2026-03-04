@@ -162,6 +162,7 @@ static void status_spinner_stop(TUIState *tui) {
     tui->pacman_dots_eaten = 0;
     tui->pacman_direction = 1;
     tui->pacman_anim_frame = 0;
+    tui->pacman_last_step_ns = 0;
 }
 
 // ============================================================================
@@ -200,14 +201,14 @@ static int get_pacman_max_context(void) {
 //
 // Working (is_working=1):
 //   pacman_dots_eaten sweeps 0 → anchor then resets to 0.
-//   The sweep advances one step per PACMAN_ANIM_STRIDE spinner frames.
+//   The sweep advances one step every PACMAN_STEP_NS (150ms), independent of frame rate.
 //   Positions [0, pacman_dots_eaten) are blank (eaten trail).
-//   Position pacman_dots_eaten is Pac-Man (mouth alternates ᗧ/● every 3 frames).
+//   Position pacman_dots_eaten is Pac-Man (mouth alternates ᗧ/● every 300ms).
 //   Positions (pacman_dots_eaten, anchor] are uneaten dots "·".
 //   Positions (anchor, max_dots-1] are always-uneaten dots "·".
 //   If sweep position == 0, origin shows Pac-Man; otherwise origin shows "·".
 //
-#define PACMAN_ANIM_STRIDE 3  // spinner frames between each sweep step
+#define PACMAN_STEP_NS 150000000ULL  // 150ms per sweep step (real-time based)
 
 static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int prompt_tokens, int is_working) {
     if (!tui || !buf || buf_size == 0) return;
@@ -225,11 +226,13 @@ static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int pr
         if (anchor >= max_dots) anchor = max_dots - 1;
     }
 
-    // Advance sweep animation when working
+    // Advance sweep animation when working (time-based, not frame-based)
     if (is_working) {
-        tui->pacman_anim_frame++;
-        if (tui->pacman_anim_frame >= PACMAN_ANIM_STRIDE) {
-            tui->pacman_anim_frame = 0;
+        uint64_t now = monotonic_time_ns();
+        if (tui->pacman_last_step_ns == 0) {
+            tui->pacman_last_step_ns = now; // Initialize on first working frame
+        } else if (now - tui->pacman_last_step_ns >= PACMAN_STEP_NS) {
+            tui->pacman_last_step_ns = now;
             tui->pacman_dots_eaten++;
             if (tui->pacman_dots_eaten > anchor) {
                 tui->pacman_dots_eaten = 0; // Loop back
@@ -238,6 +241,7 @@ static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int pr
     } else {
         // Idle: Pac-Man sits at anchor
         tui->pacman_dots_eaten = anchor;
+        tui->pacman_last_step_ns = 0; // Reset so animation restarts cleanly next time
         tui->pacman_anim_frame = 0;
     }
 
@@ -247,8 +251,9 @@ static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int pr
     // Animate when working; always open-mouth when idle (ᗧ = classic open face)
     int mouth_open;
     if (is_working) {
-        int frame = tui->status_spinner_frame;
-        mouth_open = (frame / 3) % 2;
+        // Toggle mouth every 300ms based on real time
+        uint64_t now = monotonic_time_ns();
+        mouth_open = (int)((now / 300000000ULL) % 2);
     } else {
         mouth_open = 1; // idle: open mouth "ᗧ" facing right
     }
@@ -296,6 +301,7 @@ static void pacman_init(TUIState *tui, int available_width) {
     tui->pacman_dots_eaten = 0;
     tui->pacman_direction = 1;
     tui->pacman_anim_frame = 0;
+    tui->pacman_last_step_ns = 0;
 }
 
 // ============================================================================
