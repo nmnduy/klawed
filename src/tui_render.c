@@ -180,45 +180,44 @@ static int get_pacman_max_context(void) {
     return 200000; // Default: 200k tokens
 }
 
-// Build the pacman string: "● ● ● ● ● ▶      "
-// Uses UTF-8 string copy to handle Unicode characters properly
+// Build the pacman string: "· · · ᗧ · · · · ·"
+// Pacman moves left→right, eating dots as context fills.
+// Uses UTF-8 string ops to handle multibyte characters.
 static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int prompt_tokens) {
     if (!tui || !buf || buf_size == 0) return;
 
     int max_context = get_pacman_max_context();
     int max_dots = tui->pacman_max_dots;
-    if (max_dots <= 0) max_dots = 10; // Fallback
+    if (max_dots <= 0) max_dots = 8; // Fallback
 
     // Calculate how many dots should be eaten based on context usage
-    // More context = more dots eaten
+    // More context = pacman further right (more dots eaten behind him)
     int dots_to_eat = 0;
     if (max_context > 0 && prompt_tokens > 0) {
         double ratio = (double)prompt_tokens / (double)max_context;
         if (ratio > 1.0) ratio = 1.0;
-        dots_to_eat = (int)(ratio * max_dots);
-        if (dots_to_eat > max_dots) dots_to_eat = max_dots;
+        dots_to_eat = (int)(ratio * (max_dots - 1));
+        if (dots_to_eat >= max_dots) dots_to_eat = max_dots - 1;
     }
 
-    // Animate: alternate between eating and moving
+    // Animate pacman mouth: open (ᗧ) / closed (●)
     int frame = tui->status_spinner_frame;
-    int eating_frame = (frame / 4) % 2; // Alternate every 4 frames
+    int mouth_open = (frame / 3) % 2; // Alternate every 3 frames
 
-    // Update eaten count for animation
     tui->pacman_dots_eaten = dots_to_eat;
 
-    // Build the pacman display using string operations for UTF-8
+    // Build the display string using UTF-8 string ops
     char tmp[16] = {0};
     size_t idx = 0;
     int i;
 
-    // Draw dots and pacman
-    for (i = 0; i < max_dots && idx < buf_size - 4; i++) {
+    for (i = 0; i < max_dots && idx < buf_size - 8; i++) {
         if (i < tui->pacman_dots_eaten) {
-            // Dot eaten - dim dot as trail
-            strlcpy(tmp, "·", sizeof(tmp));
-        } else if (i == tui->pacman_dots_eaten && i < max_dots) {
-            // Pacman at current position - use ASCII for compatibility
-            strlcpy(tmp, eating_frame ? ">" : "●", sizeof(tmp));
+            // Eaten dots — leave a small gap (space) behind pacman
+            strlcpy(tmp, " ", sizeof(tmp));
+        } else if (i == tui->pacman_dots_eaten) {
+            // Pacman: ᗧ (mouth open) or ● (mouth closed)
+            strlcpy(tmp, mouth_open ? "ᗧ" : "●", sizeof(tmp));
         } else {
             // Uneaten dot
             strlcpy(tmp, "·", sizeof(tmp));
@@ -230,22 +229,16 @@ static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int pr
         }
     }
 
-    // Add space after pacman
-    if (idx < buf_size - 1) {
-        buf[idx++] = ' ';
-    }
-
     buf[idx] = '\0';
 }
 
 // Initialize pacman state when thinking starts
 static void pacman_init(TUIState *tui, int available_width) {
     if (!tui) return;
+    (void)available_width;
 
-    // Calculate max dots based on available width (leave room for text)
-    int max_dots = available_width - 20; // Leave space for status text
-    if (max_dots < 5) max_dots = 5;
-    if (max_dots > 30) max_dots = 30;
+    // Fixed short bar: pacman + 15 dots
+    int max_dots = 16;
 
     tui->pacman_max_dots = max_dots;
     tui->pacman_dots_eaten = 0;
@@ -481,17 +474,7 @@ void render_status_window(TUIState *tui) {
                 wattroff(tui->wm.status_win, A_BOLD);
             }
             left_col += utf8_display_width(pacman_buf);
-
-            // Render status text after pacman
-            if (status_text_len > 0 && left_col + utf8_display_width(status_text) <= left_limit) {
-                if (has_colors()) {
-                    wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
-                }
-                mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
-                if (has_colors()) {
-                    wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
-                }
-            }
+            // No status text in pacman style — bar only
         } else {
             // Render regular spinner character with STATUS color (yellow)
             if (has_colors()) {
