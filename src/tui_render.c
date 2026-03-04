@@ -183,7 +183,8 @@ static int get_pacman_max_context(void) {
 // Build the pacman string: "· · · ᗧ · · · · ·"
 // Pacman moves left→right, eating dots as context fills.
 // Uses UTF-8 string ops to handle multibyte characters.
-static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int prompt_tokens) {
+// is_working: if true, animate mouth open/closed. if false, keep static.
+static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int prompt_tokens, int is_working) {
     if (!tui || !buf || buf_size == 0) return;
 
     int max_context = get_pacman_max_context();
@@ -201,8 +202,14 @@ static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int pr
     }
 
     // Animate pacman mouth: open (ᗧ) / closed (●)
-    int frame = tui->status_spinner_frame;
-    int mouth_open = (frame / 3) % 2; // Alternate every 3 frames
+    // Only animate when working (has spinner), static when idle
+    int mouth_open = 0;
+    if (is_working) {
+        int frame = tui->status_spinner_frame;
+        mouth_open = (frame / 3) % 2; // Alternate every 3 frames
+    } else {
+        mouth_open = 0; // Static closed mouth when idle
+    }
 
     tui->pacman_dots_eaten = dots_to_eat;
 
@@ -408,9 +415,9 @@ void render_status_window(TUIState *tui) {
     }
 
 
-    // Show token count when non-zero, regardless of mode
+    // Show token count when non-zero, but NOT in PACMAN mode (pacman bar replaces it)
     // Format: "17715 tok" (prompt tokens only — output tokens are usually negligible)
-    if (prompt_tokens > 0) {
+    if (prompt_tokens > 0 && tui->thinking_style != THINKING_STYLE_PACMAN) {
         snprintf(token_str, sizeof(token_str), " %ld tok", (long)prompt_tokens);
         token_str_len = (int)strlen(token_str);
         token_display_width = utf8_display_width(token_str);
@@ -457,8 +464,9 @@ void render_status_window(TUIState *tui) {
             }
 
             // Build pacman frame
+            // Only animate when has_spinner (working), static when idle
             char pacman_buf[64] = {0};
-            build_pacman_frame(tui, pacman_buf, sizeof(pacman_buf), (int)prompt_tokens);
+            build_pacman_frame(tui, pacman_buf, sizeof(pacman_buf), (int)prompt_tokens, has_spinner);
             int pacman_len = (int)strlen(pacman_buf);
 
             // Render pacman with STATUS color
@@ -505,6 +513,31 @@ void render_status_window(TUIState *tui) {
                 }
             }
         }
+    } else if (tui->thinking_style == THINKING_STYLE_PACMAN) {
+        // PACMAN mode: show static pacman bar even when not thinking (no spinner)
+        // Initialize pacman if needed
+        if (tui->pacman_max_dots <= 0) {
+            pacman_init(tui, left_limit);
+        }
+
+        // Build static pacman frame (is_working = false, so no mouth animation)
+        char pacman_buf[64] = {0};
+        build_pacman_frame(tui, pacman_buf, sizeof(pacman_buf), (int)prompt_tokens, 0);
+        int pacman_len = (int)strlen(pacman_buf);
+
+        // Render pacman with STATUS color
+        if (has_colors()) {
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+        } else {
+            wattron(tui->wm.status_win, A_BOLD);
+        }
+        mvwaddnstr(tui->wm.status_win, 0, left_col, pacman_buf, pacman_len);
+        if (has_colors()) {
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+        } else {
+            wattroff(tui->wm.status_win, A_BOLD);
+        }
+        left_col += utf8_display_width(pacman_buf);
     } else if (status_text_len > 0 && status_display_width <= left_limit) {
         // No spinner, just render status text on the left
         if (has_colors()) {
