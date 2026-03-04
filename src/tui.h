@@ -143,9 +143,10 @@ typedef struct TUIStateStruct {
     TextDiffusionConfig status_text_diffusion; // Diffusion animation config
 
     // Pacman thinking style state
-    int pacman_dots_eaten;       // Number of dots consumed by pacman
-    int pacman_direction;        // 1 = moving right, -1 = moving left
-    int pacman_max_dots;         // Maximum dots to display (calculated from context %)
+    int pacman_dots_eaten;       // Animation sweep position (0..anchor, loops when working)
+    int pacman_direction;        // 1 = moving right, -1 = moving left (unused, kept for compat)
+    int pacman_max_dots;         // Total bar width (dots + pac-man + sentinel)
+    int pacman_anim_frame;       // Sub-frame counter for controlling sweep speed
 
 
     // Database connection for real-time token usage queries
