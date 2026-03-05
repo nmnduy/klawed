@@ -476,14 +476,24 @@ void render_status_window(TUIState *tui) {
         LOG_FINE("[TUI] Rendering token display: %s (mode=%d, width=%d)", token_str, tui->mode, width);
     }
     // Prepare help text for NORMAL mode (shown when no active status)
-    char help_str[64] = {0};
+    // Two variants: full (wide screens) and short (narrow screens)
+    char help_str[128] = {0};
     int help_str_len = 0;
     int help_display_width = 0;
+    char help_str_short[64] = {0};
+    int help_str_short_len = 0;
+    int help_display_width_short = 0;
     if (tui->mode == TUI_MODE_NORMAL && !has_spinner && status_text_len == 0) {
-        // Show concise help text guiding users
-        snprintf(help_str, sizeof(help_str), " i=insert  j/k=scroll  /=search ");
+        // Full hint: includes backward search, page-down/up
+        snprintf(help_str, sizeof(help_str),
+                 " i=insert  j/k=scroll  /=search  ?=back  ^D/^U=pgdn/up ");
         help_str_len = (int)strlen(help_str);
         help_display_width = utf8_display_width(help_str);
+        // Short fallback: existing hints only
+        snprintf(help_str_short, sizeof(help_str_short),
+                 " i=insert  j/k=scroll  /=search ");
+        help_str_short_len = (int)strlen(help_str_short);
+        help_display_width_short = utf8_display_width(help_str_short);
     }
 
     // Layout: spinner + status message on the LEFT, indicators on the RIGHT
@@ -605,14 +615,27 @@ void render_status_window(TUIState *tui) {
         }
     } else if (help_str_len > 0) {
         // Render help text centered in the available space
+        // Try the full hint first; fall back to the short version if it doesn't fit
         int available_width = right_start_col - left_col;
+        const char *active_help = NULL;
+        int active_help_len = 0;
+        int active_help_width = 0;
         if (help_display_width <= available_width) {
-            int help_col = left_col + (available_width - help_display_width) / 2;
+            active_help = help_str;
+            active_help_len = help_str_len;
+            active_help_width = help_display_width;
+        } else if (help_display_width_short > 0 && help_display_width_short <= available_width) {
+            active_help = help_str_short;
+            active_help_len = help_str_short_len;
+            active_help_width = help_display_width_short;
+        }
+        if (active_help) {
+            int help_col = left_col + (available_width - active_help_width) / 2;
             if (help_col < left_col) help_col = left_col;
             if (has_colors()) {
                 wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
-            mvwaddnstr(tui->wm.status_win, 0, help_col, help_str, help_str_len);
+            mvwaddnstr(tui->wm.status_win, 0, help_col, active_help, active_help_len);
             if (has_colors()) {
                 wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
