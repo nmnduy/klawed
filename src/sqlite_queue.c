@@ -37,7 +37,6 @@
 
 // Default configuration values
 #define DEFAULT_POLL_INTERVAL 300      // 300ms
-#define DEFAULT_POLL_TIMEOUT 30000     // 30 seconds
 #define DEFAULT_MAX_RETRIES 3
 #define DEFAULT_MAX_MESSAGE_SIZE (1024 * 1024)  // 1MB
 #define DEFAULT_MAX_QUEUE_SIZE 1000
@@ -160,9 +159,6 @@ SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_na
     ctx->poll_interval = poll_interval_env ? atoi(poll_interval_env) : DEFAULT_POLL_INTERVAL;
     if (ctx->poll_interval < 10) ctx->poll_interval = 10; // Minimum 10ms
 
-    const char *poll_timeout_env = getenv("KLAWED_SQLITE_POLL_TIMEOUT");
-    ctx->poll_timeout = poll_timeout_env ? atoi(poll_timeout_env) : DEFAULT_POLL_TIMEOUT;
-
     const char *max_retries_env = getenv("KLAWED_SQLITE_MAX_RETRIES");
     ctx->max_retries = max_retries_env ? atoi(max_retries_env) : DEFAULT_MAX_RETRIES;
 
@@ -178,7 +174,6 @@ SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_na
     ctx->max_iterations = max_iterations_env ? atoi(max_iterations_env) : DEFAULT_MAX_ITERATIONS;
 
     // Initialize state tracking
-    ctx->last_poll = 0;
     ctx->retry_count = 0;
     ctx->initialized = false;
     ctx->db_handle = NULL;
@@ -188,7 +183,7 @@ SQLiteQueueContext* sqlite_queue_init(const char *db_path, const char *sender_na
     ctx->error_message[0] = '\0';
     ctx->error_time = 0;
 
-    LOG_DEBUG("SQLite Queue: Poll interval: %dms, Poll timeout: %dms", ctx->poll_interval, ctx->poll_timeout);
+    LOG_DEBUG("SQLite Queue: Poll interval: %dms", ctx->poll_interval);
     LOG_DEBUG("SQLite Queue: Max retries: %d, Max message size: %zu, Max queue size: %d, Max iterations: %d",
               ctx->max_retries, ctx->max_message_size, ctx->max_queue_size, ctx->max_iterations);
 
@@ -344,7 +339,7 @@ int sqlite_queue_send(SQLiteQueueContext *ctx, const char *receiver, const char 
 }
 
 int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int max_messages,
-                         char ***messages, int *message_count, long long **message_ids, int timeout_ms) {
+                         char ***messages, int *message_count, long long **message_ids) {
     // Critical invariants
     assert(ctx != NULL);
     assert(messages != NULL);
@@ -371,97 +366,67 @@ int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int
         return ctx->last_error;
     }
 
-    // Poll for messages with timeout (millisecond precision)
-    struct timespec start_ts;
-    clock_gettime(CLOCK_MONOTONIC, &start_ts);
-    long timeout_ms_adj = (timeout_ms > 0) ? timeout_ms : 30000;
+    LOG_DEBUG("SQLite Queue: Checking for messages (sender_filter: %s)",
+              sender_filter ? sender_filter : "any");
 
-    LOG_DEBUG("SQLite Queue: Polling for messages (timeout: %ld ms, sender_filter: %s)",
-              timeout_ms_adj, sender_filter ? sender_filter : "any");
-
-    while (1) {
-        // Check if timeout has elapsed
-        struct timespec now;
-        clock_gettime(CLOCK_MONOTONIC, &now);
-        long elapsed_ms = (long)((now.tv_sec - start_ts.tv_sec) * 1000 +
-                                 (now.tv_nsec - start_ts.tv_nsec) / 1000000);
-        if (elapsed_ms >= timeout_ms_adj) {
-            break;
-        }
-        // Prepare select statement
-        sqlite3_stmt *stmt = NULL;
-        int rc = sqlite_queue_prepare_statement(ctx, &stmt, SELECT_MESSAGES_SQL);
-        if (rc != SQLITE_OK) {
-            return rc;
-        }
-
-        // Bind parameters (receiver = our sender_name)
-        sqlite3_bind_text(stmt, 1, ctx->sender_name, -1, SQLITE_STATIC);
-        sqlite3_bind_int(stmt, 2, max_messages);
-
-        // Fetch messages
-        int count = 0;
-        char **msg_array = reallocarray(NULL, (size_t)max_messages, sizeof(char *));
-        long long *id_array = reallocarray(NULL, (size_t)max_messages, sizeof(long long));
-
-        if (!msg_array || !id_array) {
-            free(msg_array);
-            free(id_array);
-            sqlite3_finalize(stmt);
-            sqlite_queue_set_error(ctx, SQLITE_QUEUE_ERROR_DB_EXECUTE_FAILED, "Memory allocation failed");
-            return SQLITE_QUEUE_ERROR_DB_EXECUTE_FAILED;
-        }
-
-        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW && count < max_messages) {
-            id_array[count] = sqlite3_column_int64(stmt, 0);
-            const char *msg_text = (const char *)sqlite3_column_text(stmt, 1);
-
-            if (msg_text) {
-                msg_array[count] = strdup(msg_text);
-                if (!msg_array[count]) {
-                    // Free all allocated messages so far
-                    for (int i = 0; i < count; i++) {
-                        free(msg_array[i]);
-                    }
-                    free(msg_array);
-                    free(id_array);
-                    sqlite3_finalize(stmt);
-                    sqlite_queue_set_error(ctx, SQLITE_QUEUE_ERROR_DB_EXECUTE_FAILED, "Memory allocation failed");
-                    return SQLITE_QUEUE_ERROR_DB_EXECUTE_FAILED;
-                }
-                count++;
-            }
-        }
-
-        sqlite3_finalize(stmt);
-
-        // Check if we got any messages
-        if (count > 0) {
-            *messages = msg_array;
-            *message_count = count;
-            *message_ids = id_array;
-
-            LOG_INFO("SQLite Queue: Received %d message(s)", count);
-            return SQLITE_QUEUE_ERROR_NONE;
-        } else {
-            // Free temporary arrays
-            free(msg_array);
-            free(id_array);
-        }
-
-        // No messages, wait a short interval before retrying (50ms for responsive polling)
-        // This allows checking the database multiple times within the timeout window
-        usleep(50000);  // 50ms
+    // Prepare select statement
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite_queue_prepare_statement(ctx, &stmt, SELECT_MESSAGES_SQL);
+    if (rc != SQLITE_OK) {
+        return rc;
     }
 
-    // Timeout is a normal condition when polling - no messages available
-    // Don't log as error, just set the error code for the caller
-    ctx->last_error = SQLITE_QUEUE_ERROR_TIMEOUT;
-    strlcpy(ctx->error_message, "No messages received within timeout", sizeof(ctx->error_message));
-    ctx->error_time = time(NULL);
+    // Bind parameters (receiver = our sender_name)
+    sqlite3_bind_text(stmt, 1, ctx->sender_name, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 2, max_messages);
 
-    LOG_DEBUG("SQLite Queue: No messages received within timeout");
-    return SQLITE_QUEUE_ERROR_TIMEOUT;
+    // Fetch messages
+    int count = 0;
+    char **msg_array = reallocarray(NULL, (size_t)max_messages, sizeof(char *));
+    long long *id_array = reallocarray(NULL, (size_t)max_messages, sizeof(long long));
+
+    if (!msg_array || !id_array) {
+        free(msg_array);
+        free(id_array);
+        sqlite3_finalize(stmt);
+        sqlite_queue_set_error(ctx, SQLITE_QUEUE_ERROR_DB_EXECUTE_FAILED, "Memory allocation failed");
+        return SQLITE_QUEUE_ERROR_DB_EXECUTE_FAILED;
+    }
+
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW && count < max_messages) {
+        id_array[count] = sqlite3_column_int64(stmt, 0);
+        const char *msg_text = (const char *)sqlite3_column_text(stmt, 1);
+
+        if (msg_text) {
+            msg_array[count] = strdup(msg_text);
+            if (!msg_array[count]) {
+                // Free all allocated messages so far
+                for (int i = 0; i < count; i++) {
+                    free(msg_array[i]);
+                }
+                free(msg_array);
+                free(id_array);
+                sqlite3_finalize(stmt);
+                sqlite_queue_set_error(ctx, SQLITE_QUEUE_ERROR_DB_EXECUTE_FAILED, "Memory allocation failed");
+                return SQLITE_QUEUE_ERROR_DB_EXECUTE_FAILED;
+            }
+            count++;
+        }
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (count > 0) {
+        *messages = msg_array;
+        *message_count = count;
+        *message_ids = id_array;
+        LOG_INFO("SQLite Queue: Received %d message(s)", count);
+        return SQLITE_QUEUE_ERROR_NONE;
+    }
+
+    free(msg_array);
+    free(id_array);
+    return SQLITE_QUEUE_ERROR_NO_MESSAGES;
 }
 
 int sqlite_queue_acknowledge(SQLiteQueueContext *ctx, long long message_id) {
@@ -542,7 +507,7 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
     int message_count = 0;
     long long *message_ids = NULL;
 
-    int result = sqlite_queue_receive(ctx, NULL, 1, &messages, &message_count, &message_ids, -1);
+    int result = sqlite_queue_receive(ctx, NULL, 1, &messages, &message_count, &message_ids);
     if (result != SQLITE_QUEUE_ERROR_NONE || message_count == 0) {
         LOG_DEBUG("SQLite Queue: No messages to process");
         return SQLITE_QUEUE_ERROR_NO_MESSAGES;
@@ -1815,11 +1780,10 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
         int msg_count = 0;
         long long *message_ids = NULL;
 
-        int result = sqlite_queue_receive(ctx, NULL, 1, &messages, &msg_count, &message_ids, 100); // Short timeout
+        int result = sqlite_queue_receive(ctx, NULL, 1, &messages, &msg_count, &message_ids);
 
-        if (result == SQLITE_QUEUE_ERROR_TIMEOUT || msg_count == 0) {
-            // No messages, this is normal - continue polling
-            // Small delay to avoid tight loop
+        if (result == SQLITE_QUEUE_ERROR_NO_MESSAGES || msg_count == 0) {
+            // No messages, this is normal - sleep and poll again
             struct timespec sleep_time = {0, (ctx->poll_interval * 1000000L)};
             nanosleep(&sleep_time, NULL);
             continue;
@@ -2010,8 +1974,6 @@ int sqlite_queue_get_status(SQLiteQueueContext *ctx, char *buffer, size_t buffer
         return -1;
     }
 
-    time_t now = time(NULL);
-
     // Format status string
     snprintf(buffer, buffer_size,
              "SQLite Queue Status:\n"
@@ -2019,13 +1981,11 @@ int sqlite_queue_get_status(SQLiteQueueContext *ctx, char *buffer, size_t buffer
              "  Sender Name: %s\n"
              "  Daemon Mode: %s\n"
              "  Enabled: %s\n"
-             "  Last Poll: %ld seconds ago\n"
              "  Retry Count: %d/%d",
              ctx->db_path ? ctx->db_path : "unknown",
              ctx->sender_name ? ctx->sender_name : "unknown",
              ctx->daemon_mode ? "enabled" : "disabled",
              ctx->enabled ? "enabled" : "disabled",
-             ctx->last_poll ? (now - ctx->last_poll) : 0,
              ctx->retry_count, ctx->max_retries);
 
     return 0;
