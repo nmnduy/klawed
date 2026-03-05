@@ -48,7 +48,6 @@ typedef struct SQLiteQueueContext {
 
     // Polling configuration (in milliseconds)
     int poll_interval;
-    int poll_timeout;
     int max_retries;
 
     // Message configuration
@@ -57,7 +56,6 @@ typedef struct SQLiteQueueContext {
     int max_iterations;      // Maximum iterations in interactive loop (0 = unlimited)
 
     // State tracking
-    time_t last_poll;
     int retry_count;
     bool initialized;
 
@@ -113,11 +111,10 @@ int sqlite_queue_send(SQLiteQueueContext *ctx, const char *receiver, const char 
  * @param messages Array to store received messages (caller must free strings)
  * @param message_count Output parameter for number of messages received
  * @param message_ids Output parameter for message IDs (caller must free)
- * @param timeout_ms Timeout in milliseconds (0 = non-blocking, -1 = blocking)
  * @return 0 on success, SQLiteQueueErrorCode on failure
  */
 int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int max_messages,
-                         char ***messages, int *message_count, long long **message_ids, int timeout_ms);
+                         char ***messages, int *message_count, long long **message_ids);
 
 /**
  * Acknowledge message as sent/read
