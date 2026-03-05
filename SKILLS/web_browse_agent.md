@@ -11,8 +11,8 @@ web_browse_agent --session mysession open https://example.com
 # Get page content
 web_browse_agent --session mysession html
 
-# Take a screenshot
-web_browse_agent --session mysession screenshot
+# Take a screenshot (use --json to get base64 data)
+web_browse_agent --session mysession --json screenshot
 
 # End the session when done
 web_browse_agent --session mysession end-session
@@ -37,7 +37,7 @@ web_browse_agent --session <session-id> [--headless] [--json] <command> [args...
 ### Browser Navigation
 | Command | Arguments | Description |
 |---------|-----------|-------------|
-| `open` | `<url>` | Navigate to URL (async - returns immediately) |
+| `open` | `<url>` | Navigate to URL (async - returns when HTTP headers received) |
 | `list-tabs` | - | List all open tabs |
 | `switch-tab` | `<tab-id>` | Switch to a specific tab |
 | `close-tab` | `<tab-id>` | Close a specific tab |
@@ -46,22 +46,22 @@ web_browse_agent --session <session-id> [--headless] [--json] <command> [args...
 | Command | Arguments | Description |
 |---------|-----------|-------------|
 | `click` | `<selector>` | Click an element (CSS or Playwright selector) |
-| `type` | `<selector> <text>` | Type text into an element |
+| `type` | `<selector> <text>` | Type text into an element (clears first) |
 | `upload-file` | `<selector> <path...>` | Upload file(s) to a file input element |
-| `wait-for` | `<selector>` | Wait for element to appear |
+| `wait-for` | `<selector>` | Wait for element to appear (CSS/Playwright selector only) |
 | `eval` | `<javascript>` | Execute JavaScript and return result |
 
 ### Page Inspection
 | Command | Arguments | Description |
 |---------|-----------|-------------|
 | `html` | - | Get the full page HTML |
-| `screenshot` | - | Take screenshot (returns base64 PNG) |
+| `screenshot` | - | Take screenshot — use `--json` to get base64 PNG data |
 
 ### Browser Configuration
 | Command | Arguments | Description |
 |---------|-----------|-------------|
 | `set-viewport` | `<width> <height>` | Set browser viewport size |
-| `cookies` | - | Get current cookies |
+| `cookies` | - | Get current cookies (read-only) |
 
 ### Session Management
 | Command | Arguments | Description |
@@ -78,7 +78,7 @@ web_browse_agent --session <session-id> [--headless] [--json] <command> [args...
 
 ```bash
 # Start a session and navigate
-web_browse_agent --session scrape --json open https://news.ycombinator.com
+web_browse_agent --session scrape open https://news.ycombinator.com
 
 # Wait for content to load
 web_browse_agent --session scrape wait-for ".athing"
@@ -96,6 +96,9 @@ web_browse_agent --session scrape end-session
 # Navigate to login page
 web_browse_agent --session login open https://example.com/login
 
+# Wait for the form to be ready
+web_browse_agent --session login wait-for "#username"
+
 # Fill in credentials
 web_browse_agent --session login type "#username" "myuser"
 web_browse_agent --session login type "#password" "mypass"
@@ -103,8 +106,8 @@ web_browse_agent --session login type "#password" "mypass"
 # Submit form
 web_browse_agent --session login click "#submit"
 
-# Wait for navigation
-web_browse_agent --session login wait-for --wait-type navigation
+# Wait for post-login element (page load signal)
+web_browse_agent --session login wait-for "#dashboard"
 ```
 
 ### File Upload
@@ -129,10 +132,24 @@ web_browse_agent --session upload click "#submit-button"
 # Set viewport for consistent screenshots
 web_browse_agent --session capture set-viewport 1920 1080
 
-# Navigate and capture
+# Navigate and wait for page to be ready
 web_browse_agent --session capture open https://example.com
 web_browse_agent --session capture wait-for "body"
-web_browse_agent --session capture screenshot > screenshot.base64
+
+# Capture screenshot — must use --json to get base64 image data
+web_browse_agent --session capture --json screenshot
+# Without --json, you only get a human-readable summary line, not the image data
+```
+
+**Decoding the screenshot:**
+```bash
+# Save PNG directly using Python
+web_browse_agent --session capture --json screenshot \
+  | python3 -c "import sys,json,base64; d=json.load(sys.stdin); open('shot.png','wb').write(base64.b64decode(d['data']))"
+
+# Or use jq + base64 (Linux)
+web_browse_agent --session capture --json screenshot \
+  | jq -r '.data' | base64 -d > screenshot.png
 ```
 
 ### JavaScript Evaluation
@@ -141,7 +158,7 @@ web_browse_agent --session capture screenshot > screenshot.base64
 # Get page title
 web_browse_agent --session test eval "document.title"
 
-# Get all links
+# Get all links (result is always in .value field)
 web_browse_agent --session test --json eval "Array.from(document.links).map(l => l.href)"
 
 # Check element existence
@@ -149,6 +166,9 @@ web_browse_agent --session test eval "!!document.querySelector('#my-element')"
 
 # Scroll to bottom
 web_browse_agent --session test eval "window.scrollTo(0, document.body.scrollHeight)"
+
+# Set a cookie via JavaScript (no native set-cookie command exists)
+web_browse_agent --session test eval "document.cookie = 'name=value; path=/'"
 ```
 
 ## Selectors
@@ -168,20 +188,55 @@ web_browse_agent --session s click "text=Sign In"
 web_browse_agent --session s click "role=button[name='Submit']"
 ```
 
-## Async Navigation Note
+## Async Navigation and Waiting for Load
 
-The `open` command returns immediately after navigation starts (when HTTP headers are received). To wait for full page load:
+The `open` command returns as soon as the HTTP response headers are received — it does **not** wait for the page to fully render. There is **no** `wait-for --wait-type navigation` flag; that syntax does not exist.
 
-```bash
-web_browse_agent --session s open https://example.com
-web_browse_agent --session s wait-for --wait-type navigation
-```
-
-Or wait for a specific element that indicates the page is ready:
+**Correct pattern** — wait for a specific element that signals the page is ready:
 
 ```bash
 web_browse_agent --session s open https://example.com
 web_browse_agent --session s wait-for "#main-content"
+```
+
+**Fallback** — wait for `body` if you just need the DOM to exist:
+
+```bash
+web_browse_agent --session s open https://example.com
+web_browse_agent --session s wait-for "body"
+```
+
+`wait-for` only accepts CSS/Playwright selectors. It does **not** accept numeric timeouts or `navigation` as arguments.
+
+## Cookies
+
+`cookies` is **read-only** — it returns the current cookies for the page. There is no `set-cookie` command.
+
+To inject cookies, use `eval` to set them via JavaScript:
+
+```bash
+# Read cookies
+web_browse_agent --session s --json cookies
+
+# Set a cookie via JavaScript
+web_browse_agent --session s eval "document.cookie = 'session=abc123; path=/'"
+```
+
+Note: JavaScript-set cookies only work for non-`HttpOnly` cookies. To inject `HttpOnly` cookies you need to set them server-side (e.g. via a request that returns a `Set-Cookie` header).
+
+## eval Result Format
+
+`eval` always returns `{"value": <result>}`. The result is the JavaScript return value, serialised as JSON:
+
+```bash
+web_browse_agent --session s --json eval "document.title"
+# → {"value":"Example Domain"}
+
+web_browse_agent --session s --json eval "[1,2,3]"
+# → {"value":[1,2,3]}
+
+web_browse_agent --session s --json eval "43"
+# → {"value":43}
 ```
 
 ## Session Lifecycle
@@ -247,9 +302,9 @@ xvfb-run web_browse_agent --session test --headless=false open https://example.c
 
 ## Tips
 
-1. **Use JSON output** for programmatic parsing: `--json`
+1. **Always use `--json`** for programmatic parsing — especially for `screenshot` (required to get image data) and `eval`
 2. **Reuse sessions** to maintain state across multiple operations
-3. **Use `wait-for`** after navigation to ensure content is loaded
-4. **Use `eval`** for complex data extraction that simple commands can't handle
+3. **Use `wait-for <selector>`** after `open` to ensure the page is ready — wait for a specific element, not `navigation`
+4. **Use `eval`** for complex data extraction and for setting cookies
 5. **Set viewport** before screenshots for consistent dimensions
 6. **Set DISPLAY** when using `--headless=false` to see the browser window
