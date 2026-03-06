@@ -827,8 +827,8 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     const char *name = is_vltrn ? "vltrn" : "klawed";
     snprintf(line1, sizeof(line1), "  /\\_/\\   %s v%s", name, version ? version : "?");
     snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
-    snprintf(line3, sizeof(line3), "  > ^ <    %s", working_dir);
-    snprintf(line4, sizeof(line4), "           %s", session_id ? session_id : "(no session)");
+    snprintf(line3, sizeof(line3), "  > ^ <   %s", working_dir);
+    snprintf(line4, sizeof(line4), "          %s", session_id ? session_id : "(no session)");
 
     // Add padding before mascot
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
@@ -839,7 +839,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
         tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
         tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, line4, COLOR_PAIR_STATUS);
+        tui_add_conversation_line(tui, NULL, line4, COLOR_PAIR_ASSISTANT);
     }
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);  // Blank line
 
