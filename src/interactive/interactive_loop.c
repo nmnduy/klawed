@@ -51,7 +51,7 @@ void interactive_mode(ConversationState *state) {
     vltrn_show_greeting(&tui);
 
     // Display startup banner with mascot in the TUI
-    tui_show_startup_banner(&tui, VERSION, state->model, state->working_dir);
+    tui_show_startup_banner(&tui, VERSION, state->model, state->working_dir, state->session_id);
 
     // If resuming a session, populate the TUI with conversation history
     if (state->count > 1) {  // > 1 to account for system message
