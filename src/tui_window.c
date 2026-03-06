@@ -17,6 +17,8 @@
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
+#include <wchar.h>
+#include <locale.h>
 
 #define INPUT_WIN_MIN_HEIGHT 2  // Min height for input window (content lines, no borders)
 #define INPUT_WIN_MAX_HEIGHT_PERCENT 20  // Max height as percentage of viewport
@@ -120,6 +122,151 @@ int tui_window_install_resize_handler(void) {
 #endif
 }
 
+// Count the display column width of a single UTF-8 character sequence starting at *p.
+// Advances *p past the character. Returns column width (1 for most chars, 2 for wide).
+static int utf8_char_cols(const char **p) {
+    const unsigned char *u = (const unsigned char *)*p;
+    int bytes;
+    unsigned int cp;
+
+    if (u[0] < 0x80) {
+        bytes = 1;
+        cp = u[0];
+    } else if ((u[0] & 0xE0) == 0xC0) {
+        bytes = 2;
+        cp = u[0] & 0x1F;
+    } else if ((u[0] & 0xF0) == 0xE0) {
+        bytes = 3;
+        cp = u[0] & 0x0F;
+    } else if ((u[0] & 0xF8) == 0xF0) {
+        bytes = 4;
+        cp = u[0] & 0x07;
+    } else {
+        /* Invalid/continuation byte, skip one */
+        *p += 1;
+        return 0;
+    }
+
+    for (int i = 1; i < bytes; i++) {
+        if ((u[i] & 0xC0) != 0x80) { bytes = i; break; }
+        cp = (cp << 6) | (u[i] & 0x3F);
+    }
+    *p += bytes;
+
+    /* Wide East Asian characters (rough check) */
+    if ((cp >= 0x1100 && cp <= 0x115F) ||
+        (cp >= 0x2E80 && cp <= 0x303E) ||
+        (cp >= 0x3040 && cp <= 0xA4CF) ||
+        (cp >= 0xAC00 && cp <= 0xD7A3) ||
+        (cp >= 0xF900 && cp <= 0xFAFF) ||
+        (cp >= 0xFE30 && cp <= 0xFE4F) ||
+        (cp >= 0xFF01 && cp <= 0xFF60) ||
+        (cp >= 0xFFE0 && cp <= 0xFFE6) ||
+        (cp >= 0x1F300)) {
+        return 2;
+    }
+    /* Zero-width / combining / control */
+    if (cp == 0 || (cp >= 0x0300 && cp <= 0x036F) ||
+        (cp >= 0x200B && cp <= 0x200F) ||
+        cp == 0xFEFF) {
+        return 0;
+    }
+    return 1;
+}
+
+// Count how many pad lines a block of text will occupy when rendered starting
+// at column col_offset in a pad of width pad_width.
+// Handles explicit newlines in text.
+static int count_text_lines(const char *text, int pad_width, int col_offset) {
+    if (!text || !*text || pad_width <= 0) return 1;
+
+    int lines = 1;
+    int col = col_offset;
+
+    const char *p = text;
+    while (*p) {
+        if (*p == '\n') {
+            lines++;
+            col = 0;
+            p++;
+            continue;
+        }
+        int w = utf8_char_cols(&p);
+        col += w;
+        if (col >= pad_width) {
+            lines++;
+            col = 0;
+        }
+    }
+    return lines;
+}
+
+// Estimate how many pad lines one ConversationEntry will occupy at the given width.
+static int estimate_entry_lines(const ConversationEntry *entry, int pad_width) {
+    if (!entry) return 1;
+
+    int is_user = (entry->prefix && strcmp(entry->prefix, "[User]") == 0);
+    int is_asst = (entry->prefix && strcmp(entry->prefix, "[Assistant]") == 0);
+
+    if (is_user) {
+        /* 1 blank line before + text starting at col 2 (❯ + space) + newline + 1 blank line */
+        int text_lines = entry->text && entry->text[0] ?
+            count_text_lines(entry->text, pad_width, 2) : 1;
+        return 1 + text_lines + 1;  /* blank + text_lines + trailing blank */
+    } else if (is_asst) {
+        /* Each source line gets │ (1 col) + space (1 col) = 2 col prefix, then wraps */
+        if (!entry->text || !entry->text[0]) return 0;
+        int total = 0;
+        const char *p = entry->text;
+        while (*p) {
+            const char *line_start = p;
+            /* Find end of source line */
+            while (*p && *p != '\n') p++;
+            /* Count columns of this source segment (exclude newline) */
+            /* Build a temporary view for counting */
+            char tmp_buf[16384];
+            size_t len = (size_t)(p - line_start);
+            if (len >= sizeof(tmp_buf)) len = sizeof(tmp_buf) - 1;
+            memcpy(tmp_buf, line_start, len);
+            tmp_buf[len] = '\0';
+            total += count_text_lines(tmp_buf, pad_width, 2);  /* 2-col prefix */
+            if (*p == '\n') p++;
+        }
+        return total > 0 ? total : 1;
+    } else {
+        /* prefix + space + text + newline */
+        int prefix_cols = 0;
+        if (entry->prefix && entry->prefix[0]) {
+            const char *pp = entry->prefix;
+            while (*pp) prefix_cols += utf8_char_cols(&pp);
+            prefix_cols++;  /* +1 for the space after prefix */
+        }
+        int text_lines = entry->text && entry->text[0] ?
+            count_text_lines(entry->text, pad_width, prefix_cols) : 1;
+        return text_lines;
+    }
+}
+
+// Find which entry index is visible at the top of the viewport (scroll_offset).
+// Returns the index of the first entry whose start line <= scroll_offset and
+// whose end line > scroll_offset (i.e., the entry straddling the top).
+// If scroll_offset is 0 or below first entry, returns 0.
+static int find_anchor_entry(TUIState *tui, int scroll_offset, int old_pad_width) {
+    if (!tui || tui->entries_count == 0) return 0;
+    if (scroll_offset <= 0) return 0;
+
+    int line = 0;
+    for (int i = 0; i < tui->entries_count; i++) {
+        int entry_lines = estimate_entry_lines(&tui->entries[i], old_pad_width);
+        if (line + entry_lines > scroll_offset) {
+            return i;
+        }
+        line += entry_lines;
+    }
+    /* scroll_offset is past all content: anchor to last entry */
+    return tui->entries_count - 1;
+}
+
 // Handle terminal resize
 void tui_handle_resize(TUIState *tui) {
     if (!tui || !tui->is_initialized) return;
@@ -128,6 +275,14 @@ void tui_handle_resize(TUIState *tui) {
     // invalid pad coordinates during rebuild
     int saved_scroll_offset = tui->wm.conv_scroll_offset;
     tui->wm.conv_scroll_offset = 0;
+
+    // Find the anchor entry (the entry visible at the top of the viewport)
+    // before the pad is destroyed, using the current (old) pad width.
+    int old_pad_width = tui->wm.screen_width - tui->wm.config.conv_h_padding;
+    if (old_pad_width < 1) old_pad_width = 1;
+    int anchor_entry_idx = find_anchor_entry(tui, saved_scroll_offset, old_pad_width);
+    LOG_DEBUG("[TUI] Resize anchor: entry %d/%d (old scroll=%d, old pad_width=%d)",
+              anchor_entry_idx, tui->entries_count, saved_scroll_offset, old_pad_width);
 
     // Get new screen dimensions to recalculate max input height
     int screen_height, screen_width;
@@ -178,6 +333,13 @@ void tui_handle_resize(TUIState *tui) {
     getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
     (void)pad_width;  // May be used in getmaxyx refresh call later
 
+    // Allocate array to track the start line of each entry in the new pad
+    int *new_entry_start_lines = NULL;
+    if (tui->entries_count > 0) {
+        new_entry_start_lines = calloc((size_t)tui->entries_count, sizeof(int));
+        // Allocation failure is non-fatal: we fall back to saved_scroll_offset
+    }
+
     for (int i = 0; i < tui->entries_count; i++) {
         ConversationEntry *entry = &tui->entries[i];
 
@@ -185,6 +347,11 @@ void tui_handle_resize(TUIState *tui) {
         int cur_y, cur_x;
         getyx(tui->wm.conv_pad, cur_y, cur_x);
         (void)cur_x;
+
+        // Record the start line of this entry in the new pad
+        if (new_entry_start_lines) {
+            new_entry_start_lines[i] = cur_y;
+        }
 
         if (cur_y >= pad_height - 1) {
             LOG_WARN("[TUI] Pad capacity exceeded during resize rebuild at entry %d/%d (cur_y=%d, pad_height=%d)",
@@ -379,13 +546,24 @@ void tui_handle_resize(TUIState *tui) {
     (void)cur_x;
     window_manager_set_content_lines(&tui->wm, cur_y);
 
-    // Restore scroll position (clamped to valid range by window manager)
-    tui->wm.conv_scroll_offset = saved_scroll_offset;
+    // Restore scroll position anchored to the entry that was at the top of
+    // the viewport before the resize. This preserves the user's reading
+    // position even when text reflows due to a width change.
+    int new_scroll = saved_scroll_offset;  // fallback
+    if (new_entry_start_lines && tui->entries_count > 0 &&
+        anchor_entry_idx >= 0 && anchor_entry_idx < tui->entries_count) {
+        new_scroll = new_entry_start_lines[anchor_entry_idx];
+        LOG_DEBUG("[TUI] Resize: anchor entry %d starts at new line %d",
+                  anchor_entry_idx, new_scroll);
+    }
+    free(new_entry_start_lines);
+    new_entry_start_lines = NULL;
+
     int max_scroll = cur_y - tui->wm.conv_viewport_height;
     if (max_scroll < 0) max_scroll = 0;
-    if (tui->wm.conv_scroll_offset > max_scroll) {
-        tui->wm.conv_scroll_offset = max_scroll;
-    }
+    if (new_scroll < 0) new_scroll = 0;
+    if (new_scroll > max_scroll) new_scroll = max_scroll;
+    tui->wm.conv_scroll_offset = new_scroll;
 
     validate_tui_windows(tui);
     window_manager_refresh_all(&tui->wm);
