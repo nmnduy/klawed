@@ -251,7 +251,7 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
 void tui_handle_resize(TUIState *tui);
 
 // Show startup banner with version, model, and working directory
-void tui_show_startup_banner(TUIState *tui, const char *version, const char *model, const char *working_dir);
+void tui_show_startup_banner(TUIState *tui, const char *version, const char *model, const char *working_dir, const char *session_id);
 
 // Scroll conversation up/down
 // direction: positive = scroll down, negative = scroll up

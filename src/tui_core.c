@@ -803,7 +803,7 @@ void tui_render_active_subagents(TUIState *tui) {
     tui_add_conversation_line(tui, NULL, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", COLOR_PAIR_TOOL);
 }
 
-void tui_show_startup_banner(TUIState *tui, const char *version, const char *model, const char *working_dir) {
+void tui_show_startup_banner(TUIState *tui, const char *version, const char *model, const char *working_dir, const char *session_id) {
     if (!tui || !tui->is_initialized) return;
 
     // Defensive check: model and working_dir must not be NULL
@@ -820,6 +820,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     char line1[256];
     char line2[256];
     char line3[256];
+    char line4[256];
     char tip_line[512];
 
     // Create content lines without box borders
@@ -827,6 +828,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     snprintf(line1, sizeof(line1), "  /\\_/\\   %s v%s", name, version ? version : "?");
     snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
     snprintf(line3, sizeof(line3), "  > ^ <    %s", working_dir);
+    snprintf(line4, sizeof(line4), "           %s", session_id ? session_id : "(no session)");
 
     // Add padding before mascot
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
@@ -837,6 +839,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
         tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
         tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, line4, COLOR_PAIR_STATUS);
     }
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);  // Blank line
 

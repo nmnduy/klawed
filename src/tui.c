@@ -297,7 +297,7 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
     // Show mascot if we have at least model and working directory
     // Version can be NULL - we'll show placeholder in that case
     if (mod && dir) {
-        tui_show_startup_banner(tui, ver ? ver : "?", mod, dir);
+        tui_show_startup_banner(tui, ver ? ver : "?", mod, dir, NULL);
     }
 
     // Add a system message indicating the clear (after mascot)
