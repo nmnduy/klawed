@@ -35,11 +35,13 @@ func init() {
 }
 
 var (
-	sessionID  string
-	jsonOutput bool
-	timeout    int
-	headless   bool
-	verbose    bool
+	sessionID        string
+	jsonOutput       bool
+	timeout          int
+	headless         bool
+	verbose          bool
+	browserExecutable string
+	userDataDir      string
 )
 
 func main() {
@@ -75,6 +77,8 @@ Examples:
 	rootCmd.PersistentFlags().IntVar(&timeout, "timeout", 30, "Command timeout in seconds")
 	rootCmd.PersistentFlags().BoolVar(&headless, "headless", true, "Run browser in headless mode")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
+	rootCmd.PersistentFlags().StringVar(&browserExecutable, "browser", "", "Browser executable path (e.g., /usr/bin/brave-browser). If not set, auto-detects system Chromium/Chrome")
+	rootCmd.PersistentFlags().StringVar(&userDataDir, "user-data-dir", "", "Browser profile directory (e.g., ~/.config/BraveSoftware/Brave-Browser/Default)")
 
 	// Don't mark session as required globally - check in runCommand instead
 
@@ -108,6 +112,20 @@ Examples:
 func runCommand(cmd *cobra.Command, args []string) error {
 	mainLogger.Printf("runCommand called with args: %v", args)
 	mainLogger.Printf("Session: %s, Headless: %v, JSON: %v", sessionID, headless, jsonOutput)
+
+	// Support WEB_AGENT_BROWSER and WEB_AGENT_USER_DATA_DIR environment variables as fallback for flags
+	if browserExecutable == "" {
+		if envBrowser := os.Getenv("WEB_AGENT_BROWSER"); envBrowser != "" {
+			mainLogger.Printf("Using browser from WEB_AGENT_BROWSER env: %s", envBrowser)
+			browserExecutable = envBrowser
+		}
+	}
+	if userDataDir == "" {
+		if envUserDataDir := os.Getenv("WEB_AGENT_USER_DATA_DIR"); envUserDataDir != "" {
+			mainLogger.Printf("Using user-data-dir from WEB_AGENT_USER_DATA_DIR env: %s", envUserDataDir)
+			userDataDir = envUserDataDir
+		}
+	}
 
 	// Handle special case: no command provided
 	if len(args) == 0 {
@@ -192,9 +210,14 @@ func ensureDriverRunning(sess *session.Session) error {
 	}
 
 	// Start new driver
+	// Use CLI user-data-dir flag if provided, otherwise use session's user-data-dir
+	effectiveUserDataDir := userDataDir
+	if effectiveUserDataDir == "" {
+		effectiveUserDataDir = sess.UserDataDir
+	}
 	socketPath := filepath.Join(os.TempDir(), fmt.Sprintf("web-agent-%s.sock", sess.ID))
-	mainLogger.Printf("Starting new driver process (socket: %s)", socketPath)
-	pid, err := browser.StartDriverProcess(sess.ID, socketPath, headless, sess.UserDataDir)
+	mainLogger.Printf("Starting new driver process (socket: %s, userDataDir: %s)", socketPath, effectiveUserDataDir)
+	pid, err := browser.StartDriverProcess(sess.ID, socketPath, headless, effectiveUserDataDir, browserExecutable)
 	if err != nil {
 		mainLogger.Printf("ERROR: Failed to start driver process: %v", err)
 		return fmt.Errorf("failed to start driver: %w", err)
