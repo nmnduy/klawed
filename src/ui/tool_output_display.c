@@ -669,6 +669,63 @@ char* get_tool_details(const char *tool_name, cJSON *arguments) {
                 }
             }
         }
+    } else if (strcmp(tool_name, "BrowserControl") == 0) {
+        cJSON *command = cJSON_GetObjectItem(arguments, "command");
+        cJSON *params = cJSON_GetObjectItem(arguments, "params");
+        if (cJSON_IsString(command)) {
+            if (params && cJSON_IsObject(params)) {
+                // Show the most relevant param inline: url, selector, text, code, x/y
+                cJSON *url = cJSON_GetObjectItem(params, "url");
+                cJSON *selector = cJSON_GetObjectItem(params, "selector");
+                cJSON *text = cJSON_GetObjectItem(params, "text");
+                cJSON *code = cJSON_GetObjectItem(params, "code");
+                cJSON *max_length = cJSON_GetObjectItem(params, "maxLength");
+                if (cJSON_IsString(url)) {
+                    snprintf(details, sizeof(details), "%s %s",
+                             command->valuestring, url->valuestring);
+                } else if (cJSON_IsString(selector)) {
+                    if (cJSON_IsString(text)) {
+                        snprintf(details, sizeof(details), "%s %s \"%s\"",
+                                 command->valuestring, selector->valuestring,
+                                 text->valuestring);
+                    } else {
+                        snprintf(details, sizeof(details), "%s %s",
+                                 command->valuestring, selector->valuestring);
+                    }
+                } else if (cJSON_IsString(code)) {
+                    const char *c = code->valuestring;
+                    size_t len = strlen(c);
+                    if (len > 40) {
+                        snprintf(details, sizeof(details), "%s %.37s...",
+                                 command->valuestring, c);
+                    } else {
+                        snprintf(details, sizeof(details), "%s %s",
+                                 command->valuestring, c);
+                    }
+                } else if (cJSON_IsNumber(max_length)) {
+                    snprintf(details, sizeof(details), "%s (maxLength=%d)",
+                             command->valuestring, max_length->valueint);
+                } else {
+                    // Fall back: show command + raw params (truncated)
+                    char *params_str = cJSON_PrintUnformatted(params);
+                    if (params_str) {
+                        size_t plen = strlen(params_str);
+                        if (plen > 40) {
+                            snprintf(details, sizeof(details), "%s %.37s...",
+                                     command->valuestring, params_str);
+                        } else {
+                            snprintf(details, sizeof(details), "%s %s",
+                                     command->valuestring, params_str);
+                        }
+                        free(params_str);
+                    } else {
+                        strlcpy(details, command->valuestring, sizeof(details));
+                    }
+                }
+            } else {
+                strlcpy(details, command->valuestring, sizeof(details));
+            }
+        }
     } else if (strncmp(tool_name, "mcp_", 4) == 0) {
         // Handle MCP tools (format: mcp_<server>_<toolname>)
         // Extract the actual tool name after the server prefix for display
