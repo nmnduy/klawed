@@ -7,9 +7,10 @@ GOFILES = main.go go.mod
 PREFIX        ?= $(HOME)/.local
 BINDIR         = $(PREFIX)/bin
 
-# Chrome/Chromium native messaging host directories (Linux)
+# Chrome/Chromium/Brave native messaging host directories (Linux)
 CHROME_HOST_DIR   = $(HOME)/.config/google-chrome/NativeMessagingHosts
 CHROMIUM_HOST_DIR = $(HOME)/.config/chromium/NativeMessagingHosts
+BRAVE_HOST_DIR    = $(HOME)/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts
 
 # Extension ID — must be set after loading the extension in Chrome
 EXTENSION_ID ?= EXTENSION_ID_PLACEHOLDER
@@ -68,6 +69,11 @@ install: build configure
 		   "$(CHROMIUM_HOST_DIR)/com.klawed.browser_controller.json"; \
 		echo "  → $(CHROMIUM_HOST_DIR)/com.klawed.browser_controller.json"; \
 	fi
+
+	@install -d "$(BRAVE_HOST_DIR)"
+	@cp "$(CHROME_HOST_DIR)/com.klawed.browser_controller.json" \
+	    "$(BRAVE_HOST_DIR)/com.klawed.browser_controller.json"
+	@echo "  → $(BRAVE_HOST_DIR)/com.klawed.browser_controller.json"
 
 	@echo ""
 	@echo "Installation complete!"

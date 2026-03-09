@@ -60,12 +60,18 @@ async function connectNativeHost() {
     nativePort.onDisconnect.addListener(() => {
       const err = chrome.runtime.lastError;
       console.log('Native host disconnected:', err ? err.message : '(no error)');
+      const wasIntentional = !err || err.message === 'Native host has exited.';
       isConnected = false;
       nativePort = null;
       broadcastToTabs({ type: 'nativeStatus', connected: false });
 
-      // Auto-reconnect — use chrome.alarms instead of setTimeout since
-      // MV3 service workers kill pending timers when they go idle.
+      // Only auto-reconnect for unexpected disconnects, not "host not found" errors
+      // (which would spam reconnects forever).
+      if (!wasIntentional && err && err.message.includes('not found')) {
+        console.log('Native host not found — not retrying automatically.');
+        return;
+      }
+      // Use chrome.alarms for reconnect so it survives service worker idle kills.
       chrome.alarms.create('reconnect', { delayInMinutes: 1/30 }); // ~2 seconds
     });
 
