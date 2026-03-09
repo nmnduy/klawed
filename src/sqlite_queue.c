@@ -92,6 +92,7 @@
 #ifndef TEST_BUILD
 static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx, struct ConversationState *state, const char *user_input);
 static int sqlite_queue_handle_compact_trigger(SQLiteQueueContext *ctx, struct ConversationState *state);
+static int sqlite_queue_resume_pending_turn(SQLiteQueueContext *ctx, struct ConversationState *state);
 #endif
 static void sqlite_queue_set_error(SQLiteQueueContext *ctx, SQLiteQueueErrorCode error_code, const char *format, ...);
 static const char* sqlite_queue_error_to_string(SQLiteQueueErrorCode error_code);
@@ -1004,6 +1005,84 @@ static void sqlite_on_after_tool_results(struct ConversationState *state, void *
 }
 
 // Process SQLite message with unified conversation processor
+/*
+ * Resume a pending user turn that was left unanswered before klawed was last stopped.
+ * Called on startup when conversation history ends with a user message (MSG_USER) that
+ * has no assistant response yet. Calls the LLM directly without adding a new user message.
+ */
+static int sqlite_queue_resume_pending_turn(SQLiteQueueContext *ctx, struct ConversationState *state) {
+    if (!ctx || !state) {
+        LOG_ERROR("SQLite Queue: resume_pending_turn: invalid parameters");
+        return -1;
+    }
+
+    LOG_INFO("SQLite Queue: Resuming pending user turn from previous session");
+    printf("SQLite Queue: Resuming unanswered user message from previous session...\n");
+    fflush(stdout);
+
+    const char *response_receiver = "client";
+
+    SQLiteQueueCallbackContext cb_ctx = {
+        .ctx = ctx,
+        .response_receiver = response_receiver
+    };
+
+    ProcessingContext proc_ctx = {0};
+    processing_context_init(&proc_ctx);
+    proc_ctx.execution_mode = EXEC_MODE_SERIAL;
+    proc_ctx.output_format = OUTPUT_FORMAT_PLAIN;
+    proc_ctx.max_iterations = ctx->max_iterations;
+    proc_ctx.user_data = &cb_ctx;
+    proc_ctx.on_tool_start_ex = sqlite_on_tool_start_ex;
+    proc_ctx.on_tool_complete_ex = sqlite_on_tool_complete_ex;
+    proc_ctx.on_assistant_text = sqlite_on_assistant_text;
+    proc_ctx.on_error = sqlite_on_error;
+    proc_ctx.should_interrupt = sqlite_should_interrupt;
+    proc_ctx.on_status_update = sqlite_on_status_update;
+    proc_ctx.on_after_tool_results = sqlite_on_after_tool_results;
+
+    /* Call the LLM with the existing conversation state (last message is already MSG_USER). */
+    if (proc_ctx.on_status_update) {
+        proc_ctx.on_status_update("Calling AI...", proc_ctx.user_data);
+    }
+
+    ApiResponse *response = call_api_with_retries(state);
+    if (!response) {
+        LOG_ERROR("SQLite Queue: resume_pending_turn: API call failed");
+        if (proc_ctx.on_error) {
+            proc_ctx.on_error("Failed to get response from API", proc_ctx.user_data);
+        }
+        sqlite_queue_send_end_ai_turn(ctx, response_receiver);
+        return -1;
+    }
+
+    if (response->error_message) {
+        if (proc_ctx.on_error) {
+            proc_ctx.on_error(response->error_message, proc_ctx.user_data);
+        }
+        api_response_free(response);
+        sqlite_queue_send_end_ai_turn(ctx, response_receiver);
+        return -1;
+    }
+
+    int result = process_response_unified(state, response, &proc_ctx);
+    api_response_free(response);
+
+    sqlite_queue_send_end_ai_turn(ctx, response_receiver);
+
+    char status_color[32] = {0};
+    const char *status_color_start = NULL;
+    if (get_colorscheme_color(COLORSCHEME_STATUS, status_color, sizeof(status_color)) == 0) {
+        status_color_start = status_color;
+    } else {
+        status_color_start = ANSI_FALLBACK_STATUS;
+    }
+    printf("\n%s[Ready]%s Waiting for next message...\n", status_color_start, ANSI_RESET);
+    fflush(stdout);
+
+    return result;
+}
+
 static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
                                             struct ConversationState *state, const char *user_input) {
     if (!ctx || !state || !user_input) {
@@ -1747,6 +1826,14 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
 
     /* Restore conversation from database history (crash recovery) */
     sqlite_queue_restore_conversation(ctx, state);
+
+    /* If the last restored message is from the user with no assistant reply,
+     * resume the turn immediately rather than waiting for a new message. */
+    if (state->count > 0 &&
+        state->messages[state->count - 1].role == MSG_USER) {
+        LOG_INFO("SQLite Queue: Last restored message is from user - resuming pending turn");
+        sqlite_queue_resume_pending_turn(ctx, state);
+    }
 
     // Store state in context for worker thread access
     ctx->state = state;
