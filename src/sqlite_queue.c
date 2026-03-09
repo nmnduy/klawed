@@ -85,7 +85,7 @@
     "SELECT id, sender, message FROM (" \
     "  SELECT id, sender, message FROM messages " \
     "  WHERE sent = 1 " \
-    "  ORDER BY id DESC LIMIT 200" \
+    "  ORDER BY id DESC LIMIT 800" \
     ") ORDER BY id ASC;"
 
 // Check if the last message sent by klawed was an END_AI_TURN.

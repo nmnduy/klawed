@@ -157,7 +157,7 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
 /**
  * Restore conversation history from an existing SQLite queue database.
  * Called automatically at daemon startup to resume after a crash or restart.
- * Loads up to 200 most recent processed messages (sent=1) and reconstructs
+ * Loads up to 800 most recent processed messages (sent=1) and reconstructs
  * the conversation: user TEXT turns, assistant TEXT+TOOL turns, tool results.
  * Interrupted tool calls (no matching TOOL_RESULT) get synthetic error results.
  *
