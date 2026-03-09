@@ -64,7 +64,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           log('Connected!', 'ok');
           setConnected(true);
         } else {
-          log('Connection failed. Is the native host installed?', 'err');
+          log('Connection failed. Check chrome://extensions → Errors for details.', 'err');
+          log('Also check: ls ~/.local/bin/klawed_browser_controller', 'err');
         }
       }
     } catch (e) {
