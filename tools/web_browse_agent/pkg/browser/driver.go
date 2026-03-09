@@ -22,13 +22,14 @@ func getLogger() *log.Logger {
 // Driver represents a browser driver process
 type Driver struct {
 	// Configuration
-	sessionID   string
-	socketPath  string
-	headless    bool
-	userDataDir string        // Path to persistent user data directory
-	timeout     time.Duration
-	idleTimeout time.Duration // Auto-shutdown after this duration of inactivity (0 = disabled)
-	parentPID   int           // Parent process to monitor for cleanup
+	sessionID         string
+	socketPath        string
+	headless          bool
+	userDataDir       string        // Path to persistent user data directory
+	browserExecutable string        // Path to browser executable (empty = auto-detect)
+	timeout           time.Duration
+	idleTimeout       time.Duration // Auto-shutdown after this duration of inactivity (0 = disabled)
+	parentPID         int           // Parent process to monitor for cleanup
 
 	// Process management
 	cmd          *exec.Cmd
@@ -50,13 +51,14 @@ type Driver struct {
 
 // DriverConfig holds configuration for creating a new driver
 type DriverConfig struct {
-	SessionID   string
-	SocketPath  string
-	Headless    bool
-	UserDataDir string        // Path to persistent user data directory (empty = no persistence)
-	Timeout     time.Duration
-	IdleTimeout time.Duration // Auto-shutdown after this duration of inactivity (0 = disabled)
-	ParentPID   int           // Parent process to monitor - driver exits if parent dies
+	SessionID         string
+	SocketPath        string
+	Headless          bool
+	UserDataDir       string        // Path to persistent user data directory (empty = no persistence)
+	BrowserExecutable string        // Path to browser executable (empty = auto-detect)
+	Timeout           time.Duration
+	IdleTimeout       time.Duration // Auto-shutdown after this duration of inactivity (0 = disabled)
+	ParentPID         int           // Parent process to monitor - driver exits if parent dies
 }
 
 // NewDriver creates a new browser driver
@@ -76,15 +78,16 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 	}
 
 	return &Driver{
-		sessionID:    config.SessionID,
-		socketPath:   config.SocketPath,
-		headless:     config.Headless,
-		userDataDir:  config.UserDataDir,
-		timeout:      config.Timeout,
-		idleTimeout:  config.IdleTimeout,
-		parentPID:    config.ParentPID,
-		shutdown:     make(chan struct{}),
-		lastActivity: time.Now(),
+		sessionID:         config.SessionID,
+		socketPath:        config.SocketPath,
+		headless:          config.Headless,
+		userDataDir:       config.UserDataDir,
+		browserExecutable: config.BrowserExecutable,
+		timeout:           config.Timeout,
+		idleTimeout:       config.IdleTimeout,
+		parentPID:         config.ParentPID,
+		shutdown:          make(chan struct{}),
+		lastActivity:      time.Now(),
 	}, nil
 }
 
@@ -92,7 +95,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 func (d *Driver) Start() error {
 	logger.Printf("Starting driver for session %s", d.sessionID)
 	logger.Printf("Socket path: %s", d.socketPath)
-	logger.Printf("Headless: %v, UserDataDir: %s", d.headless, d.userDataDir)
+	logger.Printf("Headless: %v, UserDataDir: %s, BrowserExecutable: %s", d.headless, d.userDataDir, d.browserExecutable)
 
 	// Create IPC server with activity tracking for idle timeout
 	ipcConfig := ipc.ServerConfig{
@@ -110,8 +113,9 @@ func (d *Driver) Start() error {
 	// Initialize browser context
 	logger.Printf("Initializing browser context...")
 	ctx, err := NewBrowserContextWithConfig(BrowserContextConfig{
-		Headless:    d.headless,
-		UserDataDir: d.userDataDir,
+		Headless:         d.headless,
+		UserDataDir:      d.userDataDir,
+		BrowserExecutable: d.browserExecutable,
 	})
 	if err != nil {
 		logger.Printf("ERROR: Failed to create browser context: %v", err)
@@ -376,10 +380,10 @@ const DefaultIdleTimeout = 5 * time.Minute
 func RunDriverMain() error {
 	// Parse command line arguments
 	if len(os.Args) < 4 {
-		return fmt.Errorf("usage: %s --driver <session-id> --socket <socket-path> [--parent-pid <pid>] [--idle-timeout <seconds>] [--user-data-dir <path>] [--no-headless]", os.Args[0])
+		return fmt.Errorf("usage: %s --driver <session-id> --socket <socket-path> [--parent-pid <pid>] [--idle-timeout <seconds>] [--user-data-dir <path>] [--browser <path>] [--no-headless]", os.Args[0])
 	}
 
-	var sessionID, socketPath, userDataDir string
+	var sessionID, socketPath, userDataDir, browserExecutable string
 	var parentPID int
 	var idleTimeoutSec int
 	headless := true
@@ -411,6 +415,11 @@ func RunDriverMain() error {
 				userDataDir = os.Args[i+1]
 				i++
 			}
+		case "--browser":
+			if i+1 < len(os.Args) {
+				browserExecutable = os.Args[i+1]
+				i++
+			}
 		case "--no-headless":
 			headless = false
 		}
@@ -435,13 +444,14 @@ func RunDriverMain() error {
 
 	// Create and start driver
 	config := DriverConfig{
-		SessionID:   sessionID,
-		SocketPath:  socketPath,
-		Headless:    headless,
-		UserDataDir: userDataDir,
-		Timeout:     30 * time.Second,
-		IdleTimeout: idleTimeout,
-		ParentPID:   parentPID,
+		SessionID:         sessionID,
+		SocketPath:        socketPath,
+		Headless:          headless,
+		UserDataDir:       userDataDir,
+		BrowserExecutable: browserExecutable,
+		Timeout:           30 * time.Second,
+		IdleTimeout:       idleTimeout,
+		ParentPID:         parentPID,
 	}
 
 	driver, err := NewDriver(config)
@@ -482,9 +492,9 @@ func waitForInterrupt() chan os.Signal {
 //
 // Idle timeout is inherited from WEB_AGENT_IDLE_TIMEOUT env var if set,
 // otherwise defaults to DefaultIdleTimeout (5 minutes).
-func StartDriverProcess(sessionID, socketPath string, headless bool, userDataDir string) (int, error) {
+func StartDriverProcess(sessionID, socketPath string, headless bool, userDataDir string, browserExecutable string) (int, error) {
 	logger.Printf("StartDriverProcess called for session %s", sessionID)
-	logger.Printf("Socket path: %s, Headless: %v, UserDataDir: %s", socketPath, headless, userDataDir)
+	logger.Printf("Socket path: %s, Headless: %v, UserDataDir: %s, BrowserExecutable: %s", socketPath, headless, userDataDir, browserExecutable)
 
 	// Get parent PID for orphan detection
 	// Prefer KLAWED_PID env var, then fall back to our parent PID
@@ -510,6 +520,11 @@ func StartDriverProcess(sessionID, socketPath string, headless bool, userDataDir
 	// Pass user data directory if specified
 	if userDataDir != "" {
 		cmd.Args = append(cmd.Args, "--user-data-dir", userDataDir)
+	}
+
+	// Pass browser executable if specified
+	if browserExecutable != "" {
+		cmd.Args = append(cmd.Args, "--browser", browserExecutable)
 	}
 
 	// Pass idle timeout from environment if set
