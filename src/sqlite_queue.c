@@ -88,11 +88,17 @@
     "  ORDER BY id DESC LIMIT 200" \
     ") ORDER BY id ASC;"
 
+// Check if the last message sent by klawed was an END_AI_TURN.
+// Used on startup to detect an incomplete turn (klawed died before finishing).
+#define SELECT_LAST_KLAWED_MESSAGE_SQL \
+    "SELECT message FROM messages WHERE sender = ? AND sent = 1 ORDER BY id DESC LIMIT 1;"
+
 // Forward declarations
 #ifndef TEST_BUILD
 static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx, struct ConversationState *state, const char *user_input);
 static int sqlite_queue_handle_compact_trigger(SQLiteQueueContext *ctx, struct ConversationState *state);
 static int sqlite_queue_resume_pending_turn(SQLiteQueueContext *ctx, struct ConversationState *state);
+static int sqlite_queue_last_turn_complete(SQLiteQueueContext *ctx);
 #endif
 static void sqlite_queue_set_error(SQLiteQueueContext *ctx, SQLiteQueueErrorCode error_code, const char *format, ...);
 static const char* sqlite_queue_error_to_string(SQLiteQueueErrorCode error_code);
@@ -1006,6 +1012,49 @@ static void sqlite_on_after_tool_results(struct ConversationState *state, void *
 
 // Process SQLite message with unified conversation processor
 /*
+ * Returns 1 if the last message sent by klawed in the DB was END_AI_TURN,
+ * 0 if the turn appears incomplete (or there are no prior messages at all),
+ * -1 on error.
+ */
+static int sqlite_queue_last_turn_complete(SQLiteQueueContext *ctx) {
+    if (!ctx) return -1;
+
+    if (!ctx->db_handle && sqlite_queue_open_db(ctx) != 0) {
+        return -1;
+    }
+
+    sqlite3 *db = (sqlite3 *)ctx->db_handle;
+    sqlite3_stmt *stmt = NULL;
+
+    int rc = sqlite3_prepare_v2(db, SELECT_LAST_KLAWED_MESSAGE_SQL, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("SQLite Queue: last_turn_complete: prepare failed: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+
+    sqlite3_bind_text(stmt, 1, ctx->sender_name, -1, SQLITE_STATIC);
+
+    int result = 0; /* default: no prior message → treat as incomplete */
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char *message = (const char *)sqlite3_column_text(stmt, 0);
+        if (message) {
+            cJSON *json = cJSON_Parse(message);
+            if (json) {
+                cJSON *jtype = cJSON_GetObjectItem(json, "messageType");
+                if (jtype && cJSON_IsString(jtype) &&
+                    strcmp(jtype->valuestring, "END_AI_TURN") == 0) {
+                    result = 1;
+                }
+                cJSON_Delete(json);
+            }
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+/*
  * Resume a pending user turn that was left unanswered before klawed was last stopped.
  * Called on startup when conversation history ends with a user message (MSG_USER) that
  * has no assistant response yet. Calls the LLM directly without adding a new user message.
@@ -1827,11 +1876,11 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
     /* Restore conversation from database history (crash recovery) */
     sqlite_queue_restore_conversation(ctx, state);
 
-    /* If the last restored message is from the user with no assistant reply,
-     * resume the turn immediately rather than waiting for a new message. */
-    if (state->count > 0 &&
-        state->messages[state->count - 1].role == MSG_USER) {
-        LOG_INFO("SQLite Queue: Last restored message is from user - resuming pending turn");
+    /* If the last message klawed sent was not END_AI_TURN, the previous turn was
+     * never completed (klawed was killed mid-response or before responding at all).
+     * Resume it immediately rather than waiting for a new message. */
+    if (state->count > 0 && sqlite_queue_last_turn_complete(ctx) == 0) {
+        LOG_INFO("SQLite Queue: Last turn was not completed - resuming pending turn");
         sqlite_queue_resume_pending_turn(ctx, state);
     }
 
