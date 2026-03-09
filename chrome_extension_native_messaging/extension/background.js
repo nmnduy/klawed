@@ -485,6 +485,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           result = { connected: false };
           break;
         case 'getStatus':
+          // If the service worker was killed and restarted, nativePort is gone.
+          // Auto-reconnect transparently so the popup always comes up green.
+          if (!nativePort) {
+            await connectNativeHost().catch(() => {});
+          }
           result = { connected: isConnected };
           break;
         case 'execute':
