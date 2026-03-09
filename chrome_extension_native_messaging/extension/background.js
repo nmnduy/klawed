@@ -215,18 +215,27 @@ async function executeCommand(command, params) {
     }
 
     case 'getPageSource': {
-      const result = await execInActiveTab(() => document.documentElement.outerHTML);
-      return { html: result[0].result };
+      const result = await execInActiveTab(() => {
+        const clone = document.documentElement.cloneNode(true);
+        // Strip noise that LLMs don't need
+        clone.querySelectorAll('script, style, noscript, svg, link[rel="stylesheet"]').forEach(el => el.remove());
+        return clone.outerHTML;
+      });
+      const html = result[0].result || '';
+      const maxLength = params.maxLength || 20000;
+      return { html: html.length > maxLength ? html.slice(0, maxLength) + `\n<!-- truncated at ${maxLength} chars, full length ${html.length} -->` : html };
     }
 
     case 'getReadableText': {
       const result = await execInActiveTab(() => {
-        // Remove scripts/styles, then get innerText
         const clone = document.documentElement.cloneNode(true);
         clone.querySelectorAll('script, style, noscript').forEach(el => el.remove());
-        return clone.innerText;
+        // Collapse excessive whitespace
+        return clone.innerText.replace(/\n{3,}/g, '\n\n').trim();
       });
-      return { text: result[0].result };
+      const text = result[0].result || '';
+      const maxLength = params.maxLength || 8000;
+      return { text: text.length > maxLength ? text.slice(0, maxLength) + `\n[truncated at ${maxLength} chars, full length ${text.length}]` : text };
     }
 
     // ── DOM Interaction ──────────────────────────────────────────────────────
@@ -259,7 +268,9 @@ async function executeCommand(command, params) {
         const el = selector ? document.querySelector(selector) : document.body;
         return el ? el.innerText : null;
       }, [params.selector || null]);
-      return { text: result[0].result };
+      const text = result[0].result || '';
+      const maxLength = params.maxLength || 8000;
+      return { text: text.length > maxLength ? text.slice(0, maxLength) + `\n[truncated at ${maxLength} chars]` : text };
     }
 
     case 'getHtml': {
@@ -341,30 +352,34 @@ async function executeCommand(command, params) {
     }
 
     case 'findElements': {
-      const result = await execInActiveTab((selector) => {
+      const result = await execInActiveTab((selector, limit) => {
         const els = document.querySelectorAll(selector);
-        return Array.from(els).map((el, idx) => {
+        return Array.from(els).slice(0, limit).map((el, idx) => {
           const rect = el.getBoundingClientRect();
           return {
             index: idx,
             tagName: el.tagName,
             id: el.id || null,
             className: el.className || null,
-            text: el.textContent?.substring(0, 200) || null,
+            text: el.textContent?.trim().substring(0, 100) || null,
             visible: rect.width > 0 && rect.height > 0,
           };
         });
-      }, [params.selector]);
-      return { elements: result[0].result };
+      }, [params.selector, params.limit || 50]);
+      const els = result[0].result || [];
+      return { elements: els, count: els.length };
     }
 
     case 'getLinks': {
-      const result = await execInActiveTab(() =>
-        Array.from(document.links).map(l => ({
-          href: l.href, text: l.textContent?.trim(), title: l.title || null,
-        }))
-      );
-      return { links: result[0].result };
+      const result = await execInActiveTab((limit) => {
+        const seen = new Set();
+        return Array.from(document.links)
+          .filter(l => { if (seen.has(l.href)) return false; seen.add(l.href); return true; })
+          .slice(0, limit)
+          .map(l => ({ href: l.href, text: l.textContent?.trim().substring(0, 80) || null }));
+      }, [params.limit || 50]);
+      const links = result[0].result || [];
+      return { links, count: links.length };
     }
 
     case 'getForms': {
