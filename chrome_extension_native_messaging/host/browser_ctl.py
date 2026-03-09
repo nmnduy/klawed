@@ -69,7 +69,7 @@ def main():
             )
             with open(fname, "wb") as f:
                 f.write(base64.b64decode(b64data))
-            parsed = {"file": fname, "format": ext}
+            parsed = {"saved_to": fname, "format": ext}
 
         print(json.dumps(parsed, indent=2))
 
