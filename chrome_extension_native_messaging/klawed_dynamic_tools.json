@@ -6,6 +6,7 @@
   "tools": [
     {
       "type": "function",
+      "exec": "python3 /home/fandalf/git/klawed/chrome_extension_native_messaging/host/browser_ctl.py",
       "function": {
         "name": "BrowserControl",
         "description": "Control a real Chrome/Chromium browser that has the Klawed Browser Controller extension installed and connected.\n\nThe extension must be installed and connected (green dot in Chrome toolbar) for this tool to work.\n\nAvailable commands:\n  Navigation: navigate, goBack, goForward, reload, newTab, closeTab, switchTab\n  Tab info:   listTabs, getActiveTab\n  Page info:  getPageInfo, getPageSource, getReadableText\n  DOM:        click, type, getText, getHtml, getAttribute, findElements, getLinks, getForms\n  Forms:      fillForm, submitForm, pressKey\n  Scroll:     scroll, scrollBy, scrollToElement\n  JS:         evaluate\n  Wait:       waitForElement\n  Screenshot: screenshot\n  Debug:      ping, getInfo",

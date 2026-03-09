@@ -8,6 +8,8 @@
 #include "../base64.h"
 #include "../mcp.h"
 #include "../klawed_internal.h"
+#include "../dynamic_tools.h"
+#include "../process_utils.h"
 #include <string.h>
 #include <time.h>
 #include <stdlib.h>
@@ -239,6 +241,87 @@ cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *stat
         LOG_DEBUG("execute_tool: Tool '%s' not found in built-in tools and doesn't match MCP pattern", tool_name);
     }
 #endif
+
+    // Try dynamic tools (exec-based)
+    if (!result) {
+        DynamicToolsRegistry dyn_registry;
+        dynamic_tools_init(&dyn_registry);
+        char dyn_path[DYNAMIC_TOOLS_PATH_MAX];
+        if (dynamic_tools_get_path(dyn_path, sizeof(dyn_path)) == 0) {
+            dynamic_tools_load_from_file(&dyn_registry, dyn_path);
+        }
+        const DynamicToolDef *dyn_tool = dynamic_tools_has_tool(&dyn_registry, tool_name)
+            ? dynamic_tools_get_tool(&dyn_registry, tool_name)
+            : NULL;
+
+        if (dyn_tool && dyn_tool->exec[0] != '\0') {
+            // Serialize the input JSON and pass it as a single argument to the exec command
+            char *input_json = cJSON_PrintUnformatted(input);
+            if (input_json) {
+                // Build: exec_template 'JSON'
+                // We shell-quote the JSON: replace each ' with '\''
+                size_t json_len = strlen(input_json);
+                size_t quoted_len = json_len * 4 + 3; // worst case all single-quotes
+                char *quoted = malloc(quoted_len);
+                if (quoted) {
+                    size_t qi = 0;
+                    quoted[qi++] = '\'';
+                    for (size_t ci = 0; ci < json_len && qi < quoted_len - 4; ci++) {
+                        if (input_json[ci] == '\'') {
+                            quoted[qi++] = '\'';
+                            quoted[qi++] = '\\';
+                            quoted[qi++] = '\'';
+                            quoted[qi++] = '\'';
+                        } else {
+                            quoted[qi++] = input_json[ci];
+                        }
+                    }
+                    quoted[qi++] = '\'';
+                    quoted[qi] = '\0';
+
+                    size_t cmd_len = strlen(dyn_tool->exec) + qi + 2;
+                    char *full_cmd = malloc(cmd_len);
+                    if (full_cmd) {
+                        snprintf(full_cmd, cmd_len, "%s %s", dyn_tool->exec, quoted);
+                        LOG_DEBUG("execute_tool: Running dynamic tool exec: %s", full_cmd);
+
+                        int timed_out = 0;
+                        char *output = NULL;
+                        size_t output_size = 0;
+                        volatile int *interrupt_flag = state ? &state->interrupt_requested : NULL;
+                        execute_command_with_timeout(full_cmd, 35, &timed_out, &output, &output_size, interrupt_flag);
+
+                        result = cJSON_CreateObject();
+                        if (timed_out) {
+                            cJSON_AddStringToObject(result, "error", "Dynamic tool exec timed out");
+                        } else if (output && output_size > 0) {
+                            // Try to parse output as JSON, otherwise wrap as plain output
+                            cJSON *parsed = cJSON_Parse(output);
+                            if (parsed) {
+                                cJSON_Delete(result);
+                                result = parsed;
+                            } else {
+                                cJSON_AddStringToObject(result, "output", output);
+                            }
+                        } else {
+                            cJSON_AddStringToObject(result, "output", "");
+                        }
+                        free(output);
+                        free(full_cmd);
+                    }
+                    free(quoted);
+                }
+                free(input_json);
+            }
+        } else if (dyn_tool) {
+            // Tool defined but no exec — not executable
+            result = cJSON_CreateObject();
+            cJSON_AddStringToObject(result, "error",
+                "Dynamic tool has no exec command configured");
+            LOG_WARN("execute_tool: Dynamic tool '%s' has no exec field", tool_name);
+        }
+        dynamic_tools_cleanup(&dyn_registry);
+    }
 
     if (!result) {
         LOG_WARN("execute_tool: No result generated for tool '%s'", tool_name);

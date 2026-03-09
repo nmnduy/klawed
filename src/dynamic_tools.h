@@ -23,12 +23,16 @@
 // Maximum length for tool description
 #define DYNAMIC_TOOL_DESC_MAX 4096
 
+// Maximum length for tool exec command template
+#define DYNAMIC_TOOL_EXEC_MAX 1024
+
 /**
  * Dynamic tool definition structure
  */
 typedef struct {
     char name[DYNAMIC_TOOL_NAME_MAX];       // Tool name
     char description[DYNAMIC_TOOL_DESC_MAX]; // Tool description
+    char exec[DYNAMIC_TOOL_EXEC_MAX];        // Shell command to execute (input JSON passed as first arg)
     cJSON *parameters;                       // JSON schema for parameters (owned by this struct)
     cJSON *cache_control;                    // Optional cache control (owned by this struct)
 } DynamicToolDef;
