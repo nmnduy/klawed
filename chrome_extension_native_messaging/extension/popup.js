@@ -39,11 +39,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     return chrome.runtime.sendMessage({ action, ...extra });
   }
 
-  // Check initial status
+  // Check initial status — background auto-reconnects if the service worker was restarted
   try {
     const r = await send('getStatus');
     setConnected(r.connected);
-    if (r.connected) log('Already connected to native host.', 'ok');
+    if (r.connected) log('Connected to native host.', 'ok');
+    else log('Not connected. Click Connect to link to the native host.', 'dim');
   } catch (e) {
     setConnected(false);
   }
