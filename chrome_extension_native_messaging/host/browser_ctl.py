@@ -14,10 +14,13 @@ Environment:
     KLAWED_BROWSER_SOCKET  Override socket path (default: /tmp/klawed-browser.sock)
 """
 
+import base64
 import json
 import os
 import socket
 import sys
+import tempfile
+import time
 
 
 def main():
@@ -52,8 +55,22 @@ def main():
                     break
 
         line = buf.split(b"\n")[0].decode("utf-8")
-        # Pretty-print the response
         parsed = json.loads(line)
+
+        # If this is a screenshot response, save the image to a tmp file
+        # instead of dumping base64 into the LLM context
+        data_url = parsed.get("dataUrl") or parsed.get("data_url")
+        if data_url and data_url.startswith("data:image/"):
+            header, _, b64data = data_url.partition(",")
+            ext = "png" if "png" in header else "jpg"
+            fname = os.path.join(
+                tempfile.gettempdir(),
+                f"klawed_screenshot_{int(time.time())}.{ext}"
+            )
+            with open(fname, "wb") as f:
+                f.write(base64.b64decode(b64data))
+            parsed = {"file": fname, "format": ext}
+
         print(json.dumps(parsed, indent=2))
 
     except FileNotFoundError:
