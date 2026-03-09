@@ -33,6 +33,7 @@ void dynamic_tools_init(DynamicToolsRegistry *registry) {
     for (int i = 0; i < DYNAMIC_TOOLS_MAX; i++) {
         registry->tools[i].name[0] = '\0';
         registry->tools[i].description[0] = '\0';
+        registry->tools[i].exec[0] = '\0';
         registry->tools[i].parameters = NULL;
         registry->tools[i].cache_control = NULL;
     }
@@ -120,6 +121,15 @@ static int parse_tool_definition(cJSON *tool_json, DynamicToolDef *tool_def) {
         if (cache_item) {
             tool_def->cache_control = cJSON_Duplicate(cache_item, 1);
         }
+
+        // Check for exec command (may be at function level or root level)
+        cJSON *exec_item = cJSON_GetObjectItem(func_obj, "exec");
+        if (!exec_item) exec_item = cJSON_GetObjectItem(tool_json, "exec");
+        if (exec_item && cJSON_IsString(exec_item)) {
+            strlcpy(tool_def->exec, exec_item->valuestring, DYNAMIC_TOOL_EXEC_MAX);
+        } else {
+            tool_def->exec[0] = '\0';
+        }
     } else {
         // Simplified format: { name, description, parameters }
         cJSON *name_item = cJSON_GetObjectItem(tool_json, "name");
@@ -153,6 +163,14 @@ static int parse_tool_definition(cJSON *tool_json, DynamicToolDef *tool_def) {
         cJSON *cache_item = cJSON_GetObjectItem(tool_json, "cache_control");
         if (cache_item) {
             tool_def->cache_control = cJSON_Duplicate(cache_item, 1);
+        }
+
+        // Check for exec command at root level
+        cJSON *exec_item = cJSON_GetObjectItem(tool_json, "exec");
+        if (exec_item && cJSON_IsString(exec_item)) {
+            strlcpy(tool_def->exec, exec_item->valuestring, DYNAMIC_TOOL_EXEC_MAX);
+        } else {
+            tool_def->exec[0] = '\0';
         }
     }
 
