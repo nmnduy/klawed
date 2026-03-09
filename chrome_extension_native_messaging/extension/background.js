@@ -15,6 +15,15 @@ async function connectNativeHost() {
   try {
     nativePort = chrome.runtime.connectNative(NATIVE_HOST_NAME);
 
+    // Check immediately if Chrome rejected the connection
+    const lastErr = chrome.runtime.lastError;
+    if (lastErr) {
+      console.error('connectNative failed immediately:', lastErr.message);
+      nativePort = null;
+      isConnected = false;
+      return false;
+    }
+
     nativePort.onMessage.addListener(async (message) => {
       console.log('Received from native host:', message);
 
@@ -49,13 +58,15 @@ async function connectNativeHost() {
     });
 
     nativePort.onDisconnect.addListener(() => {
-      console.log('Native host disconnected:', chrome.runtime.lastError?.message);
+      const err = chrome.runtime.lastError;
+      console.log('Native host disconnected:', err ? err.message : '(no error)');
       isConnected = false;
       nativePort = null;
       broadcastToTabs({ type: 'nativeStatus', connected: false });
 
-      // Auto-reconnect after a short delay
-      setTimeout(() => connectNativeHost().catch(() => {}), 2000);
+      // Auto-reconnect — use chrome.alarms instead of setTimeout since
+      // MV3 service workers kill pending timers when they go idle.
+      chrome.alarms.create('reconnect', { delayInMinutes: 1/30 }); // ~2 seconds
     });
 
     isConnected = true;
@@ -536,6 +547,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // ─── Startup ─────────────────────────────────────────────────────────────────
+
+// Use alarms for reconnect so it survives service worker idle kills
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'reconnect') {
+    console.log('Alarm fired: attempting reconnect...');
+    connectNativeHost().catch(() => {});
+  }
+});
 
 // Attempt to connect on startup; failure is normal if host isn't installed yet.
 connectNativeHost().catch(() => {});
