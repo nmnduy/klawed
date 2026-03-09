@@ -9,17 +9,17 @@
       "exec": "python3 /home/fandalf/git/klawed/chrome_extension_native_messaging/host/browser_ctl.py",
       "function": {
         "name": "BrowserControl",
-        "description": "Control a real Chrome/Chromium browser that has the Klawed Browser Controller extension installed and connected.\n\nThe extension must be installed and connected (green dot in Chrome toolbar) for this tool to work.\n\nAvailable commands:\n  Navigation: navigate, goBack, goForward, reload, newTab, closeTab, switchTab\n  Tab info:   listTabs, getActiveTab\n  Page info:  getPageInfo, getPageSource, getReadableText\n  DOM:        click, type, getText, getHtml, getAttribute, findElements, getLinks, getForms\n  Forms:      fillForm, submitForm, pressKey\n  Scroll:     scroll, scrollBy, scrollToElement\n  JS:         evaluate\n  Wait:       waitForElement\n  Screenshot: screenshot\n  Debug:      ping, getInfo",
+        "description": "Control a real Chrome/Chromium browser via the Klawed Browser Controller extension (must be connected - green dot in toolbar).\n\nNavigation: navigate, goBack, goForward, reload, newTab(url), closeTab(tabId), switchTab(tabId)\nTab info:   listTabs, getActiveTab\nPage text:  getReadableText(maxLength?), getText(selector?, maxLength?)\nPage HTML:  getPageSource(maxLength?) — scripts/styles stripped; default 20k chars\nDOM:        click(selector), type(selector,text,clearFirst?), getHtml(selector?), getAttribute(selector,attribute)\n            findElements(selector,limit?=50), getLinks(limit?=50), getForms, fillForm(data), submitForm(selector?), pressKey(selector,key)\nScroll:     scroll(x,y), scrollBy(dx,dy), scrollToElement(selector)\nJS:         evaluate(code), waitForElement(selector,timeout?)\nCapture:    screenshot\nDebug:      ping, getInfo\n\nTip: prefer getText/getReadableText with a selector or small maxLength over getPageSource. Use evaluate for targeted extraction.",
         "parameters": {
           "type": "object",
           "properties": {
             "command": {
               "type": "string",
-              "description": "Browser command to execute. Examples: 'navigate', 'click', 'type', 'getPageSource', 'listTabs', 'screenshot', 'evaluate', 'getReadableText'"
+              "description": "Browser command to execute."
             },
             "params": {
               "type": "object",
-              "description": "Command-specific parameters. Examples:\n  navigate:     {\"url\": \"https://example.com\"}\n  click:        {\"selector\": \"#submit-btn\"}\n  type:         {\"selector\": \"input[name='q']\", \"text\": \"hello\"}\n  getText:      {\"selector\": \"h1\"}  (omit selector for whole page)\n  getAttribute: {\"selector\": \"a.link\", \"attribute\": \"href\"}\n  scroll:       {\"x\": 0, \"y\": 500}\n  scrollBy:     {\"dx\": 0, \"dy\": 300}\n  evaluate:     {\"code\": \"document.title\"}\n  waitForElement: {\"selector\": \".result\", \"timeout\": 5000}\n  findElements: {\"selector\": \"a[href]\"}\n  fillForm:     {\"data\": {\"#email\": \"user@example.com\", \"#pass\": \"secret\"}}\n  switchTab:    {\"tabId\": 123}\n  closeTab:     {\"tabId\": 123}\n  newTab:       {\"url\": \"https://example.com\"}"
+              "description": "Command parameters. E.g. {\"url\":\"https://...\"}, {\"selector\":\"#id\"}, {\"maxLength\":4000}"
             }
           },
           "required": ["command"]
