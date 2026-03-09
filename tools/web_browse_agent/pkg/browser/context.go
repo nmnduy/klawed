@@ -41,8 +41,9 @@ type BrowserContext struct {
 	tabMu     sync.RWMutex
 
 	// Configuration
-	headless    bool
-	userDataDir string
+	headless          bool
+	userDataDir       string
+	browserExecutable string
 }
 
 // Tab represents a browser tab/page
@@ -55,8 +56,9 @@ type Tab struct {
 
 // BrowserContextConfig holds configuration for creating a new browser context
 type BrowserContextConfig struct {
-	Headless    bool
-	UserDataDir string // Path to persistent user data directory (empty = no persistence)
+	Headless         bool
+	UserDataDir      string        // Path to persistent user data directory (empty = no persistence)
+	BrowserExecutable string       // Path to browser executable (empty = auto-detect)
 }
 
 // NewBrowserContext creates a new browser context
@@ -106,8 +108,8 @@ func findChromiumExecutable() string {
 
 // NewBrowserContextWithConfig creates a new browser context with full configuration
 func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, error) {
-	logger.Printf("Creating browser context with config: Headless=%v, UserDataDir=%s",
-		config.Headless, config.UserDataDir)
+	logger.Printf("Creating browser context with config: Headless=%v, UserDataDir=%s, BrowserExecutable=%s",
+		config.Headless, config.UserDataDir, config.BrowserExecutable)
 
 	// Initialize Playwright
 	logger.Printf("Starting Playwright...")
@@ -121,8 +123,14 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 	var browser playwright.Browser
 	var context playwright.BrowserContext
 
-	// Find system Chromium or use bundled browser
-	chromiumPath := findChromiumExecutable()
+	// Use explicit browser executable if provided, otherwise find system Chromium
+	var chromiumPath string
+	if config.BrowserExecutable != "" {
+		chromiumPath = config.BrowserExecutable
+		logger.Printf("Using explicit browser executable: %s", chromiumPath)
+	} else {
+		chromiumPath = findChromiumExecutable()
+	}
 
 	// Use launchPersistentContext if userDataDir is specified for persistent storage
 	if config.UserDataDir != "" {
@@ -176,12 +184,13 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 
 	logger.Printf("Browser context ready")
 	return &BrowserContext{
-		browser:     browser,
-		context:     context,
-		pw:          pw,
-		tabs:        make(map[string]*Tab),
-		headless:    config.Headless,
-		userDataDir: config.UserDataDir,
+		browser:           browser,
+		context:           context,
+		pw:                pw,
+		tabs:              make(map[string]*Tab),
+		headless:          config.Headless,
+		userDataDir:       config.UserDataDir,
+		browserExecutable: config.BrowserExecutable,
 	}, nil
 }
 
