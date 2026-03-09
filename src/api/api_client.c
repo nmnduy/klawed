@@ -31,59 +31,7 @@
 #include <bsd/stdlib.h>
 #include <cjson/cJSON.h>
 
-/**
- * Send API_CALL message to indicate waiting for API response
- */
-static void send_api_call_message(ConversationState *state, const char *model, const char *provider) {
-    if (!state) return;
 
-    // Get current timestamp
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    long long timestamp_ms = (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-
-    // Create API_CALL message JSON
-    cJSON *message_json = cJSON_CreateObject();
-    if (!message_json) return;
-
-    cJSON_AddStringToObject(message_json, "messageType", "API_CALL");
-    cJSON_AddNumberToObject(message_json, "timestamp", (double)ts.tv_sec);
-    cJSON_AddNumberToObject(message_json, "timestampMs", (double)timestamp_ms);
-
-    // Add optional fields
-    if (model) {
-        cJSON_AddStringToObject(message_json, "model", model);
-    }
-    if (provider) {
-        cJSON_AddStringToObject(message_json, "provider", provider);
-    }
-
-    // Estimate duration (default 5 seconds for most API calls)
-    cJSON_AddNumberToObject(message_json, "estimatedDurationMs", 5000);
-
-    char *message_str = cJSON_PrintUnformatted(message_json);
-    if (!message_str) {
-        cJSON_Delete(message_json);
-        return;
-    }
-
-    // Send via ZMQ if enabled
-#ifdef HAVE_ZMQ
-    if (state->zmq_context) {
-        zmq_socket_send(state->zmq_context, message_str, strlen(message_str));
-    }
-#endif
-
-    // Send via SQLite queue if enabled
-    if (state->sqlite_queue_context) {
-        // Get receiver name from context
-        const char *receiver = "client"; // Default receiver
-        sqlite_queue_send(state->sqlite_queue_context, receiver, message_str, strlen(message_str));
-    }
-
-    free(message_str);
-    cJSON_Delete(message_json);
-}
 
 /**
  * Handle context overflow error by replacing last tool result
@@ -316,9 +264,6 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
 
         // Call provider's single-attempt API call
         LOG_DEBUG("API call attempt %d (elapsed: %ld ms)", attempt_num, elapsed_ms);
-
-        // Send API_CALL message to indicate waiting for API response
-        send_api_call_message(state, state->model, state->provider->name);
 
 #ifdef HAVE_MEMVID
         // Inject/refresh memory context before each API call
