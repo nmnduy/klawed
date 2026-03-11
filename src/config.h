@@ -34,6 +34,7 @@ typedef enum {
     PROVIDER_DEEPSEEK,      // DeepSeek API (OpenAI-compatible, discards reasoning_content)
     PROVIDER_MOONSHOT,      // Moonshot/Kimi API (OpenAI-compatible, preserves reasoning_content)
     PROVIDER_KIMI_CODING_PLAN, // Kimi Coding Plan (OAuth device flow, preserves reasoning_content)
+    PROVIDER_OPENAI_SUB,    // OpenAI Subscription (OAuth device flow, ChatGPT Plus/Pro)
     PROVIDER_CUSTOM         // Custom provider
 } LLMProviderType;
 

@@ -758,6 +758,8 @@ const char* config_provider_type_to_string(LLMProviderType type) {
             return "moonshot";
         case PROVIDER_KIMI_CODING_PLAN:
             return "kimi_coding_plan";
+        case PROVIDER_OPENAI_SUB:
+            return "openai_sub";
         case PROVIDER_CUSTOM:
             return "custom";
         default:
@@ -780,6 +782,8 @@ LLMProviderType config_provider_type_from_string(const char *str) {
         return PROVIDER_MOONSHOT;
     } else if (strcmp(str, "kimi_coding_plan") == 0) {
         return PROVIDER_KIMI_CODING_PLAN;
+    } else if (strcmp(str, "openai_sub") == 0 || strcmp(str, "chatgpt") == 0) {
+        return PROVIDER_OPENAI_SUB;
     } else if (strcmp(str, "custom") == 0) {
         return PROVIDER_CUSTOM;
     }

@@ -2,19 +2,91 @@
 
 This guide explains how to configure klawed to use OpenAI's API with a paid subscription (Plus, Pro, or API account).
 
+There are two ways to authenticate:
+
+1. **API key** — standard approach using a key from `platform.openai.com/api-keys`
+2. **OAuth device flow** — use your existing ChatGPT Plus/Pro subscription without a separate API key
+
 ---
 
-## Prerequisites
+## Option A: OpenAI Subscription (OAuth Device Flow — No API Key Required)
+
+If you have a **ChatGPT Plus or Pro subscription**, you can authenticate klawed using your existing account without needing separate API billing or an API key.
+
+### Setup
+
+Add this to your `~/.klawed/config.json` (create if it doesn't exist):
+
+```json
+{
+  "active_provider": "chatgpt",
+  "providers": {
+    "chatgpt": {
+      "provider_type": "openai_sub",
+      "provider_name": "ChatGPT Subscription",
+      "model": "gpt-4o"
+    }
+  }
+}
+```
+
+Or use the `chatgpt` alias for `provider_type`:
+
+```json
+{
+  "providers": {
+    "chatgpt": {
+      "provider_type": "chatgpt",
+      "model": "gpt-4o"
+    }
+  }
+}
+```
+
+### First Use — Browser Login
+
+The first time klawed uses this provider, it will:
+
+1. Print a URL and a short user code, e.g.:
+   ```
+   Visit: https://auth.openai.com/activate?user_code=XXXX-XXXX
+   Code:  XXXX-XXXX
+   ```
+2. Try to open your browser automatically
+3. Wait for you to sign in and authorize klawed
+
+After authorization, the token is saved to `~/.openai/auth.json` and reused on future runs. The token refreshes automatically in the background.
+
+### Notes
+
+- Requires a **ChatGPT Plus or Pro** subscription (free accounts don't have API model access)
+- Token is stored at `~/.openai/auth.json` (mode 0600)
+- Background thread auto-refreshes the token before it expires
+- Works across multiple klawed instances (subagents) via disk reload
+- Use `/provider chatgpt` inside a session to switch to this provider
+
+### Logout
+
+To log out and delete the stored token:
+
+```bash
+# Not yet a CLI command — delete manually:
+rm ~/.openai/auth.json
+```
+
+---
+
+## Option B: API Key (Standard Approach)
+
+### Prerequisites
 
 - An OpenAI account at [platform.openai.com](https://platform.openai.com)
-- An active subscription: **ChatGPT Plus/Pro** (for ChatGPT-tier access) or an **API billing plan** (pay-as-you-go or pre-paid credits)
+- An **API billing plan** (pay-as-you-go or pre-paid credits)
 - An API key generated from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
-> **Note:** Free OpenAI accounts have no API access. You need a paid plan to generate an API key and make API calls.
+> **Note:** ChatGPT Plus/Pro subscriptions give you access to ChatGPT at chat.openai.com but do **not** automatically grant API access. For API access you need a separate billing plan — unless you use Option A above.
 
----
-
-## Quick Setup (Environment Variable)
+### Quick Setup (Environment Variable)
 
 The fastest way to authenticate is to export your OpenAI API key:
 
@@ -22,8 +94,6 @@ The fastest way to authenticate is to export your OpenAI API key:
 export OPENAI_API_KEY="sk-..."
 klawed "Your prompt here"
 ```
-
-klawed will automatically use `https://api.openai.com/v1/chat/completions` as the endpoint and default to `gpt-4` as the model.
 
 To set a specific model (e.g., `gpt-4o`, `gpt-4o-mini`, `o1`, `o3`):
 
