@@ -1340,6 +1340,11 @@ static int sqlite_queue_handle_compact_trigger(SQLiteQueueContext *ctx, struct C
                                             result.usage_after_pct,
                                             result.summary[0] != '\0' ? result.summary : NULL);
 
+        // Send END_AI_TURN so that on restart last_turn_complete() correctly
+        // sees the TRIGGER_COMPACT as fully handled and does not spuriously
+        // call the LLM with no pending user message.
+        sqlite_queue_send_end_ai_turn(ctx, response_receiver);
+
         return 0;
 
     } else if (ret == 0) {
