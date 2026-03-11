@@ -235,4 +235,35 @@ int sqlite_queue_pending_count(SQLiteQueueContext *ctx);
  */
 int sqlite_queue_interrupt(SQLiteQueueContext *ctx);
 
+/**
+ * Send an authentication message to the queue client.
+ *
+ * Used during OAuth device authorization to relay instructions to the caller
+ * so they can complete the browser-based login flow. The client should display
+ * these messages prominently (they contain the URL and user code the user must
+ * visit).
+ *
+ * Message format sent to receiver:
+ *   { "messageType": "AUTH_REQUIRED",
+ *     "content": "<human-readable instruction>",
+ *     "isError": <0|1> }
+ *
+ * Typical sequence during first login:
+ *   AUTH_REQUIRED  – "================================================"
+ *   AUTH_REQUIRED  – "  OPENAI SUBSCRIPTION LOGIN"
+ *   AUTH_REQUIRED  – "  Visit: https://auth0.openai.com/activate?user_code=XXXX-XXXX"
+ *   AUTH_REQUIRED  – "  Code:  XXXX-XXXX"
+ *   AUTH_REQUIRED  – "  Waiting for authorization..."
+ *   AUTH_REQUIRED  – "  Authorization successful!"  (on success)
+ *   TEXT           – first assistant response follows
+ *
+ * @param ctx       SQLite queue context
+ * @param receiver  Receiver name (usually "client")
+ * @param message   Human-readable auth instruction / status line
+ * @param is_error  1 if this is an error message, 0 for normal info
+ * @return 0 on success, -1 on failure
+ */
+int sqlite_queue_send_auth_message(SQLiteQueueContext *ctx, const char *receiver,
+                                   const char *message, int is_error);
+
 #endif // SQLITE_QUEUE_H
