@@ -2100,6 +2100,57 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
 }
 #endif // TEST_BUILD
 
+/**
+ * Send an AUTH_REQUIRED message to the queue client.
+ *
+ * Called by the OAuth message callback during device authorization so that
+ * sqlite-queue clients receive the login URL and user code rather than
+ * having them silently printed to a console that nobody is watching.
+ *
+ * The client should treat AUTH_REQUIRED messages as high-priority user-facing
+ * prompts and display them before waiting for the next TEXT response.
+ */
+int sqlite_queue_send_auth_message(SQLiteQueueContext *ctx, const char *receiver,
+                                   const char *message, int is_error) {
+    if (!ctx || !receiver || !message) {
+        LOG_ERROR("SQLite Queue: Invalid parameters for send_auth_message");
+        return -1;
+    }
+
+    /* Echo to console so server-side logs always show the auth flow */
+    if (is_error) {
+        fprintf(stderr, "[OpenAI Auth] %s\n", message);
+    } else {
+        printf("[OpenAI Auth] %s\n", message);
+    }
+    fflush(stdout);
+
+    cJSON *msg_json = cJSON_CreateObject();
+    if (!msg_json) {
+        LOG_ERROR("SQLite Queue: Failed to create auth message JSON object");
+        return -1;
+    }
+
+    cJSON_AddStringToObject(msg_json, "messageType", "AUTH_REQUIRED");
+    cJSON_AddStringToObject(msg_json, "content", message);
+    cJSON_AddBoolToObject(msg_json, "isError", is_error ? cJSON_True : cJSON_False);
+
+    char *msg_str = cJSON_PrintUnformatted(msg_json);
+    cJSON_Delete(msg_json);
+
+    if (!msg_str) {
+        LOG_ERROR("SQLite Queue: Failed to serialize auth message JSON");
+        return -1;
+    }
+
+    LOG_INFO("SQLite Queue: Sending AUTH_REQUIRED message (is_error=%d): %s",
+             is_error, message);
+
+    int result = sqlite_queue_send(ctx, receiver, msg_str, strlen(msg_str));
+    free(msg_str);
+
+    return result;
+}
 bool sqlite_queue_available(void) {
     // SQLite is always available (it's a required dependency)
     return true;

@@ -22,6 +22,7 @@
 #include "retry_logic.h"
 #include "tui.h"
 #include "message_queue.h"
+#include "sqlite_queue.h"
 #include "util/string_utils.h"
 
 #include <stdio.h>
@@ -52,13 +53,31 @@ static char *arena_strdup(Arena *arena, const char *str) {
 }
 
 /**
- * OAuth message callback — routes messages to TUI or console.
+ * OAuth message callback — routes messages to TUI, sqlite-queue client, or console.
+ *
+ * Priority order:
+ *  1. sqlite-queue daemon mode: send AUTH_REQUIRED to the "client" receiver
+ *     so the caller can display the login URL / user code.
+ *  2. TUI mode: post to TUI message queue or add conversation line.
+ *  3. Fallback: print to stdout / stderr.
+ *
+ * Both #1 and #2 can be active simultaneously (daemon mode with a TUI is
+ * unusual but the code handles it gracefully).
  */
 static void openai_sub_oauth_message_callback(void *user_data,
                                                const char *message,
                                                int is_error) {
     ConversationState *state = (ConversationState *)user_data;
 
+    /* --- sqlite-queue relay (daemon mode) -------------------------------- */
+    if (state && state->sqlite_queue_context) {
+        sqlite_queue_send_auth_message(
+            state->sqlite_queue_context,
+            "client", message, is_error);
+        /* Fall through — also show in TUI / console if available */
+    }
+
+    /* --- TUI display ----------------------------------------------------- */
     if (state && (state->tui_queue || state->tui)) {
         TUIColorPair color = is_error ? COLOR_PAIR_ERROR : COLOR_PAIR_STATUS;
         if (state->tui_queue) {
@@ -68,7 +87,13 @@ static void openai_sub_oauth_message_callback(void *user_data,
             tui_add_conversation_line(state->tui, "[OpenAI Auth]", message, color);
             tui_refresh(state->tui);
         }
-    } else {
+        return;
+    }
+
+    /* --- Console fallback (no TUI, no queue, or queue already printed) --- */
+    if (!state || !state->sqlite_queue_context) {
+        /* Only print to console if we haven't already relayed via queue
+         * (sqlite_queue_send_auth_message echoes to console itself) */
         if (is_error) {
             fprintf(stderr, "%s\n", message);
         } else {
