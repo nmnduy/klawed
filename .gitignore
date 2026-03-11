@@ -68,3 +68,4 @@ wt-*
 # Release packages
 releases/
 
+vendor/

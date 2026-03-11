@@ -61,7 +61,8 @@ You can define multiple named provider configurations and switch between them:
 
 - **provider_type**: The type of provider to use. Can be:
   - `"auto"` (default): Auto-detect based on URL patterns and environment variables
-  - `"openai"`: OpenAI-compatible API
+  - `"openai"`: OpenAI-compatible API (requires `OPENAI_API_KEY`)
+  - `"openai_sub"` (or `"chatgpt"`): OpenAI Subscription (OAuth device flow — no API key needed, uses ChatGPT Plus/Pro account)
   - `"anthropic"`: Anthropic API
   - `"bedrock"`: AWS Bedrock
   - `"kimi_coding_plan"`: Kimi Coding Plan (OAuth device flow, requires browser auth)
