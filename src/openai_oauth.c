@@ -1,0 +1,1176 @@
+/*
+ * openai_oauth.c - OpenAI OAuth 2.0 Device Authorization
+ *
+ * Implements OAuth 2.0 Device Authorization Grant (RFC 8628) for
+ * OpenAI ChatGPT subscription authentication.
+ *
+ * Flow:
+ *   1. POST /oauth/device/code  → get user_code + device_code
+ *   2. Show user_code / URL to user (open browser if possible)
+ *   3. Poll POST /oauth/token until user authorizes
+ *   4. Store access_token + refresh_token in ~/.openai/auth.json
+ *   5. Use access_token as "Authorization: Bearer <token>" on api.openai.com
+ *   6. Background thread refreshes the token before it expires
+ *
+ * Token storage: ~/.openai/auth.json  (0600 permissions)
+ * Device ID:     not needed (unlike Kimi which uses device headers)
+ */
+
+#define _POSIX_C_SOURCE 200809L
+
+#include "openai_oauth.h"
+#include "logger.h"
+#include "http_client.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <limits.h>
+#include <pwd.h>
+#include <curl/curl.h>
+#include <cjson/cJSON.h>
+#include <bsd/string.h>
+#include <bsd/stdlib.h>
+
+/* ============================================================================
+ * Internal Forward Declarations
+ * ============================================================================ */
+
+static char              *get_openai_dir(void);
+static char              *get_token_file_path(void);
+static int                mkdir_p_with_mode(const char *path, mode_t mode);
+static OpenAIOAuthToken  *load_token_from_disk(void);
+static int                save_token_to_disk(const OpenAIOAuthToken *token);
+static int                reload_token_from_disk_if_newer(OpenAIOAuthManager *manager);
+static OpenAIDeviceAuth  *request_device_authorization(void);
+static OpenAIOAuthToken  *poll_for_token(const OpenAIDeviceAuth *auth);
+static OpenAIOAuthToken  *refresh_token_internal(OpenAIOAuthManager *manager, int force);
+static void              *refresh_thread_func(void *arg);
+static void               oauth_display_message(OpenAIOAuthManager *manager,
+                                                 const char *msg, int is_error);
+static char              *http_post_form(const char *url, const char *body,
+                                          long *http_status_out);
+static void               revoke_token(const char *token_value,
+                                        const char *token_type_hint);
+
+/* ============================================================================
+ * Filesystem Helpers
+ * ============================================================================ */
+
+/**
+ * Create directory recursively with specified mode.
+ */
+static int mkdir_p_with_mode(const char *path, mode_t mode) {
+    char tmp[PATH_MAX];
+    char *p = NULL;
+
+    if (strlcpy(tmp, path, sizeof(tmp)) >= sizeof(tmp)) {
+        return -1;
+    }
+    size_t len = strlen(tmp);
+    if (len > 0 && tmp[len - 1] == '/') {
+        tmp[len - 1] = '\0';
+    }
+
+    for (p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            if (mkdir(tmp, mode) != 0 && errno != EEXIST) {
+                return -1;
+            }
+            *p = '/';
+        }
+    }
+    if (mkdir(tmp, mode) != 0 && errno != EEXIST) {
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * Return the ~/.openai directory path (caller must free).
+ */
+static char *get_openai_dir(void) {
+    const char *home = getenv("HOME");
+    if (!home || home[0] == '\0') {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw) {
+            home = pw->pw_dir;
+        }
+    }
+    if (!home || home[0] == '\0') {
+        LOG_ERROR("[OpenAI OAuth] Cannot determine home directory");
+        return NULL;
+    }
+
+    char *path = malloc(PATH_MAX);
+    if (!path) return NULL;
+
+    if (snprintf(path, PATH_MAX, "%s/.openai", home) >= PATH_MAX) {
+        free(path);
+        return NULL;
+    }
+    return path;
+}
+
+/**
+ * Return the full path to the auth token file (caller must free).
+ * Path: ~/.openai/auth.json
+ */
+static char *get_token_file_path(void) {
+    char *dir = get_openai_dir();
+    if (!dir) return NULL;
+
+    char *path = malloc(PATH_MAX);
+    if (!path) {
+        free(dir);
+        return NULL;
+    }
+    if (snprintf(path, PATH_MAX, "%s/auth.json", dir) >= PATH_MAX) {
+        free(path);
+        free(dir);
+        return NULL;
+    }
+    free(dir);
+    return path;
+}
+
+/* ============================================================================
+ * Token Storage
+ * ============================================================================ */
+
+/**
+ * Load OAuth token from ~/.openai/auth.json.
+ * Returns NULL if no valid token exists.
+ */
+static OpenAIOAuthToken *load_token_from_disk(void) {
+    char *path = get_token_file_path();
+    if (!path) return NULL;
+
+    FILE *f = fopen(path, "r");
+    free(path);
+    if (!f) {
+        LOG_DEBUG("[OpenAI OAuth] No token file found");
+        return NULL;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    if (fsize <= 0 || fsize > 1024 * 1024) {
+        fclose(f);
+        return NULL;
+    }
+    fseek(f, 0, SEEK_SET);
+
+    char *content = malloc((size_t)fsize + 1);
+    if (!content) {
+        fclose(f);
+        return NULL;
+    }
+    size_t nread = fread(content, 1, (size_t)fsize, f);
+    fclose(f);
+
+    if (nread != (size_t)fsize) {
+        free(content);
+        return NULL;
+    }
+    content[fsize] = '\0';
+
+    cJSON *json = cJSON_Parse(content);
+    free(content);
+    if (!json) {
+        LOG_WARN("[OpenAI OAuth] Failed to parse token file");
+        return NULL;
+    }
+
+    OpenAIOAuthToken *token = calloc(1, sizeof(OpenAIOAuthToken));
+    if (!token) {
+        cJSON_Delete(json);
+        return NULL;
+    }
+
+    cJSON *access_token  = cJSON_GetObjectItem(json, "access_token");
+    cJSON *refresh_token = cJSON_GetObjectItem(json, "refresh_token");
+    cJSON *expires_at    = cJSON_GetObjectItem(json, "expires_at");
+    cJSON *token_type    = cJSON_GetObjectItem(json, "token_type");
+    cJSON *scope         = cJSON_GetObjectItem(json, "scope");
+    cJSON *id_token      = cJSON_GetObjectItem(json, "id_token");
+
+    if (access_token  && cJSON_IsString(access_token))  token->access_token  = strdup(access_token->valuestring);
+    if (refresh_token && cJSON_IsString(refresh_token)) token->refresh_token = strdup(refresh_token->valuestring);
+    if (expires_at    && cJSON_IsNumber(expires_at))    token->expires_at    = (time_t)expires_at->valuedouble;
+    if (token_type    && cJSON_IsString(token_type))    token->token_type    = strdup(token_type->valuestring);
+    if (scope         && cJSON_IsString(scope))         token->scope         = strdup(scope->valuestring);
+    if (id_token      && cJSON_IsString(id_token))      token->id_token      = strdup(id_token->valuestring);
+
+    cJSON_Delete(json);
+
+    if (!token->access_token) {
+        LOG_WARN("[OpenAI OAuth] Token file missing access_token");
+        openai_oauth_token_free(token);
+        return NULL;
+    }
+
+    LOG_DEBUG("[OpenAI OAuth] Loaded token from disk (expires_at: %ld)",
+              (long)token->expires_at);
+    return token;
+}
+
+/**
+ * Save OAuth token to ~/.openai/auth.json with 0600 permissions.
+ */
+static int save_token_to_disk(const OpenAIOAuthToken *token) {
+    if (!token || !token->access_token) return -1;
+
+    char *dir = get_openai_dir();
+    if (!dir) return -1;
+
+    if (mkdir_p_with_mode(dir, 0700) != 0) {
+        LOG_ERROR("[OpenAI OAuth] Failed to create ~/.openai directory");
+        free(dir);
+        return -1;
+    }
+    free(dir);
+
+    char *path = get_token_file_path();
+    if (!path) return -1;
+
+    cJSON *json = cJSON_CreateObject();
+    if (!json) {
+        free(path);
+        return -1;
+    }
+
+    cJSON_AddStringToObject(json, "access_token",  token->access_token);
+    if (token->refresh_token) cJSON_AddStringToObject(json, "refresh_token", token->refresh_token);
+    cJSON_AddNumberToObject(json, "expires_at",    (double)token->expires_at);
+    if (token->token_type)    cJSON_AddStringToObject(json, "token_type",    token->token_type);
+    if (token->scope)         cJSON_AddStringToObject(json, "scope",         token->scope);
+    if (token->id_token)      cJSON_AddStringToObject(json, "id_token",      token->id_token);
+
+    char *json_str = cJSON_Print(json);
+    cJSON_Delete(json);
+    if (!json_str) {
+        free(path);
+        return -1;
+    }
+
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    free(path);
+    if (fd < 0) {
+        LOG_ERROR("[OpenAI OAuth] Failed to open token file for writing: %s",
+                  strerror(errno));
+        free(json_str);
+        return -1;
+    }
+
+    FILE *f = fdopen(fd, "w");
+    if (!f) {
+        close(fd);
+        free(json_str);
+        return -1;
+    }
+
+    fprintf(f, "%s\n", json_str);
+    fclose(f);
+    free(json_str);
+
+    LOG_DEBUG("[OpenAI OAuth] Token saved to disk");
+    return 0;
+}
+
+/**
+ * Reload from disk if the on-disk token is newer than the in-memory one.
+ * Handles multi-process cases (e.g., subagent refreshed the token).
+ *
+ * @return 1 if a new token was loaded, 0 otherwise
+ */
+static int reload_token_from_disk_if_newer(OpenAIOAuthManager *manager) {
+    if (!manager) return 0;
+
+    OpenAIOAuthToken *disk = load_token_from_disk();
+    if (!disk) return 0;
+
+    int loaded = 0;
+
+    if (!manager->token) {
+        manager->token = disk;
+        loaded = 1;
+        LOG_INFO("[OpenAI OAuth] Loaded token from disk (no in-memory token)");
+    } else {
+        int refresh_differs = 1;
+        if (manager->token->refresh_token && disk->refresh_token) {
+            refresh_differs = strcmp(manager->token->refresh_token,
+                                     disk->refresh_token) != 0;
+        }
+        int expires_later = disk->expires_at > manager->token->expires_at;
+
+        if (refresh_differs || expires_later) {
+            OpenAIOAuthToken *old = manager->token;
+            manager->token = disk;
+            openai_oauth_token_free(old);
+            loaded = 1;
+            LOG_INFO("[OpenAI OAuth] Reloaded newer token from disk");
+        } else {
+            openai_oauth_token_free(disk);
+        }
+    }
+    return loaded;
+}
+
+/* ============================================================================
+ * HTTP Helpers
+ * ============================================================================ */
+
+/**
+ * POST application/x-www-form-urlencoded body to url.
+ * Returns response body string (caller must free), or NULL on error.
+ */
+static char *http_post_form(const char *url, const char *body,
+                             long *http_status_out) {
+    if (!url) return NULL;
+
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers,
+                                "Content-Type: application/x-www-form-urlencoded");
+    /* Standard Accept header */
+    headers = curl_slist_append(headers, "Accept: application/json");
+
+    HttpRequest req = {0};
+    req.url                = url;
+    req.method             = "POST";
+    req.body               = body;
+    req.headers            = headers;
+    req.connect_timeout_ms = 30000;
+    req.total_timeout_ms   = 60000;
+
+    HttpResponse *resp = http_client_execute(&req, NULL, NULL);
+    curl_slist_free_all(headers);
+
+    if (!resp) {
+        LOG_ERROR("[OpenAI OAuth] HTTP POST to %s failed (no response)", url);
+        return NULL;
+    }
+
+    if (http_status_out) {
+        *http_status_out = resp->status_code;
+    }
+
+    char *result = NULL;
+    if (resp->body) {
+        result = strdup(resp->body);
+    }
+
+    if (resp->error_message) {
+        LOG_ERROR("[OpenAI OAuth] HTTP error: %s", resp->error_message);
+    }
+
+    http_response_free(resp);
+    return result;
+}
+
+/* ============================================================================
+ * Device Authorization Flow
+ * ============================================================================ */
+
+/**
+ * Request device authorization from OpenAI OAuth server.
+ * Returns a DeviceAuth struct the caller must free with openai_device_auth_free().
+ */
+static OpenAIDeviceAuth *request_device_authorization(void) {
+    const char *body =
+        "client_id=" OPENAI_OAUTH_CLIENT_ID
+        "&scope=" "openid%20profile%20email%20offline_access"
+        "&audience=" "https%3A%2F%2Fapi.openai.com%2Fv1";
+
+    long status = 0;
+    char *response = http_post_form(OPENAI_DEVICE_AUTH_ENDPOINT, body, &status);
+    if (!response) {
+        LOG_ERROR("[OpenAI OAuth] Device authorization request failed");
+        return NULL;
+    }
+
+    if (status != 200) {
+        LOG_ERROR("[OpenAI OAuth] Device auth returned status %ld: %s",
+                  status, response);
+        free(response);
+        return NULL;
+    }
+
+    cJSON *json = cJSON_Parse(response);
+    free(response);
+    if (!json) {
+        LOG_ERROR("[OpenAI OAuth] Failed to parse device auth response");
+        return NULL;
+    }
+
+    OpenAIDeviceAuth *auth = calloc(1, sizeof(OpenAIDeviceAuth));
+    if (!auth) {
+        cJSON_Delete(json);
+        return NULL;
+    }
+
+    cJSON *user_code       = cJSON_GetObjectItem(json, "user_code");
+    cJSON *device_code     = cJSON_GetObjectItem(json, "device_code");
+    cJSON *verification_uri          = cJSON_GetObjectItem(json, "verification_uri");
+    cJSON *verification_uri_complete = cJSON_GetObjectItem(json, "verification_uri_complete");
+    cJSON *expires_in      = cJSON_GetObjectItem(json, "expires_in");
+    cJSON *interval        = cJSON_GetObjectItem(json, "interval");
+
+    if (user_code && cJSON_IsString(user_code))
+        auth->user_code = strdup(user_code->valuestring);
+    if (device_code && cJSON_IsString(device_code))
+        auth->device_code = strdup(device_code->valuestring);
+    if (verification_uri && cJSON_IsString(verification_uri))
+        auth->verification_uri = strdup(verification_uri->valuestring);
+    if (verification_uri_complete && cJSON_IsString(verification_uri_complete))
+        auth->verification_uri_complete = strdup(verification_uri_complete->valuestring);
+    if (expires_in && cJSON_IsNumber(expires_in))
+        auth->expires_in = expires_in->valueint;
+    if (interval && cJSON_IsNumber(interval))
+        auth->interval = interval->valueint;
+
+    cJSON_Delete(json);
+
+    if (!auth->user_code || !auth->device_code) {
+        LOG_ERROR("[OpenAI OAuth] Device auth response missing required fields");
+        openai_device_auth_free(auth);
+        return NULL;
+    }
+
+    if (auth->expires_in <= 0) auth->expires_in = OPENAI_DEVICE_AUTH_TIMEOUT_SECONDS;
+    if (auth->interval   <= 0) auth->interval   = 5;
+
+    LOG_DEBUG("[OpenAI OAuth] Device auth: user_code=%s expires_in=%d",
+              auth->user_code, auth->expires_in);
+    return auth;
+}
+
+/**
+ * Poll the token endpoint until the user authorizes or the device code expires.
+ * Returns the token on success, NULL on error/timeout.
+ */
+static OpenAIOAuthToken *poll_for_token(const OpenAIDeviceAuth *auth) {
+    if (!auth || !auth->device_code) return NULL;
+
+    int interval = auth->interval > 0 ? auth->interval : 5;
+    time_t start = time(NULL);
+    int expires  = auth->expires_in > 0 ? auth->expires_in
+                                        : OPENAI_DEVICE_AUTH_TIMEOUT_SECONDS;
+
+    /* Build static part of the request body */
+    char body[1024];
+    snprintf(body, sizeof(body),
+             "grant_type=urn%%3Aietf%%3Aparams%%3Aoauth%%3Agrant-type%%3Adevice_code"
+             "&device_code=%s"
+             "&client_id=%s",
+             auth->device_code, OPENAI_OAUTH_CLIENT_ID);
+
+    while (1) {
+        if (time(NULL) - start > expires) {
+            LOG_ERROR("[OpenAI OAuth] Device authorization timed out");
+            return NULL;
+        }
+
+        sleep((unsigned int)interval);
+
+        long status = 0;
+        char *response = http_post_form(OPENAI_TOKEN_ENDPOINT, body, &status);
+        if (!response) {
+            LOG_WARN("[OpenAI OAuth] Token poll request failed, retrying...");
+            continue;
+        }
+
+        cJSON *json = cJSON_Parse(response);
+        free(response);
+        if (!json) {
+            LOG_WARN("[OpenAI OAuth] Failed to parse token poll response, retrying...");
+            continue;
+        }
+
+        /* Check for OAuth error */
+        cJSON *error = cJSON_GetObjectItem(json, "error");
+        if (error && cJSON_IsString(error)) {
+            const char *err = error->valuestring;
+
+            if (strcmp(err, "authorization_pending") == 0) {
+                LOG_DEBUG("[OpenAI OAuth] Authorization pending...");
+                cJSON_Delete(json);
+                continue;
+            } else if (strcmp(err, "slow_down") == 0) {
+                interval += 5;
+                LOG_DEBUG("[OpenAI OAuth] slow_down: increasing interval to %d", interval);
+                cJSON_Delete(json);
+                continue;
+            } else if (strcmp(err, "expired_token") == 0) {
+                LOG_ERROR("[OpenAI OAuth] Device code expired");
+                cJSON_Delete(json);
+                return NULL;
+            } else if (strcmp(err, "access_denied") == 0) {
+                LOG_ERROR("[OpenAI OAuth] Authorization denied by user");
+                cJSON_Delete(json);
+                return NULL;
+            } else {
+                cJSON *desc = cJSON_GetObjectItem(json, "error_description");
+                LOG_ERROR("[OpenAI OAuth] Token error: %s (%s)", err,
+                          desc && cJSON_IsString(desc) ? desc->valuestring : "");
+                cJSON_Delete(json);
+                return NULL;
+            }
+        }
+
+        /* Parse successful token response */
+        OpenAIOAuthToken *token = calloc(1, sizeof(OpenAIOAuthToken));
+        if (!token) {
+            cJSON_Delete(json);
+            return NULL;
+        }
+
+        cJSON *access_token  = cJSON_GetObjectItem(json, "access_token");
+        cJSON *refresh_token = cJSON_GetObjectItem(json, "refresh_token");
+        cJSON *expires_in_j  = cJSON_GetObjectItem(json, "expires_in");
+        cJSON *token_type    = cJSON_GetObjectItem(json, "token_type");
+        cJSON *scope         = cJSON_GetObjectItem(json, "scope");
+        cJSON *id_token      = cJSON_GetObjectItem(json, "id_token");
+
+        if (access_token  && cJSON_IsString(access_token))  token->access_token  = strdup(access_token->valuestring);
+        if (refresh_token && cJSON_IsString(refresh_token)) token->refresh_token = strdup(refresh_token->valuestring);
+        if (expires_in_j  && cJSON_IsNumber(expires_in_j))  token->expires_at    = time(NULL) + (time_t)expires_in_j->valueint;
+        if (token_type    && cJSON_IsString(token_type))    token->token_type    = strdup(token_type->valuestring);
+        if (scope         && cJSON_IsString(scope))         token->scope         = strdup(scope->valuestring);
+        if (id_token      && cJSON_IsString(id_token))      token->id_token      = strdup(id_token->valuestring);
+
+        cJSON_Delete(json);
+
+        if (!token->access_token) {
+            LOG_ERROR("[OpenAI OAuth] Token response missing access_token");
+            openai_oauth_token_free(token);
+            return NULL;
+        }
+
+        LOG_INFO("[OpenAI OAuth] Access token obtained successfully");
+        return token;
+    }
+}
+
+/* ============================================================================
+ * Token Refresh
+ * ============================================================================ */
+
+/**
+ * Refresh the access token using the refresh_token.
+ * IMPORTANT: refresh_token rotates on each use — always save the new one!
+ *
+ * Reloads from disk first to handle multi-process scenarios.
+ * Returns new token on success, NULL if refresh failed or not needed.
+ */
+static OpenAIOAuthToken *refresh_token_internal(OpenAIOAuthManager *manager, int force) {
+    if (!manager) return NULL;
+
+    /* First reload from disk: another process may have refreshed already */
+    reload_token_from_disk_if_newer(manager);
+
+    if (!manager->token || !manager->token->refresh_token) {
+        LOG_ERROR("[OpenAI OAuth] No refresh token available");
+        return NULL;
+    }
+
+    /* Skip if not needed (unless forced) */
+    if (!force) {
+        time_t remaining = manager->token->expires_at - time(NULL);
+        if (remaining >= OPENAI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+            LOG_DEBUG("[OpenAI OAuth] Token still fresh (%ld s remaining)",
+                      (long)remaining);
+            return NULL;
+        }
+    }
+
+    /* Build refresh request body */
+    char body[2048];
+    snprintf(body, sizeof(body),
+             "grant_type=refresh_token"
+             "&refresh_token=%s"
+             "&client_id=%s",
+             manager->token->refresh_token, OPENAI_OAUTH_CLIENT_ID);
+
+    long status = 0;
+    char *response = http_post_form(OPENAI_TOKEN_ENDPOINT, body, &status);
+
+    /* Wipe sensitive stack data */
+    explicit_bzero(body, sizeof(body));
+
+    if (!response) {
+        LOG_ERROR("[OpenAI OAuth] Token refresh request failed");
+        return NULL;
+    }
+
+    /* 401: another process may have rotated the token */
+    if (status == 401) {
+        LOG_WARN("[OpenAI OAuth] Refresh returned 401, checking disk for newer token...");
+        free(response);
+        if (reload_token_from_disk_if_newer(manager)) {
+            time_t remaining = manager->token ? manager->token->expires_at - time(NULL) : 0;
+            if (remaining > 0) {
+                LOG_INFO("[OpenAI OAuth] Found valid token on disk after 401");
+                return NULL;
+            }
+        }
+        return NULL;
+    }
+
+    if (status != 200) {
+        LOG_ERROR("[OpenAI OAuth] Token refresh failed with status %ld: %s",
+                  status, response);
+        free(response);
+        return NULL;
+    }
+
+    cJSON *json = cJSON_Parse(response);
+    free(response);
+    if (!json) {
+        LOG_ERROR("[OpenAI OAuth] Failed to parse refresh response");
+        return NULL;
+    }
+
+    cJSON *error = cJSON_GetObjectItem(json, "error");
+    if (error && cJSON_IsString(error)) {
+        LOG_ERROR("[OpenAI OAuth] Refresh error: %s", error->valuestring);
+        cJSON_Delete(json);
+        return NULL;
+    }
+
+    OpenAIOAuthToken *token = calloc(1, sizeof(OpenAIOAuthToken));
+    if (!token) {
+        cJSON_Delete(json);
+        return NULL;
+    }
+
+    cJSON *access_token  = cJSON_GetObjectItem(json, "access_token");
+    cJSON *refresh_token = cJSON_GetObjectItem(json, "refresh_token");
+    cJSON *expires_in    = cJSON_GetObjectItem(json, "expires_in");
+    cJSON *token_type    = cJSON_GetObjectItem(json, "token_type");
+    cJSON *scope         = cJSON_GetObjectItem(json, "scope");
+    cJSON *id_token      = cJSON_GetObjectItem(json, "id_token");
+
+    if (access_token  && cJSON_IsString(access_token))  token->access_token  = strdup(access_token->valuestring);
+    if (refresh_token && cJSON_IsString(refresh_token)) token->refresh_token = strdup(refresh_token->valuestring);
+    if (expires_in    && cJSON_IsNumber(expires_in))    token->expires_at    = time(NULL) + (time_t)expires_in->valueint;
+    if (token_type    && cJSON_IsString(token_type))    token->token_type    = strdup(token_type->valuestring);
+    if (scope         && cJSON_IsString(scope))         token->scope         = strdup(scope->valuestring);
+    if (id_token      && cJSON_IsString(id_token))      token->id_token      = strdup(id_token->valuestring);
+
+    cJSON_Delete(json);
+
+    if (!token->access_token || !token->refresh_token) {
+        LOG_ERROR("[OpenAI OAuth] Refresh response missing required fields");
+        openai_oauth_token_free(token);
+        return NULL;
+    }
+
+    LOG_INFO("[OpenAI OAuth] Token refreshed (new expires_at: %ld)",
+             (long)token->expires_at);
+    return token;
+}
+
+/* ============================================================================
+ * Background Refresh Thread
+ * ============================================================================ */
+
+static void *refresh_thread_func(void *arg) {
+    OpenAIOAuthManager *manager = (OpenAIOAuthManager *)arg;
+    if (!manager) return NULL;
+
+    LOG_DEBUG("[OpenAI OAuth] Refresh thread started");
+
+    while (manager->refresh_thread_running) {
+        for (int i = 0;
+             i < OPENAI_TOKEN_REFRESH_INTERVAL_SECONDS && manager->refresh_thread_running;
+             i++) {
+            sleep(1);
+        }
+        if (!manager->refresh_thread_running) break;
+
+        pthread_mutex_lock(&manager->token_mutex);
+
+        if (manager->token && manager->token->expires_at > 0) {
+            time_t remaining = manager->token->expires_at - time(NULL);
+            if (remaining < OPENAI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+                LOG_INFO("[OpenAI OAuth] Background refresh (expires in %ld s)",
+                         (long)remaining);
+                OpenAIOAuthToken *new_token = refresh_token_internal(manager, 0);
+                if (new_token) {
+                    OpenAIOAuthToken *old = manager->token;
+                    manager->token = new_token;
+                    if (save_token_to_disk(new_token) != 0) {
+                        LOG_WARN("[OpenAI OAuth] Failed to save refreshed token");
+                    }
+                    openai_oauth_token_free(old);
+                    LOG_INFO("[OpenAI OAuth] Background refresh successful");
+                }
+            }
+        }
+
+        pthread_mutex_unlock(&manager->token_mutex);
+    }
+
+    LOG_DEBUG("[OpenAI OAuth] Refresh thread stopped");
+    return NULL;
+}
+
+/* ============================================================================
+ * Message Display Helper
+ * ============================================================================ */
+
+static void oauth_display_message(OpenAIOAuthManager *manager,
+                                   const char *msg, int is_error) {
+    if (!msg) return;
+
+    if (manager && manager->message_callback) {
+        manager->message_callback(manager->message_callback_user_data,
+                                  msg, is_error);
+    } else {
+        if (is_error) {
+            fprintf(stderr, "%s\n", msg);
+        } else {
+            printf("%s\n", msg);
+        }
+    }
+}
+
+/* ============================================================================
+ * Token Revocation (used at logout)
+ * ============================================================================ */
+
+static void revoke_token(const char *token_value, const char *token_type_hint) {
+    if (!token_value || token_value[0] == '\0') return;
+
+    char body[4096];
+    if (token_type_hint) {
+        snprintf(body, sizeof(body),
+                 "token=%s&client_id=%s&token_type_hint=%s",
+                 token_value, OPENAI_OAUTH_CLIENT_ID, token_type_hint);
+    } else {
+        snprintf(body, sizeof(body),
+                 "token=%s&client_id=%s",
+                 token_value, OPENAI_OAUTH_CLIENT_ID);
+    }
+
+    long status = 0;
+    char *response = http_post_form(OPENAI_REVOKE_ENDPOINT, body, &status);
+
+    explicit_bzero(body, sizeof(body));
+
+    if (response) {
+        free(response);
+    }
+    if (status == 200) {
+        LOG_INFO("[OpenAI OAuth] Token revoked successfully");
+    } else {
+        LOG_WARN("[OpenAI OAuth] Token revocation returned status %ld", status);
+    }
+}
+
+/* ============================================================================
+ * Public API Implementation
+ * ============================================================================ */
+
+/**
+ * Create and initialize an OAuth manager.
+ */
+OpenAIOAuthManager *openai_oauth_manager_create(void) {
+    OpenAIOAuthManager *manager = calloc(1, sizeof(OpenAIOAuthManager));
+    if (!manager) {
+        LOG_ERROR("[OpenAI OAuth] Failed to allocate manager");
+        return NULL;
+    }
+
+    if (pthread_mutex_init(&manager->token_mutex, NULL) != 0) {
+        LOG_ERROR("[OpenAI OAuth] Failed to initialize mutex");
+        free(manager);
+        return NULL;
+    }
+
+    /* Try to load existing token */
+    manager->token = load_token_from_disk();
+    if (manager->token) {
+        LOG_INFO("[OpenAI OAuth] Loaded existing token from disk");
+    }
+
+    return manager;
+}
+
+/**
+ * Destroy the OAuth manager.
+ */
+void openai_oauth_manager_destroy(OpenAIOAuthManager *manager) {
+    if (!manager) return;
+
+    openai_oauth_stop_refresh_thread(manager);
+
+    pthread_mutex_lock(&manager->token_mutex);
+    openai_oauth_token_free(manager->token);
+    manager->token = NULL;
+    pthread_mutex_unlock(&manager->token_mutex);
+
+    pthread_mutex_destroy(&manager->token_mutex);
+    free(manager);
+
+    LOG_DEBUG("[OpenAI OAuth] Manager destroyed");
+}
+
+/**
+ * Set the message display callback.
+ */
+void openai_oauth_set_message_callback(OpenAIOAuthManager *manager,
+                                        OpenAIOAuthMessageCallback callback,
+                                        void *user_data) {
+    if (!manager) return;
+    manager->message_callback           = callback;
+    manager->message_callback_user_data = user_data;
+}
+
+/**
+ * Check if we have a valid (or refreshable) token.
+ */
+int openai_oauth_is_authenticated(OpenAIOAuthManager *manager) {
+    if (!manager) return 0;
+
+    pthread_mutex_lock(&manager->token_mutex);
+    int authenticated = (manager->token != NULL &&
+                         manager->token->access_token != NULL);
+
+    /* If we have a refresh token, we can always re-authenticate */
+    if (!authenticated && manager->token && manager->token->refresh_token) {
+        authenticated = 1;
+    }
+
+    /* If access token is expired and there's no refresh token, not authenticated */
+    if (authenticated && !manager->token->refresh_token) {
+        time_t now = time(NULL);
+        if (manager->token->expires_at > 0 &&
+            manager->token->expires_at <= now) {
+            authenticated = 0;
+        }
+    }
+
+    pthread_mutex_unlock(&manager->token_mutex);
+    return authenticated;
+}
+
+/**
+ * Perform interactive device authorization flow.
+ */
+int openai_oauth_login(OpenAIOAuthManager *manager) {
+    if (!manager) return -1;
+
+    /* Step 1: Request device authorization */
+    OpenAIDeviceAuth *auth = request_device_authorization();
+    if (!auth) {
+        oauth_display_message(manager,
+                              "Failed to start OpenAI device authorization.", 1);
+        return -1;
+    }
+
+    /* Step 2: Display instructions */
+    oauth_display_message(manager, "", 0);
+    oauth_display_message(manager, "================================================", 0);
+    oauth_display_message(manager, "  OPENAI SUBSCRIPTION LOGIN", 0);
+    oauth_display_message(manager, "================================================", 0);
+    oauth_display_message(manager, "", 0);
+
+    char msg[1024];
+
+    if (auth->verification_uri_complete) {
+        snprintf(msg, sizeof(msg), "  Visit: %s",
+                 auth->verification_uri_complete);
+    } else {
+        const char *base = auth->verification_uri
+                           ? auth->verification_uri
+                           : "https://auth.openai.com/activate";
+        snprintf(msg, sizeof(msg), "  Visit: %s", base);
+    }
+    oauth_display_message(manager, msg, 0);
+    oauth_display_message(manager, "", 0);
+
+    snprintf(msg, sizeof(msg), "  Code:  %s", auth->user_code ? auth->user_code : "(none)");
+    oauth_display_message(manager, msg, 0);
+    oauth_display_message(manager, "", 0);
+    oauth_display_message(manager, "  Sign in with your OpenAI account to authorize.", 0);
+    oauth_display_message(manager, "  (ChatGPT Plus/Pro subscription required)", 0);
+    oauth_display_message(manager, "", 0);
+
+    /* Try to open a browser automatically */
+    const char *open_url = auth->verification_uri_complete
+                           ? auth->verification_uri_complete
+                           : auth->verification_uri;
+    if (open_url) {
+        char cmd[1024];
+        snprintf(cmd, sizeof(cmd),
+                 "xdg-open '%s' 2>/dev/null || "
+                 "open '%s' 2>/dev/null || "
+                 "start '%s' 2>/dev/null",
+                 open_url, open_url, open_url);
+        int rc = system(cmd);
+        if (rc == 0) {
+            oauth_display_message(manager, "  Browser opened automatically.", 0);
+        }
+    }
+
+    oauth_display_message(manager, "  Waiting for authorization...", 0);
+    oauth_display_message(manager, "", 0);
+
+    /* Step 3: Poll for token */
+    OpenAIOAuthToken *token = poll_for_token(auth);
+    openai_device_auth_free(auth);
+
+    if (!token) {
+        oauth_display_message(manager, "Authorization failed or timed out.", 1);
+        return -1;
+    }
+
+    /* Step 4: Store token */
+    pthread_mutex_lock(&manager->token_mutex);
+    openai_oauth_token_free(manager->token);
+    manager->token = token;
+    pthread_mutex_unlock(&manager->token_mutex);
+
+    if (save_token_to_disk(token) != 0) {
+        LOG_WARN("[OpenAI OAuth] Failed to save token to disk");
+    }
+
+    oauth_display_message(manager, "  Authorization successful!", 0);
+    oauth_display_message(manager, "  Token saved to ~/.openai/auth.json", 0);
+    oauth_display_message(manager, "", 0);
+
+    return 0;
+}
+
+/**
+ * Get the current access token, refreshing if needed.
+ */
+const char *openai_oauth_get_access_token(OpenAIOAuthManager *manager) {
+    if (!manager) return NULL;
+
+    pthread_mutex_lock(&manager->token_mutex);
+
+    /* Try disk if no in-memory token */
+    if (!manager->token || !manager->token->access_token) {
+        reload_token_from_disk_if_newer(manager);
+        if (!manager->token || !manager->token->access_token) {
+            pthread_mutex_unlock(&manager->token_mutex);
+            return NULL;
+        }
+    }
+
+    /* Always reload from disk to catch updates from subagents */
+    reload_token_from_disk_if_newer(manager);
+
+    /* Refresh if expiring soon */
+    time_t now = time(NULL);
+    time_t remaining = manager->token->expires_at > 0
+                       ? manager->token->expires_at - now
+                       : (time_t)INT_MAX;
+
+    if (remaining < OPENAI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+        LOG_INFO("[OpenAI OAuth] Token expiring in %ld s, refreshing...",
+                 (long)remaining);
+        OpenAIOAuthToken *new_token = refresh_token_internal(manager, 0);
+        if (new_token) {
+            OpenAIOAuthToken *old = manager->token;
+            manager->token = new_token;
+            if (save_token_to_disk(new_token) != 0) {
+                LOG_WARN("[OpenAI OAuth] Failed to save refreshed token");
+            }
+            openai_oauth_token_free(old);
+        } else {
+            /* Re-check: refresh_token_internal may have reloaded from disk */
+            if (manager->token && manager->token->expires_at > 0) {
+                remaining = manager->token->expires_at - now;
+            }
+            if (remaining <= 0) {
+                LOG_ERROR("[OpenAI OAuth] Token expired and refresh failed");
+                pthread_mutex_unlock(&manager->token_mutex);
+                return NULL;
+            }
+        }
+    }
+
+    const char *tok = manager->token->access_token;
+    pthread_mutex_unlock(&manager->token_mutex);
+    return tok;
+}
+
+/**
+ * Force token refresh.
+ */
+int openai_oauth_refresh(OpenAIOAuthManager *manager, int force) {
+    if (!manager) return -1;
+
+    pthread_mutex_lock(&manager->token_mutex);
+
+    reload_token_from_disk_if_newer(manager);
+
+    if (!manager->token || !manager->token->refresh_token) {
+        pthread_mutex_unlock(&manager->token_mutex);
+        LOG_ERROR("[OpenAI OAuth] No refresh token available");
+        return -1;
+    }
+
+    /* If not forced, skip if token is fresh after disk reload */
+    if (!force) {
+        time_t remaining = manager->token->expires_at - time(NULL);
+        if (remaining >= OPENAI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+            LOG_INFO("[OpenAI OAuth] Token already fresh, skipping refresh");
+            pthread_mutex_unlock(&manager->token_mutex);
+            return 0;
+        }
+    }
+
+    OpenAIOAuthToken *new_token = refresh_token_internal(manager, force);
+    if (!new_token) {
+        /* Check if disk reload handled it */
+        time_t remaining = manager->token ? manager->token->expires_at - time(NULL) : 0;
+        if (remaining >= OPENAI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+            LOG_INFO("[OpenAI OAuth] Token refreshed by another process");
+            pthread_mutex_unlock(&manager->token_mutex);
+            return 0;
+        }
+        pthread_mutex_unlock(&manager->token_mutex);
+        return -1;
+    }
+
+    OpenAIOAuthToken *old = manager->token;
+    manager->token = new_token;
+    if (save_token_to_disk(new_token) != 0) {
+        LOG_WARN("[OpenAI OAuth] Failed to save refreshed token");
+    }
+    openai_oauth_token_free(old);
+
+    pthread_mutex_unlock(&manager->token_mutex);
+    return 0;
+}
+
+/**
+ * Reload token from disk (public API for 401 recovery).
+ */
+int openai_oauth_reload_from_disk(OpenAIOAuthManager *manager) {
+    if (!manager) return 0;
+
+    pthread_mutex_lock(&manager->token_mutex);
+    int result = reload_token_from_disk_if_newer(manager);
+    pthread_mutex_unlock(&manager->token_mutex);
+
+    if (result) {
+        LOG_INFO("[OpenAI OAuth] Reloaded token from disk");
+    }
+    return result;
+}
+
+/**
+ * Start background token refresh thread.
+ */
+int openai_oauth_start_refresh_thread(OpenAIOAuthManager *manager) {
+    if (!manager) return -1;
+
+    if (manager->refresh_thread_started) {
+        LOG_DEBUG("[OpenAI OAuth] Refresh thread already running");
+        return 0;
+    }
+
+    manager->refresh_thread_running = 1;
+    if (pthread_create(&manager->refresh_thread, NULL,
+                       refresh_thread_func, manager) != 0) {
+        LOG_ERROR("[OpenAI OAuth] Failed to create refresh thread");
+        manager->refresh_thread_running = 0;
+        return -1;
+    }
+    manager->refresh_thread_started = 1;
+    LOG_INFO("[OpenAI OAuth] Background refresh thread started");
+    return 0;
+}
+
+/**
+ * Stop background token refresh thread.
+ */
+void openai_oauth_stop_refresh_thread(OpenAIOAuthManager *manager) {
+    if (!manager || !manager->refresh_thread_started) return;
+
+    manager->refresh_thread_running = 0;
+    pthread_join(manager->refresh_thread, NULL);
+    manager->refresh_thread_started = 0;
+    LOG_DEBUG("[OpenAI OAuth] Refresh thread stopped");
+}
+
+/**
+ * Logout: revoke tokens and delete the token file.
+ */
+void openai_oauth_logout(OpenAIOAuthManager *manager) {
+    if (!manager) return;
+
+    openai_oauth_stop_refresh_thread(manager);
+
+    pthread_mutex_lock(&manager->token_mutex);
+
+    /* Revoke refresh token (most important to revoke) */
+    if (manager->token && manager->token->refresh_token) {
+        revoke_token(manager->token->refresh_token, "refresh_token");
+    }
+
+    openai_oauth_token_free(manager->token);
+    manager->token = NULL;
+
+    pthread_mutex_unlock(&manager->token_mutex);
+
+    /* Delete the token file */
+    char *path = get_token_file_path();
+    if (path) {
+        if (unlink(path) == 0) {
+            LOG_INFO("[OpenAI OAuth] Deleted token file: %s", path);
+        } else if (errno != ENOENT) {
+            LOG_WARN("[OpenAI OAuth] Failed to delete token file: %s",
+                     strerror(errno));
+        }
+        free(path);
+    }
+
+    LOG_INFO("[OpenAI OAuth] Logged out");
+}
+
+/* ============================================================================
+ * Struct Freeing
+ * ============================================================================ */
+
+void openai_device_auth_free(OpenAIDeviceAuth *auth) {
+    if (!auth) return;
+    free(auth->user_code);
+    free(auth->device_code);
+    free(auth->verification_uri);
+    free(auth->verification_uri_complete);
+    free(auth);
+}
+
+void openai_oauth_token_free(OpenAIOAuthToken *token) {
+    if (!token) return;
+
+    /* Securely wipe sensitive fields before freeing */
+    if (token->access_token) {
+        explicit_bzero(token->access_token, strlen(token->access_token));
+        free(token->access_token);
+    }
+    if (token->refresh_token) {
+        explicit_bzero(token->refresh_token, strlen(token->refresh_token));
+        free(token->refresh_token);
+    }
+    if (token->id_token) {
+        explicit_bzero(token->id_token, strlen(token->id_token));
+        free(token->id_token);
+    }
+
+    free(token->token_type);
+    free(token->scope);
+    free(token);
+}

@@ -12,6 +12,7 @@
 #include "deepseek_provider.h"
 #include "moonshot_provider.h"
 #include "kimi_coding_plan_provider.h"
+#include "openai_sub_provider.h"
 #include "config.h"
 #include "logger.h"
 #include "arena.h"
@@ -315,6 +316,11 @@ static int provider_config_has_api_key(const LLMProviderConfig *cfg) {
 
     // Kimi Coding Plan uses OAuth, not API keys
     if (cfg->provider_type == PROVIDER_KIMI_CODING_PLAN) {
+        return 1;
+    }
+
+    // OpenAI Subscription uses OAuth, not API keys
+    if (cfg->provider_type == PROVIDER_OPENAI_SUB) {
         return 1;
     }
 
@@ -757,10 +763,14 @@ void provider_init(const char *model,
     }
 
     if (!api_key_to_use || api_key_to_use[0] == '\0') {
-        result->error_message = strdup("API key is required for API provider. Set OPENAI_API_KEY environment variable or configure in .klawed/config.json");
-        LOG_ERROR("Provider init failed: %s", result->error_message);
-        arena_destroy(arena);
-        return;
+        /* OAuth providers (Kimi Coding Plan, OpenAI Sub) don't need an API key */
+        if (provider_type != PROVIDER_KIMI_CODING_PLAN &&
+            provider_type != PROVIDER_OPENAI_SUB) {
+            result->error_message = strdup("API key is required for API provider. Set OPENAI_API_KEY environment variable or configure in .klawed/config.json");
+            LOG_ERROR("Provider init failed: %s", result->error_message);
+            arena_destroy(arena);
+            return;
+        }
     }
 
     // Determine which API base URL to use
@@ -881,6 +891,37 @@ void provider_init(const char *model,
                 return;
             }
             LOG_INFO("Provider initialization successful: Kimi Coding Plan (API base: %s)", result->api_url);
+            arena_destroy(arena);
+            return;
+        } else if (provider_type == PROVIDER_OPENAI_SUB) {
+            LOG_INFO("Using OpenAI Subscription provider (explicitly configured)");
+            const char *api_base_to_use = (provider_config && provider_config->api_base[0] != '\0')
+                                          ? provider_config->api_base : NULL;
+            Provider *prov = openai_sub_provider_create(model_to_use, api_base_to_use);
+            if (!prov) {
+                result->error_message = strdup("Failed to initialize OpenAI Subscription provider (check logs for details)");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                arena_destroy(arena);
+                return;
+            }
+            OpenAISubConfig *sub_cfg = (OpenAISubConfig *)prov->config;
+            if (!sub_cfg || !sub_cfg->api_base) {
+                result->error_message = strdup("OpenAI Subscription provider initialized but API base is missing");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            result->provider = prov;
+            result->api_url = strdup(sub_cfg->api_base);
+            if (!result->api_url) {
+                result->error_message = strdup("Failed to allocate memory for API URL");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            LOG_INFO("Provider initialization successful: OpenAI Subscription (API base: %s)", result->api_url);
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_CUSTOM) {
@@ -1095,12 +1136,16 @@ void provider_init_from_config(const char *provider_key,
         return;
     }
 
-    // Non-Bedrock providers require API key
+    // Non-Bedrock providers require API key (except OAuth-based providers)
     if (!api_key || api_key[0] == '\0') {
-        result->error_message = strdup(
-            "API key is required. Set api_key_env in provider config or OPENAI_API_KEY environment variable");
-        LOG_ERROR("Provider init from config failed: %s", result->error_message);
-        return;
+        /* OAuth providers don't need an API key */
+        if (provider_type != PROVIDER_KIMI_CODING_PLAN &&
+            provider_type != PROVIDER_OPENAI_SUB) {
+            result->error_message = strdup(
+                "API key is required. Set api_key_env in provider config or OPENAI_API_KEY environment variable");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
     }
 
     // Determine base URL - use config or fall back to defaults
@@ -1208,6 +1253,37 @@ void provider_init_from_config(const char *provider_key,
             return;
         }
         LOG_INFO("Provider initialization successful: Kimi Coding Plan (API base: %s)", result->api_url);
+        return;
+    }
+
+    if (provider_type == PROVIDER_OPENAI_SUB) {
+        LOG_INFO("Creating OpenAI Subscription provider from config...");
+        const char *api_base_to_use = (config->api_base[0] != '\0') ? config->api_base : NULL;
+        free(base_url);  /* OpenAI Sub provider manages its own URL */
+        Provider *prov = openai_sub_provider_create(model, api_base_to_use);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize OpenAI Subscription provider (check logs for details)");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        OpenAISubConfig *sub_cfg = (OpenAISubConfig *)prov->config;
+        if (!sub_cfg || !sub_cfg->api_base) {
+            result->error_message = strdup(
+                "OpenAI Subscription provider initialized but API base is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(sub_cfg->api_base);
+        if (!result->api_url) {
+            result->error_message = strdup("Failed to allocate memory for API URL");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: OpenAI Subscription (API base: %s)", result->api_url);
         return;
     }
 
