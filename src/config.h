@@ -35,6 +35,7 @@ typedef enum {
     PROVIDER_MOONSHOT,      // Moonshot/Kimi API (OpenAI-compatible, preserves reasoning_content)
     PROVIDER_KIMI_CODING_PLAN, // Kimi Coding Plan (OAuth device flow, preserves reasoning_content)
     PROVIDER_OPENAI_SUB,    // OpenAI Subscription (OAuth device flow, ChatGPT Plus/Pro)
+    PROVIDER_ANTHROPIC_SUB, // Anthropic Subscription (OAuth, Claude.ai / claude auth login)
     PROVIDER_CUSTOM         // Custom provider
 } LLMProviderType;
 

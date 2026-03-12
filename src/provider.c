@@ -13,6 +13,7 @@
 #include "moonshot_provider.h"
 #include "kimi_coding_plan_provider.h"
 #include "openai_sub_provider.h"
+#include "anthropic_sub_provider.h"
 #include "config.h"
 #include "logger.h"
 #include "arena.h"
@@ -321,6 +322,11 @@ static int provider_config_has_api_key(const LLMProviderConfig *cfg) {
 
     // OpenAI Subscription uses OAuth, not API keys
     if (cfg->provider_type == PROVIDER_OPENAI_SUB) {
+        return 1;
+    }
+
+    // Anthropic Subscription uses OAuth, not API keys
+    if (cfg->provider_type == PROVIDER_ANTHROPIC_SUB) {
         return 1;
     }
 
@@ -763,9 +769,10 @@ void provider_init(const char *model,
     }
 
     if (!api_key_to_use || api_key_to_use[0] == '\0') {
-        /* OAuth providers (Kimi Coding Plan, OpenAI Sub) don't need an API key */
+        /* OAuth providers (Kimi Coding Plan, OpenAI Sub, Anthropic Sub) don't need an API key */
         if (provider_type != PROVIDER_KIMI_CODING_PLAN &&
-            provider_type != PROVIDER_OPENAI_SUB) {
+            provider_type != PROVIDER_OPENAI_SUB &&
+            provider_type != PROVIDER_ANTHROPIC_SUB) {
             result->error_message = strdup("API key is required for API provider. Set OPENAI_API_KEY environment variable or configure in .klawed/config.json");
             LOG_ERROR("Provider init failed: %s", result->error_message);
             arena_destroy(arena);
@@ -922,6 +929,39 @@ void provider_init(const char *model,
                 return;
             }
             LOG_INFO("Provider initialization successful: OpenAI Subscription (API base: %s)", result->api_url);
+            arena_destroy(arena);
+            return;
+        } else if (provider_type == PROVIDER_ANTHROPIC_SUB) {
+            LOG_INFO("Using Anthropic Subscription provider (explicitly configured)");
+            const char *api_base_to_use = (provider_config && provider_config->api_base[0] != '\0')
+                                          ? provider_config->api_base : NULL;
+            Provider *prov = anthropic_sub_provider_create(model_to_use, api_base_to_use);
+            if (!prov) {
+                result->error_message = strdup("Failed to initialize Anthropic Subscription provider "
+                                               "(ensure ~/.claude/.credentials.json exists — run 'claude auth login')");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                arena_destroy(arena);
+                return;
+            }
+            AnthropicSubConfig *sub_cfg = (AnthropicSubConfig *)prov->config;
+            if (!sub_cfg || !sub_cfg->api_base) {
+                result->error_message = strdup("Anthropic Subscription provider initialized but API base is missing");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            result->provider = prov;
+            result->api_url = strdup(sub_cfg->api_base);
+            if (!result->api_url) {
+                result->error_message = strdup("Failed to allocate memory for API URL");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            LOG_INFO("Provider initialization successful: Anthropic Subscription (API base: %s)",
+                     result->api_url);
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_CUSTOM) {
@@ -1140,7 +1180,8 @@ void provider_init_from_config(const char *provider_key,
     if (!api_key || api_key[0] == '\0') {
         /* OAuth providers don't need an API key */
         if (provider_type != PROVIDER_KIMI_CODING_PLAN &&
-            provider_type != PROVIDER_OPENAI_SUB) {
+            provider_type != PROVIDER_OPENAI_SUB &&
+            provider_type != PROVIDER_ANTHROPIC_SUB) {
             result->error_message = strdup(
                 "API key is required. Set api_key_env in provider config or OPENAI_API_KEY environment variable");
             LOG_ERROR("Provider init from config failed: %s", result->error_message);
@@ -1284,6 +1325,39 @@ void provider_init_from_config(const char *provider_key,
             return;
         }
         LOG_INFO("Provider initialization successful: OpenAI Subscription (API base: %s)", result->api_url);
+        return;
+    }
+
+    if (provider_type == PROVIDER_ANTHROPIC_SUB) {
+        LOG_INFO("Creating Anthropic Subscription provider from config...");
+        const char *api_base_to_use = (config->api_base[0] != '\0') ? config->api_base : NULL;
+        free(base_url);  /* Anthropic Sub provider manages its own URL */
+        Provider *prov = anthropic_sub_provider_create(model, api_base_to_use);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize Anthropic Subscription provider "
+                "(ensure ~/.claude/.credentials.json exists — run 'claude auth login')");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        AnthropicSubConfig *sub_cfg = (AnthropicSubConfig *)prov->config;
+        if (!sub_cfg || !sub_cfg->api_base) {
+            result->error_message = strdup(
+                "Anthropic Subscription provider initialized but API base is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(sub_cfg->api_base);
+        if (!result->api_url) {
+            result->error_message = strdup("Failed to allocate memory for API URL");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: Anthropic Subscription (API base: %s)",
+                 result->api_url);
         return;
     }
 

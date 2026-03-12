@@ -760,6 +760,8 @@ const char* config_provider_type_to_string(LLMProviderType type) {
             return "kimi_coding_plan";
         case PROVIDER_OPENAI_SUB:
             return "openai_sub";
+        case PROVIDER_ANTHROPIC_SUB:
+            return "anthropic_sub";
         case PROVIDER_CUSTOM:
             return "custom";
         default:
@@ -784,6 +786,8 @@ LLMProviderType config_provider_type_from_string(const char *str) {
         return PROVIDER_KIMI_CODING_PLAN;
     } else if (strcmp(str, "openai_sub") == 0 || strcmp(str, "chatgpt") == 0) {
         return PROVIDER_OPENAI_SUB;
+    } else if (strcmp(str, "anthropic_sub") == 0 || strcmp(str, "claude_sub") == 0) {
+        return PROVIDER_ANTHROPIC_SUB;
     } else if (strcmp(str, "custom") == 0) {
         return PROVIDER_CUSTOM;
     }
