@@ -7,6 +7,7 @@
 #include "../tool_utils.h"
 #include "../process_utils.h"
 #include "../util/string_utils.h"
+#include "../util/redact_utils.h"
 #include "../message_queue.h"
 #include "../logger.h"
 #include <stdio.h>
@@ -201,9 +202,14 @@ cJSON* tool_bash(cJSON *params, ConversationState *state) {
         clean_output = strip_ansi_escapes(output);
     }
 
+    /* Redact secrets from command output (catches env/printenv/cat .env leaking keys) */
+    const char *raw_output = clean_output ? clean_output : (output ? output : "");
+    char *redacted_output = redact_sensitive_text(raw_output);
+
     cJSON *result = cJSON_CreateObject();
     cJSON_AddNumberToObject(result, "exit_code", exit_code);
-    cJSON_AddStringToObject(result, "output", clean_output ? clean_output : (output ? output : ""));
+    cJSON_AddStringToObject(result, "output", redacted_output ? redacted_output : raw_output);
+    free(redacted_output);
 
     free(clean_output);
 
