@@ -1838,12 +1838,12 @@ $(QUERY_TOOL): $(QUERY_TOOL_SRC) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKE
 	@echo ""
 
 # Test target for Window Manager - layout and pad capacity behavior
-$(TEST_WM_TARGET): $(TEST_WM_SRC) $(WINDOW_MANAGER_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_WM_TARGET): $(TEST_WM_SRC) $(WINDOW_MANAGER_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Window Manager tests..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_window_manager.o $(TEST_WM_SRC)
 	@echo "Linking Window Manager test executable..."
-	@$(CC) -o $(TEST_WM_TARGET) $(BUILD_DIR)/test_window_manager.o $(WINDOW_MANAGER_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_WM_TARGET) $(BUILD_DIR)/test_window_manager.o $(WINDOW_MANAGER_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Window Manager test build successful!"
 	@echo ""
@@ -2052,19 +2052,19 @@ $(TEST_TOOL_DETAILS_TARGET): $(TEST_TOOL_DETAILS_SRC)
 	@echo ""
 
 # Test target for Duplicate Tool Detection - tests detect_duplicate_tool_names()
-$(TEST_DUPLICATE_TOOL_DETECTION_TARGET): $(TEST_DUPLICATE_TOOL_DETECTION_SRC) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_STUBS_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_DUPLICATE_TOOL_DETECTION_TARGET): $(TEST_DUPLICATE_TOOL_DETECTION_SRC) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_STUBS_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Duplicate Tool Detection test suite..."
-	@$(CC) $(CFLAGS) -o $(TEST_DUPLICATE_TOOL_DETECTION_TARGET) $(TEST_DUPLICATE_TOOL_DETECTION_SRC) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_STUBS_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -o $(TEST_DUPLICATE_TOOL_DETECTION_TARGET) $(TEST_DUPLICATE_TOOL_DETECTION_SRC) $(TOOL_DEFINITIONS_TEST_OBJ) $(TEST_STUBS_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Duplicate Tool Detection test build successful!"
 	@echo ""
 
 # Test target for Array Resize - tests array/buffer resize utilities
-$(TEST_ARRAY_RESIZE_TARGET): $(TEST_ARRAY_RESIZE_SRC) $(ARRAY_RESIZE_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_ARRAY_RESIZE_TARGET): $(TEST_ARRAY_RESIZE_SRC) $(ARRAY_RESIZE_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Array Resize test suite..."
-	@$(CC) $(CFLAGS) -o $(TEST_ARRAY_RESIZE_TARGET) $(TEST_ARRAY_RESIZE_SRC) $(ARRAY_RESIZE_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -o $(TEST_ARRAY_RESIZE_TARGET) $(TEST_ARRAY_RESIZE_SRC) $(ARRAY_RESIZE_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Array Resize test build successful!"
 	@echo ""
@@ -2094,19 +2094,19 @@ $(TEST_TUI_TOOL_CONNECTOR_TARGET): $(TEST_TUI_TOOL_CONNECTOR_SRC)
 	@echo ""
 
 # Test target for Config module - tests save/load and style conversion
-$(TEST_CONFIG_TARGET): tests/test_config.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_CONFIG_TARGET): tests/test_config.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Config test suite..."
-	@$(CC) $(CFLAGS) -o $(TEST_CONFIG_TARGET) tests/test_config.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -o $(TEST_CONFIG_TARGET) tests/test_config.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Config test build successful!"
 	@echo ""
 
 # Test target for Config merge - tests that saving doesn't copy global config to local
-$(TEST_CONFIG_MERGE_TARGET): tests/test_config_merge.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_CONFIG_MERGE_TARGET): tests/test_config_merge.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Config merge test suite..."
-	@$(CC) $(CFLAGS) -o $(TEST_CONFIG_MERGE_TARGET) tests/test_config_merge.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS) -lcjson
+	@$(CC) $(CFLAGS) -o $(TEST_CONFIG_MERGE_TARGET) tests/test_config_merge.c $(CONFIG_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS) -lcjson
 	@echo ""
 	@echo "✓ Config merge test build successful!"
 	@echo ""
@@ -2160,27 +2160,27 @@ test-provider-init: $(TEST_PROVIDER_INIT_TARGET)
 	@./$(TEST_PROVIDER_INIT_TARGET)
 
 # Test target for Memory DB - tests SQLite-based memory system
-$(TEST_MEMORY_DB_TARGET): $(TEST_MEMORY_DB_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_MEMORY_DB_TARGET): $(TEST_MEMORY_DB_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Memory DB test suite..."
-	@$(CC) $(CFLAGS) -o $(TEST_MEMORY_DB_TARGET) $(TEST_MEMORY_DB_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -o $(TEST_MEMORY_DB_TARGET) $(TEST_MEMORY_DB_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Memory DB test build successful!"
 
 # Test target for Memory Retraction - tests relation: "retracts" functionality
-$(TEST_MEMORY_RETRACT_TARGET): $(TEST_MEMORY_RETRACT_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_MEMORY_RETRACT_TARGET): $(TEST_MEMORY_RETRACT_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Memory Retraction test suite..."
-	@$(CC) $(CFLAGS) -o $(TEST_MEMORY_RETRACT_TARGET) $(TEST_MEMORY_RETRACT_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -o $(TEST_MEMORY_RETRACT_TARGET) $(TEST_MEMORY_RETRACT_SRC) $(MEMORY_DB_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Memory Retraction test build successful!"
 	@echo ""
 
 # Test target for Token Usage - tests token usage tracking functionality
-$(TEST_TOKEN_USAGE_TARGET): $(TEST_TOKEN_USAGE_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ)
+$(TEST_TOKEN_USAGE_TARGET): $(TEST_TOKEN_USAGE_SRC) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Token Usage test suite..."
-	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_TARGET) $(TEST_TOKEN_USAGE_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_TARGET) $(TEST_TOKEN_USAGE_SRC) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Token Usage test build successful!"
 	@echo ""
@@ -2254,14 +2254,14 @@ $(TEST_REDACT_TARGET): $(REDACT_UTILS_SRC) $(TEST_REDACT_SRC)
 	@echo ""
 
 # Test target for Bedrock Converse API format conversion
-$(TEST_BEDROCK_CONVERSE_TARGET): $(BEDROCK_CONVERSE_SRC) $(TEST_BEDROCK_CONVERSE_SRC) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_BEDROCK_CONVERSE_TARGET): $(BEDROCK_CONVERSE_SRC) $(TEST_BEDROCK_CONVERSE_SRC) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Bedrock Converse implementation..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/bedrock_converse_test.o $(BEDROCK_CONVERSE_SRC)
 	@echo "Compiling Bedrock Converse test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_bedrock_converse.o $(TEST_BEDROCK_CONVERSE_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_BEDROCK_CONVERSE_TARGET) $(BUILD_DIR)/bedrock_converse_test.o $(BUILD_DIR)/test_bedrock_converse.o $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_BEDROCK_CONVERSE_TARGET) $(BUILD_DIR)/bedrock_converse_test.o $(BUILD_DIR)/test_bedrock_converse.o $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bedrock Converse test build successful!"
 	@echo ""
@@ -2324,7 +2324,7 @@ $(TEST_CONVERSATION_FREE_TARGET): $(OPENAI_MESSAGES_SRC) $(LOGGER_SRC) $(TEST_CO
 	@echo "Compiling conversation memory management test suite..."
 	@$(CC) $(CFLAGS) -I./src -c -o $(BUILD_DIR)/test_conversation_free.o $(TEST_CONVERSATION_FREE_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_CONVERSATION_FREE_TARGET) $(BUILD_DIR)/openai_messages_free.o $(BUILD_DIR)/test_conversation_free.o $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_CONVERSATION_FREE_TARGET) $(BUILD_DIR)/openai_messages_free.o $(BUILD_DIR)/test_conversation_free.o $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Conversation memory management test build successful!"
 	@echo ""
@@ -2386,7 +2386,7 @@ $(TEST_WRITE_DIFF_INTEGRATION_TARGET): $(SRC) $(TEST_WRITE_DIFF_INTEGRATION_SRC)
 	@echo ""
 
 # Test target for database rotation
-$(TEST_ROTATION_TARGET): $(TEST_ROTATION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ)
+$(TEST_ROTATION_TARGET): $(TEST_ROTATION_SRC) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling database rotation tests..."
 	$(CC) $(CFLAGS) -o $(TEST_ROTATION_TARGET) $(TEST_ROTATION_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
@@ -2422,19 +2422,19 @@ $(TEST_THREAD_CANCEL_TARGET): $(TEST_THREAD_CANCEL_SRC)
 	@echo ""
 
 # Test target for AWS credential rotation with polling
-$(TEST_AWS_CRED_ROTATION_TARGET): $(TEST_AWS_CRED_ROTATION_SRC) $(AWS_BEDROCK_OBJ) $(LOGGER_OBJ) $(TOOL_UTILS_OBJ) $(DATA_DIR_OBJ)
+$(TEST_AWS_CRED_ROTATION_TARGET): $(TEST_AWS_CRED_ROTATION_SRC) $(AWS_BEDROCK_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(TOOL_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling AWS Credential Rotation test suite..."
-	@$(CC) $(CFLAGS) -o $(TEST_AWS_CRED_ROTATION_TARGET) $(TEST_AWS_CRED_ROTATION_SRC) $(AWS_BEDROCK_OBJ) $(LOGGER_OBJ) $(TOOL_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -o $(TEST_AWS_CRED_ROTATION_TARGET) $(TEST_AWS_CRED_ROTATION_SRC) $(AWS_BEDROCK_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(TOOL_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ AWS Credential Rotation test build successful!"
 	@echo ""
 
 # Test target for message queues - tests thread-safe queues
-$(TEST_MESSAGE_QUEUE_TARGET): $(TEST_MESSAGE_QUEUE_SRC) $(MESSAGE_QUEUE_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_MESSAGE_QUEUE_TARGET): $(TEST_MESSAGE_QUEUE_SRC) $(MESSAGE_QUEUE_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Message Queue test suite..."
-	@$(CC) $(CFLAGS) -o $(TEST_MESSAGE_QUEUE_TARGET) $(TEST_MESSAGE_QUEUE_SRC) $(MESSAGE_QUEUE_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -o $(TEST_MESSAGE_QUEUE_TARGET) $(TEST_MESSAGE_QUEUE_SRC) $(MESSAGE_QUEUE_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Message Queue test build successful!"
 	@echo ""
@@ -2460,10 +2460,10 @@ $(TEST_TEXT_WRAP_TARGET): tests/test_text_wrap.c
 	@echo "✓ Text Wrapping test build successful!"
 	@echo ""
 
-$(TEST_MCP_TARGET): $(TEST_MCP_SRC) $(MCP_TEST_OBJ) $(BASE64_OBJ) $(DATA_DIR_OBJ) $(LOGGER_OBJ)
+$(TEST_MCP_TARGET): $(TEST_MCP_SRC) $(MCP_TEST_OBJ) $(BASE64_OBJ) $(DATA_DIR_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling MCP integration tests..."
-	@$(CC) $(CFLAGS) -DTEST_BUILD -o $(TEST_MCP_TARGET) $(TEST_MCP_SRC) $(MCP_TEST_OBJ) $(BASE64_OBJ) $(DATA_DIR_OBJ) $(LOGGER_OBJ) $(LDFLAGS)
+	@$(CC) $(CFLAGS) -DTEST_BUILD -o $(TEST_MCP_TARGET) $(TEST_MCP_SRC) $(MCP_TEST_OBJ) $(BASE64_OBJ) $(DATA_DIR_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ MCP test build successful!"
 	@echo ""
@@ -2804,13 +2804,13 @@ ci-test: ci-gcc ci-clang-sanitize
 	@echo ""
 
 # Test target for History File functionality
-$(TEST_HISTORY_FILE_TARGET): $(HISTORY_FILE_SRC) $(TEST_HISTORY_FILE_SRC) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_HISTORY_FILE_TARGET): $(HISTORY_FILE_SRC) $(TEST_HISTORY_FILE_SRC) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling History File test suite..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/history_file_test.o $(HISTORY_FILE_SRC)
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_history_file.o $(TEST_HISTORY_FILE_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_HISTORY_FILE_TARGET) $(BUILD_DIR)/history_file_test.o $(BUILD_DIR)/test_history_file.o $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_HISTORY_FILE_TARGET) $(BUILD_DIR)/history_file_test.o $(BUILD_DIR)/test_history_file.o $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ History File test build successful!"
 	@echo ""
@@ -2843,8 +2843,8 @@ $(TEST_TUI_AUTO_SCROLL_TARGET): $(TEST_TUI_AUTO_SCROLL_SRC)
 TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET = $(BUILD_DIR)/test_token_usage_comprehensive
 TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET = $(BUILD_DIR)/test_token_usage_session_totals
 
-$(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET): $(TEST_TOKEN_USAGE_SESSION_TOTALS_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ)
-	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET) $(TEST_TOKEN_USAGE_SESSION_TOTALS_SRC) $(LOGGER_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+$(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET): $(TEST_TOKEN_USAGE_SESSION_TOTALS_SRC) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ)
+	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_SESSION_TOTALS_TARGET) $(TEST_TOKEN_USAGE_SESSION_TOTALS_SRC) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(PERSISTENCE_OBJ) $(TOKEN_USAGE_DB_OBJ) $(TOKEN_USAGE_DB_MIGRATIONS_OBJ) $(MIGRATIONS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 # Test-specific SQLite queue object (compiled with TEST_BUILD to exclude klawed.c dependencies)
 SQLITE_QUEUE_TEST_OBJ = $(BUILD_DIR)/sqlite_queue_test.o
 
@@ -2872,15 +2872,15 @@ test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARG
 $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET): $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET) $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC) $(LDFLAGS)
 
-$(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ) $(RETRY_LOGIC_OBJ) $(DATA_DIR_OBJ)
-	@$(CC) $(CFLAGS) -o $(TEST_HTTP_CLIENT_TARGET) $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ) $(RETRY_LOGIC_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+$(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(RETRY_LOGIC_OBJ) $(DATA_DIR_OBJ)
+	@$(CC) $(CFLAGS) -o $(TEST_HTTP_CLIENT_TARGET) $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(RETRY_LOGIC_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 
 
 
 
 
-$(TEST_SQLITE_QUEUE_TARGET): $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
-	@$(CC) $(CFLAGS) -o $(TEST_SQLITE_QUEUE_TARGET) $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+$(TEST_SQLITE_QUEUE_TARGET): $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
+	@$(CC) $(CFLAGS) -o $(TEST_SQLITE_QUEUE_TARGET) $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 
 # Test target for SQLite Queue Seeding (conversation history restoration)
 $(TEST_SQLITE_QUEUE_SEEDING_TARGET): $(SRC) $(TEST_SQLITE_QUEUE_SEEDING_SRC) $(TEST_COMMON_OBJS)
@@ -2899,14 +2899,14 @@ $(TEST_SQLITE_QUEUE_SEEDING_TARGET): $(SRC) $(TEST_SQLITE_QUEUE_SEEDING_SRC) $(T
 	@echo ""
 
 # Test target for File Search fuzzy matching
-$(TEST_FILE_SEARCH_TARGET): $(FILE_SEARCH_SRC) $(TEST_FILE_SEARCH_SRC) $(LOGGER_OBJ) $(DATA_DIR_OBJ)
+$(TEST_FILE_SEARCH_TARGET): $(FILE_SEARCH_SRC) $(TEST_FILE_SEARCH_SRC) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling File Search implementation for tests (TEST_BUILD)..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/file_search_test.o $(FILE_SEARCH_SRC)
 	@echo "Compiling File Search test suite..."
 	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_file_search.o $(TEST_FILE_SEARCH_SRC)
 	@echo "Linking test executable..."
-	@$(CC) -o $(TEST_FILE_SEARCH_TARGET) $(BUILD_DIR)/file_search_test.o $(BUILD_DIR)/test_file_search.o $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_FILE_SEARCH_TARGET) $(BUILD_DIR)/file_search_test.o $(BUILD_DIR)/test_file_search.o $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ File Search test build successful!"
 
