@@ -124,6 +124,14 @@ const NamedProviderConfig* provider_config_find_provider(const UnifiedProviderCo
 int provider_config_is_bedrock(const UnifiedProviderConfig *config);
 
 /**
+ * Check if the effective provider uses OAuth (no API key required).
+ * OAuth providers authenticate via browser device flow instead of an API key.
+ * Currently: openai_sub (ChatGPT subscription), kimi_coding_plan,
+ *            anthropic_sub (Claude.ai subscription).
+ */
+int provider_config_is_oauth(const UnifiedProviderConfig *config);
+
+/**
  * Check if the effective provider has an API key configured
  *
  * @param config Pointer to UnifiedProviderConfig
