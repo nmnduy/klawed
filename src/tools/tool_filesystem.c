@@ -7,6 +7,7 @@
 #include "../util/file_utils.h"
 #include "../util/diff_utils.h"
 #include "../util/output_utils.h"
+#include "../util/redact_utils.h"
 #define COLORSCHEME_EXTERN 1
 #include "../colorscheme.h"
 #include "../fallback_colors.h"
@@ -195,8 +196,12 @@ cJSON* tool_read(cJSON *params, ConversationState *state) {
         if (pos > content && *(pos-1) != '\n') total_lines++;  // Last line without newline
     }
 
+    /* Redact secrets from file content (catches .env, credentials files, etc.) */
+    char *redacted_content = redact_sensitive_text(filtered_content);
+
     cJSON *result = cJSON_CreateObject();
-    cJSON_AddStringToObject(result, "content", filtered_content);
+    cJSON_AddStringToObject(result, "content", redacted_content ? redacted_content : filtered_content);
+    free(redacted_content);
     cJSON_AddNumberToObject(result, "total_lines", total_lines);
 
     if (start_line > 0 || end_line > 0) {
