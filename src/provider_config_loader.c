@@ -344,6 +344,18 @@ int provider_config_is_bedrock(const UnifiedProviderConfig *config) {
 }
 
 /**
+ * Check if the effective provider uses OAuth device flow (no API key required).
+ */
+int provider_config_is_oauth(const UnifiedProviderConfig *config) {
+    const LLMProviderConfig *effective = provider_config_get_effective(config);
+    if (!effective) return 0;
+
+    return (effective->provider_type == PROVIDER_OPENAI_SUB ||
+            effective->provider_type == PROVIDER_KIMI_CODING_PLAN ||
+            effective->provider_type == PROVIDER_ANTHROPIC_SUB);
+}
+
+/**
  * Check if the effective provider has an API key configured
  */
 int provider_config_has_api_key(const UnifiedProviderConfig *config) {
@@ -413,8 +425,9 @@ char* provider_config_validate(const UnifiedProviderConfig *config) {
         return strdup("No model configured. Set OPENAI_MODEL environment variable or configure a model in .klawed/config.json");
     }
 
-    // Check if API key is available (unless bedrock)
-    if (!provider_config_has_api_key(config)) {
+    // Check if API key is available (unless bedrock or oauth)
+    if (!provider_config_has_api_key(config) &&
+        !provider_config_is_oauth(config)) {
         return strdup("No API key configured. Set OPENAI_API_KEY environment variable or configure api_key/api_key_env in .klawed/config.json");
     }
 

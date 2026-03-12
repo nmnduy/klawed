@@ -1613,14 +1613,21 @@ int main(int argc, char *argv[]) {
         }
 
         if (!api_key) {
-            LOG_ERROR("OPENAI_API_KEY environment variable not set");
-            fprintf(stderr, "Error: OPENAI_API_KEY environment variable not set\n");
-            fprintf(stderr, "\nTo use AWS Bedrock instead, set:\n");
-            fprintf(stderr, "  export KLAWED_USE_BEDROCK=true\n");
-            fprintf(stderr, "  export ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0\n");
-            fprintf(stderr, "  export AWS_REGION=us-west-2\n");
-            fprintf(stderr, "  export AWS_PROFILE=your-profile\n");
-            return 1;
+            // OAuth providers (openai_sub, kimi_coding_plan, anthropic_sub) authenticate via
+            // device/PKCE flow and do not require an API key at startup.
+            if (provider_config_is_oauth(&unified_config)) {
+                api_key = "oauth";  /* Placeholder; real auth happens at first API call */
+                api_key_source = "oauth";
+            } else {
+                LOG_ERROR("OPENAI_API_KEY environment variable not set");
+                fprintf(stderr, "Error: OPENAI_API_KEY environment variable not set\n");
+                fprintf(stderr, "\nTo use AWS Bedrock instead, set:\n");
+                fprintf(stderr, "  export KLAWED_USE_BEDROCK=true\n");
+                fprintf(stderr, "  export ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0\n");
+                fprintf(stderr, "  export AWS_REGION=us-west-2\n");
+                fprintf(stderr, "  export AWS_PROFILE=your-profile\n");
+                return 1;
+            }
         }
 
         // Use placeholder if provider has its own key configured (resolved later in provider_init)
