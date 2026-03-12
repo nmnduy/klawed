@@ -91,7 +91,10 @@ char* build_system_prompt(ConversationState *state) {
         "Platform: %s\n"
         "OS Version: %s\n"
         "Today's date: %s\n"
-        "</env>\n",
+        "</env>\n"
+        "\nNote: Some values in tool output (API keys, tokens, passwords, private keys, etc.) "
+        "may appear as *** or [REDACTED PRIVATE KEY] — these have been automatically redacted "
+        "by the system before being shown to you.\n",
         is_git ? "Yes" : "No",
         platform,
         os_version,
