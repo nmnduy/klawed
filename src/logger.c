@@ -4,6 +4,7 @@
 
 #include "logger.h"
 #include "data_dir.h"
+#include "util/redact_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -341,11 +342,16 @@ void log_message(LogLevel level, const char *file, int line,
                 func);
     }
 
-    // Write the actual log message
+    // Write the actual log message (with secret redaction)
     va_list args;
     va_start(args, fmt);
-    vfprintf(g_log_file, fmt, args);
+    char msg_buf[4096];
+    vsnprintf(msg_buf, sizeof(msg_buf), fmt, args);
     va_end(args);
+
+    char *redacted = redact_sensitive_text(msg_buf);
+    fprintf(g_log_file, "%s", redacted ? redacted : msg_buf);
+    free(redacted);
 
     fprintf(g_log_file, "\n");
 
