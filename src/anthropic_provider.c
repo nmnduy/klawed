@@ -70,7 +70,7 @@ static char* arena_strdup(Arena *arena, const char *str) {
 // ============================================================================
 
 // Convert OpenAI-style request (our internal builder outputs) to Anthropic native
-static char* openai_to_anthropic_request(const char *openai_req) {
+char* anthropic_convert_openai_to_anthropic_request(const char *openai_req) {
     cJSON *openai_json = cJSON_Parse(openai_req);
     if (!openai_json) return NULL;
 
@@ -263,7 +263,7 @@ static char* openai_to_anthropic_request(const char *openai_req) {
 }
 
 // Convert Anthropic JSON back to an OpenAI-like response so we can reuse parse code paths
-static cJSON* anthropic_to_openai_response(const char *anthropic_raw) {
+cJSON* anthropic_convert_response_to_openai(const char *anthropic_raw) {
     cJSON *anth = cJSON_Parse(anthropic_raw);
     if (!anth) return NULL;
 
@@ -384,25 +384,10 @@ static cJSON* anthropic_to_openai_response(const char *anthropic_raw) {
 // Streaming Support
 // ============================================================================
 
-// Streaming context passed to SSE callback
-typedef struct {
-    ConversationState *state;        // For interrupt checking
-    char *accumulated_text;          // Accumulated text from deltas
-    size_t accumulated_size;
-    size_t accumulated_capacity;
-    int content_block_index;         // Current content block being streamed
-    char *content_block_type;        // Type of current block ("text" or "tool_use")
-    char *tool_use_id;               // Tool use ID for current block
-    char *tool_use_name;             // Tool name for current block
-    char *tool_input_json;           // Accumulated tool input JSON
-    size_t tool_input_size;
-    size_t tool_input_capacity;
-    cJSON *message_start_data;       // Message metadata from message_start
-    char *stop_reason;               // Stop reason from message_delta
-    Arena *arena;                    // Arena for all allocations (optional, NULL for heap allocation)
-} StreamingContext;
+/* StreamingContext is exported as AnthropicStreamingContext via anthropic_provider.h */
+typedef AnthropicStreamingContext StreamingContext;
 
-static void streaming_context_init(StreamingContext *ctx, ConversationState *state) {
+void anthropic_streaming_context_init(AnthropicStreamingContext *ctx, ConversationState *state) {
     memset(ctx, 0, sizeof(StreamingContext));
     ctx->state = state;
     ctx->content_block_index = -1;
@@ -435,7 +420,7 @@ static void streaming_context_init(StreamingContext *ctx, ConversationState *sta
     }
 }
 
-static void streaming_context_free(StreamingContext *ctx) {
+void anthropic_streaming_context_free(AnthropicStreamingContext *ctx) {
     if (!ctx) return;
 
     // If arena is present, destroy it (frees all arena-allocated memory)
@@ -456,7 +441,7 @@ static void streaming_context_free(StreamingContext *ctx) {
     }
 }
 
-static int streaming_event_handler(StreamEvent *event, void *userdata) {
+int anthropic_streaming_event_handler(StreamEvent *event, void *userdata) {
     StreamingContext *ctx = (StreamingContext *)userdata;
 
     // Check for interrupt
@@ -716,7 +701,7 @@ static void anthropic_call_api(Provider *self, ConversationState *state, ApiCall
         *out = result; return;
     }
 
-    char *anth_req = openai_to_anthropic_request(openai_req);
+    char *anth_req = anthropic_convert_openai_to_anthropic_request(openai_req);
     LOG_DEBUG("Anthropic: Converted to Anthropic format, request length: %zu bytes",
               anth_req ? strlen(anth_req) : 0);
     if (!anth_req) {
@@ -815,8 +800,8 @@ static void anthropic_call_api(Provider *self, ConversationState *state, ApiCall
     StreamingContext stream_ctx;
 
     if (enable_streaming) {
-        streaming_context_init(&stream_ctx, state);
-        http_resp = http_client_execute_stream(&req, streaming_event_handler, &stream_ctx, progress_callback, state);
+        anthropic_streaming_context_init(&stream_ctx, state);
+        http_resp = http_client_execute_stream(&req, anthropic_streaming_event_handler, &stream_ctx, progress_callback, state);
     } else {
         http_resp = http_client_execute(&req, progress_callback, state);
     }
@@ -900,15 +885,18 @@ static void anthropic_call_api(Provider *self, ConversationState *state, ApiCall
                 }
 
                 // Convert to OpenAI format
-                openai_like = anthropic_to_openai_response(synth_str ? synth_str : "{}");
+                openai_like = anthropic_convert_response_to_openai(synth_str ? synth_str : "{}");
                 cJSON_Delete(synth_response);
             }
 
-            streaming_context_free(&stream_ctx);
+            anthropic_streaming_context_free(&stream_ctx);
+
         } else {
             // Non-streaming: convert normal response
-            openai_like = anthropic_to_openai_response(result.raw_response);
+            openai_like = anthropic_convert_response_to_openai(result.raw_response);
         }
+
+        // Synthesise a response
         if (!openai_like) {
             result.error_message = strdup("Failed to parse Anthropic response");
             result.is_retryable = 1;  // Malformed response might be transient, retry
