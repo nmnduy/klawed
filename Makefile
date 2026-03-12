@@ -460,6 +460,8 @@ TEST_WM_SRC = tests/test_window_manager.c
 TEST_TOOL_RESULTS_REGRESSION_SRC = tests/test_tool_results_regression.c
 TEST_BASE64_SRC = tests/test_base64.c
 TEST_BASE64_TARGET = $(BUILD_DIR)/test_base64
+TEST_REDACT_SRC = tests/test_redact.c
+TEST_REDACT_TARGET = $(BUILD_DIR)/test_redact
 TEST_CANCEL_FLOW_TARGET = $(BUILD_DIR)/test_cancel_flow
 TEST_BASH_SUMMARY_TARGET = $(BUILD_DIR)/test_bash_summary
 TEST_BASH_SUMMARY_SRC = tests/test_bash_summary.c
@@ -513,7 +515,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-realtime-steering test-tui-tool-connector test-bedrock-converse test-insert-system-message
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-realtime-steering test-tui-tool-connector test-bedrock-converse test-insert-system-message
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -711,6 +713,12 @@ test-base64: check-deps $(TEST_BASE64_TARGET)
 	@echo "Running Base64 encoding/decoding tests..."
 	@echo ""
 	@./$(TEST_BASE64_TARGET)
+
+test-redact: check-deps $(TEST_REDACT_TARGET)
+	@echo ""
+	@echo "Running secret redaction unit tests..."
+	@echo ""
+	@./$(TEST_REDACT_TARGET)
 
 test-bedrock-converse: check-deps $(TEST_BEDROCK_CONVERSE_TARGET)
 	@echo ""
@@ -2231,6 +2239,18 @@ $(TEST_BASE64_TARGET): $(BASE64_SRC) $(TEST_BASE64_SRC)
 	@$(CC) -o $(TEST_BASE64_TARGET) $(BUILD_DIR)/base64_test.o $(BUILD_DIR)/test_base64.o $(LDFLAGS)
 	@echo ""
 	@echo "✓ Base64 test build successful!"
+	@echo ""
+
+$(TEST_REDACT_TARGET): $(REDACT_UTILS_SRC) $(TEST_REDACT_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling redact_utils..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/redact_utils_test.o $(REDACT_UTILS_SRC)
+	@echo "Compiling redact test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_redact.o $(TEST_REDACT_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_REDACT_TARGET) $(BUILD_DIR)/redact_utils_test.o $(BUILD_DIR)/test_redact.o $(LDFLAGS)
+	@echo ""
+	@echo "✓ Redact test build successful!"
 	@echo ""
 
 # Test target for Bedrock Converse API format conversion
