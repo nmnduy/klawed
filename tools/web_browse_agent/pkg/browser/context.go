@@ -44,6 +44,7 @@ type BrowserContext struct {
 	headless          bool
 	userDataDir       string
 	browserExecutable string
+	proxy             string
 }
 
 // Tab represents a browser tab/page
@@ -56,9 +57,10 @@ type Tab struct {
 
 // BrowserContextConfig holds configuration for creating a new browser context
 type BrowserContextConfig struct {
-	Headless         bool
-	UserDataDir      string        // Path to persistent user data directory (empty = no persistence)
-	BrowserExecutable string       // Path to browser executable (empty = auto-detect)
+	Headless          bool
+	UserDataDir       string // Path to persistent user data directory (empty = no persistence)
+	BrowserExecutable string // Path to browser executable (empty = auto-detect)
+	Proxy             string // HTTP/SOCKS proxy URL, e.g. "http://host:8080" (empty = no proxy)
 }
 
 // NewBrowserContext creates a new browser context
@@ -108,8 +110,8 @@ func findChromiumExecutable() string {
 
 // NewBrowserContextWithConfig creates a new browser context with full configuration
 func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, error) {
-	logger.Printf("Creating browser context with config: Headless=%v, UserDataDir=%s, BrowserExecutable=%s",
-		config.Headless, config.UserDataDir, config.BrowserExecutable)
+	logger.Printf("Creating browser context with config: Headless=%v, UserDataDir=%s, BrowserExecutable=%s, Proxy=%s",
+		config.Headless, config.UserDataDir, config.BrowserExecutable, config.Proxy)
 
 	// Initialize Playwright
 	logger.Printf("Starting Playwright...")
@@ -132,6 +134,13 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 		chromiumPath = findChromiumExecutable()
 	}
 
+	// Build a *playwright.Proxy if a proxy URL was provided
+	var playwrightProxy *playwright.Proxy
+	if config.Proxy != "" {
+		playwrightProxy = &playwright.Proxy{Server: config.Proxy}
+		logger.Printf("Using proxy: %s", config.Proxy)
+	}
+
 	// Use launchPersistentContext if userDataDir is specified for persistent storage
 	if config.UserDataDir != "" {
 		logger.Printf("Launching persistent context with user data dir: %s", config.UserDataDir)
@@ -142,6 +151,9 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 		if chromiumPath != "" {
 			launchOptions.ExecutablePath = playwright.String(chromiumPath)
 			logger.Printf("Using Chromium executable: %s", chromiumPath)
+		}
+		if playwrightProxy != nil {
+			launchOptions.Proxy = playwrightProxy
 		}
 		context, err = pw.Chromium.LaunchPersistentContext(config.UserDataDir, launchOptions)
 		if err != nil {
@@ -162,6 +174,9 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 			launchOptions.ExecutablePath = playwright.String(chromiumPath)
 			logger.Printf("Using Chromium executable: %s", chromiumPath)
 		}
+		if playwrightProxy != nil {
+			launchOptions.Proxy = playwrightProxy
+		}
 		browser, err = pw.Chromium.Launch(launchOptions)
 		if err != nil {
 			logger.Printf("ERROR: Failed to launch browser: %v", err)
@@ -172,7 +187,11 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 
 		// Create browser context
 		logger.Printf("Creating new browser context")
-		context, err = browser.NewContext()
+		ctxOptions := playwright.BrowserNewContextOptions{}
+		if playwrightProxy != nil {
+			ctxOptions.Proxy = playwrightProxy
+		}
+		context, err = browser.NewContext(ctxOptions)
 		if err != nil {
 			logger.Printf("ERROR: Failed to create browser context: %v", err)
 			browser.Close()
@@ -191,6 +210,7 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 		headless:          config.Headless,
 		userDataDir:       config.UserDataDir,
 		browserExecutable: config.BrowserExecutable,
+		proxy:             config.Proxy,
 	}, nil
 }
 
