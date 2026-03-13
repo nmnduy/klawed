@@ -27,6 +27,7 @@ type Driver struct {
 	headless          bool
 	userDataDir       string        // Path to persistent user data directory
 	browserExecutable string        // Path to browser executable (empty = auto-detect)
+	proxy             string        // HTTP/SOCKS proxy URL (empty = no proxy)
 	timeout           time.Duration
 	idleTimeout       time.Duration // Auto-shutdown after this duration of inactivity (0 = disabled)
 	parentPID         int           // Parent process to monitor for cleanup
@@ -56,6 +57,7 @@ type DriverConfig struct {
 	Headless          bool
 	UserDataDir       string        // Path to persistent user data directory (empty = no persistence)
 	BrowserExecutable string        // Path to browser executable (empty = auto-detect)
+	Proxy             string        // HTTP/SOCKS proxy URL (empty = no proxy)
 	Timeout           time.Duration
 	IdleTimeout       time.Duration // Auto-shutdown after this duration of inactivity (0 = disabled)
 	ParentPID         int           // Parent process to monitor - driver exits if parent dies
@@ -83,6 +85,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 		headless:          config.Headless,
 		userDataDir:       config.UserDataDir,
 		browserExecutable: config.BrowserExecutable,
+		proxy:             config.Proxy,
 		timeout:           config.Timeout,
 		idleTimeout:       config.IdleTimeout,
 		parentPID:         config.ParentPID,
@@ -95,7 +98,7 @@ func NewDriver(config DriverConfig) (*Driver, error) {
 func (d *Driver) Start() error {
 	logger.Printf("Starting driver for session %s", d.sessionID)
 	logger.Printf("Socket path: %s", d.socketPath)
-	logger.Printf("Headless: %v, UserDataDir: %s, BrowserExecutable: %s", d.headless, d.userDataDir, d.browserExecutable)
+	logger.Printf("Headless: %v, UserDataDir: %s, BrowserExecutable: %s, Proxy: %s", d.headless, d.userDataDir, d.browserExecutable, d.proxy)
 
 	// Create IPC server with activity tracking for idle timeout
 	ipcConfig := ipc.ServerConfig{
@@ -113,9 +116,10 @@ func (d *Driver) Start() error {
 	// Initialize browser context
 	logger.Printf("Initializing browser context...")
 	ctx, err := NewBrowserContextWithConfig(BrowserContextConfig{
-		Headless:         d.headless,
-		UserDataDir:      d.userDataDir,
+		Headless:          d.headless,
+		UserDataDir:       d.userDataDir,
 		BrowserExecutable: d.browserExecutable,
+		Proxy:             d.proxy,
 	})
 	if err != nil {
 		logger.Printf("ERROR: Failed to create browser context: %v", err)
@@ -380,10 +384,10 @@ const DefaultIdleTimeout = 5 * time.Minute
 func RunDriverMain() error {
 	// Parse command line arguments
 	if len(os.Args) < 4 {
-		return fmt.Errorf("usage: %s --driver <session-id> --socket <socket-path> [--parent-pid <pid>] [--idle-timeout <seconds>] [--user-data-dir <path>] [--browser <path>] [--no-headless]", os.Args[0])
+		return fmt.Errorf("usage: %s --driver <session-id> --socket <socket-path> [--parent-pid <pid>] [--idle-timeout <seconds>] [--user-data-dir <path>] [--browser <path>] [--proxy <url>] [--no-headless]", os.Args[0])
 	}
 
-	var sessionID, socketPath, userDataDir, browserExecutable string
+	var sessionID, socketPath, userDataDir, browserExecutable, proxy string
 	var parentPID int
 	var idleTimeoutSec int
 	headless := true
@@ -420,6 +424,11 @@ func RunDriverMain() error {
 				browserExecutable = os.Args[i+1]
 				i++
 			}
+		case "--proxy":
+			if i+1 < len(os.Args) {
+				proxy = os.Args[i+1]
+				i++
+			}
 		case "--no-headless":
 			headless = false
 		}
@@ -427,6 +436,11 @@ func RunDriverMain() error {
 
 	if sessionID == "" {
 		return fmt.Errorf("session ID is required")
+	}
+
+	// Proxy: CLI arg > env var
+	if proxy == "" {
+		proxy = os.Getenv("WEB_AGENT_PROXY")
 	}
 
 	// Determine idle timeout: CLI arg > env var > default
@@ -449,6 +463,7 @@ func RunDriverMain() error {
 		Headless:          headless,
 		UserDataDir:       userDataDir,
 		BrowserExecutable: browserExecutable,
+		Proxy:             proxy,
 		Timeout:           30 * time.Second,
 		IdleTimeout:       idleTimeout,
 		ParentPID:         parentPID,
@@ -492,9 +507,9 @@ func waitForInterrupt() chan os.Signal {
 //
 // Idle timeout is inherited from WEB_AGENT_IDLE_TIMEOUT env var if set,
 // otherwise defaults to DefaultIdleTimeout (5 minutes).
-func StartDriverProcess(sessionID, socketPath string, headless bool, userDataDir string, browserExecutable string) (int, error) {
+func StartDriverProcess(sessionID, socketPath string, headless bool, userDataDir string, browserExecutable string, proxy string) (int, error) {
 	logger.Printf("StartDriverProcess called for session %s", sessionID)
-	logger.Printf("Socket path: %s, Headless: %v, UserDataDir: %s, BrowserExecutable: %s", socketPath, headless, userDataDir, browserExecutable)
+	logger.Printf("Socket path: %s, Headless: %v, UserDataDir: %s, BrowserExecutable: %s, Proxy: %s", socketPath, headless, userDataDir, browserExecutable, proxy)
 
 	// Get parent PID for orphan detection
 	// Prefer KLAWED_PID env var, then fall back to our parent PID
@@ -525,6 +540,11 @@ func StartDriverProcess(sessionID, socketPath string, headless bool, userDataDir
 	// Pass browser executable if specified
 	if browserExecutable != "" {
 		cmd.Args = append(cmd.Args, "--browser", browserExecutable)
+	}
+
+	// Pass proxy if specified (CLI arg takes precedence; driver will also check WEB_AGENT_PROXY env)
+	if proxy != "" {
+		cmd.Args = append(cmd.Args, "--proxy", proxy)
 	}
 
 	// Pass idle timeout from environment if set
