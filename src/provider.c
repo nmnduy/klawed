@@ -14,6 +14,7 @@
 #include "kimi_coding_plan_provider.h"
 #include "openai_sub_provider.h"
 #include "anthropic_sub_provider.h"
+#include "openai_responses_provider.h"
 #include "config.h"
 #include "logger.h"
 #include "arena.h"
@@ -328,6 +329,14 @@ static int provider_config_has_api_key(const LLMProviderConfig *cfg) {
     // Anthropic Subscription uses OAuth, not API keys
     if (cfg->provider_type == PROVIDER_ANTHROPIC_SUB) {
         return 1;
+    }
+
+    // OpenAI Responses provider falls back to OPENAI_API_KEY env var
+    if (cfg->provider_type == PROVIDER_OPENAI_RESPONSES) {
+        const char *env_key = getenv("OPENAI_API_KEY");
+        if (env_key && env_key[0] != '\0') {
+            return 1;
+        }
     }
 
     // Check if api_key_env is set and the env var exists
@@ -964,6 +973,46 @@ void provider_init(const char *model,
                      result->api_url);
             arena_destroy(arena);
             return;
+        } else if (provider_type == PROVIDER_OPENAI_RESPONSES) {
+            LOG_INFO("Using OpenAI Responses API provider (explicitly configured)");
+            const char *responses_api_base = (provider_config && provider_config->api_base[0] != '\0')
+                                              ? provider_config->api_base : NULL;
+            const char *responses_api_key = (provider_config && provider_config->api_key[0] != '\0')
+                                             ? provider_config->api_key : NULL;
+            Provider *prov = openai_responses_provider_create(responses_api_key,
+                                                               responses_api_base,
+                                                               model_to_use);
+            if (!prov) {
+                result->error_message = strdup(
+                    "Failed to initialize OpenAI Responses provider "
+                    "(ensure OPENAI_API_KEY is set or api_key is in the provider config)");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                arena_destroy(arena);
+                return;
+            }
+            OpenAIResponsesProviderConfig *resp_cfg =
+                (OpenAIResponsesProviderConfig *)prov->config;
+            if (!resp_cfg || !resp_cfg->api_base) {
+                result->error_message = strdup(
+                    "OpenAI Responses provider initialized but API base is missing");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            result->provider = prov;
+            result->api_url = strdup(resp_cfg->api_base);
+            if (!result->api_url) {
+                result->error_message = strdup("Failed to allocate memory for API URL");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            LOG_INFO("Provider initialization successful: OpenAI Responses API (url: %s)",
+                     result->api_url);
+            arena_destroy(arena);
+            return;
         } else if (provider_type == PROVIDER_CUSTOM) {
             // For custom, we need to check URL patterns
             use_anthropic = 0; // Default to OpenAI-compatible for custom
@@ -1357,6 +1406,41 @@ void provider_init_from_config(const char *provider_key,
             return;
         }
         LOG_INFO("Provider initialization successful: Anthropic Subscription (API base: %s)",
+                 result->api_url);
+        return;
+    }
+
+    if (provider_type == PROVIDER_OPENAI_RESPONSES) {
+        LOG_INFO("Creating OpenAI Responses API provider from config...");
+        const char *api_base_to_use = (config->api_base[0] != '\0') ? config->api_base : NULL;
+        const char *api_key_to_use  = (config->api_key[0]  != '\0') ? config->api_key  : NULL;
+        free(base_url);  /* Responses provider manages its own URL */
+        Provider *prov = openai_responses_provider_create(api_key_to_use, api_base_to_use, model);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize OpenAI Responses provider "
+                "(ensure OPENAI_API_KEY is set or api_key is in the provider config)");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        OpenAIResponsesProviderConfig *resp_cfg =
+            (OpenAIResponsesProviderConfig *)prov->config;
+        if (!resp_cfg || !resp_cfg->api_base) {
+            result->error_message = strdup(
+                "OpenAI Responses provider initialized but API base is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(resp_cfg->api_base);
+        if (!result->api_url) {
+            result->error_message = strdup("Failed to allocate memory for API URL");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: OpenAI Responses API (url: %s)",
                  result->api_url);
         return;
     }
