@@ -77,6 +77,7 @@ web_browse_agent --session my-session wait-for --wait-type navigation
 - `--timeout <sec>`: Per-command timeout in seconds (default: 30)
 - `--headless/--no-headless`: Run browser in headless mode (default: headless)
 - `--verbose` or `-v`: Enable verbose output
+- `--proxy <url>`: HTTP/SOCKS proxy URL, e.g. `http://host:8080` or `socks5://host:1080` (overrides `WEB_AGENT_PROXY`)
 
 ## Available Commands
 
@@ -132,6 +133,7 @@ The tool will:
 |----------|-------------|---------|
 | `WEB_AGENT_PERSISTENT_STORAGE` | Enable persistent browser storage (cookies, localStorage, etc.) | `false` |
 | `WEB_AGENT_IDLE_TIMEOUT` | Idle timeout in seconds (0 to disable) | `300` (5 min) |
+| `WEB_AGENT_PROXY` | HTTP/SOCKS proxy URL for all browser traffic, e.g. `http://host:8080` or `socks5://host:1080` | (none) |
 | `BROWSER_HEADLESS` | Run browser without UI | `true` |
 | `BROWSER_VIEWPORT_WIDTH` | Browser viewport width | `1280` |
 | `BROWSER_VIEWPORT_HEIGHT` | Browser viewport height | `720` |

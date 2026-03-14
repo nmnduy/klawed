@@ -35,13 +35,14 @@ func init() {
 }
 
 var (
-	sessionID        string
-	jsonOutput       bool
-	timeout          int
-	headless         bool
-	verbose          bool
+	sessionID         string
+	jsonOutput        bool
+	timeout           int
+	headless          bool
+	verbose           bool
 	browserExecutable string
-	userDataDir      string
+	userDataDir       string
+	proxy             string
 )
 
 func main() {
@@ -79,6 +80,7 @@ Examples:
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
 	rootCmd.PersistentFlags().StringVar(&browserExecutable, "browser", "", "Browser executable path (e.g., /usr/bin/brave-browser). If not set, auto-detects system Chromium/Chrome")
 	rootCmd.PersistentFlags().StringVar(&userDataDir, "user-data-dir", "", "Browser profile directory (e.g., ~/.config/BraveSoftware/Brave-Browser/Default)")
+	rootCmd.PersistentFlags().StringVar(&proxy, "proxy", "", "HTTP/SOCKS proxy URL, e.g. http://host:8080 or socks5://host:1080 (overrides WEB_AGENT_PROXY env var)")
 
 	// Don't mark session as required globally - check in runCommand instead
 
@@ -124,6 +126,12 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		if envUserDataDir := os.Getenv("WEB_AGENT_USER_DATA_DIR"); envUserDataDir != "" {
 			mainLogger.Printf("Using user-data-dir from WEB_AGENT_USER_DATA_DIR env: %s", envUserDataDir)
 			userDataDir = envUserDataDir
+		}
+	}
+	if proxy == "" {
+		if envProxy := os.Getenv("WEB_AGENT_PROXY"); envProxy != "" {
+			mainLogger.Printf("Using proxy from WEB_AGENT_PROXY env: %s", envProxy)
+			proxy = envProxy
 		}
 	}
 
@@ -217,7 +225,7 @@ func ensureDriverRunning(sess *session.Session) error {
 	}
 	socketPath := filepath.Join(os.TempDir(), fmt.Sprintf("web-agent-%s.sock", sess.ID))
 	mainLogger.Printf("Starting new driver process (socket: %s, userDataDir: %s)", socketPath, effectiveUserDataDir)
-	pid, err := browser.StartDriverProcess(sess.ID, socketPath, headless, effectiveUserDataDir, browserExecutable)
+	pid, err := browser.StartDriverProcess(sess.ID, socketPath, headless, effectiveUserDataDir, browserExecutable, proxy)
 	if err != nil {
 		mainLogger.Printf("ERROR: Failed to start driver process: %v", err)
 		return fmt.Errorf("failed to start driver: %w", err)
