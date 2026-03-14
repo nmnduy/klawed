@@ -175,6 +175,7 @@ TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 TEST_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_sqlite_queue
 TEST_SQLITE_QUEUE_SEEDING_TARGET = $(BUILD_DIR)/test_sqlite_queue_seeding
 TEST_PROVIDER_INIT_FROM_CONFIG_TARGET = $(BUILD_DIR)/test_provider_init_from_config
+TEST_OPENAI_RESPONSES_PROVIDER_TARGET = $(BUILD_DIR)/test_openai_responses_provider
 TEST_DATA_DIR_TARGET = $(BUILD_DIR)/test_data_dir
 TEST_REALTIME_STEERING_TARGET = $(BUILD_DIR)/test_realtime_steering
 TEST_TUI_TOOL_CONNECTOR_TARGET = $(BUILD_DIR)/test_tui_tool_connector
@@ -503,7 +504,7 @@ TEST_BEDROCK_CONVERSE_TARGET = $(BUILD_DIR)/test_bedrock_converse
 TEST_INSERT_SYSTEM_MESSAGE_SRC = tests/test_insert_system_message.c
 TEST_INSERT_SYSTEM_MESSAGE_TARGET = $(BUILD_DIR)/test_insert_system_message
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config test-bedrock-converse test-insert-system-message query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-insert-system-message query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -518,7 +519,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-realtime-steering test-tui-tool-connector test-bedrock-converse test-insert-system-message
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-bedrock-converse test-insert-system-message
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -808,6 +809,12 @@ test-provider-init-from-config: check-deps $(TEST_PROVIDER_INIT_FROM_CONFIG_TARG
 	@echo "Running provider_init_from_config tests..."
 	@echo ""
 	@./$(TEST_PROVIDER_INIT_FROM_CONFIG_TARGET)
+
+test-openai-responses-provider: check-deps $(TEST_OPENAI_RESPONSES_PROVIDER_TARGET)
+	@echo ""
+	@echo "Running OpenAI Responses provider unit tests..."
+	@echo ""
+	@./$(TEST_OPENAI_RESPONSES_PROVIDER_TARGET)
 
 test-data-dir: check-deps $(TEST_DATA_DIR_TARGET)
 	@echo ""
@@ -2145,7 +2152,29 @@ $(TEST_PROVIDER_INIT_FROM_CONFIG_TARGET): $(SRC) tests/test_provider_init_from_c
 	@echo "✓ provider_init_from_config test build successful!"
 	@echo ""
 
-# Test target for provider_init - tests that named provider's model takes precedence
+# Test target for openai_responses_provider - tests factory, type strings, and init_from_config
+$(TEST_OPENAI_RESPONSES_PROVIDER_TARGET): $(SRC) tests/test_openai_responses_provider.c $(TEST_COMMON_OBJS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling klawed.c for openai_responses_provider testing (renaming main)..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/openai_responses_provider_test_main.o $(SRC)
+	@echo "Compiling openai_responses_provider test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_openai_responses_provider.o tests/test_openai_responses_provider.c
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_API_CLIENT_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_OPENAI_RESPONSES_PROVIDER_TARGET) \
+		$(BUILD_DIR)/openai_responses_provider_test_main.o \
+		$(BUILD_DIR)/test_openai_responses_provider.o \
+		$(SQLITE_QUEUE_TEST_OBJ) \
+		$(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) \
+		$(TOOL_DEFINITIONS_TEST_OBJ) $(DYNAMIC_TOOLS_TEST_OBJ) \
+		$(TEST_COMMON_OBJS) $(LDFLAGS)
+	@echo ""
+	@echo "✓ openai_responses_provider test build successful!"
+	@echo ""
+
+
 TEST_PROVIDER_INIT_TARGET = $(BUILD_DIR)/test_provider_init
 $(TEST_PROVIDER_INIT_TARGET): $(SRC) tests/test_provider_init.c $(TEST_COMMON_OBJS)
 	@mkdir -p $(BUILD_DIR)
