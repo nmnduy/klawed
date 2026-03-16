@@ -113,6 +113,11 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 	logger.Printf("Creating browser context with config: Headless=%v, UserDataDir=%s, BrowserExecutable=%s, Proxy=%s",
 		config.Headless, config.UserDataDir, config.BrowserExecutable, config.Proxy)
 
+	stealth := stealthEnabled()
+	if stealth {
+		logger.Printf("Stealth mode enabled (set WEB_AGENT_STEALTH=0 to disable)")
+	}
+
 	// Initialize Playwright
 	logger.Printf("Starting Playwright...")
 	pw, err := playwright.Run()
@@ -144,16 +149,22 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 	// Use launchPersistentContext if userDataDir is specified for persistent storage
 	if config.UserDataDir != "" {
 		logger.Printf("Launching persistent context with user data dir: %s", config.UserDataDir)
-		// LaunchPersistentContext launches browser with persistent storage
-		launchOptions := playwright.BrowserTypeLaunchPersistentContextOptions{
-			Headless: playwright.Bool(config.Headless),
+		var launchOptions playwright.BrowserTypeLaunchPersistentContextOptions
+		if stealth {
+			launchOptions = stealthPersistentContextOptions(config.Headless, chromiumPath, playwrightProxy)
+		} else {
+			launchOptions = playwright.BrowserTypeLaunchPersistentContextOptions{
+				Headless: playwright.Bool(config.Headless),
+			}
+			if chromiumPath != "" {
+				launchOptions.ExecutablePath = playwright.String(chromiumPath)
+			}
+			if playwrightProxy != nil {
+				launchOptions.Proxy = playwrightProxy
+			}
 		}
 		if chromiumPath != "" {
-			launchOptions.ExecutablePath = playwright.String(chromiumPath)
 			logger.Printf("Using Chromium executable: %s", chromiumPath)
-		}
-		if playwrightProxy != nil {
-			launchOptions.Proxy = playwrightProxy
 		}
 		context, err = pw.Chromium.LaunchPersistentContext(config.UserDataDir, launchOptions)
 		if err != nil {
@@ -166,16 +177,22 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 		browser = nil
 	} else {
 		logger.Printf("Launching regular browser context")
-		// Regular launch without persistent storage
-		launchOptions := playwright.BrowserTypeLaunchOptions{
-			Headless: playwright.Bool(config.Headless),
+		var launchOptions playwright.BrowserTypeLaunchOptions
+		if stealth {
+			launchOptions = stealthLaunchOptions(config.Headless, chromiumPath, playwrightProxy)
+		} else {
+			launchOptions = playwright.BrowserTypeLaunchOptions{
+				Headless: playwright.Bool(config.Headless),
+			}
+			if chromiumPath != "" {
+				launchOptions.ExecutablePath = playwright.String(chromiumPath)
+			}
+			if playwrightProxy != nil {
+				launchOptions.Proxy = playwrightProxy
+			}
 		}
 		if chromiumPath != "" {
-			launchOptions.ExecutablePath = playwright.String(chromiumPath)
 			logger.Printf("Using Chromium executable: %s", chromiumPath)
-		}
-		if playwrightProxy != nil {
-			launchOptions.Proxy = playwrightProxy
 		}
 		browser, err = pw.Chromium.Launch(launchOptions)
 		if err != nil {
@@ -187,9 +204,14 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 
 		// Create browser context
 		logger.Printf("Creating new browser context")
-		ctxOptions := playwright.BrowserNewContextOptions{}
-		if playwrightProxy != nil {
-			ctxOptions.Proxy = playwrightProxy
+		var ctxOptions playwright.BrowserNewContextOptions
+		if stealth {
+			ctxOptions = stealthContextOptions(playwrightProxy)
+		} else {
+			ctxOptions = playwright.BrowserNewContextOptions{}
+			if playwrightProxy != nil {
+				ctxOptions.Proxy = playwrightProxy
+			}
 		}
 		context, err = browser.NewContext(ctxOptions)
 		if err != nil {
@@ -199,6 +221,17 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 			return nil, fmt.Errorf("failed to create browser context: %w", err)
 		}
 		logger.Printf("Browser context created successfully")
+	}
+
+	// Inject stealth init script into every page before any other script
+	if stealth {
+		if err := context.AddInitScript(playwright.Script{
+			Content: playwright.String(stealthInitScript),
+		}); err != nil {
+			logger.Printf("WARNING: Failed to add stealth init script: %v", err)
+		} else {
+			logger.Printf("Stealth init script injected into browser context")
+		}
 	}
 
 	logger.Printf("Browser context ready")
