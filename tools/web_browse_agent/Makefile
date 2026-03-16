@@ -56,7 +56,30 @@ install-deps:
 	@echo "Installing dependencies..."
 	$(GOMOD) download
 	@echo "Installing Playwright browsers..."
-	$(GOCMD) run github.com/playwright-community/playwright-go/cmd/playwright@latest install
+	$(GOCMD) run github.com/playwright-community/playwright-go/cmd/playwright@v0.5200.1 install chromium
+
+# Install system libraries for Chromium in datacenter/stripped container environments
+# Downloads Debian bookworm packages and extracts to ./chromium_libs/
+install-system-libs:
+	@echo "Installing Chromium system libraries for datacenter environments..."
+	@chmod +x ./install-system-libs.sh
+	./install-system-libs.sh ./chromium_libs
+	@echo ""
+	@echo "Libraries installed. Use 'make install-datacenter' for a full setup."
+
+# Full datacenter install: build + playwright deps + system libs + wrapper script
+install-datacenter: build install-deps install-system-libs
+	@echo "Creating wrapper script that sets LD_LIBRARY_PATH automatically..."
+	@cp $(BINARY_PATH) $(BINARY_DIR)/web_browse_agent.bin
+	@cp web_browse_agent.sh $(BINARY_PATH)
+	@chmod +x $(BINARY_PATH)
+	@cp -r chromium_libs $(BINARY_DIR)/chromium_libs 2>/dev/null || true
+	@echo ""
+	@echo "Datacenter install complete!"
+	@echo "The binary at $(BINARY_PATH) now automatically sets up library paths."
+	@echo ""
+	@echo "Test with:"
+	@echo "  $(BINARY_PATH) --session test open https://example.com"
 
 # Install to ~/.local/bin
 install: build

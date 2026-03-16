@@ -1,6 +1,6 @@
 # Web Browse Agent
 
-Version: `1.3.0`
+Version: `1.4.0`
 
 A sessionful browser automation CLI for persistent web browsing sessions. This tool provides a REPL-style interface where you start a browser session and send commands one at a time while maintaining session state.
 
@@ -13,13 +13,16 @@ A sessionful browser automation CLI for persistent web browsing sessions. This t
 - **Full Browser Automation** - Powered by Playwright with support for all major browsers
 - **JSON Output** - Machine-readable output with `--json` flag
 - **Command Discovery** - Use `commands` subcommand to list available browser commands
+- **Stealth Mode** - Built-in Cloudflare/bot-detection bypass for datacenter environments (on by default)
 
 ## Requirements
 
 - **Go 1.22+**
-- **Playwright** - Installed automatically on first run
+- **Playwright** - Installed via `make install-deps`
 
 ## Installation
+
+### Local/Desktop Environment
 
 ```bash
 # Build the agent
@@ -29,6 +32,58 @@ make build
 # Install Playwright browsers (first time only)
 make install-deps
 ```
+
+### Datacenter / Container Environment
+
+In datacenter environments (Docker, Kubernetes, CI/CD), system libraries required by
+Chromium are often missing. Use the datacenter install target:
+
+```bash
+cd tools/web_browse_agent
+
+# Full setup: build + Playwright browsers + system libs + wrapper script
+make install-datacenter
+```
+
+This will:
+1. Build the binary
+2. Download and install Playwright's Chromium browser
+3. Download Debian system libraries (libglib2, libnss3, libx11, etc.) to `bin/chromium_libs/`
+4. Create a wrapper script `bin/web_browse_agent` that sets `LD_LIBRARY_PATH` automatically
+
+The wrapper replaces the binary in-place, so you can use `bin/web_browse_agent` directly.
+
+#### Manual library installation
+
+If you only need the system libraries (e.g. you already have Go and Playwright installed):
+
+```bash
+./install-system-libs.sh /path/to/libs
+export LD_LIBRARY_PATH="/path/to/libs/usr/lib/x86_64-linux-gnu:..."
+```
+
+## Stealth Mode (Cloudflare Bypass)
+
+Stealth mode is **enabled by default** and patches several browser fingerprinting vectors
+that bot detection systems (Cloudflare, DataDome, etc.) use to identify headless browsers:
+
+| Detection Vector | Fix Applied |
+|---|---|
+| `navigator.webdriver` present | Deleted from Navigator prototype |
+| `HeadlessChrome` in User-Agent | Replaced with regular `Chrome` UA string |
+| `HeadlessChrome` in `sec-ch-ua` header | Overridden with `"Google Chrome"` brand list |
+| `window.chrome` missing | Restored with full chrome runtime object |
+| Plugins array empty | Spoofed with 3 standard Chrome plugins |
+| `navigator.languages` shows `en-US@posix` | Fixed to `['en-US', 'en']` |
+| Permissions return `denied` | Fixed for notifications |
+| Small viewport | Set to 1920x1080 |
+| Timezone missing | Set to `America/New_York` |
+
+To disable stealth mode (e.g. for debugging):
+```bash
+WEB_AGENT_STEALTH=0 web_browse_agent --session test open https://example.com
+```
+
 
 ## Usage
 
