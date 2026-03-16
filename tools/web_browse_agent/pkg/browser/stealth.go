@@ -254,7 +254,41 @@ const stealthInitScript = `
     );
   }
 
-  // 6. Prevent iframe contentWindow detection
+  // 6. Spoof WebGL renderer and vendor strings.
+  //    gl.getParameter() for RENDERER/VENDOR returns "SwiftShader" in headless
+  //    Chrome because there's no GPU. We intercept getParameter on both
+  //    WebGLRenderingContext and WebGL2RenderingContext and return realistic
+  //    NVIDIA strings for the four relevant enum values.
+  (function() {
+    const VENDOR_ENUM            = 0x1F00; // GL_VENDOR
+    const RENDERER_ENUM          = 0x1F01; // GL_RENDERER
+    const UNMASKED_VENDOR_WEBGL  = 0x9245; // from WEBGL_debug_renderer_info
+    const UNMASKED_RENDERER_WEBGL = 0x9246;
+
+    const FAKE_VENDOR   = 'Google Inc. (NVIDIA)';
+    const FAKE_RENDERER = 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+
+    function patchGetParameter(ctx) {
+      const original = ctx.getParameter.bind(ctx);
+      ctx.getParameter = function(param) {
+        if (param === VENDOR_ENUM || param === UNMASKED_VENDOR_WEBGL)   return FAKE_VENDOR;
+        if (param === RENDERER_ENUM || param === UNMASKED_RENDERER_WEBGL) return FAKE_RENDERER;
+        return original(param);
+      };
+    }
+
+    // Patch HTMLCanvasElement.getContext so any future context is also patched
+    const origGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+      const ctx = origGetContext.call(this, type, ...args);
+      if (ctx && (type === 'webgl' || type === 'experimental-webgl' || type === 'webgl2')) {
+        patchGetParameter(ctx);
+      }
+      return ctx;
+    };
+  })();
+
+  // 7. Prevent iframe contentWindow detection
   const originalContentWindow = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow');
   if (originalContentWindow) {
     Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
