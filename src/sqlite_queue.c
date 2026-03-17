@@ -1375,6 +1375,61 @@ typedef struct {
     int capacity;
 } PendingAssistant;
 
+/**
+ * Buffer for user TEXT messages that arrived while a tool round-trip was
+ * in flight.  These cannot be inserted immediately (the assistant turn has
+ * open tool_use blocks without matching tool_results yet), so we hold them
+ * here and inject them as user messages once all tool results have landed.
+ * Mirrors what sqlite_on_after_tool_results does on the live path.
+ */
+typedef struct {
+    char **texts;
+    int count;
+    int capacity;
+} DeferredUserTexts;
+
+static int deferred_user_texts_append(DeferredUserTexts *d, const char *text) {
+    if (d->count >= d->capacity) {
+        int new_cap = d->capacity == 0 ? 4 : d->capacity * 2;
+        char **tmp = reallocarray(d->texts, (size_t)new_cap, sizeof(char *));
+        if (!tmp) return -1;
+        d->texts    = tmp;
+        d->capacity = new_cap;
+    }
+    d->texts[d->count] = strdup(text);
+    if (!d->texts[d->count]) return -1;
+    d->count++;
+    return 0;
+}
+
+static void deferred_user_texts_free(DeferredUserTexts *d) {
+    for (int i = 0; i < d->count; i++) free(d->texts[i]);
+    free(d->texts);
+    d->texts    = NULL;
+    d->count    = 0;
+    d->capacity = 0;
+}
+
+/*
+ * Flush all buffered deferred user texts into state as individual user
+ * messages, then reset the buffer.  Safe to call when d->count == 0.
+ */
+static int flush_deferred_user_texts(ConversationState *state,
+                                     DeferredUserTexts *d,
+                                     int *restored_out) {
+    for (int i = 0; i < d->count; i++) {
+        if (state->count >= MAX_MESSAGES) {
+            LOG_ERROR("SQLite Queue restore: MAX_MESSAGES reached, dropping deferred user text");
+            deferred_user_texts_free(d);
+            return -1;
+        }
+        add_user_message(state, d->texts[i]);
+        if (restored_out) (*restored_out)++;
+    }
+    deferred_user_texts_free(d);
+    return 0;
+}
+
 static int pending_assistant_append(PendingAssistant *pa, InternalContent item) {
     if (pa->count >= pa->capacity) {
         int new_cap = pa->capacity == 0 ? 4 : pa->capacity * 2;
@@ -1460,6 +1515,8 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
     }
 
     PendingAssistant pa = {0};
+    DeferredUserTexts deferred = {0};
+    int open_tool_calls = 0;  /* # of TOOL rows seen without a matching TOOL_RESULT */
     int restored = 0;
 
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
@@ -1498,14 +1555,29 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
                     break;
                 }
             } else {
-                /* User text: flush pending assistant turn first, then add user message */
-                if (flush_pending_assistant(state, &pa) != 0) {
-                    cJSON_Delete(json);
-                    break;
-                }
-                if (state->count < MAX_MESSAGES) {
-                    add_user_message(state, text);
-                    restored++;
+                /* User text: if there are open (unresolved) tool calls in the
+                 * pending assistant turn, we cannot flush yet — doing so would
+                 * produce an illegal assistant:[tool_use] → user:[text] sequence
+                 * without the required tool_result in between.  Buffer the text
+                 * and inject it after the tool round-trip completes, mirroring
+                 * what sqlite_on_after_tool_results does on the live path. */
+                if (open_tool_calls > 0) {
+                    if (deferred_user_texts_append(&deferred, text) != 0) {
+                        LOG_ERROR("SQLite Queue: restore: OOM buffering deferred user text");
+                        cJSON_Delete(json);
+                        break;
+                    }
+                    LOG_INFO("SQLite Queue: restore: deferring user text (open_tool_calls=%d)", open_tool_calls);
+                } else {
+                    /* Normal case: flush pending assistant turn, then add user message */
+                    if (flush_pending_assistant(state, &pa) != 0) {
+                        cJSON_Delete(json);
+                        break;
+                    }
+                    if (state->count < MAX_MESSAGES) {
+                        add_user_message(state, text);
+                        restored++;
+                    }
                 }
             }
 
@@ -1539,6 +1611,7 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
                 cJSON_Delete(json);
                 break;
             }
+            open_tool_calls++;
 
         } else if (strcmp(mt, "TOOL_RESULT") == 0 && from_klawed) {
             /* Tool result: flush pending assistant turn, then add MSG_USER with result */
@@ -1591,6 +1664,19 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
                 msg->content_count = 1;
                 state->count++;
                 restored++;
+            }
+
+            /* Track that one tool call has been resolved. */
+            if (open_tool_calls > 0) open_tool_calls--;
+
+            /* Once all open tool calls in this turn are resolved, inject any
+             * user messages that arrived during the tool round-trip. */
+            if (open_tool_calls == 0 && deferred.count > 0) {
+                LOG_INFO("SQLite Queue: restore: injecting %d deferred user message(s) after tool results",
+                         deferred.count);
+                if (flush_deferred_user_texts(state, &deferred, &restored) != 0) {
+                    break;
+                }
             }
         }
         /* Ignore API_CALL, END_AI_TURN, ERROR, AUTO_COMPACTION, etc. */
@@ -1653,6 +1739,14 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
                              tool_call_count);
                 }
             }
+
+            /* Inject any user messages that arrived during the interrupted
+             * tool execution — same deferred-text logic as the normal path. */
+            if (deferred.count > 0) {
+                LOG_INFO("SQLite Queue: restore: injecting %d deferred user message(s) after interrupted tool results",
+                         deferred.count);
+                flush_deferred_user_texts(state, &deferred, &restored);
+            }
         }
 
         /* Free any ids/names not transferred (OOM path) */
@@ -1661,6 +1755,10 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
             free(interrupted_names[i]);
         }
     }
+
+    /* Safety: free deferred buffer if we broke out of the loop early
+     * (e.g. OOM) before open_tool_calls reached zero. */
+    deferred_user_texts_free(&deferred);
 
     if (restored > 0) {
         LOG_INFO("SQLite Queue: Restored %d message block(s) from conversation history", restored);
