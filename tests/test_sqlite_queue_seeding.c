@@ -372,7 +372,19 @@ static void test_synthetic_error_injection(void) {
     cleanup_test_db();
 }
 
-// Test 5: User message interrupts tool execution
+// Test 5: User message typed while tool was executing (arrives between TOOL and TOOL_RESULT).
+// The restore path must NOT flush the assistant turn early — that would produce
+// assistant:[tool_use] → user:[plain text] which Anthropic rejects.  Instead the
+// user text is buffered and injected AFTER the tool round-trip completes.
+//
+// In this sub-case there is NO TOOL_RESULT at all (session died mid-execution),
+// so the interrupted-tool path fires: it synthesises an error result and then
+// injects the deferred user text afterward.
+// Expected sequence:
+//   [0] user:  "Read the file"          (original request)
+//   [1] asst:  tool_use Read            (tool call)
+//   [2] user:  tool_result(error)       (synthetic error — klawed was killed)
+//   [3] user:  "Never mind, cancel"     (deferred, injected after tool round-trip)
 static void test_user_message_interrupts_tool(void) {
     setup_test_db();
 
@@ -395,7 +407,7 @@ static void test_user_message_interrupts_tool(void) {
     free(tool_msg);
     cJSON_Delete(params);
 
-    // User sends another message before TOOL_RESULT arrives (interruption)
+    // User sends another message before TOOL_RESULT arrives (interleaved during execution)
     char *user_msg2 = create_text_message("Never mind, cancel that");
     insert_message(db, "client", "klawed", user_msg2);
     free(user_msg2);
@@ -404,27 +416,33 @@ static void test_user_message_interrupts_tool(void) {
     ConversationState state = {0};
     conversation_state_init(&state);
     int seeded = sqlite_queue_restore_conversation(ctx, &state);
-    (void)seeded; // Used in checks below
+    (void)seeded;
 
-    // Should have 3 messages: user text, assistant tool request, user text
-    // Note: when user interrupts, no synthetic error is generated - just the user interrupt
-    assert_equal_int("test_user_message_interrupts_tool: message count", 3, state.count);
+    // 4 messages: original user text, assistant tool_use, synthetic error result,
+    // deferred user text (injected after tool round-trip)
+    assert_equal_int("test_user_message_interrupts_tool: message count", 4, state.count);
 
-    if (state.count >= 3) {
-        assert_true("test_user_message_interrupts_tool: first is user text",
+    if (state.count >= 4) {
+        assert_true("test_user_message_interrupts_tool: [0] is user text",
                    state.messages[0].role == MSG_USER &&
                    state.messages[0].contents[0].type == INTERNAL_TEXT,
                    "first message should be user text");
 
-        assert_true("test_user_message_interrupts_tool: second is assistant tool request",
+        assert_true("test_user_message_interrupts_tool: [1] is assistant tool_use",
                    state.messages[1].role == MSG_ASSISTANT &&
                    state.messages[1].contents[0].type == INTERNAL_TOOL_CALL,
-                   "second message should be assistant tool request");
+                   "second message should be assistant tool_use");
 
-        assert_true("test_user_message_interrupts_tool: third is user text",
+        assert_true("test_user_message_interrupts_tool: [2] is synthetic error tool_result",
                    state.messages[2].role == MSG_USER &&
-                   state.messages[2].contents[0].type == INTERNAL_TEXT,
-                   "third message should be user text");
+                   state.messages[2].contents[0].type == INTERNAL_TOOL_RESPONSE &&
+                   state.messages[2].contents[0].is_error == 1,
+                   "third message should be synthetic error tool_result");
+
+        assert_true("test_user_message_interrupts_tool: [3] is deferred user text",
+                   state.messages[3].role == MSG_USER &&
+                   state.messages[3].contents[0].type == INTERNAL_TEXT,
+                   "fourth message should be deferred user text");
     }
 
     conversation_state_destroy(&state);
@@ -506,7 +524,15 @@ static void test_multiple_tool_calls(void) {
     cleanup_test_db();
 }
 
-// Test 7: Mixed scenarios - some tools complete, some interrupted
+// Test 7: Mixed scenarios - first tool completes, second is interrupted with a
+// user message arriving between the second TOOL and its (missing) TOOL_RESULT.
+// Expected sequence after restore:
+//   [0] user:  "Do multiple things"
+//   [1] asst:  tool_use Read(call_success)
+//   [2] user:  tool_result(call_success, ok)
+//   [3] asst:  tool_use Bash(call_interrupted)
+//   [4] user:  tool_result(call_interrupted, error)  ← synthetic
+//   [5] user:  "Stop that"                           ← deferred, safe to inject here
 static void test_mixed_tool_completion(void) {
     setup_test_db();
 
@@ -541,7 +567,7 @@ static void test_mixed_tool_completion(void) {
     free(tool_msg2);
     cJSON_Delete(params2);
 
-    // User sends another message (interruption)
+    // User sends a message while second tool was executing (interleaved)
     char *user_msg2 = create_text_message("Stop that");
     insert_message(db, "client", "klawed", user_msg2);
     free(user_msg2);
@@ -550,27 +576,43 @@ static void test_mixed_tool_completion(void) {
     ConversationState state = {0};
     conversation_state_init(&state);
     int seeded = sqlite_queue_restore_conversation(ctx, &state);
-    (void)seeded; // Used in checks below
+    (void)seeded;
 
-    // Should have 3 messages: user text, assistant with completed tool, user text (interrupt)
-    // Note: restore collapses tool+result pairs; interrupted tool has no result so no synthetic error
-    assert_equal_int("test_mixed_tool_completion: message count", 3, state.count);
+    // 6 messages (see comment above)
+    assert_equal_int("test_mixed_tool_completion: message count", 6, state.count);
 
-    if (state.count >= 3) {
-        assert_true("test_mixed_tool_completion: first is user text",
+    if (state.count >= 6) {
+        assert_true("test_mixed_tool_completion: [0] user text",
                    state.messages[0].role == MSG_USER &&
                    state.messages[0].contents[0].type == INTERNAL_TEXT,
-                   "first message should be user text");
+                   "[0] should be user text");
 
-        assert_true("test_mixed_tool_completion: second is assistant with completed tool",
+        assert_true("test_mixed_tool_completion: [1] asst tool_use (first)",
                    state.messages[1].role == MSG_ASSISTANT &&
                    state.messages[1].contents[0].type == INTERNAL_TOOL_CALL,
-                   "second message should be assistant with completed tool");
+                   "[1] should be assistant tool_use");
 
-        assert_true("test_mixed_tool_completion: third is user text interrupt",
+        assert_true("test_mixed_tool_completion: [2] user tool_result (first, ok)",
                    state.messages[2].role == MSG_USER &&
-                   state.messages[2].contents[0].type == INTERNAL_TEXT,
-                   "third message should be user text");
+                   state.messages[2].contents[0].type == INTERNAL_TOOL_RESPONSE &&
+                   state.messages[2].contents[0].is_error == 0,
+                   "[2] should be successful tool_result");
+
+        assert_true("test_mixed_tool_completion: [3] asst tool_use (second)",
+                   state.messages[3].role == MSG_ASSISTANT &&
+                   state.messages[3].contents[0].type == INTERNAL_TOOL_CALL,
+                   "[3] should be assistant tool_use");
+
+        assert_true("test_mixed_tool_completion: [4] synthetic error tool_result",
+                   state.messages[4].role == MSG_USER &&
+                   state.messages[4].contents[0].type == INTERNAL_TOOL_RESPONSE &&
+                   state.messages[4].contents[0].is_error == 1,
+                   "[4] should be synthetic error tool_result");
+
+        assert_true("test_mixed_tool_completion: [5] deferred user text",
+                   state.messages[5].role == MSG_USER &&
+                   state.messages[5].contents[0].type == INTERNAL_TEXT,
+                   "[5] should be deferred user text");
     }
 
     conversation_state_destroy(&state);
@@ -640,6 +682,89 @@ static void test_only_assistant_messages(void) {
     cleanup_test_db();
 }
 
+// Test 10: The exact scenario from the bug report:
+//   TOOL (Sleep) → client TEXT (user typed during sleep) → TOOL_RESULT (Sleep done)
+// The restore path used to produce the illegal sequence:
+//   assistant:[tool_use] → user:[plain text] → user:[tool_result]
+// (Anthropic rejects this because tool_use must be immediately followed by tool_result)
+// With the fix the user text is deferred and injected only after the tool round-trip:
+//   [0] user:  "Sleep for 70s"
+//   [1] asst:  tool_use Sleep
+//   [2] user:  tool_result Sleep
+//   [3] user:  "also see if there is a bug..." (deferred, now safe)
+static void test_user_text_between_tool_and_result(void) {
+    setup_test_db();
+
+    SQLiteQueueContext *ctx = sqlite_queue_init(TEST_DB_PATH, "klawed");
+    assert(ctx != NULL);
+
+    sqlite_queue_init_schema(ctx);
+    sqlite3 *db = (sqlite3 *)ctx->db_handle;
+
+    // msg 1: user asks klawed to sleep
+    char *user_msg = create_text_message("Sleep for 70 seconds");
+    insert_message(db, "client", "klawed", user_msg);
+    free(user_msg);
+
+    // msg 2 (id 397 equivalent): klawed issues a Sleep tool call
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddNumberToObject(params, "duration", 70);
+    char *tool_msg = create_tool_message("Sleep", "tooluse_E4sagE1", params);
+    insert_message(db, "klawed", "client", tool_msg);
+    free(tool_msg);
+    cJSON_Delete(params);
+
+    // msg 3 (id 398): user typed while klawed was sleeping — INTERLEAVED
+    char *user_during = create_text_message("also see if there is a bug");
+    insert_message(db, "client", "klawed", user_during);
+    free(user_during);
+
+    // msg 4 (id 399): Sleep result arrives
+    char *result_msg = create_tool_result_message("Sleep", "tooluse_E4sagE1", "slept 70s", 0);
+    insert_message(db, "client", "klawed", result_msg);
+    free(result_msg);
+
+    // Restore conversation
+    ConversationState state = {0};
+    conversation_state_init(&state);
+    int seeded = sqlite_queue_restore_conversation(ctx, &state);
+    (void)seeded;
+
+    // 4 messages: original user, assistant tool_use, tool_result, deferred user text
+    assert_equal_int("test_user_text_between_tool_and_result: message count", 4, state.count);
+
+    if (state.count >= 4) {
+        assert_true("test_user_text_between_tool_and_result: [0] user text",
+                   state.messages[0].role == MSG_USER &&
+                   state.messages[0].contents[0].type == INTERNAL_TEXT,
+                   "[0] should be user text");
+
+        assert_true("test_user_text_between_tool_and_result: [1] asst tool_use",
+                   state.messages[1].role == MSG_ASSISTANT &&
+                   state.messages[1].contents[0].type == INTERNAL_TOOL_CALL,
+                   "[1] should be assistant tool_use");
+
+        // Critical: tool_result must be at [2], not after the plain user text
+        assert_true("test_user_text_between_tool_and_result: [2] tool_result (not plain text)",
+                   state.messages[2].role == MSG_USER &&
+                   state.messages[2].contents[0].type == INTERNAL_TOOL_RESPONSE,
+                   "[2] must be tool_result, not plain user text");
+
+        assert_true("test_user_text_between_tool_and_result: [2] tool_result not error",
+                   state.messages[2].contents[0].is_error == 0,
+                   "[2] tool_result should not be an error");
+
+        assert_true("test_user_text_between_tool_and_result: [3] deferred user text",
+                   state.messages[3].role == MSG_USER &&
+                   state.messages[3].contents[0].type == INTERNAL_TEXT,
+                   "[3] should be the deferred user text (injected after tool round-trip)");
+    }
+
+    conversation_state_destroy(&state);
+    sqlite_queue_cleanup(ctx);
+    cleanup_test_db();
+}
+
 // Main test runner
 int main(void) {
     printf("\n%s=== SQLite Queue Seeding Test Suite ===%s\n\n", COLOR_CYAN, COLOR_RESET);
@@ -653,6 +778,7 @@ int main(void) {
     test_mixed_tool_completion();
     test_empty_database();
     test_only_assistant_messages();
+    test_user_text_between_tool_and_result();
 
     printf("\n%s=== Test Summary ===%s\n", COLOR_CYAN, COLOR_RESET);
     printf("Total tests: %d\n", tests_run);
