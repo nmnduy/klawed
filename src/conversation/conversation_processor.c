@@ -294,6 +294,26 @@ static int execute_tools_serial(struct ConversationState *state,
         result_slot->is_error = tool_result ? cJSON_HasObjectItem(tool_result, "error") : 1;
 
         cJSON_Delete(input);
+
+        // Check for interrupt after tool completes (e.g. tool itself set the flag,
+        // or interrupt arrived while the tool was running).  Cancel any remaining
+        // tools with synthetic error results so the conversation stays valid.
+        if (ctx->should_interrupt && ctx->should_interrupt(ctx->user_data)) {
+            LOG_INFO("Tool execution interrupted after completing tool %d (%s), cancelling remaining",
+                     i, tool->name);
+            for (int k = i + 1; k < tool_count; k++) {
+                ToolCall *tcancel = &tools[k];
+                InternalContent *slot = &results[k];
+                slot->type = INTERNAL_TOOL_RESPONSE;
+                slot->tool_id = tcancel->id ? strdup(tcancel->id) : strdup("unknown");
+                slot->tool_name = tcancel->name ? strdup(tcancel->name) : strdup("tool");
+                cJSON *err = cJSON_CreateObject();
+                cJSON_AddStringToObject(err, "error", "Tool execution cancelled: operation interrupted by user");
+                slot->tool_output = err;
+                slot->is_error = 1;
+            }
+            break;
+        }
     }
 
     *results_out = results;
@@ -641,6 +661,17 @@ int process_response_unified(struct ConversationState *state,
             // that will be visible to the LLM in the next API call.
             if (ctx->on_after_tool_results) {
                 ctx->on_after_tool_results(state, ctx->user_data);
+            }
+
+            // Check for interrupt before making the follow-up API call.
+            // Tool results are already committed to state (conversation stays valid),
+            // but we skip the next LLM round-trip and end the AI turn now.
+            if (ctx->should_interrupt && ctx->should_interrupt(ctx->user_data)) {
+                LOG_INFO("Interrupt requested after tool results — ending AI turn without follow-up API call");
+                if (own_response) {
+                    api_response_free(current_response);
+                }
+                return 0;
             }
 
             // Call API again with tool results
