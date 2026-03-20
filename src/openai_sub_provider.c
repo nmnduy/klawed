@@ -904,22 +904,39 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
             LOG_INFO("OpenAI Sub: Reloaded updated token from disk");
             result.is_retryable = 1;
         } else {
-            LOG_INFO("OpenAI Sub: No newer token on disk, attempting refresh...");
-            if (openai_oauth_refresh(config->oauth_manager, 1) == 0) {
-                LOG_INFO("OpenAI Sub: Token refreshed successfully");
+            /*
+             * No newer token on disk yet.  A concurrent process (e.g. another
+             * klawed subagent) may be mid-refresh and has not finished writing
+             * the new token file.  Wait briefly and retry the disk check
+             * before hitting the network — a force-refresh on a just-rotated
+             * refresh token returns 401 and wastes the credential.
+             */
+            LOG_INFO("OpenAI Sub: No newer token on disk, waiting briefly before retry...");
+            struct timespec ts_wait = {0, 300 * 1000 * 1000}; /* 300 ms */
+            nanosleep(&ts_wait, NULL);
+
+            reloaded = openai_oauth_reload_from_disk(config->oauth_manager);
+            if (reloaded) {
+                LOG_INFO("OpenAI Sub: Reloaded updated token from disk (after wait)");
                 result.is_retryable = 1;
             } else {
-                reloaded = openai_oauth_reload_from_disk(config->oauth_manager);
-                if (reloaded) {
+                LOG_INFO("OpenAI Sub: No newer token on disk after wait, attempting refresh...");
+                if (openai_oauth_refresh(config->oauth_manager, 1) == 0) {
+                    LOG_INFO("OpenAI Sub: Token refreshed successfully");
                     result.is_retryable = 1;
                 } else {
-                    LOG_ERROR("OpenAI Sub: Token refresh failed, clearing credentials");
-                    openai_oauth_logout(config->oauth_manager);
-                    free(result.error_message);
-                    result.error_message = strdup(
-                        "OpenAI OAuth token expired or revoked. "
-                        "Please run again to re-authenticate.");
-                    result.is_retryable = 0;
+                    reloaded = openai_oauth_reload_from_disk(config->oauth_manager);
+                    if (reloaded) {
+                        result.is_retryable = 1;
+                    } else {
+                        LOG_ERROR("OpenAI Sub: Token refresh failed, clearing credentials");
+                        openai_oauth_logout(config->oauth_manager);
+                        free(result.error_message);
+                        result.error_message = strdup(
+                            "OpenAI OAuth token expired or revoked. "
+                            "Please run again to re-authenticate.");
+                        result.is_retryable = 0;
+                    }
                 }
             }
         }
