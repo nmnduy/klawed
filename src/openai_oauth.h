@@ -85,6 +85,8 @@ typedef struct {
     char   *token_type;     /* Usually "Bearer" */
     char   *scope;          /* Granted scopes */
     char   *id_token;       /* OpenID Connect identity token (optional) */
+    char   *client_id;      /* OAuth client_id that issued the token (optional, overrides default) */
+    char   *account_id;     /* ChatGPT account ID from JWT claims (optional, for ChatGPT-Account-Id header) */
 } OpenAIOAuthToken;
 
 /**
@@ -174,6 +176,16 @@ int openai_oauth_refresh(OpenAIOAuthManager *manager, int force);
  * @return 1 if a new token was loaded, 0 if no change
  */
 int openai_oauth_reload_from_disk(OpenAIOAuthManager *manager);
+
+/**
+ * Get the ChatGPT account ID from the current access token JWT claims.
+ * This is needed for the ChatGPT-Account-Id request header.
+ * Caller must NOT free the returned string (owned by the token).
+ *
+ * @param manager OAuth manager
+ * @return account_id string or NULL if not available
+ */
+const char *openai_oauth_get_account_id(OpenAIOAuthManager *manager);
 
 /**
  * Start background token refresh thread.
