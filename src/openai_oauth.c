@@ -206,6 +206,8 @@ static OpenAIOAuthToken *load_token_from_disk(void) {
     if (token_type    && cJSON_IsString(token_type))    token->token_type    = strdup(token_type->valuestring);
     if (scope         && cJSON_IsString(scope))         token->scope         = strdup(scope->valuestring);
     if (id_token      && cJSON_IsString(id_token))      token->id_token      = strdup(id_token->valuestring);
+    cJSON *client_id_item = cJSON_GetObjectItem(json, "client_id");
+    if (client_id_item && cJSON_IsString(client_id_item)) token->client_id     = strdup(client_id_item->valuestring);
 
     cJSON_Delete(json);
 
@@ -251,6 +253,7 @@ static int save_token_to_disk(const OpenAIOAuthToken *token) {
     if (token->token_type)    cJSON_AddStringToObject(json, "token_type",    token->token_type);
     if (token->scope)         cJSON_AddStringToObject(json, "scope",         token->scope);
     if (token->id_token)      cJSON_AddStringToObject(json, "id_token",      token->id_token);
+    if (token->client_id)     cJSON_AddStringToObject(json, "client_id",     token->client_id);
 
     char *json_str = cJSON_Print(json);
     cJSON_Delete(json);
@@ -590,12 +593,16 @@ static OpenAIOAuthToken *refresh_token_internal(OpenAIOAuthManager *manager, int
     }
 
     /* Build refresh request body */
+    /* Use client_id stored in token if available (e.g. codex-issued tokens) */
+    const char *client_id_to_use = (manager->token->client_id && manager->token->client_id[0])
+                                   ? manager->token->client_id
+                                   : OPENAI_OAUTH_CLIENT_ID;
     char body[2048];
     snprintf(body, sizeof(body),
              "grant_type=refresh_token"
              "&refresh_token=%s"
              "&client_id=%s",
-             manager->token->refresh_token, OPENAI_OAUTH_CLIENT_ID);
+             manager->token->refresh_token, client_id_to_use);
 
     long status = 0;
     char *response = http_post_form(OPENAI_TOKEN_ENDPOINT, body, &status);
@@ -669,6 +676,11 @@ static OpenAIOAuthToken *refresh_token_internal(OpenAIOAuthManager *manager, int
         LOG_ERROR("[OpenAI OAuth] Refresh response missing required fields");
         openai_oauth_token_free(token);
         return NULL;
+    }
+
+    /* Carry over client_id from old token so future refreshes use same client */
+    if (!token->client_id && manager->token && manager->token->client_id) {
+        token->client_id = strdup(manager->token->client_id);
     }
 
     LOG_INFO("[OpenAI OAuth] Token refreshed (new expires_at: %ld)",
@@ -1071,6 +1083,115 @@ int openai_oauth_reload_from_disk(OpenAIOAuthManager *manager) {
 }
 
 /**
+ * Extract chatgpt_account_id from JWT access token claims.
+ * The access token JWT has a claim "https://api.openai.com/auth" containing
+ * {"chatgpt_account_id": "..."}.
+ */
+static char *extract_account_id_from_jwt(const char *access_token) {
+    if (!access_token || access_token[0] == '\0') return NULL;
+
+    /* Find the payload part (second JWT segment) */
+    const char *dot1 = strchr(access_token, '.');
+    if (!dot1) return NULL;
+    const char *payload_b64 = dot1 + 1;
+    const char *dot2 = strchr(payload_b64, '.');
+    if (!dot2) return NULL;
+
+    size_t encoded_len = (size_t)(dot2 - payload_b64);
+    if (encoded_len == 0 || encoded_len > 16384) return NULL;
+
+    /* Convert base64url to base64 (add padding, swap - and _) */
+    size_t pad = (4 - encoded_len % 4) % 4;
+    size_t buf_len = encoded_len + pad + 1;
+    char *b64 = malloc(buf_len);
+    if (!b64) return NULL;
+    strlcpy(b64, payload_b64, encoded_len + 1);
+    for (size_t i = 0; i < pad; i++) b64[encoded_len + i] = '=';
+    b64[encoded_len + pad] = '\0';
+    for (size_t i = 0; i < encoded_len; i++) {
+        if (b64[i] == '-') b64[i] = '+';
+        else if (b64[i] == '_') b64[i] = '/';
+    }
+
+    /* Decode base64 manually */
+    static const signed char dtable[256] = {
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,
+        52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1,
+        -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,
+        15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,
+        -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
+        41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+        -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+    };
+    size_t b64_len = strlen(b64);
+    size_t out_len = (b64_len / 4) * 3 + 3;
+    char *json_str = malloc(out_len);
+    if (!json_str) { free(b64); return NULL; }
+    size_t j = 0;
+    for (size_t i = 0; i + 3 < b64_len; i += 4) {
+        signed char c0 = dtable[(unsigned char)b64[i]];
+        signed char c1 = dtable[(unsigned char)b64[i+1]];
+        signed char c2 = dtable[(unsigned char)b64[i+2]];
+        signed char c3 = dtable[(unsigned char)b64[i+3]];
+        if (c0 < 0 || c1 < 0) break;
+        json_str[j++] = (char)((c0 << 2) | (c1 >> 4));
+        if (c2 >= 0) json_str[j++] = (char)((c1 << 4) | (c2 >> 2));
+        if (c3 >= 0) json_str[j++] = (char)((c2 << 6) | c3);
+    }
+    free(b64);
+    json_str[j] = '\0';
+
+    cJSON *json = cJSON_Parse(json_str);
+    free(json_str);
+    if (!json) return NULL;
+
+    char *account_id = NULL;
+    /* JWT claim "https://api.openai.com/auth" contains chatgpt_account_id */
+    cJSON *auth_claim = cJSON_GetObjectItem(json, "https://api.openai.com/auth");
+    if (auth_claim && cJSON_IsObject(auth_claim)) {
+        cJSON *acct = cJSON_GetObjectItem(auth_claim, "chatgpt_account_id");
+        if (acct && cJSON_IsString(acct) && acct->valuestring) {
+            account_id = strdup(acct->valuestring);
+        }
+    }
+    cJSON_Delete(json);
+    return account_id;
+}
+
+const char *openai_oauth_get_account_id(OpenAIOAuthManager *manager) {
+    if (!manager) return NULL;
+    pthread_mutex_lock(&manager->token_mutex);
+    /* Return cached account_id if available */
+    if (manager->token && manager->token->account_id) {
+        const char *aid = manager->token->account_id;
+        pthread_mutex_unlock(&manager->token_mutex);
+        return aid;
+    }
+    /* Try to extract from current access token JWT */
+    if (manager->token && manager->token->access_token) {
+        char *aid = extract_account_id_from_jwt(manager->token->access_token);
+        if (aid) {
+            free(manager->token->account_id);
+            manager->token->account_id = aid;
+            pthread_mutex_unlock(&manager->token_mutex);
+            return manager->token->account_id;
+        }
+    }
+    pthread_mutex_unlock(&manager->token_mutex);
+    return NULL;
+}
+
+
+/**
  * Start background token refresh thread.
  */
 int openai_oauth_start_refresh_thread(OpenAIOAuthManager *manager) {
@@ -1172,5 +1293,7 @@ void openai_oauth_token_free(OpenAIOAuthToken *token) {
 
     free(token->token_type);
     free(token->scope);
+    free(token->client_id);
+    free(token->account_id);
     free(token);
 }

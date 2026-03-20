@@ -16,6 +16,8 @@
 #include "openai_sub_provider.h"
 #include "openai_oauth.h"
 #include "openai_messages.h"
+#include "openai_responses.h"
+#include "openai_provider.h"
 #include "http_client.h"
 #include "logger.h"
 #include "arena.h"
@@ -35,9 +37,9 @@
 #include <curl/curl.h>
 #include <bsd/string.h>
 
-/* Default model and API endpoint */
-#define OPENAI_SUB_DEFAULT_MODEL    "gpt-4o"
-#define OPENAI_SUB_DEFAULT_API_BASE "https://api.openai.com/v1/chat/completions"
+/* Default model and API endpoint — ChatGPT backend Responses API */
+#define OPENAI_SUB_DEFAULT_MODEL    "gpt-5.3-codex"
+#define OPENAI_SUB_DEFAULT_API_BASE "https://chatgpt.com/backend-api/codex/responses"
 
 /* ============================================================================
  * Helper Functions
@@ -478,6 +480,222 @@ static ApiResponse *parse_response(cJSON *json) {
  * Provider call_api Implementation
  * ============================================================================ */
 
+/**
+ * Parse the SSE body returned by the chatgpt backend Responses API into a
+ * synthetic chat-completions JSON object so the rest of the pipeline can
+ * process it unchanged.
+ *
+ * Events we care about:
+ *   response.output_text.delta  → accumulate text
+ *   response.completed          → extract usage
+ *   response.failed / error     → surface error
+ */
+static cJSON *parse_chatgpt_sse_response(const char *sse_body) {
+    if (!sse_body) return NULL;
+
+    /* Buffers for accumulated text and usage */
+    size_t text_cap  = 4096;
+    size_t text_len  = 0;
+    char  *text_buf  = malloc(text_cap);
+    if (!text_buf) return NULL;
+    text_buf[0] = '\0';
+
+    long   input_tokens  = 0;
+    long   output_tokens = 0;
+    char   model_str[128] = "gpt-5.3-codex";
+    char   resp_id[128]   = "chatgpt_sub";
+    int    got_error      = 0;
+    char   error_msg[512] = {0};
+
+    /* Walk line by line */
+    const char *p = sse_body;
+    while (*p) {
+        /* Find end of line */
+        const char *eol = strchr(p, '\n');
+        size_t line_len = eol ? (size_t)(eol - p) : strlen(p);
+
+        if (line_len > 5 && strncmp(p, "data:", 5) == 0) {
+            /* Skip leading space after "data:" */
+            const char *json_start = p + 5;
+            if (*json_start == ' ') json_start++;
+            size_t json_len = line_len - (size_t)(json_start - p);
+
+            if (json_len > 0 && strncmp(json_start, "[DONE]", 6) != 0) {
+                cJSON *ev = cJSON_ParseWithLength(json_start, json_len);
+                if (ev) {
+                    cJSON *type_item = cJSON_GetObjectItem(ev, "type");
+                    const char *ev_type = (type_item && cJSON_IsString(type_item))
+                                          ? type_item->valuestring : "";
+
+                    if (strcmp(ev_type, "response.output_text.delta") == 0) {
+                        cJSON *delta = cJSON_GetObjectItem(ev, "delta");
+                        if (delta && cJSON_IsString(delta) && delta->valuestring) {
+                            size_t dlen = strlen(delta->valuestring);
+                            if (text_len + dlen + 1 >= text_cap) {
+                                text_cap = (text_len + dlen + 1) * 2;
+                                char *tmp = realloc(text_buf, text_cap);
+                                if (!tmp) { free(text_buf); cJSON_Delete(ev); return NULL; }
+                                text_buf = tmp;
+                            }
+                            strlcpy(text_buf + text_len, delta->valuestring,
+                                    text_cap - text_len);
+                            text_len += dlen;
+                        }
+                    } else if (strcmp(ev_type, "response.completed") == 0) {
+                        cJSON *resp = cJSON_GetObjectItem(ev, "response");
+                        if (resp) {
+                            cJSON *id_item = cJSON_GetObjectItem(resp, "id");
+                            if (id_item && cJSON_IsString(id_item))
+                                strlcpy(resp_id, id_item->valuestring, sizeof(resp_id));
+                            cJSON *mdl = cJSON_GetObjectItem(resp, "model");
+                            if (mdl && cJSON_IsString(mdl))
+                                strlcpy(model_str, mdl->valuestring, sizeof(model_str));
+                            cJSON *usage = cJSON_GetObjectItem(resp, "usage");
+                            if (usage) {
+                                cJSON *it = cJSON_GetObjectItem(usage, "input_tokens");
+                                cJSON *ot = cJSON_GetObjectItem(usage, "output_tokens");
+                                if (it && cJSON_IsNumber(it)) input_tokens  = (long)it->valuedouble;
+                                if (ot && cJSON_IsNumber(ot)) output_tokens = (long)ot->valuedouble;
+                            }
+                        }
+                    } else if (strcmp(ev_type, "response.failed") == 0
+                               || strcmp(ev_type, "error") == 0) {
+                        got_error = 1;
+                        cJSON *err = cJSON_GetObjectItem(ev, "error");
+                        if (err) {
+                            cJSON *msg = cJSON_GetObjectItem(err, "message");
+                            if (msg && cJSON_IsString(msg))
+                                strlcpy(error_msg, msg->valuestring, sizeof(error_msg));
+                        }
+                        if (!error_msg[0])
+                            strlcpy(error_msg, "ChatGPT backend returned an error", sizeof(error_msg));
+                    }
+                    cJSON_Delete(ev);
+                }
+            }
+        }
+
+        p += line_len;
+        if (*p == '\n') p++;   /* skip LF */
+        if (*p == '\r') p++;   /* skip CR (CRLF) */
+    }
+
+    if (got_error) {
+        free(text_buf);
+        /* Return an error-shaped JSON that the caller can detect */
+        cJSON *err_json = cJSON_CreateObject();
+        cJSON *e = cJSON_CreateObject();
+        cJSON_AddStringToObject(e, "message", error_msg);
+        cJSON_AddItemToObject(err_json, "error", e);
+        return err_json;
+    }
+
+    /* Synthesise a chat-completions response */
+    cJSON *out = cJSON_CreateObject();
+    cJSON_AddStringToObject(out, "id",     resp_id);
+    cJSON_AddStringToObject(out, "object", "chat.completion");
+    cJSON_AddStringToObject(out, "model",  model_str);
+    cJSON_AddNumberToObject(out, "created", (double)(long)time(NULL));
+
+    cJSON *choices = cJSON_CreateArray();
+    cJSON *choice  = cJSON_CreateObject();
+    cJSON_AddNumberToObject(choice, "index", 0);
+    cJSON *msg_obj = cJSON_CreateObject();
+    cJSON_AddStringToObject(msg_obj, "role", "assistant");
+    cJSON_AddStringToObject(msg_obj, "content", text_buf);
+    cJSON_AddItemToObject(choice, "message", msg_obj);
+    cJSON_AddStringToObject(choice, "finish_reason", "stop");
+    cJSON_AddItemToArray(choices, choice);
+    cJSON_AddItemToObject(out, "choices", choices);
+
+    cJSON *usage_obj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(usage_obj, "prompt_tokens",     (double)input_tokens);
+    cJSON_AddNumberToObject(usage_obj, "completion_tokens", (double)output_tokens);
+    cJSON_AddNumberToObject(usage_obj, "total_tokens",
+                            (double)(input_tokens + output_tokens));
+    cJSON_AddItemToObject(out, "usage", usage_obj);
+
+    free(text_buf);
+    return out;
+}
+
+/**
+ * Build the JSON body for the ChatGPT backend Responses API.
+ *
+ * The chatgpt.com/backend-api/codex/responses endpoint requires:
+ *   - model:        string
+ *   - instructions: string  (from the first system message)
+ *   - input:        array of {role, content} messages (user + assistant turns)
+ *   - store:        false   (required)
+ *   - stream:       true    (required)
+ *
+ * max_output_tokens is NOT supported and must be omitted.
+ */
+static cJSON *build_chatgpt_backend_request(ConversationState *state,
+                                             const char *model_override) {
+    if (!state) return NULL;
+
+    conversation_state_lock(state);
+
+    const char *model = (model_override && model_override[0] != '\0')
+                        ? model_override
+                        : (state->model ? state->model : OPENAI_SUB_DEFAULT_MODEL);
+
+    cJSON *req = cJSON_CreateObject();
+    if (!req) { conversation_state_unlock(state); return NULL; }
+
+    cJSON_AddStringToObject(req, "model", model);
+    cJSON_AddFalseToObject(req,  "store");
+    cJSON_AddTrueToObject(req,   "stream");
+
+    /* Collect system prompt as "instructions" and all other messages as "input" */
+    cJSON *input = cJSON_CreateArray();
+    if (!input) { cJSON_Delete(req); conversation_state_unlock(state); return NULL; }
+
+    for (int i = 0; i < state->count; i++) {
+        InternalMessage *msg = &state->messages[i];
+
+        if (msg->role == MSG_SYSTEM) {
+            /* Use first system message as instructions */
+            for (int j = 0; j < msg->content_count; j++) {
+                InternalContent *c = &msg->contents[j];
+                if (c->type == INTERNAL_TEXT && c->text && c->text[0] != '\0') {
+                    /* Only set if not already present */
+                    if (!cJSON_GetObjectItem(req, "instructions")) {
+                        cJSON_AddStringToObject(req, "instructions", c->text);
+                    }
+                    break;
+                }
+            }
+            continue;
+        }
+
+        /* user / assistant turns */
+        const char *role_str = (msg->role == MSG_USER) ? "user" : "assistant";
+        for (int j = 0; j < msg->content_count; j++) {
+            InternalContent *c = &msg->contents[j];
+            if (c->type != INTERNAL_TEXT || !c->text || c->text[0] == '\0') continue;
+
+            cJSON *item = cJSON_CreateObject();
+            if (!item) continue;
+            cJSON_AddStringToObject(item, "role", role_str);
+            cJSON_AddStringToObject(item, "content", c->text);
+            cJSON_AddItemToArray(input, item);
+        }
+    }
+
+    cJSON_AddItemToObject(req, "input", input);
+
+    /* Ensure instructions field exists */
+    if (!cJSON_GetObjectItem(req, "instructions")) {
+        cJSON_AddStringToObject(req, "instructions",
+                                "You are a helpful coding assistant.");
+    }
+
+    conversation_state_unlock(state);
+    return req;
+}
+
 static void openai_sub_call_api(Provider *self, ConversationState *state,
                                   ApiCallResult *out) {
     ApiCallResult result = {0};
@@ -521,77 +739,123 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
         enable_streaming = 1;
     }
 
-    /* Build request using standard OpenAI chat completions format */
-    cJSON *request = build_openai_request_with_reasoning(state, 0, 0);
-    if (!request) {
-        result.error_message = strdup("Failed to build request JSON");
-        result.is_retryable  = 0;
-        *out = result;
-        return;
-    }
+    /* Determine URL */
+    const char *url = (config->api_base && config->api_base[0] != '\0')
+                      ? config->api_base
+                      : OPENAI_SUB_DEFAULT_API_BASE;
 
-    /* Override model if specified in config */
-    if (config->model && config->model[0] != '\0') {
-        cJSON *model_item = cJSON_GetObjectItem(request, "model");
-        if (model_item) {
-            cJSON_ReplaceItemInObject(request, "model",
-                                      cJSON_CreateString(config->model));
-        } else {
-            cJSON_AddStringToObject(request, "model", config->model);
-        }
-    }
+    /* Detect whether we're targeting the chatgpt backend (Responses API) or
+     * a custom endpoint (chat completions).  The chatgpt backend requires:
+     *   - Responses API JSON format (store=false, stream=true, instructions)
+     *   - ChatGPT-Account-Id header
+     * A custom api_base falls back to chat completions format. */
+    int use_responses_api = (strstr(url, "chatgpt.com") != NULL);
 
-    if (enable_streaming) {
-        cJSON_AddBoolToObject(request, "stream", cJSON_True);
-    }
-
-    char *request_json = cJSON_PrintUnformatted(request);
-    cJSON_Delete(request);
-
-    if (!request_json) {
-        result.error_message = strdup("Failed to serialize request JSON");
-        result.is_retryable  = 0;
-        *out = result;
-        return;
-    }
-
-    result.request_json = request_json;
-
-    /* Build URL */
-    const char *url = config->api_base ? config->api_base : OPENAI_SUB_DEFAULT_API_BASE;
-
-    /* Build headers */
-    struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, "Content-Type: application/json");
-
-    char auth_header[2048];
-    snprintf(auth_header, sizeof(auth_header),
-             "Authorization: Bearer %s", access_token);
-    headers = curl_slist_append(headers, auth_header);
-
-    if (!headers) {
-        result.error_message = strdup("Failed to setup HTTP headers");
-        result.is_retryable  = 0;
-        *out = result;
-        return;
-    }
-
-    result.headers_json = http_headers_to_json(headers);
-
-    /* Execute request */
+    char *request_json = NULL;
     HttpRequest req = {0};
-    req.url                = url;
-    req.method             = "POST";
-    req.body               = request_json;
-    req.headers            = headers;
-    req.connect_timeout_ms = 30000;
-    req.total_timeout_ms   = 300000;
-    req.enable_streaming   = enable_streaming;
+
+    if (use_responses_api) {
+        /* Resolve account_id for the required ChatGPT-Account-Id header */
+        const char *account_id = openai_oauth_get_account_id(config->oauth_manager);
+
+        /* Build the ChatGPT backend Responses API request JSON directly.
+         * The chatgpt backend differs from api.openai.com/v1/responses:
+         *   - store must be false
+         *   - stream must be true
+         *   - max_output_tokens is not supported (omit it)
+         *   - model + instructions + input[] format                      */
+        cJSON *body = build_chatgpt_backend_request(state, config->model);
+        if (!body) {
+            result.error_message = strdup("OpenAI sub: failed to build chatgpt backend request");
+            result.is_retryable  = 0;
+            *out = result;
+            return;
+        }
+        request_json = cJSON_PrintUnformatted(body);
+        cJSON_Delete(body);
+        if (!request_json) {
+            result.error_message = strdup("OpenAI sub: failed to serialise request JSON");
+            result.is_retryable  = 0;
+            *out = result;
+            return;
+        }
+
+        /* Build headers */
+        struct curl_slist *hdrs = NULL;
+        hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
+        char auth_hdr[2048];
+        snprintf(auth_hdr, sizeof(auth_hdr), "Authorization: Bearer %s", access_token);
+        hdrs = curl_slist_append(hdrs, auth_hdr);
+        if (account_id && account_id[0] != '\0') {
+            char acct_hdr[256];
+            snprintf(acct_hdr, sizeof(acct_hdr), "ChatGPT-Account-Id: %s", account_id);
+            hdrs = curl_slist_append(hdrs, acct_hdr);
+        }
+
+        req.url                = url;
+        req.method             = "POST";
+        req.body               = request_json;
+        req.headers            = hdrs;
+        req.connect_timeout_ms = 30000;
+        req.total_timeout_ms   = 300000;
+        req.enable_streaming   = 0; /* we'll read the full SSE body ourselves */
+    } else {
+        /* Fallback: chat completions format for custom api_base */
+        cJSON *request = build_openai_request_with_reasoning(state, 0, 0);
+        if (!request) {
+            result.error_message = strdup("Failed to build request JSON");
+            result.is_retryable  = 0;
+            *out = result;
+            return;
+        }
+        if (config->model && config->model[0] != '\0') {
+            cJSON *m = cJSON_GetObjectItem(request, "model");
+            if (m) cJSON_ReplaceItemInObject(request, "model",
+                                              cJSON_CreateString(config->model));
+            else    cJSON_AddStringToObject(request, "model", config->model);
+        }
+        if (enable_streaming)
+            cJSON_AddBoolToObject(request, "stream", cJSON_True);
+
+        request_json = cJSON_PrintUnformatted(request);
+        cJSON_Delete(request);
+        if (!request_json) {
+            result.error_message = strdup("Failed to serialize request JSON");
+            result.is_retryable  = 0;
+            *out = result;
+            return;
+        }
+
+        /* Build headers manually for chat completions path */
+        struct curl_slist *hdrs = NULL;
+        hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
+        char auth_hdr[2048];
+        snprintf(auth_hdr, sizeof(auth_hdr), "Authorization: Bearer %s", access_token);
+        hdrs = curl_slist_append(hdrs, auth_hdr);
+        if (!hdrs) {
+            result.error_message = strdup("Failed to setup HTTP headers");
+            result.is_retryable  = 0;
+            free(request_json);
+            *out = result;
+            return;
+        }
+        req.url                = url;
+        req.method             = "POST";
+        req.body               = request_json;
+        req.headers            = hdrs;
+        req.connect_timeout_ms = 30000;
+        req.total_timeout_ms   = 300000;
+        req.enable_streaming   = enable_streaming;
+    }
+
+    result.request_json = strdup(request_json ? request_json : "");
+    result.headers_json = http_headers_to_json(req.headers);
+    LOG_DEBUG("OpenAI Sub: sending body: %.500s", request_json ? request_json : "(null)");
 
     SubStreamingContext stream_ctx = {0};
     HttpResponse *http_resp = NULL;
 
-    if (enable_streaming) {
+    if (enable_streaming && !use_responses_api) {
         sub_streaming_context_init(&stream_ctx, state);
         http_resp = http_client_execute_stream(&req, sub_streaming_event_handler,
                                                &stream_ctx, progress_callback, state);
@@ -599,7 +863,9 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
         http_resp = http_client_execute(&req, progress_callback, state);
     }
 
-    curl_slist_free_all(headers);
+    curl_slist_free_all(req.headers);
+    free(request_json);
+    req.body = NULL;
 
     if (!http_resp) {
         result.error_message = strdup("Failed to execute HTTP request");
@@ -665,6 +931,9 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
 
     /* Handle other HTTP errors */
     if (result.http_status < 200 || result.http_status >= 300) {
+        LOG_WARN("OpenAI Sub: HTTP %ld body: %.500s",
+                 result.http_status,
+                 result.raw_response ? result.raw_response : "(empty)");
         if (!result.error_message) {
             char buf[64];
             snprintf(buf, sizeof(buf), "HTTP %ld", result.http_status);
@@ -683,7 +952,18 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
     /* Parse successful response */
     cJSON *raw_json = NULL;
 
-    if (enable_streaming) {
+    if (use_responses_api && result.raw_response) {
+        /* The chatgpt backend returns SSE even in non-streaming HTTP mode.
+         * Walk the SSE lines and accumulate text/tool deltas, then synthesise
+         * a chat-completions-shaped JSON so the rest of the pipeline is happy. */
+        raw_json = parse_chatgpt_sse_response(result.raw_response);
+        if (!raw_json) {
+            result.error_message = strdup("Failed to parse ChatGPT SSE response");
+            result.is_retryable  = 1;
+            *out = result;
+            return;
+        }
+    } else if (enable_streaming) {
         /* Reconstruct response from streaming context */
         raw_json = cJSON_CreateObject();
         cJSON_AddStringToObject(raw_json, "id",
