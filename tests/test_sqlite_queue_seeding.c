@@ -215,9 +215,9 @@ static void test_tool_result_pairing(void) {
     free(tool_msg);
     cJSON_Delete(params);
 
-    // Insert TOOL_RESULT message
+    // Insert TOOL_RESULT message (klawed sends the result after executing the tool)
     char *result_msg = create_tool_result_message("Read", "call_123", "File contents here", 0);
-    insert_message(db, "client", "klawed", result_msg);
+    insert_message(db, "klawed", "client", result_msg);
     free(result_msg);
 
     // Restore conversation
@@ -250,7 +250,10 @@ static void test_tool_result_pairing(void) {
                    strcmp(state.messages[2].contents[0].tool_id, "call_123") == 0,
                    "tool result should have matching id");
 
-        /* Note: is_error field may not be set by restore function for successful results */
+        assert_true("test_tool_result_pairing: tool result is not error",
+                   state.messages[2].contents[0].is_error == 0,
+                   "tool result should not be an error");
+
         assert_true("test_tool_result_pairing: tool result has output",
                    state.messages[2].contents[0].tool_output != NULL,
                    "tool result should have output");
@@ -473,9 +476,9 @@ static void test_multiple_tool_calls(void) {
     free(tool_msg1);
     cJSON_Delete(params1);
 
-    // Insert first TOOL_RESULT
+    // Insert first TOOL_RESULT (klawed sends result after executing the tool)
     char *result_msg1 = create_tool_result_message("Read", "call_1", "Contents of file1", 0);
-    insert_message(db, "client", "klawed", result_msg1);
+    insert_message(db, "klawed", "client", result_msg1);
     free(result_msg1);
 
     // Insert second TOOL message
@@ -486,9 +489,9 @@ static void test_multiple_tool_calls(void) {
     free(tool_msg2);
     cJSON_Delete(params2);
 
-    // Insert second TOOL_RESULT
+    // Insert second TOOL_RESULT (klawed sends result after executing the tool)
     char *result_msg2 = create_tool_result_message("Read", "call_2", "Contents of file2", 0);
-    insert_message(db, "client", "klawed", result_msg2);
+    insert_message(db, "klawed", "client", result_msg2);
     free(result_msg2);
 
     // Restore conversation
@@ -497,11 +500,11 @@ static void test_multiple_tool_calls(void) {
     int seeded = sqlite_queue_restore_conversation(ctx, &state);
     (void)seeded; // Used in checks below
 
-    // Should have 3 messages: user text, assistant tool request (with results)
-    // Note: restore collapses tool pairs into assistant message with embedded results
-    assert_equal_int("test_multiple_tool_calls: message count", 3, state.count);
+    // Should have 5 messages: user text, asst tool_use(call_1), user tool_result(call_1),
+    // asst tool_use(call_2), user tool_result(call_2)
+    assert_equal_int("test_multiple_tool_calls: message count", 5, state.count);
 
-    if (state.count >= 3) {
+    if (state.count >= 5) {
         assert_true("test_multiple_tool_calls: first is user text",
                    state.messages[0].role == MSG_USER &&
                    state.messages[0].contents[0].type == INTERNAL_TEXT,
@@ -512,11 +515,22 @@ static void test_multiple_tool_calls(void) {
                    state.messages[1].contents[0].type == INTERNAL_TOOL_CALL,
                    "second message should be assistant with first tool");
 
-        /* Third message could be user with result or assistant with second tool
-         * depending on how restore collapses sequential tool calls */
-        assert_true("test_multiple_tool_calls: third has valid role",
-                   state.messages[2].role == MSG_USER || state.messages[2].role == MSG_ASSISTANT,
-                   "third message should have valid role");
+        assert_true("test_multiple_tool_calls: third is tool_result for call_1",
+                   state.messages[2].role == MSG_USER &&
+                   state.messages[2].contents[0].type == INTERNAL_TOOL_RESPONSE &&
+                   state.messages[2].contents[0].is_error == 0,
+                   "third message should be successful tool_result for call_1");
+
+        assert_true("test_multiple_tool_calls: fourth is assistant with second tool",
+                   state.messages[3].role == MSG_ASSISTANT &&
+                   state.messages[3].contents[0].type == INTERNAL_TOOL_CALL,
+                   "fourth message should be assistant with second tool");
+
+        assert_true("test_multiple_tool_calls: fifth is tool_result for call_2",
+                   state.messages[4].role == MSG_USER &&
+                   state.messages[4].contents[0].type == INTERNAL_TOOL_RESPONSE &&
+                   state.messages[4].contents[0].is_error == 0,
+                   "fifth message should be successful tool_result for call_2");
     }
 
     conversation_state_destroy(&state);
@@ -556,7 +570,7 @@ static void test_mixed_tool_completion(void) {
     cJSON_Delete(params1);
 
     char *result_msg1 = create_tool_result_message("Read", "call_success", "Success", 0);
-    insert_message(db, "client", "klawed", result_msg1);
+    insert_message(db, "klawed", "client", result_msg1);
     free(result_msg1);
 
     // Second tool - gets interrupted (no result)
@@ -719,9 +733,9 @@ static void test_user_text_between_tool_and_result(void) {
     insert_message(db, "client", "klawed", user_during);
     free(user_during);
 
-    // msg 4 (id 399): Sleep result arrives
+    // msg 4 (id 399): Sleep result arrives (klawed sends result after tool completes)
     char *result_msg = create_tool_result_message("Sleep", "tooluse_E4sagE1", "slept 70s", 0);
-    insert_message(db, "client", "klawed", result_msg);
+    insert_message(db, "klawed", "client", result_msg);
     free(result_msg);
 
     // Restore conversation
