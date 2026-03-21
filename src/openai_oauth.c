@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <errno.h>
 #include <limits.h>
 #include <pwd.h>
@@ -46,6 +47,10 @@ static int                mkdir_p_with_mode(const char *path, mode_t mode);
 static OpenAIOAuthToken  *load_token_from_disk(void);
 static int                save_token_to_disk(const OpenAIOAuthToken *token);
 static int                reload_token_from_disk_if_newer(OpenAIOAuthManager *manager);
+static char              *get_lock_file_path(void);
+static int                acquire_refresh_lock(void);
+static int                acquire_refresh_lock_nb(void);
+static void               release_refresh_lock(int fd);
 static OpenAIDeviceAuth  *request_device_authorization(void);
 static OpenAIOAuthToken  *poll_for_token(const OpenAIDeviceAuth *auth);
 static OpenAIOAuthToken  *refresh_token_internal(OpenAIOAuthManager *manager, int force);
@@ -137,6 +142,116 @@ static char *get_token_file_path(void) {
     }
     free(dir);
     return path;
+}
+
+/**
+ * Return the full path to the refresh lock file (caller must free).
+ * Path: ~/.openai/auth.lock
+ *
+ * This lock coordinates cross-process token refresh so that only one
+ * process performs the network refresh at a time.  Others wait on the
+ * lock and then reload the fresh token from disk.
+ */
+static char *get_lock_file_path(void) {
+    char *dir = get_openai_dir();
+    if (!dir) return NULL;
+
+    char *path = malloc(PATH_MAX);
+    if (!path) {
+        free(dir);
+        return NULL;
+    }
+    if (snprintf(path, PATH_MAX, "%s/auth.lock", dir) >= PATH_MAX) {
+        free(path);
+        free(dir);
+        return NULL;
+    }
+    free(dir);
+    return path;
+}
+
+/**
+ * Open/create the refresh lock file and acquire an exclusive flock.
+ * Blocks until the lock is obtained or until a 10-second timeout expires.
+ *
+ * @return  fd >= 0 on success (caller must release_refresh_lock(fd)),
+ *          -1 on error or timeout.
+ */
+static int acquire_refresh_lock(void) {
+    char *path = get_lock_file_path();
+    if (!path) return -1;
+
+    int fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+    free(path);
+    if (fd < 0) {
+        LOG_WARN("[OpenAI OAuth] Cannot open lock file: %s", strerror(errno));
+        return -1;
+    }
+
+    /* Try non-blocking first; if busy poll with short sleeps up to 10 s */
+    if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
+        return fd;
+    }
+
+    LOG_DEBUG("[OpenAI OAuth] Refresh lock busy, waiting...");
+
+    struct timespec deadline;
+    clock_gettime(CLOCK_MONOTONIC, &deadline);
+    deadline.tv_sec += 10; /* 10-second hard timeout */
+
+    struct timespec sleep_ts = {0, 50 * 1000 * 1000}; /* 50 ms poll interval */
+    while (1) {
+        nanosleep(&sleep_ts, NULL);
+
+        if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
+            LOG_DEBUG("[OpenAI OAuth] Acquired refresh lock after wait");
+            return fd;
+        }
+
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (now.tv_sec > deadline.tv_sec ||
+            (now.tv_sec == deadline.tv_sec && now.tv_nsec >= deadline.tv_nsec)) {
+            LOG_WARN("[OpenAI OAuth] Timed out waiting for refresh lock");
+            close(fd);
+            return -1;
+        }
+    }
+}
+
+/**
+ * Try to acquire the refresh lock without blocking.
+ *
+ * @return  fd >= 0 if we obtained the lock (caller must release_refresh_lock),
+ *          -1 if the lock is held by another process (refresh in progress).
+ */
+static int acquire_refresh_lock_nb(void) {
+    char *path = get_lock_file_path();
+    if (!path) return -1;
+
+    int fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+    free(path);
+    if (fd < 0) {
+        LOG_WARN("[OpenAI OAuth] Cannot open lock file: %s", strerror(errno));
+        return -1;
+    }
+
+    if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
+        return fd; /* We own the lock */
+    }
+
+    /* Lock is held — another process is refreshing */
+    close(fd);
+    return -1;
+}
+
+/**
+ * Release a previously acquired refresh lock.
+ */
+static void release_refresh_lock(int fd) {
+    if (fd < 0) return;
+    flock(fd, LOCK_UN);
+    close(fd);
 }
 
 /* ============================================================================
@@ -713,15 +828,33 @@ static void *refresh_thread_func(void *arg) {
             if (remaining < OPENAI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
                 LOG_INFO("[OpenAI OAuth] Background refresh (expires in %ld s)",
                          (long)remaining);
-                OpenAIOAuthToken *new_token = refresh_token_internal(manager, 0);
-                if (new_token) {
-                    OpenAIOAuthToken *old = manager->token;
-                    manager->token = new_token;
-                    if (save_token_to_disk(new_token) != 0) {
-                        LOG_WARN("[OpenAI OAuth] Failed to save refreshed token");
+                /* Acquire cross-process refresh lock before the network call.
+                 * If another process is already refreshing, it will finish and
+                 * write the new token to disk; we skip our own network refresh
+                 * and reload from disk instead. */
+                int lock_fd = acquire_refresh_lock_nb();
+                if (lock_fd < 0) {
+                    /* Another process holds the lock — wait for it, then reload */
+                    LOG_INFO("[OpenAI OAuth] Background refresh deferred (another process refreshing)");
+                    pthread_mutex_unlock(&manager->token_mutex);
+                    lock_fd = acquire_refresh_lock();
+                    if (lock_fd >= 0) {
+                        release_refresh_lock(lock_fd);
                     }
-                    openai_oauth_token_free(old);
-                    LOG_INFO("[OpenAI OAuth] Background refresh successful");
+                    pthread_mutex_lock(&manager->token_mutex);
+                    reload_token_from_disk_if_newer(manager);
+                } else {
+                    OpenAIOAuthToken *new_token = refresh_token_internal(manager, 0);
+                    release_refresh_lock(lock_fd);
+                    if (new_token) {
+                        OpenAIOAuthToken *old = manager->token;
+                        manager->token = new_token;
+                        if (save_token_to_disk(new_token) != 0) {
+                            LOG_WARN("[OpenAI OAuth] Failed to save refreshed token");
+                        }
+                        openai_oauth_token_free(old);
+                        LOG_INFO("[OpenAI OAuth] Background refresh successful");
+                    }
                 }
             }
         }
@@ -990,7 +1123,31 @@ const char *openai_oauth_get_access_token(OpenAIOAuthManager *manager) {
     if (remaining < OPENAI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
         LOG_INFO("[OpenAI OAuth] Token expiring in %ld s, refreshing...",
                  (long)remaining);
+
+        /* Acquire cross-process lock before network call */
+        int lock_fd = acquire_refresh_lock_nb();
+        if (lock_fd < 0) {
+            /* Another process is refreshing — wait then reload */
+            LOG_INFO("[OpenAI OAuth] get_access_token: waiting for concurrent refresh");
+            pthread_mutex_unlock(&manager->token_mutex);
+            lock_fd = acquire_refresh_lock();
+            if (lock_fd >= 0) {
+                release_refresh_lock(lock_fd);
+            }
+            pthread_mutex_lock(&manager->token_mutex);
+            reload_token_from_disk_if_newer(manager);
+            if (manager->token && manager->token->access_token) {
+                const char *tok = manager->token->access_token;
+                pthread_mutex_unlock(&manager->token_mutex);
+                return tok;
+            }
+            pthread_mutex_unlock(&manager->token_mutex);
+            return NULL;
+        }
+
         OpenAIOAuthToken *new_token = refresh_token_internal(manager, 0);
+        release_refresh_lock(lock_fd);
+
         if (new_token) {
             OpenAIOAuthToken *old = manager->token;
             manager->token = new_token;
@@ -1042,9 +1199,35 @@ int openai_oauth_refresh(OpenAIOAuthManager *manager, int force) {
         }
     }
 
+    /* Acquire cross-process refresh lock before network call.
+     * If another process is already refreshing, wait for it and reload
+     * from disk rather than racing it with a duplicate network request. */
+    int lock_fd = acquire_refresh_lock_nb();
+    if (lock_fd < 0) {
+        /* Another process holds the lock — wait for completion, then reload */
+        LOG_INFO("[OpenAI OAuth] Refresh deferred: another process is refreshing");
+        pthread_mutex_unlock(&manager->token_mutex);
+        lock_fd = acquire_refresh_lock();
+        if (lock_fd >= 0) {
+            release_refresh_lock(lock_fd);
+        }
+        pthread_mutex_lock(&manager->token_mutex);
+        reload_token_from_disk_if_newer(manager);
+        time_t remaining = manager->token ? manager->token->expires_at - time(NULL) : 0;
+        if (remaining >= OPENAI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
+            LOG_INFO("[OpenAI OAuth] Token updated by other process");
+            pthread_mutex_unlock(&manager->token_mutex);
+            return 0;
+        }
+        pthread_mutex_unlock(&manager->token_mutex);
+        return -1;
+    }
+
     OpenAIOAuthToken *new_token = refresh_token_internal(manager, force);
+    release_refresh_lock(lock_fd);
+
     if (!new_token) {
-        /* Check if disk reload handled it */
+        /* Check if disk reload (inside refresh_token_internal) handled it */
         time_t remaining = manager->token ? manager->token->expires_at - time(NULL) : 0;
         if (remaining >= OPENAI_TOKEN_REFRESH_THRESHOLD_SECONDS) {
             LOG_INFO("[OpenAI OAuth] Token refreshed by another process");
@@ -1081,6 +1264,51 @@ int openai_oauth_reload_from_disk(OpenAIOAuthManager *manager) {
     }
     return result;
 }
+
+/**
+ * Wait for any in-progress cross-process token refresh to complete.
+ *
+ * If another process currently holds the refresh lock this call blocks until
+ * it releases the lock, then reloads the new token from disk.  If no refresh
+ * is in progress the call returns immediately after a quick disk check.
+ *
+ * Used by the 401 handler so it can pick up a freshly rotated token without
+ * racing into its own (duplicate) network refresh.
+ *
+ * @return 1 if the token was reloaded from disk, 0 otherwise.
+ */
+int openai_oauth_wait_for_refresh(OpenAIOAuthManager *manager) {
+    if (!manager) return 0;
+
+    /* Non-blocking check first: if we get it immediately, nobody is refreshing */
+    int lock_fd = acquire_refresh_lock_nb();
+    if (lock_fd >= 0) {
+        /* Lock was free — no concurrent refresh, just do a quick disk check */
+        release_refresh_lock(lock_fd);
+        pthread_mutex_lock(&manager->token_mutex);
+        int reloaded = reload_token_from_disk_if_newer(manager);
+        pthread_mutex_unlock(&manager->token_mutex);
+        return reloaded;
+    }
+
+    /* Lock is held — a refresh is in progress.  Wait for it. */
+    LOG_INFO("[OpenAI OAuth] Waiting for concurrent token refresh to complete...");
+    lock_fd = acquire_refresh_lock();
+    if (lock_fd >= 0) {
+        release_refresh_lock(lock_fd);
+    }
+
+    /* Refresh finished: reload the new token from disk */
+    pthread_mutex_lock(&manager->token_mutex);
+    int reloaded = reload_token_from_disk_if_newer(manager);
+    pthread_mutex_unlock(&manager->token_mutex);
+
+    if (reloaded) {
+        LOG_INFO("[OpenAI OAuth] Reloaded updated token after waiting for refresh");
+    }
+    return reloaded;
+}
+
 
 /**
  * Extract chatgpt_account_id from JWT access token claims.
