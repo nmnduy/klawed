@@ -178,6 +178,16 @@ int openai_oauth_refresh(OpenAIOAuthManager *manager, int force);
 int openai_oauth_reload_from_disk(OpenAIOAuthManager *manager);
 
 /**
+ * Wait for any in-progress cross-process token refresh to complete,
+ * then reload the new token from disk.  Used by the 401 handler to pick
+ * up a freshly rotated token without racing into a duplicate network refresh.
+ *
+ * @param manager OAuth manager
+ * @return 1 if the token was reloaded from disk, 0 otherwise
+ */
+int openai_oauth_wait_for_refresh(OpenAIOAuthManager *manager);
+
+/**
  * Get the ChatGPT account ID from the current access token JWT claims.
  * This is needed for the ChatGPT-Account-Id request header.
  * Caller must NOT free the returned string (owned by the token).
