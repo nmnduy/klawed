@@ -911,7 +911,7 @@ static cJSON *build_chatgpt_backend_request(ConversationState *state,
     }
 
     /* Add tools with cache_control support (including MCP tools if available) */
-    cJSON *tool_defs = get_openai_subscription_tool_definitions(state, 0, TOOL_SCHEMA_RESPONSES);
+    cJSON *tool_defs = get_openai_subscription_tool_definitions(0, TOOL_SCHEMA_RESPONSES);
     cJSON_AddItemToObject(req, "tools", tool_defs);
 
     conversation_state_unlock(state);
