@@ -24,9 +24,10 @@
  * OpenAI subscription provider configuration
  */
 typedef struct {
-    OpenAIOAuthManager *oauth_manager;  /* OAuth manager for token lifecycle */
-    char               *api_base;       /* API base URL (default: https://api.openai.com/v1) */
-    char               *model;          /* Model name (e.g., "gpt-4o") */
+    OpenAIOAuthManager *oauth_manager;       /* OAuth manager for token lifecycle */
+    char               *api_base;            /* API base URL (default: https://api.openai.com/v1) */
+    char               *model;               /* Model name (e.g., "gpt-4o") */
+    char               *previous_response_id; /* Previous Responses API response ID for conversation continuity */
 } OpenAISubConfig;
 
 /**
