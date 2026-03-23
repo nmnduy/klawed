@@ -35,6 +35,221 @@
  * Returns: Pointer to duplicate tool name if found, NULL otherwise
  * Note: Returned pointer is to the name field in the JSON, caller must NOT free
  */
+static int is_subagent_process(void) {
+    const char *is_subagent_env = getenv("KLAWED_IS_SUBAGENT");
+    return is_subagent_env && (strcmp(is_subagent_env, "1") == 0 ||
+                               strcasecmp(is_subagent_env, "true") == 0 ||
+                               strcasecmp(is_subagent_env, "yes") == 0);
+}
+
+static void add_function_tool(cJSON *tool_array, ToolSchemaFormat format,
+                              const char *name, const char *description,
+                              cJSON *parameters) {
+    cJSON *tool = cJSON_CreateObject();
+    if (!tool) {
+        if (parameters) {
+            cJSON_Delete(parameters);
+        }
+        return;
+    }
+
+    cJSON_AddStringToObject(tool, "type", "function");
+    if (format == TOOL_SCHEMA_RESPONSES) {
+        cJSON_AddStringToObject(tool, "name", name);
+        cJSON_AddStringToObject(tool, "description", description);
+        cJSON_AddItemToObject(tool, "parameters", parameters);
+    } else {
+        cJSON *func = cJSON_CreateObject();
+        if (!func) {
+            cJSON_Delete(tool);
+            if (parameters) {
+                cJSON_Delete(parameters);
+            }
+            return;
+        }
+        cJSON_AddStringToObject(func, "name", name);
+        cJSON_AddStringToObject(func, "description", description);
+        cJSON_AddItemToObject(func, "parameters", parameters);
+        cJSON_AddItemToObject(tool, "function", func);
+    }
+    cJSON_AddItemToArray(tool_array, tool);
+}
+
+static cJSON* build_required_array(const char **names, size_t count) {
+    cJSON *required = cJSON_CreateArray();
+    size_t i = 0;
+    if (!required) {
+        return NULL;
+    }
+    for (i = 0; i < count; i++) {
+        cJSON_AddItemToArray(required, cJSON_CreateString(names[i]));
+    }
+    return required;
+}
+
+
+
+cJSON* get_openai_subscription_tool_definitions(struct ConversationState *state,
+                                                int enable_caching,
+                                                ToolSchemaFormat format) {
+    (void)enable_caching;
+
+    cJSON *tool_array = cJSON_CreateArray();
+    cJSON *params = NULL;
+    cJSON *props = NULL;
+    cJSON *item = NULL;
+    int is_subagent = is_subagent_process();
+
+    if (!tool_array) {
+        return NULL;
+    }
+
+    if (!is_tool_disabled("Bash")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "The command to execute");
+        cJSON_AddItemToObject(props, "command", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "integer");
+        cJSON_AddStringToObject(item, "description", "Optional: Timeout in seconds. Default: 30 (from KLAWED_BASH_TIMEOUT env var). Set to 0 for no timeout.");
+        cJSON_AddItemToObject(props, "timeout", item);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("command"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "Bash",
+                          "Executes bash commands. Note: stderr is automatically redirected to stdout to prevent terminal corruption, so both stdout and stderr output will be captured in the 'output' field. Commands have a configurable timeout (default: 30 seconds) to prevent hanging. Use the 'timeout' parameter to override the default or set to 0 for no timeout.",
+                          params);
+    } else {
+        LOG_INFO("Tool 'Bash' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
+    if (!is_subagent && !is_tool_disabled("Subagent")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "The task prompt for the subagent. Be specific and include all necessary context.");
+        cJSON_AddItemToObject(props, "prompt", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "integer");
+        cJSON_AddStringToObject(item, "description", "Optional: Timeout in seconds. Default: 300 (5 minutes). Set to 0 for no timeout.");
+        cJSON_AddItemToObject(props, "timeout", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "integer");
+        cJSON_AddStringToObject(item, "description", "Optional: Number of lines to return from end of log. Default: 100.");
+        cJSON_AddItemToObject(props, "tail_lines", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "Optional: LLM provider name to use for this subagent.");
+        cJSON_AddItemToObject(props, "provider", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "Optional: Working directory for the subagent. Must be an absolute path.");
+        cJSON_AddItemToObject(props, "working_dir", item);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("prompt"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "Subagent",
+                          "Spawns a new instance of klawed with the same configuration to work on a delegated task in a fresh context. The subagent runs independently and writes all output to a log file.",
+                          params);
+    } else if (!is_subagent) {
+        LOG_INFO("Tool 'Subagent' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
+    if (!is_subagent && !is_tool_disabled("CheckSubagentProgress")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "integer");
+        cJSON_AddStringToObject(item, "description", "Process ID of the subagent (from Subagent tool response)");
+        cJSON_AddItemToObject(props, "pid", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "Path to subagent log file (from Subagent tool response)");
+        cJSON_AddItemToObject(props, "log_file", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "integer");
+        cJSON_AddStringToObject(item, "description", "Optional: Number of lines to read from end of log (default: 50)");
+        cJSON_AddItemToObject(props, "tail_lines", item);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("pid"));
+        cJSON_AddItemToArray(item, cJSON_CreateString("log_file"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "CheckSubagentProgress",
+                          "Checks the progress of a running subagent by reading its log file.",
+                          params);
+    } else if (!is_subagent) {
+        LOG_INFO("Tool 'CheckSubagentProgress' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
+    if (!is_subagent && !is_tool_disabled("InterruptSubagent")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "integer");
+        cJSON_AddStringToObject(item, "description", "Process ID of the subagent to interrupt (from Subagent tool response)");
+        cJSON_AddItemToObject(props, "pid", item);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("pid"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "InterruptSubagent",
+                          "Interrupts and stops a running subagent. Use this to cancel a subagent that is stuck, taking too long, or no longer needed.",
+                          params);
+    } else if (!is_subagent) {
+        LOG_INFO("Tool 'InterruptSubagent' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
+    return tool_array;
+}
 const char* detect_duplicate_tool_names(cJSON *tool_array) {
     if (!tool_array || !cJSON_IsArray(tool_array)) {
         return NULL;
