@@ -28,8 +28,7 @@ typedef enum {
 
 void add_memory_tools(cJSON *tool_array, ToolSchemaFormat format);
 cJSON* get_tool_definitions(struct ConversationState *state, int enable_caching);
-cJSON* get_openai_subscription_tool_definitions(struct ConversationState *state,
-                                                int enable_caching,
+cJSON* get_openai_subscription_tool_definitions(int enable_caching,
                                                 ToolSchemaFormat format);
 
 /**
