@@ -96,9 +96,23 @@ static int mkdir_p_with_mode(const char *path, mode_t mode) {
 }
 
 /**
- * Get ~/.kimi directory path
+ * Get ~/.kimi directory path (or $KIMI_CONFIG_DIR if set)
  */
 static char* get_kimi_dir(void) {
+    // Check for KIMI_CONFIG_DIR environment variable first
+    const char *config_dir = getenv("KIMI_CONFIG_DIR");
+    if (config_dir && config_dir[0] != '\0') {
+        char *path = malloc(PATH_MAX);
+        if (!path) return NULL;
+        if (strlcpy(path, config_dir, PATH_MAX) >= PATH_MAX) {
+            free(path);
+            LOG_ERROR("KIMI_CONFIG_DIR path too long");
+            return NULL;
+        }
+        return path;
+    }
+
+    // Fall back to ~/.kimi
     const char *home = getenv("HOME");
     if (!home || home[0] == '\0') {
         struct passwd *pw = getpwuid(getuid());
