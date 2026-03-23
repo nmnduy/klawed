@@ -480,15 +480,32 @@ static ApiResponse *parse_response(cJSON *json) {
  * Provider call_api Implementation
  * ============================================================================ */
 
+
+/**
+ * Structure to track a pending function call during SSE parsing
+ */
+typedef struct {
+    char id[128];
+    char call_id[128];
+    char name[64];
+    char *arguments;
+    size_t args_cap;
+    size_t args_len;
+    int complete;
+} PendingFunctionCall;
 /**
  * Parse the SSE body returned by the chatgpt backend Responses API into a
  * synthetic chat-completions JSON object so the rest of the pipeline can
  * process it unchanged.
  *
  * Events we care about:
- *   response.output_text.delta  → accumulate text
- *   response.completed          → extract usage
- *   response.failed / error     → surface error
+ *   response.output_text.delta          -> accumulate text
+ *   response.output_item.added          -> function call started (has item.id, call_id, name)
+ *   response.function_call_arguments.delta -> accumulate args
+ *   response.function_call_arguments.done -> args complete
+ *   response.output_item.done           -> item complete (has full arguments)
+ *   response.completed                  -> extract usage
+ *   response.failed / error             -> surface error
  */
 static cJSON *parse_chatgpt_sse_response(const char *sse_body) {
     if (!sse_body) return NULL;
@@ -500,6 +517,11 @@ static cJSON *parse_chatgpt_sse_response(const char *sse_body) {
     if (!text_buf) return NULL;
     text_buf[0] = '\0';
 
+
+    /* Track function calls */
+    PendingFunctionCall *funcs = NULL;
+    int func_count = 0;
+    int func_cap = 0;
     long   input_tokens  = 0;
     long   output_tokens = 0;
     char   model_str[128] = "gpt-5.3-codex";
@@ -541,7 +563,116 @@ static cJSON *parse_chatgpt_sse_response(const char *sse_body) {
                                     text_cap - text_len);
                             text_len += dlen;
                         }
-                    } else if (strcmp(ev_type, "response.completed") == 0) {
+                    }
+                    /* New function call started */
+                    else if (strcmp(ev_type, "response.output_item.added") == 0) {
+                        cJSON *item = cJSON_GetObjectItem(ev, "item");
+                        if (item) {
+                            cJSON *item_type = cJSON_GetObjectItem(item, "type");
+                            if (item_type && cJSON_IsString(item_type) &&
+                                strcmp(item_type->valuestring, "function_call") == 0) {
+                                /* Start tracking a new function call */
+                                if (func_count >= func_cap) {
+                                    func_cap = func_cap ? func_cap * 2 : 4;
+                                    PendingFunctionCall *tmp = realloc(funcs,
+                                        (size_t)func_cap * sizeof(PendingFunctionCall));
+                                    if (!tmp) { free(text_buf); cJSON_Delete(ev); return NULL; }
+                                    funcs = tmp;
+                                }
+                                PendingFunctionCall *f = &funcs[func_count];
+                                memset(f, 0, sizeof(*f));
+
+                                cJSON *id_j = cJSON_GetObjectItem(item, "id");
+                                if (id_j && cJSON_IsString(id_j)) {
+                                    strlcpy(f->id, id_j->valuestring, sizeof(f->id));
+                                }
+                                cJSON *call_id_j = cJSON_GetObjectItem(item, "call_id");
+                                if (call_id_j && cJSON_IsString(call_id_j)) {
+                                    strlcpy(f->call_id, call_id_j->valuestring, sizeof(f->call_id));
+                                }
+                                cJSON *name_j = cJSON_GetObjectItem(item, "name");
+                                if (name_j && cJSON_IsString(name_j)) {
+                                    strlcpy(f->name, name_j->valuestring, sizeof(f->name));
+                                }
+                                func_count++;
+                            }
+                        }
+                    }
+                    /* Incremental function call arguments */
+                    else if (strcmp(ev_type, "response.function_call_arguments.delta") == 0) {
+                        cJSON *delta = cJSON_GetObjectItem(ev, "delta");
+                        cJSON *item_id = cJSON_GetObjectItem(ev, "item_id");
+                        if (delta && cJSON_IsString(delta) && delta->valuestring &&
+                            item_id && cJSON_IsString(item_id)) {
+                            /* Find the matching function call */
+                            for (int i = 0; i < func_count; i++) {
+                                if (strcmp(funcs[i].id, item_id->valuestring) == 0) {
+                                    PendingFunctionCall *f = &funcs[i];
+                                    size_t dlen = strlen(delta->valuestring);
+                                    if (f->args_len + dlen + 1 > f->args_cap) {
+                                        f->args_cap = (f->args_len + dlen + 1) * 2;
+                                        if (f->args_cap < 256) f->args_cap = 256;
+                                        char *tmp = realloc(f->arguments, f->args_cap);
+                                        if (!tmp) break;
+                                        f->arguments = tmp;
+                                    }
+                                    memcpy(f->arguments + f->args_len, delta->valuestring, dlen);
+                                    f->args_len += dlen;
+                                    f->arguments[f->args_len] = '\0';
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    /* Function call arguments complete */
+                    else if (strcmp(ev_type, "response.function_call_arguments.done") == 0) {
+                        cJSON *item_id = cJSON_GetObjectItem(ev, "item_id");
+                        cJSON *args_j = cJSON_GetObjectItem(ev, "arguments");
+                        if (item_id && cJSON_IsString(item_id) &&
+                            args_j && cJSON_IsString(args_j)) {
+                            for (int i = 0; i < func_count; i++) {
+                                if (strcmp(funcs[i].id, item_id->valuestring) == 0) {
+                                    PendingFunctionCall *f = &funcs[i];
+                                    /* Replace accumulated args with final args */
+                                    free(f->arguments);
+                                    f->arguments = strdup(args_j->valuestring);
+                                    f->args_len = strlen(args_j->valuestring);
+                                    f->args_cap = f->args_len + 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    /* Output item complete (may have final function call data) */
+                    else if (strcmp(ev_type, "response.output_item.done") == 0) {
+                        cJSON *item = cJSON_GetObjectItem(ev, "item");
+                        if (item) {
+                            cJSON *item_type = cJSON_GetObjectItem(item, "type");
+                            if (item_type && cJSON_IsString(item_type) &&
+                                strcmp(item_type->valuestring, "function_call") == 0) {
+                                cJSON *id_j = cJSON_GetObjectItem(item, "id");
+                                cJSON *args_j = cJSON_GetObjectItem(item, "arguments");
+                                if (id_j && cJSON_IsString(id_j) &&
+                                    args_j && cJSON_IsString(args_j)) {
+                                    /* Find and update the matching function call */
+                                    for (int i = 0; i < func_count; i++) {
+                                        if (strcmp(funcs[i].id, id_j->valuestring) == 0) {
+                                            PendingFunctionCall *f = &funcs[i];
+                                            /* Ensure we have the final arguments */
+                                            free(f->arguments);
+                                            f->arguments = strdup(args_j->valuestring);
+                                            f->args_len = strlen(args_j->valuestring);
+                                            f->args_cap = f->args_len + 1;
+                                            f->complete = 1;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    /* Response completed - extract usage */
+                    else if (strcmp(ev_type, "response.completed") == 0) {
                         cJSON *resp = cJSON_GetObjectItem(ev, "response");
                         if (resp) {
                             cJSON *id_item = cJSON_GetObjectItem(resp, "id");
@@ -582,6 +713,10 @@ static cJSON *parse_chatgpt_sse_response(const char *sse_body) {
 
     if (got_error) {
         free(text_buf);
+        for (int i = 0; i < func_count; i++) {
+            free(funcs[i].arguments);
+        }
+        free(funcs);
         /* Return an error-shaped JSON that the caller can detect */
         cJSON *err_json = cJSON_CreateObject();
         cJSON *e = cJSON_CreateObject();
@@ -602,9 +737,28 @@ static cJSON *parse_chatgpt_sse_response(const char *sse_body) {
     cJSON_AddNumberToObject(choice, "index", 0);
     cJSON *msg_obj = cJSON_CreateObject();
     cJSON_AddStringToObject(msg_obj, "role", "assistant");
-    cJSON_AddStringToObject(msg_obj, "content", text_buf);
+    cJSON_AddStringToObject(msg_obj, "content", text_buf ? text_buf : "");
     cJSON_AddItemToObject(choice, "message", msg_obj);
-    cJSON_AddStringToObject(choice, "finish_reason", "stop");
+
+    /* Add tool_calls if we have any function calls */
+    if (func_count > 0) {
+        cJSON *tool_calls = cJSON_CreateArray();
+        for (int i = 0; i < func_count; i++) {
+            cJSON *tc = cJSON_CreateObject();
+            cJSON_AddStringToObject(tc, "id", funcs[i].call_id[0] ? funcs[i].call_id : funcs[i].id);
+            cJSON_AddStringToObject(tc, "type", "function");
+            cJSON *fn = cJSON_CreateObject();
+            cJSON_AddStringToObject(fn, "name", funcs[i].name);
+            cJSON_AddStringToObject(fn, "arguments", funcs[i].arguments ? funcs[i].arguments : "{}");
+            cJSON_AddItemToObject(tc, "function", fn);
+            cJSON_AddItemToArray(tool_calls, tc);
+        }
+        cJSON_AddItemToObject(msg_obj, "tool_calls", tool_calls);
+        cJSON_AddStringToObject(choice, "finish_reason", "tool_calls");
+    } else {
+        cJSON_AddStringToObject(choice, "finish_reason", "stop");
+    }
+
     cJSON_AddItemToArray(choices, choice);
     cJSON_AddItemToObject(out, "choices", choices);
 
@@ -616,6 +770,10 @@ static cJSON *parse_chatgpt_sse_response(const char *sse_body) {
     cJSON_AddItemToObject(out, "usage", usage_obj);
 
     free(text_buf);
+    for (int i = 0; i < func_count; i++) {
+        free(funcs[i].arguments);
+    }
+    free(funcs);
     return out;
 }
 
