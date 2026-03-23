@@ -788,9 +788,18 @@ static cJSON *parse_chatgpt_sse_response(const char *sse_body) {
  *   - stream:       true    (required)
  *
  * max_output_tokens is NOT supported and must be omitted.
+ *
+ * ChatGPT Backend API content types:
+ *   - input_text:  user text input (includes tool results in text format)
+ *   - input_image: user image input
+ *   - output_text: assistant text output (for conversation history)
+ *
+ * IMPORTANT: The ChatGPT backend does NOT accept 'function_call' as an input
+ * content type. Tool calls are tracked via stateful previous_response_id.
  */
 static cJSON *build_chatgpt_backend_request(ConversationState *state,
-                                             const char *model_override) {
+                                             const char *model_override,
+                                             const char *previous_response_id) {
     if (!state) return NULL;
 
     conversation_state_lock(state);
@@ -806,11 +815,18 @@ static cJSON *build_chatgpt_backend_request(ConversationState *state,
     cJSON_AddFalseToObject(req,  "store");
     cJSON_AddTrueToObject(req,   "stream");
 
+    /* Note: ChatGPT backend doesn't support previous_response_id.
+     * We track it for future use but don't send it in the request. */
+    (void)previous_response_id; /* unused for now */
+
     /* Collect system prompt as "instructions" and all other messages as "input" */
     cJSON *input = cJSON_CreateArray();
     if (!input) { cJSON_Delete(req); conversation_state_unlock(state); return NULL; }
 
-    for (int i = 0; i < state->count; i++) {
+    /* Send full conversation history */
+    int start_idx = 0;
+
+    for (int i = start_idx; i < state->count; i++) {
         InternalMessage *msg = &state->messages[i];
 
         if (msg->role == MSG_SYSTEM) {
@@ -828,17 +844,60 @@ static cJSON *build_chatgpt_backend_request(ConversationState *state,
             continue;
         }
 
-        /* user / assistant turns */
+        /* user / assistant turns - build content array with proper types */
         const char *role_str = (msg->role == MSG_USER) ? "user" : "assistant";
+        cJSON *content_array = cJSON_CreateArray();
+        if (!content_array) continue;
+
         for (int j = 0; j < msg->content_count; j++) {
             InternalContent *c = &msg->contents[j];
-            if (c->type != INTERNAL_TEXT || !c->text || c->text[0] == '\0') continue;
 
+            if (c->type == INTERNAL_TEXT && c->text && c->text[0] != '\0') {
+                /* Text content - input_text for user, output_text for assistant */
+                cJSON *text_obj = cJSON_CreateObject();
+                if (!text_obj) continue;
+                const char *type_str = (msg->role == MSG_USER) ? "input_text" : "output_text";
+                cJSON_AddStringToObject(text_obj, "type", type_str);
+                cJSON_AddStringToObject(text_obj, "text", c->text);
+                cJSON_AddItemToArray(content_array, text_obj);
+            }
+            /* ChatGPT backend does NOT accept function_call as input type.
+             * Tool calls are tracked via stateful previous_response_id.
+             * We skip INTERNAL_TOOL_CALL for assistant role when building input.
+             */
+            else if (c->type == INTERNAL_TOOL_RESPONSE && msg->role == MSG_USER) {
+                /* ChatGPT backend (codex endpoint) doesn't support function_call_output.
+                 * Convert tool result to input_text with the result included. */
+                cJSON *tool_result = cJSON_CreateObject();
+                if (!tool_result) continue;
+                cJSON_AddStringToObject(tool_result, "type", "input_text");
+
+                /* Build a text representation of the tool result */
+                char *output_str = cJSON_PrintUnformatted(c->tool_output);
+                char result_text[2048];
+                snprintf(result_text, sizeof(result_text),
+                         "Tool result (id: %s): %s",
+                         c->tool_id ? c->tool_id : "unknown",
+                         output_str ? output_str : "{}");
+                free(output_str);
+                cJSON_AddStringToObject(tool_result, "text", result_text);
+                cJSON_AddItemToArray(content_array, tool_result);
+            }
+        }
+
+        /* Only add message if we have content */
+        if (cJSON_GetArraySize(content_array) > 0) {
             cJSON *item = cJSON_CreateObject();
-            if (!item) continue;
-            cJSON_AddStringToObject(item, "role", role_str);
-            cJSON_AddStringToObject(item, "content", c->text);
-            cJSON_AddItemToArray(input, item);
+            if (item) {
+                cJSON_AddStringToObject(item, "type", "message");
+                cJSON_AddStringToObject(item, "role", role_str);
+                cJSON_AddItemToObject(item, "content", content_array);
+                cJSON_AddItemToArray(input, item);
+            } else {
+                cJSON_Delete(content_array);
+            }
+        } else {
+            cJSON_Delete(content_array);
         }
     }
 
@@ -925,8 +984,10 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
          *   - store must be false
          *   - stream must be true
          *   - max_output_tokens is not supported (omit it)
-         *   - model + instructions + input[] format                      */
-        cJSON *body = build_chatgpt_backend_request(state, config->model);
+         *   - model + instructions + input[] format
+         *   - previous_response_id for stateful conversation tracking          */
+        cJSON *body = build_chatgpt_backend_request(state, config->model,
+                                                     config->previous_response_id);
         if (!body) {
             result.error_message = strdup("OpenAI sub: failed to build chatgpt backend request");
             result.is_retryable  = 0;
@@ -1202,6 +1263,17 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
         return;
     }
 
+    /* Extract response ID for stateful conversation tracking (ChatGPT backend) */
+    if (use_responses_api) {
+        cJSON *id_item = cJSON_GetObjectItem(raw_json, "id");
+        if (id_item && cJSON_IsString(id_item) && id_item->valuestring) {
+            free(config->previous_response_id);
+            config->previous_response_id = strdup(id_item->valuestring);
+            LOG_DEBUG("OpenAI Sub: saved response_id=%s for stateful conversation",
+                      config->previous_response_id);
+        }
+    }
+
     result.response    = api_response;
     result.is_retryable = 0;
     *out = result;
@@ -1222,6 +1294,7 @@ static void openai_sub_cleanup(Provider *self) {
         }
         free(config->api_base);
         free(config->model);
+        free(config->previous_response_id);
         free(config);
     }
     free(self);
