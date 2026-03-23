@@ -75,20 +75,6 @@ static void add_function_tool(cJSON *tool_array, ToolSchemaFormat format,
     cJSON_AddItemToArray(tool_array, tool);
 }
 
-static cJSON* build_required_array(const char **names, size_t count) {
-    cJSON *required = cJSON_CreateArray();
-    size_t i = 0;
-    if (!required) {
-        return NULL;
-    }
-    for (i = 0; i < count; i++) {
-        cJSON_AddItemToArray(required, cJSON_CreateString(names[i]));
-    }
-    return required;
-}
-
-
-
 cJSON* get_openai_subscription_tool_definitions(struct ConversationState *state,
                                                 int enable_caching,
                                                 ToolSchemaFormat format) {
