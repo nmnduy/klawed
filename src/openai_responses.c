@@ -232,7 +232,7 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
 
     // Add tools with cache_control support (including MCP tools if available)
     // Use the Responses API-specific tool definitions function
-    cJSON *tool_defs = get_tool_definitions_for_responses_api(state, enable_caching);
+    cJSON *tool_defs = get_openai_subscription_tool_definitions(state, enable_caching, TOOL_SCHEMA_RESPONSES);
     cJSON_AddItemToObject(request, "tools", tool_defs);
 
     conversation_state_unlock(state);

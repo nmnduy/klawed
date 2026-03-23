@@ -28,6 +28,9 @@ typedef enum {
 
 void add_memory_tools(cJSON *tool_array, ToolSchemaFormat format);
 cJSON* get_tool_definitions(struct ConversationState *state, int enable_caching);
+cJSON* get_openai_subscription_tool_definitions(struct ConversationState *state,
+                                                int enable_caching,
+                                                ToolSchemaFormat format);
 
 /**
  * detect_duplicate_tool_names - Check for duplicate tool names in the tool array

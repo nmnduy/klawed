@@ -18,6 +18,7 @@
 #include "openai_messages.h"
 #include "openai_responses.h"
 #include "openai_provider.h"
+#include "tools/tool_definitions.h"
 #include "http_client.h"
 #include "logger.h"
 #include "arena.h"
@@ -910,7 +911,7 @@ static cJSON *build_chatgpt_backend_request(ConversationState *state,
     }
 
     /* Add tools with cache_control support (including MCP tools if available) */
-    cJSON *tool_defs = get_tool_definitions_for_responses_api(state, 0);
+    cJSON *tool_defs = get_openai_subscription_tool_definitions(state, 0, TOOL_SCHEMA_RESPONSES);
     cJSON_AddItemToObject(req, "tools", tool_defs);
 
     conversation_state_unlock(state);
