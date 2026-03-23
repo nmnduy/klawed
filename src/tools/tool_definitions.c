@@ -75,11 +75,9 @@ static void add_function_tool(cJSON *tool_array, ToolSchemaFormat format,
     cJSON_AddItemToArray(tool_array, tool);
 }
 
-cJSON* get_openai_subscription_tool_definitions(struct ConversationState *state,
-                                                int enable_caching,
+cJSON* get_openai_subscription_tool_definitions(int enable_caching,
                                                 ToolSchemaFormat format) {
     (void)enable_caching;
-    (void)state;
 
     cJSON *tool_array = cJSON_CreateArray();
     cJSON *params = NULL;
