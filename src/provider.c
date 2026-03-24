@@ -853,7 +853,14 @@ void provider_init(const char *model,
             return;
         } else if (provider_type == PROVIDER_MOONSHOT) {
             LOG_INFO("Using Moonshot provider (explicitly configured)");
-            Provider *prov = moonshot_provider_create(api_key_to_use, base_url);
+            // Use create_with_headers if extra_headers are present in config
+            Provider *prov;
+            if (provider_config && provider_config->extra_headers[0] != '\0') {
+                prov = moonshot_provider_create_with_headers(api_key_to_use, base_url,
+                                                              provider_config->extra_headers);
+            } else {
+                prov = moonshot_provider_create(api_key_to_use, base_url);
+            }
             if (!prov) {
                 result->error_message = strdup("Failed to initialize Moonshot provider (check logs for details)");
                 LOG_ERROR("Provider init failed: %s", result->error_message);
@@ -1324,7 +1331,13 @@ void provider_init_from_config(const char *provider_key,
 
     if (provider_type == PROVIDER_MOONSHOT) {
         LOG_INFO("Creating Moonshot provider from config...");
-        Provider *prov = moonshot_provider_create(api_key, base_url);
+        // Use create_with_headers if extra_headers are present in config
+        Provider *prov;
+        if (config && config->extra_headers[0] != '\0') {
+            prov = moonshot_provider_create_with_headers(api_key, base_url, config->extra_headers);
+        } else {
+            prov = moonshot_provider_create(api_key, base_url);
+        }
         free(base_url);
         if (!prov) {
             result->error_message = strdup(

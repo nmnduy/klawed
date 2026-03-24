@@ -46,3 +46,55 @@ Provider* moonshot_provider_create(const char *api_key, const char *base_url) {
     LOG_INFO("Moonshot provider created successfully (base URL: %s)", url);
     return provider;
 }
+
+Provider* moonshot_provider_create_with_headers(const char *api_key,
+                                                 const char *base_url,
+                                                 const char *extra_headers) {
+    LOG_DEBUG("Creating Moonshot provider with extra headers...");
+
+    Provider *provider = moonshot_provider_create(api_key, base_url);
+    if (!provider) {
+        return NULL;
+    }
+
+    // Apply extra_headers if provided
+    if (extra_headers && extra_headers[0] != '\0') {
+        LOG_INFO("[Moonshot] Loading extra_headers: %s", extra_headers);
+
+        OpenAIConfig *cfg = (OpenAIConfig *)provider->config;
+        if (cfg) {
+            // Parse comma-separated headers
+            char *extra_headers_copy = strdup(extra_headers);
+            if (extra_headers_copy) {
+                // Count headers
+                int count = 0;
+                char *temp = strdup(extra_headers);
+                if (temp) {
+                    char *token = strtok(temp, ",");
+                    while (token) {
+                        count++;
+                        token = strtok(NULL, ",");
+                    }
+                    free(temp);
+                }
+
+                // Allocate array
+                cfg->extra_headers = calloc((size_t)count + 1, sizeof(char*));
+                if (cfg->extra_headers) {
+                    cfg->extra_headers_count = count;
+                    int idx = 0;
+                    char *token = strtok(extra_headers_copy, ",");
+                    while (token && idx < count) {
+                        cfg->extra_headers[idx] = strdup(token);
+                        LOG_DEBUG("[Moonshot] Added extra header: %s", token);
+                        idx++;
+                        token = strtok(NULL, ",");
+                    }
+                }
+                free(extra_headers_copy);
+            }
+        }
+    }
+
+    return provider;
+}
