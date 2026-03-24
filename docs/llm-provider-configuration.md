@@ -251,6 +251,35 @@ The system will:
 
 **Note:** Kimi Coding Plan uses OAuth device flow for authentication. On first use, you'll be prompted to authorize via browser. The OAuth token will be stored in `~/.kimi/credentials/` for subsequent use.
 
+**Headless/Server Usage:** To use Kimi on a machine without a browser (e.g., servers), you can copy the authentication from a machine that has completed the browser flow:
+
+1. **Option A - Using `KIMI_CONFIG_DIR`:**
+   ```bash
+   # On machine with browser
+   export KIMI_CONFIG_DIR="$HOME/.kimi-shared"
+   klawed  # Complete browser auth
+   
+   # Copy to headless server
+   scp -r ~/.kimi-shared user@server:~/
+   
+   # On headless server
+   export KIMI_CONFIG_DIR="$HOME/.kimi-shared"
+   klawed  # Works without browser
+   ```
+
+2. **Option B - Copy auth files directly:**
+   ```bash
+   # Copy these two files from the authenticated machine:
+   # - ~/.kimi/device_id
+   # - ~/.kimi/credentials/oauth_token.json
+   
+   # On headless server:
+   mkdir -p ~/.kimi/credentials
+   # Copy both files to the same locations
+   ```
+
+**Important:** You must copy **both** `device_id` AND `oauth_token.json`. The device_id is tied to the OAuth token and is required for API requests.
+
 #### Moonshot/Kimi API Configuration (for kimi-k2.5)
 ```json
 {
