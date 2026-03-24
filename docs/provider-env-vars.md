@@ -17,6 +17,8 @@ Klawed supports configuring LLM providers entirely through environment variables
 - `OPENAI_MODEL` - Override the default model name for any provider
 - `OPENAI_API_BASE` - Custom API base URL (for compatible endpoints)
 
+**Note on `OPENAI_API_BASE`:** This variable works with `openai_sub`, `anthropic_sub`, and `zai_coding` providers, but **does not affect `kimi_coding_plan`** (which uses a fixed endpoint).
+
 ## OAuth Providers (No API Key Required)
 
 ### OpenAI Subscription (ChatGPT Plus/Pro)
