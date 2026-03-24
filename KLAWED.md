@@ -167,10 +167,18 @@ export OPENAI_API_KEY="your-api-key"
 **Configuration files:** 
 - Global: `~/.klawed/config.json` - User-wide settings shared across all projects
 - Local: `.klawed/config.json` - Project-specific settings (overrides global)
-- See `docs/llm-provider-configuration.md` for detailed documentation and examples.
+- See `docs/llm-provider-configuration.md` for detailed configuration documentation
+- See `docs/provider-env-vars.md` for using providers via environment variables only (no config.json needed)
 
 **Environment variables:**
 - **API**: `OPENAI_API_KEY` (required), `OPENAI_MODEL`, `OPENAI_API_BASE`
+- **Provider Type**: `KLAWED_PROVIDER_TYPE` - Select provider type without config.json. Useful for OAuth providers that don't need API keys:
+  - `openai_sub` - OpenAI Subscription (ChatGPT Plus/Pro). Uses OAuth, no API key needed. Default model: `gpt-5.3-codex`
+  - `anthropic_sub` - Anthropic Subscription (Claude.ai). Uses OAuth, no API key needed. Default model: `claude-opus-4`
+  - `kimi_coding_plan` - Kimi Coding Plan. Uses OAuth, no API key needed. Default model: `kimi-for-coding`
+  - `zai_coding` - Z.AI GLM Coding Plan. Requires `ZAI_API_KEY_CODING_PLAN` env var. Default model: `glm-4-flash`
+  - `openai`, `anthropic`, `bedrock`, etc. - Standard API providers
+  - Override the default model with `OPENAI_MODEL` environment variable
 - **OpenAI Authentication**: `OPENAI_AUTH_HEADER` - Custom auth header template (e.g., "x-api-key: %s" or "Authorization: Bearer %s")
 - **Extra Headers**: `OPENAI_EXTRA_HEADERS` - Comma-separated list of additional headers (e.g., "anthropic-version: 2023-06-01, User-Agent: my-app")
 - **Caching**: `DISABLE_PROMPT_CACHING=1` to disable
@@ -217,6 +225,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_WEB_BROWSE_AGENT_PATH` - Path to web_browse_agent binary (default: tools/web_browse_agent/web_browse_agent)
   - `CONTEXT7_API_KEY` - API key for Context7 (optional, for higher rate limits)
 - **Kimi Coding Plan**: `KIMI_CONFIG_DIR` - Directory for Kimi OAuth credentials (default: `~/.kimi`). Useful for copying auth to headless servers. Set to a shared path to easily copy credentials between machines.
+- **OpenAI Subscription**: `OPENAI_OAUTH_PATH` - Custom path for OpenAI OAuth token file (default: `~/.openai/auth.json`). Useful for sharing credentials across machines or using secure storage locations.
 
 **Defaults:**
 - Logs: `./.klawed/logs/klawed.log` (project-local)

@@ -438,6 +438,38 @@ static void get_provider_config(Arena *arena,
     *api_key_source_out = NULL;
     *provider_name_out = NULL;
 
+    // Check for KLAWED_PROVIDER_TYPE (env-only provider configuration)
+    // This allows using providers like zai_coding, kimi_coding_plan without config.json
+    const char *env_provider_type = getenv("KLAWED_PROVIDER_TYPE");
+    LLMProviderConfig synthetic_provider;
+    memset(&synthetic_provider, 0, sizeof(synthetic_provider));
+    int using_synthetic_provider = 0;
+
+    if (env_provider_type && env_provider_type[0] != '\0') {
+        synthetic_provider.provider_type = config_provider_type_from_string(env_provider_type);
+        if (synthetic_provider.provider_type != PROVIDER_AUTO) {
+            using_synthetic_provider = 1;
+            strlcpy(synthetic_provider.provider_name, env_provider_type, CONFIG_PROVIDER_NAME_MAX);
+            LOG_INFO("[Provider] Using provider type '%s' from KLAWED_PROVIDER_TYPE", env_provider_type);
+
+            // Set appropriate API key env var for specific providers
+            if (synthetic_provider.provider_type == PROVIDER_ZAI_CODING) {
+                strlcpy(synthetic_provider.api_key_env, "ZAI_API_KEY_CODING_PLAN", CONFIG_API_KEY_ENV_MAX);
+                // Default model for Z.AI - will be used if OPENAI_MODEL is not set
+                strlcpy(synthetic_provider.model, "glm-4-flash", CONFIG_MODEL_MAX);
+            } else if (synthetic_provider.provider_type == PROVIDER_KIMI_CODING_PLAN) {
+                // Kimi Coding Plan uses OAuth, no API key needed
+                strlcpy(synthetic_provider.model, "kimi-for-coding", CONFIG_MODEL_MAX);
+            } else if (synthetic_provider.provider_type == PROVIDER_OPENAI_SUB) {
+                // OpenAI Subscription uses OAuth, no API key needed
+                strlcpy(synthetic_provider.model, "gpt-5.3-codex", CONFIG_MODEL_MAX);
+            } else if (synthetic_provider.provider_type == PROVIDER_ANTHROPIC_SUB) {
+                // Anthropic Subscription uses OAuth, no API key needed
+                strlcpy(synthetic_provider.model, "claude-opus-4", CONFIG_MODEL_MAX);
+            }
+        }
+    }
+
     // Load configuration from file
     KlawedConfig file_config;
     config_init_defaults(&file_config);
@@ -446,7 +478,12 @@ static void get_provider_config(Arena *arena,
     // Get the provider configuration to use (checks KLAWED_LLM_PROVIDER env and active_provider)
     const LLMProviderConfig *provider_config = NULL;
     const char *active_provider_key = NULL;
-    if (config_loaded) {
+
+    // If using synthetic provider from KLAWED_PROVIDER_TYPE, use that
+    if (using_synthetic_provider) {
+        provider_config = &synthetic_provider;
+        active_provider_key = env_provider_type;
+    } else if (config_loaded) {
         provider_config = get_provider_config_to_use(&file_config);
         // Determine which provider key is active
         const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
@@ -470,8 +507,11 @@ static void get_provider_config(Arena *arena,
         LOG_DEBUG("[Provider] Named provider selected, using provider config as primary (env vars as fallback)");
         *provider_name_out = active_provider_key;
 
-        // Get model (priority: provider config > env var)
-        if (provider_config->model[0] != '\0') {
+        // Get model (priority: env var > provider config for synthetic providers, provider config > env var otherwise)
+        // This allows OPENAI_MODEL to override synthetic provider defaults
+        if (using_synthetic_provider && env_model && env_model[0] != '\0') {
+            *model_out = arena_strdup(arena, env_model);
+        } else if (provider_config->model[0] != '\0') {
             *model_out = arena_strdup(arena, provider_config->model);
         } else if (env_model && env_model[0] != '\0') {
             *model_out = arena_strdup(arena, env_model);
