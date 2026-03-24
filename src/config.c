@@ -33,6 +33,7 @@ void config_init_defaults(KlawedConfig *config) {
     config->llm_provider.api_base[0] = '\0';
     config->llm_provider.api_key[0] = '\0';
     config->llm_provider.api_key_env[0] = '\0';
+    config->llm_provider.api_key_file[0] = '\0';
     config->llm_provider.extra_headers[0] = '\0';
     config->llm_provider.use_bedrock = 0;
 
@@ -49,6 +50,7 @@ void config_init_defaults(KlawedConfig *config) {
         config->providers[i].config.api_base[0] = '\0';
         config->providers[i].config.api_key[0] = '\0';
         config->providers[i].config.api_key_env[0] = '\0';
+        config->providers[i].config.api_key_file[0] = '\0';
         config->providers[i].config.extra_headers[0] = '\0';
         config->providers[i].config.use_bedrock = 0;
     }
@@ -284,6 +286,13 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
             LOG_DEBUG("[Config] Loaded api_key_env from %s: %s", label, config->llm_provider.api_key_env);
         }
 
+        // Read API key file path
+        cJSON *api_key_file_item = cJSON_GetObjectItem(llm_item, "api_key_file");
+        if (api_key_file_item && cJSON_IsString(api_key_file_item) && api_key_file_item->valuestring) {
+            strlcpy(config->llm_provider.api_key_file, api_key_file_item->valuestring, CONFIG_PATH_MAX);
+            LOG_DEBUG("[Config] Loaded api_key_file from %s: %s", label, config->llm_provider.api_key_file);
+        }
+
         // Read extra headers
         cJSON *extra_headers_item = cJSON_GetObjectItem(llm_item, "extra_headers");
         if (extra_headers_item && cJSON_IsString(extra_headers_item) && extra_headers_item->valuestring) {
@@ -395,6 +404,13 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
             if (api_key_env_item && cJSON_IsString(api_key_env_item) && api_key_env_item->valuestring) {
                 strlcpy(provider_config->api_key_env, api_key_env_item->valuestring, CONFIG_API_KEY_ENV_MAX);
                 LOG_DEBUG("[Config] Loaded api_key_env for '%s' from %s: %s", key, label, provider_config->api_key_env);
+            }
+
+            // Read API key file path
+            cJSON *api_key_file_item = cJSON_GetObjectItem(provider_item, "api_key_file");
+            if (api_key_file_item && cJSON_IsString(api_key_file_item) && api_key_file_item->valuestring) {
+                strlcpy(provider_config->api_key_file, api_key_file_item->valuestring, CONFIG_PATH_MAX);
+                LOG_DEBUG("[Config] Loaded api_key_file for '%s' from %s: %s", key, label, provider_config->api_key_file);
             }
 
             // Read extra headers
@@ -704,6 +720,11 @@ int config_save(const KlawedConfig *config) {
                     // Add API key environment variable name (if non-empty)
                     if (provider_config->api_key_env[0] != '\0') {
                         cJSON_AddStringToObject(provider_obj, "api_key_env", provider_config->api_key_env);
+                    }
+
+                    // Add API key file path (if non-empty)
+                    if (provider_config->api_key_file[0] != '\0') {
+                        cJSON_AddStringToObject(provider_obj, "api_key_file", provider_config->api_key_file);
                     }
 
                     // Add use_bedrock (legacy flag) - only if non-zero

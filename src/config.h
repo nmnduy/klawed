@@ -19,6 +19,7 @@
 #define CONFIG_API_BASE_MAX 256
 #define CONFIG_API_KEY_MAX 256
 #define CONFIG_API_KEY_ENV_MAX 128
+#define CONFIG_PATH_MAX 512
 #define CONFIG_EXTRA_HEADERS_MAX 1024  // Max length for extra_headers string
 
 // Maximum number of provider configurations
@@ -50,6 +51,7 @@ typedef struct {
     char api_base[CONFIG_API_BASE_MAX];     // API base URL
     char api_key[CONFIG_API_KEY_MAX];       // API key (optional, prefer env var)
     char api_key_env[CONFIG_API_KEY_ENV_MAX]; // Environment variable name for API key
+    char api_key_file[CONFIG_PATH_MAX];      // File path containing API key (optional, checked at request time)
     char extra_headers[CONFIG_EXTRA_HEADERS_MAX]; // Extra headers for API requests (comma-separated)
     int use_bedrock;                        // Use AWS Bedrock (legacy flag)
 } LLMProviderConfig;
