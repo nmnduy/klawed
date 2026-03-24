@@ -11,6 +11,7 @@
 #include "anthropic_provider.h"
 #include "deepseek_provider.h"
 #include "moonshot_provider.h"
+#include "zai_coding_provider.h"
 #include "kimi_coding_plan_provider.h"
 #include "openai_sub_provider.h"
 #include "anthropic_sub_provider.h"
@@ -887,6 +888,42 @@ void provider_init(const char *model,
             LOG_INFO("Provider initialization successful: Moonshot (base URL: %s)", result->api_url);
             arena_destroy(arena);
             return;
+        } else if (provider_type == PROVIDER_ZAI_CODING) {
+            LOG_INFO("Using Z.AI GLM Coding Plan provider (explicitly configured)");
+            // Use create_with_headers if extra_headers are present in config
+            Provider *prov;
+            if (provider_config && provider_config->extra_headers[0] != '\0') {
+                prov = zai_coding_provider_create_with_headers(api_key_to_use, base_url,
+                                                                provider_config->extra_headers);
+            } else {
+                prov = zai_coding_provider_create(api_key_to_use, base_url);
+            }
+            if (!prov) {
+                result->error_message = strdup("Failed to initialize Z.AI Coding Plan provider (check logs for details)");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                arena_destroy(arena);
+                return;
+            }
+            OpenAIConfig *cfg = (OpenAIConfig *)prov->config;
+            if (!cfg || !cfg->base_url) {
+                result->error_message = strdup("Z.AI Coding Plan provider initialized but base URL is missing");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            result->provider = prov;
+            result->api_url = strdup(cfg->base_url);
+            if (!result->api_url) {
+                result->error_message = strdup("Failed to allocate memory for API URL");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            LOG_INFO("Provider initialization successful: Z.AI GLM Coding (base URL: %s)", result->api_url);
+            arena_destroy(arena);
+            return;
         } else if (provider_type == PROVIDER_KIMI_CODING_PLAN) {
             LOG_INFO("Using Kimi Coding Plan provider (explicitly configured)");
             Provider *prov = kimi_coding_plan_provider_create(model_to_use);
@@ -1362,6 +1399,42 @@ void provider_init_from_config(const char *provider_key,
             return;
         }
         LOG_INFO("Provider initialization successful: Moonshot (base URL: %s)", result->api_url);
+        return;
+    }
+
+    if (provider_type == PROVIDER_ZAI_CODING) {
+        LOG_INFO("Creating Z.AI GLM Coding Plan provider from config...");
+        // Use create_with_headers if extra_headers are present in config
+        Provider *prov;
+        if (config && config->extra_headers[0] != '\0') {
+            prov = zai_coding_provider_create_with_headers(api_key, base_url, config->extra_headers);
+        } else {
+            prov = zai_coding_provider_create(api_key, base_url);
+        }
+        free(base_url);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize Z.AI Coding Plan provider (check logs for details)");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        OpenAIConfig *cfg = (OpenAIConfig *)prov->config;
+        if (!cfg || !cfg->base_url) {
+            result->error_message = strdup(
+                "Z.AI Coding Plan provider initialized but base URL is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(cfg->base_url);
+        if (!result->api_url) {
+            result->error_message = strdup("Failed to allocate memory for API URL");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: Z.AI GLM Coding (base URL: %s)", result->api_url);
         return;
     }
 
