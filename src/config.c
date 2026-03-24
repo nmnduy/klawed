@@ -780,6 +780,8 @@ const char* config_provider_type_to_string(LLMProviderType type) {
             return "anthropic_sub";
         case PROVIDER_OPENAI_RESPONSES:
             return "openai_responses";
+        case PROVIDER_ZAI_CODING:
+            return "zai_coding";
         case PROVIDER_CUSTOM:
             return "custom";
         default:
@@ -808,6 +810,8 @@ LLMProviderType config_provider_type_from_string(const char *str) {
         return PROVIDER_ANTHROPIC_SUB;
     } else if (strcmp(str, "openai_responses") == 0) {
         return PROVIDER_OPENAI_RESPONSES;
+    } else if (strcmp(str, "zai_coding") == 0 || strcmp(str, "glm_coding") == 0 || strcmp(str, "zai") == 0) {
+        return PROVIDER_ZAI_CODING;
     } else if (strcmp(str, "custom") == 0) {
         return PROVIDER_CUSTOM;
     }
