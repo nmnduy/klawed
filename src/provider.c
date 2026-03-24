@@ -1095,6 +1095,42 @@ void provider_init(const char *model,
         return;
     }
     OpenAIConfig *cfg = (OpenAIConfig *)prov->config;
+
+    // Apply extra_headers from provider config if present
+    if (cfg && provider_config && provider_config->extra_headers[0] != '\0') {
+        LOG_INFO("[Provider] Loading extra_headers from config: %s", provider_config->extra_headers);
+
+        // Parse comma-separated headers
+        char *extra_headers_copy = strdup(provider_config->extra_headers);
+        if (extra_headers_copy) {
+            // Count headers
+            int count = 0;
+            char *temp = strdup(provider_config->extra_headers);
+            if (temp) {
+                char *token = strtok(temp, ",");
+                while (token) {
+                    count++;
+                    token = strtok(NULL, ",");
+                }
+                free(temp);
+            }
+
+            // Allocate array
+            cfg->extra_headers = calloc((size_t)count + 1, sizeof(char*));
+            if (cfg->extra_headers) {
+                cfg->extra_headers_count = count;
+                int idx = 0;
+                char *token = strtok(extra_headers_copy, ",");
+                while (token && idx < count) {
+                    cfg->extra_headers[idx] = strdup(token);
+                    LOG_DEBUG("[Provider] Added extra header: %s", token);
+                    idx++;
+                    token = strtok(NULL, ",");
+                }
+            }
+            free(extra_headers_copy);
+        }
+    }
     if (!cfg || !cfg->base_url) {
         result->error_message = strdup(
             "OpenAI provider initialized but base URL is missing");
@@ -1496,6 +1532,43 @@ void provider_init_from_config(const char *provider_key,
         return;
     }
     OpenAIConfig *cfg = (OpenAIConfig *)prov->config;
+
+    // Apply extra_headers from provider config if present
+    if (cfg && config && config->extra_headers[0] != '\0') {
+        LOG_INFO("[Provider] Loading extra_headers from config: %s", config->extra_headers);
+
+        // Parse comma-separated headers
+        char *extra_headers_copy = strdup(config->extra_headers);
+        if (extra_headers_copy) {
+            // Count headers
+            int count = 0;
+            char *temp = strdup(config->extra_headers);
+            if (temp) {
+                char *token = strtok(temp, ",");
+                while (token) {
+                    count++;
+                    token = strtok(NULL, ",");
+                }
+                free(temp);
+            }
+
+            // Allocate array
+            cfg->extra_headers = calloc((size_t)count + 1, sizeof(char*));
+            if (cfg->extra_headers) {
+                cfg->extra_headers_count = count;
+                int idx = 0;
+                char *token = strtok(extra_headers_copy, ",");
+                while (token && idx < count) {
+                    cfg->extra_headers[idx] = strdup(token);
+                    LOG_DEBUG("[Provider] Added extra header: %s", token);
+                    idx++;
+                    token = strtok(NULL, ",");
+                }
+            }
+            free(extra_headers_copy);
+        }
+    }
+
     if (!cfg || !cfg->base_url) {
         result->error_message = strdup(
             "OpenAI provider initialized but base URL is missing");
