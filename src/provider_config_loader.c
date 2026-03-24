@@ -544,7 +544,29 @@ const char* provider_config_resolve_api_key(const UnifiedProviderConfig *config,
         return "bedrock";
     }
 
-    // Check api_key_env first
+    // Check api_key_file first (read at request time, allows hot-swap)
+    static __thread char file_key_buffer[CONFIG_API_KEY_MAX];
+    if (effective->api_key_file[0] != '\0') {
+        FILE *fp = fopen(effective->api_key_file, "r");
+        if (fp) {
+            if (fgets(file_key_buffer, sizeof(file_key_buffer), fp) != NULL) {
+                // Remove trailing newline if present
+                size_t len = strlen(file_key_buffer);
+                if (len > 0 && file_key_buffer[len-1] == '\n') {
+                    file_key_buffer[len-1] = '\0';
+                }
+                fclose(fp);
+                if (file_key_buffer[0] != '\0') {
+                    if (source_out) *source_out = effective->api_key_file;
+                    return file_key_buffer;
+                }
+            } else {
+                fclose(fp);
+            }
+        }
+    }
+
+    // Check api_key_env
     if (effective->api_key_env[0] != '\0') {
         const char *env_key = getenv(effective->api_key_env);
         if (env_key && env_key[0] != '\0') {
