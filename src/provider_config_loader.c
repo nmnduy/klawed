@@ -48,24 +48,46 @@ static void create_synthetic_env_provider(LLMProviderConfig *provider) {
 
     memset(provider, 0, sizeof(LLMProviderConfig));
 
-    // Set provider type based on environment
-    const char *env_use_bedrock = getenv("KLAWED_USE_BEDROCK");
-    if (env_use_bedrock && (strcmp(env_use_bedrock, "1") == 0 ||
-                           strcasecmp(env_use_bedrock, "true") == 0 ||
-                           strcasecmp(env_use_bedrock, "yes") == 0)) {
-        provider->provider_type = PROVIDER_BEDROCK;
-        provider->use_bedrock = 1;
+    // Check for explicit provider type via KLAWED_PROVIDER_TYPE
+    // This allows using OAuth providers like openai_sub without config.json
+    const char *env_provider_type = getenv("KLAWED_PROVIDER_TYPE");
+    if (env_provider_type && env_provider_type[0] != '\0') {
+        provider->provider_type = config_provider_type_from_string(env_provider_type);
+        if (provider->provider_type != PROVIDER_AUTO) {
+            LOG_DEBUG("[ProviderConfig] Using provider type '%s' from KLAWED_PROVIDER_TYPE",
+                      env_provider_type);
+        }
+        // Set appropriate API key env var for specific providers
+        if (provider->provider_type == PROVIDER_ZAI_CODING) {
+            strlcpy(provider->api_key_env, "ZAI_API_KEY_CODING_PLAN", CONFIG_API_KEY_ENV_MAX);
+            LOG_DEBUG("[ProviderConfig] Using ZAI_API_KEY_CODING_PLAN for API key");
+        } else if (provider->provider_type == PROVIDER_KIMI_CODING_PLAN ||
+                   provider->provider_type == PROVIDER_OPENAI_SUB ||
+                   provider->provider_type == PROVIDER_ANTHROPIC_SUB) {
+            // OAuth providers - no API key needed, clear the api_key_env
+            provider->api_key_env[0] = '\0';
+            LOG_DEBUG("[ProviderConfig] OAuth provider selected, no API key required");
+        }
     } else {
-        // Auto-detect based on URL patterns and env vars
-        const char *openai_base = getenv("OPENAI_API_BASE");
-        const char *anthropic_url = getenv("ANTHROPIC_API_URL");
-        if (!anthropic_url) anthropic_url = getenv("ANTHROPIC_BASE_URL");
-
-        if (anthropic_url && anthropic_url[0] != '\0' &&
-            (!openai_base || openai_base[0] == '\0')) {
-            provider->provider_type = PROVIDER_ANTHROPIC;
+        // Set provider type based on environment
+        const char *env_use_bedrock = getenv("KLAWED_USE_BEDROCK");
+        if (env_use_bedrock && (strcmp(env_use_bedrock, "1") == 0 ||
+                               strcasecmp(env_use_bedrock, "true") == 0 ||
+                               strcasecmp(env_use_bedrock, "yes") == 0)) {
+            provider->provider_type = PROVIDER_BEDROCK;
+            provider->use_bedrock = 1;
         } else {
-            provider->provider_type = PROVIDER_AUTO;
+            // Auto-detect based on URL patterns and env vars
+            const char *openai_base = getenv("OPENAI_API_BASE");
+            const char *anthropic_url = getenv("ANTHROPIC_API_URL");
+            if (!anthropic_url) anthropic_url = getenv("ANTHROPIC_BASE_URL");
+
+            if (anthropic_url && anthropic_url[0] != '\0' &&
+                (!openai_base || openai_base[0] == '\0')) {
+                provider->provider_type = PROVIDER_ANTHROPIC;
+            } else {
+                provider->provider_type = PROVIDER_AUTO;
+            }
         }
     }
 

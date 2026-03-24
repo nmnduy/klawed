@@ -124,9 +124,20 @@ static char *get_openai_dir(void) {
 
 /**
  * Return the full path to the auth token file (caller must free).
- * Path: ~/.openai/auth.json
+ * Path: ~/.openai/auth.json (or $OPENAI_OAUTH_PATH if set)
+ *
+ * Environment variable OPENAI_OAUTH_PATH can be used to override the default
+ * location. This is useful for sharing OAuth credentials across machines or
+ * using a custom location.
  */
 static char *get_token_file_path(void) {
+    // Check for environment variable override first
+    const char *env_path = getenv("OPENAI_OAUTH_PATH");
+    if (env_path && env_path[0] != '\0') {
+        LOG_DEBUG("[OpenAI OAuth] Using token path from OPENAI_OAUTH_PATH: %s", env_path);
+        return strdup(env_path);
+    }
+
     char *dir = get_openai_dir();
     if (!dir) return NULL;
 
@@ -146,27 +157,44 @@ static char *get_token_file_path(void) {
 
 /**
  * Return the full path to the refresh lock file (caller must free).
- * Path: ~/.openai/auth.lock
+ * Path: same directory as auth.json, with .lock extension
  *
  * This lock coordinates cross-process token refresh so that only one
  * process performs the network refresh at a time.  Others wait on the
  * lock and then reload the fresh token from disk.
  */
 static char *get_lock_file_path(void) {
-    char *dir = get_openai_dir();
-    if (!dir) return NULL;
+    // Get the token file path first
+    char *token_path = get_token_file_path();
+    if (!token_path) return NULL;
 
+    // Find the last dot to replace extension, or append .lock
     char *path = malloc(PATH_MAX);
     if (!path) {
-        free(dir);
+        free(token_path);
         return NULL;
     }
-    if (snprintf(path, PATH_MAX, "%s/auth.lock", dir) >= PATH_MAX) {
-        free(path);
-        free(dir);
-        return NULL;
+
+    // Replace .json extension with .lock, or append .lock if no extension
+    char *last_dot = strrchr(token_path, '.');
+    if (last_dot && strcmp(last_dot, ".json") == 0) {
+        size_t base_len = (size_t)(last_dot - token_path);
+        if (base_len + 5 >= PATH_MAX) {  // +5 for ".lock\0"
+            free(path);
+            free(token_path);
+            return NULL;
+        }
+        memcpy(path, token_path, base_len);
+        strcpy(path + base_len, ".lock");
+    } else {
+        if (snprintf(path, PATH_MAX, "%s.lock", token_path) >= PATH_MAX) {
+            free(path);
+            free(token_path);
+            return NULL;
+        }
     }
-    free(dir);
+
+    free(token_path);
     return path;
 }
 
