@@ -33,6 +33,7 @@ void config_init_defaults(KlawedConfig *config) {
     config->llm_provider.api_base[0] = '\0';
     config->llm_provider.api_key[0] = '\0';
     config->llm_provider.api_key_env[0] = '\0';
+    config->llm_provider.extra_headers[0] = '\0';
     config->llm_provider.use_bedrock = 0;
 
     // Initialize multiple providers
@@ -48,6 +49,7 @@ void config_init_defaults(KlawedConfig *config) {
         config->providers[i].config.api_base[0] = '\0';
         config->providers[i].config.api_key[0] = '\0';
         config->providers[i].config.api_key_env[0] = '\0';
+        config->providers[i].config.extra_headers[0] = '\0';
         config->providers[i].config.use_bedrock = 0;
     }
 }
@@ -282,6 +284,13 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
             LOG_DEBUG("[Config] Loaded api_key_env from %s: %s", label, config->llm_provider.api_key_env);
         }
 
+        // Read extra headers
+        cJSON *extra_headers_item = cJSON_GetObjectItem(llm_item, "extra_headers");
+        if (extra_headers_item && cJSON_IsString(extra_headers_item) && extra_headers_item->valuestring) {
+            strlcpy(config->llm_provider.extra_headers, extra_headers_item->valuestring, CONFIG_EXTRA_HEADERS_MAX);
+            LOG_DEBUG("[Config] Loaded extra_headers from %s: %s", label, config->llm_provider.extra_headers);
+        }
+
         // Read use_bedrock (legacy flag) - can be boolean or number
         cJSON *use_bedrock_item = cJSON_GetObjectItem(llm_item, "use_bedrock");
         if (use_bedrock_item) {
@@ -386,6 +395,13 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
             if (api_key_env_item && cJSON_IsString(api_key_env_item) && api_key_env_item->valuestring) {
                 strlcpy(provider_config->api_key_env, api_key_env_item->valuestring, CONFIG_API_KEY_ENV_MAX);
                 LOG_DEBUG("[Config] Loaded api_key_env for '%s' from %s: %s", key, label, provider_config->api_key_env);
+            }
+
+            // Read extra headers
+            cJSON *extra_headers_item = cJSON_GetObjectItem(provider_item, "extra_headers");
+            if (extra_headers_item && cJSON_IsString(extra_headers_item) && extra_headers_item->valuestring) {
+                strlcpy(provider_config->extra_headers, extra_headers_item->valuestring, CONFIG_EXTRA_HEADERS_MAX);
+                LOG_DEBUG("[Config] Loaded extra_headers for '%s' from %s: %s", key, label, provider_config->extra_headers);
             }
 
             // Read use_bedrock (legacy flag) - can be boolean or number
