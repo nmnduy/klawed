@@ -216,6 +216,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_EXPLORE_HEADLESS` - Run browser in headless mode (default: 1)
   - `KLAWED_WEB_BROWSE_AGENT_PATH` - Path to web_browse_agent binary (default: tools/web_browse_agent/web_browse_agent)
   - `CONTEXT7_API_KEY` - API key for Context7 (optional, for higher rate limits)
+- **Kimi Coding Plan**: `KIMI_CONFIG_DIR` - Directory for Kimi OAuth credentials (default: `~/.kimi`). Useful for copying auth to headless servers. Set to a shared path to easily copy credentials between machines.
 
 **Defaults:**
 - Logs: `./.klawed/logs/klawed.log` (project-local)
