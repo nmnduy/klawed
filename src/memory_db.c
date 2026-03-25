@@ -340,6 +340,12 @@ int memory_db_init_global(const char *path) {
     const char *effective_path = NULL;
     size_t path_len = 0;
 
+    /* Skip initialization in no-storage mode */
+    if (data_dir_is_no_storage_mode()) {
+        LOG_INFO("[Memory DB] Initialization skipped (KLAWED_NO_STORAGE=1)");
+        return 0;
+    }
+
     pthread_mutex_lock(&g_memory_db_mutex);
 
     /* If already initialized, return previous result */
