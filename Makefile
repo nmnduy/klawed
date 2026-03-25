@@ -28,13 +28,17 @@ endif
 
 # Default ncurses library (Linux)
 NCURSES_LIB = -lncursesw
+# Default terminfo library (Linux only - tinfo is separate on Linux)
+TINFO_LIB = -ltinfo
 
 ifeq ($(UNAME_S),Darwin)
     # macOS typically uses just ncurses (not ncursesw)
+    # tinfo is built into ncurses on macOS, no separate library needed
     NCURSES_LIB = -lncurses
+    TINFO_LIB =
 endif
 
-LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd -lm $(NCURSES_LIB) -ltinfo -lcjson $(SANITIZERS) -Wl,-pie
+LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd -lm $(NCURSES_LIB) $(TINFO_LIB) -lcjson $(SANITIZERS) -Wl,-pie
 # Add vendor lib path if vendor/lib exists (for dev environments without system lib symlinks)
 ifneq ($(wildcard vendor/lib),)
     LDFLAGS += -Lvendor/lib
@@ -42,7 +46,7 @@ endif
 ifeq ($(UNAME_S),Linux)
     LDFLAGS += -Wl,-z,relro -Wl,-z,now
 endif
-DEBUG_LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd -lm $(NCURSES_LIB) -fsanitize=address -Wl,-pie
+DEBUG_LDFLAGS = -lcurl -lpthread -lsqlite3 -lssl -lcrypto -lbsd -lm $(NCURSES_LIB) $(TINFO_LIB) -fsanitize=address -Wl,-pie
 ifeq ($(UNAME_S),Linux)
     DEBUG_LDFLAGS += -Wl,-z,relro -Wl,-z,now
 endif
