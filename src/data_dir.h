@@ -48,7 +48,11 @@ int data_dir_ensure(const char *subpath);
 
 /*
  * Check if no-storage diagnostic mode is enabled (KLAWED_NO_STORAGE=1).
- * When enabled, SQLite database and history file operations are skipped.
+ * When enabled, all SQLite database operations are skipped:
+ *   - API call history database (api_calls.db)
+ *   - Token usage tracking database (token_usage.db)
+ *   - Memory database (memory.db)
+ *   - History file
  * This helps diagnose TUI hangs on certain platforms (e.g., Mac Apple Silicon).
  *
  * @return 1 if no-storage mode is enabled, 0 otherwise

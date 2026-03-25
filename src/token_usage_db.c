@@ -214,6 +214,12 @@ static int mkdir_recursive(const char *path) {
 
 // Initialize token usage database
 TokenUsageDB* token_usage_db_init(const char *db_path) {
+    // Skip initialization in no-storage mode
+    if (data_dir_is_no_storage_mode()) {
+        LOG_INFO("[Token Usage DB] Initialization skipped (KLAWED_NO_STORAGE=1)");
+        return NULL;
+    }
+
     TokenUsageDB *tdb = calloc(1, sizeof(TokenUsageDB));
     if (!tdb) {
         LOG_ERROR("Failed to allocate TokenUsageDB");

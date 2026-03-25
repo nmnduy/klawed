@@ -186,7 +186,7 @@ export OPENAI_API_KEY="your-api-key"
 - **Logging**: `KLAWED_LOG_LEVEL` (DEBUG/INFO/WARN/ERROR), `KLAWED_LOG_PATH`
 - **Database**: `KLAWED_DB_PATH` for API call history (SQLite)
 - **Token Usage Database**: `KLAWED_TOKEN_USAGE_DB_PATH` - Path for token usage tracking (default: `.klawed/token_usage.db`)
-- **Diagnostics**: `KLAWED_NO_STORAGE` - Set to 1 to disable SQLite database and history file. Useful for debugging TUI hangs on certain platforms (e.g., Mac Apple Silicon).
+- **Diagnostics**: `KLAWED_NO_STORAGE` - Set to 1 to disable all SQLite database operations (API history, token usage tracking, memory database) and history file. Useful for debugging TUI hangs on certain platforms (e.g., Mac Apple Silicon).
 - **Database Rotation**:
   - `KLAWED_DB_MAX_DAYS` - Keep records for N days (default: 30, 0=unlimited)
   - `KLAWED_DB_MAX_RECORDS` - Keep last N records (default: 1000, 0=unlimited)
