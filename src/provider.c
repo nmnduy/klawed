@@ -464,7 +464,7 @@ static void get_provider_config(Arena *arena,
             if (synthetic_provider.provider_type == PROVIDER_ZAI_CODING) {
                 strlcpy(synthetic_provider.api_key_env, "ZAI_API_KEY_CODING_PLAN", CONFIG_API_KEY_ENV_MAX);
                 // Default model for Z.AI - will be used if OPENAI_MODEL is not set
-                strlcpy(synthetic_provider.model, "glm-4-flash", CONFIG_MODEL_MAX);
+                strlcpy(synthetic_provider.model, "glm-4.5", CONFIG_MODEL_MAX);
             } else if (synthetic_provider.provider_type == PROVIDER_KIMI_CODING_PLAN) {
                 // Kimi Coding Plan uses OAuth, no API key needed
                 strlcpy(synthetic_provider.model, "kimi-for-coding", CONFIG_MODEL_MAX);
