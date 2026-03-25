@@ -176,7 +176,7 @@ export OPENAI_API_KEY="your-api-key"
   - `openai_sub` - OpenAI Subscription (ChatGPT Plus/Pro). Uses OAuth, no API key needed. Default model: `gpt-5.3-codex`
   - `anthropic_sub` - Anthropic Subscription (Claude.ai). Uses OAuth, no API key needed. Default model: `claude-opus-4`
   - `kimi_coding_plan` - Kimi Coding Plan. Uses OAuth, no API key needed. Default model: `kimi-for-coding`
-  - `zai_coding` - Z.AI GLM Coding Plan. Requires `ZAI_API_KEY_CODING_PLAN` env var. Default model: `glm-4-flash`
+  - `zai_coding` - Z.AI GLM Coding Plan. Requires `ZAI_API_KEY_CODING_PLAN` env var. Default model: `glm-4.5`
   - `openai`, `anthropic`, `bedrock`, etc. - Standard API providers
   - Override the default model with `OPENAI_MODEL` environment variable
 - **OpenAI Authentication**: `OPENAI_AUTH_HEADER` - Custom auth header template (e.g., "x-api-key: %s" or "Authorization: Bearer %s")

@@ -30,7 +30,7 @@ Note: `glm-5` requires a higher-tier subscription.
 ```bash
 export ZAI_API_KEY_CODING_PLAN="your-api-key-here"
 export OPENAI_API_KEY="$ZAI_API_KEY_CODING_PLAN"
-export OPENAI_API_BASE="https://api.z.ai/api/coding/paas/v4"
+export OPENAI_API_BASE="https://api.z.ai/api/coding/paas/v4/chat/completions"
 export OPENAI_MODEL="glm-4.6"
 
 klawed "Your coding prompt here"
@@ -106,7 +106,7 @@ Quick test command:
 ```bash
 export $(grep ZAI_API_KEY_CODING_PLAN ~/.api_keys)
 export OPENAI_API_KEY="$ZAI_API_KEY_CODING_PLAN"
-export OPENAI_API_BASE="https://api.z.ai/api/coding/paas/v4"
+export OPENAI_API_BASE="https://api.z.ai/api/coding/paas/v4/chat/completions"
 export OPENAI_MODEL="glm-4.6"
 
 echo "test" | timeout 15 ./build/klawed "Say 'ZAI works' in exactly 2 words"

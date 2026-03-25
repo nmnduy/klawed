@@ -8,7 +8,7 @@ Klawed supports configuring LLM providers entirely through environment variables
 |--------------|------------------------|-----------------|---------------|
 | OpenAI Subscription (ChatGPT Plus/Pro) | `openai_sub` | None (OAuth) | `gpt-5.3-codex` |
 | Kimi Coding Plan | `kimi_coding_plan` | None (OAuth) | `kimi-for-coding` |
-| Z.AI GLM Coding Plan | `zai_coding` | `ZAI_API_KEY_CODING_PLAN` | `glm-4-flash` |
+| Z.AI GLM Coding Plan | `zai_coding` | `ZAI_API_KEY_CODING_PLAN` | `glm-4.5` |
 | Anthropic Subscription (Claude.ai) | `anthropic_sub` | None (OAuth) | `claude-opus-4` |
 
 ## Common Environment Variables
@@ -103,8 +103,8 @@ Requires an API key from Z.AI.
 ```bash
 export KLAWED_PROVIDER_TYPE=zai_coding
 export ZAI_API_KEY_CODING_PLAN="your-api-key-here"
-# Optional: override default model
-export OPENAI_MODEL=glm-4-plus
+# Optional: override default model (available: glm-4.5, glm-4.6, glm-4.7)
+export OPENAI_MODEL=glm-4.6
 
 klawed "your coding task here"
 ```
