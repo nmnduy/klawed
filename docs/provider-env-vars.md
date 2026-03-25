@@ -62,6 +62,26 @@ klawed "your coding task here"
 - Default: `~/.kimi/oauth_token.json`
 - Custom: Set `KIMI_CONFIG_DIR` to change the directory (the filename remains `oauth_token.json`)
 
+#### Alternative: Direct API Key Configuration
+
+You can also use Kimi Coding Plan with a direct API key instead of OAuth by configuring it as a `moonshot` provider:
+
+```bash
+export KLAWED_PROVIDER_TYPE=moonshot
+export KIMI_CODE_API_KEY="your-api-key"
+export OPENAI_API_BASE=https://api.kimi.com/coding/v1/chat/completions
+export OPENAI_MODEL=kimi-for-coding
+export OPENAI_EXTRA_HEADERS="User-Agent: KimiCLI/0.35.1,X-Msh-Platform: kimi_cli,X-Msh-Version: 0.35.1,X-Msh-Device-Name: klawed-test,X-Msh-Device-Model: Linux x86_64"
+
+klawed "your coding task here"
+```
+
+**Required environment variables:**
+- `KLAWED_PROVIDER_TYPE=moonshot` - Use the moonshot provider type
+- `KIMI_CODE_API_KEY` - Your Kimi API key
+- `OPENAI_API_BASE=https://api.kimi.com/coding/v1/chat/completions` - The Kimi Coding Plan endpoint
+- `OPENAI_EXTRA_HEADERS` - Required headers for Kimi CLI compatibility
+
 ### Anthropic Subscription (Claude.ai)
 
 Uses OAuth device flow for authentication.
