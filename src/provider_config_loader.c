@@ -116,7 +116,12 @@ static void create_synthetic_env_provider(LLMProviderConfig *provider) {
 
     // API key is not stored directly - we use api_key_env or look up at runtime
     // The synthetic provider uses "OPENAI_API_KEY" as the env var name
-    strlcpy(provider->api_key_env, "OPENAI_API_KEY", CONFIG_API_KEY_ENV_MAX);
+    // Only set if not already configured (e.g., OAuth providers clear this)
+    if (provider->api_key_env[0] == '\0' && provider->provider_type != PROVIDER_KIMI_CODING_PLAN &&
+        provider->provider_type != PROVIDER_OPENAI_SUB &&
+        provider->provider_type != PROVIDER_ANTHROPIC_SUB) {
+        strlcpy(provider->api_key_env, "OPENAI_API_KEY", CONFIG_API_KEY_ENV_MAX);
+    }
 
     LOG_DEBUG("[ProviderConfig] Created synthetic env provider: type=%s, model=%s, api_base=%s",
               config_provider_type_to_string(provider->provider_type),

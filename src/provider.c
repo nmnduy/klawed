@@ -429,7 +429,9 @@ static void get_provider_config(Arena *arena,
                                 char **api_base_out,
                                 int *use_bedrock_out,
                                 const char **api_key_source_out,
-                                const char **provider_name_out) {
+                                const char **provider_name_out,
+                                LLMProviderType *provider_type_out,
+                                const LLMProviderConfig **provider_config_out) {
     // Initialize outputs
     *model_out = NULL;
     *api_key_out = NULL;
@@ -437,6 +439,12 @@ static void get_provider_config(Arena *arena,
     *use_bedrock_out = 0;
     *api_key_source_out = NULL;
     *provider_name_out = NULL;
+    if (provider_type_out) {
+        *provider_type_out = PROVIDER_AUTO;
+    }
+    if (provider_config_out) {
+        *provider_config_out = NULL;
+    }
 
     // Check for KLAWED_PROVIDER_TYPE (env-only provider configuration)
     // This allows using providers like zai_coding, kimi_coding_plan without config.json
@@ -483,8 +491,17 @@ static void get_provider_config(Arena *arena,
     if (using_synthetic_provider) {
         provider_config = &synthetic_provider;
         active_provider_key = env_provider_type;
+        if (provider_type_out) {
+            *provider_type_out = synthetic_provider.provider_type;
+        }
+        if (provider_config_out) {
+            *provider_config_out = provider_config;
+        }
     } else if (config_loaded) {
         provider_config = get_provider_config_to_use(&file_config);
+        if (provider_config_out) {
+            *provider_config_out = provider_config;
+        }
         // Determine which provider key is active
         const char *env_provider = getenv("KLAWED_LLM_PROVIDER");
         if (env_provider && env_provider[0] != '\0') {
@@ -667,40 +684,42 @@ void provider_init(const char *model,
     const char *api_key_source = NULL;
     const char *provider_name = NULL;
 
+    LLMProviderType provider_type = PROVIDER_AUTO;
+    const LLMProviderConfig *provider_config = NULL;
     get_provider_config(arena, &effective_config, &config_model, &config_api_key,
-                        &config_api_base, &config_use_bedrock, &api_key_source, &provider_name);
+                        &config_api_base, &config_use_bedrock, &api_key_source, &provider_name,
+                        &provider_type, &provider_config);
 
     LOG_DEBUG("[Provider Init] Loaded config: active_provider='%s', provider_count=%d, legacy model='%s'",
               effective_config.active_provider[0] ? effective_config.active_provider : "(not set)",
               effective_config.provider_count,
               effective_config.llm_provider.model[0] ? effective_config.llm_provider.model : "(not set)");
 
-    // Get the provider configuration to use for provider type
-    const LLMProviderConfig *provider_config = get_provider_config_to_use(&effective_config);
-    LLMProviderType provider_type = provider_config ? provider_config->provider_type : effective_config.llm_provider.provider_type;
-
-    LOG_DEBUG("[Provider Init] Selected provider_config=%s, provider_type=%d",
-              provider_config ? provider_config->provider_name : "(NULL)", provider_type);
+    // If provider_type wasn't set by get_provider_config (e.g., from KLAWED_PROVIDER_TYPE),
+    // fall back to checking config file
+    if (provider_type == PROVIDER_AUTO) {
+        provider_config = get_provider_config_to_use(&effective_config);
+        provider_type = provider_config ? provider_config->provider_type : effective_config.llm_provider.provider_type;
+        LOG_DEBUG("[Provider Init] Selected provider_config=%s, provider_type=%d",
+                  provider_config ? provider_config->provider_name : "(NULL)", provider_type);
+    } else {
+        LOG_DEBUG("[Provider Init] Using provider_type=%d from KLAWED_PROVIDER_TYPE or env config", provider_type);
+    }
 
     // Determine which model to use
     // Priority:
-    // 1. Named provider's model (if a provider is explicitly selected via active_provider or KLAWED_LLM_PROVIDER)
-    // 2. Passed model parameter
-    // 3. Config file's model (from provider config or legacy llm_provider)
-    // 4. Environment variable (OPENAI_MODEL)
+    // 1. Passed model parameter
+    // 2. Config file's model (from get_provider_config which handles env vars and provider defaults)
+    // 3. Environment variable (OPENAI_MODEL)
     char *model_to_use = NULL;
-    if (provider_config && provider_config->model[0] != '\0') {
-        // Named provider explicitly selected - use its model (takes precedence over passed parameter)
-        model_to_use = arena_strdup(arena, provider_config->model);
-        LOG_DEBUG("[Provider] Using model from named provider: %s", model_to_use);
-    } else if (model && model[0] != '\0') {
+    if (model && model[0] != '\0') {
         // Use passed parameter
         model_to_use = arena_strdup(arena, model);
         LOG_DEBUG("[Provider] Using model from passed parameter: %s", model_to_use);
     } else if (config_model && config_model[0] != '\0') {
-        // Fall back to config file's model
+        // Use model from get_provider_config (handles env vars, provider defaults, etc.)
         model_to_use = config_model;
-        LOG_DEBUG("[Provider] Using model from config file: %s", model_to_use);
+        LOG_DEBUG("[Provider] Using model from config: %s", model_to_use);
     } else {
         // Fall back to environment variable
         const char *env_model = getenv("OPENAI_MODEL");
