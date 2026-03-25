@@ -1297,8 +1297,9 @@ int main(int argc, char *argv[]) {
         printf("                         Default: ~/.local/share/klawed/api_calls.db\n");
         printf("    KLAWED_MAX_RETRY_DURATION_MS  Optional: Maximum retry duration in milliseconds\n");
         printf("                                     Default: 600000 (10 minutes)\n");
-        printf("    KLAWED_NO_STORAGE  Optional: Set to 1 to disable SQLite and history file\n");
-        printf("                         Diagnostic mode for debugging TUI hangs\n\n");
+        printf("    KLAWED_NO_STORAGE  Optional: Set to 1 to disable all storage (SQLite databases\n");
+        printf("                         and history file). Disables API history, token tracking,\n");
+        printf("                         and memory database. Diagnostic mode for TUI hangs\n\n");
         printf("  UI Customization:\n");
         printf("    KLAWED_THEME       Optional: Path to Kitty theme file\n\n");
         printf("  Tools and Output:\n");
