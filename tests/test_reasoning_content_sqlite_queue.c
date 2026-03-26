@@ -504,6 +504,259 @@ static void test_multiple_reasoning_messages(void) {
     TEST_ASSERT(true, "Multiple reasoning messages test completed");
 }
 
+// Simulate the restore logic from sqlite_queue.c
+typedef enum {
+    INTERNAL_TEXT,
+    INTERNAL_TOOL_CALL
+} InternalContentType;
+
+typedef struct {
+    InternalContentType type;
+    char *text;
+    char *reasoning_content;
+    char *tool_id;
+} SimulatedContent;
+
+typedef struct {
+    SimulatedContent *contents;
+    int count;
+    int capacity;
+} PendingAssistant;
+
+static void pending_assistant_free(PendingAssistant *pa) {
+    for (int i = 0; i < pa->count; i++) {
+        free(pa->contents[i].text);
+        free(pa->contents[i].reasoning_content);
+        free(pa->contents[i].tool_id);
+    }
+    free(pa->contents);
+    pa->contents = NULL;
+    pa->count = 0;
+    pa->capacity = 0;
+}
+
+static int pending_assistant_append(PendingAssistant *pa, SimulatedContent item) {
+    if (pa->count >= pa->capacity) {
+        int new_cap = pa->capacity == 0 ? 4 : pa->capacity * 2;
+        SimulatedContent *tmp = realloc(pa->contents, (size_t)new_cap * sizeof(SimulatedContent));
+        if (!tmp) return -1;
+        pa->contents = tmp;
+        pa->capacity = new_cap;
+    }
+    pa->contents[pa->count++] = item;
+    return 0;
+}
+
+static int flush_pending_assistant(PendingAssistant *pa, cJSON *assistant_turns) {
+    if (pa->count == 0) return 0;
+
+    cJSON *turn = cJSON_CreateObject();
+    cJSON *contents = cJSON_CreateArray();
+
+    for (int i = 0; i < pa->count; i++) {
+        cJSON *content = cJSON_CreateObject();
+        if (pa->contents[i].type == INTERNAL_TEXT) {
+            cJSON_AddStringToObject(content, "type", "text");
+            cJSON_AddStringToObject(content, "text", pa->contents[i].text ? pa->contents[i].text : "");
+        } else {
+            cJSON_AddStringToObject(content, "type", "tool_call");
+            cJSON_AddStringToObject(content, "tool_id", pa->contents[i].tool_id ? pa->contents[i].tool_id : "");
+        }
+        if (pa->contents[i].reasoning_content) {
+            cJSON_AddStringToObject(content, "reasoning_content", pa->contents[i].reasoning_content);
+        }
+        cJSON_AddItemToArray(contents, content);
+    }
+
+    cJSON_AddItemToObject(turn, "contents", contents);
+    cJSON_AddItemToArray(assistant_turns, turn);
+
+    pending_assistant_free(pa);
+    return 0;
+}
+
+// Simulate restore with END_AI_TURN handling (the fix)
+static cJSON* simulate_restore_with_end_ai_turn(cJSON *messages) {
+    PendingAssistant pa = {0};
+    cJSON *assistant_turns = cJSON_CreateArray();
+    cJSON *msg = NULL;
+
+    cJSON_ArrayForEach(msg, messages) {
+        cJSON *sender = cJSON_GetObjectItem(msg, "sender");
+        cJSON *message = cJSON_GetObjectItem(msg, "message");
+
+        if (!sender || !message || !cJSON_IsString(message)) continue;
+
+        cJSON *json = cJSON_Parse(message->valuestring);
+        if (!json) continue;
+
+        cJSON *jtype = cJSON_GetObjectItem(json, "messageType");
+        if (!jtype || !cJSON_IsString(jtype)) {
+            cJSON_Delete(json);
+            continue;
+        }
+        const char *mt = jtype->valuestring;
+        int from_klawed = (strcmp(sender->valuestring, "klawed") == 0);
+
+        if (strcmp(mt, "TEXT") == 0 && from_klawed) {
+            cJSON *jcontent = cJSON_GetObjectItem(json, "content");
+            if (jcontent && cJSON_IsString(jcontent)) {
+                SimulatedContent c = {0};
+                c.type = INTERNAL_TEXT;
+                c.text = strdup(jcontent->valuestring);
+                pending_assistant_append(&pa, c);
+            }
+        } else if (strcmp(mt, "REASONING") == 0 && from_klawed) {
+            cJSON *jreasoning = cJSON_GetObjectItem(json, "reasoningContent");
+            if (jreasoning && cJSON_IsString(jreasoning) && pa.count > 0) {
+                // Attach reasoning to most recent content block
+                int last_idx = pa.count - 1;
+                pa.contents[last_idx].reasoning_content = strdup(jreasoning->valuestring);
+            }
+        } else if (strcmp(mt, "TOOL") == 0 && from_klawed) {
+            cJSON *jtool_id = cJSON_GetObjectItem(json, "toolId");
+            if (jtool_id && cJSON_IsString(jtool_id)) {
+                SimulatedContent c = {0};
+                c.type = INTERNAL_TOOL_CALL;
+                c.tool_id = strdup(jtool_id->valuestring);
+                pending_assistant_append(&pa, c);
+            }
+        } else if (strcmp(mt, "END_AI_TURN") == 0 && from_klawed) {
+            // THE FIX: Flush pending assistant on END_AI_TURN
+            if (pa.count > 0) {
+                flush_pending_assistant(&pa, assistant_turns);
+            }
+        }
+
+        cJSON_Delete(json);
+    }
+
+    // Flush any remaining content
+    if (pa.count > 0) {
+        flush_pending_assistant(&pa, assistant_turns);
+    }
+
+    return assistant_turns;
+}
+
+static void test_end_ai_turn_separates_assistant_turns(void) {
+    printf(COLOR_YELLOW "\nTest: END_AI_TURN separates multiple assistant turns\n" COLOR_RESET);
+    printf("This test simulates the bug: reasoning_content from turn 2 was attached to turn 1\n");
+
+    TestQueueContext ctx = {0};
+    TEST_ASSERT(init_test_queue(&ctx) == 0, "Should create test queue");
+    if (!ctx.db) return;
+
+    // Simulate the sequence from the real bug:
+    // Turn 1: TEXT + REASONING + TOOL
+    // END_AI_TURN
+    // Turn 2: TEXT + REASONING + TOOL (but reasoning was attached to turn 1's tool!)
+
+    // Turn 1
+    cJSON *text1 = cJSON_CreateObject();
+    cJSON_AddStringToObject(text1, "messageType", "TEXT");
+    cJSON_AddStringToObject(text1, "content", "First response");
+    char *s1 = cJSON_PrintUnformatted(text1);
+    insert_message(&ctx, "klawed", s1);
+    cJSON_Delete(text1);
+    free(s1);
+
+    cJSON *reasoning1 = cJSON_CreateObject();
+    cJSON_AddStringToObject(reasoning1, "messageType", "REASONING");
+    cJSON_AddStringToObject(reasoning1, "reasoningContent", "Reasoning for first turn");
+    char *r1 = cJSON_PrintUnformatted(reasoning1);
+    insert_message(&ctx, "klawed", r1);
+    cJSON_Delete(reasoning1);
+    free(r1);
+
+    cJSON *tool1 = cJSON_CreateObject();
+    cJSON_AddStringToObject(tool1, "messageType", "TOOL");
+    cJSON_AddStringToObject(tool1, "toolId", "tool_001");
+    cJSON_AddStringToObject(tool1, "toolName", "Bash");
+    char *t1 = cJSON_PrintUnformatted(tool1);
+    insert_message(&ctx, "klawed", t1);
+    cJSON_Delete(tool1);
+    free(t1);
+
+    // END_AI_TURN - This is the key! Without this, turn 2 merges with turn 1
+    cJSON *end_turn = cJSON_CreateObject();
+    cJSON_AddStringToObject(end_turn, "messageType", "END_AI_TURN");
+    char *et = cJSON_PrintUnformatted(end_turn);
+    insert_message(&ctx, "klawed", et);
+    cJSON_Delete(end_turn);
+    free(et);
+
+    // Turn 2
+    cJSON *text2 = cJSON_CreateObject();
+    cJSON_AddStringToObject(text2, "messageType", "TEXT");
+    cJSON_AddStringToObject(text2, "content", "Second response");
+    char *s2 = cJSON_PrintUnformatted(text2);
+    insert_message(&ctx, "klawed", s2);
+    cJSON_Delete(text2);
+    free(s2);
+
+    cJSON *reasoning2 = cJSON_CreateObject();
+    cJSON_AddStringToObject(reasoning2, "messageType", "REASONING");
+    cJSON_AddStringToObject(reasoning2, "reasoningContent", "Reasoning for second turn");
+    char *r2 = cJSON_PrintUnformatted(reasoning2);
+    insert_message(&ctx, "klawed", r2);
+    cJSON_Delete(reasoning2);
+    free(r2);
+
+    cJSON *tool2 = cJSON_CreateObject();
+    cJSON_AddStringToObject(tool2, "messageType", "TOOL");
+    cJSON_AddStringToObject(tool2, "toolId", "tool_002");
+    cJSON_AddStringToObject(tool2, "toolName", "Read");
+    char *t2 = cJSON_PrintUnformatted(tool2);
+    insert_message(&ctx, "klawed", t2);
+    cJSON_Delete(tool2);
+    free(t2);
+
+    // Retrieve and simulate restore
+    cJSON *messages = retrieve_messages(&ctx);
+    TEST_ASSERT(messages != NULL, "Should retrieve messages");
+    TEST_ASSERT(cJSON_GetArraySize(messages) == 7, "Should have 7 messages");
+
+    // Simulate restore with END_AI_TURN handling
+    cJSON *assistant_turns = simulate_restore_with_end_ai_turn(messages);
+    TEST_ASSERT(assistant_turns != NULL, "Should produce assistant turns");
+    TEST_ASSERT(cJSON_GetArraySize(assistant_turns) == 2, "Should have exactly 2 assistant turns (not merged!)");
+
+    // Verify turn 1 has its reasoning, turn 2 has its reasoning
+    // Note: reasoning_content is attached to the most recent content block when received
+    // In this sequence: TEXT (gets reasoning) → TOOL
+    if (cJSON_GetArraySize(assistant_turns) == 2) {
+        cJSON *turn1 = cJSON_GetArrayItem(assistant_turns, 0);
+        cJSON *contents1 = cJSON_GetObjectItem(turn1, "contents");
+        cJSON *turn2 = cJSON_GetArrayItem(assistant_turns, 1);
+        cJSON *contents2 = cJSON_GetObjectItem(turn2, "contents");
+
+        // Check turn 1's text block has reasoning (index 0 is text, gets reasoning attached)
+        cJSON *text_content1 = cJSON_GetArrayItem(contents1, 0);
+        cJSON *rc1 = cJSON_GetObjectItem(text_content1, "reasoning_content");
+        TEST_ASSERT(rc1 != NULL, "Turn 1 text should have reasoning_content");
+        if (rc1) {
+            TEST_ASSERT(strstr(rc1->valuestring, "first turn") != NULL,
+                       "Turn 1 reasoning should be 'first turn'");
+        }
+
+        // Check turn 2's text block has reasoning
+        cJSON *text_content2 = cJSON_GetArrayItem(contents2, 0);
+        cJSON *rc2 = cJSON_GetObjectItem(text_content2, "reasoning_content");
+        TEST_ASSERT(rc2 != NULL, "Turn 2 text should have reasoning_content");
+        if (rc2) {
+            TEST_ASSERT(strstr(rc2->valuestring, "second turn") != NULL,
+                       "Turn 2 reasoning should be 'second turn'");
+        }
+    }
+
+    cJSON_Delete(messages);
+    cJSON_Delete(assistant_turns);
+    cleanup_test_queue(&ctx);
+
+    TEST_ASSERT(true, "END_AI_TURN separates assistant turns test completed");
+}
+
 // ============================================================================
 // Main Test Runner
 // ============================================================================
@@ -519,6 +772,7 @@ int main(void) {
     test_restore_preserves_reasoning();
     test_empty_reasoning_content();
     test_multiple_reasoning_messages();
+    test_end_ai_turn_separates_assistant_turns();
 
     TEST_SUMMARY();
 }

@@ -1768,8 +1768,20 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
                     break;
                 }
             }
+        } else if (strcmp(mt, "END_AI_TURN") == 0 && from_klawed) {
+            /* End of assistant turn: flush pending assistant content to conversation state.
+             * This ensures each assistant turn is properly separated, which is critical
+             * for preserving reasoning_content on the correct assistant message. */
+            if (pa.count > 0) {
+                if (flush_pending_assistant(state, &pa) != 0) {
+                    cJSON_Delete(json);
+                    break;
+                }
+                restored++;
+                LOG_DEBUG("SQLite Queue: restore: flushed assistant turn on END_AI_TURN");
+            }
         }
-        /* Ignore API_CALL, END_AI_TURN, ERROR, AUTO_COMPACTION, etc. */
+        /* Ignore API_CALL, ERROR, AUTO_COMPACTION, etc. */
 
         cJSON_Delete(json);
     }
