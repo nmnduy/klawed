@@ -503,10 +503,18 @@ TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 TEST_BEDROCK_CONVERSE_SRC = tests/test_bedrock_converse.c
 TEST_BEDROCK_CONVERSE_TARGET = $(BUILD_DIR)/test_bedrock_converse
+
+# Model switch tests
+TEST_MODEL_SWITCH_INTERACTIVE_SRC = tests/test_model_switch_interactive.c
+TEST_MODEL_SWITCH_INTERACTIVE_TARGET = $(BUILD_DIR)/test_model_switch_interactive
+TEST_MODEL_SWITCH_SQLITE_QUEUE_SRC = tests/test_model_switch_sqlite_queue.c
+TEST_MODEL_SWITCH_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_model_switch_sqlite_queue
+TEST_MODEL_SWITCH_QUEUE_RESTART_SRC = tests/test_model_switch_queue_restart.c
+TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET = $(BUILD_DIR)/test_model_switch_queue_restart
 TEST_INSERT_SYSTEM_MESSAGE_SRC = tests/test_insert_system_message.c
 TEST_INSERT_SYSTEM_MESSAGE_TARGET = $(BUILD_DIR)/test_insert_system_message
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-insert-system-message query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -521,7 +529,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-bedrock-converse test-insert-system-message
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -731,6 +739,27 @@ test-bedrock-converse: check-deps $(TEST_BEDROCK_CONVERSE_TARGET)
 	@echo "Running Bedrock Converse format tests..."
 	@echo ""
 	@./$(TEST_BEDROCK_CONVERSE_TARGET)
+
+test-model-switch-interactive: check-deps $(TEST_MODEL_SWITCH_INTERACTIVE_TARGET)
+	@echo ""
+	@echo "Running model switch tests (interactive mode)..."
+	@echo "Providers: Kimi, Z.AI/GLM, OpenAI, Anthropic"
+	@echo ""
+	@./$(TEST_MODEL_SWITCH_INTERACTIVE_TARGET)
+
+test-model-switch-sqlite-queue: check-deps $(TEST_MODEL_SWITCH_SQLITE_QUEUE_TARGET)
+	@echo ""
+	@echo "Running model switch tests (SQLite queue mode)..."
+	@echo "Providers: Kimi (582 calls), Z.AI/GLM (1 call), OpenAI (1 call), Anthropic (1 call)"
+	@echo ""
+	@./$(TEST_MODEL_SWITCH_SQLITE_QUEUE_TARGET)
+
+test-model-switch-queue-restart: check-deps $(TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET)
+	@echo ""
+	@echo "Running model switch via daemon restart tests..."
+	@echo "Scenario: Stop klawed -> Restart with different provider -> Continue conversation"
+	@echo ""
+	@./$(TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET)
 
 test-insert-system-message: check-deps $(TEST_INSERT_SYSTEM_MESSAGE_TARGET)
 	@echo ""
@@ -2310,6 +2339,57 @@ $(TEST_BEDROCK_CONVERSE_TARGET): $(BEDROCK_CONVERSE_SRC) $(TEST_BEDROCK_CONVERSE
 	@$(CC) -o $(TEST_BEDROCK_CONVERSE_TARGET) $(BUILD_DIR)/bedrock_converse_test.o $(BUILD_DIR)/test_bedrock_converse.o $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bedrock Converse test build successful!"
+	@echo ""
+
+$(TEST_MODEL_SWITCH_INTERACTIVE_TARGET): $(SRC) $(TEST_MODEL_SWITCH_INTERACTIVE_SRC) $(TEST_COMMON_OBJS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling klawed.c for testing (renaming main)..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/klawed_test.o $(SRC)
+	@echo "Compiling model switch interactive test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_model_switch_interactive.o $(TEST_MODEL_SWITCH_INTERACTIVE_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_API_CLIENT_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_MODEL_SWITCH_INTERACTIVE_TARGET) \
+		$(BUILD_DIR)/klawed_test.o $(BUILD_DIR)/test_model_switch_interactive.o \
+		$(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(DYNAMIC_TOOLS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Model switch (interactive) test build successful!"
+	@echo ""
+
+$(TEST_MODEL_SWITCH_SQLITE_QUEUE_TARGET): $(SRC) $(TEST_MODEL_SWITCH_SQLITE_QUEUE_SRC) $(TEST_COMMON_OBJS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling klawed.c for testing (renaming main)..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/klawed_test.o $(SRC)
+	@echo "Compiling model switch SQLite queue test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_model_switch_sqlite_queue.o $(TEST_MODEL_SWITCH_SQLITE_QUEUE_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_API_CLIENT_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_MODEL_SWITCH_SQLITE_QUEUE_TARGET) \
+		$(BUILD_DIR)/klawed_test.o $(BUILD_DIR)/test_model_switch_sqlite_queue.o \
+		$(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(DYNAMIC_TOOLS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Model switch (SQLite queue) test build successful!"
+	@echo ""
+
+$(TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET): $(SRC) $(TEST_MODEL_SWITCH_QUEUE_RESTART_SRC) $(TEST_COMMON_OBJS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling klawed.c for testing (renaming main)..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/klawed_test.o $(SRC)
+	@echo "Compiling model switch queue restart test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_model_switch_queue_restart.o $(TEST_MODEL_SWITCH_QUEUE_RESTART_SRC)
+	$(BUILD_SQLITE_QUEUE_TEST_OBJ)
+	$(BUILD_API_CLIENT_TEST_OBJ)
+	$(BUILD_TOOL_SYSTEM_TEST_OBJS)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET) \
+		$(BUILD_DIR)/klawed_test.o $(BUILD_DIR)/test_model_switch_queue_restart.o \
+		$(SQLITE_QUEUE_TEST_OBJ) $(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) $(TOOL_DEFINITIONS_TEST_OBJ) $(DYNAMIC_TOOLS_TEST_OBJ) $(TEST_COMMON_OBJS) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Model switch (queue restart) test build successful!"
 	@echo ""
 
 # Test target for insert_system_message function
