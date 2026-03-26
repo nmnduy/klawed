@@ -567,6 +567,22 @@ int process_response_unified(struct ConversationState *state,
             }
         }
 
+        // Extract and send reasoning content if present (for thinking models like Moonshot/Kimi)
+        if (current_response->raw_response && ctx->on_assistant_reasoning) {
+            cJSON *choices = cJSON_GetObjectItem(current_response->raw_response, "choices");
+            if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
+                cJSON *choice = cJSON_GetArrayItem(choices, 0);
+                cJSON *message = cJSON_GetObjectItem(choice, "message");
+                if (message) {
+                    cJSON *reasoning_content = cJSON_GetObjectItem(message, "reasoning_content");
+                    if (reasoning_content && cJSON_IsString(reasoning_content) &&
+                        reasoning_content->valuestring && reasoning_content->valuestring[0]) {
+                        ctx->on_assistant_reasoning(reasoning_content->valuestring, ctx->user_data);
+                    }
+                }
+            }
+        }
+
         // Add to conversation history
         if (current_response->raw_response) {
             cJSON *choices = cJSON_GetObjectItem(current_response->raw_response, "choices");
