@@ -113,6 +113,13 @@ typedef struct {
     void (*on_assistant_text)(const char *text, void *user_data);
 
     /**
+     * Called when assistant reasoning content is received (for thinking models)
+     * @param reasoning_content The model's reasoning/thinking content
+     * @param user_data Context user_data
+     */
+    void (*on_assistant_reasoning)(const char *reasoning_content, void *user_data);
+
+    /**
      * Called when an error occurs
      * @param error_message Error description
      * @param user_data Context user_data
