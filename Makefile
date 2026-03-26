@@ -173,6 +173,7 @@ TEST_MEMORY_RETRACT_TARGET = $(BUILD_DIR)/test_memory_retract
 TEST_TOKEN_USAGE_TARGET = $(BUILD_DIR)/test_token_usage
 TEST_HTTP_CLIENT_TARGET = $(BUILD_DIR)/test_http_client
 TEST_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_sqlite_queue
+TEST_REASONING_CONTENT_SQLITE_QUEUE_TARGET = $(BUILD_DIR)/test_reasoning_content_sqlite_queue
 TEST_SQLITE_QUEUE_SEEDING_TARGET = $(BUILD_DIR)/test_sqlite_queue_seeding
 TEST_PROVIDER_INIT_FROM_CONFIG_TARGET = $(BUILD_DIR)/test_provider_init_from_config
 TEST_OPENAI_RESPONSES_PROVIDER_TARGET = $(BUILD_DIR)/test_openai_responses_provider
@@ -495,6 +496,7 @@ TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
 TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
 TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
 TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
+TEST_REASONING_CONTENT_SQLITE_QUEUE_SRC = tests/test_reasoning_content_sqlite_queue.c
 TEST_SQLITE_QUEUE_SEEDING_SRC = tests/test_sqlite_queue_seeding.c
 TEST_REALTIME_STEERING_SRC = tests/test_realtime_steering.c
 TEST_TUI_TOOL_CONNECTOR_SRC = tests/test_tui_tool_connector.c
@@ -514,7 +516,7 @@ TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET = $(BUILD_DIR)/test_model_switch_queue_re
 TEST_INSERT_SYSTEM_MESSAGE_SRC = tests/test_insert_system_message.c
 TEST_INSERT_SYSTEM_MESSAGE_TARGET = $(BUILD_DIR)/test_insert_system_message
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -529,7 +531,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message
+test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -890,6 +892,12 @@ test-sqlite-queue: check-deps $(TEST_SQLITE_QUEUE_TARGET)
 	@echo "Running SQLite Queue tests..."
 	@echo ""
 	@./$(TEST_SQLITE_QUEUE_TARGET)
+
+test-reasoning-content-sqlite-queue: check-deps $(TEST_REASONING_CONTENT_SQLITE_QUEUE_TARGET)
+	@echo ""
+	@echo "Running reasoning_content SQLite Queue tests..."
+	@echo ""
+	@./$(TEST_REASONING_CONTENT_SQLITE_QUEUE_TARGET)
 
 test-sqlite-queue-seeding: check-deps $(TARGET) $(TEST_SQLITE_QUEUE_SEEDING_TARGET)
 	@echo ""
@@ -3007,6 +3015,15 @@ $(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(LOGGER_
 
 $(TEST_SQLITE_QUEUE_TARGET): $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_SQLITE_QUEUE_TARGET) $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+
+# Test target for reasoning_content preservation in SQLite Queue (Moonshot/Kimi fix)
+$(TEST_REASONING_CONTENT_SQLITE_QUEUE_TARGET): $(TEST_REASONING_CONTENT_SQLITE_QUEUE_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling reasoning_content SQLite Queue test suite..."
+	@$(CC) $(CFLAGS) -o $(TEST_REASONING_CONTENT_SQLITE_QUEUE_TARGET) $(TEST_REASONING_CONTENT_SQLITE_QUEUE_SRC) $(LDFLAGS)
+	@echo ""
+	@echo "✓ reasoning_content SQLite Queue test build successful!"
+	@echo ""
 
 # Test target for SQLite Queue Seeding (conversation history restoration)
 $(TEST_SQLITE_QUEUE_SEEDING_TARGET): $(SRC) $(TEST_SQLITE_QUEUE_SEEDING_SRC) $(TEST_COMMON_OBJS)
