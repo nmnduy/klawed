@@ -117,7 +117,7 @@ static const TestProviderConfig TEST_PROVIDERS[] = {
 // Helper: Create LLMProviderConfig from test config
 // ============================================================================
 
-static void create_provider_config(const TestProviderConfig *test_config, 
+static void create_provider_config(const TestProviderConfig *test_config,
                                    LLMProviderConfig *config) {
     memset(config, 0, sizeof(*config));
     strlcpy(config->model, test_config->model, sizeof(config->model));
@@ -134,10 +134,10 @@ static Provider* init_test_provider(const TestProviderConfig *test_config,
                                     char **api_url_out) {
     LLMProviderConfig config;
     create_provider_config(test_config, &config);
-    
+
     ProviderInitResult result = {0};
     provider_init_from_config(test_config->name, &config, &result);
-    
+
     if (!result.provider) {
         fprintf(stderr, "Failed to init provider '%s': %s\n",
                 test_config->name, result.error_message ? result.error_message : "unknown");
@@ -145,14 +145,14 @@ static Provider* init_test_provider(const TestProviderConfig *test_config,
         free(result.api_url);
         return NULL;
     }
-    
+
     if (api_url_out) {
         *api_url_out = result.api_url;
     } else {
         free(result.api_url);
     }
     free(result.error_message);
-    
+
     return result.provider;
 }
 
@@ -164,23 +164,23 @@ static char* serialize_conversation(InternalMessage *messages, int count,
                                     const char *model, const char *api_url) {
     cJSON *root = cJSON_CreateObject();
     if (!root) return NULL;
-    
+
     // Add metadata
     cJSON_AddStringToObject(root, "model", model ? model : "");
     cJSON_AddStringToObject(root, "api_url", api_url ? api_url : "");
     cJSON_AddNumberToObject(root, "message_count", count);
-    
+
     // Add messages array
     cJSON *msgs = cJSON_CreateArray();
     if (!msgs) {
         cJSON_Delete(root);
         return NULL;
     }
-    
+
     for (int i = 0; i < count; i++) {
         cJSON *msg = cJSON_CreateObject();
         if (!msg) continue;
-        
+
         // Role
         const char *role_str = "unknown";
         switch (messages[i].role) {
@@ -191,13 +191,13 @@ static char* serialize_conversation(InternalMessage *messages, int count,
             default: role_str = "unknown";
         }
         cJSON_AddStringToObject(msg, "role", role_str);
-        
+
         // Contents
         cJSON *contents = cJSON_CreateArray();
         for (int j = 0; j < messages[i].content_count; j++) {
             cJSON *content = cJSON_CreateObject();
             InternalContent *c = &messages[i].contents[j];
-            
+
             // Content type
             const char *type_str = "unknown";
             switch (c->type) {
@@ -208,7 +208,7 @@ static char* serialize_conversation(InternalMessage *messages, int count,
                 default: type_str = "unknown"; break;
             }
             cJSON_AddStringToObject(content, "type", type_str);
-            
+
             if (c->text) cJSON_AddStringToObject(content, "text", c->text);
             if (c->tool_id) cJSON_AddStringToObject(content, "tool_id", c->tool_id);
             if (c->tool_name) cJSON_AddStringToObject(content, "tool_name", c->tool_name);
@@ -219,15 +219,15 @@ static char* serialize_conversation(InternalMessage *messages, int count,
             if (c->tool_output) {
                 cJSON_AddItemToObject(content, "tool_output", cJSON_Duplicate(c->tool_output, 1));
             }
-            
+
             cJSON_AddItemToArray(contents, content);
         }
         cJSON_AddItemToObject(msg, "contents", contents);
         cJSON_AddItemToArray(msgs, msg);
     }
-    
+
     cJSON_AddItemToObject(root, "messages", msgs);
-    
+
     char *result = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     return result;
@@ -237,59 +237,59 @@ static char* serialize_conversation(InternalMessage *messages, int count,
 // Helper: Deserialize conversation from JSON
 // ============================================================================
 
-static int deserialize_conversation(const char *json, 
+static int deserialize_conversation(const char *json,
                                     InternalMessage *messages, int *count,
                                     char **model_out, char **api_url_out,
                                     int max_messages) {
     cJSON *root = cJSON_Parse(json);
     if (!root) return -1;
-    
+
     // Extract metadata
     cJSON *model = cJSON_GetObjectItem(root, "model");
     cJSON *api_url = cJSON_GetObjectItem(root, "api_url");
-    
+
     if (model_out && model && cJSON_IsString(model)) {
         *model_out = strdup(model->valuestring);
     }
     if (api_url_out && api_url && cJSON_IsString(api_url)) {
         *api_url_out = strdup(api_url->valuestring);
     }
-    
+
     // Extract messages
     cJSON *msgs = cJSON_GetObjectItem(root, "messages");
     if (!msgs || !cJSON_IsArray(msgs)) {
         cJSON_Delete(root);
         return -1;
     }
-    
+
     int msg_count = 0;
     cJSON *msg_item = NULL;
     cJSON_ArrayForEach(msg_item, msgs) {
         if (msg_count >= max_messages) break;
-        
+
         cJSON *role = cJSON_GetObjectItem(msg_item, "role");
         cJSON *contents = cJSON_GetObjectItem(msg_item, "contents");
-        
+
         if (!role || !cJSON_IsString(role)) continue;
-        
+
         InternalMessage *msg = &messages[msg_count++];
-        
+
         // Set role
         if (strcmp(role->valuestring, "user") == 0) msg->role = MSG_USER;
         else if (strcmp(role->valuestring, "assistant") == 0) msg->role = MSG_ASSISTANT;
         else if (strcmp(role->valuestring, "system") == 0) msg->role = MSG_SYSTEM;
-        
+
         // Parse contents
         if (contents && cJSON_IsArray(contents)) {
             int content_count = cJSON_GetArraySize(contents);
             msg->contents = calloc((size_t)content_count, sizeof(InternalContent));
             msg->content_count = content_count;
-            
+
             int cidx = 0;
             cJSON *content_item = NULL;
             cJSON_ArrayForEach(content_item, contents) {
                 InternalContent *c = &msg->contents[cidx++];
-                
+
                 cJSON *type = cJSON_GetObjectItem(content_item, "type");
                 cJSON *text = cJSON_GetObjectItem(content_item, "text");
                 cJSON *tool_id = cJSON_GetObjectItem(content_item, "tool_id");
@@ -297,14 +297,14 @@ static int deserialize_conversation(const char *json,
                 cJSON *is_error = cJSON_GetObjectItem(content_item, "is_error");
                 cJSON *tool_params = cJSON_GetObjectItem(content_item, "tool_params");
                 cJSON *tool_output = cJSON_GetObjectItem(content_item, "tool_output");
-                
+
                 if (type && cJSON_IsString(type)) {
                     if (strcmp(type->valuestring, "text") == 0) c->type = INTERNAL_TEXT;
                     else if (strcmp(type->valuestring, "tool_call") == 0) c->type = INTERNAL_TOOL_CALL;
                     else if (strcmp(type->valuestring, "tool_response") == 0) c->type = INTERNAL_TOOL_RESPONSE;
                     else if (strcmp(type->valuestring, "image") == 0) c->type = INTERNAL_IMAGE;
                 }
-                
+
                 if (text && cJSON_IsString(text)) c->text = strdup(text->valuestring);
                 if (tool_id && cJSON_IsString(tool_id)) c->tool_id = strdup(tool_id->valuestring);
                 if (tool_name && cJSON_IsString(tool_name)) c->tool_name = strdup(tool_name->valuestring);
@@ -314,7 +314,7 @@ static int deserialize_conversation(const char *json,
             }
         }
     }
-    
+
     *count = msg_count;
     cJSON_Delete(root);
     return 0;
@@ -326,7 +326,7 @@ static int deserialize_conversation(const char *json,
 
 static void build_test_conversation(InternalMessage *messages, int *count) {
     *count = 0;
-    
+
     // User message 1
     messages[*count].role = MSG_USER;
     messages[*count].content_count = 1;
@@ -334,7 +334,7 @@ static void build_test_conversation(InternalMessage *messages, int *count) {
     messages[*count].contents[0].type = INTERNAL_TEXT;
     messages[*count].contents[0].text = strdup("Hello, help me with coding");
     (*count)++;
-    
+
     // Assistant response 1
     messages[*count].role = MSG_ASSISTANT;
     messages[*count].content_count = 1;
@@ -342,7 +342,7 @@ static void build_test_conversation(InternalMessage *messages, int *count) {
     messages[*count].contents[0].type = INTERNAL_TEXT;
     messages[*count].contents[0].text = strdup("Sure! What do you need help with?");
     (*count)++;
-    
+
     // User message 2 with tool request
     messages[*count].role = MSG_USER;
     messages[*count].content_count = 1;
@@ -350,7 +350,7 @@ static void build_test_conversation(InternalMessage *messages, int *count) {
     messages[*count].contents[0].type = INTERNAL_TEXT;
     messages[*count].contents[0].text = strdup("List files");
     (*count)++;
-    
+
     // Assistant with tool call
     messages[*count].role = MSG_ASSISTANT;
     messages[*count].content_count = 1;
@@ -362,7 +362,7 @@ static void build_test_conversation(InternalMessage *messages, int *count) {
     cJSON_AddStringToObject(params, "command", "ls");
     messages[*count].contents[0].tool_params = params;
     (*count)++;
-    
+
     // Tool result
     messages[*count].role = MSG_USER;
     messages[*count].content_count = 1;
@@ -374,7 +374,7 @@ static void build_test_conversation(InternalMessage *messages, int *count) {
     cJSON_AddStringToObject(output, "output", "file.txt\nmain.py");
     messages[*count].contents[0].tool_output = output;
     (*count)++;
-    
+
     // Final assistant response
     messages[*count].role = MSG_ASSISTANT;
     messages[*count].content_count = 1;
@@ -408,70 +408,70 @@ static void cleanup_conversation(InternalMessage *messages, int count) {
 
 static void test_queue_save_restore(void) {
     printf("\nTest: Save conversation to queue and restore\n");
-    
+
     // Remove old test db
     unlink(TEST_DB_PATH);
-    
+
     // Initialize queue
     SQLiteQueueContext *ctx = sqlite_queue_init(TEST_DB_PATH, "test_sender");
     TEST_ASSERT(ctx != NULL, "Queue context initialized");
-    
+
     // Build test conversation
     InternalMessage messages[10];
     int msg_count = 0;
     build_test_conversation(messages, &msg_count);
     TEST_ASSERT(msg_count == 6, "Test conversation has 6 messages");
-    
+
     // Serialize and save
-    char *serialized = serialize_conversation(messages, msg_count, 
+    char *serialized = serialize_conversation(messages, msg_count,
                                                TEST_PROVIDERS[0].model,
                                                TEST_PROVIDERS[0].api_base);
     TEST_ASSERT(serialized != NULL, "Conversation serialized");
-    
+
     int result = sqlite_queue_send(ctx, "receiver", serialized, strlen(serialized));
     TEST_ASSERT(result == SQLITE_QUEUE_ERROR_NONE, "Conversation saved to queue");
-    
+
     free(serialized);
     cleanup_conversation(messages, msg_count);
     sqlite_queue_cleanup(ctx);
-    
+
     // Restore from queue
     ctx = sqlite_queue_init(TEST_DB_PATH, "receiver");
     TEST_ASSERT(ctx != NULL, "Queue context re-initialized for receiver");
-    
+
     char **received_msgs = NULL;
     long long *msg_ids = NULL;
     int received_count = 0;
-    
-    result = sqlite_queue_receive(ctx, "test_sender", 10, &received_msgs, 
+
+    result = sqlite_queue_receive(ctx, "test_sender", 10, &received_msgs,
                                    &received_count, &msg_ids);
     TEST_ASSERT(result == SQLITE_QUEUE_ERROR_NONE, "Message received from queue");
     TEST_ASSERT(received_count == 1, "Exactly one message received");
-    
+
     // Deserialize
     InternalMessage restored[10];
     int restored_count = 0;
     char *restored_model = NULL;
     char *restored_api_url = NULL;
-    
+
     result = deserialize_conversation(received_msgs[0], restored, &restored_count,
                                        &restored_model, &restored_api_url, 10);
     TEST_ASSERT(result == 0, "Conversation deserialized");
     TEST_ASSERT(restored_count == 6, "All 6 messages restored");
     TEST_ASSERT(restored_model != NULL, "Model restored");
     TEST_ASSERT(strcmp(restored_model, TEST_PROVIDERS[0].model) == 0, "Model matches");
-    
+
     // Cleanup
     cleanup_conversation(restored, restored_count);
     free(restored_model);
     free(restored_api_url);
-    
+
     if (received_msgs) {
         for (int i = 0; i < received_count; i++) free(received_msgs[i]);
         free(received_msgs);
     }
     if (msg_ids) free(msg_ids);
-    
+
     sqlite_queue_cleanup(ctx);
     unlink(TEST_DB_PATH);
 }
@@ -482,17 +482,17 @@ static void test_queue_save_restore(void) {
 
 static void test_switch_after_queue_restore(void) {
     printf("\nTest: Switch provider after queue restore\n");
-    
+
     unlink(TEST_DB_PATH);
-    
+
     // Initialize and save conversation with Kimi (most used in real db)
     SQLiteQueueContext *ctx = sqlite_queue_init(TEST_DB_PATH, "sender");
     TEST_ASSERT(ctx != NULL, "Queue initialized");
-    
+
     InternalMessage messages[10];
     int msg_count = 0;
     build_test_conversation(messages, &msg_count);
-    
+
     char *serialized = serialize_conversation(messages, msg_count,
                                                TEST_PROVIDERS[0].model,  // Kimi
                                                TEST_PROVIDERS[0].api_base);
@@ -500,39 +500,39 @@ static void test_switch_after_queue_restore(void) {
     free(serialized);
     cleanup_conversation(messages, msg_count);
     sqlite_queue_cleanup(ctx);
-    
+
     // Restore and switch to Z.AI
     ctx = sqlite_queue_init(TEST_DB_PATH, "receiver");
-    
+
     char **received = NULL;
     long long *ids = NULL;
     int count = 0;
     sqlite_queue_receive(ctx, NULL, 10, &received, &count, &ids);
-    
+
     InternalMessage restored[10];
     int restored_count = 0;
     char *model = NULL;
     char *api_url = NULL;
     deserialize_conversation(received[0], restored, &restored_count, &model, &api_url, 10);
-    
+
     // Verify original model is Kimi
     TEST_ASSERT(strcmp(model, TEST_PROVIDERS[0].model) == 0, "Restored model is Kimi");
-    
+
     // Initialize new provider (Z.AI)
     Provider *new_provider = init_test_provider(&TEST_PROVIDERS[1], &api_url);
     TEST_ASSERT(new_provider != NULL, "Can switch to Z.AI after restore");
-    
+
     // Update model
     free(model);
     model = strdup(TEST_PROVIDERS[1].model);
     TEST_ASSERT(strcmp(model, "glm-4.6") == 0, "Model updated to Z.AI");
-    
+
     // Cleanup
     new_provider->cleanup(new_provider);
     cleanup_conversation(restored, restored_count);
     free(model);
     free(api_url);
-    
+
     for (int i = 0; i < count; i++) free(received[i]);
     free(received);
     free(ids);
@@ -546,52 +546,52 @@ static void test_switch_after_queue_restore(void) {
 
 static void test_multiple_queue_ops_with_switch(void) {
     printf("\nTest: Multiple queue operations with provider switching\n");
-    
+
     unlink(TEST_DB_PATH);
-    
+
     // Simulate a conversation that goes through multiple save/restore cycles
     // with provider switches in between
-    
+
     SQLiteQueueContext *sender = sqlite_queue_init(TEST_DB_PATH, "process_a");
     SQLiteQueueContext *receiver = sqlite_queue_init(TEST_DB_PATH, "process_b");
     TEST_ASSERT(sender != NULL && receiver != NULL, "Both queue contexts initialized");
-    
+
     // Round 1: Start with Kimi
     InternalMessage msgs1[5];
     int count1 = 0;
     build_test_conversation(msgs1, &count1);
-    
-    char *ser1 = serialize_conversation(msgs1, count1, 
+
+    char *ser1 = serialize_conversation(msgs1, count1,
                                          TEST_PROVIDERS[0].model,
                                          TEST_PROVIDERS[0].api_base);
     sqlite_queue_send(sender, "process_b", ser1, strlen(ser1));
     free(ser1);
     cleanup_conversation(msgs1, count1);
-    
+
     // Receive and switch to OpenAI
     char **rcv1 = NULL;
     long long *ids1 = NULL;
     int cnt1 = 0;
     sqlite_queue_receive(receiver, "process_a", 10, &rcv1, &cnt1, &ids1);
     sqlite_queue_acknowledge(receiver, ids1[0]);
-    
+
     InternalMessage rmsgs1[10];
     int rcnt1 = 0;
     char *model1 = NULL;
     char *url1 = NULL;
     deserialize_conversation(rcv1[0], rmsgs1, &rcnt1, &model1, &url1, 10);
-    
+
     // Switch to OpenAI
     Provider *prov1 = init_test_provider(&TEST_PROVIDERS[2], &url1);
     TEST_ASSERT(prov1 != NULL, "Switched to OpenAI after first restore");
     free(model1);
     model1 = strdup(TEST_PROVIDERS[2].model);
-    
+
     // Round 2: Continue conversation, save with OpenAI
     char *ser2 = serialize_conversation(rmsgs1, rcnt1, model1, url1);
     sqlite_queue_send(receiver, "process_a", ser2, strlen(ser2));
     free(ser2);
-    
+
     for (int i = 0; i < cnt1; i++) free(rcv1[i]);
     free(rcv1);
     free(ids1);
@@ -599,28 +599,28 @@ static void test_multiple_queue_ops_with_switch(void) {
     prov1->cleanup(prov1);
     free(model1);
     free(url1);
-    
+
     // Receive and switch to Anthropic
     char **rcv2 = NULL;
     long long *ids2 = NULL;
     int cnt2 = 0;
     sqlite_queue_receive(sender, "process_b", 10, &rcv2, &cnt2, &ids2);
-    
+
     InternalMessage rmsgs2[10];
     int rcnt2 = 0;
     char *model2 = NULL;
     char *url2 = NULL;
     deserialize_conversation(rcv2[0], rmsgs2, &rcnt2, &model2, &url2, 10);
-    
+
     // Verify we got the OpenAI model from the queue
     TEST_ASSERT(strcmp(model2, TEST_PROVIDERS[2].model) == 0, "Received OpenAI model from queue");
-    
+
     // Switch to Anthropic
     Provider *prov2 = init_test_provider(&TEST_PROVIDERS[3], &url2);
     TEST_ASSERT(prov2 != NULL, "Switched to Anthropic after second restore");
-    
+
     TEST_ASSERT(rcnt2 == 6, "All messages preserved through multiple queue ops");
-    
+
     // Cleanup
     cleanup_conversation(rmsgs2, rcnt2);
     prov2->cleanup(prov2);
@@ -629,7 +629,7 @@ static void test_multiple_queue_ops_with_switch(void) {
     for (int i = 0; i < cnt2; i++) free(rcv2[i]);
     free(rcv2);
     free(ids2);
-    
+
     sqlite_queue_cleanup(sender);
     sqlite_queue_cleanup(receiver);
     unlink(TEST_DB_PATH);
@@ -641,13 +641,13 @@ static void test_multiple_queue_ops_with_switch(void) {
 
 static void test_tool_ordering_preserved(void) {
     printf("\nTest: Tool call/result ordering preserved through queue\n");
-    
+
     unlink(TEST_DB_PATH);
-    
+
     // Create conversation with specific tool ordering
     InternalMessage msgs[10];
     int count = 0;
-    
+
     // User: request
     msgs[count].role = MSG_USER;
     msgs[count].content_count = 1;
@@ -655,7 +655,7 @@ static void test_tool_ordering_preserved(void) {
     msgs[count].contents[0].type = INTERNAL_TEXT;
     msgs[count].contents[0].text = strdup("Do multiple things");
     count++;
-    
+
     // Assistant: two parallel tool calls
     msgs[count].role = MSG_ASSISTANT;
     msgs[count].content_count = 1;
@@ -667,10 +667,10 @@ static void test_tool_ordering_preserved(void) {
     cJSON_AddStringToObject(p1, "file_path", "a.txt");
     msgs[count].contents[0].tool_params = p1;
     count++;
-    
+
     // Note: In a real scenario, both tool calls might be in same assistant message
     // but for this test we use separate messages for clarity
-    
+
     // Tool result A
     msgs[count].role = MSG_USER;
     msgs[count].content_count = 1;
@@ -682,7 +682,7 @@ static void test_tool_ordering_preserved(void) {
     cJSON_AddStringToObject(o1, "content", "Content A");
     msgs[count].contents[0].tool_output = o1;
     count++;
-    
+
     // Another tool call
     msgs[count].role = MSG_ASSISTANT;
     msgs[count].content_count = 1;
@@ -694,7 +694,7 @@ static void test_tool_ordering_preserved(void) {
     cJSON_AddStringToObject(p2, "command", "ls");
     msgs[count].contents[0].tool_params = p2;
     count++;
-    
+
     // Tool result B
     msgs[count].role = MSG_USER;
     msgs[count].content_count = 1;
@@ -706,7 +706,7 @@ static void test_tool_ordering_preserved(void) {
     cJSON_AddStringToObject(o2, "output", "file.txt");
     msgs[count].contents[0].tool_output = o2;
     count++;
-    
+
     // Final response
     msgs[count].role = MSG_ASSISTANT;
     msgs[count].content_count = 1;
@@ -714,30 +714,30 @@ static void test_tool_ordering_preserved(void) {
     msgs[count].contents[0].type = INTERNAL_TEXT;
     msgs[count].contents[0].text = strdup("Done");
     count++;
-    
+
     // Save to queue
     SQLiteQueueContext *ctx = sqlite_queue_init(TEST_DB_PATH, "sender");
-    char *ser = serialize_conversation(msgs, count, 
+    char *ser = serialize_conversation(msgs, count,
                                         TEST_PROVIDERS[0].model,
                                         TEST_PROVIDERS[0].api_base);
     sqlite_queue_send(ctx, "receiver", ser, strlen(ser));
     free(ser);
     cleanup_conversation(msgs, count);
     sqlite_queue_cleanup(ctx);
-    
+
     // Restore and verify ordering
     ctx = sqlite_queue_init(TEST_DB_PATH, "receiver");
     char **rcv = NULL;
     long long *ids = NULL;
     int rcnt = 0;
     sqlite_queue_receive(ctx, "sender", 10, &rcv, &rcnt, &ids);
-    
+
     InternalMessage rmsgs[10];
     int rcount = 0;
     char *model = NULL;
     char *url = NULL;
     deserialize_conversation(rcv[0], rmsgs, &rcount, &model, &url, 10);
-    
+
     // Verify ordering
     TEST_ASSERT(rcount == 6, "All messages restored");
     TEST_ASSERT(rmsgs[0].role == MSG_USER, "Message 0 is user");
@@ -747,11 +747,11 @@ static void test_tool_ordering_preserved(void) {
     TEST_ASSERT(rmsgs[2].role == MSG_USER, "Message 2 is user");
     TEST_ASSERT(rmsgs[2].contents[0].type == INTERNAL_TOOL_RESPONSE, "Message 2 is tool response");
     TEST_ASSERT(strcmp(rmsgs[2].contents[0].tool_id, "call_a") == 0, "Tool response ID matches call_a");
-    
+
     // Verify we can switch providers and ordering is still valid
     Provider *prov = init_test_provider(&TEST_PROVIDERS[1], &url);
     TEST_ASSERT(prov != NULL, "Can switch provider after queue restore");
-    
+
     // Cleanup
     cleanup_conversation(rmsgs, rcount);
     prov->cleanup(prov);
@@ -770,20 +770,20 @@ static void test_tool_ordering_preserved(void) {
 
 static void test_all_real_providers(void) {
     printf("\nTest: All providers from real_api_calls.db\n");
-    
+
     unlink(TEST_DB_PATH);
-    
+
     // Test that all 4 providers found in the real database can be initialized
     // and used in queue mode
-    
+
     for (size_t i = 0; i < NUM_TEST_PROVIDERS; i++) {
         // Save conversation with this provider
         SQLiteQueueContext *ctx = sqlite_queue_init(TEST_DB_PATH, "sender");
-        
+
         InternalMessage msgs[5];
         int count = 0;
         build_test_conversation(msgs, &count);
-        
+
         char *ser = serialize_conversation(msgs, count,
                                             TEST_PROVIDERS[i].model,
                                             TEST_PROVIDERS[i].api_base);
@@ -791,7 +791,7 @@ static void test_all_real_providers(void) {
         free(ser);
         cleanup_conversation(msgs, count);
         sqlite_queue_cleanup(ctx);
-        
+
         // Restore and verify
         ctx = sqlite_queue_init(TEST_DB_PATH, "receiver");
         char **rcv = NULL;
@@ -799,16 +799,16 @@ static void test_all_real_providers(void) {
         int rcnt = 0;
         sqlite_queue_receive(ctx, "sender", 10, &rcv, &rcnt, &ids);
         sqlite_queue_acknowledge(ctx, ids[0]);
-        
+
         InternalMessage rmsgs[10];
         int rcount = 0;
         char *model = NULL;
         char *url = NULL;
         deserialize_conversation(rcv[0], rmsgs, &rcount, &model, &url, 10);
-        
+
         TEST_ASSERT(strcmp(model, TEST_PROVIDERS[i].model) == 0,
                     "Provider model preserved correctly");
-        
+
         // Cleanup
         cleanup_conversation(rmsgs, rcount);
         free(model);
@@ -817,11 +817,11 @@ static void test_all_real_providers(void) {
         free(rcv);
         free(ids);
         sqlite_queue_cleanup(ctx);
-        
+
         // Clear for next iteration
         unlink(TEST_DB_PATH);
     }
-    
+
     printf("  [INFO] Tested all %zu providers from real_api_calls.db\n", NUM_TEST_PROVIDERS);
 }
 
@@ -833,25 +833,25 @@ int main(void) {
     printf("=== Model Switch Tests (SQLite Queue Mode) ===\n");
     printf("Testing providers from real_api_calls.db:\n");
     for (size_t i = 0; i < NUM_TEST_PROVIDERS; i++) {
-        printf("  - %s (%s) - %s\n", 
-               TEST_PROVIDERS[i].name, 
+        printf("  - %s (%s) - %s\n",
+               TEST_PROVIDERS[i].name,
                TEST_PROVIDERS[i].model,
                i == 0 ? "582 calls" : "1 call");  // Match real distribution
     }
-    
+
     test_queue_save_restore();
     test_switch_after_queue_restore();
     test_multiple_queue_ops_with_switch();
     test_tool_ordering_preserved();
     test_all_real_providers();
-    
+
     printf("\n=== Results ===\n");
     printf("Tests run: %d\n", tests_run);
     printf("Tests passed: %d\n", tests_passed);
     printf("Tests failed: %d\n", tests_failed);
-    
+
     // Cleanup
     unlink(TEST_DB_PATH);
-    
+
     return tests_failed > 0 ? 1 : 0;
 }
