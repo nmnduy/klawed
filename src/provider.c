@@ -872,6 +872,9 @@ void provider_init(const char *model,
     char *base_url = NULL;
     if (config_api_base && config_api_base[0] != '\0') {
         base_url = arena_strdup(arena, config_api_base);
+    } else if (provider_type == PROVIDER_MINIMAX_CODING) {
+        // MiniMax Coding provider has its own default URL - leave NULL to use it
+        base_url = NULL;
     } else {
         base_url = get_api_url_from_env();  // This uses strdup, not arena
         if (base_url) {
@@ -1431,6 +1434,9 @@ void provider_init_from_config(const char *provider_key,
         base_url = strdup(api_base);
     } else if (provider_type == PROVIDER_ANTHROPIC) {
         base_url = strdup(DEFAULT_ANTHROPIC_URL);
+    } else if (provider_type == PROVIDER_MINIMAX_CODING) {
+        // MiniMax Coding provider has its own default URL - pass NULL to use it
+        base_url = NULL;
     } else {
         // Fall back to environment or default OpenAI URL
         base_url = get_api_url_from_env();
