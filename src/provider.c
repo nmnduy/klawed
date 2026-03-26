@@ -885,7 +885,8 @@ void provider_init(const char *model,
         }
     }
 
-    if (!base_url) {
+    // MiniMax Coding provider manages its own URL, so base_url can be NULL
+    if (!base_url && provider_type != PROVIDER_MINIMAX_CODING) {
         result->error_message = strdup("Failed to allocate memory for API URL");
         LOG_ERROR("Provider init failed: %s", result->error_message);
         arena_destroy(arena);
@@ -1442,7 +1443,8 @@ void provider_init_from_config(const char *provider_key,
         base_url = get_api_url_from_env();
     }
 
-    if (!base_url) {
+    // MiniMax Coding provider manages its own URL, so base_url can be NULL
+    if (!base_url && provider_type != PROVIDER_MINIMAX_CODING) {
         result->error_message = strdup("Failed to determine API base URL");
         LOG_ERROR("Provider init from config failed: %s", result->error_message);
         return;
