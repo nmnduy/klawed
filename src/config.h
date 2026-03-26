@@ -40,6 +40,7 @@ typedef enum {
     PROVIDER_ANTHROPIC_SUB,    // Anthropic Subscription (OAuth, Claude.ai / claude auth login)
     PROVIDER_OPENAI_RESPONSES, // OpenAI Responses API (/v1/responses endpoint, always uses Responses format)
     PROVIDER_ZAI_CODING,       // Z.AI GLM Coding Plan (OpenAI-compatible, coding endpoint)
+    PROVIDER_MINIMAX_CODING,   // MiniMax Coding Plan (Anthropic-compatible API)
     PROVIDER_CUSTOM            // Custom provider
 } LLMProviderType;
 
