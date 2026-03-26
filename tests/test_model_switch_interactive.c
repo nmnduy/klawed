@@ -150,7 +150,7 @@ static void cleanup_mock_state(MockConversationState *state) {
         }
         free(msg->contents);
     }
-    
+
     if (state->provider && state->provider->cleanup) {
         state->provider->cleanup(state->provider);
     }
@@ -163,7 +163,7 @@ static void cleanup_mock_state(MockConversationState *state) {
 // Helper: Create LLMProviderConfig from test config
 // ============================================================================
 
-static void create_provider_config(const TestProviderConfig *test_config, 
+static void create_provider_config(const TestProviderConfig *test_config,
                                    LLMProviderConfig *config) {
     memset(config, 0, sizeof(*config));
     strlcpy(config->model, test_config->model, sizeof(config->model));
@@ -176,24 +176,24 @@ static void create_provider_config(const TestProviderConfig *test_config,
 // Helper: Switch provider on conversation state
 // ============================================================================
 
-static int switch_provider(MockConversationState *state, 
+static int switch_provider(MockConversationState *state,
                            const TestProviderConfig *new_config) {
     pthread_mutex_lock(&state->lock);
-    
+
     // Clean up old provider
     if (state->provider && state->provider->cleanup) {
         state->provider->cleanup(state->provider);
     }
     free(state->api_url);
-    
+
     // Create new provider config
     LLMProviderConfig config;
     create_provider_config(new_config, &config);
-    
+
     // Initialize new provider
     ProviderInitResult result = {0};
     provider_init_from_config(new_config->name, &config, &result);
-    
+
     if (!result.provider) {
         pthread_mutex_unlock(&state->lock);
         fprintf(stderr, "Failed to initialize provider '%s': %s\n",
@@ -202,17 +202,17 @@ static int switch_provider(MockConversationState *state,
         free(result.api_url);
         return -1;
     }
-    
+
     // Update state
     state->provider = result.provider;
     state->api_url = result.api_url;
-    
+
     // Update model
     free(state->model);
     state->model = strdup(new_config->model);
-    
+
     free(result.error_message);
-    
+
     pthread_mutex_unlock(&state->lock);
     return 0;
 }
@@ -223,12 +223,12 @@ static int switch_provider(MockConversationState *state,
 
 static int mock_add_user_message(MockConversationState *state, const char *text) {
     pthread_mutex_lock(&state->lock);
-    
+
     if (state->count >= MAX_MESSAGES) {
         pthread_mutex_unlock(&state->lock);
         return -1;
     }
-    
+
     InternalMessage *msg = &state->messages[state->count++];
     msg->role = MSG_USER;
     msg->content_count = 1;
@@ -238,22 +238,22 @@ static int mock_add_user_message(MockConversationState *state, const char *text)
         pthread_mutex_unlock(&state->lock);
         return -1;
     }
-    
+
     msg->contents[0].type = INTERNAL_TEXT;
     msg->contents[0].text = strdup(text);
-    
+
     pthread_mutex_unlock(&state->lock);
     return 0;
 }
 
 static int mock_add_assistant_message(MockConversationState *state, const char *text) {
     pthread_mutex_lock(&state->lock);
-    
+
     if (state->count >= MAX_MESSAGES) {
         pthread_mutex_unlock(&state->lock);
         return -1;
     }
-    
+
     InternalMessage *msg = &state->messages[state->count++];
     msg->role = MSG_ASSISTANT;
     msg->content_count = 1;
@@ -263,10 +263,10 @@ static int mock_add_assistant_message(MockConversationState *state, const char *
         pthread_mutex_unlock(&state->lock);
         return -1;
     }
-    
+
     msg->contents[0].type = INTERNAL_TEXT;
     msg->contents[0].text = strdup(text);
-    
+
     pthread_mutex_unlock(&state->lock);
     return 0;
 }
@@ -274,12 +274,12 @@ static int mock_add_assistant_message(MockConversationState *state, const char *
 static int mock_add_tool_call(MockConversationState *state, const char *tool_id,
                          const char *tool_name, cJSON *params) {
     pthread_mutex_lock(&state->lock);
-    
+
     if (state->count >= MAX_MESSAGES) {
         pthread_mutex_unlock(&state->lock);
         return -1;
     }
-    
+
     InternalMessage *msg = &state->messages[state->count++];
     msg->role = MSG_ASSISTANT;
     msg->content_count = 1;
@@ -289,12 +289,12 @@ static int mock_add_tool_call(MockConversationState *state, const char *tool_id,
         pthread_mutex_unlock(&state->lock);
         return -1;
     }
-    
+
     msg->contents[0].type = INTERNAL_TOOL_CALL;
     msg->contents[0].tool_id = strdup(tool_id);
     msg->contents[0].tool_name = strdup(tool_name);
     msg->contents[0].tool_params = cJSON_Duplicate(params, 1);
-    
+
     pthread_mutex_unlock(&state->lock);
     return 0;
 }
@@ -302,12 +302,12 @@ static int mock_add_tool_call(MockConversationState *state, const char *tool_id,
 static int mock_add_tool_result(MockConversationState *state, const char *tool_id,
                            const char *tool_name, cJSON *output, int is_error) {
     pthread_mutex_lock(&state->lock);
-    
+
     if (state->count >= MAX_MESSAGES) {
         pthread_mutex_unlock(&state->lock);
         return -1;
     }
-    
+
     InternalMessage *msg = &state->messages[state->count++];
     msg->role = MSG_USER;
     msg->content_count = 1;
@@ -317,13 +317,13 @@ static int mock_add_tool_result(MockConversationState *state, const char *tool_i
         pthread_mutex_unlock(&state->lock);
         return -1;
     }
-    
+
     msg->contents[0].type = INTERNAL_TOOL_RESPONSE;
     msg->contents[0].tool_id = strdup(tool_id);
     msg->contents[0].tool_name = strdup(tool_name);
     msg->contents[0].tool_output = cJSON_Duplicate(output, 1);
     msg->contents[0].is_error = is_error;
-    
+
     pthread_mutex_unlock(&state->lock);
     return 0;
 }
@@ -334,9 +334,9 @@ static int mock_add_tool_result(MockConversationState *state, const char *tool_i
 
 static int verify_conversation_integrity(MockConversationState *state) {
     pthread_mutex_lock(&state->lock);
-    
+
     int valid = 1;
-    
+
     // Check 1: Tool calls must have matching results
     for (int i = 0; i < state->count; i++) {
         InternalMessage *msg = &state->messages[i];
@@ -345,7 +345,7 @@ static int verify_conversation_integrity(MockConversationState *state) {
                 if (msg->contents[j].type == INTERNAL_TOOL_CALL) {
                     const char *tool_id = msg->contents[j].tool_id;
                     int found_result = 0;
-                    
+
                     // Look for matching result in subsequent messages
                     for (int k = i + 1; k < state->count; k++) {
                         InternalMessage *result_msg = &state->messages[k];
@@ -361,7 +361,7 @@ static int verify_conversation_integrity(MockConversationState *state) {
                         }
                         if (found_result) break;
                     }
-                    
+
                     if (!found_result) {
                         printf("  [WARN] Tool call '%s' has no matching result\n", tool_id);
                         // This is a warning, not necessarily a failure (could be pending)
@@ -370,7 +370,7 @@ static int verify_conversation_integrity(MockConversationState *state) {
             }
         }
     }
-    
+
     // Check 2: All messages must have valid roles
     for (int i = 0; i < state->count; i++) {
         InternalMessage *msg = &state->messages[i];
@@ -379,7 +379,7 @@ static int verify_conversation_integrity(MockConversationState *state) {
             valid = 0;
         }
     }
-    
+
     pthread_mutex_unlock(&state->lock);
     return valid;
 }
@@ -390,21 +390,21 @@ static int verify_conversation_integrity(MockConversationState *state) {
 
 static void test_switch_at_empty(void) {
     printf("\nTest: Switch provider at empty conversation\n");
-    
+
     MockConversationState state;
     init_mock_state(&state);
-    
+
     // Switch to first provider
     int result = switch_provider(&state, &TEST_PROVIDERS[0]);
     TEST_ASSERT(result == 0, "Can switch to provider at empty conversation");
     TEST_ASSERT(state.provider != NULL, "Provider is set");
     TEST_ASSERT_STR_EQ(TEST_PROVIDERS[0].model, state.model, "Model matches");
-    
+
     // Switch to second provider
     result = switch_provider(&state, &TEST_PROVIDERS[1]);
     TEST_ASSERT(result == 0, "Can switch to different provider");
     TEST_ASSERT_STR_EQ(TEST_PROVIDERS[1].model, state.model, "Model updated");
-    
+
     cleanup_mock_state(&state);
 }
 
@@ -414,20 +414,20 @@ static void test_switch_at_empty(void) {
 
 static void test_switch_after_user_message(void) {
     printf("\nTest: Switch provider after user message\n");
-    
+
     MockConversationState state;
     init_mock_state(&state);
-    
+
     // Add user message
     mock_add_user_message(&state, "Hello, can you help me with coding?");
     TEST_ASSERT(state.count == 1, "User message added");
-    
+
     // Switch provider
     int result = switch_provider(&state, &TEST_PROVIDERS[2]);
     TEST_ASSERT(result == 0, "Can switch after user message");
     TEST_ASSERT(state.count == 1, "Message count preserved");
     TEST_ASSERT_STR_EQ(TEST_PROVIDERS[2].model, state.model, "Model is OpenAI");
-    
+
     cleanup_mock_state(&state);
 }
 
@@ -437,26 +437,26 @@ static void test_switch_after_user_message(void) {
 
 static void test_switch_after_assistant(void) {
     printf("\nTest: Switch provider after assistant response\n");
-    
+
     MockConversationState state;
     init_mock_state(&state);
-    
+
     // Add conversation
     mock_add_user_message(&state, "Write a Python function to sort a list");
     mock_add_assistant_message(&state, "Here's a Python function to sort a list using bubble sort...");
-    
+
     TEST_ASSERT(state.count == 2, "Conversation has 2 messages");
-    
+
     // Switch to all providers sequentially
     for (size_t i = 0; i < NUM_TEST_PROVIDERS; i++) {
         int result = switch_provider(&state, &TEST_PROVIDERS[i]);
         TEST_ASSERT(result == 0, "Can switch to provider after assistant response");
         TEST_ASSERT(state.count == 2, "Messages preserved after switch");
-        
+
         int integrity = verify_conversation_integrity(&state);
         TEST_ASSERT(integrity, "Conversation integrity maintained");
     }
-    
+
     cleanup_mock_state(&state);
 }
 
@@ -466,37 +466,37 @@ static void test_switch_after_assistant(void) {
 
 static void test_switch_with_tool_calls(void) {
     printf("\nTest: Switch provider with tool calls in conversation\n");
-    
+
     MockConversationState state;
     init_mock_state(&state);
-    
+
     // Build conversation with tool calls
     mock_add_user_message(&state, "List files in current directory");
-    
+
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "command", "ls -la");
     mock_add_tool_call(&state, "call_1", "Bash", params);
     cJSON_Delete(params);
-    
+
     cJSON *output = cJSON_CreateObject();
     cJSON_AddStringToObject(output, "output", "total 10\ndrwxr-xr-x 3 user user 4096 Mar 26 10:00 .\n...");
     mock_add_tool_result(&state, "call_1", "Bash", output, 0);
     cJSON_Delete(output);
-    
+
     mock_add_assistant_message(&state, "Here are the files in your directory...");
-    
+
     TEST_ASSERT(state.count == 4, "Conversation has 4 messages");
-    
+
     // Switch between all providers
     for (size_t i = 0; i < NUM_TEST_PROVIDERS; i++) {
         int result = switch_provider(&state, &TEST_PROVIDERS[i]);
         TEST_ASSERT(result == 0, "Can switch with tool calls");
         TEST_ASSERT(state.count == 4, "All messages preserved");
-        
+
         int integrity = verify_conversation_integrity(&state);
         TEST_ASSERT(integrity, "Tool call/result integrity maintained");
     }
-    
+
     cleanup_mock_state(&state);
 }
 
@@ -506,50 +506,50 @@ static void test_switch_with_tool_calls(void) {
 
 static void test_switch_with_parallel_tools(void) {
     printf("\nTest: Switch with multiple parallel tool calls\n");
-    
+
     MockConversationState state;
     init_mock_state(&state);
-    
+
     // User asks for multiple things
     mock_add_user_message(&state, "Read file.txt and also show me the current directory");
-    
+
     // Assistant makes two parallel tool calls
     cJSON *params1 = cJSON_CreateObject();
     cJSON_AddStringToObject(params1, "file_path", "file.txt");
     mock_add_tool_call(&state, "call_read", "Read", params1);
     cJSON_Delete(params1);
-    
+
     cJSON *params2 = cJSON_CreateObject();
     cJSON_AddStringToObject(params2, "command", "pwd");
     mock_add_tool_call(&state, "call_bash", "Bash", params2);
     cJSON_Delete(params2);
-    
+
     // Both tool results
     cJSON *output1 = cJSON_CreateObject();
     cJSON_AddStringToObject(output1, "content", "Contents of file.txt...");
     mock_add_tool_result(&state, "call_read", "Read", output1, 0);
     cJSON_Delete(output1);
-    
+
     cJSON *output2 = cJSON_CreateObject();
     cJSON_AddStringToObject(output2, "output", "/home/user/project");
     mock_add_tool_result(&state, "call_bash", "Bash", output2, 0);
     cJSON_Delete(output2);
-    
+
     // Assistant responds
     mock_add_assistant_message(&state, "The file contains... and you're in /home/user/project");
-    
+
     TEST_ASSERT(state.count == 6, "Conversation has 6 messages (user + 2 tool calls + 2 tool results + assistant)");
-    
+
     // Switch between Kimi and Z.AI (most used providers in real db)
     int result = switch_provider(&state, &TEST_PROVIDERS[0]);  // Kimi
     TEST_ASSERT(result == 0, "Can switch to Kimi with parallel tools");
-    
+
     result = switch_provider(&state, &TEST_PROVIDERS[1]);  // Z.AI
     TEST_ASSERT(result == 0, "Can switch to Z.AI with parallel tools");
-    
+
     int integrity = verify_conversation_integrity(&state);
     TEST_ASSERT(integrity, "Parallel tool integrity maintained");
-    
+
     cleanup_mock_state(&state);
 }
 
@@ -559,17 +559,17 @@ static void test_switch_with_parallel_tools(void) {
 
 static void test_rapid_switching(void) {
     printf("\nTest: Rapid switching between providers\n");
-    
+
     MockConversationState state;
     init_mock_state(&state);
-    
+
     // Build a longer conversation
     mock_add_user_message(&state, "Message 1");
     mock_add_assistant_message(&state, "Response 1");
     mock_add_user_message(&state, "Message 2");
     mock_add_assistant_message(&state, "Response 2");
     mock_add_user_message(&state, "Message 3");
-    
+
     // Rapidly switch between all providers multiple times
     for (int round = 0; round < 3; round++) {
         for (size_t i = 0; i < NUM_TEST_PROVIDERS; i++) {
@@ -577,9 +577,9 @@ static void test_rapid_switching(void) {
             TEST_ASSERT(result == 0, "Rapid switch successful");
         }
     }
-    
+
     TEST_ASSERT(state.count == 5, "Messages preserved after rapid switching");
-    
+
     cleanup_mock_state(&state);
 }
 
@@ -589,34 +589,34 @@ static void test_rapid_switching(void) {
 
 static void test_switch_after_error_result(void) {
     printf("\nTest: Switch provider after error tool result\n");
-    
+
     MockConversationState state;
     init_mock_state(&state);
-    
+
     mock_add_user_message(&state, "Run invalid command");
-    
+
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "command", "invalid_cmd");
     mock_add_tool_call(&state, "call_err", "Bash", params);
     cJSON_Delete(params);
-    
+
     // Error result
     cJSON *output = cJSON_CreateObject();
     cJSON_AddStringToObject(output, "error", "Command not found");
     mock_add_tool_result(&state, "call_err", "Bash", output, 1);  // is_error = 1
     cJSON_Delete(output);
-    
+
     mock_add_assistant_message(&state, "That command failed, let me try something else...");
-    
+
     // Switch providers
     int result = switch_provider(&state, &TEST_PROVIDERS[3]);  // Anthropic
     TEST_ASSERT(result == 0, "Can switch after error result");
     TEST_ASSERT(state.count == 4, "All messages including error preserved");
-    
+
     // Verify error flag is preserved
     InternalMessage *result_msg = &state.messages[2];
     TEST_ASSERT(result_msg->contents[0].is_error == 1, "Error flag preserved");
-    
+
     cleanup_mock_state(&state);
 }
 
@@ -626,10 +626,10 @@ static void test_switch_after_error_result(void) {
 
 static void test_provider_api_urls(void) {
     printf("\nTest: Verify provider-specific API URLs\n");
-    
+
     MockConversationState state;
     init_mock_state(&state);
-    
+
     // Test each provider sets correct API URL
     for (size_t i = 0; i < NUM_TEST_PROVIDERS; i++) {
         int result = switch_provider(&state, &TEST_PROVIDERS[i]);
@@ -639,7 +639,7 @@ static void test_provider_api_urls(void) {
                     strstr(TEST_PROVIDERS[i].api_base, state.api_url) != NULL,
                     "API URL matches provider config");
     }
-    
+
     cleanup_mock_state(&state);
 }
 
@@ -653,7 +653,7 @@ int main(void) {
     for (size_t i = 0; i < NUM_TEST_PROVIDERS; i++) {
         printf("  - %s (%s)\n", TEST_PROVIDERS[i].name, TEST_PROVIDERS[i].model);
     }
-    
+
     test_switch_at_empty();
     test_switch_after_user_message();
     test_switch_after_assistant();
@@ -662,11 +662,11 @@ int main(void) {
     test_rapid_switching();
     test_switch_after_error_result();
     test_provider_api_urls();
-    
+
     printf("\n=== Results ===\n");
     printf("Tests run: %d\n", tests_run);
     printf("Tests passed: %d\n", tests_passed);
     printf("Tests failed: %d\n", tests_failed);
-    
+
     return tests_failed > 0 ? 1 : 0;
 }
