@@ -12,6 +12,7 @@
 #include "deepseek_provider.h"
 #include "moonshot_provider.h"
 #include "zai_coding_provider.h"
+#include "minimax_coding_provider.h"
 #include "kimi_coding_plan_provider.h"
 #include "openai_sub_provider.h"
 #include "anthropic_sub_provider.h"
@@ -474,6 +475,10 @@ static void get_provider_config(Arena *arena,
             } else if (synthetic_provider.provider_type == PROVIDER_ANTHROPIC_SUB) {
                 // Anthropic Subscription uses OAuth, no API key needed
                 strlcpy(synthetic_provider.model, "claude-opus-4", CONFIG_MODEL_MAX);
+            } else if (synthetic_provider.provider_type == PROVIDER_MINIMAX_CODING) {
+                // MiniMax Coding Plan uses MINIMAX_CODING_PLAN_API_KEY
+                strlcpy(synthetic_provider.api_key_env, "MINIMAX_CODING_PLAN_API_KEY", CONFIG_API_KEY_ENV_MAX);
+                strlcpy(synthetic_provider.model, "MiniMax-M2.1", CONFIG_MODEL_MAX);
             }
         }
     }
@@ -1026,6 +1031,35 @@ void provider_init(const char *model,
             LOG_INFO("Provider initialization successful: Kimi Coding Plan (API base: %s)", result->api_url);
             arena_destroy(arena);
             return;
+        } else if (provider_type == PROVIDER_MINIMAX_CODING) {
+            LOG_INFO("Using MiniMax Coding Plan provider (explicitly configured)");
+            Provider *prov = minimax_coding_provider_create(api_key_to_use, base_url);
+            if (!prov) {
+                result->error_message = strdup("Failed to initialize MiniMax Coding Plan provider (check logs for details)");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                arena_destroy(arena);
+                return;
+            }
+            AnthropicConfig *cfg = (AnthropicConfig *)prov->config;
+            if (!cfg || !cfg->base_url) {
+                result->error_message = strdup("MiniMax Coding Plan provider initialized but base URL is missing");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            result->provider = prov;
+            result->api_url = strdup(cfg->base_url);
+            if (!result->api_url) {
+                result->error_message = strdup("Failed to allocate memory for API URL");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            LOG_INFO("Provider initialization successful: MiniMax Coding Plan (base URL: %s)", result->api_url);
+            arena_destroy(arena);
+            return;
         } else if (provider_type == PROVIDER_OPENAI_SUB) {
             LOG_INFO("Using OpenAI Subscription provider (explicitly configured)");
             const char *api_base_to_use = (provider_config && provider_config->api_base[0] != '\0')
@@ -1508,6 +1542,36 @@ void provider_init_from_config(const char *provider_key,
             return;
         }
         LOG_INFO("Provider initialization successful: Z.AI GLM Coding (base URL: %s)", result->api_url);
+        return;
+    }
+
+    if (provider_type == PROVIDER_MINIMAX_CODING) {
+        LOG_INFO("Creating MiniMax Coding Plan provider from config...");
+        Provider *prov = minimax_coding_provider_create(api_key, base_url);
+        free(base_url);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize MiniMax Coding Plan provider (check logs for details)");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        AnthropicConfig *cfg = (AnthropicConfig *)prov->config;
+        if (!cfg || !cfg->base_url) {
+            result->error_message = strdup(
+                "MiniMax Coding Plan provider initialized but base URL is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(cfg->base_url);
+        if (!result->api_url) {
+            result->error_message = strdup("Failed to allocate memory for API URL");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: MiniMax Coding Plan (base URL: %s)", result->api_url);
         return;
     }
 
