@@ -697,9 +697,15 @@ void provider_init(const char *model,
 
     // If provider_type wasn't set by get_provider_config (e.g., from KLAWED_PROVIDER_TYPE),
     // fall back to checking config file
+    int named_provider_selected = 0;
     if (provider_type == PROVIDER_AUTO) {
         provider_config = get_provider_config_to_use(&effective_config);
-        provider_type = provider_config ? provider_config->provider_type : effective_config.llm_provider.provider_type;
+        if (provider_config) {
+            named_provider_selected = 1;
+            provider_type = provider_config->provider_type;
+        } else {
+            provider_type = effective_config.llm_provider.provider_type;
+        }
         LOG_DEBUG("[Provider Init] Selected provider_config=%s, provider_type=%d",
                   provider_config ? provider_config->provider_name : "(NULL)", provider_type);
     } else {
@@ -708,18 +714,26 @@ void provider_init(const char *model,
 
     // Determine which model to use
     // Priority:
-    // 1. Passed model parameter
-    // 2. Config file's model (from get_provider_config which handles env vars and provider defaults)
-    // 3. Environment variable (OPENAI_MODEL)
+    // 1. Named provider's model (when a valid named provider is selected)
+    // 2. Config file's model from get_provider_config (handles env vars for non-named configs)
+    // 3. Passed model parameter (only used in legacy mode when no named provider)
+    // 4. Environment variable (OPENAI_MODEL)
     char *model_to_use = NULL;
-    if (model && model[0] != '\0') {
-        // Use passed parameter
-        model_to_use = arena_strdup(arena, model);
-        LOG_DEBUG("[Provider] Using model from passed parameter: %s", model_to_use);
+
+    if (named_provider_selected && provider_config && provider_config->model[0] != '\0') {
+        // Named provider is selected - use its configured model
+        // This takes precedence over the passed model parameter
+        model_to_use = arena_strdup(arena, provider_config->model);
+        LOG_DEBUG("[Provider] Using model from named provider '%s': %s",
+                provider_config->provider_name, model_to_use);
     } else if (config_model && config_model[0] != '\0') {
         // Use model from get_provider_config (handles env vars, provider defaults, etc.)
         model_to_use = config_model;
-        LOG_DEBUG("[Provider] Using model from config: %s", model_to_use);
+        LOG_DEBUG("[Provider] Using model from get_provider_config: %s", model_to_use);
+    } else if (model && model[0] != '\0') {
+        // Legacy mode: use passed parameter when no named provider selected
+        model_to_use = arena_strdup(arena, model);
+        LOG_DEBUG("[Provider] Using model from passed parameter (legacy mode): %s", model_to_use);
     } else {
         // Fall back to environment variable
         const char *env_model = getenv("OPENAI_MODEL");
