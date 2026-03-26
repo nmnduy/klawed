@@ -1643,17 +1643,53 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
             if (*p == '\0') { cJSON_Delete(json); continue; }
 
             /* Add reasoning_content to the most recent pending assistant content block
-             * (either the last text block or the last tool call block) */
+             * (either the last text block or the last tool call block).
+             * 
+             * IMPORTANT: If the last content block is a TEXT block with non-empty text content,
+             * this means the TEXT is a response from the previous turn, and the REASONING
+             * belongs to a new turn. In this case, we should NOT attach the reasoning_content
+             * to the existing TEXT block. Instead, create a new synthetic text block for the
+             * reasoning. This prevents the "reasoning_content is missing in assistant tool call
+             * message" error when multiple turns are merged (e.g., due to missing END_AI_TURN). */
             if (pa.count > 0) {
                 int last_idx = pa.count - 1;
-                pa.contents[last_idx].reasoning_content = strdup(reasoning);
-                if (!pa.contents[last_idx].reasoning_content) {
-                    LOG_ERROR("SQLite Queue: restore: OOM storing reasoning content");
-                    cJSON_Delete(json);
-                    break;
+                int create_new_block = 0;
+                
+                /* Check if last block is TEXT with non-empty content - if so, don't attach reasoning to it */
+                if (pa.contents[last_idx].type == INTERNAL_TEXT && 
+                    pa.contents[last_idx].text && 
+                    pa.contents[last_idx].text[0] != '\0') {
+                    /* Last block is a text response, reasoning belongs to next turn */
+                    create_new_block = 1;
+                    LOG_DEBUG("SQLite Queue: restore: last block is text response, creating new block for reasoning");
                 }
-                LOG_DEBUG("SQLite Queue: restore: stored reasoning_content (%zu bytes) on content block %d",
-                          strlen(reasoning), last_idx);
+                
+                if (create_new_block) {
+                    /* Create a new synthetic text block to hold the reasoning for the new turn */
+                    InternalContent c = {0};
+                    c.type = INTERNAL_TEXT;
+                    c.text = strdup("");  /* Empty text, reasoning_content holds the actual content */
+                    c.reasoning_content = strdup(reasoning);
+                    if (!c.text || !c.reasoning_content || pending_assistant_append(&pa, c) != 0) {
+                        free(c.text);
+                        free(c.reasoning_content);
+                        LOG_ERROR("SQLite Queue: restore: OOM appending synthetic text with reasoning for new turn");
+                        cJSON_Delete(json);
+                        break;
+                    }
+                    LOG_DEBUG("SQLite Queue: restore: created synthetic text block for new turn with reasoning_content (%zu bytes)",
+                              strlen(reasoning));
+                } else {
+                    /* Attach reasoning to existing block (tool call or empty text block) */
+                    pa.contents[last_idx].reasoning_content = strdup(reasoning);
+                    if (!pa.contents[last_idx].reasoning_content) {
+                        LOG_ERROR("SQLite Queue: restore: OOM storing reasoning content");
+                        cJSON_Delete(json);
+                        break;
+                    }
+                    LOG_DEBUG("SQLite Queue: restore: stored reasoning_content (%zu bytes) on content block %d",
+                              strlen(reasoning), last_idx);
+                }
             } else {
                 /* No pending assistant content - create a synthetic text block to hold the reasoning */
                 InternalContent c = {0};
