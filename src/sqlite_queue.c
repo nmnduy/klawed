@@ -1756,6 +1756,25 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
                 cJSON_Delete(json);
                 break;
             }
+
+            /* Extract reasoning_content from TOOL message if present */
+            cJSON *jreasoning = cJSON_GetObjectItem(json, "reasoningContent");
+            if (jreasoning && cJSON_IsString(jreasoning) && jreasoning->valuestring) {
+                const char *reasoning = jreasoning->valuestring;
+                /* Skip empty / whitespace-only reasoning */
+                const char *pr = reasoning;
+                while (*pr && isspace((unsigned char)*pr)) pr++;
+                if (*pr != '\0') {
+                    pa.contents[pa.count - 1].reasoning_content = strdup(reasoning);
+                    if (!pa.contents[pa.count - 1].reasoning_content) {
+                        LOG_ERROR("SQLite Queue: restore: OOM storing reasoning_content on TOOL");
+                    } else {
+                        LOG_DEBUG("SQLite Queue: restore: stored reasoning_content (%zu bytes) on TOOL %s",
+                                  strlen(reasoning), c.tool_name);
+                    }
+                }
+            }
+
             open_tool_calls++;
 
         } else if (strcmp(mt, "TOOL_RESULT") == 0 && from_klawed) {

@@ -698,6 +698,13 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
             api_response->message.text = NULL;
         }
 
+        // Extract reasoning_content for thinking models
+        cJSON *reasoning = cJSON_GetObjectItem(message, "reasoning_content");
+        if (reasoning && cJSON_IsString(reasoning) && reasoning->valuestring) {
+            api_response->message.reasoning_content = arena_strdup(api_response->arena, reasoning->valuestring);
+            LOG_DEBUG("Kimi provider: extracted reasoning_content (%zu bytes)", strlen(reasoning->valuestring));
+        }
+
         // Extract and validate tool calls
         cJSON *tool_calls = cJSON_GetObjectItem(message, "tool_calls");
         if (tool_calls && cJSON_IsArray(tool_calls)) {
@@ -756,6 +763,11 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
                         }
                     } else {
                         api_response->tools[tool_idx].parameters = cJSON_CreateObject();
+                    }
+
+                    // Propagate reasoning_content to tool call (for thinking models)
+                    if (api_response->message.reasoning_content) {
+                        api_response->tools[tool_idx].reasoning_content = api_response->message.reasoning_content;
                     }
 
                     tool_idx++;
