@@ -87,11 +87,12 @@ typedef struct {
      * @param tool_name Name of the tool being executed
      * @param tool_parameters Tool input parameters (JSON object, may be NULL)
      * @param tool_details Human-readable description of tool call
+     * @param reasoning_content Optional reasoning content for thinking models (may be NULL)
      * @param user_data Context user_data
      * @note If set, this is called instead of on_tool_start
      */
     void (*on_tool_start_ex)(const char *tool_id, const char *tool_name, cJSON *tool_parameters,
-                             const char *tool_details, void *user_data);
+                             const char *tool_details, const char *reasoning_content, void *user_data);
 
     /**
      * Extended callback: Called when a tool completes (with full tool context)
@@ -108,14 +109,16 @@ typedef struct {
     /**
      * Called when assistant text is received
      * @param text Assistant's text response
+     * @param reasoning_content Optional reasoning content for thinking models (may be NULL)
      * @param user_data Context user_data
      */
-    void (*on_assistant_text)(const char *text, void *user_data);
+    void (*on_assistant_text)(const char *text, const char *reasoning_content, void *user_data);
 
     /**
      * Called when assistant reasoning content is received (for thinking models)
      * @param reasoning_content The model's reasoning/thinking content
      * @param user_data Context user_data
+     * @deprecated: Use on_assistant_text() or on_tool_start_ex() with reasoning_content parameter instead
      */
     void (*on_assistant_reasoning)(const char *reasoning_content, void *user_data);
 
