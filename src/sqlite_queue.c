@@ -758,7 +758,7 @@ static int sqlite_queue_send_tool_result(SQLiteQueueContext *ctx, const char *re
 
 // Helper function to send assistant text response
 static int sqlite_queue_send_text_response(SQLiteQueueContext *ctx, const char *receiver,
-                                          const char *text) {
+                                          const char *text, const char *reasoning_content) {
     if (!ctx || !receiver || !text) {
         LOG_ERROR("SQLite Queue: Invalid parameters for send_text_response");
         return -1;
@@ -802,51 +802,42 @@ static int sqlite_queue_send_text_response(SQLiteQueueContext *ctx, const char *
            text_color_start, p, ANSI_RESET);
     fflush(stdout);
 
-    return sqlite_queue_send_json(ctx, receiver, "TEXT", p);
-}
-
-// Helper function to send assistant reasoning content (for thinking models)
-static int sqlite_queue_send_reasoning(SQLiteQueueContext *ctx, const char *receiver,
-                                       const char *reasoning_content) {
-    if (!ctx || !receiver || !reasoning_content) {
-        LOG_ERROR("SQLite Queue: Invalid parameters for send_reasoning");
-        return -1;
-    }
-
-    // Skip whitespace-only content
-    const char *p = reasoning_content;
-    while (*p && isspace((unsigned char)*p)) p++;
-
-    if (*p == '\0') {  // Only whitespace
-        LOG_DEBUG("SQLite Queue: Skipping whitespace-only reasoning content");
-        return 0;
-    }
-
-    LOG_INFO("SQLite Queue: Sending assistant reasoning content");
-
-    // Create JSON with reasoning_content field
+    // Create JSON with optional reasoning_content
     cJSON *json = cJSON_CreateObject();
     if (!json) {
-        LOG_ERROR("SQLite Queue: Failed to create reasoning JSON object");
+        LOG_ERROR("SQLite Queue: Failed to create TEXT JSON object");
         return -1;
     }
 
-    cJSON_AddStringToObject(json, "messageType", "REASONING");
-    cJSON_AddStringToObject(json, "reasoningContent", reasoning_content);
+    cJSON_AddStringToObject(json, "messageType", "TEXT");
+    cJSON_AddStringToObject(json, "content", p);
+
+    // Add reasoning_content if present
+    if (reasoning_content && reasoning_content[0] != '\0') {
+        cJSON_AddStringToObject(json, "reasoningContent", reasoning_content);
+        LOG_DEBUG("SQLite Queue: Added reasoning_content (%zu bytes) to TEXT message",
+                  strlen(reasoning_content));
+    }
 
     char *json_str = cJSON_PrintUnformatted(json);
-    cJSON_Delete(json);
-
     if (!json_str) {
-        LOG_ERROR("SQLite Queue: Failed to serialize reasoning JSON");
+        LOG_ERROR("SQLite Queue: Failed to serialize TEXT JSON");
+        cJSON_Delete(json);
         return -1;
     }
 
     int result = sqlite_queue_send(ctx, receiver, json_str, strlen(json_str));
     free(json_str);
+    cJSON_Delete(json);
 
     return result;
 }
+
+// Deprecated: reasoning_content is now bundled with TEXT and TOOL messages.
+// Kept for reference, remove once REASONING message type is fully deprecated.
+// Helper function to send assistant reasoning content (for thinking models)
+// static int sqlite_queue_send_reasoning(SQLiteQueueContext *ctx, const char *receiver,
+//                                        const char *reasoning_content) { ... }
 
 // Helper function to send END_AI_TURN event
 static int sqlite_queue_send_end_ai_turn(SQLiteQueueContext *ctx, const char *receiver) {
@@ -862,7 +853,7 @@ static int sqlite_queue_send_end_ai_turn(SQLiteQueueContext *ctx, const char *re
 // Helper function to send a tool execution request
 static int sqlite_queue_send_tool_request(SQLiteQueueContext *ctx, const char *receiver,
                                          const char *tool_name, const char *tool_id,
-                                         cJSON *tool_parameters) {
+                                         cJSON *tool_parameters, const char *reasoning_content) {
     if (!ctx || !receiver || !tool_name || !tool_id) {
         LOG_ERROR("SQLite Queue: Invalid parameters for send_tool_request");
         return -1;
@@ -882,6 +873,13 @@ static int sqlite_queue_send_tool_request(SQLiteQueueContext *ctx, const char *r
         cJSON_AddItemToObject(request_json, "toolParameters", cJSON_Duplicate(tool_parameters, 1));
     } else {
         cJSON_AddNullToObject(request_json, "toolParameters");
+    }
+
+    // Add reasoning_content if present
+    if (reasoning_content && reasoning_content[0] != '\0') {
+        cJSON_AddStringToObject(request_json, "reasoningContent", reasoning_content);
+        LOG_DEBUG("SQLite Queue: Added reasoning_content (%zu bytes) to TOOL message for %s",
+                  strlen(reasoning_content), tool_name);
     }
 
     char *request_str = cJSON_PrintUnformatted(request_json);
@@ -908,7 +906,7 @@ typedef struct {
 // Extended callbacks with full tool context for sending TOOL/TOOL_RESULT messages
 static void sqlite_on_tool_start_ex(const char *tool_id, const char *tool_name,
                                     cJSON *tool_parameters, const char *tool_details,
-                                    void *user_data) {
+                                    const char *reasoning_content, void *user_data) {
     SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
 
     LOG_INFO("SQLite Queue: Starting tool: %s (id: %s)", tool_name, tool_id);
@@ -956,7 +954,7 @@ static void sqlite_on_tool_start_ex(const char *tool_id, const char *tool_name,
 
     // Send TOOL message to the queue
     sqlite_queue_send_tool_request(cb_ctx->ctx, cb_ctx->response_receiver,
-                                   tool_name, tool_id, tool_parameters);
+                                   tool_name, tool_id, tool_parameters, reasoning_content);
 }
 
 static void sqlite_on_tool_complete_ex(const char *tool_id, const char *tool_name,
@@ -985,14 +983,17 @@ static void sqlite_on_tool_complete_ex(const char *tool_id, const char *tool_nam
                                   tool_name, tool_id, result, is_error);
 }
 
-static void sqlite_on_assistant_text(const char *text, void *user_data) {
+static void sqlite_on_assistant_text(const char *text, const char *reasoning_content, void *user_data) {
     SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
-    sqlite_queue_send_text_response(cb_ctx->ctx, cb_ctx->response_receiver, text);
+    sqlite_queue_send_text_response(cb_ctx->ctx, cb_ctx->response_receiver, text, reasoning_content);
 }
 
 static void sqlite_on_assistant_reasoning(const char *reasoning_content, void *user_data) {
-    SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
-    sqlite_queue_send_reasoning(cb_ctx->ctx, cb_ctx->response_receiver, reasoning_content);
+    // Deprecated: reasoning_content is now handled via on_assistant_text or on_tool_start_ex
+    // Keep this for backward compatibility but don't use it
+    (void)reasoning_content;
+    (void)user_data;
+    LOG_DEBUG("SQLite Queue: sqlite_on_assistant_reasoning called (deprecated callback)");
 }
 
 static void sqlite_on_error(const char *error_message, void *user_data) {
@@ -1603,6 +1604,24 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
                     LOG_ERROR("SQLite Queue: restore: OOM appending assistant text");
                     cJSON_Delete(json);
                     break;
+                }
+
+                /* Extract reasoning_content from TEXT message if present */
+                cJSON *jreasoning = cJSON_GetObjectItem(json, "reasoningContent");
+                if (jreasoning && cJSON_IsString(jreasoning) && jreasoning->valuestring) {
+                    const char *reasoning = jreasoning->valuestring;
+                    /* Skip empty / whitespace-only reasoning */
+                    const char *pr = reasoning;
+                    while (*pr && isspace((unsigned char)*pr)) pr++;
+                    if (*pr != '\0') {
+                        pa.contents[pa.count - 1].reasoning_content = strdup(reasoning);
+                        if (!pa.contents[pa.count - 1].reasoning_content) {
+                            LOG_ERROR("SQLite Queue: restore: OOM storing reasoning_content");
+                        } else {
+                            LOG_DEBUG("SQLite Queue: restore: stored reasoning_content (%zu bytes) on TEXT content",
+                                      strlen(reasoning));
+                        }
+                    }
                 }
             } else {
                 /* User text: if there are open (unresolved) tool calls in the

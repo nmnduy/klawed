@@ -23,8 +23,9 @@ typedef struct {
 } OneshotCallbackContext;
 
 // Callback implementations for unified processor
-static void oneshot_on_assistant_text(const char *text, void *user_data) {
+static void oneshot_on_assistant_text(const char *text, const char *reasoning_content, void *user_data) {
     (void)user_data;
+    (void)reasoning_content;  // Reasoning content handled by main text callback in oneshot
     // Skip whitespace-only content
     const char *p = text;
     while (*p && isspace((unsigned char)*p)) {

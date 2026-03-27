@@ -271,7 +271,7 @@ static int execute_tools_serial(struct ConversationState *state,
 
         // Notify start (prefer extended callback if available)
         if (ctx->on_tool_start_ex) {
-            ctx->on_tool_start_ex(tool->id, tool->name, tool->parameters, tool_details, ctx->user_data);
+            ctx->on_tool_start_ex(tool->id, tool->name, tool->parameters, tool_details, tool->reasoning_content, ctx->user_data);
         } else if (ctx->on_tool_start) {
             ctx->on_tool_start(tool->name, tool_details, ctx->user_data);
         }
@@ -411,7 +411,7 @@ static int execute_tools_parallel(struct ConversationState *state,
         // Notify start (prefer extended callback if available)
         const char *tool_details = get_tool_description(tool->name, input);
         if (ctx->on_tool_start_ex) {
-            ctx->on_tool_start_ex(tool->id, tool->name, tool->parameters, tool_details, ctx->user_data);
+            ctx->on_tool_start_ex(tool->id, tool->name, tool->parameters, tool_details, tool->reasoning_content, ctx->user_data);
         } else if (ctx->on_tool_start) {
             ctx->on_tool_start(tool->name, tool_details, ctx->user_data);
         }
@@ -577,29 +577,29 @@ int process_response_unified(struct ConversationState *state,
             break;
         }
 
-        // Display assistant text
+        // Display assistant text with reasoning_content if present
         if (current_response->message.text && current_response->message.text[0] != '\0') {
             const char *p = current_response->message.text;
             while (*p && isspace((unsigned char)*p)) p++;
 
             if (*p != '\0' && ctx->on_assistant_text) {
-                ctx->on_assistant_text(p, ctx->user_data);
-            }
-        }
-
-        // Extract and send reasoning content if present (for thinking models like Moonshot/Kimi)
-        if (current_response->raw_response && ctx->on_assistant_reasoning) {
-            cJSON *choices = cJSON_GetObjectItem(current_response->raw_response, "choices");
-            if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
-                cJSON *choice = cJSON_GetArrayItem(choices, 0);
-                cJSON *message = cJSON_GetObjectItem(choice, "message");
-                if (message) {
-                    cJSON *reasoning_content = cJSON_GetObjectItem(message, "reasoning_content");
-                    if (reasoning_content && cJSON_IsString(reasoning_content) &&
-                        reasoning_content->valuestring && reasoning_content->valuestring[0]) {
-                        ctx->on_assistant_reasoning(reasoning_content->valuestring, ctx->user_data);
+                const char *reasoning = current_response->message.reasoning_content;
+                // Check for fallback reasoning in raw_response (for providers that don't populate AssistantMessage)
+                if (!reasoning && current_response->raw_response && ctx->on_assistant_reasoning) {
+                    cJSON *choices = cJSON_GetObjectItem(current_response->raw_response, "choices");
+                    if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
+                        cJSON *choice = cJSON_GetArrayItem(choices, 0);
+                        cJSON *message = cJSON_GetObjectItem(choice, "message");
+                        if (message) {
+                            cJSON *reasoning_json = cJSON_GetObjectItem(message, "reasoning_content");
+                            if (reasoning_json && cJSON_IsString(reasoning_json) &&
+                                reasoning_json->valuestring && reasoning_json->valuestring[0]) {
+                                reasoning = reasoning_json->valuestring;
+                            }
+                        }
                     }
                 }
+                ctx->on_assistant_text(p, reasoning, ctx->user_data);
             }
         }
 
