@@ -12,6 +12,7 @@
 #include "../retry_logic.h"
 #include "../compaction.h"
 #include "../persistence.h"
+#include "../model_capabilities.h"
 #include "../ui/print_helpers.h"
 
 #ifdef HAVE_MEMVID
@@ -313,6 +314,30 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
                 // Update token count in compaction config after successful API call
                 if (state->compaction_config) {
                     compaction_update_token_count(state, state->compaction_config);
+                }
+                
+                // Update context-aware max_tokens tracking for next call
+                // Extract prompt_tokens from API response usage
+                if (result.raw_response) {
+                    cJSON *usage = cJSON_GetObjectItem(result.raw_response, "usage");
+                    if (usage) {
+                        // Try OpenAI format first
+                        cJSON *prompt_tokens_json = cJSON_GetObjectItem(usage, "prompt_tokens");
+                        if (!prompt_tokens_json) {
+                            // Try Anthropic format (input_tokens)
+                            prompt_tokens_json = cJSON_GetObjectItem(usage, "input_tokens");
+                        }
+                        if (prompt_tokens_json && cJSON_IsNumber(prompt_tokens_json)) {
+                            state->last_prompt_tokens = (int)prompt_tokens_json->valueint;
+                            LOG_DEBUG("Updated last_prompt_tokens: %d", state->last_prompt_tokens);
+                        }
+                    }
+                    // Update context_limit if not already set
+                    if (state->context_limit == 0 && state->model) {
+                        ModelCapabilities caps = get_model_capabilities(state->model, 128000, 16384);
+                        state->context_limit = caps.context_limit;
+                        LOG_DEBUG("Set context_limit from model capabilities: %d", state->context_limit);
+                    }
                 }
             }
 
