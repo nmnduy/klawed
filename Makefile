@@ -144,6 +144,7 @@ TEST_EDIT_REGEX_TARGET = $(BUILD_DIR)/test_edit_regex_enhancements
 TEST_READ_TARGET = $(BUILD_DIR)/test_read
 TEST_TODO_TARGET = $(BUILD_DIR)/test_todo
 TEST_TODO_WRITE_TARGET = $(BUILD_DIR)/test_todo_write
+TEST_MODEL_CAPABILITIES_TARGET = $(BUILD_DIR)/test_model_capabilities
 TEST_COMPACTION_TARGET = $(BUILD_DIR)/test_compaction
 TEST_TIMING_TARGET = $(BUILD_DIR)/test_tool_timing
 TEST_PASTE_TARGET = $(BUILD_DIR)/test_paste
@@ -449,6 +450,7 @@ TEST_EDIT_REGEX_SRC = tests/test_edit_regex_enhancements.c
 TEST_READ_SRC = tests/test_read.c
 TEST_TODO_SRC = tests/test_todo.c
 TEST_TODO_WRITE_SRC = tests/test_todo_write.c
+TEST_MODEL_CAPABILITIES_SRC = tests/test_model_capabilities.c
 TEST_COMPACTION_SRC = tests/test_compaction.c
 TEST_PASTE_SRC = tests/test_paste.c
 TEST_RETRY_JITTER_SRC = tests/test_retry_jitter.c
@@ -539,7 +541,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message
+test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -570,6 +572,12 @@ test-todo-write: check-deps $(TEST_TODO_WRITE_TARGET)
 	@echo "Running TodoWrite tool tests..."
 	@echo ""
 	@./$(TEST_TODO_WRITE_TARGET)
+
+test-model-capabilities: check-deps $(TEST_MODEL_CAPABILITIES_TARGET)
+	@echo ""
+	@echo "Running model capabilities tests..."
+	@echo ""
+	@./$(TEST_MODEL_CAPABILITIES_TARGET)
 
 test-compaction: check-deps $(TEST_COMPACTION_TARGET)
 	@echo ""
@@ -2025,6 +2033,19 @@ $(TEST_TODO_TARGET): $(TODO_SRC) $(TEST_TODO_SRC) tests/test_todo_stubs.c
 	@$(CC) -o $(TEST_TODO_TARGET) $(BUILD_DIR)/todo_test.o $(BUILD_DIR)/test_todo.o $(BUILD_DIR)/test_todo_stubs.o $(LDFLAGS)
 	@echo ""
 	@echo "✓ TODO list test build successful!"
+	@echo ""
+
+# Test target for model_capabilities module
+$(TEST_MODEL_CAPABILITIES_TARGET): $(MODEL_CAPABILITIES_SRC) $(TEST_MODEL_CAPABILITIES_SRC) tests/test_model_capabilities_stubs.c
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling model capabilities test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/model_capabilities_test.o $(MODEL_CAPABILITIES_SRC)
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_model_capabilities.o $(TEST_MODEL_CAPABILITIES_SRC)
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_model_capabilities_stubs.o tests/test_model_capabilities_stubs.c
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_MODEL_CAPABILITIES_TARGET) $(BUILD_DIR)/model_capabilities_test.o $(BUILD_DIR)/test_model_capabilities.o $(BUILD_DIR)/test_model_capabilities_stubs.o $(LDFLAGS)
+	@echo ""
+	@echo "✓ Model capabilities test build successful!"
 	@echo ""
 
 # Test target for TodoWrite tool - tests integration with claude.c
