@@ -319,18 +319,22 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
                 // Update context-aware max_tokens tracking for next call
                 // Extract prompt_tokens from API response usage
                 if (result.raw_response) {
-                    cJSON *usage = cJSON_GetObjectItem(result.raw_response, "usage");
-                    if (usage) {
-                        // Try OpenAI format first
-                        cJSON *prompt_tokens_json = cJSON_GetObjectItem(usage, "prompt_tokens");
-                        if (!prompt_tokens_json) {
-                            // Try Anthropic format (input_tokens)
-                            prompt_tokens_json = cJSON_GetObjectItem(usage, "input_tokens");
+                    cJSON *parsed_response = cJSON_Parse(result.raw_response);
+                    if (parsed_response) {
+                        cJSON *usage = cJSON_GetObjectItem(parsed_response, "usage");
+                        if (usage) {
+                            // Try OpenAI format first
+                            cJSON *prompt_tokens_json = cJSON_GetObjectItem(usage, "prompt_tokens");
+                            if (!prompt_tokens_json) {
+                                // Try Anthropic format (input_tokens)
+                                prompt_tokens_json = cJSON_GetObjectItem(usage, "input_tokens");
+                            }
+                            if (prompt_tokens_json && cJSON_IsNumber(prompt_tokens_json)) {
+                                state->last_prompt_tokens = (int)prompt_tokens_json->valueint;
+                                LOG_DEBUG("Updated last_prompt_tokens: %d", state->last_prompt_tokens);
+                            }
                         }
-                        if (prompt_tokens_json && cJSON_IsNumber(prompt_tokens_json)) {
-                            state->last_prompt_tokens = (int)prompt_tokens_json->valueint;
-                            LOG_DEBUG("Updated last_prompt_tokens: %d", state->last_prompt_tokens);
-                        }
+                        cJSON_Delete(parsed_response);
                     }
                     // Update context_limit if not already set
                     if (state->context_limit == 0 && state->model) {
