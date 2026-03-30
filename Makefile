@@ -1502,7 +1502,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/file_utils_all.o $(BUILD_DIR)/string_utils_all.o \
 		$(BUILD_DIR)/timestamp_utils_all.o $(BUILD_DIR)/format_utils_all.o \
 		$(BUILD_DIR)/env_utils_all.o $(BUILD_DIR)/output_utils_all.o $(BUILD_DIR)/diff_utils_all.o \
-		$(BUILD_DIR)/redact_utils_all.o \
+		$(BUILD_DIR)/redact_utils_all.o $(BUILD_DIR)/model_capabilities_all.o \
 		$(BUILD_DIR)/tool_sleep_all.o $(BUILD_DIR)/tool_todo_all.o \
 		$(BUILD_DIR)/tool_image_all.o $(BUILD_DIR)/tool_search_all.o \
 		$(BUILD_DIR)/tool_filesystem_all.o $(BUILD_DIR)/tool_bash_all.o \
