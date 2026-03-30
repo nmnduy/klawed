@@ -81,12 +81,12 @@ char* build_request_json_from_state(ConversationState *state) {
     }
 
     cJSON_AddStringToObject(request, "model", state->model);
-    
+
     // Use context-aware max_tokens: cap to safe limit based on actual prompt tokens
     // context_buffer of 500 tokens for system prompts, tool definitions, etc.
     int safe_max_tokens = state->max_tokens;
     if (state->last_prompt_tokens > 0 && state->context_limit > 0) {
-        safe_max_tokens = get_safe_max_tokens(state->model, state->last_prompt_tokens, 
+        safe_max_tokens = get_safe_max_tokens(state->model, state->last_prompt_tokens,
                                               state->max_tokens, 500);
     }
     cJSON_AddNumberToObject(request, "max_completion_tokens", safe_max_tokens);
