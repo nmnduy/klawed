@@ -13,6 +13,12 @@
 // External tool function
 extern cJSON* tool_todo_write(cJSON *params, ConversationState *state);
 
+// Test function prototypes
+void test_basic_todo_write(void);
+void test_replace_todos(void);
+void test_invalid_status(void);
+void test_empty_todos(void);
+
 void test_basic_todo_write(void) {
     printf("Test: Basic TodoWrite functionality\n");
 
