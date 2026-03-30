@@ -927,14 +927,14 @@ static void test_missing_end_ai_turn_with_text_response(void) {
     // With the fix, we should have 1 merged assistant turn but with separate content blocks
     cJSON *assistant_turns = simulate_restore_with_text_response_detection(messages);
     TEST_ASSERT(assistant_turns != NULL, "Should produce assistant turns");
-    
+
     // Should have 1 turn (merged) but with correct reasoning attached to each part
     TEST_ASSERT(cJSON_GetArraySize(assistant_turns) == 1, "Should have 1 merged assistant turn");
 
     if (cJSON_GetArraySize(assistant_turns) == 1) {
         cJSON *turn = cJSON_GetArrayItem(assistant_turns, 0);
         cJSON *contents = cJSON_GetObjectItem(turn, "contents");
-        
+
         // Should have at least 4 content blocks: text1, tool1, text2 (empty+reasoning2), tool2
         int content_count = cJSON_GetArraySize(contents);
         TEST_ASSERT(content_count >= 4, "Should have at least 4 content blocks");
