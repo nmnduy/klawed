@@ -1791,11 +1791,23 @@ int main(int argc, char *argv[]) {
     state.api_url = strdup(api_base);
     state.model = strdup(model);
     state.max_tokens = get_env_int_retry("KLAWED_MAX_TOKENS", MAX_TOKENS);
-
-    // Note: model is now a pointer to unified_config data or env var, no need to free
-
-    // Note: DeepSeek API max_tokens override removed - no longer limiting to 4096
-
+    
+    // Initialize context limit from model capabilities
+    ModelCapabilities caps = get_model_capabilities(model, 128000, MAX_TOKENS);
+    state.context_limit = caps.context_limit;
+    
+    // Set max_tokens: respect KLAWED_MAX_TOKENS if explicitly set, otherwise use model-specific default
+    int env_max_tokens = get_env_int("KLAWED_MAX_TOKENS", -1);
+    if (env_max_tokens > 0) {
+        state.max_tokens = env_max_tokens;
+        LOG_INFO("Using user-specified max_tokens: %d", env_max_tokens);
+    } else {
+        state.max_tokens = caps.max_output_tokens;
+        LOG_INFO("Using model-specific max_tokens: %d (model: %s, context_limit: %d)",
+                 state.max_tokens, model ? model : "unknown", state.context_limit);
+    }
+    
+    state.last_prompt_tokens = 0;
     // Get current working directory - use PATH_MAX to satisfy static analyzer
     char cwd_buf[PATH_MAX];
     char *cwd = getcwd(cwd_buf, sizeof(cwd_buf));

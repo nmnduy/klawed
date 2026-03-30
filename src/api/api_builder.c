@@ -9,6 +9,7 @@
 #include "../openai_messages.h"
 #include "../tool_utils.h"
 #include "../logger.h"
+#include "../model_capabilities.h"
 #include "../tools/tool_definitions.h"
 #include "../ui/print_helpers.h"
 #include "../tui.h"
@@ -80,7 +81,15 @@ char* build_request_json_from_state(ConversationState *state) {
     }
 
     cJSON_AddStringToObject(request, "model", state->model);
-    cJSON_AddNumberToObject(request, "max_completion_tokens", state->max_tokens);
+    
+    // Use context-aware max_tokens: cap to safe limit based on actual prompt tokens
+    // context_buffer of 500 tokens for system prompts, tool definitions, etc.
+    int safe_max_tokens = state->max_tokens;
+    if (state->last_prompt_tokens > 0 && state->context_limit > 0) {
+        safe_max_tokens = get_safe_max_tokens(state->model, state->last_prompt_tokens, 
+                                              state->max_tokens, 500);
+    }
+    cJSON_AddNumberToObject(request, "max_completion_tokens", safe_max_tokens);
 
     // Add messages in OpenAI format
     cJSON *messages_array = cJSON_CreateArray();
