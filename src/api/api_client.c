@@ -315,7 +315,7 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
                 if (state->compaction_config) {
                     compaction_update_token_count(state, state->compaction_config);
                 }
-                
+
                 // Update context-aware max_tokens tracking for next call
                 // Extract prompt_tokens from API response usage
                 if (result.raw_response) {

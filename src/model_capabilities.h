@@ -2,7 +2,7 @@
  * model_capabilities.h - Model-specific capability definitions
  *
  * This module provides model-specific configuration values, including
- * maximum output tokens and context limits. The system uses pattern 
+ * maximum output tokens and context limits. The system uses pattern
  * matching to find appropriate values when a model is configured.
  *
  * Important: max_tokens is a ceiling, not a target. The model may output
@@ -263,8 +263,8 @@ typedef struct {
  * @param default_max_output_tokens Fallback max output (e.g., from klawed_internal.h MAX_TOKENS)
  * @return ModelCapabilities with context_limit and max_output_tokens
  */
-ModelCapabilities get_model_capabilities(const char *model, 
-                                        int default_context_limit, 
+ModelCapabilities get_model_capabilities(const char *model,
+                                        int default_context_limit,
                                         int default_max_output_tokens);
 
 /**
@@ -297,7 +297,7 @@ int get_model_context_limit(const char *model, int default_context_limit);
  * @param context_buffer Extra buffer to reserve for system prompts, etc.
  * @return Safe max_tokens that won't exceed context limit
  */
-int get_safe_max_tokens(const char *model, int prompt_tokens, 
+int get_safe_max_tokens(const char *model, int prompt_tokens,
                         int original_max_tokens, int context_buffer);
 
 #endif /* MODEL_CAPABILITIES_H */
