@@ -12,6 +12,7 @@
 #include "deepseek_provider.h"
 #include "moonshot_provider.h"
 #include "zai_coding_provider.h"
+#include "minimax_coding_provider.h"
 #include "kimi_coding_plan_provider.h"
 #include "openai_sub_provider.h"
 #include "anthropic_sub_provider.h"
@@ -464,7 +465,7 @@ static void get_provider_config(Arena *arena,
             if (synthetic_provider.provider_type == PROVIDER_ZAI_CODING) {
                 strlcpy(synthetic_provider.api_key_env, "ZAI_API_KEY_CODING_PLAN", CONFIG_API_KEY_ENV_MAX);
                 // Default model for Z.AI - will be used if OPENAI_MODEL is not set
-                strlcpy(synthetic_provider.model, "glm-4-flash", CONFIG_MODEL_MAX);
+                strlcpy(synthetic_provider.model, "glm-4.5", CONFIG_MODEL_MAX);
             } else if (synthetic_provider.provider_type == PROVIDER_KIMI_CODING_PLAN) {
                 // Kimi Coding Plan uses OAuth, no API key needed
                 strlcpy(synthetic_provider.model, "kimi-for-coding", CONFIG_MODEL_MAX);
@@ -474,6 +475,10 @@ static void get_provider_config(Arena *arena,
             } else if (synthetic_provider.provider_type == PROVIDER_ANTHROPIC_SUB) {
                 // Anthropic Subscription uses OAuth, no API key needed
                 strlcpy(synthetic_provider.model, "claude-opus-4", CONFIG_MODEL_MAX);
+            } else if (synthetic_provider.provider_type == PROVIDER_MINIMAX_CODING) {
+                // MiniMax Coding Plan uses MINIMAX_CODING_PLAN_API_KEY
+                strlcpy(synthetic_provider.api_key_env, "MINIMAX_CODING_PLAN_API_KEY", CONFIG_API_KEY_ENV_MAX);
+                strlcpy(synthetic_provider.model, "MiniMax-M2.1", CONFIG_MODEL_MAX);
             }
         }
     }
@@ -697,9 +702,15 @@ void provider_init(const char *model,
 
     // If provider_type wasn't set by get_provider_config (e.g., from KLAWED_PROVIDER_TYPE),
     // fall back to checking config file
+    int named_provider_selected = 0;
     if (provider_type == PROVIDER_AUTO) {
         provider_config = get_provider_config_to_use(&effective_config);
-        provider_type = provider_config ? provider_config->provider_type : effective_config.llm_provider.provider_type;
+        if (provider_config) {
+            named_provider_selected = 1;
+            provider_type = provider_config->provider_type;
+        } else {
+            provider_type = effective_config.llm_provider.provider_type;
+        }
         LOG_DEBUG("[Provider Init] Selected provider_config=%s, provider_type=%d",
                   provider_config ? provider_config->provider_name : "(NULL)", provider_type);
     } else {
@@ -708,18 +719,26 @@ void provider_init(const char *model,
 
     // Determine which model to use
     // Priority:
-    // 1. Passed model parameter
-    // 2. Config file's model (from get_provider_config which handles env vars and provider defaults)
-    // 3. Environment variable (OPENAI_MODEL)
+    // 1. Named provider's model (when a valid named provider is selected)
+    // 2. Config file's model from get_provider_config (handles env vars for non-named configs)
+    // 3. Passed model parameter (only used in legacy mode when no named provider)
+    // 4. Environment variable (OPENAI_MODEL)
     char *model_to_use = NULL;
-    if (model && model[0] != '\0') {
-        // Use passed parameter
-        model_to_use = arena_strdup(arena, model);
-        LOG_DEBUG("[Provider] Using model from passed parameter: %s", model_to_use);
+
+    if (named_provider_selected && provider_config && provider_config->model[0] != '\0') {
+        // Named provider is selected - use its configured model
+        // This takes precedence over the passed model parameter
+        model_to_use = arena_strdup(arena, provider_config->model);
+        LOG_DEBUG("[Provider] Using model from named provider '%s': %s",
+                provider_config->provider_name, model_to_use);
     } else if (config_model && config_model[0] != '\0') {
         // Use model from get_provider_config (handles env vars, provider defaults, etc.)
         model_to_use = config_model;
-        LOG_DEBUG("[Provider] Using model from config: %s", model_to_use);
+        LOG_DEBUG("[Provider] Using model from get_provider_config: %s", model_to_use);
+    } else if (model && model[0] != '\0') {
+        // Legacy mode: use passed parameter when no named provider selected
+        model_to_use = arena_strdup(arena, model);
+        LOG_DEBUG("[Provider] Using model from passed parameter (legacy mode): %s", model_to_use);
     } else {
         // Fall back to environment variable
         const char *env_model = getenv("OPENAI_MODEL");
@@ -853,6 +872,9 @@ void provider_init(const char *model,
     char *base_url = NULL;
     if (config_api_base && config_api_base[0] != '\0') {
         base_url = arena_strdup(arena, config_api_base);
+    } else if (provider_type == PROVIDER_MINIMAX_CODING) {
+        // MiniMax Coding provider has its own default URL - leave NULL to use it
+        base_url = NULL;
     } else {
         base_url = get_api_url_from_env();  // This uses strdup, not arena
         if (base_url) {
@@ -863,7 +885,8 @@ void provider_init(const char *model,
         }
     }
 
-    if (!base_url) {
+    // MiniMax Coding provider manages its own URL, so base_url can be NULL
+    if (!base_url && provider_type != PROVIDER_MINIMAX_CODING) {
         result->error_message = strdup("Failed to allocate memory for API URL");
         LOG_ERROR("Provider init failed: %s", result->error_message);
         arena_destroy(arena);
@@ -1010,6 +1033,35 @@ void provider_init(const char *model,
                 return;
             }
             LOG_INFO("Provider initialization successful: Kimi Coding Plan (API base: %s)", result->api_url);
+            arena_destroy(arena);
+            return;
+        } else if (provider_type == PROVIDER_MINIMAX_CODING) {
+            LOG_INFO("Using MiniMax Coding Plan provider (explicitly configured)");
+            Provider *prov = minimax_coding_provider_create(api_key_to_use, base_url);
+            if (!prov) {
+                result->error_message = strdup("Failed to initialize MiniMax Coding Plan provider (check logs for details)");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                arena_destroy(arena);
+                return;
+            }
+            AnthropicConfig *cfg = (AnthropicConfig *)prov->config;
+            if (!cfg || !cfg->base_url) {
+                result->error_message = strdup("MiniMax Coding Plan provider initialized but base URL is missing");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            result->provider = prov;
+            result->api_url = strdup(cfg->base_url);
+            if (!result->api_url) {
+                result->error_message = strdup("Failed to allocate memory for API URL");
+                LOG_ERROR("Provider init failed: %s", result->error_message);
+                prov->cleanup(prov);
+                arena_destroy(arena);
+                return;
+            }
+            LOG_INFO("Provider initialization successful: MiniMax Coding Plan (base URL: %s)", result->api_url);
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_OPENAI_SUB) {
@@ -1383,12 +1435,16 @@ void provider_init_from_config(const char *provider_key,
         base_url = strdup(api_base);
     } else if (provider_type == PROVIDER_ANTHROPIC) {
         base_url = strdup(DEFAULT_ANTHROPIC_URL);
+    } else if (provider_type == PROVIDER_MINIMAX_CODING) {
+        // MiniMax Coding provider has its own default URL - pass NULL to use it
+        base_url = NULL;
     } else {
         // Fall back to environment or default OpenAI URL
         base_url = get_api_url_from_env();
     }
 
-    if (!base_url) {
+    // MiniMax Coding provider manages its own URL, so base_url can be NULL
+    if (!base_url && provider_type != PROVIDER_MINIMAX_CODING) {
         result->error_message = strdup("Failed to determine API base URL");
         LOG_ERROR("Provider init from config failed: %s", result->error_message);
         return;
@@ -1494,6 +1550,36 @@ void provider_init_from_config(const char *provider_key,
             return;
         }
         LOG_INFO("Provider initialization successful: Z.AI GLM Coding (base URL: %s)", result->api_url);
+        return;
+    }
+
+    if (provider_type == PROVIDER_MINIMAX_CODING) {
+        LOG_INFO("Creating MiniMax Coding Plan provider from config...");
+        Provider *prov = minimax_coding_provider_create(api_key, base_url);
+        free(base_url);
+        if (!prov) {
+            result->error_message = strdup(
+                "Failed to initialize MiniMax Coding Plan provider (check logs for details)");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            return;
+        }
+        AnthropicConfig *cfg = (AnthropicConfig *)prov->config;
+        if (!cfg || !cfg->base_url) {
+            result->error_message = strdup(
+                "MiniMax Coding Plan provider initialized but base URL is missing");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        result->provider = prov;
+        result->api_url = strdup(cfg->base_url);
+        if (!result->api_url) {
+            result->error_message = strdup("Failed to allocate memory for API URL");
+            LOG_ERROR("Provider init from config failed: %s", result->error_message);
+            prov->cleanup(prov);
+            return;
+        }
+        LOG_INFO("Provider initialization successful: MiniMax Coding Plan (base URL: %s)", result->api_url);
         return;
     }
 

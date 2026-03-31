@@ -35,6 +35,7 @@ static Tool tools[] = {
     {"Grep", tool_grep},
     {"TodoWrite", tool_todo_write},
     {"UploadImage", tool_upload_image},
+    {"ViewImage", tool_view_image},
     // Memory tools (always registered, use SQLite memory database)
     {"MemoryStore", tool_memory_store},
     {"MemoryRecall", tool_memory_recall},
