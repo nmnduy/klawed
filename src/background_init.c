@@ -22,12 +22,18 @@
 #ifdef __APPLE__
 #include <TargetConditionals.h>
 #if TARGET_OS_MAC
-#define DATABASE_INIT_TIMEOUT_MS 5000  /* 5 seconds on macOS */
+#define DATABASE_INIT_TIMEOUT_MS 5000       /* 5 seconds on macOS */
+#define SYSTEM_PROMPT_TIMEOUT_MS 10000      /* 10 seconds for system prompt on macOS */
+#define MEMORY_DB_TIMEOUT_MS 5000           /* 5 seconds for memory db on macOS */
 #else
-#define DATABASE_INIT_TIMEOUT_MS 30000 /* 30 seconds on other Apple platforms */
+#define DATABASE_INIT_TIMEOUT_MS 30000      /* 30 seconds on other Apple platforms */
+#define SYSTEM_PROMPT_TIMEOUT_MS 30000      /* 30 seconds for system prompt */
+#define MEMORY_DB_TIMEOUT_MS 30000          /* 30 seconds for memory db */
 #endif
 #else
-#define DATABASE_INIT_TIMEOUT_MS 30000 /* 30 seconds on Linux/other */
+#define DATABASE_INIT_TIMEOUT_MS 30000      /* 30 seconds on Linux/other */
+#define SYSTEM_PROMPT_TIMEOUT_MS 30000      /* 30 seconds for system prompt */
+#define MEMORY_DB_TIMEOUT_MS 30000          /* 30 seconds for memory db */
 #endif
 
 /*
@@ -270,6 +276,10 @@ int insert_system_message(InternalMessage *messages, int *count, char *system_te
 
 /*
  * Wait for system prompt to be ready and add it to conversation
+ *
+ * This function waits for the system prompt loading thread to complete,
+ * but with a timeout to prevent indefinite hangs (especially on macOS where
+ * git commands may hang due to credential prompts or network issues).
  */
 void await_system_prompt_ready(ConversationState *state) {
     if (!state || !state->bg_loaders) {
@@ -289,12 +299,44 @@ void await_system_prompt_ready(ConversationState *state) {
     if (ready) {
         LOG_DEBUG("System prompt already ready (fast path)");
     } else {
-        // Wait for thread to complete
-        LOG_DEBUG("Waiting for system prompt to finish loading...");
+        // Wait for thread to complete with timeout
+        LOG_DEBUG("Waiting for system prompt to finish loading (timeout: %d ms)...", SYSTEM_PROMPT_TIMEOUT_MS);
         if (bg->system_prompt_started) {
+            /* Use polling timeout to avoid indefinite hang */
+            int timeout_ms = SYSTEM_PROMPT_TIMEOUT_MS;
+            int waited_ms = 0;
+            int poll_interval_ms = 100;  /* Check every 100ms */
+
+            while (waited_ms < timeout_ms) {
+                /* Check if thread has completed by checking the ready flag */
+                pthread_mutex_lock(&bg->system_prompt_mutex);
+                ready = bg->system_prompt_ready;
+                pthread_mutex_unlock(&bg->system_prompt_mutex);
+
+                if (ready) {
+                    LOG_DEBUG("System prompt loading completed (waited %d ms)", waited_ms);
+                    break;
+                }
+
+                /* Small sleep to avoid busy-waiting */
+                struct timespec sleep_ts = {0, poll_interval_ms * 1000000};
+                nanosleep(&sleep_ts, NULL);
+                waited_ms += poll_interval_ms;
+            }
+
+            if (!ready) {
+                LOG_WARN("System prompt loading timed out after %d ms - continuing without system prompt", timeout_ms);
+                /*
+                 * Note: We don't cancel the thread here as it might still be working.
+                 * We just return without a system prompt. The thread will eventually
+                 * complete and the result will be cleaned up in cleanup_background_loaders().
+                 */
+                return;
+            }
+
+            /* Thread has signaled completion, now join it to clean up */
             pthread_join(bg->system_prompt_thread, NULL);
             bg->system_prompt_started = 0;  // Mark as joined
-            LOG_DEBUG("System prompt loading completed (waited)");
         }
     }
 
@@ -417,7 +459,10 @@ PersistenceDB* await_database_ready(ConversationState *state) {
 }
 
 /*
- * Check if memory database is ready (wait if not ready)
+ * Check if memory database is ready (wait if not ready, with timeout)
+ *
+ * This function waits for the memory database initialization thread to complete,
+ * but with a timeout to prevent indefinite hangs (especially on macOS).
  */
 int await_memory_db_ready(ConversationState *state) {
     if (!state || !state->bg_loaders) {
@@ -440,12 +485,46 @@ int await_memory_db_ready(ConversationState *state) {
         return result;
     }
 
-    // Wait for thread to complete
-    LOG_DEBUG("Waiting for memory database initialization to complete...");
+    // Wait for thread to complete with timeout
+    LOG_DEBUG("Waiting for memory database initialization to complete (timeout: %d ms)...", MEMORY_DB_TIMEOUT_MS);
     if (bg->memvid_started) {
+        /* Use polling timeout to avoid indefinite hang */
+        int timeout_ms = MEMORY_DB_TIMEOUT_MS;
+        int waited_ms = 0;
+        int poll_interval_ms = 100;  /* Check every 100ms */
+
+        while (waited_ms < timeout_ms) {
+            /* Check if thread has completed by checking the ready flag */
+            pthread_mutex_lock(&bg->memvid_mutex);
+            ready = bg->memvid_ready;
+            result = bg->memvid_result;
+            pthread_mutex_unlock(&bg->memvid_mutex);
+
+            if (ready) {
+                LOG_DEBUG("Memory database initialization completed (waited %d ms)", waited_ms);
+                break;
+            }
+
+            /* Small sleep to avoid busy-waiting */
+            struct timespec sleep_ts = {0, poll_interval_ms * 1000000};
+            nanosleep(&sleep_ts, NULL);
+            waited_ms += poll_interval_ms;
+        }
+
+        if (!ready) {
+            LOG_WARN("Memory database initialization timed out after %d ms - continuing without memory db", timeout_ms);
+            /*
+             * Note: We don't cancel the thread here as it might still be working.
+             * We just return -1 to indicate the memory db is not available.
+             * The thread will eventually complete and the result will be cleaned up
+             * in cleanup_background_loaders().
+             */
+            return -1;
+        }
+
+        /* Thread has signaled completion, now join it to clean up */
         pthread_join(bg->memvid_thread, NULL);
         bg->memvid_started = 0;
-        LOG_DEBUG("Memory database initialization completed (waited)");
     }
 
     pthread_mutex_lock(&bg->memvid_mutex);
