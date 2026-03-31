@@ -16,6 +16,7 @@
 #include "migrations.h"
 #include "logger.h"
 #include "data_dir.h"
+#include "macos_sqlite_fix.h"
 
 // Get total token usage for a session
 // Delegates to the separate token_usage database
@@ -237,13 +238,19 @@ PersistenceDB* persistence_init(const char *db_path) {
         }
     }
 
-    // Open/create database
-    int rc = sqlite3_open(pdb->db_path, &pdb->db);
+    // Open/create database with macOS-specific flags if needed
+    int open_flags = macos_sqlite_open_flags();
+    int rc = sqlite3_open_v2(pdb->db_path, &pdb->db, open_flags, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Failed to open database %s: %s", pdb->db_path, sqlite3_errmsg(pdb->db));
         free(pdb->db_path);
         free(pdb);
         return NULL;
+    }
+
+    // Apply macOS-specific fixes
+    if (macos_sqlite_needs_fixes()) {
+        macos_sqlite_apply_fixes(pdb->db);
     }
 
     // Configure database for better concurrency and performance
@@ -267,8 +274,10 @@ PersistenceDB* persistence_init(const char *db_path) {
         // Non-fatal, continue anyway
     }
 
-    // Set busy timeout to 5 seconds
-    sqlite3_busy_timeout(pdb->db, 5000);
+    // Set busy timeout (shorter on macOS to prevent hangs)
+    int busy_timeout_ms = macos_sqlite_busy_timeout_ms();
+    sqlite3_busy_timeout(pdb->db, busy_timeout_ms);
+    LOG_DEBUG("[Persistence] SQLite busy timeout set to %d ms", busy_timeout_ms);
 
     // Create schema
     rc = sqlite3_exec(pdb->db, SCHEMA_SQL, NULL, NULL, &err_msg);

@@ -14,6 +14,7 @@
 #include "token_usage_db_migrations.h"
 #include "logger.h"
 #include "data_dir.h"
+#include "macos_sqlite_fix.h"
 
 // SQL schema for the token_usage table
 // Uses BIGINT to avoid overflow with high-volume usage (int64_t)
@@ -258,8 +259,9 @@ TokenUsageDB* token_usage_db_init(const char *db_path) {
         }
     }
 
-    // Open/create database
-    int rc = sqlite3_open(tdb->db_path, &tdb->db);
+    // Open/create database with macOS-specific flags if needed
+    int open_flags = macos_sqlite_open_flags();
+    int rc = sqlite3_open_v2(tdb->db_path, &tdb->db, open_flags, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Failed to open token usage database %s: %s",
                   tdb->db_path, sqlite3_errmsg(tdb->db));
@@ -267,6 +269,11 @@ TokenUsageDB* token_usage_db_init(const char *db_path) {
         pthread_mutex_destroy(&tdb->mutex);
         free(tdb);
         return NULL;
+    }
+
+    // Apply macOS-specific fixes
+    if (macos_sqlite_needs_fixes()) {
+        macos_sqlite_apply_fixes(tdb->db);
     }
 
     char *err_msg = NULL;
@@ -287,8 +294,10 @@ TokenUsageDB* token_usage_db_init(const char *db_path) {
         err_msg = NULL;
     }
 
-    // Set busy timeout to 5 seconds
-    sqlite3_busy_timeout(tdb->db, 5000);
+    // Set busy timeout (shorter on macOS to prevent hangs)
+    int busy_timeout_ms = macos_sqlite_busy_timeout_ms();
+    sqlite3_busy_timeout(tdb->db, busy_timeout_ms);
+    LOG_DEBUG("[TokenUsageDB] SQLite busy timeout set to %d ms", busy_timeout_ms);
 
     // Create schema
     rc = sqlite3_exec(tdb->db, SCHEMA_SQL, NULL, NULL, &err_msg);

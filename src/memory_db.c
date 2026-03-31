@@ -9,6 +9,7 @@
 #include "logger.h"
 #include "data_dir.h"
 #include "util/alloc_utils.h"
+#include "macos_sqlite_fix.h"
 
 #include <bsd/string.h>
 #include <ctype.h>
@@ -261,7 +262,9 @@ MemoryDB* memory_db_open(const char *path) {
         return NULL;
     }
 
-    int rc = sqlite3_open(path, &mdb->db);
+    /* Open database with macOS-specific flags if needed */
+    int open_flags = macos_sqlite_open_flags();
+    int rc = sqlite3_open_v2(path, &mdb->db, open_flags, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Memory DB: Failed to open database at %s: %s",
                   path, sqlite3_errmsg(mdb->db));
@@ -272,8 +275,26 @@ MemoryDB* memory_db_open(const char *path) {
         return NULL;
     }
 
+    /* Apply macOS-specific fixes */
+    if (macos_sqlite_needs_fixes()) {
+        macos_sqlite_apply_fixes(mdb->db);
+    }
+
     /* Enable foreign keys */
     sqlite3_exec(mdb->db, "PRAGMA foreign_keys = ON;", NULL, NULL, NULL);
+
+    /* Enable WAL mode for better concurrency (consistent with other databases) */
+    char *err_msg = NULL;
+    rc = sqlite3_exec(mdb->db, "PRAGMA journal_mode=WAL;", NULL, NULL, &err_msg);
+    if (rc != SQLITE_OK) {
+        LOG_WARN("Memory DB: Failed to enable WAL mode: %s", err_msg);
+        sqlite3_free(err_msg);
+    }
+
+    /* Set busy timeout (shorter on macOS to prevent hangs) */
+    int busy_timeout_ms = macos_sqlite_busy_timeout_ms();
+    sqlite3_busy_timeout(mdb->db, busy_timeout_ms);
+    LOG_DEBUG("[MemoryDB] SQLite busy timeout set to %d ms", busy_timeout_ms);
 
     /* Initialize schema */
     if (memory_db_init_schema(mdb) != 0) {
