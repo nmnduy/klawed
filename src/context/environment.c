@@ -30,13 +30,31 @@ int is_git_repo(const char *working_dir) {
  * Execute a git command and return its output.
  * Uses popen() to run the command and captures output.
  * Trims trailing newline from output.
+ *
+ * Note: On macOS, git commands may hang due to credential prompts or network issues.
+ * We use a timeout wrapper to prevent indefinite hangs.
  */
 char* exec_git_command(const char *command) {
     if (!command) {
         return NULL;
     }
 
-    FILE *fp = popen(command, "r");
+    /*
+     * On macOS, wrap git commands with timeout to prevent hangs from
+     * credential prompts or network issues. The timeout command sends
+     * SIGTERM after the specified duration.
+     */
+#ifdef __APPLE__
+    #define GIT_TIMEOUT_SEC 5
+    char timeout_cmd[4096];
+    /* Use -k to ensure the command is killed even if it ignores SIGTERM */
+    snprintf(timeout_cmd, sizeof(timeout_cmd), "timeout -k 1 %d %s", GIT_TIMEOUT_SEC, command);
+    const char *effective_command = timeout_cmd;
+#else
+    const char *effective_command = command;
+#endif
+
+    FILE *fp = popen(effective_command, "r");
     if (!fp) {
         return NULL;
     }
