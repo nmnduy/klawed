@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <errno.h>
 #include "background_init.h"
 #include "klawed_internal.h"
 #include "logger.h"
@@ -13,6 +14,21 @@
 #include "persistence.h"
 #include "memory_db.h"
 #include "data_dir.h"
+
+/*
+ * Default timeout for waiting on background database initialization.
+ * On macOS, we use a shorter timeout to prevent TUI hangs.
+ */
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#if TARGET_OS_MAC
+#define DATABASE_INIT_TIMEOUT_MS 5000  /* 5 seconds on macOS */
+#else
+#define DATABASE_INIT_TIMEOUT_MS 30000 /* 30 seconds on other Apple platforms */
+#endif
+#else
+#define DATABASE_INIT_TIMEOUT_MS 30000 /* 30 seconds on Linux/other */
+#endif
 
 /*
  * Background thread: Load system prompt
@@ -319,7 +335,10 @@ void await_system_prompt_ready(ConversationState *state) {
 }
 
 /*
- * Get database handle (wait if not ready)
+ * Get database handle (wait if not ready, with timeout)
+ *
+ * This function waits for the database initialization thread to complete,
+ * but with a timeout to prevent indefinite hangs (especially on macOS).
  */
 PersistenceDB* await_database_ready(ConversationState *state) {
     if (!state || !state->bg_loaders) {
@@ -342,12 +361,46 @@ PersistenceDB* await_database_ready(ConversationState *state) {
         return db;
     }
 
-    // Wait for thread to complete
-    LOG_DEBUG("Waiting for database initialization to complete...");
+    // Wait for thread to complete with timeout
+    LOG_DEBUG("Waiting for database initialization to complete (timeout: %d ms)...", DATABASE_INIT_TIMEOUT_MS);
     if (bg->database_started) {
+        /* Use pthread_timedjoin_np if available (Linux) or implement polling timeout */
+        int timeout_ms = DATABASE_INIT_TIMEOUT_MS;
+        int waited_ms = 0;
+        int poll_interval_ms = 100;  /* Check every 100ms */
+
+        while (waited_ms < timeout_ms) {
+            /* Check if thread has completed by checking the ready flag */
+            pthread_mutex_lock(&bg->database_mutex);
+            ready = bg->database_ready;
+            db = bg->database_result;
+            pthread_mutex_unlock(&bg->database_mutex);
+
+            if (ready) {
+                LOG_DEBUG("Database initialization completed (waited %d ms)", waited_ms);
+                break;
+            }
+
+            /* Small sleep to avoid busy-waiting */
+            struct timespec sleep_ts = {0, poll_interval_ms * 1000000};
+            nanosleep(&sleep_ts, NULL);
+            waited_ms += poll_interval_ms;
+        }
+
+        if (!ready) {
+            LOG_WARN("Database initialization timed out after %d ms - continuing without database", timeout_ms);
+            /*
+             * Note: We don't cancel the thread here as it might still be working.
+             * We just return NULL to indicate the database is not available.
+             * The thread will eventually complete and the result will be cleaned up
+             * in cleanup_background_loaders().
+             */
+            return NULL;
+        }
+
+        /* Thread has signaled completion, now join it to clean up */
         pthread_join(bg->database_thread, NULL);
         bg->database_started = 0;
-        LOG_DEBUG("Database initialization completed (waited)");
     }
 
     pthread_mutex_lock(&bg->database_mutex);
