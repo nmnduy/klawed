@@ -1,5 +1,5 @@
 /*
- * tool_image.h - UploadImage tool implementation
+ * tool_image.h - UploadImage and ViewImage tool implementations
  */
 
 #ifndef TOOL_IMAGE_H
@@ -18,5 +18,14 @@ typedef struct ConversationState ConversationState;
  * @return JSON object with status, file info, mime type, and base64 encoded image data
  */
 cJSON* tool_upload_image(cJSON *params, ConversationState *state);
+
+/**
+ * tool_view_image - Views a local image from the filesystem (similar to Codex's view_image)
+ *
+ * @param params JSON object with: { "path": <path> }
+ * @param state Conversation state containing working_dir and interrupt flag
+ * @return JSON object with status, file info, mime type, and base64 encoded image data
+ */
+cJSON* tool_view_image(cJSON *params, ConversationState *state);
 
 #endif // TOOL_IMAGE_H
