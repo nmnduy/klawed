@@ -141,6 +141,7 @@ typedef struct {
     char *id;                // Unique ID for this tool call
     char *name;              // Tool name (e.g., "Bash", "Read", "Write")
     cJSON *parameters;       // Tool parameters (owned by this struct, must be freed)
+    char *reasoning_content; // Reasoning content for thinking models (may be NULL)
 } ToolCall;
 
 /**
@@ -149,6 +150,7 @@ typedef struct {
  */
 typedef struct {
     char *text;              // Text content (may be NULL if only tools, owned by this struct)
+    char *reasoning_content; // Reasoning content for thinking models (may be NULL)
 } AssistantMessage;
 
 /**
@@ -235,6 +237,8 @@ typedef struct ConversationState {
     char *api_url;
     char *model;
     int max_tokens;           // Maximum tokens for completion (configurable via env var)
+    int last_prompt_tokens;   // Actual prompt tokens from last API response (for context-aware capping)
+    int context_limit;        // Model context limit (from model_capabilities)
     char *working_dir;
     char **additional_dirs;         // Array of additional working directory paths
     int additional_dirs_count;      // Number of additional directories

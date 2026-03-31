@@ -335,3 +335,202 @@ cJSON* tool_upload_image(cJSON *params, ConversationState *state) {
 
     return result;
 }
+
+/**
+ * tool_view_image - Views a local image from the filesystem
+ *
+ * This is similar to tool_upload_image but uses the "path" parameter name
+ * to match Codex's view_image tool interface.
+ */
+cJSON* tool_view_image(cJSON *params, ConversationState *state) {
+    const cJSON *path_json = cJSON_GetObjectItem(params, "path");
+
+    if (!path_json || !cJSON_IsString(path_json)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Missing 'path' parameter");
+        return error;
+    }
+
+    // Check for interrupt before starting
+    if (state && state->interrupt_requested) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Operation interrupted by user");
+        return error;
+    }
+
+    // Resolve the path relative to working directory
+    if (!state) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Internal error: null state");
+        return error;
+    }
+    char *resolved_path = resolve_path(path_json->valuestring, state->working_dir);
+    if (!resolved_path) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to resolve path");
+        return error;
+    }
+
+    // Check if file exists and is readable
+    if (access(resolved_path, R_OK) != 0) {
+        cJSON *error = cJSON_CreateObject();
+        char err_msg[256];
+        snprintf(err_msg, sizeof(err_msg), "Cannot read image file '%s': %s",
+                 resolved_path, strerror(errno));
+        cJSON_AddStringToObject(error, "error", err_msg);
+        free(resolved_path);
+        return error;
+    }
+
+    // Read the file
+    unsigned char *image_data = NULL;
+    off_t file_size = 0;
+
+    int fd = open(resolved_path, O_RDONLY);
+    if (fd < 0) {
+        cJSON *error = cJSON_CreateObject();
+        char err_msg[256];
+        snprintf(err_msg, sizeof(err_msg), "Failed to open image file '%s': %s",
+                 resolved_path, strerror(errno));
+        cJSON_AddStringToObject(error, "error", err_msg);
+        free(resolved_path);
+        return error;
+    }
+
+    // Get file size
+    struct stat st;
+    if (fstat(fd, &st) != 0) {
+        close(fd);
+        cJSON *error = cJSON_CreateObject();
+        char err_msg[256];
+        snprintf(err_msg, sizeof(err_msg), "Failed to get file size for '%s': %s",
+                 resolved_path, strerror(errno));
+        cJSON_AddStringToObject(error, "error", err_msg);
+        free(resolved_path);
+        return error;
+    }
+    file_size = st.st_size;
+
+    // Check file size limit (20MB for view_image)
+    if (file_size > 20 * 1024 * 1024) {
+        close(fd);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Image file too large (max 20MB)");
+        free(resolved_path);
+        return error;
+    }
+
+    // Read file content
+    image_data = (unsigned char *)malloc((size_t)file_size);
+    if (!image_data) {
+        close(fd);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to allocate memory for image");
+        free(resolved_path);
+        return error;
+    }
+
+    ssize_t bytes_read = read(fd, image_data, (size_t)file_size);
+    close(fd);
+
+    if (bytes_read != file_size) {
+        free(image_data);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to read image file");
+        free(resolved_path);
+        return error;
+    }
+
+    // Detect MIME type from extension
+    const char *mime_type = "application/octet-stream";
+    const char *ext = strrchr(resolved_path, '.');
+    if (ext) {
+        char lower_ext[16];
+        size_t ext_len = strlen(ext);
+        if (ext_len < sizeof(lower_ext)) {
+            for (size_t i = 0; i <= ext_len; i++) {
+                lower_ext[i] = (char)tolower((unsigned char)ext[i]);
+            }
+
+            if (strcmp(lower_ext, ".png") == 0) {
+                mime_type = "image/png";
+            } else if (strcmp(lower_ext, ".jpg") == 0 || strcmp(lower_ext, ".jpeg") == 0) {
+                mime_type = "image/jpeg";
+            } else if (strcmp(lower_ext, ".gif") == 0) {
+                mime_type = "image/gif";
+            } else if (strcmp(lower_ext, ".webp") == 0) {
+                mime_type = "image/webp";
+            } else if (strcmp(lower_ext, ".bmp") == 0) {
+                mime_type = "image/bmp";
+            } else if (strcmp(lower_ext, ".tiff") == 0 || strcmp(lower_ext, ".tif") == 0) {
+                mime_type = "image/tiff";
+            } else if (strcmp(lower_ext, ".svg") == 0) {
+                mime_type = "image/svg+xml";
+            }
+        }
+    }
+
+    // Try to detect image type from magic numbers
+    if (file_size >= 8) {
+        unsigned char magic[8];
+        memcpy(magic, image_data, 8);
+
+        // PNG
+        if (magic[0] == 0x89 && magic[1] == 'P' && magic[2] == 'N' && magic[3] == 'G' &&
+            magic[4] == 0x0D && magic[5] == 0x0A && magic[6] == 0x1A && magic[7] == 0x0A) {
+            mime_type = "image/png";
+        }
+        // JPEG
+        else if (magic[0] == 0xFF && magic[1] == 0xD8 && magic[2] == 0xFF) {
+            mime_type = "image/jpeg";
+        }
+        // GIF
+        else if (magic[0] == 'G' && magic[1] == 'I' && magic[2] == 'F' && magic[3] == '8' &&
+                (magic[4] == '7' || magic[4] == '9') && magic[5] == 'a') {
+            mime_type = "image/gif";
+        }
+        // WebP
+        else if (file_size >= 12) {
+            if (magic[0] == 'R' && magic[1] == 'I' && magic[2] == 'F' && magic[3] == 'F') {
+                if (image_data[8] == 'W' && image_data[9] == 'E' &&
+                    image_data[10] == 'B' && image_data[11] == 'P') {
+                    mime_type = "image/webp";
+                }
+            }
+        }
+        // BMP
+        else if (magic[0] == 'B' && magic[1] == 'M') {
+            mime_type = "image/bmp";
+        }
+        // TIFF
+        else if ((magic[0] == 'I' && magic[1] == 'I') || (magic[0] == 'M' && magic[1] == 'M')) {
+            mime_type = "image/tiff";
+        }
+    }
+
+    // Base64 encode the image
+    size_t encoded_size = 0;
+    char *base64_data = base64_encode(image_data, (size_t)file_size, &encoded_size);
+    free(image_data);
+
+    if (!base64_data) {
+        free(resolved_path);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to encode image as base64");
+        return error;
+    }
+
+    // Create result with image content
+    cJSON *result = cJSON_CreateObject();
+    cJSON_AddStringToObject(result, "status", "success");
+    cJSON_AddStringToObject(result, "file_path", resolved_path);
+    cJSON_AddStringToObject(result, "mime_type", mime_type);
+    cJSON_AddNumberToObject(result, "file_size_bytes", (double)file_size);
+    cJSON_AddStringToObject(result, "base64_data", base64_data);
+    cJSON_AddStringToObject(result, "content_type", "image");
+
+    free(base64_data);
+    free(resolved_path);
+
+    return result;
+}

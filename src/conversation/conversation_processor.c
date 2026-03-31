@@ -271,7 +271,7 @@ static int execute_tools_serial(struct ConversationState *state,
 
         // Notify start (prefer extended callback if available)
         if (ctx->on_tool_start_ex) {
-            ctx->on_tool_start_ex(tool->id, tool->name, tool->parameters, tool_details, ctx->user_data);
+            ctx->on_tool_start_ex(tool->id, tool->name, tool->parameters, tool_details, tool->reasoning_content, ctx->user_data);
         } else if (ctx->on_tool_start) {
             ctx->on_tool_start(tool->name, tool_details, ctx->user_data);
         }
@@ -294,6 +294,26 @@ static int execute_tools_serial(struct ConversationState *state,
         result_slot->is_error = tool_result ? cJSON_HasObjectItem(tool_result, "error") : 1;
 
         cJSON_Delete(input);
+
+        // Check for interrupt after tool completes (e.g. tool itself set the flag,
+        // or interrupt arrived while the tool was running).  Cancel any remaining
+        // tools with synthetic error results so the conversation stays valid.
+        if (ctx->should_interrupt && ctx->should_interrupt(ctx->user_data)) {
+            LOG_INFO("Tool execution interrupted after completing tool %d (%s), cancelling remaining",
+                     i, tool->name);
+            for (int k = i + 1; k < tool_count; k++) {
+                ToolCall *tcancel = &tools[k];
+                InternalContent *slot = &results[k];
+                slot->type = INTERNAL_TOOL_RESPONSE;
+                slot->tool_id = tcancel->id ? strdup(tcancel->id) : strdup("unknown");
+                slot->tool_name = tcancel->name ? strdup(tcancel->name) : strdup("tool");
+                cJSON *err = cJSON_CreateObject();
+                cJSON_AddStringToObject(err, "error", "Tool execution cancelled: operation interrupted by user");
+                slot->tool_output = err;
+                slot->is_error = 1;
+            }
+            break;
+        }
     }
 
     *results_out = results;
@@ -391,7 +411,7 @@ static int execute_tools_parallel(struct ConversationState *state,
         // Notify start (prefer extended callback if available)
         const char *tool_details = get_tool_description(tool->name, input);
         if (ctx->on_tool_start_ex) {
-            ctx->on_tool_start_ex(tool->id, tool->name, tool->parameters, tool_details, ctx->user_data);
+            ctx->on_tool_start_ex(tool->id, tool->name, tool->parameters, tool_details, tool->reasoning_content, ctx->user_data);
         } else if (ctx->on_tool_start) {
             ctx->on_tool_start(tool->name, tool_details, ctx->user_data);
         }
@@ -557,13 +577,29 @@ int process_response_unified(struct ConversationState *state,
             break;
         }
 
-        // Display assistant text
+        // Display assistant text with reasoning_content if present
         if (current_response->message.text && current_response->message.text[0] != '\0') {
             const char *p = current_response->message.text;
             while (*p && isspace((unsigned char)*p)) p++;
 
             if (*p != '\0' && ctx->on_assistant_text) {
-                ctx->on_assistant_text(p, ctx->user_data);
+                const char *reasoning = current_response->message.reasoning_content;
+                // Check for fallback reasoning in raw_response (for providers that don't populate AssistantMessage)
+                if (!reasoning && current_response->raw_response && ctx->on_assistant_reasoning) {
+                    cJSON *choices = cJSON_GetObjectItem(current_response->raw_response, "choices");
+                    if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
+                        cJSON *choice = cJSON_GetArrayItem(choices, 0);
+                        cJSON *message = cJSON_GetObjectItem(choice, "message");
+                        if (message) {
+                            cJSON *reasoning_json = cJSON_GetObjectItem(message, "reasoning_content");
+                            if (reasoning_json && cJSON_IsString(reasoning_json) &&
+                                reasoning_json->valuestring && reasoning_json->valuestring[0]) {
+                                reasoning = reasoning_json->valuestring;
+                            }
+                        }
+                    }
+                }
+                ctx->on_assistant_text(p, reasoning, ctx->user_data);
             }
         }
 
@@ -625,6 +661,17 @@ int process_response_unified(struct ConversationState *state,
             // that will be visible to the LLM in the next API call.
             if (ctx->on_after_tool_results) {
                 ctx->on_after_tool_results(state, ctx->user_data);
+            }
+
+            // Check for interrupt before making the follow-up API call.
+            // Tool results are already committed to state (conversation stays valid),
+            // but we skip the next LLM round-trip and end the AI turn now.
+            if (ctx->should_interrupt && ctx->should_interrupt(ctx->user_data)) {
+                LOG_INFO("Interrupt requested after tool results — ending AI turn without follow-up API call");
+                if (own_response) {
+                    api_response_free(current_response);
+                }
+                return 0;
             }
 
             // Call API again with tool results

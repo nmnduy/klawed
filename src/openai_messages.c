@@ -416,7 +416,12 @@ cJSON* build_openai_request_with_reasoning(ConversationState *state, int enable_
                         LOG_DEBUG("Found reasoning_content on text content block (text %s)",
                                   text_content ? "present" : "empty");
                     }
-                    if (text_content) break;  // Stop if we found non-empty text
+                    /* NOTE: We don't break here even if we found text_content.
+                     * There might be additional content blocks (e.g., a synthetic text
+                     * block with reasoning_content for the next turn) that we need to check.
+                     * Breaking early would miss reasoning_content on subsequent blocks,
+                     * causing the "reasoning_content is missing in assistant tool call message" error.
+                     */
                 }
             }
 

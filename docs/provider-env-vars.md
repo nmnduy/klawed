@@ -8,8 +8,9 @@ Klawed supports configuring LLM providers entirely through environment variables
 |--------------|------------------------|-----------------|---------------|
 | OpenAI Subscription (ChatGPT Plus/Pro) | `openai_sub` | None (OAuth) | `gpt-5.3-codex` |
 | Kimi Coding Plan | `kimi_coding_plan` | None (OAuth) | `kimi-for-coding` |
-| Z.AI GLM Coding Plan | `zai_coding` | `ZAI_API_KEY_CODING_PLAN` | `glm-4-flash` |
+| Z.AI GLM Coding Plan | `zai_coding` | `ZAI_API_KEY_CODING_PLAN` | `glm-4.5` |
 | Anthropic Subscription (Claude.ai) | `anthropic_sub` | None (OAuth) | `claude-opus-4` |
+| MiniMax Coding Plan | `minimax_coding` | `MINIMAX_CODING_PLAN_API_KEY` | `MiniMax-M2.1` |
 
 ## Common Environment Variables
 
@@ -103,8 +104,8 @@ Requires an API key from Z.AI.
 ```bash
 export KLAWED_PROVIDER_TYPE=zai_coding
 export ZAI_API_KEY_CODING_PLAN="your-api-key-here"
-# Optional: override default model
-export OPENAI_MODEL=glm-4-plus
+# Optional: override default model (available: glm-4.5, glm-4.6, glm-4.7)
+export OPENAI_MODEL=glm-4.6
 
 klawed "your coding task here"
 ```
@@ -114,6 +115,50 @@ klawed "your coding task here"
 2. Navigate to the API/coding plan section
 3. Generate an API key
 4. Set it as `ZAI_API_KEY_CODING_PLAN`
+
+### MiniMax Coding Plan
+
+Requires an API key from MiniMax. MiniMax provides an Anthropic-compatible API endpoint.
+
+```bash
+export KLAWED_PROVIDER_TYPE=minimax_coding
+export MINIMAX_CODING_PLAN_API_KEY="your-minimax-api-key"
+# Optional: override default model
+export OPENAI_MODEL=MiniMax-M2.1
+
+klawed "your coding task here"
+```
+
+**Alternative: Using anthropic provider type directly**
+
+You can also configure MiniMax using the anthropic provider with custom environment variables:
+
+```bash
+export ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic/v1/messages
+export OPENAI_API_KEY=$MINIMAX_CODING_PLAN_API_KEY
+export OPENAI_MODEL=MiniMax-M2.1
+export ANTHROPIC_VERSION=2023-06-01
+# Clear OPENAI_API_BASE to ensure anthropic provider is used
+export OPENAI_API_BASE=
+
+klawed "your coding task here"
+```
+
+**Required environment variables:**
+- `KLAWED_PROVIDER_TYPE=minimax_coding` - Use the minimax_coding provider type
+- `MINIMAX_CODING_PLAN_API_KEY` - Your MiniMax API key
+
+**Alternative configuration (anthropic provider):**
+- `ANTHROPIC_BASE_URL` - Set to `https://api.minimax.io/anthropic/v1/messages`
+- `OPENAI_API_KEY` - Your MiniMax API key (yes, it uses OPENAI_API_KEY variable)
+- `OPENAI_MODEL` - Model name (default: `MiniMax-M2.1`)
+- `ANTHROPIC_VERSION` - API version (default: `2023-06-01`)
+
+**Getting an API Key:**
+1. Visit [MiniMax](https://www.minimax.io) and create an account
+2. Navigate to the developer/API section
+3. Generate an API key
+4. Set it as `MINIMAX_CODING_PLAN_API_KEY`
 
 ## Advanced Usage
 
@@ -128,6 +173,7 @@ alias klawed-openai='unset KLAWED_PROVIDER_TYPE; export OPENAI_API_KEY=your-key;
 alias klawed-chatgpt='export KLAWED_PROVIDER_TYPE=openai_sub; unset OPENAI_API_KEY; klawed'
 alias klawed-kimi='export KLAWED_PROVIDER_TYPE=kimi_coding_plan; unset OPENAI_API_KEY; klawed'
 alias klawed-zai='export KLAWED_PROVIDER_TYPE=zai_coding; export ZAI_API_KEY_CODING_PLAN=your-key; klawed'
+alias klawed-minimax='export KLAWED_PROVIDER_TYPE=minimax_coding; export MINIMAX_CODING_PLAN_API_KEY=*** klawed'
 ```
 
 ### Sharing OAuth Credentials Across Machines

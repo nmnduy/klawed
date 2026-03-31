@@ -1,5 +1,6 @@
 #include "response_processor.h"
 #include "../logger.h"
+#include "../model_capabilities.h"
 #include "../ui/ui_output.h"
 #include "../ui/print_helpers.h"
 #include "../ui/tool_output_display.h"
