@@ -233,6 +233,271 @@ cJSON* get_openai_subscription_tool_definitions(int enable_caching,
         LOG_INFO("Tool 'InterruptSubagent' is disabled via KLAWED_DISABLE_TOOLS");
     }
 
+    // ViewImage tool - for viewing images from filesystem (like Codex's view_image)
+    if (!is_tool_disabled("ViewImage")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "Local filesystem path to an image file");
+        cJSON_AddItemToObject(props, "path", item);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("path"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "ViewImage",
+                          "View a local image from the filesystem (only use if given a full filepath by the user, and the image isn't already attached to the thread context). Supports common image formats (PNG, JPEG, GIF, WebP).",
+                          params);
+    } else {
+        LOG_INFO("Tool 'ViewImage' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
+    // TodoWrite tool - task tracking
+    if (!is_tool_disabled("TodoWrite")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        // Define the todos array parameter
+        cJSON *todos_array = cJSON_CreateObject();
+        cJSON_AddStringToObject(todos_array, "type", "array");
+        cJSON_AddStringToObject(todos_array, "description",
+            "Array of todo items to display. Replaces the entire todo list.");
+
+        // Define the items schema for the array
+        cJSON *todos_items = cJSON_CreateObject();
+        cJSON_AddStringToObject(todos_items, "type", "object");
+        cJSON *item_props = cJSON_CreateObject();
+
+        cJSON *content_prop = cJSON_CreateObject();
+        cJSON_AddStringToObject(content_prop, "type", "string");
+        cJSON_AddStringToObject(content_prop, "description",
+            "Task description in imperative form (e.g., 'Run tests')");
+        cJSON_AddItemToObject(item_props, "content", content_prop);
+
+        cJSON *status_prop = cJSON_CreateObject();
+        cJSON_AddStringToObject(status_prop, "type", "string");
+        cJSON *status_enum = cJSON_CreateArray();
+        cJSON_AddItemToArray(status_enum, cJSON_CreateString("pending"));
+        cJSON_AddItemToArray(status_enum, cJSON_CreateString("in_progress"));
+        cJSON_AddItemToArray(status_enum, cJSON_CreateString("completed"));
+        cJSON_AddItemToObject(status_prop, "enum", status_enum);
+        cJSON_AddStringToObject(status_prop, "description",
+            "Current status of the task");
+        cJSON_AddItemToObject(item_props, "status", status_prop);
+
+        cJSON_AddItemToObject(todos_items, "properties", item_props);
+        cJSON *item_required = cJSON_CreateArray();
+        cJSON_AddItemToArray(item_required, cJSON_CreateString("content"));
+        cJSON_AddItemToArray(item_required, cJSON_CreateString("status"));
+        cJSON_AddItemToObject(todos_items, "required", item_required);
+        cJSON_AddItemToObject(todos_array, "items", todos_items);
+        cJSON_AddItemToObject(props, "todos", todos_array);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("todos"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "TodoWrite",
+                          "Creates and updates a task list to track progress on multi-step tasks. Replaces the entire todo list with the provided array.",
+                          params);
+    } else {
+        LOG_INFO("Tool 'TodoWrite' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
+    // Glob tool - file pattern matching
+    if (!is_tool_disabled("Glob")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "Glob pattern to match files against (e.g., '*.py', 'src/**/*.js')");
+        cJSON_AddItemToObject(props, "pattern", item);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("pattern"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "Glob",
+                          "Finds files matching a glob pattern. Returns an array of file paths.",
+                          params);
+    } else {
+        LOG_INFO("Tool 'Glob' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
+    // Grep tool - search file contents
+    if (!is_tool_disabled("Grep")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "Regular expression pattern to search for");
+        cJSON_AddItemToObject(props, "pattern", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "Directory or file path to search (default: current working directory)");
+        cJSON_AddItemToObject(props, "path", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "integer");
+        cJSON_AddStringToObject(item, "description", "Optional: Maximum number of matches to return (default: 100)");
+        cJSON_AddItemToObject(props, "max_results", item);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("pattern"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "Grep",
+                          "Searches for patterns in files using regular expressions. Returns file paths and matching lines. Automatically excludes common build directories and binary files.",
+                          params);
+    } else {
+        LOG_INFO("Tool 'Grep' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
+    // Read tool - file reading with optional line range
+    if (!is_tool_disabled("Read")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "The absolute path to the file");
+        cJSON_AddItemToObject(props, "file_path", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "integer");
+        cJSON_AddStringToObject(item, "description", "Optional: Starting line number (1-indexed, inclusive)");
+        cJSON_AddItemToObject(props, "start_line", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "integer");
+        cJSON_AddStringToObject(item, "description", "Optional: Ending line number (1-indexed, inclusive)");
+        cJSON_AddItemToObject(props, "end_line", item);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("file_path"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "Read",
+                          "Reads a file from the filesystem with optional line range support. Returns the file contents.",
+                          params);
+    } else {
+        LOG_INFO("Tool 'Read' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
+    // Write tool - file writing
+    if (!is_tool_disabled("Write")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "The absolute path to the file");
+        cJSON_AddItemToObject(props, "file_path", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "The content to write to the file");
+        cJSON_AddItemToObject(props, "content", item);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("file_path"));
+        cJSON_AddItemToArray(item, cJSON_CreateString("content"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "Write",
+                          "Writes content to a file. Creates the file if it doesn't exist, overwrites if it does.",
+                          params);
+    } else {
+        LOG_INFO("Tool 'Write' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
+    // Edit tool - string replacement
+    if (!is_tool_disabled("Edit")) {
+        params = cJSON_CreateObject();
+        props = cJSON_CreateObject();
+        if (!params || !props) {
+            cJSON_Delete(params);
+            cJSON_Delete(props);
+            cJSON_Delete(tool_array);
+            return NULL;
+        }
+        cJSON_AddStringToObject(params, "type", "object");
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "The absolute path to the file");
+        cJSON_AddItemToObject(props, "file_path", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "Exact text to find and replace. Only simple string matching is supported.");
+        cJSON_AddItemToObject(props, "old_string", item);
+
+        item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "type", "string");
+        cJSON_AddStringToObject(item, "description", "Replacement text. Will replace the first occurrence of old_string.");
+        cJSON_AddItemToObject(props, "new_string", item);
+
+        cJSON_AddItemToObject(params, "properties", props);
+        item = cJSON_CreateArray();
+        cJSON_AddItemToArray(item, cJSON_CreateString("file_path"));
+        cJSON_AddItemToArray(item, cJSON_CreateString("old_string"));
+        cJSON_AddItemToArray(item, cJSON_CreateString("new_string"));
+        cJSON_AddItemToObject(params, "required", item);
+        add_function_tool(tool_array, format, "Edit",
+                          "Performs simple string replacement in files. Replaces the first occurrence of old_string with new_string.",
+                          params);
+    } else {
+        LOG_INFO("Tool 'Edit' is disabled via KLAWED_DISABLE_TOOLS");
+    }
+
     return tool_array;
 }
 const char* detect_duplicate_tool_names(cJSON *tool_array) {
