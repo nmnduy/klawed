@@ -20,6 +20,7 @@
 #include "colorscheme.h"
 #include "fallback_colors.h"
 #include "ui/tool_output_display.h"
+#include "macos_sqlite_fix.h"
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -2550,7 +2551,14 @@ static int sqlite_queue_open_db(SQLiteQueueContext *ctx) {
     }
 
     sqlite3 *db = NULL;
-    int rc = sqlite3_open(ctx->db_path, &db);
+
+    // Use macOS-specific open flags if needed
+    int open_flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
+#ifdef __APPLE__
+    open_flags = macos_sqlite_open_flags();
+#endif
+
+    int rc = sqlite3_open_v2(ctx->db_path, &db, open_flags, NULL);
     if (rc != SQLITE_OK) {
         LOG_ERROR("SQLite Queue: Failed to open database %s: %s", ctx->db_path, sqlite3_errmsg(db));
         sqlite_queue_set_error(ctx, SQLITE_QUEUE_ERROR_DB_OPEN_FAILED,
@@ -2558,6 +2566,21 @@ static int sqlite_queue_open_db(SQLiteQueueContext *ctx) {
         sqlite3_close(db);
         return SQLITE_QUEUE_ERROR_DB_OPEN_FAILED;
     }
+
+    // Apply macOS-specific fixes if needed
+#ifdef __APPLE__
+    if (macos_sqlite_needs_fixes()) {
+        if (macos_sqlite_apply_fixes(db) != 0) {
+            LOG_WARN("SQLite Queue: Failed to apply macOS SQLite fixes");
+        }
+        // Use macOS-specific busy timeout
+        sqlite3_busy_timeout(db, macos_sqlite_busy_timeout_ms());
+    } else {
+        sqlite3_busy_timeout(db, 5000);
+    }
+#else
+    sqlite3_busy_timeout(db, 5000);
+#endif
 
     // Apply pragma settings for better concurrency and performance
     char *errmsg = NULL;
@@ -2583,9 +2606,8 @@ static int sqlite_queue_open_db(SQLiteQueueContext *ctx) {
         LOG_DEBUG("SQLite Queue: Synchronous mode set to NORMAL");
     }
 
-    // 3. Set busy timeout to 5 seconds (ESSENTIAL)
-    sqlite3_busy_timeout(db, 5000);
-    LOG_DEBUG("SQLite Queue: Busy timeout set to 5000ms");
+    // Busy timeout is set above (with macOS-specific handling)
+    LOG_DEBUG("SQLite Queue: Busy timeout configured");
 
     // Optional performance pragmas
     // Set cache size to ~2MB (2000 pages of 1KB each)
