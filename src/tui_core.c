@@ -283,9 +283,16 @@ static void* check_vim_fugitive_thread(void *arg) {
     LOG_DEBUG("[TUI] Background thread checking vim-fugitive availability");
 
     // Check if vim-fugitive is available by running vim with a test command
+    // On macOS, wrap with timeout to prevent hangs from credential prompts or
+    // vim waiting for user input if misconfigured
     char test_cmd[512];
+#ifdef __APPLE__
+    snprintf(test_cmd, sizeof(test_cmd),
+             "timeout 5 vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" 2>&1");
+#else
     snprintf(test_cmd, sizeof(test_cmd),
              "vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" 2>&1");
+#endif
 
     FILE *fp = popen(test_cmd, "r");
     if (!fp) {
