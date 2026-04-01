@@ -1497,6 +1497,7 @@ static int pending_assistant_append(PendingAssistant *pa, InternalContent item) 
 static void pending_assistant_free(PendingAssistant *pa) {
     for (int i = 0; i < pa->count; i++) {
         free(pa->contents[i].text);
+        free(pa->contents[i].reasoning_content);
         free(pa->contents[i].tool_id);
         free(pa->contents[i].tool_name);
         if (pa->contents[i].tool_params) cJSON_Delete(pa->contents[i].tool_params);
@@ -1748,10 +1749,27 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
                             ? cJSON_Duplicate(jtool_params, 1)
                             : cJSON_CreateObject();
 
+            /* Extract reasoning_content from TOOL message if present (for Moonshot/Kimi) */
+            cJSON *jreasoning = cJSON_GetObjectItem(json, "reasoningContent");
+            if (jreasoning && cJSON_IsString(jreasoning) && jreasoning->valuestring) {
+                const char *reasoning = jreasoning->valuestring;
+                /* Skip empty / whitespace-only reasoning */
+                const char *pr = reasoning;
+                while (*pr && isspace((unsigned char)*pr)) pr++;
+                if (*pr != '\0') {
+                    c.reasoning_content = strdup(reasoning);
+                    if (c.reasoning_content) {
+                        LOG_DEBUG("SQLite Queue: restore: stored reasoning_content (%zu bytes) on TOOL call",
+                                  strlen(reasoning));
+                    }
+                }
+            }
+
             if (!c.tool_id || !c.tool_name || !c.tool_params ||
                 pending_assistant_append(&pa, c) != 0) {
                 free(c.tool_id);
                 free(c.tool_name);
+                free(c.reasoning_content);
                 if (c.tool_params) cJSON_Delete(c.tool_params);
                 LOG_ERROR("SQLite Queue: restore: OOM appending tool call");
                 cJSON_Delete(json);
