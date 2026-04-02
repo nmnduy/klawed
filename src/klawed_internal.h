@@ -278,6 +278,9 @@ typedef struct ConversationState {
 
     // Context compaction configuration
     struct CompactionConfig *compaction_config;  // Auto-compaction settings (NULL if not enabled)
+
+    // Context overflow recovery tracking
+    int context_overflow_recovery_attempts;  // Track recovery retries to prevent infinite loops
 } ConversationState;
 
 // ============================================================================
