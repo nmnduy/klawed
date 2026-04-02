@@ -35,6 +35,13 @@
 
 
 /**
+ * Maximum number of context overflow recovery attempts before giving up.
+ * Each recovery only removes a single tool result, which may be too small
+ * to meaningfully reduce context size in extreme cases.
+ */
+#define MAX_CONTEXT_OVERFLOW_RECOVERIES 5
+
+/**
  * Handle context overflow error by replacing last tool result
  * Only called when auto-compaction is enabled
  *
@@ -345,6 +352,9 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
                 }
             }
 
+            // Reset recovery attempts on success
+            state->context_overflow_recovery_attempts = 0;
+
             // Cleanup and return
             free(result.raw_response);
             free(result.request_json);
@@ -394,7 +404,35 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
 
             // Try context overflow recovery if applicable
             if (handle_context_overflow_recovery(state, result.error_message)) {
-                LOG_INFO("Context overflow recovery applied - retrying API call");
+                state->context_overflow_recovery_attempts++;
+
+                if (state->context_overflow_recovery_attempts > MAX_CONTEXT_OVERFLOW_RECOVERIES) {
+                    LOG_ERROR("Context overflow recovery failed after %d attempts - giving up",
+                              MAX_CONTEXT_OVERFLOW_RECOVERIES);
+
+                    char error_msg[512];
+                    snprintf(error_msg, sizeof(error_msg),
+                             "API context limit exceeded. Recovery failed after %d attempts. "
+                             "The conversation is too long. Please start a new conversation "
+                             "or use a model with a larger context window.",
+                             MAX_CONTEXT_OVERFLOW_RECOVERIES);
+                    print_error(error_msg);
+
+                    // Create an error response
+                    ApiResponse *error_response = calloc(1, sizeof(ApiResponse));
+                    if (error_response) {
+                        error_response->error_message = strdup(error_msg);
+                    }
+
+                    free(last_error);
+                    free(result.raw_response);
+                    free(result.request_json);
+                    free(result.error_message);
+                    return error_response;
+                }
+
+                LOG_INFO("Context overflow recovery applied (attempt %d/%d) - retrying API call",
+                         state->context_overflow_recovery_attempts, MAX_CONTEXT_OVERFLOW_RECOVERIES);
                 free(result.raw_response);
                 free(result.request_json);
                 free(result.error_message);
