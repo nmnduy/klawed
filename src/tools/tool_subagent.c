@@ -282,7 +282,7 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     }
 
     // Allocate new environment array (current + modifications)
-    char **new_environ = malloc((env_count + 10) * sizeof(char *));
+    char **new_environ = malloc((size_t)(env_count + 10) * sizeof(char *));
     if (!new_environ) {
         posix_spawn_file_actions_destroy(&file_actions);
         posix_spawnattr_destroy(&spawnattr);
@@ -338,7 +338,7 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
                 free(tmp);
             }
 
-            extra_env_vars = malloc(extra_env_count * sizeof(char *));
+            extra_env_vars = malloc((size_t)extra_env_count * sizeof(char *));
             if (extra_env_vars) {
                 char *saveptr = NULL;
                 char *token = strtok_r(env_vars_copy, ",", &saveptr);
@@ -367,7 +367,6 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     new_environ[new_env_idx] = NULL;  // Terminate the array
 
     // Build argv for shell execution
-    char shell_path[] = "/bin/sh";
     char shell_name[] = "sh";
     char dash_c[] = "-c";
     char *argv[] = {shell_name, dash_c, command, NULL};
