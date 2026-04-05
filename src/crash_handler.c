@@ -2,6 +2,9 @@
  * crash_handler.c - Enhanced crash diagnostics for klawed
  */
 
+/* Define _XOPEN_SOURCE before any includes for ucontext.h */
+#define _XOPEN_SOURCE 700
+
 #include "crash_handler.h"
 #include "logger.h"
 
@@ -73,8 +76,12 @@ static const char *signal_code_desc(int sig, int code) {
         switch (code) {
             case SEGV_MAPERR:  return "Address not mapped to object";
             case SEGV_ACCERR:  return "Access permissions fault";
+#ifdef SEGV_BNDERR
             case SEGV_BNDERR:  return "Bounds checking fault";
+#endif
+#ifdef SEGV_PKUERR
             case SEGV_PKUERR:  return "Protection key violation";
+#endif
             default:           return "Unknown SEGV code";
         }
     } else if (sig == SIGBUS) {
@@ -337,6 +344,7 @@ static void log_thread_info(void) {
                     case TH_STATE_WAITING:   state_str = "waiting"; break;
                     case TH_STATE_UNINTERRUPTIBLE: state_str = "uninterruptible"; break;
                     case TH_STATE_HALTED:    state_str = "halted"; break;
+                    default:                 state_str = "unknown"; break;
                 }
 
                 LOG_ERROR("  Thread %u: state=%s, cpu_usage=%d%%",
