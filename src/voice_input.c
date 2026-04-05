@@ -19,6 +19,13 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <errno.h>
+#include <fcntl.h>
+
+#ifdef __APPLE__
+#include <spawn.h>
+/* For posix_spawn file actions */
+extern char **environ;
+#endif
 
 #ifdef HAVE_WHISPER
 #include "whisper.h"
@@ -135,6 +142,44 @@ static int record_audio_ffmpeg(const char *output_path, volatile sig_atomic_t *s
 
     LOG_DEBUG("Starting audio recording: %s", cmd);
 
+#ifdef __APPLE__
+    /*
+     * macOS: Use posix_spawn() instead of fork() for thread safety.
+     *
+     * When fork() is called in a multi-threaded program on macOS, only the
+     * calling thread survives in the child. If other threads held locks
+     * (malloc, SQLite, log mutex, etc.), those locks remain locked forever
+     * in the child, causing deadlocks.
+     *
+     * posix_spawn() avoids this by creating a new process without copying
+     * the parent's memory space and mutex states.
+     */
+    pid_t pid;
+    posix_spawn_file_actions_t file_actions;
+
+    int rc = posix_spawn_file_actions_init(&file_actions);
+    if (rc != 0) {
+        LOG_ERROR("Failed to init file actions: %s", strerror(rc));
+        return -1;
+    }
+
+    // Redirect stdin from /dev/null (ffmpeg doesn't need interactive input)
+    posix_spawn_file_actions_addopen(&file_actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+
+    // Build argv for shell execution
+    char shell_name[] = "sh";
+    char dash_c[] = "-c";
+    char *argv[] = {shell_name, dash_c, cmd, NULL};
+
+    rc = posix_spawn(&pid, "/bin/sh", &file_actions, NULL, argv, environ);
+
+    posix_spawn_file_actions_destroy(&file_actions);
+
+    if (rc != 0) {
+        LOG_ERROR("Failed to spawn ffmpeg: %s", strerror(rc));
+        return -1;
+    }
+#else
     // Fork and exec ffmpeg
     pid_t pid = fork();
     if (pid < 0) {
@@ -147,6 +192,7 @@ static int record_audio_ffmpeg(const char *output_path, volatile sig_atomic_t *s
         execl("/bin/sh", "sh", "-c", cmd, (char*)NULL);
         _exit(127);  // exec failed
     }
+#endif
 
     // Parent process: wait for user to press Enter
     fprintf(stderr, "\nRecording... press ENTER to stop.\n");
