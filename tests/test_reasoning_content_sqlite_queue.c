@@ -17,6 +17,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <cjson/cJSON.h>
 #include <sqlite3.h>
 
@@ -619,6 +620,13 @@ static cJSON* simulate_restore_with_end_ai_turn(cJSON *messages) {
                 SimulatedContent c = {0};
                 c.type = INTERNAL_TOOL_CALL;
                 c.tool_id = strdup(jtool_id->valuestring);
+
+                /* Extract reasoningContent from TOOL message (THE BUG FIX) */
+                cJSON *jreasoning = cJSON_GetObjectItem(json, "reasoningContent");
+                if (jreasoning && cJSON_IsString(jreasoning) && jreasoning->valuestring) {
+                    c.reasoning_content = strdup(jreasoning->valuestring);
+                }
+
                 pending_assistant_append(&pa, c);
             }
         } else if (strcmp(mt, "END_AI_TURN") == 0 && from_klawed) {
@@ -970,6 +978,252 @@ static void test_missing_end_ai_turn_with_text_response(void) {
     TEST_ASSERT(true, "Missing END_AI_TURN with text response test completed");
 }
 
+// Simulate restore that extracts reasoningContent from TOOL messages (THE BUG FIX)
+static cJSON* simulate_restore_with_tool_reasoning(cJSON *messages) {
+    PendingAssistant pa = {0};
+    cJSON *assistant_turns = cJSON_CreateArray();
+    cJSON *msg = NULL;
+
+    cJSON_ArrayForEach(msg, messages) {
+        cJSON *sender = cJSON_GetObjectItem(msg, "sender");
+        cJSON *message = cJSON_GetObjectItem(msg, "message");
+
+        if (!sender || !message || !cJSON_IsString(message)) continue;
+
+        int from_klawed = (strcmp(sender->valuestring, "klawed") == 0);
+        cJSON *json = cJSON_Parse(message->valuestring);
+        if (!json) continue;
+
+        cJSON *jtype = cJSON_GetObjectItem(json, "messageType");
+        if (!jtype || !cJSON_IsString(jtype)) { cJSON_Delete(json); continue; }
+        const char *mt = jtype->valuestring;
+
+        if (strcmp(mt, "TEXT") == 0 && from_klawed) {
+            cJSON *jcontent = cJSON_GetObjectItem(json, "content");
+            if (jcontent && cJSON_IsString(jcontent)) {
+                SimulatedContent c = {0};
+                c.type = INTERNAL_TEXT;
+                c.text = strdup(jcontent->valuestring);
+                pending_assistant_append(&pa, c);
+            }
+        } else if (strcmp(mt, "TOOL") == 0 && from_klawed) {
+            cJSON *jtool_id = cJSON_GetObjectItem(json, "toolId");
+            if (jtool_id && cJSON_IsString(jtool_id)) {
+                SimulatedContent c = {0};
+                c.type = INTERNAL_TOOL_CALL;
+                c.tool_id = strdup(jtool_id->valuestring);
+
+                /* THE FIX: Extract reasoningContent from TOOL message */
+                cJSON *jreasoning = cJSON_GetObjectItem(json, "reasoningContent");
+                if (jreasoning && cJSON_IsString(jreasoning) && jreasoning->valuestring) {
+                    const char *reasoning = jreasoning->valuestring;
+                    /* Skip empty / whitespace-only reasoning */
+                    const char *pr = reasoning;
+                    while (*pr && isspace((unsigned char)*pr)) pr++;
+                    if (*pr != '\0') {
+                        c.reasoning_content = strdup(reasoning);
+                    }
+                }
+
+                pending_assistant_append(&pa, c);
+            }
+        } else if (strcmp(mt, "END_AI_TURN") == 0 && from_klawed) {
+            if (pa.count > 0) {
+                flush_pending_assistant(&pa, assistant_turns);
+            }
+        }
+
+        cJSON_Delete(json);
+    }
+
+    if (pa.count > 0) {
+        flush_pending_assistant(&pa, assistant_turns);
+    }
+
+    return assistant_turns;
+}
+
+static void test_tool_message_with_reasoning_content(void) {
+    printf(COLOR_YELLOW "\nTest: TOOL message with reasoningContent\n" COLOR_RESET);
+    printf("This test verifies the bug fix: reasoningContent is extracted from TOOL messages\n");
+
+    TestQueueContext ctx = {0};
+    TEST_ASSERT(init_test_queue(&ctx) == 0, "Should create test queue");
+    if (!ctx.db) return;
+
+    // Simulate: Assistant sends tool call with reasoningContent (Moonshot/Kimi behavior)
+    // This is the exact scenario that was broken before the fix
+
+    // User request
+    cJSON *user_msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(user_msg, "messageType", "TEXT");
+    cJSON_AddStringToObject(user_msg, "content", "Check the system status");
+    char *user_str = cJSON_PrintUnformatted(user_msg);
+    insert_message(&ctx, "user", user_str);
+    cJSON_Delete(user_msg);
+    free(user_str);
+
+    // Assistant tool call WITH reasoningContent (the key test case)
+    cJSON *tool_msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(tool_msg, "messageType", "TOOL");
+    cJSON_AddStringToObject(tool_msg, "toolId", "tool_with_reasoning_001");
+    cJSON_AddStringToObject(tool_msg, "toolName", "Bash");
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddStringToObject(params, "command", "uptime");
+    cJSON_AddItemToObject(tool_msg, "toolParameters", params);
+    // THE KEY: This reasoningContent was being lost before the fix
+    cJSON_AddStringToObject(tool_msg, "reasoningContent",
+        "Let me check the system uptime to see how long the server has been running.");
+    char *tool_str = cJSON_PrintUnformatted(tool_msg);
+    insert_message(&ctx, "klawed", tool_str);
+    cJSON_Delete(tool_msg);
+    free(tool_str);
+
+    // END_AI_TURN
+    cJSON *end_turn = cJSON_CreateObject();
+    cJSON_AddStringToObject(end_turn, "messageType", "END_AI_TURN");
+    char *et = cJSON_PrintUnformatted(end_turn);
+    insert_message(&ctx, "klawed", et);
+    cJSON_Delete(end_turn);
+    free(et);
+
+    // Retrieve messages
+    cJSON *messages = retrieve_messages(&ctx);
+    TEST_ASSERT(messages != NULL, "Should retrieve messages");
+    TEST_ASSERT(cJSON_GetArraySize(messages) == 3, "Should have 3 messages");
+
+    // Verify the TOOL message has reasoningContent in the database
+    cJSON *tool_db_msg = cJSON_GetArrayItem(messages, 1);
+    TEST_ASSERT(tool_db_msg != NULL, "Should have tool message");
+    cJSON *tool_sender = cJSON_GetObjectItem(tool_db_msg, "sender");
+    TEST_ASSERT(tool_sender && strcmp(tool_sender->valuestring, "klawed") == 0,
+               "Tool message should be from klawed");
+    cJSON *tool_message = cJSON_GetObjectItem(tool_db_msg, "message");
+    TEST_ASSERT(tool_message && cJSON_IsString(tool_message), "Tool should have message");
+
+    cJSON *parsed_tool = cJSON_Parse(tool_message->valuestring);
+    TEST_ASSERT(parsed_tool != NULL, "Should parse tool message");
+    cJSON *rc = cJSON_GetObjectItem(parsed_tool, "reasoningContent");
+    TEST_ASSERT(rc && cJSON_IsString(rc), "TOOL message should have reasoningContent field");
+    TEST_ASSERT(strstr(rc->valuestring, "system uptime") != NULL,
+               "reasoningContent should contain the thinking");
+    cJSON_Delete(parsed_tool);
+
+    // Now simulate restore with the fix
+    cJSON *assistant_turns = simulate_restore_with_tool_reasoning(messages);
+    TEST_ASSERT(assistant_turns != NULL, "Should produce assistant turns");
+    TEST_ASSERT(cJSON_GetArraySize(assistant_turns) == 1, "Should have 1 assistant turn");
+
+    // Verify the tool call has reasoning_content attached
+    if (cJSON_GetArraySize(assistant_turns) == 1) {
+        cJSON *turn = cJSON_GetArrayItem(assistant_turns, 0);
+        cJSON *contents = cJSON_GetObjectItem(turn, "contents");
+        TEST_ASSERT(contents != NULL, "Turn should have contents");
+        TEST_ASSERT(cJSON_GetArraySize(contents) == 1, "Should have 1 content block (the tool call)");
+
+        cJSON *tool_content = cJSON_GetArrayItem(contents, 0);
+        cJSON *restored_rc = cJSON_GetObjectItem(tool_content, "reasoning_content");
+        TEST_ASSERT(restored_rc && cJSON_IsString(restored_rc),
+                   "Tool call content should have reasoning_content after restore");
+        TEST_ASSERT(strstr(restored_rc->valuestring, "system uptime") != NULL,
+                   "reasoning_content should contain the original thinking");
+    }
+
+    cJSON_Delete(messages);
+    cJSON_Delete(assistant_turns);
+    cleanup_test_queue(&ctx);
+
+    TEST_ASSERT(true, "TOOL message with reasoningContent test completed");
+}
+
+static void test_tool_message_with_empty_reasoning_content(void) {
+    printf(COLOR_YELLOW "\nTest: TOOL message with empty/whitespace reasoningContent\n" COLOR_RESET);
+
+    TestQueueContext ctx = {0};
+    TEST_ASSERT(init_test_queue(&ctx) == 0, "Should create test queue");
+    if (!ctx.db) return;
+
+    // User request
+    cJSON *user_msg = cJSON_CreateObject();
+    cJSON_AddStringToObject(user_msg, "messageType", "TEXT");
+    cJSON_AddStringToObject(user_msg, "content", "Do something");
+    char *user_str = cJSON_PrintUnformatted(user_msg);
+    insert_message(&ctx, "user", user_str);
+    cJSON_Delete(user_msg);
+    free(user_str);
+
+    // Tool with empty reasoningContent
+    cJSON *tool1 = cJSON_CreateObject();
+    cJSON_AddStringToObject(tool1, "messageType", "TOOL");
+    cJSON_AddStringToObject(tool1, "toolId", "tool_empty");
+    cJSON_AddStringToObject(tool1, "toolName", "Read");
+    cJSON_AddStringToObject(tool1, "reasoningContent", "");
+    char *t1 = cJSON_PrintUnformatted(tool1);
+    insert_message(&ctx, "klawed", t1);
+    cJSON_Delete(tool1);
+    free(t1);
+
+    // Tool with whitespace-only reasoningContent
+    cJSON *tool2 = cJSON_CreateObject();
+    cJSON_AddStringToObject(tool2, "messageType", "TOOL");
+    cJSON_AddStringToObject(tool2, "toolId", "tool_ws");
+    cJSON_AddStringToObject(tool2, "toolName", "Read");
+    cJSON_AddStringToObject(tool2, "reasoningContent", "   \n\t  ");
+    char *t2 = cJSON_PrintUnformatted(tool2);
+    insert_message(&ctx, "klawed", t2);
+    cJSON_Delete(tool2);
+    free(t2);
+
+    // Tool with valid reasoningContent
+    cJSON *tool3 = cJSON_CreateObject();
+    cJSON_AddStringToObject(tool3, "messageType", "TOOL");
+    cJSON_AddStringToObject(tool3, "toolId", "tool_valid");
+    cJSON_AddStringToObject(tool3, "toolName", "Bash");
+    cJSON_AddStringToObject(tool3, "reasoningContent", "Valid reasoning here");
+    char *t3 = cJSON_PrintUnformatted(tool3);
+    insert_message(&ctx, "klawed", t3);
+    cJSON_Delete(tool3);
+    free(t3);
+
+    cJSON *end = cJSON_CreateObject();
+    cJSON_AddStringToObject(end, "messageType", "END_AI_TURN");
+    char *es = cJSON_PrintUnformatted(end);
+    insert_message(&ctx, "klawed", es);
+    cJSON_Delete(end);
+    free(es);
+
+    cJSON *messages = retrieve_messages(&ctx);
+    cJSON *assistant_turns = simulate_restore_with_tool_reasoning(messages);
+
+    TEST_ASSERT(assistant_turns != NULL, "Should produce assistant turns");
+    if (cJSON_GetArraySize(assistant_turns) == 1) {
+        cJSON *turn = cJSON_GetArrayItem(assistant_turns, 0);
+        cJSON *contents = cJSON_GetObjectItem(turn, "contents");
+        TEST_ASSERT(cJSON_GetArraySize(contents) == 3, "Should have 3 tool calls");
+
+        // First two should NOT have reasoning_content (empty/whitespace skipped)
+        // Third one should have reasoning_content
+        cJSON *tool1_content = cJSON_GetArrayItem(contents, 0);
+        cJSON *tool2_content = cJSON_GetArrayItem(contents, 1);
+        cJSON *tool3_content = cJSON_GetArrayItem(contents, 2);
+
+        cJSON *rc1 = cJSON_GetObjectItem(tool1_content, "reasoning_content");
+        cJSON *rc2 = cJSON_GetObjectItem(tool2_content, "reasoning_content");
+        cJSON *rc3 = cJSON_GetObjectItem(tool3_content, "reasoning_content");
+
+        TEST_ASSERT(rc1 == NULL, "Empty reasoning should not be stored");
+        TEST_ASSERT(rc2 == NULL, "Whitespace reasoning should not be stored");
+        TEST_ASSERT(rc3 != NULL && strstr(rc3->valuestring, "Valid reasoning"),
+                   "Valid reasoning should be stored");
+    }
+
+    cJSON_Delete(messages);
+    cJSON_Delete(assistant_turns);
+    cleanup_test_queue(&ctx);
+
+    TEST_ASSERT(true, "TOOL message with empty/whitespace reasoningContent test completed");
+}
+
 int main(void) {
     printf("=== reasoning_content SQLite Queue Preservation Tests ===\n");
     printf("Testing that reasoning_content from thinking models is preserved\n");
@@ -983,6 +1237,8 @@ int main(void) {
     test_multiple_reasoning_messages();
     test_end_ai_turn_separates_assistant_turns();
     test_missing_end_ai_turn_with_text_response();
+    test_tool_message_with_reasoning_content();
+    test_tool_message_with_empty_reasoning_content();
 
     TEST_SUMMARY();
 }
