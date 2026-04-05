@@ -125,7 +125,7 @@ static int populate_file_cache(FileSearchState *state) {
     detect_tools(state);
     free_file_cache(state);
 
-    const char *cmd;
+    char *cmd;
     char cmd_buf[1024];
     const char *dir = state->search_dir ? state->search_dir : ".";
 
@@ -190,7 +190,7 @@ static int populate_file_cache(FileSearchState *state) {
     // Build argv for shell execution
     char shell_name[] = "sh";
     char dash_c[] = "-c";
-    char *argv[] = {shell_name, dash_c, (char *)cmd, NULL};
+    char *argv[] = {shell_name, dash_c, cmd, NULL};
 
     rc = posix_spawn(&pid, "/bin/sh", &file_actions, NULL, argv, environ);
 
