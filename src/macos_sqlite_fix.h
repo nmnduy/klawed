@@ -47,4 +47,13 @@ int macos_sqlite_busy_timeout_ms(void);
  */
 int macos_sqlite_open_flags(void);
 
+/*
+ * Trigger WAL checkpoint on macOS.
+ * This should be called periodically to prevent WAL file growth.
+ * Pass checkpoint mode: SQLITE_CHECKPOINT_PASSIVE (0), FULL (1), or RESTART (2)
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int macos_sqlite_wal_checkpoint(sqlite3 *db, int mode);
+
 #endif /* MACOS_SQLITE_FIX_H */

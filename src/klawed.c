@@ -53,6 +53,7 @@
 
 // Socket support removed - will be reimplemented with ZMQ
 #include "colorscheme.h"
+#include "crash_handler.h"
 #include "fallback_colors.h"
 #include "tool_utils.h"
 #include "process_utils.h"
@@ -307,7 +308,10 @@ static SubagentManager *g_subagent_manager_for_cleanup = NULL;
 static pthread_mutex_t g_cleanup_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Emergency cleanup handler called on exit or signal
-static void emergency_cleanup_subagents(void) {
+/* Forward declaration */
+void emergency_cleanup_subagents(void);
+
+void emergency_cleanup_subagents(void) {
     pthread_mutex_lock(&g_cleanup_mutex);
 
     if (g_subagent_manager_for_cleanup) {
@@ -342,9 +346,16 @@ void register_subagent_manager_for_cleanup(SubagentManager *manager) {
             atexit_registered = 1;
         }
 
-        // Register signal handlers
+        // Register signal handlers for graceful shutdown
         signal(SIGINT, signal_handler_cleanup);
         signal(SIGTERM, signal_handler_cleanup);
+
+        // Install enhanced crash diagnostics (only once)
+        static int crash_handler_installed = 0;
+        if (!crash_handler_installed) {
+            crash_handler_install();
+            crash_handler_installed = 1;
+        }
     }
 }
 
