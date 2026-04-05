@@ -624,7 +624,7 @@ int mcp_connect_server(MCPServer *server) {
         }
 
         // Allocate new environment array
-        new_environ = malloc((env_count + server->env_count + 1) * sizeof(char *));
+        new_environ = malloc((size_t)(env_count + server->env_count + 1) * sizeof(char *));
         if (!new_environ) {
             free(argv);
             posix_spawn_file_actions_destroy(&file_actions);
@@ -645,7 +645,7 @@ int mcp_connect_server(MCPServer *server) {
         }
 
         // Add custom environment variables (need to dup since putenv format)
-        env_vars_to_free = malloc(server->env_count * sizeof(char *));
+        env_vars_to_free = malloc((size_t)server->env_count * sizeof(char *));
         if (env_vars_to_free) {
             for (int i = 0; i < server->env_count; i++) {
                 env_vars_to_free[i] = strdup(server->env[i]);
@@ -762,14 +762,14 @@ int mcp_connect_server(MCPServer *server) {
     server->connected = 1;
 
     // Set non-blocking mode for stdout and stderr
-    int flags = fcntl(server->stdout_fd, F_GETFL, 0);
-    if (flags >= 0) {
-        fcntl(server->stdout_fd, F_SETFL, flags | O_NONBLOCK);
+    int fd_flags = fcntl(server->stdout_fd, F_GETFL, 0);
+    if (fd_flags >= 0) {
+        fcntl(server->stdout_fd, F_SETFL, fd_flags | O_NONBLOCK);
     }
 
-    flags = fcntl(server->stderr_fd, F_GETFL, 0);
-    if (flags >= 0) {
-        fcntl(server->stderr_fd, F_SETFL, flags | O_NONBLOCK);
+    fd_flags = fcntl(server->stderr_fd, F_GETFL, 0);
+    if (fd_flags >= 0) {
+        fcntl(server->stderr_fd, F_SETFL, fd_flags | O_NONBLOCK);
     }
 
     // Open log file for stderr output
