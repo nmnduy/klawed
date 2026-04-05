@@ -102,7 +102,6 @@ int execute_command_with_timeout(
     posix_spawnattr_setpgroup(&spawnattr, 0);  // New process group
 
     // Build argv for shell execution (posix_spawn requires non-const char*)
-    char shell_path[] = "/bin/sh";
     char shell_name[] = "sh";
     char dash_c[] = "-c";
     // Need a mutable copy of command since posix_spawn may modify argv
@@ -117,7 +116,7 @@ int execute_command_with_timeout(
         close(stderr_pipe[1]);
         return -1;
     }
-    char *argv[] = {shell_path, shell_name, dash_c, command_copy, NULL};
+    char *argv[] = {shell_name, dash_c, command_copy, NULL};
 
     rc = posix_spawn(&pid, "/bin/sh", &file_actions, &spawnattr, argv, environ);
     free(command_copy);  // Safe to free after posix_spawn returns
