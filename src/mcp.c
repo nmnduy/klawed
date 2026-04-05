@@ -21,6 +21,11 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <fcntl.h>
+#ifdef __APPLE__
+#include <spawn.h>
+/* For posix_spawn file actions */
+extern char **environ;
+#endif
 #include <cjson/cJSON.h>
 #include <bsd/string.h>
 #include "mcp.h"
@@ -524,6 +529,162 @@ int mcp_connect_server(MCPServer *server) {
         return -1;
     }
 
+#ifdef __APPLE__
+    /*
+     * macOS: Use posix_spawn() instead of fork() for thread safety.
+     *
+     * When fork() is called in a multi-threaded program on macOS, only the
+     * calling thread survives in the child. If other threads held locks
+     * (malloc, SQLite, log mutex, etc.), those locks remain locked forever
+     * in the child, causing deadlocks.
+     *
+     * posix_spawn() avoids this by creating a new process without copying
+     * the parent's memory space and mutex states.
+     */
+    pid_t pid;
+    posix_spawn_file_actions_t file_actions;
+    posix_spawnattr_t spawnattr;
+
+    int rc = posix_spawn_file_actions_init(&file_actions);
+    if (rc != 0) {
+        LOG_ERROR("MCP: Failed to init file actions: %s", strerror(rc));
+        close(stdin_pipe[0]);
+        close(stdin_pipe[1]);
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        return -1;
+    }
+
+    rc = posix_spawnattr_init(&spawnattr);
+    if (rc != 0) {
+        LOG_ERROR("MCP: Failed to init spawn attributes: %s", strerror(rc));
+        posix_spawn_file_actions_destroy(&file_actions);
+        close(stdin_pipe[0]);
+        close(stdin_pipe[1]);
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        return -1;
+    }
+
+    // Set up file actions for pipe redirection
+    posix_spawn_file_actions_addclose(&file_actions, stdin_pipe[1]);   // Close write end of stdin
+    posix_spawn_file_actions_addclose(&file_actions, stdout_pipe[0]);  // Close read end of stdout
+    posix_spawn_file_actions_addclose(&file_actions, stderr_pipe[0]);  // Close read end of stderr
+    posix_spawn_file_actions_adddup2(&file_actions, stdin_pipe[0], STDIN_FILENO);
+    posix_spawn_file_actions_adddup2(&file_actions, stdout_pipe[1], STDOUT_FILENO);
+    posix_spawn_file_actions_adddup2(&file_actions, stderr_pipe[1], STDERR_FILENO);
+    posix_spawn_file_actions_addclose(&file_actions, stdin_pipe[0]);   // Close original after dup
+    posix_spawn_file_actions_addclose(&file_actions, stdout_pipe[1]);  // Close original after dup
+    posix_spawn_file_actions_addclose(&file_actions, stderr_pipe[1]);  // Close original after dup
+
+    // Change working directory if provided (macOS extension)
+    if (server->cwd) {
+        posix_spawn_file_actions_addchdir_np(&file_actions, server->cwd);
+    }
+
+    // Set spawn attributes: create new process group
+    short flags = POSIX_SPAWN_SETPGROUP;
+    posix_spawnattr_setflags(&spawnattr, flags);
+    posix_spawnattr_setpgroup(&spawnattr, 0);  // New process group
+
+    // Build argv
+    char **argv = calloc((size_t)(server->args_count + 2), sizeof(char*));
+    if (!argv) {
+        posix_spawn_file_actions_destroy(&file_actions);
+        posix_spawnattr_destroy(&spawnattr);
+        close(stdin_pipe[0]);
+        close(stdin_pipe[1]);
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        return -1;
+    }
+
+    argv[0] = server->command;
+    for (int i = 0; i < server->args_count; i++) {
+        argv[i + 1] = server->args[i];
+    }
+    argv[server->args_count + 1] = NULL;
+
+    // Build custom environment if needed
+    char **new_environ = environ;
+    char **env_vars_to_free = NULL;
+    int env_vars_count = 0;
+
+    if (server->env_count > 0) {
+        // Count current environment
+        int env_count = 0;
+        for (char **e = environ; *e; e++) {
+            env_count++;
+        }
+
+        // Allocate new environment array
+        new_environ = malloc((env_count + server->env_count + 1) * sizeof(char *));
+        if (!new_environ) {
+            free(argv);
+            posix_spawn_file_actions_destroy(&file_actions);
+            posix_spawnattr_destroy(&spawnattr);
+            close(stdin_pipe[0]);
+            close(stdin_pipe[1]);
+            close(stdout_pipe[0]);
+            close(stdout_pipe[1]);
+            close(stderr_pipe[0]);
+            close(stderr_pipe[1]);
+            return -1;
+        }
+
+        // Copy current environment
+        int idx = 0;
+        for (int i = 0; i < env_count; i++) {
+            new_environ[idx++] = environ[i];
+        }
+
+        // Add custom environment variables (need to dup since putenv format)
+        env_vars_to_free = malloc(server->env_count * sizeof(char *));
+        if (env_vars_to_free) {
+            for (int i = 0; i < server->env_count; i++) {
+                env_vars_to_free[i] = strdup(server->env[i]);
+                if (env_vars_to_free[i]) {
+                    new_environ[idx++] = env_vars_to_free[i];
+                    env_vars_count++;
+                }
+            }
+        }
+        new_environ[idx] = NULL;
+    }
+
+    rc = posix_spawn(&pid, server->command, &file_actions, &spawnattr, argv, new_environ);
+
+    // Cleanup
+    free(argv);
+    if (env_vars_to_free) {
+        for (int i = 0; i < env_vars_count; i++) {
+            free(env_vars_to_free[i]);
+        }
+        free(env_vars_to_free);
+    }
+    if (new_environ != environ) {
+        free(new_environ);
+    }
+    posix_spawn_file_actions_destroy(&file_actions);
+    posix_spawnattr_destroy(&spawnattr);
+
+    if (rc != 0) {
+        LOG_ERROR("MCP: Failed to spawn: %s", strerror(rc));
+        close(stdin_pipe[0]);
+        close(stdin_pipe[1]);
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        return -1;
+    }
+#else
     // Fork process
     pid_t pid = fork();
     if (pid < 0) {
@@ -587,6 +748,7 @@ int mcp_connect_server(MCPServer *server) {
         fprintf(stderr, "MCP: Failed to exec %s: %s\n", server->command, strerror(errno));
         exit(1);
     }
+#endif
 
     // Parent process
     close(stdin_pipe[0]);   // Close read end of stdin pipe

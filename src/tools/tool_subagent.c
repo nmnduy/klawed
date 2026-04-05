@@ -21,9 +21,13 @@
 #include <sys/stat.h>
 #include <limits.h>
 #include <ctype.h>
+#include <fcntl.h>
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
+#include <spawn.h>
+/* For posix_spawn file actions */
+extern char **environ;
 #endif
 
 // External reference to the thread-local TUI message queue
@@ -218,7 +222,187 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
 
     free(escaped_prompt);
 
-    // Fork and execute
+#ifdef __APPLE__
+    /*
+     * macOS: Use posix_spawn() instead of fork() for thread safety.
+     *
+     * When fork() is called in a multi-threaded program on macOS, only the
+     * calling thread survives in the child. If other threads held locks
+     * (malloc, SQLite, log mutex, etc.), those locks remain locked forever
+     * in the child, causing deadlocks. This manifests as TUI freezes when
+     * multiple Subagent tools run in parallel.
+     *
+     * posix_spawn() avoids this by creating a new process without copying
+     * the parent's memory space and mutex states.
+     */
+    pid_t pid;
+    posix_spawn_file_actions_t file_actions;
+    posix_spawnattr_t spawnattr;
+
+    int rc = posix_spawn_file_actions_init(&file_actions);
+    if (rc != 0) {
+        LOG_ERROR("Failed to init file actions: %s", strerror(rc));
+        free(log_file);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to init posix_spawn file actions");
+        return error;
+    }
+
+    rc = posix_spawnattr_init(&spawnattr);
+    if (rc != 0) {
+        LOG_ERROR("Failed to init spawn attributes: %s", strerror(rc));
+        posix_spawn_file_actions_destroy(&file_actions);
+        free(log_file);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to init posix_spawn attributes");
+        return error;
+    }
+
+    // Redirect stdout and stderr to log file
+    posix_spawn_file_actions_addopen(&file_actions, STDOUT_FILENO, log_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    posix_spawn_file_actions_adddup2(&file_actions, STDOUT_FILENO, STDERR_FILENO);
+    // Redirect stdin from /dev/null
+    posix_spawn_file_actions_addopen(&file_actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+
+    // Change working directory if specified (macOS extension)
+    if (subagent_working_dir && subagent_working_dir[0] != '\0') {
+        posix_spawn_file_actions_addchdir_np(&file_actions, subagent_working_dir);
+    }
+
+    // Set spawn attributes: create new session and process group for kill(-pid, sig)
+    short flags = POSIX_SPAWN_SETSID | POSIX_SPAWN_SETPGROUP;
+    posix_spawnattr_setflags(&spawnattr, flags);
+    posix_spawnattr_setpgroup(&spawnattr, 0);  // New process group
+
+    // Build custom environment array with required variables
+    // Start by counting current environment variables
+    int env_count = 0;
+    for (char **e = environ; *e; e++) {
+        env_count++;
+    }
+
+    // Allocate new environment array (current + modifications)
+    char **new_environ = malloc((env_count + 10) * sizeof(char *));
+    if (!new_environ) {
+        posix_spawn_file_actions_destroy(&file_actions);
+        posix_spawnattr_destroy(&spawnattr);
+        free(log_file);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Out of memory building environment");
+        return error;
+    }
+
+    // Copy current environment, excluding ones we want to modify/unset
+    int new_env_idx = 0;
+    for (int i = 0; i < env_count; i++) {
+        // Skip sqlite-queue env vars (unset them)
+        if (strncmp(environ[i], "KLAWED_SQLITE_DB_PATH=", 22) == 0) continue;
+        if (strncmp(environ[i], "KLAWED_SQLITE_SENDER=", 21) == 0) continue;
+        // Skip ones we'll set explicitly
+        if (strncmp(environ[i], "KLAWED_IS_SUBAGENT=", 19) == 0) continue;
+        if (strncmp(environ[i], "KLAWED_LLM_PROVIDER=", 20) == 0) continue;
+        new_environ[new_env_idx++] = environ[i];
+    }
+
+    // Add KLAWED_IS_SUBAGENT=1
+    char *is_subagent = strdup("KLAWED_IS_SUBAGENT=1");
+    if (is_subagent) new_environ[new_env_idx++] = is_subagent;
+
+    // Add LLM provider if specified
+    char *provider_env = NULL;
+    if (provider && provider[0] != '\0') {
+        size_t prov_len = strlen(provider) + 22; // "KLAWED_LLM_PROVIDER=" + value + null
+        provider_env = malloc(prov_len);
+        if (provider_env) {
+            snprintf(provider_env, prov_len, "KLAWED_LLM_PROVIDER=%s", provider);
+            new_environ[new_env_idx++] = provider_env;
+        }
+    }
+
+    // Parse and add custom environment variables from KLAWED_SUBAGENT_ENV_VARS
+    const char *env_vars_str = getenv("KLAWED_SUBAGENT_ENV_VARS");
+    int extra_env_count = 0;
+    char **extra_env_vars = NULL;
+    if (env_vars_str && env_vars_str[0] != '\0') {
+        char *env_vars_copy = strdup(env_vars_str);
+        if (env_vars_copy) {
+            // Count tokens first
+            char *tmp = strdup(env_vars_copy);
+            if (tmp) {
+                char *saveptr = NULL;
+                char *token = strtok_r(tmp, ",", &saveptr);
+                while (token) {
+                    extra_env_count++;
+                    token = strtok_r(NULL, ",", &saveptr);
+                }
+                free(tmp);
+            }
+
+            extra_env_vars = malloc(extra_env_count * sizeof(char *));
+            if (extra_env_vars) {
+                char *saveptr = NULL;
+                char *token = strtok_r(env_vars_copy, ",", &saveptr);
+                int idx = 0;
+                while (token && idx < extra_env_count) {
+                    // Skip leading whitespace
+                    while (*token == ' ' || *token == '\t') token++;
+
+                    // Find the '=' separator
+                    char *equals = strchr(token, '=');
+                    if (equals && equals != token) {
+                        extra_env_vars[idx] = strdup(token);
+                        if (extra_env_vars[idx]) {
+                            new_environ[new_env_idx++] = extra_env_vars[idx];
+                            idx++;
+                        }
+                    }
+                    token = strtok_r(NULL, ",", &saveptr);
+                }
+                extra_env_count = idx; // Actual count after validation
+            }
+            free(env_vars_copy);
+        }
+    }
+
+    new_environ[new_env_idx] = NULL;  // Terminate the array
+
+    // Build argv for shell execution
+    char shell_path[] = "/bin/sh";
+    char shell_name[] = "sh";
+    char dash_c[] = "-c";
+    char *argv[] = {shell_name, dash_c, command, NULL};
+
+    rc = posix_spawn(&pid, "/bin/sh", &file_actions, &spawnattr, argv, new_environ);
+
+    // Cleanup spawn structures
+    posix_spawn_file_actions_destroy(&file_actions);
+    posix_spawnattr_destroy(&spawnattr);
+
+    // Cleanup environment allocations
+    free(is_subagent);
+    free(provider_env);
+    if (extra_env_vars) {
+        for (int i = 0; i < extra_env_count; i++) {
+            free(extra_env_vars[i]);
+        }
+        free(extra_env_vars);
+    }
+    free(new_environ);
+
+    if (rc != 0) {
+        LOG_ERROR("Failed to spawn subagent: %s", strerror(rc));
+        free(log_file);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to spawn subagent process");
+        return error;
+    }
+#else
+    /*
+     * Linux: Use the traditional fork()/exec() approach.
+     *
+     * Linux has been working fine with fork() in multi-threaded programs,
+     * so we keep the original implementation to avoid any regressions.
+     */
     pid_t pid = fork();
     if (pid < 0) {
         free(log_file);
@@ -302,6 +486,7 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         fprintf(stderr, "Failed to execute subagent: %s\n", strerror(errno));
         exit(1);
     }
+#endif
 
     // Parent process - return immediately with PID and log file info
     // The orchestrator can check progress by reading the log file

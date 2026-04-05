@@ -18,6 +18,12 @@
 #include <fcntl.h>
 #include <limits.h>
 
+#ifdef __APPLE__
+#include <spawn.h>
+/* For posix_spawn file actions */
+extern char **environ;
+#endif
+
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
@@ -146,13 +152,60 @@ static int populate_file_cache(FileSearchState *state) {
 
     LOG_DEBUG("[FileSearch] Running: %s", cmd);
 
-    // Use pipe + fork for timeout control
+    // Use pipe + fork/posix_spawn for timeout control
     int pipefd[2];
     if (pipe(pipefd) == -1) {
         LOG_ERROR("[FileSearch] pipe() failed: %s", strerror(errno));
         return -1;
     }
 
+#ifdef __APPLE__
+    /*
+     * macOS: Use posix_spawn() instead of fork() for thread safety.
+     *
+     * When fork() is called in a multi-threaded program on macOS, only the
+     * calling thread survives in the child. If other threads held locks
+     * (malloc, SQLite, log mutex, etc.), those locks remain locked forever
+     * in the child, causing deadlocks.
+     *
+     * posix_spawn() avoids this by creating a new process without copying
+     * the parent's memory space and mutex states.
+     */
+    pid_t pid;
+    posix_spawn_file_actions_t file_actions;
+
+    int rc = posix_spawn_file_actions_init(&file_actions);
+    if (rc != 0) {
+        LOG_ERROR("[FileSearch] Failed to init file actions: %s", strerror(rc));
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return -1;
+    }
+
+    // Set up file actions: redirect stdout to pipe, close read end
+    posix_spawn_file_actions_addclose(&file_actions, pipefd[0]);  // Close read end
+    posix_spawn_file_actions_adddup2(&file_actions, pipefd[1], STDOUT_FILENO);
+    posix_spawn_file_actions_addclose(&file_actions, pipefd[1]);  // Close original after dup
+
+    // Build argv for shell execution
+    char shell_name[] = "sh";
+    char dash_c[] = "-c";
+    char *argv[] = {shell_name, dash_c, (char *)cmd, NULL};
+
+    rc = posix_spawn(&pid, "/bin/sh", &file_actions, NULL, argv, environ);
+
+    posix_spawn_file_actions_destroy(&file_actions);
+
+    if (rc != 0) {
+        LOG_ERROR("[FileSearch] Failed to spawn: %s", strerror(rc));
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return -1;
+    }
+
+    // Parent process
+    close(pipefd[1]);  // Close write end
+#else
     pid_t pid = fork();
     if (pid == -1) {
         LOG_ERROR("[FileSearch] fork() failed: %s", strerror(errno));
@@ -173,6 +226,7 @@ static int populate_file_cache(FileSearchState *state) {
 
     // Parent process
     close(pipefd[1]);  // Close write end
+#endif
 
     // Set non-blocking
     int flags = fcntl(pipefd[0], F_GETFL, 0);
