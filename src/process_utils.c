@@ -16,6 +16,12 @@
 #include <bsd/string.h>
 #include <time.h>
 
+#ifdef __APPLE__
+#include <spawn.h>
+/* For posix_spawn file actions */
+extern char **environ;
+#endif
+
 // Execute a command with timeout and interrupt support
 // Returns: exit code, output in *output (caller must free), *timed_out flag
 int execute_command_with_timeout(
@@ -43,6 +49,97 @@ int execute_command_with_timeout(
         return -1;
     }
 
+#ifdef __APPLE__
+    /*
+     * macOS: Use posix_spawn() instead of fork() for thread safety.
+     *
+     * When fork() is called in a multi-threaded program on macOS, only the
+     * calling thread survives in the child. If other threads held locks
+     * (malloc, SQLite, log mutex, etc.), those locks remain locked forever
+     * in the child, causing deadlocks. This manifests as TUI freezes when
+     * multiple Bash tools run in parallel.
+     *
+     * posix_spawn() avoids this by creating a new process without copying
+     * the parent's memory space and mutex states.
+     */
+    posix_spawn_file_actions_t file_actions;
+    posix_spawnattr_t spawnattr;
+    pid_t pid;
+
+    int rc = posix_spawn_file_actions_init(&file_actions);
+    if (rc != 0) {
+        LOG_ERROR("Failed to init file actions: %s", strerror(rc));
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        return -1;
+    }
+
+    rc = posix_spawnattr_init(&spawnattr);
+    if (rc != 0) {
+        LOG_ERROR("Failed to init spawn attributes: %s", strerror(rc));
+        posix_spawn_file_actions_destroy(&file_actions);
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        return -1;
+    }
+
+    // Set up file actions: redirect stdout/stderr to pipes, stdin from /dev/null
+    posix_spawn_file_actions_addclose(&file_actions, stdout_pipe[0]);  // Close read end
+    posix_spawn_file_actions_addclose(&file_actions, stderr_pipe[0]);  // Close read end
+    posix_spawn_file_actions_adddup2(&file_actions, stdout_pipe[1], STDOUT_FILENO);
+    posix_spawn_file_actions_adddup2(&file_actions, stderr_pipe[1], STDERR_FILENO);
+    posix_spawn_file_actions_addclose(&file_actions, stdout_pipe[1]);  // Close original after dup
+    posix_spawn_file_actions_addclose(&file_actions, stderr_pipe[1]);  // Close original after dup
+    posix_spawn_file_actions_addopen(&file_actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+
+    // Set spawn attributes: create new process group for kill(-pid, sig)
+    short flags = POSIX_SPAWN_SETPGROUP;
+    posix_spawnattr_setflags(&spawnattr, flags);
+    posix_spawnattr_setpgroup(&spawnattr, 0);  // New process group
+
+    // Build argv for shell execution (posix_spawn requires non-const char*)
+    char shell_path[] = "/bin/sh";
+    char shell_name[] = "sh";
+    char dash_c[] = "-c";
+    // Need a mutable copy of command since posix_spawn may modify argv
+    char *command_copy = strdup(command);
+    if (!command_copy) {
+        LOG_ERROR("Failed to allocate memory for command copy");
+        posix_spawn_file_actions_destroy(&file_actions);
+        posix_spawnattr_destroy(&spawnattr);
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        return -1;
+    }
+    char *argv[] = {shell_path, shell_name, dash_c, command_copy, NULL};
+
+    rc = posix_spawn(&pid, "/bin/sh", &file_actions, &spawnattr, argv, environ);
+    free(command_copy);  // Safe to free after posix_spawn returns
+
+    posix_spawn_file_actions_destroy(&file_actions);
+    posix_spawnattr_destroy(&spawnattr);
+
+    if (rc != 0) {
+        LOG_ERROR("Failed to spawn process: %s", strerror(rc));
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        return -1;
+    }
+#else
+    /*
+     * Linux: Use the traditional fork()/exec() approach.
+     *
+     * Linux has been working fine with fork() in multi-threaded programs,
+     * so we keep the original implementation to avoid any regressions.
+     */
     pid_t pid = fork();
     if (pid == -1) {
         LOG_ERROR("Failed to fork: %s", strerror(errno));
@@ -83,6 +180,7 @@ int execute_command_with_timeout(
         // If we get here, exec failed
         _exit(127);  // Command not found
     }
+#endif
 
     // Parent process
     // Close write ends
