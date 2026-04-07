@@ -350,7 +350,7 @@ static int sub_streaming_event_handler(StreamEvent *event, void *userdata) {
                 }
                 if (existing_fn) {
                     cJSON *name_j = cJSON_GetObjectItem(fn, "name");
-                    if (name_j && cJSON_IsString(name_j)) {
+                    if (name_j && cJSON_IsString(name_j) && name_j->valuestring[0]) {
                         cJSON_DeleteItemFromObject(existing_fn, "name");
                         cJSON_AddStringToObject(existing_fn, "name", name_j->valuestring);
                     }
