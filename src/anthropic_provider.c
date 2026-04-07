@@ -458,6 +458,10 @@ int anthropic_streaming_event_handler(StreamEvent *event, void *userdata) {
     // Socket streaming support removed - will be reimplemented with ZMQ
 
     switch (event->type) {
+        case SSE_EVENT_UNKNOWN:
+            // Unknown event type - ignore
+            break;
+
         case SSE_EVENT_MESSAGE_START:
             // Store message metadata (model, usage, etc.)
             if (ctx->message_start_data) {
