@@ -583,7 +583,11 @@ int mcp_connect_server(MCPServer *server) {
 
     // Change working directory if provided (macOS extension)
     if (server->cwd) {
+#if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 150000)
+        posix_spawn_file_actions_addchdir(&file_actions, server->cwd);
+#else
         posix_spawn_file_actions_addchdir_np(&file_actions, server->cwd);
+#endif
     }
 
     // Set spawn attributes: create new process group
