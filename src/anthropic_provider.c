@@ -498,7 +498,7 @@ int anthropic_streaming_event_handler(StreamEvent *event, void *userdata) {
                             free(ctx->tool_use_id);
                             ctx->tool_use_id = ctx->arena ? arena_strdup(ctx->arena, id->valuestring) : strdup(id->valuestring);
                         }
-                        if (name && cJSON_IsString(name)) {
+                        if (name && cJSON_IsString(name) && name->valuestring[0]) {
                             free(ctx->tool_use_name);
                             ctx->tool_use_name = ctx->arena ? arena_strdup(ctx->arena, name->valuestring) : strdup(name->valuestring);
                         }
@@ -999,7 +999,7 @@ static void anthropic_call_api(Provider *self, ConversationState *state, ApiCall
                     cJSON *name = cJSON_GetObjectItem(fn, "name");
                     cJSON *args = cJSON_GetObjectItem(fn, "arguments");
                     api_resp->tools[idx].id = (id && cJSON_IsString(id)) ? arena_strdup(api_resp->arena, id->valuestring) : NULL;
-                    api_resp->tools[idx].name = (name && cJSON_IsString(name)) ? arena_strdup(api_resp->arena, name->valuestring) : NULL;
+                    api_resp->tools[idx].name = (name && cJSON_IsString(name) && name->valuestring[0]) ? arena_strdup(api_resp->arena, name->valuestring) : NULL;
                     if (args && cJSON_IsString(args)) {
                         api_resp->tools[idx].parameters = cJSON_Parse(args->valuestring);
                         if (!api_resp->tools[idx].parameters) api_resp->tools[idx].parameters = cJSON_CreateObject();
