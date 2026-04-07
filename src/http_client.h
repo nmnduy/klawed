@@ -10,9 +10,16 @@
 
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
+#include "sse_parser.h"  // SSE types and parser
 
 // ============================================================================
-// Types
+// Types (from sse_parser.h)
+// ============================================================================
+
+// StreamEventType, StreamEvent, and HttpStreamCallback are now defined in sse_parser.h
+
+// ============================================================================
+// HTTP-specific Types
 // ============================================================================
 
 /**
@@ -49,43 +56,6 @@ typedef struct {
 typedef int (*HttpProgressCallback)(void *userdata,
                                    curl_off_t dltotal, curl_off_t dlnow,
                                    curl_off_t ultotal, curl_off_t ulnow);
-
-/**
- * Streaming event types for Server-Sent Events (SSE)
- * Supports both Anthropic and OpenAI streaming formats
- */
-typedef enum {
-    // Anthropic Messages API events
-    SSE_EVENT_MESSAGE_START,    // message_start event
-    SSE_EVENT_CONTENT_BLOCK_START, // content_block_start event
-    SSE_EVENT_CONTENT_BLOCK_DELTA, // content_block_delta event (text streaming)
-    SSE_EVENT_CONTENT_BLOCK_STOP,  // content_block_stop event
-    SSE_EVENT_MESSAGE_DELTA,    // message_delta event (stop_reason, etc.)
-    SSE_EVENT_MESSAGE_STOP,     // message_stop event
-    SSE_EVENT_ERROR,            // error event
-    SSE_EVENT_PING,             // ping event (keepalive)
-
-    // OpenAI Chat Completions API events (data events without explicit event type)
-    SSE_EVENT_OPENAI_CHUNK,     // OpenAI chunk (default "data:" event)
-    SSE_EVENT_OPENAI_DONE       // OpenAI [DONE] marker
-} StreamEventType;
-
-/**
- * Streaming event data
- */
-typedef struct {
-    StreamEventType type;
-    const char *event_name; // Raw event name from SSE (e.g., "content_block_delta") - not owned
-    cJSON *data;            // Parsed JSON data from the event (owned by callback, freed after)
-    const char *raw_data;   // Raw data string (not owned, points to parser buffer)
-} StreamEvent;
-
-/**
- * Callback for handling streaming events
- * Called for each Server-Sent Event received
- * Return non-zero to abort the stream.
- */
-typedef int (*HttpStreamCallback)(StreamEvent *event, void *userdata);
 
 // ============================================================================
 // Core Functions

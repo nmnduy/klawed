@@ -163,6 +163,10 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
     // Bedrock uses the same Anthropic Messages API streaming format
     // So we can reuse the same event handling logic
     switch (event->type) {
+        case SSE_EVENT_UNKNOWN:
+            // Unknown event type - ignore
+            break;
+
         case SSE_EVENT_MESSAGE_START:
             // Store message metadata
             if (ctx->message_start_data) {
