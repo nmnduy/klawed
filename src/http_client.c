@@ -7,6 +7,7 @@
 #include "http_client.h"
 #include "logger.h"
 #include "retry_logic.h"  // For common retry logic
+#include "sse_parser.h"   // SSE parser for streaming
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,25 +19,17 @@
 // Internal Types
 // ============================================================================
 
+/* HTTP response buffer - separate from SSE parser's HttpResponseBuffer */
 typedef struct {
     char *data;
     size_t size;
     size_t capacity;
-} MemoryBuffer;
+} HttpResponseBuffer;
 
 typedef struct {
-    MemoryBuffer *buffer;
+    HttpResponseBuffer *buffer;
     struct curl_slist *headers;
 } WriteContext;
-
-// SSE Parser State
-typedef struct {
-    char *event_type;        // Current event type (e.g., "content_block_delta")
-    MemoryBuffer *data_buffer;  // Accumulates data lines until end of event
-    HttpStreamCallback callback; // User callback
-    void *callback_data;     // User data for callback
-    int abort_requested;     // Set to 1 if callback returns non-zero
-} SSEParserState;
 
 // ============================================================================
 // Static Helpers
@@ -45,7 +38,7 @@ typedef struct {
 static size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp) {
     size_t realsize = size * nmemb;
     WriteContext *ctx = (WriteContext *)userp;
-    MemoryBuffer *buf = ctx->buffer;
+    HttpResponseBuffer *buf = ctx->buffer;
 
     // Ensure we have enough capacity
     size_t needed = buf->size + realsize + 1;
@@ -102,8 +95,8 @@ static size_t header_callback(char *buffer, size_t size, size_t nitems, void *us
     return realsize;
 }
 
-static MemoryBuffer* memory_buffer_create(void) {
-    MemoryBuffer *buf = calloc(1, sizeof(MemoryBuffer));
+static HttpResponseBuffer* http_response_buffer_create(void) {
+    HttpResponseBuffer *buf = calloc(1, sizeof(HttpResponseBuffer));
     if (!buf) {
         return NULL;
     }
@@ -120,207 +113,14 @@ static MemoryBuffer* memory_buffer_create(void) {
     return buf;
 }
 
-static void memory_buffer_free(MemoryBuffer *buf) {
+static void http_response_buffer_free(HttpResponseBuffer *buf) {
     if (buf) {
         free(buf->data);
         free(buf);
     }
 }
 
-// ============================================================================
-// SSE Parser Implementation
-// ============================================================================
-
-static SSEParserState* sse_parser_create(HttpStreamCallback callback, void *callback_data) {
-    SSEParserState *parser = calloc(1, sizeof(SSEParserState));
-    if (!parser) return NULL;
-
-    parser->data_buffer = memory_buffer_create();
-    if (!parser->data_buffer) {
-        free(parser);
-        return NULL;
-    }
-
-    parser->callback = callback;
-    parser->callback_data = callback_data;
-    return parser;
-}
-
-static void sse_parser_free(SSEParserState *parser) {
-    if (!parser) return;
-    free(parser->event_type);
-    memory_buffer_free(parser->data_buffer);
-    free(parser);
-}
-
-static void sse_parser_reset_event(SSEParserState *parser) {
-    free(parser->event_type);
-    parser->event_type = NULL;
-    parser->data_buffer->size = 0;
-    if (parser->data_buffer->data) {
-        parser->data_buffer->data[0] = '\0';
-    }
-}
-
-// Map event name to enum
-static StreamEventType sse_event_name_to_type(const char *name, const char *data) {
-    // Anthropic events have explicit event types
-    if (name) {
-        if (strcmp(name, "message_start") == 0) return SSE_EVENT_MESSAGE_START;
-        if (strcmp(name, "content_block_start") == 0) return SSE_EVENT_CONTENT_BLOCK_START;
-        if (strcmp(name, "content_block_delta") == 0) return SSE_EVENT_CONTENT_BLOCK_DELTA;
-        if (strcmp(name, "content_block_stop") == 0) return SSE_EVENT_CONTENT_BLOCK_STOP;
-        if (strcmp(name, "message_delta") == 0) return SSE_EVENT_MESSAGE_DELTA;
-        if (strcmp(name, "message_stop") == 0) return SSE_EVENT_MESSAGE_STOP;
-        if (strcmp(name, "error") == 0) return SSE_EVENT_ERROR;
-        if (strcmp(name, "ping") == 0) return SSE_EVENT_PING;
-    }
-
-    // OpenAI uses implicit events (no event: field, just data:)
-    // Check if data is "[DONE]" marker
-    if (data && strcmp(data, "[DONE]") == 0) {
-        return SSE_EVENT_OPENAI_DONE;
-    }
-
-    // If no event name specified and data exists, assume OpenAI chunk
-    if (!name && data && data[0] != '\0') {
-        return SSE_EVENT_OPENAI_CHUNK;
-    }
-
-    return SSE_EVENT_PING;  // Unknown/empty events treated as ping
-}
-
-// Map event type enum to string name
-const char* sse_event_type_to_name(StreamEventType event_type) {
-    switch (event_type) {
-        case SSE_EVENT_MESSAGE_START:
-            return "message_start";
-        case SSE_EVENT_CONTENT_BLOCK_START:
-            return "content_block_start";
-        case SSE_EVENT_CONTENT_BLOCK_DELTA:
-            return "content_block_delta";
-        case SSE_EVENT_CONTENT_BLOCK_STOP:
-            return "content_block_stop";
-        case SSE_EVENT_MESSAGE_DELTA:
-            return "message_delta";
-        case SSE_EVENT_MESSAGE_STOP:
-            return "message_stop";
-        case SSE_EVENT_ERROR:
-            return "error";
-        case SSE_EVENT_PING:
-            return "ping";
-        case SSE_EVENT_OPENAI_CHUNK:
-            return "openai_chunk";
-        case SSE_EVENT_OPENAI_DONE:
-            return "openai_done";
-        default:
-            return "unknown";
-    }
-}
-
-// Dispatch event to callback
-static int sse_parser_dispatch_event(SSEParserState *parser) {
-    if (!parser->callback) return 0;
-
-    // Build StreamEvent
-    StreamEvent event = {0};
-    event.type = sse_event_name_to_type(parser->event_type, parser->data_buffer->data);
-    event.event_name = parser->event_type ? parser->event_type : "message";  // Default to "message"
-    event.raw_data = parser->data_buffer->data;
-
-    // Try to parse data as JSON (skip for OpenAI [DONE] marker)
-    if (parser->data_buffer->data && parser->data_buffer->size > 0 &&
-        strcmp(parser->data_buffer->data, "[DONE]") != 0) {
-        event.data = cJSON_Parse(parser->data_buffer->data);
-        if (!event.data) {
-            LOG_WARN("Failed to parse SSE data as JSON: %s", parser->data_buffer->data);
-        }
-    }
-
-    // Call user callback
-    int result = parser->callback(&event, parser->callback_data);
-
-    // Cleanup
-    if (event.data) {
-        cJSON_Delete(event.data);
-    }
-
-    return result;
-}
-
-// Process a single SSE line
-static int sse_parser_process_line(SSEParserState *parser, const char *line, size_t len) {
-    // Empty line = end of event
-    if (len == 0 || (len == 1 && line[0] == '\r')) {
-        if (parser->data_buffer->size > 0 || parser->event_type) {
-            int result = sse_parser_dispatch_event(parser);
-            sse_parser_reset_event(parser);
-            if (result != 0) {
-                parser->abort_requested = 1;
-                return result;
-            }
-        }
-        return 0;
-    }
-
-    // Skip comments
-    if (line[0] == ':') return 0;
-
-    // Parse field
-    const char *colon = memchr(line, ':', len);
-    if (!colon) {
-        // Line without colon, treat as data
-        MemoryBuffer *buf = parser->data_buffer;
-        size_t needed = buf->size + len + 1;
-        if (needed > buf->capacity) {
-            size_t new_capacity = buf->capacity * 2;
-            if (new_capacity < needed) new_capacity = needed;
-            char *new_data = realloc(buf->data, new_capacity);
-            if (!new_data) return 0;
-            buf->data = new_data;
-            buf->capacity = new_capacity;
-        }
-        memcpy(buf->data + buf->size, line, len);
-        buf->size += len;
-        buf->data[buf->size] = '\0';
-        return 0;
-    }
-
-    size_t field_len = (size_t)(colon - line);
-    const char *value = colon + 1;
-    size_t value_len = len - field_len - 1;
-
-    // Skip leading space in value
-    if (value_len > 0 && value[0] == ' ') {
-        value++;
-        value_len--;
-    }
-
-    // Handle fields
-    if (field_len == 5 && memcmp(line, "event", 5) == 0) {
-        free(parser->event_type);
-        parser->event_type = strndup(value, value_len);
-    } else if (field_len == 4 && memcmp(line, "data", 4) == 0) {
-        MemoryBuffer *buf = parser->data_buffer;
-        size_t needed = buf->size + value_len + 1;
-        if (needed > buf->capacity) {
-            size_t new_capacity = buf->capacity * 2;
-            if (new_capacity < needed) new_capacity = needed;
-            char *new_data = realloc(buf->data, new_capacity);
-            if (!new_data) return 0;
-            buf->data = new_data;
-            buf->capacity = new_capacity;
-        }
-        memcpy(buf->data + buf->size, value, value_len);
-        buf->size += value_len;
-        buf->data[buf->size] = '\0';
-    }
-    // Ignore other fields (id, retry, etc.)
-
-    return 0;
-}
-
-// Callback for streaming data (replaces write_callback for streaming requests)
+// Callback for streaming data (uses SSE parser)
 static size_t streaming_write_callback(void *contents, size_t size, size_t nmemb, void *userp) {
     size_t realsize = size * nmemb;
     SSEParserState *parser = (SSEParserState *)userp;
@@ -329,35 +129,10 @@ static size_t streaming_write_callback(void *contents, size_t size, size_t nmemb
         return 0;  // Abort the transfer
     }
 
-    // Process line by line
-    const char *data = (const char *)contents;
-    size_t pos = 0;
-
-    while (pos < realsize) {
-        // Find end of line
-        const char *eol = memchr(data + pos, '\n', realsize - pos);
-        size_t line_len;
-
-        if (eol) {
-            line_len = (size_t)(eol - (data + pos));
-            // Strip \r if present
-            if (line_len > 0 && data[pos + line_len - 1] == '\r') {
-                line_len--;
-            }
-        } else {
-            // No newline found, process remaining data as incomplete line
-            // For now, we'll skip it (SSE should always end lines with \n)
-            break;
-        }
-
-        // Process this line
-        int result = sse_parser_process_line(parser, data + pos, line_len);
-        if (result != 0) {
-            parser->abort_requested = 1;
-            return 0;  // Abort
-        }
-
-        pos += (size_t)(eol - (data + pos)) + 1;  // Move past newline
+    // Use the SSE parser to process the data
+    int result = sse_parser_process_data(parser, (const char *)contents, realsize);
+    if (result != 0) {
+        return 0;  // Abort
     }
 
     return realsize;
@@ -404,7 +179,7 @@ HttpResponse* http_client_execute(const HttpRequest *req,
     }
 
     // Initialize buffers
-    MemoryBuffer *body_buf = memory_buffer_create();
+    HttpResponseBuffer *body_buf = http_response_buffer_create();
     WriteContext write_ctx = {0};
     write_ctx.buffer = body_buf;
 
@@ -509,7 +284,7 @@ HttpResponse* http_client_execute(const HttpRequest *req,
         }
 
         // Clean up buffers on error
-        memory_buffer_free(body_buf);
+        http_response_buffer_free(body_buf);
         curl_slist_free_all(write_ctx.headers);
     } else {
         // Success - transfer ownership
