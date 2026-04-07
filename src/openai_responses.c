@@ -549,7 +549,7 @@ ApiResponse* parse_responses_http_response(const char *raw_response) {
                         }
 
                         api_response->tools[tool_idx].id = arena_strdup(api_response->arena, id->valuestring);
-                        api_response->tools[tool_idx].name = arena_strdup(api_response->arena, name->valuestring);
+                        api_response->tools[tool_idx].name = (name->valuestring[0]) ? arena_strdup(api_response->arena, name->valuestring) : NULL;
 
                         // Parse arguments JSON string to cJSON object
                         const char *args_str = arguments->valuestring;

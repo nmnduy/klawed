@@ -956,7 +956,7 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
                     api_response->tools[tool_idx].id =
                         (id && cJSON_IsString(id)) ? arena_strdup(api_response->arena, id->valuestring) : NULL;
                     api_response->tools[tool_idx].name =
-                        (name && cJSON_IsString(name)) ? arena_strdup(api_response->arena, name->valuestring) : NULL;
+                        (name && cJSON_IsString(name) && name->valuestring[0]) ? arena_strdup(api_response->arena, name->valuestring) : NULL;
 
                     // Parse arguments string to cJSON
                     if (arguments && cJSON_IsString(arguments)) {
