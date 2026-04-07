@@ -340,7 +340,7 @@ static int kimi_streaming_event_handler(StreamEvent *event, void *userdata) {
                                 }
 
                                 cJSON *name_obj = cJSON_GetObjectItem(function_delta, "name");
-                                if (name_obj && cJSON_IsString(name_obj)) {
+                                if (name_obj && cJSON_IsString(name_obj) && name_obj->valuestring[0]) {
                                     cJSON_ReplaceItemInObject(existing_function, "name", cJSON_Duplicate(name_obj, 1));
                                 }
 
