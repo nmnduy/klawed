@@ -266,7 +266,11 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
 
     // Change working directory if specified (macOS extension)
     if (subagent_working_dir && subagent_working_dir[0] != '\0') {
+#if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 150000)
+        posix_spawn_file_actions_addchdir(&file_actions, subagent_working_dir);
+#else
         posix_spawn_file_actions_addchdir_np(&file_actions, subagent_working_dir);
+#endif
     }
 
     // Set spawn attributes: create new session and process group for kill(-pid, sig)
