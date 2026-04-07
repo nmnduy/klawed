@@ -202,7 +202,7 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
                             // Arena allocation - old value left for arena cleanup
                             ctx->tool_use_id = arena_strdup(ctx->arena, id->valuestring);
                         }
-                        if (name && cJSON_IsString(name)) {
+                        if (name && cJSON_IsString(name) && name->valuestring[0]) {
                             // Arena allocation - old value left for arena cleanup
                             ctx->tool_use_name = arena_strdup(ctx->arena, name->valuestring);
                         }
@@ -674,7 +674,7 @@ static void bedrock_execute_request(BedrockConfig *config, const char *converse_
                     api_response->tools[tool_idx].id =
                         (id && cJSON_IsString(id)) ? arena_strdup(api_response->arena, id->valuestring) : NULL;
                     api_response->tools[tool_idx].name =
-                        (name && cJSON_IsString(name)) ? arena_strdup(api_response->arena, name->valuestring) : NULL;
+                        (name && cJSON_IsString(name) && name->valuestring[0]) ? arena_strdup(api_response->arena, name->valuestring) : NULL;
 
                     // Parse arguments string to cJSON
                     if (arguments && cJSON_IsString(arguments)) {
