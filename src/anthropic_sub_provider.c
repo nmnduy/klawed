@@ -418,7 +418,7 @@ static void anthropic_sub_call_api(Provider *self, ConversationState *state,
 
                         api_resp->tools[idx].id = (id_j && cJSON_IsString(id_j))
                             ? arena_strdup(arena, id_j->valuestring) : NULL;
-                        api_resp->tools[idx].name = (name_j && cJSON_IsString(name_j))
+                        api_resp->tools[idx].name = (name_j && cJSON_IsString(name_j) && name_j->valuestring[0])
                             ? arena_strdup(arena, name_j->valuestring) : NULL;
 
                         if (args_j && cJSON_IsString(args_j)) {
