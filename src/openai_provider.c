@@ -898,6 +898,14 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
             api_response->message.text = NULL;
         }
 
+        // Extract reasoning_content (for thinking models like DeepSeek, Moonshot/Kimi)
+        cJSON *reasoning_content = cJSON_GetObjectItem(message, "reasoning_content");
+        if (reasoning_content && cJSON_IsString(reasoning_content) && reasoning_content->valuestring) {
+            api_response->message.reasoning_content = arena_strdup(api_response->arena, reasoning_content->valuestring);
+            LOG_DEBUG("Extracted reasoning_content from response (%zu bytes)",
+                      strlen(api_response->message.reasoning_content));
+        }
+
         // Extract and validate tool calls
         cJSON *tool_calls = cJSON_GetObjectItem(message, "tool_calls");
         if (tool_calls && cJSON_IsArray(tool_calls)) {
