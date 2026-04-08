@@ -331,18 +331,21 @@ void process_response(ConversationState *state,
     }
 
     cJSON *choices = cJSON_GetObjectItem(response->raw_response, "choices");
+    const char *finish_reason_str = NULL;
+    cJSON *message = NULL;
     if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
         cJSON *choice = cJSON_GetArrayItem(choices, 0);
 
         // Check for finish_reason and log WARNING if it's 'length'
         cJSON *finish_reason = cJSON_GetObjectItem(choice, "finish_reason");
         if (finish_reason && cJSON_IsString(finish_reason) && finish_reason->valuestring) {
+            finish_reason_str = finish_reason->valuestring;
             if (strcmp(finish_reason->valuestring, "length") == 0) {
                 LOG_WARN("API response stopped due to token limit (finish_reason: 'length')");
             }
         }
 
-        cJSON *message = cJSON_GetObjectItem(choice, "message");
+        message = cJSON_GetObjectItem(choice, "message");
         if (message) {
             add_assistant_message_openai(state, message);
         }
@@ -351,6 +354,22 @@ void process_response(ConversationState *state,
     // Process tool calls from vendor-agnostic structure
     int tool_count = response->tool_count;
     ToolCall *tool_calls_array = response->tools;
+
+    if (tool_count == 0 && finish_reason_str && strcmp(finish_reason_str, "tool_calls") == 0) {
+        int raw_tool_call_count = 0;
+        if (message) {
+            cJSON *raw_tool_calls = cJSON_GetObjectItem(message, "tool_calls");
+            if (raw_tool_calls && cJSON_IsArray(raw_tool_calls)) {
+                raw_tool_call_count = cJSON_GetArraySize(raw_tool_calls);
+            }
+        }
+
+        LOG_ERROR("process_response: finish_reason=tool_calls but no valid tool calls were parsed (raw_tool_calls=%d)",
+                  raw_tool_call_count);
+        ui_show_error(tui, queue,
+                      "Provider returned tool_calls but no valid tool call payload was reconstructed.");
+        return;
+    }
 
     if (tool_count > 0) {
 
