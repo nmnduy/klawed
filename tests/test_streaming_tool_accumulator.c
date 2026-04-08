@@ -415,6 +415,28 @@ static void test_openai_streaming_format_simulation(void) {
     tool_accumulator_destroy(acc);
 }
 
+static void test_incomplete_json_arguments_filtered(void) {
+    printf(COLOR_YELLOW "\nTest: Incomplete JSON arguments are filtered\n" COLOR_RESET);
+
+    ToolCallAccumulator *acc = tool_accumulator_create(NULL);
+    TEST_ASSERT(acc != NULL, "Accumulator should be created");
+
+    cJSON *delta = create_tool_delta(0, "call_bad", "Read", "{\"file_path\":\"README.md\"");
+    tool_accumulator_process_delta(acc, delta);
+
+    TEST_ASSERT(acc->tool_calls_count == 1, "Should keep the tool call slot");
+    TEST_ASSERT(tool_accumulator_count_valid(acc) == 0,
+                "Malformed JSON arguments should not count as valid");
+
+    cJSON *filtered = tool_accumulator_filter_valid(acc);
+    TEST_ASSERT(cJSON_GetArraySize(filtered) == 0,
+                "Malformed JSON arguments should be filtered out");
+
+    cJSON_Delete(delta);
+    cJSON_Delete(filtered);
+    tool_accumulator_destroy(acc);
+}
+
 // ============================================================================
 // Test Cases - Edge cases
 // ============================================================================
@@ -503,6 +525,7 @@ int main(void) {
 
     // Real-world scenarios
     test_openai_streaming_format_simulation();
+    test_incomplete_json_arguments_filtered();
 
     // Edge cases
     test_null_and_empty_inputs();
