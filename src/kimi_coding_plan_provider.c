@@ -599,9 +599,34 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
                 LOG_DEBUG("Added reasoning_content to response (%zu bytes)", stream_ctx.reasoning_size);
             }
 
-            // Add tool calls if we have any
+            // Add tool calls if we have any (filter out incomplete ones)
             if (stream_ctx.tool_calls_count > 0) {
-                cJSON_AddItemToObject(message, "tool_calls", cJSON_Duplicate(stream_ctx.tool_calls_array, 1));
+                cJSON *filtered_tools = cJSON_CreateArray();
+                int tool_count = cJSON_GetArraySize(stream_ctx.tool_calls_array);
+                for (int i = 0; i < tool_count; i++) {
+                    cJSON *tool = cJSON_GetArrayItem(stream_ctx.tool_calls_array, i);
+                    if (!tool) continue;
+
+                    cJSON *id_obj = cJSON_GetObjectItem(tool, "id");
+                    cJSON *func_obj = cJSON_GetObjectItem(tool, "function");
+                    cJSON *name_obj = func_obj ? cJSON_GetObjectItem(func_obj, "name") : NULL;
+
+                    const char *id_str = (id_obj && cJSON_IsString(id_obj)) ? id_obj->valuestring : "";
+                    const char *name_str = (name_obj && cJSON_IsString(name_obj)) ? name_obj->valuestring : "";
+
+                    // Only include tool calls with non-empty id and name
+                    if (id_str[0] && name_str[0]) {
+                        cJSON_AddItemToArray(filtered_tools, cJSON_Duplicate(tool, 1));
+                    } else {
+                        LOG_WARN("Filtering out incomplete tool call: id='%s', name='%s'", id_str, name_str);
+                    }
+                }
+
+                if (cJSON_GetArraySize(filtered_tools) > 0) {
+                    cJSON_AddItemToObject(message, "tool_calls", filtered_tools);
+                } else {
+                    cJSON_Delete(filtered_tools);
+                }
             }
 
             cJSON_AddItemToObject(choice, "message", message);
