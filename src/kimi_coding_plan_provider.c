@@ -51,6 +51,18 @@ static char* arena_strdup(Arena *arena, const char *str) {
     return new_str;
 }
 
+static int tool_arguments_are_valid_json(cJSON *arguments) {
+    if (!arguments) return 1;
+    if (!cJSON_IsString(arguments)) return 0;
+    if (!arguments->valuestring || arguments->valuestring[0] == '\0') return 1;
+
+    cJSON *parsed = cJSON_Parse(arguments->valuestring);
+    if (!parsed) return 0;
+
+    cJSON_Delete(parsed);
+    return 1;
+}
+
 /**
  * OAuth message callback - displays messages to TUI if available, otherwise console
  * This allows the OAuth flow to show browser login prompts in the conversation TUI
@@ -610,12 +622,13 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
                     cJSON *id_obj = cJSON_GetObjectItem(tool, "id");
                     cJSON *func_obj = cJSON_GetObjectItem(tool, "function");
                     cJSON *name_obj = func_obj ? cJSON_GetObjectItem(func_obj, "name") : NULL;
+                    cJSON *args_obj = func_obj ? cJSON_GetObjectItem(func_obj, "arguments") : NULL;
 
                     const char *id_str = (id_obj && cJSON_IsString(id_obj)) ? id_obj->valuestring : "";
                     const char *name_str = (name_obj && cJSON_IsString(name_obj)) ? name_obj->valuestring : "";
 
                     // Only include tool calls with non-empty id and name
-                    if (id_str[0] && name_str[0]) {
+                    if (id_str[0] && name_str[0] && tool_arguments_are_valid_json(args_obj)) {
                         cJSON_AddItemToArray(filtered_tools, cJSON_Duplicate(tool, 1));
                     } else {
                         LOG_WARN("Filtering out incomplete tool call: id='%s', name='%s'", id_str, name_str);
@@ -733,9 +746,16 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
             for (int i = 0; i < raw_tool_count; i++) {
                 cJSON *tool_call = cJSON_GetArrayItem(tool_calls, i);
                 cJSON *function = cJSON_GetObjectItem(tool_call, "function");
-                if (function) {
-                    valid_count++;
-                }
+                if (!function) continue;
+
+                cJSON *id = cJSON_GetObjectItem(tool_call, "id");
+                cJSON *name = cJSON_GetObjectItem(function, "name");
+                cJSON *arguments = cJSON_GetObjectItem(function, "arguments");
+                if (!id || !cJSON_IsString(id) || !id->valuestring[0]) continue;
+                if (!name || !cJSON_IsString(name) || !name->valuestring[0]) continue;
+                if (!tool_arguments_are_valid_json(arguments)) continue;
+
+                valid_count++;
             }
 
             if (valid_count > 0) {
@@ -767,6 +787,15 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
 
                     cJSON *name = cJSON_GetObjectItem(function, "name");
                     cJSON *arguments = cJSON_GetObjectItem(function, "arguments");
+                    if (!id || !cJSON_IsString(id) || !id->valuestring[0]) {
+                        continue;
+                    }
+                    if (!name || !cJSON_IsString(name) || !name->valuestring[0]) {
+                        continue;
+                    }
+                    if (!tool_arguments_are_valid_json(arguments)) {
+                        continue;
+                    }
 
                     api_response->tools[tool_idx].id =
                         (id && cJSON_IsString(id)) ? arena_strdup(api_response->arena, id->valuestring) : NULL;
@@ -776,8 +805,8 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
                     if (arguments && cJSON_IsString(arguments)) {
                         api_response->tools[tool_idx].parameters = cJSON_Parse(arguments->valuestring);
                         if (!api_response->tools[tool_idx].parameters) {
-                            LOG_WARN("Failed to parse tool arguments, using empty object");
-                            api_response->tools[tool_idx].parameters = cJSON_CreateObject();
+                            LOG_WARN("Skipping tool_call at index %d: invalid JSON in 'arguments'", i);
+                            continue;
                         }
                     } else {
                         api_response->tools[tool_idx].parameters = cJSON_CreateObject();
