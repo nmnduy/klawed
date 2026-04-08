@@ -68,6 +68,7 @@ typedef struct MemoryBuffer {
 typedef struct SSEParserState {
     char *event_type;           // Current event type being built
     MemoryBuffer *data_buffer;  // Current data being accumulated
+    MemoryBuffer *line_buffer;  // Raw streaming bytes buffered across callbacks
     HttpStreamCallback callback;
     void *callback_data;
     bool abort_requested;
