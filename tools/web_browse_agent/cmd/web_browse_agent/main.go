@@ -45,28 +45,173 @@ var (
 	proxy             string
 )
 
+// Enhanced help text - displayed with --help or help command
+const longHelpText = `A sessionful browser automation CLI for persistent web browsing sessions.
+
+QUICK START
+  # Start a session and open a URL
+  web_browse_agent --session my-session open https://example.com
+
+  # Get page content
+  web_browse_agent --session my-session html
+
+  # Take a screenshot (use --json to get base64 data)
+  web_browse_agent --session my-session --json screenshot
+
+  # End the session when done
+  web_browse_agent --session my-session end-session
+
+USAGE
+  web_browse_agent [GLOBAL_FLAGS] <command> [args...]
+  web_browse_agent commands              # List available commands
+
+GLOBAL FLAGS
+  --session, -s <id>    Session ID (required for most commands)
+  --json                Output in JSON format for machine parsing
+  --timeout <sec>       Per-command timeout in seconds (default: 30)
+  --headless            Run browser without visible UI (default: true)
+  --headless=false      Run browser with visible UI (requires X server)
+  --verbose, -v         Enable verbose output
+  --proxy <url>         HTTP/SOCKS proxy URL (overrides WEB_AGENT_PROXY)
+  --browser <path>      Browser executable path (auto-detects if not set)
+  --user-data-dir <dir> Browser profile directory
+
+AVAILABLE COMMANDS
+
+  Browser Navigation:
+    open <url>            Navigate to URL (async, see ASYNC NAVIGATION below)
+    list-tabs             List all open tabs
+    switch-tab <id>       Switch to a specific tab
+    close-tab <id>        Close a specific tab
+
+  Page Interaction:
+    click <selector>      Click an element (CSS or Playwright selector)
+    type <selector> <text>  Type text into element (clears first)
+    upload-file <sel> <paths...>  Upload file(s) to file input
+    wait-for <selector>   Wait for element to appear
+    eval <javascript>     Execute JavaScript, returns {"value": ...}
+
+  Page Inspection:
+    html                  Get full page HTML
+    screenshot            Take screenshot (use --json for base64 data)
+
+  Browser Configuration:
+    set-viewport <w> <h>  Set viewport size
+    cookies               Get cookies (read-only)
+
+  Session Management:
+    session-info          Get session information
+    end-session           Close browser and end session
+    ping                  Check if session is alive
+    describe-commands     Detailed command descriptions
+    help                  Show this help message
+
+  Other:
+    commands              List commands (no session required)
+
+EXAMPLES
+
+  Web Scraping:
+    web_browse_agent --session s open https://example.com
+    web_browse_agent --session s wait-for "#content"
+    web_browse_agent --session s --json eval "document.querySelector('h1').textContent"
+
+  Form Interaction:
+    web_browse_agent --session s open https://example.com/login
+    web_browse_agent --session s wait-for "#username"
+    web_browse_agent --session s type "#username" "myuser"
+    web_browse_agent --session s type "#password" "mypass"
+    web_browse_agent --session s click "#submit"
+
+  Screenshot (base64 output):
+    web_browse_agent --session s set-viewport 1920 1080
+    web_browse_agent --session s open https://example.com
+    web_browse_agent --session s wait-for "body"
+    web_browse_agent --session s --json screenshot | python3 -c "
+import sys,json,base64
+d=json.load(sys.stdin)
+open('shot.png','wb').write(base64.b64decode(d['data']))"
+
+  File Upload:
+    web_browse_agent --session s open https://example.com/upload
+    web_browse_agent --session s upload-file "input[type=file]" /path/to/file.pdf
+    web_browse_agent --session s click "#submit"
+
+SELECTORS
+  Commands accepting selectors support CSS and Playwright selectors:
+
+  CSS selectors:
+    #submit-button
+    .nav-item:first-child
+    [data-testid='login']
+
+  Playwright selectors:
+    text=Sign In
+    role=button[name='Submit']
+
+ASYNC NAVIGATION
+  The 'open' command returns immediately after HTTP headers are received.
+  It does NOT wait for full page load. Always follow with wait-for:
+
+    web_browse_agent --session s open https://example.com
+    web_browse_agent --session s wait-for "#main-content"
+
+  Common wait-for targets:
+    - "#main-content", "#app" - app root element
+    - "body" - basic DOM exists
+    - ".loading-complete" - custom indicator
+
+COOKIES
+  The 'cookies' command is read-only. To set cookies via JavaScript:
+
+    web_browse_agent --session s eval "document.cookie = 'key=value; path=/'"
+
+  Note: JavaScript-set cookies only work for non-HttpOnly cookies.
+
+ENVIRONMENT VARIABLES
+  WEB_AGENT_PERSISTENT_STORAGE    Enable persistent storage (default: false)
+  WEB_AGENT_IDLE_TIMEOUT          Idle timeout seconds (default: 300, 0=disable)
+  WEB_AGENT_PROXY                 HTTP/SOCKS proxy URL
+  WEB_AGENT_BROWSER               Browser executable path
+  WEB_AGENT_USER_DATA_DIR         Browser profile directory
+  WEB_AGENT_STEALTH               Stealth mode (default: 1, 0=disable)
+  BROWSER_HEADLESS                Run headless (default: true)
+  BROWSER_VIEWPORT_WIDTH          Viewport width (default: 1920)
+  BROWSER_VIEWPORT_HEIGHT         Viewport height (default: 1080)
+  DISPLAY                         X server display for non-headless mode
+
+STEALTH MODE
+  Enabled by default. Patches browser fingerprinting to bypass bot detection:
+  - Removes navigator.webdriver
+  - Replaces HeadlessChrome in User-Agent
+  - Restores window.chrome object
+  - Spoofs plugins array
+  - Fixes permissions API
+  Disable with: WEB_AGENT_STEALTH=0
+
+NON-HEADLESS MODE (VISIBLE BROWSER)
+  To see the browser window, you need an X server and DISPLAY set:
+
+    export DISPLAY=:1
+    web_browse_agent --session test --headless=false open https://example.com
+
+  Or use xvfb-run for virtual display:
+    xvfb-run web_browse_agent --session test --headless=false open https://example.com
+
+BUILDING
+  cd tools/web_browse_agent
+  make build
+  make install-deps          # Install Playwright browsers (first time)
+  make install-datacenter    # For containers (includes system libs)
+
+For detailed command reference, run: web_browse_agent describe-commands
+`
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "web_browse_agent [command] [args...]",
 		Short: "Sessionful web browser automation CLI",
-		Long: `A CLI tool for persistent browser sessions with web automation.
-
-Each session maintains browser state (tabs, cookies, navigation history)
-across invocations, allowing you to issue one command at a time while
-maintaining session state.
-
-Examples:
-  # Start a session and open a URL
-  web_browse_agent --session my-session open https://example.com
-
-  # List tabs in the session
-  web_browse_agent --session my-session list-tabs
-
-  # Get available commands
-  web_browse_agent --session my-session help
-
-  # End a session
-  web_browse_agent --session my-session end-session`,
+		Long:    longHelpText,
 		Args:    cobra.ArbitraryArgs,
 		RunE:    runCommand,
 		Version: version.Version,
@@ -537,6 +682,7 @@ func formatCommandDescriptions(data interface{}) (string, error) {
 			Description string   `json:"description"`
 			Arguments   []string `json:"arguments"`
 			Example     string   `json:"example,omitempty"`
+			Notes       string   `json:"notes,omitempty"`
 		} `json:"commands"`
 	}
 	if err := json.Unmarshal(jsonData, &desc); err != nil {
@@ -544,19 +690,69 @@ func formatCommandDescriptions(data interface{}) (string, error) {
 	}
 
 	var result strings.Builder
-	result.WriteString("Available commands:\n\n")
-	for _, cmd := range desc.Commands {
+	result.WriteString("AVAILABLE COMMANDS (DETAILED)\n\n")
+	for i, cmd := range desc.Commands {
+		// Command name with arguments
 		result.WriteString(fmt.Sprintf("  %s", cmd.Name))
 		if len(cmd.Arguments) > 0 {
 			result.WriteString(fmt.Sprintf(" <%s>", strings.Join(cmd.Arguments, "> <")))
 		}
-		result.WriteString(fmt.Sprintf("\n      %s\n", cmd.Description))
-		if cmd.Example != "" {
-			result.WriteString(fmt.Sprintf("      Example: %s\n", cmd.Example))
-		}
 		result.WriteString("\n")
+
+		// Description (wrapped at ~70 chars with indentation)
+		descWrapped := wrapText(cmd.Description, 70)
+		for _, line := range descWrapped {
+			result.WriteString(fmt.Sprintf("    %s\n", line))
+		}
+
+		// Example
+		if cmd.Example != "" {
+			result.WriteString(fmt.Sprintf("    Example: %s\n", cmd.Example))
+		}
+
+		// Notes (if present)
+		if cmd.Notes != "" {
+			notesWrapped := wrapText(cmd.Notes, 68)
+			result.WriteString(fmt.Sprintf("    Note: %s\n", notesWrapped[0]))
+			for _, line := range notesWrapped[1:] {
+				result.WriteString(fmt.Sprintf("          %s\n", line))
+			}
+		}
+
+		// Add blank line between commands (but not after last)
+		if i < len(desc.Commands)-1 {
+			result.WriteString("\n")
+		}
 	}
 	return result.String(), nil
+}
+
+// wrapText wraps text at the specified width, returning lines
+func wrapText(text string, width int) []string {
+	if len(text) <= width {
+		return []string{text}
+	}
+
+	var lines []string
+	words := strings.Fields(text)
+	var currentLine strings.Builder
+
+	for _, word := range words {
+		if currentLine.Len() > 0 && currentLine.Len()+1+len(word) > width {
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+		}
+		if currentLine.Len() > 0 {
+			currentLine.WriteString(" ")
+		}
+		currentLine.WriteString(word)
+	}
+
+	if currentLine.Len() > 0 {
+		lines = append(lines, currentLine.String())
+	}
+
+	return lines
 }
 
 func formatScreenshot(data interface{}) (string, error) {
@@ -573,37 +769,6 @@ func formatScreenshot(data interface{}) (string, error) {
 }
 
 func showHelp() error {
-	help := `Available commands:
-
-  open <url>              Navigate to a URL in the browser
-  list-tabs               List all open browser tabs
-  switch-tab <tab_id>     Switch to a different browser tab
-  close-tab <tab_id>      Close a browser tab
-  eval <javascript>       Execute JavaScript in the browser
-  click <selector>        Click on an element
-  type <selector> <text>  Type text into an input element
-  upload-file <selector> <file_path...>
-                          Upload file(s) to a file input element
-  wait-for <selector>     Wait for an element to appear
-  screenshot              Take a screenshot of the current page
-  html                    Get the HTML content of the page
-  set-viewport <w> <h>    Set browser viewport size
-  cookies                 Get browser cookies
-  session-info            Get session information
-  describe-commands       Get detailed command descriptions
-  end-session             End the browser session
-  ping                    Check if the session is alive
-  help                    Show this help message
-
-Use --json for machine-readable output.
-Use --session <id> to specify or create a session.
-
-Examples:
-  web_browse_agent --session test open https://example.com
-  web_browse_agent --session test eval "document.title"
-  web_browse_agent --session test screenshot
-  web_browse_agent --session test end-session
-`
-	fmt.Print(help)
+	fmt.Print(longHelpText)
 	return nil
 }
