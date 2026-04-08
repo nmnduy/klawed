@@ -520,6 +520,10 @@ TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
 TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
 TEST_SSE_PARSER_SRC = tests/test_sse_parser.c
 TEST_STREAMING_TOOL_ACCUMULATOR_SRC = tests/test_streaming_tool_accumulator.c
+TEST_STREAMING_TOOL_CALLS_SRC = tests/test_streaming_tool_calls.c
+TEST_STREAMING_TOOL_CALLS_TARGET = $(BUILD_DIR)/test_streaming_tool_calls
+TEST_MOONSHOT_STREAMING_TOOLS_SRC = tests/test_moonshot_streaming_tools.c
+TEST_MOONSHOT_STREAMING_TOOLS_TARGET = $(BUILD_DIR)/test_moonshot_streaming_tools
 TEST_SQLITE_QUEUE_SRC = tests/test_sqlite_queue.c
 TEST_REASONING_CONTENT_SQLITE_QUEUE_SRC = tests/test_reasoning_content_sqlite_queue.c
 TEST_SQLITE_QUEUE_SEEDING_SRC = tests/test_sqlite_queue_seeding.c
@@ -541,7 +545,7 @@ TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET = $(BUILD_DIR)/test_model_switch_queue_re
 TEST_INSERT_SYSTEM_MESSAGE_SRC = tests/test_insert_system_message.c
 TEST_INSERT_SYSTEM_MESSAGE_TARGET = $(BUILD_DIR)/test_insert_system_message
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -3144,6 +3148,34 @@ test-moonshot-streaming: check-deps $(BUILD_DIR)/test_moonshot_streaming
 	@echo "Running Moonshot streaming test (makes real API calls)..."
 	@echo "Usage: ./$(BUILD_DIR)/test_moonshot_streaming [provider_name]"
 	@echo ""
+
+# Streaming tool calls test - comprehensive test for streaming tool call accumulation
+$(TEST_STREAMING_TOOL_CALLS_TARGET): $(TEST_STREAMING_TOOL_CALLS_SRC) $(STREAMING_TOOL_ACCUMULATOR_OBJ) $(OPENAI_STREAMING_OBJ) $(SSE_PARSER_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling streaming tool calls test..."
+	@$(CC) $(CFLAGS) -DARENA_IMPLEMENTATION -o $@ $(TEST_STREAMING_TOOL_CALLS_SRC) $(STREAMING_TOOL_ACCUMULATOR_OBJ) $(OPENAI_STREAMING_OBJ) $(SSE_PARSER_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@echo "✓ Streaming tool calls test built: $@"
+
+test-streaming-tool-calls: check-deps $(TEST_STREAMING_TOOL_CALLS_TARGET)
+	@echo ""
+	@echo "Running streaming tool calls test (makes real API calls)..."
+	@echo "Usage: KLAWED_ENABLE_STREAMING=1 ./$(TEST_STREAMING_TOOL_CALLS_TARGET) [provider_name]"
+	@echo ""
+
+# Moonshot streaming tools test - dedicated test for Moonshot/Kimi K2.5 streaming tool accumulation
+$(TEST_MOONSHOT_STREAMING_TOOLS_TARGET): $(TEST_MOONSHOT_STREAMING_TOOLS_SRC) $(STREAMING_TOOL_ACCUMULATOR_OBJ) $(OPENAI_STREAMING_OBJ) $(SSE_PARSER_OBJ) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(CONFIG_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Moonshot streaming tools test..."
+	@$(CC) $(CFLAGS) -DARENA_IMPLEMENTATION -o $@ $(TEST_MOONSHOT_STREAMING_TOOLS_SRC) $(STREAMING_TOOL_ACCUMULATOR_OBJ) $(OPENAI_STREAMING_OBJ) $(SSE_PARSER_OBJ) $(HTTP_CLIENT_OBJ) $(RETRY_LOGIC_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(CONFIG_OBJ) $(LDFLAGS)
+	@echo "✓ Moonshot streaming tools test built: $@"
+
+test-moonshot-streaming-tools: check-deps $(TEST_MOONSHOT_STREAMING_TOOLS_TARGET)
+	@echo ""
+	@echo "Running Moonshot streaming tools test (makes real API calls)..."
+	@echo "Provider: Moonshot/Kimi K2.5"
+	@echo "Usage: KLAWED_ENABLE_STREAMING=1 ./$(TEST_MOONSHOT_STREAMING_TOOLS_TARGET)"
+	@echo ""
+	@./$(TEST_MOONSHOT_STREAMING_TOOLS_TARGET)
 
 $(TEST_SQLITE_QUEUE_TARGET): $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_SQLITE_QUEUE_TARGET) $(TEST_SQLITE_QUEUE_SRC) $(SQLITE_QUEUE_TEST_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
