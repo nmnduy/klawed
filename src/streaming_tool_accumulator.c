@@ -7,6 +7,25 @@
 #include <string.h>
 #include <stdlib.h>
 
+static int tool_call_has_valid_arguments_json(cJSON *function_obj) {
+    if (!function_obj) return 0;
+
+    cJSON *arguments_obj = cJSON_GetObjectItem(function_obj, "arguments");
+    if (!arguments_obj) return 1;
+    if (!cJSON_IsString(arguments_obj)) return 0;
+
+    const char *arguments_str = arguments_obj->valuestring;
+    if (!arguments_str || arguments_str[0] == '\0') return 1;
+
+    cJSON *parsed = cJSON_Parse(arguments_str);
+    if (!parsed) {
+        return 0;
+    }
+
+    cJSON_Delete(parsed);
+    return 1;
+}
+
 ToolCallAccumulator* tool_accumulator_create(Arena *arena) {
     ToolCallAccumulator *acc = calloc(1, sizeof(ToolCallAccumulator));
     if (!acc) return NULL;
@@ -139,7 +158,7 @@ int tool_accumulator_count_valid(ToolCallAccumulator *acc) {
         const char *id_str = (id_obj && cJSON_IsString(id_obj)) ? id_obj->valuestring : "";
         const char *name_str = (name_obj && cJSON_IsString(name_obj)) ? name_obj->valuestring : "";
 
-        if (id_str[0] && name_str[0]) {
+        if (id_str[0] && name_str[0] && tool_call_has_valid_arguments_json(function_obj)) {
             valid_count++;
         }
     }
@@ -165,10 +184,10 @@ cJSON* tool_accumulator_filter_valid(ToolCallAccumulator *acc) {
         const char *name_str = (name_obj && cJSON_IsString(name_obj)) ? name_obj->valuestring : "";
 
         // Only include tool calls with non-empty id and name
-        if (id_str[0] && name_str[0]) {
+        if (id_str[0] && name_str[0] && tool_call_has_valid_arguments_json(function_obj)) {
             cJSON_AddItemToArray(filtered, cJSON_Duplicate(tool, 1));
         } else {
-            LOG_WARN("Filtering out tool call with empty id='%s' or name='%s'", id_str, name_str);
+            LOG_WARN("Filtering out invalid streamed tool call: id='%s', name='%s'", id_str, name_str);
         }
     }
 
