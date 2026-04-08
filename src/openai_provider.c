@@ -63,6 +63,18 @@ static char* arena_strdup(Arena *arena, const char *str) {
     return new_str;
 }
 
+static int tool_arguments_are_valid_json(cJSON *arguments) {
+    if (!arguments) return 1;
+    if (!cJSON_IsString(arguments)) return 0;
+    if (!arguments->valuestring || arguments->valuestring[0] == '\0') return 1;
+
+    cJSON *parsed = cJSON_Parse(arguments->valuestring);
+    if (!parsed) return 0;
+
+    cJSON_Delete(parsed);
+    return 1;
+}
+
 // ============================================================================
 // Request Building (using new message format)
 // ============================================================================
@@ -721,6 +733,12 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
                     continue;
                 }
 
+                cJSON *arguments = cJSON_GetObjectItem(function, "arguments");
+                if (!tool_arguments_are_valid_json(arguments)) {
+                    LOG_WARN("Skipping tool_call at index %d: invalid JSON in 'arguments'", i);
+                    continue;
+                }
+
                 valid_count++;
             }
 
@@ -762,6 +780,9 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
                     if (!name || !cJSON_IsString(name) || !name->valuestring[0]) {
                         continue;
                     }
+                    if (!tool_arguments_are_valid_json(arguments)) {
+                        continue;
+                    }
 
                     // Copy tool call data using arena allocation
                     api_response->tools[tool_idx].id = arena_strdup(api_response->arena, id->valuestring);
@@ -771,8 +792,8 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
                     if (arguments && cJSON_IsString(arguments)) {
                         api_response->tools[tool_idx].parameters = cJSON_Parse(arguments->valuestring);
                         if (!api_response->tools[tool_idx].parameters) {
-                            LOG_WARN("Failed to parse tool arguments, using empty object");
-                            api_response->tools[tool_idx].parameters = cJSON_CreateObject();
+                            LOG_WARN("Skipping tool_call at index %d: invalid JSON in 'arguments'", i);
+                            continue;
                         }
                     } else {
                         api_response->tools[tool_idx].parameters = cJSON_CreateObject();
