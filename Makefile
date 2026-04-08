@@ -1420,6 +1420,9 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/provider_all.o $(PROVIDER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/provider_config_loader_all.o $(PROVIDER_CONFIG_LOADER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/openai_provider_all.o $(OPENAI_PROVIDER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/openai_streaming_all.o $(OPENAI_STREAMING_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/sse_parser_all.o $(SSE_PARSER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/streaming_tool_accumulator_all.o $(STREAMING_TOOL_ACCUMULATOR_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/openai_messages_all.o $(OPENAI_MESSAGES_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/openai_responses_all.o $(OPENAI_RESPONSES_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/bedrock_provider_all.o $(BEDROCK_PROVIDER_SRC); \
@@ -1523,6 +1526,9 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/aws_bedrock_all.o $(BUILD_DIR)/bedrock_converse_all.o \
 		$(BUILD_DIR)/provider_all.o $(BUILD_DIR)/provider_config_loader_all.o \
 		$(BUILD_DIR)/openai_provider_all.o \
+		$(BUILD_DIR)/openai_streaming_all.o \
+		$(BUILD_DIR)/sse_parser_all.o \
+		$(BUILD_DIR)/streaming_tool_accumulator_all.o \
 		$(BUILD_DIR)/openai_messages_all.o $(BUILD_DIR)/openai_responses_all.o \
 		$(BUILD_DIR)/bedrock_provider_all.o $(BUILD_DIR)/anthropic_provider_all.o \
 		$(BUILD_DIR)/deepseek_provider_all.o $(BUILD_DIR)/moonshot_provider_all.o \
