@@ -437,6 +437,67 @@ static void test_incomplete_json_arguments_filtered(void) {
     tool_accumulator_destroy(acc);
 }
 
+static void test_moonshot_malformed_single_string_argument_repaired(void) {
+    printf(COLOR_YELLOW "\nTest: Moonshot malformed single string argument is repaired\n" COLOR_RESET);
+
+    ToolCallAccumulator *acc = tool_accumulator_create(NULL);
+    TEST_ASSERT(acc != NULL, "Accumulator should be created");
+
+    cJSON *delta = create_tool_delta(0, "tool_bad_glob", "Glob", "{\"pattern\":/*logo-v3.0-no-name*");
+    tool_accumulator_process_delta(acc, delta);
+
+    TEST_ASSERT(acc->tool_calls_count == 1, "Should keep the tool call slot");
+    TEST_ASSERT(tool_accumulator_count_valid(acc) == 1,
+                "Malformed single-string args should be recoverable");
+
+    cJSON *filtered = tool_accumulator_filter_valid(acc);
+    TEST_ASSERT(cJSON_GetArraySize(filtered) == 1,
+                "Recovered tool call should survive filtering");
+
+    cJSON *tool = cJSON_GetArrayItem(filtered, 0);
+    cJSON *func = cJSON_GetObjectItem(tool, "function");
+    cJSON *args = func ? cJSON_GetObjectItem(func, "arguments") : NULL;
+
+    TEST_ASSERT(args && cJSON_IsString(args), "Recovered arguments should be a string");
+    TEST_ASSERT(strcmp(args->valuestring, "{\"pattern\":\"/*logo-v3.0-no-name*\"}") == 0,
+                "Recovered arguments should be valid JSON");
+
+    cJSON_Delete(delta);
+    cJSON_Delete(filtered);
+    tool_accumulator_destroy(acc);
+}
+
+static void test_moonshot_malformed_command_argument_repaired(void) {
+    printf(COLOR_YELLOW "\nTest: Moonshot malformed command argument is repaired\n" COLOR_RESET);
+
+    ToolCallAccumulator *acc = tool_accumulator_create(NULL);
+    TEST_ASSERT(acc != NULL, "Accumulator should be created");
+
+    cJSON *delta = create_tool_delta(0, "tool_bad_bash", "Bash",
+                                     "{\"command\":ls -la /Users/puter/Downloads/filesurf-logo/");
+    tool_accumulator_process_delta(acc, delta);
+
+    TEST_ASSERT(tool_accumulator_count_valid(acc) == 1,
+                "Malformed command args should be recoverable");
+
+    cJSON *filtered = tool_accumulator_filter_valid(acc);
+    TEST_ASSERT(cJSON_GetArraySize(filtered) == 1,
+                "Recovered Bash tool call should survive filtering");
+
+    cJSON *tool = cJSON_GetArrayItem(filtered, 0);
+    cJSON *func = cJSON_GetObjectItem(tool, "function");
+    cJSON *args = func ? cJSON_GetObjectItem(func, "arguments") : NULL;
+
+    TEST_ASSERT(args && cJSON_IsString(args), "Recovered Bash arguments should be a string");
+    TEST_ASSERT(strcmp(args->valuestring,
+                       "{\"command\":\"ls -la /Users/puter/Downloads/filesurf-logo/\"}") == 0,
+                "Recovered command should be quoted and closed");
+
+    cJSON_Delete(delta);
+    cJSON_Delete(filtered);
+    tool_accumulator_destroy(acc);
+}
+
 // ============================================================================
 // Test Cases - Edge cases
 // ============================================================================
@@ -526,6 +587,8 @@ int main(void) {
     // Real-world scenarios
     test_openai_streaming_format_simulation();
     test_incomplete_json_arguments_filtered();
+    test_moonshot_malformed_single_string_argument_repaired();
+    test_moonshot_malformed_command_argument_repaired();
 
     // Edge cases
     test_null_and_empty_inputs();
