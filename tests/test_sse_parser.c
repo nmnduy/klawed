@@ -259,6 +259,70 @@ static void test_multiple_events_one_chunk(void) {
     reset_capture();
 }
 
+static void test_split_data_line_across_callbacks(void) {
+    printf(COLOR_YELLOW "\nTest: Split data line across callbacks\n" COLOR_RESET);
+    reset_capture();
+
+    SSEParserState *parser = sse_parser_create(test_event_callback, &g_capture);
+    TEST_ASSERT(parser != NULL, "Parser should be created");
+
+    const char *part1 = "data: {\"x\":";
+    const char *part2 = "1}\n\n";
+
+    int result = sse_parser_process_data(parser, part1, strlen(part1));
+    TEST_ASSERT(result == 0, "First partial chunk should succeed");
+    TEST_ASSERT(g_capture.count == 0, "No event should be emitted before newline");
+
+    result = sse_parser_process_data(parser, part2, strlen(part2));
+    TEST_ASSERT(result == 0, "Second chunk should succeed");
+    TEST_ASSERT(g_capture.count == 1, "Split event should be reconstructed");
+    TEST_ASSERT(g_capture.events[0].raw_data != NULL, "Raw data should exist");
+    TEST_ASSERT(strcmp(g_capture.events[0].raw_data, "{\"x\":1}") == 0,
+                "Split line should preserve full raw payload");
+    TEST_ASSERT(g_capture.events[0].data != NULL, "Split line JSON should parse");
+
+    sse_parser_free(parser);
+    reset_capture();
+}
+
+static void test_split_tool_call_line_across_callbacks(void) {
+    printf(COLOR_YELLOW "\nTest: Split tool call data line across callbacks\n" COLOR_RESET);
+    reset_capture();
+
+    SSEParserState *parser = sse_parser_create(test_event_callback, &g_capture);
+    TEST_ASSERT(parser != NULL, "Parser should be created");
+
+    const char *part1 =
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"tool_1\","
+        "\"type\":\"function\",\"function\":{\"name\":\"Glob\",\"arguments\":\"{\\\"pat";
+    const char *part2 =
+        "tern\\\":\\\"**/*\\\"}\"}}]}}]}\n\n";
+
+    int result = sse_parser_process_data(parser, part1, strlen(part1));
+    TEST_ASSERT(result == 0, "First tool-call chunk should succeed");
+    TEST_ASSERT(g_capture.count == 0, "No event should be emitted for partial tool-call line");
+
+    result = sse_parser_process_data(parser, part2, strlen(part2));
+    TEST_ASSERT(result == 0, "Second tool-call chunk should succeed");
+    TEST_ASSERT(g_capture.count == 1, "Split tool-call event should be reconstructed");
+    TEST_ASSERT(g_capture.events[0].data != NULL, "Split tool-call JSON should parse");
+
+    cJSON *choices = cJSON_GetObjectItem(g_capture.events[0].data, "choices");
+    cJSON *choice = choices ? cJSON_GetArrayItem(choices, 0) : NULL;
+    cJSON *delta = choice ? cJSON_GetObjectItem(choice, "delta") : NULL;
+    cJSON *tool_calls = delta ? cJSON_GetObjectItem(delta, "tool_calls") : NULL;
+    cJSON *tool_call = tool_calls ? cJSON_GetArrayItem(tool_calls, 0) : NULL;
+    cJSON *function = tool_call ? cJSON_GetObjectItem(tool_call, "function") : NULL;
+    cJSON *arguments = function ? cJSON_GetObjectItem(function, "arguments") : NULL;
+
+    TEST_ASSERT(arguments && cJSON_IsString(arguments), "Tool-call arguments should be present");
+    TEST_ASSERT(strcmp(arguments->valuestring, "{\"pattern\":\"**/*\"}") == 0,
+                "Split tool-call arguments should be reconstructed exactly");
+
+    sse_parser_free(parser);
+    reset_capture();
+}
+
 // ============================================================================
 // Test Cases - Real-world API responses
 // ============================================================================
@@ -497,6 +561,8 @@ int main(void) {
 
     // Multiple events tests
     test_multiple_events_one_chunk();
+    test_split_data_line_across_callbacks();
+    test_split_tool_call_line_across_callbacks();
 
     // Real-world format tests
     test_openai_streaming_format();
