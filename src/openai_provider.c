@@ -12,6 +12,7 @@
 #include "tui.h"  // For streaming TUI updates
 #include "message_queue.h"  // For thread-safe streaming updates
 #include "openai_responses.h"  // For Responses API support
+#include "openai_chat_parser.h"
 #include "util/string_utils.h" // For trim_whitespace
 
 #include <stdio.h>
@@ -46,33 +47,6 @@ static int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow
     }
 
     return 0;  // Continue transfer
-}
-
-/**
- * Duplicate a string using arena allocation
- * Returns: Newly allocated string from arena, or NULL on error
- */
-static char* arena_strdup(Arena *arena, const char *str) {
-    if (!str || !arena) return NULL;
-
-    size_t len = strlen(str) + 1;  // +1 for null terminator
-    char *new_str = arena_alloc(arena, len);
-    if (!new_str) return NULL;
-
-    strlcpy(new_str, str, len);
-    return new_str;
-}
-
-static int tool_arguments_are_valid_json(cJSON *arguments) {
-    if (!arguments) return 1;
-    if (!cJSON_IsString(arguments)) return 0;
-    if (!arguments->valuestring || arguments->valuestring[0] == '\0') return 1;
-
-    cJSON *parsed = cJSON_Parse(arguments->valuestring);
-    if (!parsed) return 0;
-
-    cJSON_Delete(parsed);
-    return 1;
 }
 
 // ============================================================================
@@ -704,125 +678,14 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
             }
         }
 
-        // Extract text content
-        cJSON *content = cJSON_GetObjectItem(message, "content");
-        if (content && cJSON_IsString(content) && content->valuestring) {
-            api_response->message.text = arena_strdup(api_response->arena, content->valuestring);
-            if (api_response->message.text) {
-                // Trim whitespace from the extracted content
-                trim_whitespace(api_response->message.text);
-            }
-        } else {
-            api_response->message.text = NULL;
-        }
-
-        // Extract reasoning_content (for thinking models like DeepSeek, Moonshot/Kimi)
-        cJSON *reasoning_content = cJSON_GetObjectItem(message, "reasoning_content");
-        if (reasoning_content && cJSON_IsString(reasoning_content) && reasoning_content->valuestring) {
-            api_response->message.reasoning_content = arena_strdup(api_response->arena, reasoning_content->valuestring);
-            LOG_DEBUG("Extracted reasoning_content from response (%zu bytes)",
-                      strlen(api_response->message.reasoning_content));
-        }
-
-        // Extract and validate tool calls
-        cJSON *tool_calls = cJSON_GetObjectItem(message, "tool_calls");
-        if (tool_calls && cJSON_IsArray(tool_calls)) {
-            int raw_tool_count = cJSON_GetArraySize(tool_calls);
-
-            // First pass: count valid tool calls (must have non-empty id AND name)
-            int valid_count = 0;
-            for (int i = 0; i < raw_tool_count; i++) {
-                cJSON *tool_call = cJSON_GetArrayItem(tool_calls, i);
-                cJSON *id = cJSON_GetObjectItem(tool_call, "id");
-                cJSON *function = cJSON_GetObjectItem(tool_call, "function");
-
-                // Check for non-empty id
-                if (!id || !cJSON_IsString(id) || !id->valuestring[0]) {
-                    LOG_WARN("Skipping tool_call at index %d: missing or empty 'id'", i);
-                    continue;
-                }
-
-                // Check for function object with non-empty name
-                if (!function) {
-                    LOG_WARN("Skipping tool_call at index %d: missing 'function' field", i);
-                    continue;
-                }
-                cJSON *name = cJSON_GetObjectItem(function, "name");
-                if (!name || !cJSON_IsString(name) || !name->valuestring[0]) {
-                    LOG_WARN("Skipping tool_call at index %d: missing or empty 'name'", i);
-                    continue;
-                }
-
-                cJSON *arguments = cJSON_GetObjectItem(function, "arguments");
-                if (!tool_arguments_are_valid_json(arguments)) {
-                    LOG_WARN("Skipping tool_call at index %d: invalid JSON in 'arguments'", i);
-                    continue;
-                }
-
-                valid_count++;
-            }
-
-            if (valid_count > 0) {
-                api_response->tools = arena_alloc(api_response->arena,
-                                                 (size_t)valid_count * sizeof(ToolCall));
-                if (!api_response->tools) {
-                    result.error_message = strdup("Failed to allocate tool calls from arena");
-                    result.is_retryable = 0;
-                    if (message_is_synthetic) cJSON_Delete(message);
-                    api_response_free(api_response);
-                    free(result.headers_json);  // Clean up headers JSON in error paths
-                    result.headers_json = NULL;
-                    *out = result; return;
-                }
-
-                // Initialize tool call array
-                memset(api_response->tools, 0, (size_t)valid_count * sizeof(ToolCall));
-
-                // Second pass: extract valid tool calls
-                int tool_idx = 0;
-                for (int i = 0; i < raw_tool_count; i++) {
-                    cJSON *tool_call = cJSON_GetArrayItem(tool_calls, i);
-                    cJSON *id = cJSON_GetObjectItem(tool_call, "id");
-                    cJSON *function = cJSON_GetObjectItem(tool_call, "function");
-
-                    // Skip if missing id or function (same checks as first pass)
-                    if (!id || !cJSON_IsString(id) || !id->valuestring[0]) {
-                        continue;
-                    }
-                    if (!function) {
-                        continue;
-                    }
-
-                    cJSON *name = cJSON_GetObjectItem(function, "name");
-                    cJSON *arguments = cJSON_GetObjectItem(function, "arguments");
-
-                    // Skip if missing name
-                    if (!name || !cJSON_IsString(name) || !name->valuestring[0]) {
-                        continue;
-                    }
-                    if (!tool_arguments_are_valid_json(arguments)) {
-                        continue;
-                    }
-
-                    // Copy tool call data using arena allocation
-                    api_response->tools[tool_idx].id = arena_strdup(api_response->arena, id->valuestring);
-                    api_response->tools[tool_idx].name = arena_strdup(api_response->arena, name->valuestring);
-
-                    // Parse arguments string to cJSON
-                    if (arguments && cJSON_IsString(arguments)) {
-                        api_response->tools[tool_idx].parameters = cJSON_Parse(arguments->valuestring);
-                        if (!api_response->tools[tool_idx].parameters) {
-                            LOG_WARN("Skipping tool_call at index %d: invalid JSON in 'arguments'", i);
-                            continue;
-                        }
-                    } else {
-                        api_response->tools[tool_idx].parameters = cJSON_CreateObject();
-                    }
-
-                    tool_idx++;
-                }
-                api_response->tool_count = tool_idx;
-            }
+        if (openai_fill_api_response_from_message(api_response, message, "OpenAI") != 0) {
+            result.error_message = strdup("Failed to allocate tool calls from arena");
+            result.is_retryable = 0;
+            if (message_is_synthetic) cJSON_Delete(message);
+            api_response_free(api_response);
+            free(result.headers_json);
+            result.headers_json = NULL;
+            *out = result; return;
         }
 
         // Clean up synthetic message if we created one for Responses API
