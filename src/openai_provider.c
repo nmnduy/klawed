@@ -427,10 +427,30 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
 
             // Add tool calls using the shared accumulator's filtering
             if (stream_ctx.acc.tool_accumulator) {
+                cJSON *all_tool_calls = tool_accumulator_get_tool_calls(stream_ctx.acc.tool_accumulator);
+                int raw_count = all_tool_calls ? cJSON_GetArraySize(all_tool_calls) : 0;
                 int valid_count = tool_accumulator_count_valid(stream_ctx.acc.tool_accumulator);
+                LOG_DEBUG("Streaming tool call reconstruction: raw_count=%d, valid_count=%d",
+                          raw_count, valid_count);
+
+                if (all_tool_calls && raw_count > 0) {
+                    char *raw_tool_calls_str = cJSON_PrintUnformatted(all_tool_calls);
+                    if (raw_tool_calls_str) {
+                        LOG_DEBUG("Streaming tool call reconstruction raw payload: %s",
+                                  raw_tool_calls_str);
+                        free(raw_tool_calls_str);
+                    }
+                }
+
                 if (valid_count > 0) {
                     cJSON *filtered_tool_calls = tool_accumulator_filter_valid(stream_ctx.acc.tool_accumulator);
                     if (filtered_tool_calls && cJSON_GetArraySize(filtered_tool_calls) > 0) {
+                        char *filtered_tool_calls_str = cJSON_PrintUnformatted(filtered_tool_calls);
+                        if (filtered_tool_calls_str) {
+                            LOG_DEBUG("Streaming tool call reconstruction filtered payload: %s",
+                                      filtered_tool_calls_str);
+                            free(filtered_tool_calls_str);
+                        }
                         cJSON_AddItemToObject(message, "tool_calls", filtered_tool_calls);
                     } else {
                         cJSON_Delete(filtered_tool_calls);
