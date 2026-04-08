@@ -455,10 +455,10 @@ void process_response(ConversationState *state,
             InternalContent *result_slot = &results[i];
             result_slot->type = INTERNAL_TOOL_RESPONSE;
 
-            if (!tool->name || !tool->id) {
+            if (!tool->name || !tool->id || !tool->name[0] || !tool->id[0]) {
                 LOG_ERROR("Tool call missing name or id (provider validation failed)");
-                result_slot->tool_id = tool->id ? strdup(tool->id) : strdup("unknown");
-                result_slot->tool_name = tool->name ? strdup(tool->name) : strdup("tool");
+                result_slot->tool_id = (tool->id && tool->id[0]) ? strdup(tool->id) : strdup("unknown");
+                result_slot->tool_name = (tool->name && tool->name[0]) ? strdup(tool->name) : strdup("tool");
                 cJSON *error = cJSON_CreateObject();
                 cJSON_AddStringToObject(error, "error", "Tool call missing name or id");
                 result_slot->tool_output = error;
