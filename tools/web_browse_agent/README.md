@@ -4,6 +4,15 @@ Version: `1.4.0`
 
 A sessionful browser automation CLI for persistent web browsing sessions. This tool provides a REPL-style interface where you start a browser session and send commands one at a time while maintaining session state.
 
+## Quick Reference
+
+**Comprehensive help is built-in:**
+```bash
+web_browse_agent --help              # Full documentation with examples
+web_browse_agent commands            # Quick command reference
+web_browse_agent describe-commands   # Detailed command descriptions with notes
+```
+
 ## Features
 
 - **Persistent Sessions** - Browser sessions maintain state (tabs, cookies, navigation history) across commands
@@ -12,7 +21,7 @@ A sessionful browser automation CLI for persistent web browsing sessions. This t
 - **Auto-Cleanup** - Driver process monitors parent PID and auto-terminates when klawed exits
 - **Full Browser Automation** - Powered by Playwright with support for all major browsers
 - **JSON Output** - Machine-readable output with `--json` flag
-- **Command Discovery** - Use `commands` subcommand to list available browser commands
+- **Command Discovery** - Use `commands` subcommand or `--help` for comprehensive documentation
 - **Stealth Mode** - Built-in Cloudflare/bot-detection bypass for datacenter environments (on by default)
 
 ## Requirements
