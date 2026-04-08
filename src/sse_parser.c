@@ -75,6 +75,13 @@ SSEParserState* sse_parser_create(HttpStreamCallback callback, void *callback_da
         return NULL;
     }
 
+    parser->line_buffer = memory_buffer_create();
+    if (!parser->line_buffer) {
+        memory_buffer_free(parser->data_buffer);
+        free(parser);
+        return NULL;
+    }
+
     parser->callback = callback;
     parser->callback_data = callback_data;
     parser->abort_requested = false;
@@ -85,6 +92,7 @@ void sse_parser_free(SSEParserState *parser) {
     if (!parser) return;
     free(parser->event_type);
     memory_buffer_free(parser->data_buffer);
+    memory_buffer_free(parser->line_buffer);
     free(parser);
 }
 
@@ -265,33 +273,43 @@ int sse_parser_process_line(SSEParserState *parser, const char *line, size_t len
 int sse_parser_process_data(SSEParserState *parser, const char *data, size_t len) {
     if (!parser || !data) return -1;
 
+    if (!parser->line_buffer) {
+        return -1;
+    }
+
+    if (memory_buffer_append(parser->line_buffer, data, len) != 0) {
+        return -1;
+    }
+
     size_t pos = 0;
-
-    while (pos < len) {
-        /* Find end of line */
-        const char *eol = memchr(data + pos, '\n', len - pos);
-        size_t line_len;
-
-        if (eol) {
-            line_len = (size_t)(eol - (data + pos));
-            /* Strip \r if present */
-            if (line_len > 0 && data[pos + line_len - 1] == '\r') {
-                line_len--;
-            }
-        } else {
-            /* No newline found, process remaining data as incomplete line */
-            /* For now, we'll skip it (SSE should always end lines with \n) */
+    while (pos < parser->line_buffer->size) {
+        const char *base = parser->line_buffer->data;
+        const char *eol = memchr(base + pos, '\n', parser->line_buffer->size - pos);
+        if (!eol) {
             break;
         }
 
-        /* Process this line */
-        int result = sse_parser_process_line(parser, data + pos, line_len);
+        size_t line_len = (size_t)(eol - (base + pos));
+        if (line_len > 0 && base[pos + line_len - 1] == '\r') {
+            line_len--;
+        }
+
+        int result = sse_parser_process_line(parser, base + pos, line_len);
         if (result != 0) {
             parser->abort_requested = 1;
             return result;
         }
 
-        pos += (size_t)(eol - (data + pos)) + 1;  /* Move past newline */
+        pos += (size_t)(eol - (base + pos)) + 1;
+    }
+
+    if (pos > 0) {
+        size_t remaining = parser->line_buffer->size - pos;
+        if (remaining > 0) {
+            memmove(parser->line_buffer->data, parser->line_buffer->data + pos, remaining);
+        }
+        parser->line_buffer->size = remaining;
+        parser->line_buffer->data[remaining] = '\0';
     }
 
     return 0;

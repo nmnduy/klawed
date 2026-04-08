@@ -4,10 +4,129 @@
 
 #include "streaming_tool_accumulator.h"
 #include "logger.h"
+#include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-static int tool_call_has_valid_arguments_json(cJSON *function_obj) {
+static const char *skip_ws(const char *s) {
+    while (s && *s && isspace((unsigned char)*s)) s++;
+    return s;
+}
+
+static char *escape_json_string(const char *s, size_t len) {
+    size_t needed = 1;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char ch = (unsigned char)s[i];
+        switch (ch) {
+            case '\\':
+            case '"':
+            case '\b':
+            case '\f':
+            case '\n':
+            case '\r':
+            case '\t':
+                needed += 2;
+                break;
+            default:
+                if (ch < 0x20) {
+                    needed += 6;
+                } else {
+                    needed += 1;
+                }
+                break;
+        }
+    }
+
+    char *out = malloc(needed);
+    if (!out) return NULL;
+
+    char *p = out;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char ch = (unsigned char)s[i];
+        switch (ch) {
+            case '\\': *p++ = '\\'; *p++ = '\\'; break;
+            case '"':  *p++ = '\\'; *p++ = '"'; break;
+            case '\b': *p++ = '\\'; *p++ = 'b'; break;
+            case '\f': *p++ = '\\'; *p++ = 'f'; break;
+            case '\n': *p++ = '\\'; *p++ = 'n'; break;
+            case '\r': *p++ = '\\'; *p++ = 'r'; break;
+            case '\t': *p++ = '\\'; *p++ = 't'; break;
+            default:
+                if (ch < 0x20) {
+                    snprintf(p, 7, "\\u%04x", ch);
+                    p += 6;
+                } else {
+                    *p++ = (char)ch;
+                }
+                break;
+        }
+    }
+    *p = '\0';
+    return out;
+}
+
+static char *repair_single_string_argument_json(const char *arguments_str) {
+    if (!arguments_str || !arguments_str[0]) return NULL;
+
+    const char *p = skip_ws(arguments_str);
+    if (*p != '{') return NULL;
+    p = skip_ws(p + 1);
+    if (*p != '"') return NULL;
+
+    const char *key_start = ++p;
+    while (*p && *p != '"') p++;
+    if (*p != '"') return NULL;
+
+    size_t key_len = (size_t)(p - key_start);
+    if (key_len == 0) return NULL;
+
+    p = skip_ws(p + 1);
+    if (*p != ':') return NULL;
+    p = skip_ws(p + 1);
+    if (*p == '\0') return NULL;
+
+    const char *value_start = p;
+    size_t value_len = strlen(value_start);
+    while (value_len > 0 && isspace((unsigned char)value_start[value_len - 1])) {
+        value_len--;
+    }
+
+    if (value_len == 0) return NULL;
+    if (value_start[value_len - 1] == '}') {
+        value_len--;
+        while (value_len > 0 && isspace((unsigned char)value_start[value_len - 1])) {
+            value_len--;
+        }
+    }
+    if (value_len == 0) return NULL;
+
+    if (value_start[0] == '"') return NULL;
+
+    char *escaped_value = escape_json_string(value_start, value_len);
+    if (!escaped_value) return NULL;
+
+    size_t out_len = key_len + strlen(escaped_value) + 8;
+    char *repaired = malloc(out_len);
+    if (!repaired) {
+        free(escaped_value);
+        return NULL;
+    }
+
+    snprintf(repaired, out_len, "{\"%.*s\":\"%s\"}", (int)key_len, key_start, escaped_value);
+    free(escaped_value);
+
+    cJSON *parsed = cJSON_Parse(repaired);
+    if (!parsed) {
+        free(repaired);
+        return NULL;
+    }
+    cJSON_Delete(parsed);
+    return repaired;
+}
+
+static int tool_call_has_valid_arguments_json(cJSON *function_obj, char **repaired_arguments_out) {
+    if (repaired_arguments_out) *repaired_arguments_out = NULL;
     if (!function_obj) return 0;
 
     cJSON *arguments_obj = cJSON_GetObjectItem(function_obj, "arguments");
@@ -18,11 +137,22 @@ static int tool_call_has_valid_arguments_json(cJSON *function_obj) {
     if (!arguments_str || arguments_str[0] == '\0') return 1;
 
     cJSON *parsed = cJSON_Parse(arguments_str);
-    if (!parsed) {
+    if (parsed) {
+        cJSON_Delete(parsed);
+        return 1;
+    }
+
+    char *repaired = repair_single_string_argument_json(arguments_str);
+    if (!repaired) {
         return 0;
     }
 
-    cJSON_Delete(parsed);
+    if (repaired_arguments_out) {
+        *repaired_arguments_out = repaired;
+    } else {
+        free(repaired);
+    }
+
     return 1;
 }
 
@@ -158,7 +288,7 @@ int tool_accumulator_count_valid(ToolCallAccumulator *acc) {
         const char *id_str = (id_obj && cJSON_IsString(id_obj)) ? id_obj->valuestring : "";
         const char *name_str = (name_obj && cJSON_IsString(name_obj)) ? name_obj->valuestring : "";
 
-        if (id_str[0] && name_str[0] && tool_call_has_valid_arguments_json(function_obj)) {
+        if (id_str[0] && name_str[0] && tool_call_has_valid_arguments_json(function_obj, NULL)) {
             valid_count++;
         }
     }
@@ -184,8 +314,20 @@ cJSON* tool_accumulator_filter_valid(ToolCallAccumulator *acc) {
         const char *name_str = (name_obj && cJSON_IsString(name_obj)) ? name_obj->valuestring : "";
 
         // Only include tool calls with non-empty id and name
-        if (id_str[0] && name_str[0] && tool_call_has_valid_arguments_json(function_obj)) {
-            cJSON_AddItemToArray(filtered, cJSON_Duplicate(tool, 1));
+        char *repaired_arguments = NULL;
+        if (id_str[0] && name_str[0] && tool_call_has_valid_arguments_json(function_obj, &repaired_arguments)) {
+            cJSON *tool_copy = cJSON_Duplicate(tool, 1);
+            if (tool_copy && repaired_arguments) {
+                cJSON *function_copy = cJSON_GetObjectItem(tool_copy, "function");
+                if (function_copy) {
+                    cJSON_ReplaceItemInObject(function_copy, "arguments", cJSON_CreateString(repaired_arguments));
+                    LOG_WARN("Repaired malformed streamed tool arguments for id='%s', name='%s'", id_str, name_str);
+                }
+            }
+            if (tool_copy) {
+                cJSON_AddItemToArray(filtered, tool_copy);
+            }
+            free(repaired_arguments);
         } else {
             LOG_WARN("Filtering out invalid streamed tool call: id='%s', name='%s'", id_str, name_str);
         }
