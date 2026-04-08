@@ -974,11 +974,34 @@ static void anthropic_call_api(Provider *self, ConversationState *state, ApiCall
         cJSON *tool_calls = cJSON_GetObjectItem(message, "tool_calls");
         if (tool_calls && cJSON_IsArray(tool_calls)) {
             int raw_count = cJSON_GetArraySize(tool_calls);
+
+            // First pass: count valid tool calls (must have non-empty id AND name)
             int valid = 0;
             for (int i = 0; i < raw_count; i++) {
                 cJSON *tc = cJSON_GetArrayItem(tool_calls, i);
-                if (cJSON_GetObjectItem(tc, "function")) valid++;
+                cJSON *id = cJSON_GetObjectItem(tc, "id");
+                cJSON *fn = cJSON_GetObjectItem(tc, "function");
+
+                // Check for non-empty id
+                if (!id || !cJSON_IsString(id) || !id->valuestring[0]) {
+                    LOG_WARN("Skipping tool_call at index %d: missing or empty 'id'", i);
+                    continue;
+                }
+
+                // Check for function object with non-empty name
+                if (!fn) {
+                    LOG_WARN("Skipping tool_call at index %d: missing 'function' field", i);
+                    continue;
+                }
+                cJSON *name = cJSON_GetObjectItem(fn, "name");
+                if (!name || !cJSON_IsString(name) || !name->valuestring[0]) {
+                    LOG_WARN("Skipping tool_call at index %d: missing or empty 'name'", i);
+                    continue;
+                }
+
+                valid++;
             }
+
             if (valid > 0) {
                 api_resp->tools = arena_alloc(api_resp->arena,
                                              (size_t)valid * sizeof(ToolCall));
@@ -999,11 +1022,25 @@ static void anthropic_call_api(Provider *self, ConversationState *state, ApiCall
                     cJSON *tc = cJSON_GetArrayItem(tool_calls, i);
                     cJSON *id = cJSON_GetObjectItem(tc, "id");
                     cJSON *fn = cJSON_GetObjectItem(tc, "function");
-                    if (!fn) continue;
+
+                    // Skip if missing id or function (same checks as first pass)
+                    if (!id || !cJSON_IsString(id) || !id->valuestring[0]) {
+                        continue;
+                    }
+                    if (!fn) {
+                        continue;
+                    }
+
                     cJSON *name = cJSON_GetObjectItem(fn, "name");
                     cJSON *args = cJSON_GetObjectItem(fn, "arguments");
-                    api_resp->tools[idx].id = (id && cJSON_IsString(id)) ? arena_strdup(api_resp->arena, id->valuestring) : NULL;
-                    api_resp->tools[idx].name = (name && cJSON_IsString(name) && name->valuestring[0]) ? arena_strdup(api_resp->arena, name->valuestring) : NULL;
+
+                    // Skip if missing name
+                    if (!name || !cJSON_IsString(name) || !name->valuestring[0]) {
+                        continue;
+                    }
+
+                    api_resp->tools[idx].id = arena_strdup(api_resp->arena, id->valuestring);
+                    api_resp->tools[idx].name = arena_strdup(api_resp->arena, name->valuestring);
                     if (args && cJSON_IsString(args)) {
                         api_resp->tools[idx].parameters = cJSON_Parse(args->valuestring);
                         if (!api_resp->tools[idx].parameters) api_resp->tools[idx].parameters = cJSON_CreateObject();
@@ -1012,7 +1049,7 @@ static void anthropic_call_api(Provider *self, ConversationState *state, ApiCall
                     }
                     idx++;
                 }
-                api_resp->tool_count = valid;
+                api_resp->tool_count = idx;
             }
         }
 
