@@ -938,6 +938,7 @@ static void anthropic_call_api(Provider *self, ConversationState *state, ApiCall
         // Initialize ApiResponse
         memset(api_resp, 0, sizeof(ApiResponse));
         api_resp->arena = arena;
+        api_resp->ui_streamed = enable_streaming ? 1 : 0;
         api_resp->raw_response = openai_like;
 
         cJSON *choices = cJSON_GetObjectItem(openai_like, "choices");
