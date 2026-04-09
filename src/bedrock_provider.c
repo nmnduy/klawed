@@ -273,6 +273,11 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
                                     } else if (ctx->state->tui) {
                                         tui_update_last_conversation_line(ctx->state->tui, text->valuestring);
                                     }
+                                    // Send streaming chunk to SQLite queue if enabled
+                                    if (ctx->state->sqlite_queue_context) {
+                                        sqlite_queue_send_streaming_chunk(ctx->state->sqlite_queue_context,
+                                                                          "client", text->valuestring);
+                                    }
                                 }
 
                                 LOG_DEBUG("Bedrock stream delta: %s", text->valuestring);
