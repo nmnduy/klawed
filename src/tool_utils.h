@@ -7,6 +7,8 @@
 
 #include <stddef.h>
 
+struct ConversationState;
+
 // Summarize a bash command for display purposes.
 // - Writes a concise preview into `out` (NUL-terminated).
 // - If the command begins with "cd <dir> &&" or "cd <dir>;" and <dir> is the
@@ -33,5 +35,18 @@ void secure_free(void *ptr, size_t size);
 // Returns 1 if the tool is disabled, 0 otherwise.
 int is_tool_disabled(const char *tool_name);
 
-#endif // TOOL_UTILS_H
+// Set the process-wide runtime disabled tool list used by interactive
+// settings. Pass NULL or an empty string to clear the override.
+void set_runtime_disabled_tools(const char *disabled_tools);
 
+// Check if a tool is disabled for the current runtime state. Uses the
+// state-specific disabled tool list when available, otherwise falls back to
+// KLAWED_DISABLE_TOOLS.
+int is_tool_disabled_for_state(const char *tool_name, const struct ConversationState *state);
+
+// Check whether streaming is enabled for the current runtime state. Uses the
+// state-specific toggle when available, otherwise falls back to
+// KLAWED_ENABLE_STREAMING.
+int is_streaming_enabled(const struct ConversationState *state);
+
+#endif // TOOL_UTILS_H

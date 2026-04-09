@@ -27,6 +27,7 @@ static const HelpLine help_content[] = {
     {NULL, "/exit, /quit", "Exit the application"},
     {NULL, "/add-dir <path>", "Add directory to working directories"},
     {NULL, "/themes", "Browse and preview color themes"},
+    {NULL, "/settings", "Open runtime settings menu"},
     {NULL, "/voice", "Record voice input and transcribe"},
     {NULL, "/vim", "Open vim in current directory"},
     {NULL, "/dump [file-path]", "Dump conversation to file"},
