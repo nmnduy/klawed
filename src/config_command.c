@@ -2,45 +2,92 @@
  * config_command.c - Configuration Command
  *
  * Provides a /config command to view and modify configuration settings.
- * Supports: /config llm_provider <name> to switch LLM providers
  */
 
 #include "config_command.h"
 #include "commands.h"
+#include "compaction.h"
 #include "config.h"
 #include "logger.h"
+#include "provider.h"
+#include "tool_utils.h"
 #include "tui.h"
 #include "ui/ui_output.h"
-#include "conversation/conversation_state.h"
 #include "util/string_utils.h"
-#include "provider.h"
+#include <bsd/string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <bsd/string.h>
+#include <strings.h>
 
-/**
- * Switch provider for the current session
- *
- * @param state Conversation state
- * @param provider_key Provider key to switch to
- * @return 0 on success, -1 on error
- */
-static int switch_provider_for_session(ConversationState *state, const char *provider_key) {
+static void set_status_message(ConversationState *state, const char *message) {
+    if (state && state->tui && message) {
+        tui_update_status(state->tui, message);
+    }
+}
+
+static void copy_status(char *status_out, size_t status_out_size, const char *message) {
+    if (status_out && status_out_size > 0) {
+        strlcpy(status_out, message ? message : "", status_out_size);
+    }
+}
+
+static int parse_bool_value(const char *value, int *out) {
+    if (!value || !out) {
+        return -1;
+    }
+
+    if (strcmp(value, "1") == 0 ||
+        strcasecmp(value, "true") == 0 ||
+        strcasecmp(value, "yes") == 0 ||
+        strcasecmp(value, "on") == 0 ||
+        strcasecmp(value, "enable") == 0 ||
+        strcasecmp(value, "enabled") == 0) {
+        *out = 1;
+        return 0;
+    }
+
+    if (strcmp(value, "0") == 0 ||
+        strcasecmp(value, "false") == 0 ||
+        strcasecmp(value, "no") == 0 ||
+        strcasecmp(value, "off") == 0 ||
+        strcasecmp(value, "disable") == 0 ||
+        strcasecmp(value, "disabled") == 0) {
+        *out = 0;
+        return 0;
+    }
+
+    return -1;
+}
+
+static void ensure_compaction_config(ConversationState *state, int enabled) {
+    if (!state) {
+        return;
+    }
+
+    if (!state->compaction_config) {
+        state->compaction_config = malloc(sizeof(CompactionConfig));
+        if (!state->compaction_config) {
+            LOG_ERROR("[Config] Failed to allocate compaction config");
+            return;
+        }
+        compaction_init_config(state->compaction_config, enabled, state->model);
+    }
+
+    state->compaction_config->enabled = enabled;
+}
+
+int switch_provider_for_session(ConversationState *state, const char *provider_key) {
     if (!state || !provider_key) {
         LOG_ERROR("[Config] Invalid arguments for switch_provider_for_session");
         return -1;
     }
 
-    LOG_INFO("[Config] Switching to provider '%s' for current session", provider_key);
-
-    // Load configuration
     KlawedConfig config;
     if (config_load(&config) != 0) {
         config_init_defaults(&config);
     }
 
-    // Find the provider configuration
     const NamedProviderConfig *named_provider = config_find_provider(&config, provider_key);
     if (!named_provider) {
         LOG_ERROR("[Config] Provider '%s' not found in configuration", provider_key);
@@ -49,156 +96,236 @@ static int switch_provider_for_session(ConversationState *state, const char *pro
 
     const LLMProviderConfig *provider_config = &named_provider->config;
 
-    // Clean up old provider if it exists
     if (state->provider) {
         state->provider->cleanup(state->provider);
         state->provider = NULL;
-        LOG_DEBUG("[Config] Old provider cleaned up");
     }
 
-    // Free old API URL if it exists
-    if (state->api_url) {
-        free(state->api_url);
-        state->api_url = NULL;
-    }
+    free(state->api_url);
+    state->api_url = NULL;
 
-    // Update model
-    if (state->model) {
-        free(state->model);
-    }
+    free(state->model);
     state->model = strdup(provider_config->model[0] != '\0' ? provider_config->model : "gpt-4");
     if (!state->model) {
         LOG_ERROR("[Config] Failed to allocate memory for model");
         return -1;
     }
 
-    // Initialize new provider
     ProviderInitResult provider_result;
     provider_init(state->model, state->api_key, &provider_result);
 
     if (!provider_result.provider) {
-        const char *error_msg = provider_result.error_message ? provider_result.error_message : "unknown error";
-        LOG_ERROR("[Config] Failed to initialize provider '%s': %s", provider_key, error_msg);
+        LOG_ERROR("[Config] Failed to initialize provider '%s': %s",
+                  provider_key,
+                  provider_result.error_message ? provider_result.error_message : "unknown error");
         free(provider_result.error_message);
         free(provider_result.api_url);
         return -1;
     }
 
-    // Update state with new provider and API URL
     state->provider = provider_result.provider;
     state->api_url = provider_result.api_url;
     free(provider_result.error_message);
-
-    LOG_INFO("[Config] Successfully switched to provider '%s' (model: %s, API URL: %s)",
-             provider_key, state->model, state->api_url ? state->api_url : "(null)");
-
     return 0;
 }
 
-/**
- * Handle /config command
- */
+static int save_and_report(KlawedConfig *config,
+                           ConversationState *state,
+                           const char *message,
+                           char *status_out,
+                           size_t status_out_size) {
+    if (config_save(config) != 0) {
+        set_status_message(state, "Failed to save configuration");
+        copy_status(status_out, status_out_size, "Failed to save configuration");
+        return -1;
+    }
+
+    set_status_message(state, message);
+    copy_status(status_out, status_out_size, message);
+    return 0;
+}
+
+int config_apply_setting(ConversationState *state,
+                         const char *setting,
+                         const char *value,
+                         char *status_out,
+                         size_t status_out_size) {
+    if (!state || !setting || !value) {
+        copy_status(status_out, status_out_size, "Invalid configuration request");
+        return -1;
+    }
+
+    KlawedConfig config;
+    if (config_load(&config) != 0) {
+        config_init_defaults(&config);
+    }
+
+    if (strcmp(setting, "llm_provider") == 0 || strcmp(setting, "provider") == 0) {
+        const NamedProviderConfig *provider = config_find_provider(&config, value);
+        if (!provider) {
+            copy_status(status_out, status_out_size, "Provider not found");
+            set_status_message(state, "Provider not found");
+            return -1;
+        }
+
+        strlcpy(config.active_provider, value, sizeof(config.active_provider));
+        if (config_save(&config) != 0) {
+            copy_status(status_out, status_out_size, "Failed to save provider configuration");
+            set_status_message(state, "Failed to save provider configuration");
+            return -1;
+        }
+
+        if (switch_provider_for_session(state, value) == 0) {
+            char message[256];
+            snprintf(message, sizeof(message), "Provider: %s", value);
+            set_status_message(state, message);
+            copy_status(status_out, status_out_size, message);
+            return 0;
+        }
+
+        copy_status(status_out, status_out_size, "Saved provider, but session switch failed");
+        set_status_message(state, "Saved provider, but session switch failed");
+        return -1;
+    }
+
+    if (strcmp(setting, "streaming") == 0) {
+        int enabled = 0;
+        if (parse_bool_value(value, &enabled) != 0) {
+            copy_status(status_out, status_out_size, "Streaming expects on/off");
+            return -1;
+        }
+
+        config.streaming_enabled = enabled;
+        state->streaming_enabled = enabled;
+        return save_and_report(&config,
+                               state,
+                               enabled ? "Streaming enabled" : "Streaming disabled",
+                               status_out,
+                               status_out_size);
+    }
+
+    if (strcmp(setting, "auto_compact") == 0 || strcmp(setting, "autocompact") == 0) {
+        int enabled = 0;
+        if (parse_bool_value(value, &enabled) != 0) {
+            copy_status(status_out, status_out_size, "Auto-compaction expects on/off");
+            return -1;
+        }
+
+        config.auto_compact_enabled = enabled;
+        ensure_compaction_config(state, enabled);
+        if (!state->compaction_config) {
+            copy_status(status_out, status_out_size, "Failed to allocate compaction config");
+            return -1;
+        }
+        state->compaction_config->threshold_percent = config.compaction_threshold_percent;
+
+        return save_and_report(&config,
+                               state,
+                               enabled ? "Auto-compaction enabled" : "Auto-compaction disabled",
+                               status_out,
+                               status_out_size);
+    }
+
+    if (strcmp(setting, "compaction_threshold") == 0 || strcmp(setting, "compaction_threshold_percent") == 0) {
+        int threshold = atoi(value);
+        if (threshold < 1 || threshold > 100) {
+            copy_status(status_out, status_out_size, "Compaction threshold must be 1-100");
+            return -1;
+        }
+
+        config.compaction_threshold_percent = threshold;
+        ensure_compaction_config(state, config.auto_compact_enabled);
+        if (state->compaction_config) {
+            state->compaction_config->threshold_percent = threshold;
+        }
+
+        char message[256];
+        snprintf(message, sizeof(message), "Compaction threshold: %d%%", threshold);
+        return save_and_report(&config, state, message, status_out, status_out_size);
+    }
+
+    if (strcmp(setting, "thinking_style") == 0) {
+        TUIThinkingStyle style = config_thinking_style_from_string(value);
+        if (strcmp(value, "wave") != 0 && strcmp(value, "pacman") != 0) {
+            copy_status(status_out, status_out_size, "Thinking style must be wave or pacman");
+            return -1;
+        }
+
+        config.thinking_style = style;
+        if (state->tui) {
+            state->tui->thinking_style = style;
+        }
+
+        char message[256];
+        snprintf(message, sizeof(message), "Thinking style: %s", config_thinking_style_to_string(style));
+        return save_and_report(&config, state, message, status_out, status_out_size);
+    }
+
+    if (strcmp(setting, "disabled_tools") == 0) {
+        strlcpy(config.disabled_tools, value, sizeof(config.disabled_tools));
+
+        free(state->disabled_tools);
+        state->disabled_tools = NULL;
+        if (value[0] != '\0') {
+            state->disabled_tools = strdup(value);
+            if (!state->disabled_tools) {
+                copy_status(status_out, status_out_size, "Failed to save disabled tools");
+                return -1;
+            }
+        }
+        set_runtime_disabled_tools(value);
+
+        return save_and_report(&config,
+                               state,
+                               value[0] != '\0' ? "Disabled tools updated" : "Disabled tools cleared",
+                               status_out,
+                               status_out_size);
+    }
+
+    copy_status(status_out, status_out_size, "Unknown setting");
+    return -1;
+}
+
+static void print_config_help(void) {
+    printf("Usage: /config <setting> <value>\n");
+    printf("Available settings:\n");
+    printf("  llm_provider <name>\n");
+    printf("  auto_compact <on|off>\n");
+    printf("  compaction_threshold <1-100>\n");
+    printf("  streaming <on|off>\n");
+    printf("  thinking_style <wave|pacman>\n");
+    printf("  disabled_tools <comma-separated tool names>\n");
+}
+
 int cmd_config(ConversationState *state, const char *args) {
     if (!state) {
-        // In non-TUI mode, print to stderr
         fprintf(stderr, "Error: No conversation state available\n");
         return -1;
     }
 
-    // Trim leading whitespace from args
-    while (*args == ' ' || *args == '\t') args++;
+    while (*args == ' ' || *args == '\t') {
+        args++;
+    }
 
-    // If no arguments, show help
-    if (strlen(args) == 0) {
-        printf("Usage: /config <setting> <value>\n");
-        printf("Available settings:\n");
-        printf("  llm_provider <name> - Switch LLM provider (use /provider list to see available)\n");
-        printf("\nSee also: /provider - View and switch LLM providers\n");
+    if (*args == '\0') {
+        print_config_help();
         return 0;
     }
 
-    // Parse command: /config <setting> <value>
     char setting[64];
-    char value[CONFIG_PROVIDER_KEY_MAX];  // Provider keys are limited to 64 chars
-
-    // Try to parse setting and value
-    int parsed = sscanf(args, "%63s %63[^\n]", setting, value);
-
-    if (parsed < 1) {
-        fprintf(stderr, "Error: Invalid syntax. Use: /config <setting> <value>\n");
+    char value[CONFIG_DISABLED_TOOLS_MAX];
+    int parsed = sscanf(args, "%63s %511[^\n]", setting, value);
+    if (parsed < 2) {
+        print_config_help();
         return -1;
     }
 
-    // Handle different settings
-    if (strcmp(setting, "llm_provider") == 0) {
-        if (parsed < 2) {
-            fprintf(stderr, "Error: Provider name required. Use: /config llm_provider <name>\n");
-            printf("Use /provider list to see available providers\n");
-            return -1;
-        }
-
-        // Load configuration
-        KlawedConfig config;
-        if (config_load(&config) != 0) {
-            config_init_defaults(&config);
-        }
-
-        // Check if the provider exists
-        const NamedProviderConfig *provider = config_find_provider(&config, value);
-        if (!provider) {
-            if (state->tui) {
-                char error_msg[256];
-                snprintf(error_msg, sizeof(error_msg), "Provider '%s' not found", value);
-                tui_update_status(state->tui, error_msg);
-            }
-            fprintf(stderr, "Error: Provider '%s' not found\n", value);
-            printf("Use /provider list to see available providers\n");
-            return -1;
-        }
-
-        // Update active provider in config
-        strlcpy(config.active_provider, value, sizeof(config.active_provider));
-
-        // Save the configuration
-        if (config_save(&config) != 0) {
-            if (state->tui) {
-                tui_update_status(state->tui, "Failed to save provider configuration");
-            }
-            fprintf(stderr, "Error: Failed to save provider configuration\n");
-            return -1;
-        }
-
-        // Switch provider for the current session
-        int session_switch_result = switch_provider_for_session(state, value);
-
-        // Show success message
-        if (state->tui) {
-            char success_msg[256];
-            if (session_switch_result == 0) {
-                snprintf(success_msg, sizeof(success_msg), "Switched to provider '%s'", value);
-            } else {
-                snprintf(success_msg, sizeof(success_msg), "Saved provider '%s' to config", value);
-            }
-            tui_update_status(state->tui, success_msg);
-        }
-
-        printf("Configuration updated:\n");
-        printf("  llm_provider = %s\n", value);
-        printf("  Type: %s\n", config_provider_type_to_string(provider->config.provider_type));
-        if (provider->config.model[0] != '\0') {
-            printf("  Model: %s\n", provider->config.model);
-        }
-        printf("Configuration saved to .klawed/config.json\n");
-        if (session_switch_result == 0) {
-            printf("Provider switched for current session\n");
-        } else {
-            printf("Note: Could not switch provider for current session\n");
-        }
-
-        return 0;
-    } else {
-        fprintf(stderr, "Error: Unknown setting '%s'\n", setting);
-        printf("Available settings: llm_provider\n");
+    char status[256];
+    if (config_apply_setting(state, setting, value, status, sizeof(status)) != 0) {
+        fprintf(stderr, "Error: %s\n", status[0] != '\0' ? status : "configuration update failed");
         return -1;
     }
+
+    printf("%s\n", status);
+    return 0;
 }

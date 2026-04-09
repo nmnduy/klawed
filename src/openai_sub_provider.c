@@ -25,6 +25,7 @@
 #include "logger.h"
 #include "arena.h"
 #include "retry_logic.h"
+#include "tool_utils.h"
 #include "tui.h"
 #include "message_queue.h"
 #include "sqlite_queue.h"
@@ -673,13 +674,7 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
         }
     }
 
-    /* Check if streaming is enabled */
-    int enable_streaming = 0;
-    const char *streaming_env = getenv("KLAWED_ENABLE_STREAMING");
-    if (streaming_env &&
-        (strcmp(streaming_env, "1") == 0 || strcasecmp(streaming_env, "true") == 0)) {
-        enable_streaming = 1;
-    }
+    int enable_streaming = is_streaming_enabled(state);
 
     /* Determine URL */
     const char *url = (config->api_base && config->api_base[0] != '\0')
