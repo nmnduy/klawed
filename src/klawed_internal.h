@@ -161,6 +161,7 @@ typedef struct {
     AssistantMessage message;  // Assistant's text response
     ToolCall *tools;          // Array of tool calls (NULL if no tools)
     int tool_count;           // Number of tool calls
+    int ui_streamed;          // Non-zero if assistant text was already streamed to the UI
     cJSON *raw_response;      // Raw response for adding to history (owned, must be freed)
     char *error_message;      // Error message if API call failed (owned, must be freed)
     Arena *arena;             // Arena for all allocations (optional, NULL for heap allocation)
