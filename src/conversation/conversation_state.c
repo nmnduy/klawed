@@ -35,6 +35,8 @@ int conversation_state_init(ConversationState *state) {
 
     // Initialize compaction config (NULL by default)
     state->compaction_config = NULL;
+    state->streaming_enabled = 0;
+    state->disabled_tools = NULL;
 
     // Initialize subagent manager
     state->subagent_manager = malloc(sizeof(SubagentManager));
@@ -66,6 +68,10 @@ void conversation_state_destroy(ConversationState *state) {
     if (state->compaction_config) {
         free(state->compaction_config);
         state->compaction_config = NULL;
+    }
+    if (state->disabled_tools) {
+        free(state->disabled_tools);
+        state->disabled_tools = NULL;
     }
 
     // Clean up subagent manager
