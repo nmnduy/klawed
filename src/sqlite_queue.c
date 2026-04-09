@@ -2708,9 +2708,13 @@ static int sqlite_queue_prepare_statement(SQLiteQueueContext *ctx, sqlite3_stmt 
  */
 int sqlite_queue_send_streaming_chunk(SQLiteQueueContext *ctx, const char *receiver,
                                       const char *chunk) {
-    if (!ctx || !receiver || !chunk) {
+    if (!ctx || !receiver) {
         LOG_ERROR("SQLite Queue: Invalid parameters for send_streaming_chunk");
         return -1;
+    }
+
+    if (!chunk) {
+        chunk = "";
     }
 
     cJSON *json = cJSON_CreateObject();
@@ -2754,7 +2758,7 @@ int sqlite_queue_send_streaming_chunk(SQLiteQueueContext *ctx, const char *recei
  * @param userdata User data (expected to be SQLiteQueueContext*)
  */
 void sqlite_queue_streaming_callback(const char *chunk, void *userdata) {
-    if (!chunk || !userdata) {
+    if (!userdata) {
         return;
     }
 
@@ -2796,4 +2800,3 @@ static const char* sqlite_queue_error_to_string(SQLiteQueueErrorCode error_code)
         default: return "Unknown error";
     }
 }
-
