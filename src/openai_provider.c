@@ -489,6 +489,7 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
         // Initialize ApiResponse
         memset(api_response, 0, sizeof(ApiResponse));
         api_response->arena = arena;
+        api_response->ui_streamed = enable_streaming ? 1 : 0;
 
         // Initialize error_message to NULL
         api_response->error_message = NULL;
