@@ -2689,6 +2689,81 @@ static int sqlite_queue_prepare_statement(SQLiteQueueContext *ctx, sqlite3_stmt 
     return SQLITE_OK;
 }
 
+/**
+ * Send a streaming text chunk to the queue client.
+ *
+ * Used during streaming API responses to provide real-time partial text
+ * to clients. Each chunk is written as a separate message that the client
+ * can poll and display immediately.
+ *
+ * Message format sent to receiver:
+ *   { "messageType": "TEXT_STREAM_CHUNK",
+ *     "content": "<partial text chunk>",
+ *     "isComplete": false }
+ *
+ * @param ctx       SQLite queue context
+ * @param receiver  Receiver name (usually "client")
+ * @param chunk     Partial text chunk (can be empty string for heartbeat)
+ * @return 0 on success, -1 on failure
+ */
+int sqlite_queue_send_streaming_chunk(SQLiteQueueContext *ctx, const char *receiver,
+                                      const char *chunk) {
+    if (!ctx || !receiver || !chunk) {
+        LOG_ERROR("SQLite Queue: Invalid parameters for send_streaming_chunk");
+        return -1;
+    }
+
+    cJSON *json = cJSON_CreateObject();
+    if (!json) {
+        LOG_ERROR("SQLite Queue: Failed to create streaming chunk JSON object");
+        return -1;
+    }
+
+    cJSON_AddStringToObject(json, "messageType", "TEXT_STREAM_CHUNK");
+    cJSON_AddStringToObject(json, "content", chunk);
+    cJSON_AddBoolToObject(json, "isComplete", cJSON_False);
+
+    char *json_str = cJSON_PrintUnformatted(json);
+    if (!json_str) {
+        LOG_ERROR("SQLite Queue: Failed to serialize streaming chunk JSON");
+        cJSON_Delete(json);
+        return -1;
+    }
+
+    LOG_DEBUG("SQLite Queue: Sending streaming chunk (%zu bytes): %.50s...",
+              strlen(chunk), chunk);
+
+    int result = sqlite_queue_send(ctx, receiver, json_str, strlen(json_str));
+    free(json_str);
+    cJSON_Delete(json);
+
+    return result;
+}
+
+/**
+ * Streaming text callback function.
+ *
+ * This callback signature matches what providers expect for streaming updates.
+ * It can be assigned to ConversationState.streaming_text_callback.
+ *
+ * Usage:
+ *   state->streaming_text_callback = sqlite_queue_streaming_callback;
+ *   state->streaming_callback_userdata = ctx;
+ *
+ * @param chunk    Partial text chunk received from the API
+ * @param userdata User data (expected to be SQLiteQueueContext*)
+ */
+void sqlite_queue_streaming_callback(const char *chunk, void *userdata) {
+    if (!chunk || !userdata) {
+        return;
+    }
+
+    SQLiteQueueContext *ctx = (SQLiteQueueContext *)userdata;
+
+    // Send the chunk as a TEXT_STREAM_CHUNK message
+    sqlite_queue_send_streaming_chunk(ctx, "client", chunk);
+}
+
 __attribute__((format(printf, 3, 4)))
 static void sqlite_queue_set_error(SQLiteQueueContext *ctx, SQLiteQueueErrorCode error_code, const char *format, ...) {
     if (!ctx) return;
