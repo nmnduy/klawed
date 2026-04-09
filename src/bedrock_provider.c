@@ -588,6 +588,7 @@ static void bedrock_execute_request(BedrockConfig *config, const char *converse_
         // Initialize ApiResponse
         memset(api_response, 0, sizeof(ApiResponse));
         api_response->arena = arena;
+        api_response->ui_streamed = enable_streaming ? 1 : 0;
 
         // Keep raw response for history
         api_response->raw_response = openai_json;
