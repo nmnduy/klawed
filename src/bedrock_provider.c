@@ -15,6 +15,7 @@
 #include "http_client.h"
 #include "tui.h"  // For streaming TUI updates
 #include "message_queue.h"  // For thread-safe streaming updates
+#include "tool_utils.h"
 #include "util/string_utils.h" // For trim_whitespace
 
 #include <stdio.h>
@@ -836,11 +837,8 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
         profile = config->creds->profile;
     }
 
-    // Check if streaming is enabled via environment variable
-    int enable_streaming = 0;
-    const char *streaming_env = getenv("KLAWED_ENABLE_STREAMING");
-    if (streaming_env && (strcmp(streaming_env, "1") == 0 || strcasecmp(streaming_env, "true") == 0)) {
-        enable_streaming = 1;
+    int enable_streaming = is_streaming_enabled(state);
+    if (enable_streaming) {
         LOG_DEBUG("Bedrock provider: streaming enabled");
     }
 

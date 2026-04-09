@@ -139,6 +139,32 @@ int main(void) {
         }
     }
 
+    // Test 6: Save and load runtime settings
+    printf("\nTest 6: Save and load runtime settings\n");
+    config.streaming_enabled = 1;
+    config.auto_compact_enabled = 1;
+    config.compaction_threshold_percent = 80;
+    strcpy(config.disabled_tools, "Bash,Edit");
+    if (config_save(&config) != 0) {
+        printf("  FAIL: config_save() for runtime settings failed\n");
+        failures++;
+    } else {
+        KlawedConfig loaded_config;
+        config_init_defaults(&loaded_config);
+        if (config_load(&loaded_config) != 0) {
+            printf("  FAIL: config_load() for runtime settings failed\n");
+            failures++;
+        } else if (loaded_config.streaming_enabled != 1 ||
+                   loaded_config.auto_compact_enabled != 1 ||
+                   loaded_config.compaction_threshold_percent != 80 ||
+                   strcmp(loaded_config.disabled_tools, "Bash,Edit") != 0) {
+            printf("  FAIL: Runtime settings did not round-trip correctly\n");
+            failures++;
+        } else {
+            printf("  PASS: Runtime settings round-trip correctly\n");
+        }
+    }
+
     printf("\n=== Results ===\n");
     if (failures == 0) {
         printf("All tests passed!\n");

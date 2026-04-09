@@ -1829,6 +1829,38 @@ int main(int argc, char *argv[]) {
     state.persistence_db = NULL;  // Will be set by background loader
     state.max_retry_duration_ms = get_env_int_retry("KLAWED_MAX_RETRY_DURATION_MS", MAX_RETRY_DURATION_MS);
     state.bg_loaders = NULL;  // Will be set by start_background_loaders()
+    state.streaming_enabled = 0;
+    state.disabled_tools = NULL;
+
+    KlawedConfig runtime_config;
+    int runtime_config_loaded = (config_load(&runtime_config) == 0);
+    if (!auto_compact_enabled && runtime_config_loaded && runtime_config.auto_compact_enabled) {
+        auto_compact_enabled = 1;
+    }
+
+    if (runtime_config_loaded) {
+        state.streaming_enabled = runtime_config.streaming_enabled;
+        if (runtime_config.disabled_tools[0] != '\0') {
+            state.disabled_tools = strdup(runtime_config.disabled_tools);
+            if (!state.disabled_tools) {
+                LOG_ERROR("Failed to allocate runtime disabled tools");
+            }
+        }
+    }
+
+    const char *streaming_env = getenv("KLAWED_ENABLE_STREAMING");
+    if (streaming_env) {
+        state.streaming_enabled = (strcmp(streaming_env, "1") == 0 ||
+                                   strcasecmp(streaming_env, "true") == 0 ||
+                                   strcasecmp(streaming_env, "yes") == 0) ? 1 : 0;
+    }
+
+    const char *disabled_tools_env = getenv("KLAWED_DISABLE_TOOLS");
+    if (disabled_tools_env) {
+        free(state.disabled_tools);
+        state.disabled_tools = disabled_tools_env[0] != '\0' ? strdup(disabled_tools_env) : NULL;
+    }
+    set_runtime_disabled_tools(state.disabled_tools);
 
     // Initialize todo list
     state.todo_list = calloc(1, sizeof(TodoList));  // Use calloc to zero-initialize
@@ -1838,6 +1870,11 @@ int main(int argc, char *argv[]) {
         state.compaction_config = malloc(sizeof(CompactionConfig));
         if (state.compaction_config) {
             compaction_init_config(state.compaction_config, auto_compact_enabled, state.model);
+            if (runtime_config_loaded &&
+                runtime_config.compaction_threshold_percent >= 1 &&
+                runtime_config.compaction_threshold_percent <= 100) {
+                state.compaction_config->threshold_percent = runtime_config.compaction_threshold_percent;
+            }
             LOG_INFO("Compaction configuration initialized (model: %s, limit: %d tokens)",
                      state.model ? state.model : "(unknown)",
                      state.compaction_config->model_token_limit);

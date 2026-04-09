@@ -18,6 +18,7 @@
 #include "retry_logic.h"
 #include "tui.h"
 #include "message_queue.h"  // For thread-safe streaming updates
+#include "tool_utils.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -210,11 +211,7 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
     }
 
     // Check if streaming is enabled
-    int enable_streaming = 0;
-    const char *streaming_env = getenv("KLAWED_ENABLE_STREAMING");
-    if (streaming_env && (strcmp(streaming_env, "1") == 0 || strcasecmp(streaming_env, "true") == 0)) {
-        enable_streaming = 1;
-    }
+    int enable_streaming = is_streaming_enabled(state);
 
     // Build request JSON using OpenAI format with reasoning_content preserved
     // Kimi requires reasoning_content to be included in subsequent requests

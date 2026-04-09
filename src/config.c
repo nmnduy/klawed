@@ -24,6 +24,10 @@ void config_init_defaults(KlawedConfig *config) {
     config->input_box_style = INPUT_STYLE_HORIZONTAL;
     config->response_style = RESPONSE_STYLE_BORDER;
     config->thinking_style = THINKING_STYLE_WAVE;
+    config->streaming_enabled = 0;
+    config->auto_compact_enabled = 0;
+    config->compaction_threshold_percent = 75;
+    config->disabled_tools[0] = '\0';
     config->theme[0] = '\0';  // Empty means use default or KLAWED_THEME env var
 
     // Initialize LLM provider defaults (legacy single-provider)
@@ -231,6 +235,44 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
     if (thinking_style_item && cJSON_IsString(thinking_style_item)) {
         config->thinking_style = config_thinking_style_from_string(thinking_style_item->valuestring);
         LOG_DEBUG("[Config] Loaded thinking_style from %s: %s", label, thinking_style_item->valuestring);
+    }
+
+    // Read streaming_enabled
+    cJSON *streaming_item = cJSON_GetObjectItem(root, "streaming_enabled");
+    if (streaming_item) {
+        if (cJSON_IsBool(streaming_item)) {
+            config->streaming_enabled = cJSON_IsTrue(streaming_item) ? 1 : 0;
+        } else if (cJSON_IsNumber(streaming_item)) {
+            double value = cJSON_GetNumberValue(streaming_item);
+            config->streaming_enabled = (value > 0.5 || value < -0.5) ? 1 : 0;
+        }
+    }
+
+    // Read auto_compact_enabled
+    cJSON *auto_compact_item = cJSON_GetObjectItem(root, "auto_compact_enabled");
+    if (auto_compact_item) {
+        if (cJSON_IsBool(auto_compact_item)) {
+            config->auto_compact_enabled = cJSON_IsTrue(auto_compact_item) ? 1 : 0;
+        } else if (cJSON_IsNumber(auto_compact_item)) {
+            double value = cJSON_GetNumberValue(auto_compact_item);
+            config->auto_compact_enabled = (value > 0.5 || value < -0.5) ? 1 : 0;
+        }
+    }
+
+    // Read compaction_threshold_percent
+    cJSON *threshold_item = cJSON_GetObjectItem(root, "compaction_threshold_percent");
+    if (threshold_item && cJSON_IsNumber(threshold_item)) {
+        double threshold_value = cJSON_GetNumberValue(threshold_item);
+        int threshold = (int)threshold_value;
+        if (threshold >= 1 && threshold <= 100) {
+            config->compaction_threshold_percent = threshold;
+        }
+    }
+
+    // Read disabled_tools
+    cJSON *disabled_tools_item = cJSON_GetObjectItem(root, "disabled_tools");
+    if (disabled_tools_item && cJSON_IsString(disabled_tools_item) && disabled_tools_item->valuestring) {
+        strlcpy(config->disabled_tools, disabled_tools_item->valuestring, sizeof(config->disabled_tools));
     }
 
     // Read theme
@@ -561,6 +603,41 @@ int config_save(const KlawedConfig *config) {
         cJSON_SetValuestring(existing_thinking_style, config_thinking_style_to_string(config->thinking_style));
     } else if (config->thinking_style != defaults.thinking_style) {
         cJSON_AddStringToObject(root, "thinking_style", config_thinking_style_to_string(config->thinking_style));
+    }
+
+    cJSON *existing_streaming = cJSON_GetObjectItem(root, "streaming_enabled");
+    if (existing_streaming) {
+        cJSON_DeleteItemFromObject(root, "streaming_enabled");
+        cJSON_AddBoolToObject(root, "streaming_enabled", config->streaming_enabled ? 1 : 0);
+    } else if (config->streaming_enabled != defaults.streaming_enabled) {
+        cJSON_AddBoolToObject(root, "streaming_enabled", config->streaming_enabled ? 1 : 0);
+    }
+
+    cJSON *existing_auto_compact = cJSON_GetObjectItem(root, "auto_compact_enabled");
+    if (existing_auto_compact) {
+        cJSON_DeleteItemFromObject(root, "auto_compact_enabled");
+        cJSON_AddBoolToObject(root, "auto_compact_enabled", config->auto_compact_enabled ? 1 : 0);
+    } else if (config->auto_compact_enabled != defaults.auto_compact_enabled) {
+        cJSON_AddBoolToObject(root, "auto_compact_enabled", config->auto_compact_enabled ? 1 : 0);
+    }
+
+    cJSON *existing_threshold = cJSON_GetObjectItem(root, "compaction_threshold_percent");
+    if (existing_threshold) {
+        cJSON_DeleteItemFromObject(root, "compaction_threshold_percent");
+        cJSON_AddNumberToObject(root, "compaction_threshold_percent", (double)config->compaction_threshold_percent);
+    } else if (config->compaction_threshold_percent != defaults.compaction_threshold_percent) {
+        cJSON_AddNumberToObject(root, "compaction_threshold_percent", (double)config->compaction_threshold_percent);
+    }
+
+    cJSON *existing_disabled_tools = cJSON_GetObjectItem(root, "disabled_tools");
+    if (config->disabled_tools[0] != '\0') {
+        if (existing_disabled_tools) {
+            cJSON_SetValuestring(existing_disabled_tools, config->disabled_tools);
+        } else {
+            cJSON_AddStringToObject(root, "disabled_tools", config->disabled_tools);
+        }
+    } else if (existing_disabled_tools) {
+        cJSON_DeleteItemFromObject(root, "disabled_tools");
     }
 
     // Update theme - only add if non-empty and (already exists or differs from default empty)

@@ -101,11 +101,10 @@ cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *stat
             cJSON *error = cJSON_CreateObject();
             cJSON_AddStringToObject(error, "error", "Subagent-related tools are disabled when running as a subagent to prevent recursion");
             result = error;
-        } else if (is_tool_disabled(tool_name)) {
-            // Check if the tool is disabled via KLAWED_DISABLE_TOOLS
-            LOG_INFO("Tool '%s' execution blocked - disabled via KLAWED_DISABLE_TOOLS", tool_name);
+        } else if (is_tool_disabled_for_state(tool_name, state)) {
+            LOG_INFO("Tool '%s' execution blocked - disabled via runtime settings", tool_name);
             cJSON *error = cJSON_CreateObject();
-            cJSON_AddStringToObject(error, "error", "This tool has been disabled via KLAWED_DISABLE_TOOLS environment variable");
+            cJSON_AddStringToObject(error, "error", "This tool has been disabled in settings");
             result = error;
         } else {
             LOG_DEBUG("execute_tool: Found built-in tool '%s'", tool_name);
