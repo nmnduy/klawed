@@ -288,7 +288,7 @@ int sqlite_queue_send_auth_message(SQLiteQueueContext *ctx, const char *receiver
  *
  * @param ctx       SQLite queue context
  * @param receiver  Receiver name (usually "client")
- * @param chunk     Partial text chunk (can be empty string for heartbeat)
+ * @param chunk     Partial text chunk (NULL or empty string for heartbeat)
  * @return 0 on success, -1 on failure
  */
 int sqlite_queue_send_streaming_chunk(SQLiteQueueContext *ctx, const char *receiver,
