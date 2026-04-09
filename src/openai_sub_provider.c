@@ -944,6 +944,8 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
         return;
     }
 
+    api_response->ui_streamed = (enable_streaming && !use_responses_api) ? 1 : 0;
+
     /* Extract response ID for stateful conversation tracking (ChatGPT backend) */
     if (use_responses_api) {
         cJSON *id_item = cJSON_GetObjectItem(raw_json, "id");

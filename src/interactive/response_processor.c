@@ -312,7 +312,7 @@ void process_response(ConversationState *state,
     }
 
     // Display assistant's text content if present
-    if (response->message.text && response->message.text[0] != '\0') {
+    if (!response->ui_streamed && response->message.text && response->message.text[0] != '\0') {
         // Skip whitespace-only content
         const char *p = response->message.text;
         while (*p && isspace((unsigned char)*p)) p++;
