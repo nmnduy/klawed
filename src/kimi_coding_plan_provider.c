@@ -388,6 +388,8 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
             return;
         }
 
+        api_response->ui_streamed = enable_streaming ? 1 : 0;
+
         result.response = api_response;
         *out = result;
         return;
