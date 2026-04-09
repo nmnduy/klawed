@@ -13,6 +13,7 @@
 #include "config.h"
 #include "provider_command.h"
 #include "config_command.h"
+#include "settings_menu.h"
 #include "compaction.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
@@ -767,6 +768,15 @@ static Command config_cmd = {
     .needs_terminal = 0
 };
 
+static Command settings_cmd = {
+    .name = "settings",
+    .usage = "/settings",
+    .description = "Open interactive runtime settings menu",
+    .handler = cmd_settings,
+    .completer = NULL,
+    .needs_terminal = 0
+};
+
 static Command compact_cmd = {
     .name = "compact",
     .usage = "/compact",
@@ -802,6 +812,7 @@ void commands_init(void) {
     commands_register(&dump_cmd);
     commands_register(&provider_cmd);
     commands_register(&config_cmd);
+    commands_register(&settings_cmd);
     commands_register(&compact_cmd);
     commands_register(&autocompact_cmd);
 }

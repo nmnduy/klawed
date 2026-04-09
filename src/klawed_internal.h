@@ -279,6 +279,8 @@ typedef struct ConversationState {
 
     // Context compaction configuration
     struct CompactionConfig *compaction_config;  // Auto-compaction settings (NULL if not enabled)
+    int streaming_enabled;       // Runtime streaming toggle
+    char *disabled_tools;        // Runtime comma-separated disabled tools list (owned)
 
     // Context overflow recovery tracking
     int context_overflow_recovery_attempts;  // Track recovery retries to prevent infinite loops
