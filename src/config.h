@@ -21,6 +21,7 @@
 #define CONFIG_API_KEY_ENV_MAX 128
 #define CONFIG_PATH_MAX 512
 #define CONFIG_EXTRA_HEADERS_MAX 1024  // Max length for extra_headers string
+#define CONFIG_DISABLED_TOOLS_MAX 512
 
 // Maximum number of provider configurations
 #define CONFIG_MAX_PROVIDERS 15
@@ -68,6 +69,10 @@ typedef struct {
     TUIInputBoxStyle input_box_style;
     TUIResponseStyle response_style;
     TUIThinkingStyle thinking_style;
+    int streaming_enabled;
+    int auto_compact_enabled;
+    int compaction_threshold_percent;
+    char disabled_tools[CONFIG_DISABLED_TOOLS_MAX];
     char theme[CONFIG_THEME_MAX];
     LLMProviderConfig llm_provider;         // LLM provider configuration (legacy single-provider)
     NamedProviderConfig providers[CONFIG_MAX_PROVIDERS]; // Multiple named providers

@@ -10,6 +10,9 @@
 #include <ctype.h>
 
 #include "tool_utils.h"
+#include "klawed_internal.h"
+
+static char *runtime_disabled_tools = NULL;
 
 static void safe_copy_with_ellipsis(const char *src, char *out, size_t outsz) {
     if (!out || outsz == 0) return;
@@ -157,11 +160,15 @@ void secure_free(void *ptr, size_t size) {
     free(ptr);
 }
 
-int is_tool_disabled(const char *tool_name) {
-    if (!tool_name) return 0;
+static int is_truthy_string(const char *value) {
+    if (!value || value[0] == '\0') return 0;
+    return strcmp(value, "1") == 0 ||
+           strcasecmp(value, "true") == 0 ||
+           strcasecmp(value, "yes") == 0;
+}
 
-    const char *disabled_tools = getenv("KLAWED_DISABLE_TOOLS");
-    if (!disabled_tools || disabled_tools[0] == '\0') return 0;
+static int is_tool_disabled_from_list(const char *tool_name, const char *disabled_tools) {
+    if (!tool_name || !disabled_tools || disabled_tools[0] == '\0') return 0;
 
     // Make a copy so we can tokenize
     char *copy = strdup(disabled_tools);
@@ -191,4 +198,34 @@ int is_tool_disabled(const char *tool_name) {
 
     free(copy);
     return disabled;
+}
+
+int is_tool_disabled(const char *tool_name) {
+    if (is_tool_disabled_from_list(tool_name, runtime_disabled_tools)) {
+        return 1;
+    }
+    return is_tool_disabled_from_list(tool_name, getenv("KLAWED_DISABLE_TOOLS"));
+}
+
+void set_runtime_disabled_tools(const char *disabled_tools) {
+    free(runtime_disabled_tools);
+    runtime_disabled_tools = NULL;
+
+    if (disabled_tools && disabled_tools[0] != '\0') {
+        runtime_disabled_tools = strdup(disabled_tools);
+    }
+}
+
+int is_tool_disabled_for_state(const char *tool_name, const struct ConversationState *state) {
+    if (state && state->disabled_tools && state->disabled_tools[0] != '\0') {
+        return is_tool_disabled_from_list(tool_name, state->disabled_tools);
+    }
+    return is_tool_disabled(tool_name);
+}
+
+int is_streaming_enabled(const struct ConversationState *state) {
+    if (state) {
+        return state->streaming_enabled ? 1 : 0;
+    }
+    return is_truthy_string(getenv("KLAWED_ENABLE_STREAMING"));
 }

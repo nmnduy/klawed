@@ -23,6 +23,7 @@
 #include "tui.h"
 #include "message_queue.h"
 #include "sqlite_queue.h"
+#include "tool_utils.h"
 #include "util/string_utils.h"
 #include "anthropic_provider.h"  /* AnthropicStreamingContext and streaming helpers */
 
@@ -92,13 +93,7 @@ static void anthropic_sub_call_api(Provider *self, ConversationState *state,
         return;
     }
 
-    /* Check if streaming is enabled */
-    int enable_streaming = 0;
-    const char *streaming_env = getenv("KLAWED_ENABLE_STREAMING");
-    if (streaming_env &&
-        (strcmp(streaming_env, "1") == 0 || strcasecmp(streaming_env, "true") == 0)) {
-        enable_streaming = 1;
-    }
+    int enable_streaming = is_streaming_enabled(state);
 
     /* Build request using standard Anthropic format
      * We reuse the OpenAI→Anthropic conversion pipeline from anthropic_provider.c */
