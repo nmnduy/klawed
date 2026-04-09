@@ -266,4 +266,44 @@ int sqlite_queue_interrupt(SQLiteQueueContext *ctx);
 int sqlite_queue_send_auth_message(SQLiteQueueContext *ctx, const char *receiver,
                                    const char *message, int is_error);
 
+/**
+ * Send a streaming text chunk to the queue client.
+ *
+ * Used during streaming API responses to provide real-time partial text
+ * to clients. Each chunk is written as a separate message that the client
+ * can poll and display immediately.
+ *
+ * Message format sent to receiver:
+ *   { "messageType": "TEXT_STREAM_CHUNK",
+ *     "content": "<partial text chunk>",
+ *     "isComplete": false }
+ *
+ * When streaming completes, a final TEXT message with the complete content
+ * is sent, followed by END_AI_TURN.
+ *
+ * Clients can:
+ *   - Poll for TEXT_STREAM_CHUNK messages to display real-time streaming
+ *   - Accumulate chunks to show progressive response generation
+ *   - Fall back to waiting for the final TEXT message if they don't support streaming
+ *
+ * @param ctx       SQLite queue context
+ * @param receiver  Receiver name (usually "client")
+ * @param chunk     Partial text chunk (can be empty string for heartbeat)
+ * @return 0 on success, -1 on failure
+ */
+int sqlite_queue_send_streaming_chunk(SQLiteQueueContext *ctx, const char *receiver,
+                                      const char *chunk);
+
+/**
+ * Streaming text callback function type.
+ *
+ * This callback signature matches what providers expect for streaming updates.
+ * It can be assigned to ConversationState.streaming_text_callback.
+ *
+ * Usage:
+ *   state->streaming_text_callback = sqlite_queue_streaming_callback;
+ *   state->streaming_callback_userdata = ctx;
+ */
+void sqlite_queue_streaming_callback(const char *chunk, void *userdata);
+
 #endif // SQLITE_QUEUE_H

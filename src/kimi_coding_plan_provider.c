@@ -139,6 +139,11 @@ static int kimi_streaming_event_handler(StreamEvent *event, void *userdata) {
                             } else if (ctx->state->tui) {
                                 tui_update_last_conversation_line(ctx->state->tui, content->valuestring);
                             }
+                            // Send streaming chunk to SQLite queue if enabled
+                            if (ctx->state->sqlite_queue_context) {
+                                sqlite_queue_send_streaming_chunk(ctx->state->sqlite_queue_context,
+                                                                  "client", content->valuestring);
+                            }
                         }
                     }
 
