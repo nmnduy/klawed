@@ -637,6 +637,46 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
     }
 }
 
+// Update a specific conversation entry by index (for streaming to tracked entry)
+void tui_update_conversation_entry(TUIState *tui, int entry_index, const char *text) {
+    if (!tui || !tui->is_initialized || !text) return;
+
+    // Validate entry index
+    if (entry_index < 0 || entry_index >= tui->entries_count) {
+        LOG_WARN("[TUI] Invalid entry index %d (count=%d)", entry_index, tui->entries_count);
+        return;
+    }
+
+    // Validate conversation pad exists
+    if (!tui->wm.conv_pad) {
+        LOG_ERROR("[TUI] Cannot update conversation entry - conv_pad is NULL");
+        return;
+    }
+
+    // If updating the last entry, use the efficient path
+    if (entry_index == tui->entries_count - 1) {
+        tui_update_last_conversation_line(tui, text);
+        return;
+    }
+
+    // Updating a non-last entry: update text in memory only
+    // The pad will be inconsistent until next redraw/resize
+    ConversationEntry *entry = &tui->entries[entry_index];
+
+    // Append new text to the existing text
+    size_t old_len = entry->text ? strlen(entry->text) : 0;
+    size_t new_len = strlen(text);
+    char *new_text = realloc(entry->text, old_len + new_len + 1);
+    if (new_text) {
+        if (old_len == 0) {
+            new_text[0] = '\0';
+        }
+        strlcat(new_text, text, old_len + new_len + 1);
+        entry->text = new_text;
+        LOG_DEBUG("[TUI] Updated entry %d with %zu bytes (deferred redraw)", entry_index, new_len);
+    }
+}
+
 // Infer color pair from message prefix
 TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
     if (!prefix) {
