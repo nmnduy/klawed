@@ -273,8 +273,11 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
 #endif
     }
 
-    // Set spawn attributes: create new session and process group for kill(-pid, sig)
-    short flags = POSIX_SPAWN_SETSID | POSIX_SPAWN_SETPGROUP;
+    // Set spawn attributes: create new process group for kill(-pid, sig)
+    // Note: POSIX_SPAWN_SETSID is not used on macOS as it causes posix_spawn
+    // to fail with EPERM. Using SETPGROUP alone is sufficient for terminating
+    // the subagent and its children via kill(-pid, sig).
+    short flags = POSIX_SPAWN_SETPGROUP;
     posix_spawnattr_setflags(&spawnattr, flags);
     posix_spawnattr_setpgroup(&spawnattr, 0);  // New process group
 
