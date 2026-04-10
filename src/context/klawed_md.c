@@ -52,3 +52,44 @@ char* read_klawed_md(const char *working_dir) {
     content[file_size] = '\0';
     return content;
 }
+
+/**
+ * Read KLAWED.md from a specific file path.
+ * Reads the entire file into memory.
+ */
+char* read_klawed_md_from_path(const char *file_path) {
+    if (!file_path) {
+        return NULL;
+    }
+
+    // Check if file exists
+    struct stat st;
+    if (stat(file_path, &st) != 0) {
+        return NULL; // File doesn't exist
+    }
+
+    // Read the file
+    FILE *f = fopen(file_path, "r");
+    if (!f) {
+        return NULL;
+    }
+
+    // Allocate buffer based on file size
+    size_t file_size = (size_t)st.st_size;
+    char *content = malloc(file_size + 1);
+    if (!content) {
+        fclose(f);
+        return NULL;
+    }
+
+    size_t read_size = fread(content, 1, file_size, f);
+    fclose(f);
+
+    if (read_size != file_size) {
+        free(content);
+        return NULL;
+    }
+
+    content[file_size] = '\0';
+    return content;
+}
