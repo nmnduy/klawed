@@ -218,6 +218,9 @@ typedef struct TUIStateStruct {
 
     // Tool output connection tracking (for └─ tree connector)
     char *last_tool_name;             // Last rendered tool name (for tree connector)
+
+    // Streaming state tracking (prevents user input from hijacking AI streaming)
+    int streaming_entry_index;        // Index of entry currently being streamed to (-1 if none)
 } TUIState;
 
 // Initialize TUI (must be called before any other TUI functions)
@@ -237,6 +240,9 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
 
 // Update the last conversation line (for streaming responses)
 void tui_update_last_conversation_line(TUIState *tui, const char *text);
+
+// Update a specific conversation entry by index (for streaming to tracked entry)
+void tui_update_conversation_entry(TUIState *tui, int entry_index, const char *text);
 
 // Update status message
 void tui_update_status(TUIState *tui, const char *status_text);

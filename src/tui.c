@@ -278,6 +278,9 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
     // Reset assistant line tracking
     tui->last_assistant_line = -1;
 
+    // Reset streaming entry tracking (prevents stale streaming index)
+    tui->streaming_entry_index = -1;
+
     // Clear pad and reset content lines
     werase(tui->wm.conv_pad);
     window_manager_set_content_lines(&tui->wm, 0);
@@ -1145,11 +1148,20 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
                 msg->text ? msg->text : "",
                 "",
                 (TUIColorPair)msg->color_pair);
+            /* Record the index of the entry we just created for streaming */
+            tui->streaming_entry_index = tui->entries_count - 1;
             break;
 
         case TUI_MSG_STREAM_APPEND:
-            /* Append incremental text token to last streaming line */
-            tui_update_last_conversation_line(tui, msg->text ? msg->text : "");
+            /* Append incremental text token to the tracked streaming line */
+            if (tui->streaming_entry_index >= 0 &&
+                tui->streaming_entry_index < tui->entries_count) {
+                tui_update_conversation_entry(tui, tui->streaming_entry_index,
+                                               msg->text ? msg->text : "");
+            } else {
+                /* Fallback: if no streaming entry tracked, append to last line */
+                tui_update_last_conversation_line(tui, msg->text ? msg->text : "");
+            }
             break;
 
         default:
