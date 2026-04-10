@@ -16,4 +16,12 @@
  */
 char* read_klawed_md(const char *working_dir);
 
+/**
+ * Read KLAWED.md from a specific file path.
+ * Caller must free the returned string.
+ *
+ * Returns: Newly allocated string with file contents, or NULL if file doesn't exist or can't be read
+ */
+char* read_klawed_md_from_path(const char *file_path);
+
 #endif /* CONTEXT_KLAWED_MD_H */
