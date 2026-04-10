@@ -466,6 +466,18 @@ void render_status_window(TUIState *tui) {
         LOG_FINE("[TUI] No persistence database connection available");
     }
 
+    // During streaming, the current API call's tokens haven't been logged to the database yet.
+    // Fall back to last_prompt_tokens from conversation state to show current request size.
+    if (prompt_tokens == 0 && tui->conversation_state) {
+        if (conversation_state_lock(tui->conversation_state) == 0) {
+            if (tui->conversation_state->last_prompt_tokens > 0) {
+                prompt_tokens = tui->conversation_state->last_prompt_tokens;
+                LOG_FINE("[TUI] Using last_prompt_tokens from conversation state: %ld",
+                         (long)prompt_tokens);
+            }
+            conversation_state_unlock(tui->conversation_state);
+        }
+    }
 
     // Show token count when non-zero, but NOT in PACMAN mode (pacman bar replaces it)
     // Format: "17715 tok" (prompt tokens only — output tokens are usually negligible)
