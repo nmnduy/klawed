@@ -92,9 +92,12 @@ char* build_system_prompt(ConversationState *state) {
         "OS Version: %s\n"
         "Today's date: %s\n"
         "</env>\n"
-        "\nNote: Some values in tool output (API keys, tokens, passwords, private keys, etc.) "
-        "may appear as *** or [REDACTED PRIVATE KEY] — these have been automatically redacted "
-        "by the system before being shown to you.\n",
+        "\nSECURITY NOTICE: Values that look like secrets (API keys, tokens, passwords, private keys, etc.) "
+        "have been automatically REDACTED for security and will appear as *** or [REDACTED PRIVATE KEY]. "
+        "This is intentional — you CANNOT see the actual secret values directly. "
+        "To work with secret files, use file operations (Read, Glob) on the secret file path itself, "
+        "or pipe the file content through commands (e.g., 'cat /path/to/secret | some-command'). "
+        "Do not assume secrets are 'malformed' when you see redaction markers.\n",
         is_git ? "Yes" : "No",
         platform,
         os_version,
