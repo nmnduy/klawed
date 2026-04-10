@@ -246,3 +246,65 @@ You are encouraged to commit at the end of your completed coding task if changes
 Git commit conventions:
 - When AI commits changes, use all lowercase for the main commit message (subject line)
 - Keep commit bodies concise - don't write overly long commit messages
+
+## Multi-Device Commit Workflow
+
+Since multiple devices/agents commit to this repo, we use a **per-device branch workflow** to avoid conflicts and keep history clean.
+
+### Setup (one-time per device)
+
+```bash
+# Create branch name file if doesn't exist
+if [[ ! -f filesurf-commit-branch.txt ]]; then
+    HOSTNAME=$(hostname -s)
+    RAND_HASH=$(openssl rand -hex 4)  # 8 chars
+    echo "${HOSTNAME}-${RAND_HASH}" > filesurf-commit-branch.txt
+fi
+BRANCH=$(cat filesurf-commit-branch.txt)
+
+# Create the branch if it doesn't exist
+if ! git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    git checkout -b "$BRANCH"
+fi
+```
+
+### Commit Workflow
+
+```bash
+# 1. Always pull with rebase before committing
+BRANCH=$(cat filesurf-commit-branch.txt)
+git fetch origin
+git pull origin master --rebase
+
+# 2. Make changes and commit
+# ... changes ...
+git add -A
+git commit -m "feat: your commit message"
+
+# 3. Push to your device branch
+git push origin "$BRANCH"
+
+# 4. Merge to master frequently
+git checkout master
+git pull origin master
+git merge "$BRANCH"
+git push origin master
+
+# 5. Return to device branch
+git checkout "$BRANCH"
+```
+
+### Conflict Resolution
+
+- **Never force push** — always use `--rebase`
+- If conflicts exist, resolve them: `git add <files> && git rebase --continue`
+- If unable to resolve manually, stop and ask for help
+- Each worker only needs **one** branch — create once, reuse forever
+
+### Summary Rules
+
+| Rule | Command/Action |
+|------|----------------|
+| Never force push | Always use `--rebase` |
+| One branch per worker | Reuse `filesurf-commit-branch.txt` |
+| Merge to master often | Keeps history linear and clean |
