@@ -33,6 +33,16 @@ char* build_system_prompt(ConversationState *state) {
     char *git_status = is_git ? get_git_status(working_dir) : NULL;
     char *klawed_md = read_klawed_md(working_dir);
 
+    // Check for extra KLAWED.md file (e.g., from deployment environment)
+    const char *extra_klawed_md_path = getenv("KLAWED_EXTRA_KLAWED_MD");
+    char *extra_klawed_md = NULL;
+    if (extra_klawed_md_path && extra_klawed_md_path[0] != '\0') {
+        extra_klawed_md = read_klawed_md_from_path(extra_klawed_md_path);
+        if (extra_klawed_md) {
+            LOG_INFO("Loaded extra KLAWED.md from: %s", extra_klawed_md_path);
+        }
+    }
+
     // Calculate required buffer size
     size_t prompt_size = 2048; // Base size for the prompt template
     if (git_status) {
@@ -40,6 +50,9 @@ char* build_system_prompt(ConversationState *state) {
     }
     if (klawed_md) {
         prompt_size += strlen(klawed_md) + 512; // Extra space for formatting
+    }
+    if (extra_klawed_md) {
+        prompt_size += strlen(extra_klawed_md) + 512; // Extra space for formatting
     }
 
     // Add space for additional directories
@@ -180,10 +193,24 @@ char* build_system_prompt(ConversationState *state) {
             working_dir, klawed_md);
     }
 
+    // Add extra KLAWED.md content if available (e.g., deployment environment context)
+    if (extra_klawed_md && offset < (int)prompt_size) {
+        offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
+            "\n<system-reminder>\n"
+            "# Additional Context from Environment\n\n"
+            "Contents of %s (environment-specific instructions):\n\n"
+            "%s\n\n"
+            "IMPORTANT: this context may or may not be relevant to your tasks. "
+            "You should not respond to this context unless it is highly relevant to your task.\n"
+            "</system-reminder>\n",
+            extra_klawed_md_path, extra_klawed_md);
+    }
+
     free(date);
     free(os_version);
     free(git_status);
     free(klawed_md);
+    free(extra_klawed_md);
 
     (void)offset; // Suppress unused variable warning after final snprintf
 
