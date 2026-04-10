@@ -254,7 +254,7 @@ Since multiple devices/agents commit to this repo, we use a **per-device branch 
 ### Setup (one-time per device)
 
 ```bash
-# Create branch name file if doesn't exist
+# Create branch name file if doesn't exist (DO NOT commit this file)
 if [[ ! -f filesurf-commit-branch.txt ]]; then
     HOSTNAME=$(hostname -s)
     RAND_HASH=$(openssl rand -hex 4)  # 8 chars
@@ -267,6 +267,8 @@ if ! git show-ref --verify --quiet "refs/heads/$BRANCH"; then
     git checkout -b "$BRANCH"
 fi
 ```
+
+**Note:** `filesurf-commit-branch.txt` is already in `.gitignore` and should never be committed.
 
 ### Commit Workflow
 
