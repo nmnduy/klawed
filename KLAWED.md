@@ -303,6 +303,36 @@ git checkout "$BRANCH"
 - If unable to resolve manually, stop and ask for help
 - Each worker only needs **one** branch — create once, reuse forever
 
+### Server-Side Protection (Bare Repo)
+
+If your remote is a bare repo, add this `update` hook to enforce the "no force push" rule:
+
+```bash
+# On the server, in the bare repo
+cd /path/to/repo.git/hooks
+
+cat > update << 'EOF'
+#!/bin/bash
+refname="$1"
+oldrev="$2"
+newrev="$3"
+
+# Block force pushes to master/main
+case "$refname" in
+    refs/heads/master|refs/heads/main)
+        # Check if oldrev is an ancestor of newrev (fast-forward)
+        if ! git merge-base --is-ancestor "$oldrev" "$newrev" 2>/dev/null; then
+            echo "ERROR: Force push to $refname is not allowed" >&2
+            exit 1
+        fi
+        ;;
+esac
+exit 0
+EOF
+
+chmod +x update
+```
+
 ### Summary Rules
 
 | Rule | Command/Action |
