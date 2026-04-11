@@ -971,18 +971,37 @@ void provider_init(const char *model,
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_ZAI_CODING) {
-            LOG_INFO("Using Z.AI GLM Coding Plan provider (explicitly configured)");
+            LOG_INFO("[Provider] Initializing Z.AI GLM Coding Plan provider...");
+            LOG_INFO("[Provider] Model: %s", model);
+            LOG_INFO("[Provider] API key source: %s", api_key_source ? api_key_source : "(none)");
+            LOG_INFO("[Provider] Base URL: %s", base_url ? base_url : "(default)");
+            
+            // Log API key status (safely)
+            if (api_key_to_use && api_key_to_use[0] != '\0') {
+                size_t key_len = strlen(api_key_to_use);
+                if (key_len >= 8) {
+                    LOG_INFO("[Provider] API key available: length=%zu, prefix=%.4s..., suffix=...%.4s",
+                             key_len, api_key_to_use, api_key_to_use + key_len - 4);
+                } else {
+                    LOG_WARN("[Provider] API key available but unusually short: length=%zu", key_len);
+                }
+            } else {
+                LOG_ERROR("[Provider] No API key available for Z.AI provider!");
+            }
+            
             // Use create_with_headers if extra_headers are present in config
             Provider *prov;
             if (provider_config && provider_config->extra_headers[0] != '\0') {
+                LOG_INFO("[Provider] Using extra headers: %s", provider_config->extra_headers);
                 prov = zai_coding_provider_create_with_headers(api_key_to_use, base_url,
                                                                 provider_config->extra_headers);
             } else {
+                LOG_DEBUG("[Provider] No extra headers configured");
                 prov = zai_coding_provider_create(api_key_to_use, base_url);
             }
             if (!prov) {
                 result->error_message = strdup("Failed to initialize Z.AI Coding Plan provider (check logs for details)");
-                LOG_ERROR("Provider init failed: %s", result->error_message);
+                LOG_ERROR("[Provider] Z.AI provider init failed: %s", result->error_message);
                 arena_destroy(arena);
                 return;
             }
@@ -1003,7 +1022,14 @@ void provider_init(const char *model,
                 arena_destroy(arena);
                 return;
             }
-            LOG_INFO("Provider initialization successful: Z.AI GLM Coding (base URL: %s)", result->api_url);
+            LOG_INFO("[Provider] Z.AI provider initialized successfully");
+            LOG_INFO("[Provider] Base URL: %s", result->api_url);
+            if (cfg && cfg->api_key) {
+                size_t key_len = strlen(cfg->api_key);
+                LOG_INFO("[Provider] API key in config: length=%zu", key_len);
+            } else {
+                LOG_WARN("[Provider] API key not found in provider config after initialization!");
+            }
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_KIMI_CODING_PLAN) {
