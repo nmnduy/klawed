@@ -277,9 +277,12 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
         }
     } else {
         // Default Bearer token format
+        size_t key_len = strlen(config->api_key);
+        LOG_DEBUG("[OpenAI] Building Authorization header with key length: %zu", key_len);
         snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", config->api_key);
     }
     headers = curl_slist_append(headers, auth_header);
+    LOG_DEBUG("[OpenAI] Added Authorization header to request");
 
     // Add extra headers from environment
     if (config->extra_headers) {
@@ -701,6 +704,23 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
 
     // HTTP error
     result.is_retryable = is_http_error_retryable(result.http_status);
+    
+    // Enhanced logging for 401 authentication errors
+    if (result.http_status == 401) {
+        LOG_ERROR("[OpenAI Provider] Authentication failed (HTTP 401) - API key invalid or missing");
+        LOG_ERROR("[OpenAI Provider] Endpoint: %s", config->base_url);
+        if (config->api_key && config->api_key[0] != '\0') {
+            size_t key_len = strlen(config->api_key);
+            LOG_ERROR("[OpenAI Provider] API key available: length=%zu", key_len);
+            if (key_len >= 8) {
+                LOG_ERROR("[OpenAI Provider] API key prefix: %.4s..., suffix: ...%.4s",
+                          config->api_key, config->api_key + key_len - 4);
+            }
+        } else {
+            LOG_ERROR("[OpenAI Provider] API key is empty or NULL");
+        }
+        LOG_ERROR("[OpenAI Provider] Check that your API key is set correctly in the environment variable");
+    }
 
     // Extract error message from response if JSON
     cJSON *error_json = cJSON_Parse(result.raw_response);
