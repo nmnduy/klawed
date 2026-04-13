@@ -6,6 +6,7 @@
 #include "tool_image.h"
 #include "tool_sleep.h"
 #include "tool_todo.h"
+#include "codex_tools.h"
 #include "../explore_tools.h"
 #include "../klawed_internal.h"
 
@@ -43,6 +44,14 @@ static Tool tools[] = {
     // Explore tools (only work when KLAWED_EXPLORE_MODE=1)
     {"web_search", tool_web_search_wrapper},
     {"web_read", tool_web_read_wrapper},
+    // Codex-compatible tools (used by OpenAI subscription provider)
+    {"apply_patch", codex_tool_apply_patch_wrapper},
+    {"shell", codex_tool_shell_wrapper},
+    {"shell_command", codex_tool_shell_command_wrapper},
+    {"list_dir", codex_tool_list_dir_wrapper},
+    {"view_image", codex_tool_view_image_wrapper},
+    {"spawn_agent", codex_tool_spawn_agent_wrapper},
+    {"send_message", codex_tool_send_message_wrapper},
 #ifndef TEST_BUILD
     {"ListMcpResources", tool_list_mcp_resources},
     {"ReadMcpResource", tool_read_mcp_resource},
