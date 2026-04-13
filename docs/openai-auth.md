@@ -55,12 +55,12 @@ The first time klawed uses this provider, it will:
 2. Try to open your browser automatically
 3. Wait for you to sign in and authorize klawed
 
-After authorization, the token is saved to `~/.openai/auth.json` and reused on future runs. The token refreshes automatically in the background.
+After authorization, the token is saved to `~/.codex/auth.json` and reused on future runs. The token refreshes automatically in the background.
 
 ### Notes
 
 - Requires a **ChatGPT Plus or Pro** subscription (free accounts don't have API model access)
-- Token is stored at `~/.openai/auth.json` (mode 0600)
+- Token is stored at `~/.codex/auth.json`
 - Background thread auto-refreshes the token before it expires
 - Works across multiple klawed instances (subagents) via disk reload
 - Use `/provider chatgpt` inside a session to switch to this provider
@@ -71,7 +71,7 @@ To log out and delete the stored token:
 
 ```bash
 # Not yet a CLI command — delete manually:
-rm ~/.openai/auth.json
+rm ~/.codex/auth.json
 ```
 
 ---
