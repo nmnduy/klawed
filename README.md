@@ -22,7 +22,7 @@ sudo apt-get install libcurl4-openssl-dev libcjson-dev portaudio19-dev build-ess
 
 **Recommended: Use stable release**
 ```bash
-git clone --branch v0.32.44 https://github.com/nmnduy/klawed.git
+git clone --branch v0.32.45 https://github.com/nmnduy/klawed.git
 cd klawed
 make
 ```
