@@ -636,8 +636,9 @@ static cJSON *build_chatgpt_backend_request(ConversationState *state,
                                 "You are a helpful coding assistant.");
     }
 
-    /* Add tools with cache_control support (including MCP tools if available) */
-    cJSON *tool_defs = get_openai_subscription_tool_definitions(0, TOOL_SCHEMA_RESPONSES);
+    /* Use the canonical state-aware Responses tool list so this provider
+     * stays in sync with plan mode, MCP, dynamic tools, and validation. */
+    cJSON *tool_defs = get_tool_definitions_for_responses_api(state, 0);
     cJSON_AddItemToObject(req, "tools", tool_defs);
 
     conversation_state_unlock(state);

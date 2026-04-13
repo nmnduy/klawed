@@ -230,9 +230,9 @@ cJSON* build_openai_responses_request(ConversationState *state, int enable_cachi
 
     cJSON_AddItemToObject(request, "input", input_array);
 
-    // Add tools with cache_control support (including MCP tools if available)
-    // Use the Responses API-specific tool definitions function
-    cJSON *tool_defs = get_openai_subscription_tool_definitions(enable_caching, TOOL_SCHEMA_RESPONSES);
+    // Add tools with cache_control support (including MCP tools if available).
+    // Keep all Responses-based providers on the same state-aware tool builder.
+    cJSON *tool_defs = get_tool_definitions_for_responses_api(state, enable_caching);
     cJSON_AddItemToObject(request, "tools", tool_defs);
 
     conversation_state_unlock(state);
