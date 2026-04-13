@@ -28,6 +28,8 @@ typedef enum {
 
 void add_memory_tools(cJSON *tool_array, ToolSchemaFormat format);
 cJSON* get_tool_definitions(struct ConversationState *state, int enable_caching);
+/* Deprecated helper kept declared to satisfy strict prototype checks.
+ * Responses-based providers should use get_tool_definitions_for_responses_api(). */
 cJSON* get_openai_subscription_tool_definitions(int enable_caching,
                                                 ToolSchemaFormat format);
 
