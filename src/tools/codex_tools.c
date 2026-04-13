@@ -1638,8 +1638,7 @@ cJSON* codex_tool_spawn_agent(cJSON *args) {
 #endif
 
     /* Create log directory */
-    char log_dir[PATH_MAX];
-    snprintf(log_dir, sizeof(log_dir), ".klawed/subagent");
+    const char *log_dir = ".klawed/subagent";
     mkdir_p(log_dir);
 
     /* Generate log file path */
@@ -1649,8 +1648,13 @@ cJSON* codex_tool_spawn_agent(cJSON *args) {
     strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_info);
 
     char log_file[PATH_MAX];
-    snprintf(log_file, sizeof(log_file), "%s/subagent_%s_%d.log",
-             log_dir, timestamp, getpid());
+    int ret = snprintf(log_file, sizeof(log_file), "%s/subagent_%s_%d.log",
+                       log_dir, timestamp, getpid());
+    if (ret < 0 || (size_t)ret >= sizeof(log_file)) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Log file path too long");
+        return error;
+    }
 
     /* Escape message for shell */
     size_t escaped_size = strlen(message) * 2 + 1;
