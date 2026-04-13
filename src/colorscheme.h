@@ -209,6 +209,7 @@ static int load_kitty_theme_buf(const char *buf_data, Theme *theme) {
     int line_num = 0; (void)line_num;
     int parsed_count = 0;
     int found_foreground = 0;
+    int found_background = 0;
     while (fgets(line, sizeof(line), f)) {
         line_num++;
         size_t len = strlen(line);
@@ -224,6 +225,9 @@ static int load_kitty_theme_buf(const char *buf_data, Theme *theme) {
                 theme->foreground_rgb = rgb;
                 theme->assistant_rgb = rgb;
                 parsed_count++; found_foreground = 1;
+            } else if (strcmp(key, "background") == 0) {
+                theme->background_rgb = rgb;
+                parsed_count++; found_background = 1;
             } else if (strcmp(key, "color2") == 0) {
                 theme->user_rgb = rgb; parsed_count++;
             } else if (strcmp(key, "color3") == 0) {
@@ -258,7 +262,10 @@ static int load_kitty_theme_buf(const char *buf_data, Theme *theme) {
         theme->diff_context_rgb.g = (theme->diff_context_rgb.g * 6) / 10;
         theme->diff_context_rgb.b = (theme->diff_context_rgb.b * 6) / 10;
     }
-        fclose(f);
+    if (!found_background) {
+        fprintf(stderr, "\033[33mWarning: Theme missing 'background' color (used for input box background)\033[0m\n");
+    }
+    fclose(f);
     #pragma GCC diagnostic pop
     return parsed_count > 0;
 }
