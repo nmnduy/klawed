@@ -9,7 +9,7 @@
  *
  * Key features:
  * - Device code flow (no browser required on the device itself)
- * - Persistent token storage in ~/.openai/auth.json
+ * - Persistent token storage in ~/.codex/auth.json
  * - Background token refresh thread
  * - Token rotation support (refresh_token rotates on each use)
  */
@@ -108,7 +108,7 @@ typedef struct {
 
 /**
  * Create and initialize an OAuth manager.
- * Loads any existing token from disk (~/.openai/auth.json).
+ * Loads any existing token from disk (~/.codex/auth.json).
  *
  * @return Initialized manager, or NULL on error. Caller must destroy.
  */
