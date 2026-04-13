@@ -42,6 +42,27 @@ int main(void) {
         return 1;
     }
 
+    // Test 1b: Verify built-in light theme background parsing
+    printf("\nTest 1b: Loading built-in solarized-light theme\n");
+    g_theme_loaded = 0;  // Reset
+    result = init_colorscheme("solarized-light");
+
+    if (result == 0) {
+        printf("✓ Light theme loaded successfully\n");
+        printf("  background: RGB(%d, %d, %d)\n",
+               g_theme.background_rgb.r, g_theme.background_rgb.g, g_theme.background_rgb.b);
+
+        if (g_theme.background_rgb.r != 253 ||
+            g_theme.background_rgb.g != 246 ||
+            g_theme.background_rgb.b != 227) {
+            printf("✗ Built-in theme background was not parsed correctly\n");
+            return 1;
+        }
+    } else {
+        printf("✗ Light theme failed to load (expected to succeed)\n");
+        return 1;
+    }
+
     // Test 2: Try to load non-existent theme
     printf("\nTest 2: Loading non-existent theme\n");
     g_theme_loaded = 0;  // Reset
