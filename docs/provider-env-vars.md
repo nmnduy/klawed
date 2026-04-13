@@ -24,7 +24,7 @@ Klawed supports configuring LLM providers entirely through environment variables
 
 ### OpenAI Subscription (ChatGPT Plus/Pro)
 
-Uses OAuth device flow for authentication. Tokens are stored in `~/.openai/auth.json` by default.
+Uses OAuth device flow for authentication. Tokens are stored in `~/.codex/auth.json` by default.
 
 ```bash
 export KLAWED_PROVIDER_TYPE=openai_sub
@@ -37,7 +37,7 @@ klawed "your coding task here"
 ```
 
 **OAuth Token Location:**
-- Default: `~/.openai/auth.json`
+- Default: `~/.codex/auth.json`
 - Custom: Set `OPENAI_OAUTH_PATH` to use a different location
 
 This is useful for:
@@ -217,19 +217,19 @@ If you see authentication errors with OAuth providers:
 
 1. **Check token file exists:**
    ```bash
-   ls -la ~/.openai/auth.json  # For openai_sub
+   ls -la ~/.codex/auth.json  # For openai_sub
    ls -la ~/.kimi/oauth_token.json  # For kimi_coding_plan
    ```
 
 2. **Re-authenticate by deleting the token file:**
    ```bash
-   rm ~/.openai/auth.json
+   rm ~/.codex/auth.json
    # Run klawed again - it will prompt for browser login
    ```
 
 3. **Check file permissions:**
    ```bash
-   chmod 600 ~/.openai/auth.json
+   chmod 600 ~/.codex/auth.json
    ```
 
 ### API Key Issues
