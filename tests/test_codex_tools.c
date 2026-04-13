@@ -205,7 +205,6 @@ static void test_apply_patch_multiple_operations(void) {
         "*** Begin Patch\n"
         "*** Update File: %s/multi_a.txt\n"
         "@@context\n"
-        " aaa\n"
         "-aaa\n"
         "+bbb\n"
         "*** Add File: %s/multi_b.txt\n"
@@ -243,7 +242,6 @@ static void test_apply_patch_end_patch_inside_update(void) {
         "*** Begin Patch\n"
         "*** Update File: %s/update_then_add.txt\n"
         "@@context\n"
-        " old_content\n"
         "-old_content\n"
         "+new_content\n"
         "*** Add File: %s/should_exist.txt\n"
@@ -361,6 +359,11 @@ static void test_shell_command_with_single_quotes(void) {
     cJSON *exit_json = cJSON_GetObjectItem(result, "exit_code");
     if (exit_json && cJSON_IsNumber(exit_json)) {
         exit_code = exit_json->valueint;
+    }
+
+    if (exit_code != 0) {
+        printf("    DEBUG single_quote exit_code=%d stdout='%s'\n", exit_code,
+               stdout_json ? stdout_json->valuestring : "(null)");
     }
 
     int ok = (exit_code == 0 && stdout_json && cJSON_IsString(stdout_json) &&
@@ -483,9 +486,10 @@ static void test_list_dir_depth(void) {
         for (int i = 0; i < count; i++) {
             cJSON *entry = cJSON_GetArrayItem(entries, i);
             cJSON *name = cJSON_GetObjectItem(entry, "name");
-            if (name && cJSON_IsString(name) && strcmp(name->valuestring, "nested.txt") == 0) {
-                found_nested = 1;
-                break;
+            if (name && cJSON_IsString(name)) {
+                if (strcmp(name->valuestring, "subdir/nested.txt") == 0) {
+                    found_nested = 1;
+                }
             }
         }
     }
