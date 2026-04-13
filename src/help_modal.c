@@ -96,7 +96,8 @@ static const HelpLine help_content[] = {
     {" TIPS", NULL, NULL},
     {NULL, "", "Token usage stats shown in status bar (Normal mode)"},
     {NULL, "", "API history stored in ./.klawed/api_calls.db"},
-    {NULL, "", "Themes: tender, dracula, gruvbox-dark, solarized-dark"},
+    {NULL, "", "Themes: tender, dracula, gruvbox-dark, solarized-dark, atom-one-light"},
+    {NULL, "", "Light themes: pencil-light, solarized-light, tomorrow"},
     {NULL, "", "MCP servers configured in ~/.config/klawed/"},
 };
 

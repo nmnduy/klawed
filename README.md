@@ -106,7 +106,7 @@ No API key required - OAuth authentication will prompt you to authorize via brow
 
 ### Color Theme Support
 
-**Available built-in themes:** `kitty-default`, `dracula`, `gruvbox-dark`, `solarized-dark`, `black-metal`
+**Available built-in themes:** `tender`, `kitty-default`, `dracula`, `gruvbox-dark`, `solarized-dark`, `solarized-light`, `black-metal`, `atom-one-light`, `ayu`, `belafonte-night`, `molokai`, `pencil-light`, `bl1nk`, `tomorrow`
 
 Override via env var `KLAWED_THEME`
 
