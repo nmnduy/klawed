@@ -9,11 +9,15 @@ The TUI uses **Kitty terminal's theme format**, but themes are **embedded in the
 - `dracula` — Dark purple with vibrant colors
 - `gruvbox-dark` — Warm retro with low contrast
 - `solarized-dark` — Blue-tinted, carefully balanced
+- `solarized-light` — Solarized's paper-toned light variant
 - `black-metal` — Pure black with grayscale tones
 - `ayu` — Dark blue theme with warm accents
+- `atom-one-light` — Clean light theme with crisp ANSI colors
 - `belafonte-night` — Dark red/purple theme with earthy tones
 - `molokai` — Vibrant theme with bright colors inspired by Monokai
+- `pencil-light` — Soft gray light theme with bright accents
 - `bl1nk` — Dark theme with vibrant pink and purple accents
+- `tomorrow` — Simple white background with balanced colors
 
 ## Theme Explorer (Interactive Preview)
 
