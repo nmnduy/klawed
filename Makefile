@@ -749,7 +749,7 @@ test-wm: check-deps $(TEST_WM_TARGET)
 	@echo ""
 	@echo "Running Window Manager tests..."
 	@echo ""
-	@./$(TEST_WM_TARGET)
+	@TERM=xterm script -q -e -c "./$(TEST_WM_TARGET)" /dev/null 2>/dev/null || ./$(TEST_WM_TARGET)
 
 test-bash-timeout: check-deps $(TEST_BASH_TIMEOUT_TARGET)
 	@echo ""
