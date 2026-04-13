@@ -70,7 +70,7 @@ static void print_summary(void) {
 static void cleanup_test_dir(void) {
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "rm -rf %s", TEST_DIR_APPLY);
-    (void)system(cmd);
+    int ret __attribute__((unused)) = system(cmd);
 }
 
 static void setup_test_dir(void) {
@@ -419,13 +419,13 @@ static void setup_list_dir(void) {
              "rm -rf %s && mkdir -p %s/subdir && "
              "touch %s/file1.txt %s/file2.txt %s/subdir/nested.txt",
              TEST_DIR_LIST, TEST_DIR_LIST, TEST_DIR_LIST, TEST_DIR_LIST, TEST_DIR_LIST);
-    (void)system(cmd);
+    int ret1 __attribute__((unused)) = system(cmd);
 }
 
 static void cleanup_list_dir(void) {
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "rm -rf %s", TEST_DIR_LIST);
-    (void)system(cmd);
+    int ret2 __attribute__((unused)) = system(cmd);
 }
 
 static void test_list_dir_basic(void) {
