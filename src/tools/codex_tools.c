@@ -675,6 +675,10 @@ cJSON* codex_tool_apply_patch(const char *input) {
                 char *next = get_next_line(&pos);
 
                 if (!next || line_starts_with(next, "*** ")) {
+                    /* But not *** Move to: which is part of Update File */
+                    if (next && line_starts_with(next, "*** Move to:")) {
+                        goto handle_move_to;
+                    }
                     /* End of update or new operation */
                     if (hunk_count > 0) {
                         /* Apply accumulated hunk */
@@ -768,6 +772,7 @@ cJSON* codex_tool_apply_patch(const char *input) {
                     break;
                 }
 
+handle_move_to:
                 /* Check for Move to directive */
                 if (line_starts_with(next, "*** Move to:")) {
                     if (hunk_count > 0) {
@@ -1237,14 +1242,35 @@ cJSON* codex_tool_shell_command(cJSON *args) {
     int timed_out = 0;
     char *output = NULL;
     size_t output_size = 0;
+    volatile int interrupt_flag = 0;
 
-    /* Build shell command */
-    char shell_command[BUFFER_SIZE];
+    /* Build shell command with proper escaping for sh -c.
+     * Escape single quotes as \' and backslashes as \\ so the shell
+     * can parse the command correctly.
+     */
+    char escaped_command[BUFFER_SIZE * 2];
+    size_t j = 0;
+    for (size_t i = 0; command[i] && j < sizeof(escaped_command) - 3; i++) {
+        if (command[i] == '\\') {
+            escaped_command[j++] = '\\';
+            escaped_command[j++] = '\\';
+        } else if (command[i] == '\'') {
+            escaped_command[j++] = '\\';
+            escaped_command[j++] = '\'';
+        } else if (command[i] == '"') {
+            escaped_command[j++] = '\\';
+            escaped_command[j++] = '"';
+        } else {
+            escaped_command[j++] = command[i];
+        }
+    }
+    escaped_command[j] = '\0';
+
+    char shell_command[BUFFER_SIZE * 4];
     if (workdir && workdir[0] != '\0') {
-        /* Include cd command if workdir is specified */
-        snprintf(shell_command, sizeof(shell_command), "cd '%s' && sh -c '%s' 2>&1", workdir, command);
+        snprintf(shell_command, sizeof(shell_command), "cd '%s' && %s 2>&1", workdir, escaped_command);
     } else {
-        snprintf(shell_command, sizeof(shell_command), "sh -c '%s' 2>&1", command);
+        snprintf(shell_command, sizeof(shell_command), "%s 2>&1", escaped_command);
     }
 
     int exit_code = execute_command_with_timeout(
@@ -1253,7 +1279,7 @@ cJSON* codex_tool_shell_command(cJSON *args) {
         &timed_out,
         &output,
         &output_size,
-        NULL
+        &interrupt_flag
     );
 
     /* Build result */
@@ -1274,6 +1300,70 @@ cJSON* codex_tool_shell_command(cJSON *args) {
 /* ============================================================================
  * list_dir Tool Implementation
  * ============================================================================ */
+
+static int list_dir_recursive(const char *dir_path, const char *base_path,
+                              int depth, int max_depth,
+                              cJSON *entries, int *entry_number,
+                              int offset, int limit, int *total_count) {
+    DIR *dir = opendir(dir_path);
+    if (!dir) {
+        return -1;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        (*total_count)++;
+        (*entry_number)++;
+
+        if (*entry_number >= offset && cJSON_GetArraySize(entries) < limit) {
+            char full_path[PATH_MAX];
+            snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
+
+            struct stat st;
+            const char *entry_type = "unknown";
+            if (stat(full_path, &st) == 0) {
+                if (S_ISDIR(st.st_mode)) {
+                    entry_type = "directory";
+                } else if (S_ISREG(st.st_mode)) {
+                    entry_type = "file";
+                } else if (S_ISLNK(st.st_mode)) {
+                    entry_type = "symlink";
+                }
+            }
+
+            /* Compute relative path from base_path */
+            const char *display_name = full_path + strlen(base_path);
+            while (display_name[0] == '/') {
+                display_name++;
+            }
+
+            cJSON *entry_obj = cJSON_CreateObject();
+            cJSON_AddNumberToObject(entry_obj, "number", *entry_number);
+            cJSON_AddStringToObject(entry_obj, "name", display_name);
+            cJSON_AddStringToObject(entry_obj, "type", entry_type);
+            cJSON_AddItemToArray(entries, entry_obj);
+        }
+
+        /* Recurse into subdirectories */
+        if (depth < max_depth) {
+            char full_path[PATH_MAX];
+            snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
+
+            struct stat st;
+            if (stat(full_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+                list_dir_recursive(full_path, base_path, depth + 1, max_depth,
+                                   entries, entry_number, offset, limit, total_count);
+            }
+        }
+    }
+
+    closedir(dir);
+    return 0;
+}
 
 cJSON* codex_tool_list_dir(cJSON *args) {
     if (!args) {
@@ -1317,9 +1407,13 @@ cJSON* codex_tool_list_dir(cJSON *args) {
         if (depth > 5) depth = 5; /* Cap at 5 to prevent excessive recursion */
     }
 
-    /* Open directory */
-    DIR *dir = opendir(dir_path);
-    if (!dir) {
+    cJSON *entries = cJSON_CreateArray();
+    int entry_number = 0;
+    int total_count = 0;
+
+    if (list_dir_recursive(dir_path, dir_path, 1, depth, entries,
+                           &entry_number, offset, limit, &total_count) != 0) {
+        cJSON_Delete(entries);
         cJSON *error = cJSON_CreateObject();
         char err_msg[512];
         snprintf(err_msg, sizeof(err_msg), "Failed to open directory '%s': %s",
@@ -1327,59 +1421,6 @@ cJSON* codex_tool_list_dir(cJSON *args) {
         cJSON_AddStringToObject(error, "error", err_msg);
         return error;
     }
-
-    /* Collect all entries */
-    struct dirent *entry;
-    cJSON *entries = cJSON_CreateArray();
-    int entry_number = 0;
-    int total_count = 0;
-
-    while ((entry = readdir(dir)) != NULL) {
-        /* Skip . and .. */
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
-        }
-
-        total_count++;
-        entry_number++;
-
-        /* Skip entries before offset */
-        if (entry_number < offset) {
-            continue;
-        }
-
-        /* Check limit */
-        if (cJSON_GetArraySize(entries) >= limit) {
-            continue;
-        }
-
-        /* Build full path */
-        char full_path[PATH_MAX];
-        snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
-
-        /* Get file info */
-        struct stat st;
-        const char *entry_type = "unknown";
-        if (stat(full_path, &st) == 0) {
-            if (S_ISDIR(st.st_mode)) {
-                entry_type = "directory";
-            } else if (S_ISREG(st.st_mode)) {
-                entry_type = "file";
-            } else if (S_ISLNK(st.st_mode)) {
-                entry_type = "symlink";
-            }
-        }
-
-        /* Create entry object */
-        cJSON *entry_obj = cJSON_CreateObject();
-        cJSON_AddNumberToObject(entry_obj, "number", entry_number);
-        cJSON_AddStringToObject(entry_obj, "name", entry->d_name);
-        cJSON_AddStringToObject(entry_obj, "type", entry_type);
-
-        cJSON_AddItemToArray(entries, entry_obj);
-    }
-
-    closedir(dir);
 
     /* Build result */
     cJSON *result = cJSON_CreateObject();
