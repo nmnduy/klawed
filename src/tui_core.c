@@ -50,6 +50,17 @@ static short rgb_to_ncurses(int value) {
     return (short)((value * 1000) / 255);
 }
 
+static RGB blend_rgb(RGB base, RGB accent, int accent_pct) {
+    RGB blended;
+    int base_pct = 100 - accent_pct;
+
+    blended.r = (base.r * base_pct + accent.r * accent_pct) / 100;
+    blended.g = (base.g * base_pct + accent.g * accent_pct) / 100;
+    blended.b = (base.b * base_pct + accent.b * accent_pct) / 100;
+
+    return blended;
+}
+
 // Initialize ncurses color pairs from theme
 void tui_reload_colors(void) {
     // Check if terminal supports colors
@@ -75,6 +86,9 @@ void tui_reload_colors(void) {
         LOG_DEBUG("[TUI] Initializing ncurses colors from loaded theme");
 
         int supports_256 = (COLORS >= 256);
+        RGB input_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.user_rgb, 5);
+        RGB assistant_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.assistant_rgb, 3);
+        RGB tool_dim_rgb = blend_rgb(g_theme.foreground_rgb, g_theme.background_rgb, 50);
 
         // Define custom colors (colors 16-21 are safe to redefine)
         if (can_change_color()) {
@@ -126,15 +140,10 @@ void tui_reload_colors(void) {
                 rgb_to_ncurses(g_theme.todo_accent_rgb.g),
                 rgb_to_ncurses(g_theme.todo_accent_rgb.b));
 
-            // Input background color (theme background with subtle user color tint)
-            // Blend 5% of user color into background for subtle highlight
-            int bg_r = (g_theme.background_rgb.r * 95 + g_theme.user_rgb.r * 5) / 100;
-            int bg_g = (g_theme.background_rgb.g * 95 + g_theme.user_rgb.g * 5) / 100;
-            int bg_b = (g_theme.background_rgb.b * 95 + g_theme.user_rgb.b * 5) / 100;
             init_color(23,
-                rgb_to_ncurses(bg_r),
-                rgb_to_ncurses(bg_g),
-                rgb_to_ncurses(bg_b));
+                rgb_to_ncurses(input_bg_rgb.r),
+                rgb_to_ncurses(input_bg_rgb.g),
+                rgb_to_ncurses(input_bg_rgb.b));
 
             // Input border color (use user/green color)
             init_color(24,
@@ -142,24 +151,15 @@ void tui_reload_colors(void) {
                 rgb_to_ncurses(g_theme.user_rgb.g),
                 rgb_to_ncurses(g_theme.user_rgb.b));
 
-            // Assistant message background color (theme background with subtle assistant color tint)
-            // Blend 3% of assistant color into background for very subtle highlight
-            int asst_bg_r = (g_theme.background_rgb.r * 97 + g_theme.assistant_rgb.r * 3) / 100;
-            int asst_bg_g = (g_theme.background_rgb.g * 97 + g_theme.assistant_rgb.g * 3) / 100;
-            int asst_bg_b = (g_theme.background_rgb.b * 97 + g_theme.assistant_rgb.b * 3) / 100;
             init_color(25,
-                rgb_to_ncurses(asst_bg_r),
-                rgb_to_ncurses(asst_bg_g),
-                rgb_to_ncurses(asst_bg_b));
+                rgb_to_ncurses(assistant_bg_rgb.r),
+                rgb_to_ncurses(assistant_bg_rgb.g),
+                rgb_to_ncurses(assistant_bg_rgb.b));
 
-            // Dimmed tool text color: blend 50% foreground + 50% background for subtle gray
-            int tool_dim_r = (g_theme.foreground_rgb.r * 5 + g_theme.background_rgb.r * 5) / 10;
-            int tool_dim_g = (g_theme.foreground_rgb.g * 5 + g_theme.background_rgb.g * 5) / 10;
-            int tool_dim_b = (g_theme.foreground_rgb.b * 5 + g_theme.background_rgb.b * 5) / 10;
             init_color(26,
-                rgb_to_ncurses(tool_dim_r),
-                rgb_to_ncurses(tool_dim_g),
-                rgb_to_ncurses(tool_dim_b));
+                rgb_to_ncurses(tool_dim_rgb.r),
+                rgb_to_ncurses(tool_dim_rgb.g),
+                rgb_to_ncurses(tool_dim_rgb.b));
 
             // Initialize color pairs with custom colors
             init_pair(NCURSES_PAIR_FOREGROUND, 16, default_bg);
@@ -194,6 +194,9 @@ void tui_reload_colors(void) {
             int error_idx = rgb_to_256_index(g_theme.error_rgb);
             int search_idx = rgb_to_256_index(g_theme.search_rgb);
             int todo_accent_idx = rgb_to_256_index(g_theme.todo_accent_rgb);
+            int input_bg_idx = rgb_to_256_index(input_bg_rgb);
+            int assistant_bg_idx = rgb_to_256_index(assistant_bg_rgb);
+            int tool_dim_idx = rgb_to_256_index(tool_dim_rgb);
 
             init_pair(NCURSES_PAIR_FOREGROUND, (short)fg_idx, default_bg);
             init_pair(NCURSES_PAIR_USER, (short)user_idx, default_bg);
@@ -208,19 +211,13 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_TODO_IN_PROGRESS, (short)status_idx, default_bg);
             init_pair(NCURSES_PAIR_TODO_PENDING, (short)todo_accent_idx, default_bg);  // Magenta - distinct from assistant
             init_pair(NCURSES_PAIR_SEARCH, (short)search_idx, default_bg);  // Search highlight (color5 from theme)
-            init_pair(NCURSES_PAIR_INPUT_BG, (short)fg_idx, (short)236);   // Foreground on dark gray (236 in 256 palette)
+            init_pair(NCURSES_PAIR_INPUT_BG, (short)fg_idx, (short)input_bg_idx);
             init_pair(NCURSES_PAIR_INPUT_BORDER, (short)user_idx, default_bg);  // Border color (user/green)
-            init_pair(NCURSES_PAIR_USER_MSG_BG, (short)fg_idx, (short)236);   // User message background (same as input bg)
-            init_pair(NCURSES_PAIR_ASSISTANT_BG, (short)fg_idx, (short)235);  // Foreground on very dark gray (235)
+            init_pair(NCURSES_PAIR_USER_MSG_BG, (short)fg_idx, (short)input_bg_idx);
+            init_pair(NCURSES_PAIR_ASSISTANT_BG, (short)fg_idx, (short)assistant_bg_idx);
             init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, (short)assistant_idx, default_bg);  // Assistant color with no background (for border)
-            // Dimmed tool text: derive gray from foreground brightness mapped to grayscale 232-255, then darken by ~40%
-            int fg_brightness = (g_theme.foreground_rgb.r + g_theme.foreground_rgb.g + g_theme.foreground_rgb.b) / 3;
-            int dim_brightness = (fg_brightness * 6) / 10;  // Darken by 40%
-            int tool_dim_gray_idx = 232 + (dim_brightness * 23) / 255;
-            if (tool_dim_gray_idx < 232) tool_dim_gray_idx = 232;
-            if (tool_dim_gray_idx > 255) tool_dim_gray_idx = 255;
-            init_pair(NCURSES_PAIR_TOOL_DIM, (short)tool_dim_gray_idx, default_bg);
-            init_pair(NCURSES_PAIR_DIFF_CONTEXT, (short)tool_dim_gray_idx, default_bg);  // Same gray for diff context
+            init_pair(NCURSES_PAIR_TOOL_DIM, (short)tool_dim_idx, default_bg);
+            init_pair(NCURSES_PAIR_DIFF_CONTEXT, (short)tool_dim_idx, default_bg);
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -866,7 +863,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         /* "Use /add-dir to attach a directory as context.", */
         "Press Ctrl+D to exit quickly.",
         /* "Use /voice to record and transcribe audio (requires PortAudio).", */
-        "Set KLAWED_THEME to change colors. Available: tender (default), kitty-default, dracula, gruvbox-dark, solarized-dark, black-metal.",
+        "Set KLAWED_THEME to change colors. Try light themes: atom-one-light, pencil-light, solarized-light, tomorrow.",
         "Set KLAWED_LOG_LEVEL=DEBUG for verbose logs.",
         "API history stored in ./.klawed/api_calls.db (configurable via KLAWED_DB_PATH).",
         "Insert mode supports readline keys: Ctrl+A, Ctrl+E, Alt+B, Alt+F.",
