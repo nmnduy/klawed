@@ -41,8 +41,9 @@
  * Internal Forward Declarations
  * ============================================================================ */
 
-static char              *get_openai_dir(void);
+static char              *get_codex_dir(void);
 static char              *get_token_file_path(void);
+static char              *get_parent_dir(const char *path);
 static int                mkdir_p_with_mode(const char *path, mode_t mode);
 static OpenAIOAuthToken  *load_token_from_disk(void);
 static int                save_token_to_disk(const OpenAIOAuthToken *token);
@@ -97,9 +98,9 @@ static int mkdir_p_with_mode(const char *path, mode_t mode) {
 }
 
 /**
- * Return the ~/.openai directory path (caller must free).
+ * Return the ~/.codex directory path (caller must free).
  */
-static char *get_openai_dir(void) {
+static char *get_codex_dir(void) {
     const char *home = getenv("HOME");
     if (!home || home[0] == '\0') {
         struct passwd *pw = getpwuid(getuid());
@@ -115,44 +116,59 @@ static char *get_openai_dir(void) {
     char *path = malloc(PATH_MAX);
     if (!path) return NULL;
 
-    if (snprintf(path, PATH_MAX, "%s/.openai", home) >= PATH_MAX) {
+    if (snprintf(path, PATH_MAX, "%s/.codex", home) >= PATH_MAX) {
         free(path);
         return NULL;
     }
     return path;
 }
 
+static char *get_parent_dir(const char *path) {
+    if (!path) return NULL;
+
+    const char *slash = strrchr(path, '/');
+    if (!slash) return strdup(".");
+    if (slash == path) return strdup("/");
+
+    size_t len = (size_t)(slash - path);
+    char *dir = malloc(len + 1);
+    if (!dir) return NULL;
+
+    memcpy(dir, path, len);
+    dir[len] = '\0';
+    return dir;
+}
+
 /**
  * Return the full path to the auth token file (caller must free).
- * Path: ~/.openai/auth.json (or $OPENAI_OAUTH_PATH if set)
+ * Path: ~/.codex/auth.json (or $OPENAI_OAUTH_PATH if set)
  *
  * Environment variable OPENAI_OAUTH_PATH can be used to override the default
  * location. This is useful for sharing OAuth credentials across machines or
  * using a custom location.
  */
 static char *get_token_file_path(void) {
-    // Check for environment variable override first
     const char *env_path = getenv("OPENAI_OAUTH_PATH");
     if (env_path && env_path[0] != '\0') {
         LOG_DEBUG("[OpenAI OAuth] Using token path from OPENAI_OAUTH_PATH: %s", env_path);
         return strdup(env_path);
     }
 
-    char *dir = get_openai_dir();
-    if (!dir) return NULL;
+    char *codex_dir = get_codex_dir();
+    if (!codex_dir) return NULL;
 
-    char *path = malloc(PATH_MAX);
-    if (!path) {
-        free(dir);
+    char *codex_path = malloc(PATH_MAX);
+    if (!codex_path) {
+        free(codex_dir);
         return NULL;
     }
-    if (snprintf(path, PATH_MAX, "%s/auth.json", dir) >= PATH_MAX) {
-        free(path);
-        free(dir);
+    if (snprintf(codex_path, PATH_MAX, "%s/auth.json", codex_dir) >= PATH_MAX) {
+        free(codex_path);
+        free(codex_dir);
         return NULL;
     }
-    free(dir);
-    return path;
+    free(codex_dir);
+    return codex_path;
 }
 
 /**
@@ -287,7 +303,7 @@ static void release_refresh_lock(int fd) {
  * ============================================================================ */
 
 /**
- * Load OAuth token from ~/.openai/auth.json.
+ * Load OAuth token from ~/.codex/auth.json.
  * Returns NULL if no valid token exists.
  */
 static OpenAIOAuthToken *load_token_from_disk(void) {
@@ -295,8 +311,8 @@ static OpenAIOAuthToken *load_token_from_disk(void) {
     if (!path) return NULL;
 
     FILE *f = fopen(path, "r");
-    free(path);
     if (!f) {
+        free(path);
         LOG_DEBUG("[OpenAI OAuth] No token file found");
         return NULL;
     }
@@ -326,6 +342,7 @@ static OpenAIOAuthToken *load_token_from_disk(void) {
     cJSON *json = cJSON_Parse(content);
     free(content);
     if (!json) {
+        free(path);
         LOG_WARN("[OpenAI OAuth] Failed to parse token file");
         return NULL;
     }
@@ -336,12 +353,19 @@ static OpenAIOAuthToken *load_token_from_disk(void) {
         return NULL;
     }
 
-    cJSON *access_token  = cJSON_GetObjectItem(json, "access_token");
-    cJSON *refresh_token = cJSON_GetObjectItem(json, "refresh_token");
-    cJSON *expires_at    = cJSON_GetObjectItem(json, "expires_at");
-    cJSON *token_type    = cJSON_GetObjectItem(json, "token_type");
-    cJSON *scope         = cJSON_GetObjectItem(json, "scope");
-    cJSON *id_token      = cJSON_GetObjectItem(json, "id_token");
+    cJSON *token_root = json;
+    cJSON *tokens = cJSON_GetObjectItem(json, "tokens");
+    if (tokens && cJSON_IsObject(tokens)) {
+        token_root = tokens;
+    }
+
+    cJSON *access_token  = cJSON_GetObjectItem(token_root, "access_token");
+    cJSON *refresh_token = cJSON_GetObjectItem(token_root, "refresh_token");
+    cJSON *expires_at    = cJSON_GetObjectItem(token_root, "expires_at");
+    cJSON *token_type    = cJSON_GetObjectItem(token_root, "token_type");
+    cJSON *scope         = cJSON_GetObjectItem(token_root, "scope");
+    cJSON *id_token      = cJSON_GetObjectItem(token_root, "id_token");
+    cJSON *account_id    = cJSON_GetObjectItem(token_root, "account_id");
 
     if (access_token  && cJSON_IsString(access_token))  token->access_token  = strdup(access_token->valuestring);
     if (refresh_token && cJSON_IsString(refresh_token)) token->refresh_token = strdup(refresh_token->valuestring);
@@ -349,10 +373,12 @@ static OpenAIOAuthToken *load_token_from_disk(void) {
     if (token_type    && cJSON_IsString(token_type))    token->token_type    = strdup(token_type->valuestring);
     if (scope         && cJSON_IsString(scope))         token->scope         = strdup(scope->valuestring);
     if (id_token      && cJSON_IsString(id_token))      token->id_token      = strdup(id_token->valuestring);
-    cJSON *client_id_item = cJSON_GetObjectItem(json, "client_id");
+    cJSON *client_id_item = cJSON_GetObjectItem(token_root, "client_id");
     if (client_id_item && cJSON_IsString(client_id_item)) token->client_id     = strdup(client_id_item->valuestring);
+    if (account_id && cJSON_IsString(account_id)) token->account_id = strdup(account_id->valuestring);
 
     cJSON_Delete(json);
+    free(path);
 
     if (!token->access_token) {
         LOG_WARN("[OpenAI OAuth] Token file missing access_token");
@@ -366,23 +392,27 @@ static OpenAIOAuthToken *load_token_from_disk(void) {
 }
 
 /**
- * Save OAuth token to ~/.openai/auth.json with 0600 permissions.
+ * Save OAuth token to ~/.codex/auth.json with 0600 permissions.
  */
 static int save_token_to_disk(const OpenAIOAuthToken *token) {
     if (!token || !token->access_token) return -1;
 
-    char *dir = get_openai_dir();
-    if (!dir) return -1;
+    char *path = get_token_file_path();
+    if (!path) return -1;
+
+    char *dir = get_parent_dir(path);
+    if (!dir) {
+        free(path);
+        return -1;
+    }
 
     if (mkdir_p_with_mode(dir, 0700) != 0) {
-        LOG_ERROR("[OpenAI OAuth] Failed to create ~/.openai directory");
+        LOG_ERROR("[OpenAI OAuth] Failed to create token directory");
         free(dir);
+        free(path);
         return -1;
     }
     free(dir);
-
-    char *path = get_token_file_path();
-    if (!path) return -1;
 
     cJSON *json = cJSON_CreateObject();
     if (!json) {
@@ -390,13 +420,18 @@ static int save_token_to_disk(const OpenAIOAuthToken *token) {
         return -1;
     }
 
-    cJSON_AddStringToObject(json, "access_token",  token->access_token);
-    if (token->refresh_token) cJSON_AddStringToObject(json, "refresh_token", token->refresh_token);
-    cJSON_AddNumberToObject(json, "expires_at",    (double)token->expires_at);
-    if (token->token_type)    cJSON_AddStringToObject(json, "token_type",    token->token_type);
-    if (token->scope)         cJSON_AddStringToObject(json, "scope",         token->scope);
-    if (token->id_token)      cJSON_AddStringToObject(json, "id_token",      token->id_token);
-    if (token->client_id)     cJSON_AddStringToObject(json, "client_id",     token->client_id);
+    cJSON *tokens = cJSON_CreateObject();
+    if (!tokens) {
+        cJSON_Delete(json);
+        free(path);
+        return -1;
+    }
+    cJSON_AddStringToObject(json, "auth_mode", "chatgpt");
+    if (token->access_token) cJSON_AddStringToObject(tokens, "access_token", token->access_token);
+    if (token->refresh_token) cJSON_AddStringToObject(tokens, "refresh_token", token->refresh_token);
+    if (token->id_token) cJSON_AddStringToObject(tokens, "id_token", token->id_token);
+    if (token->account_id) cJSON_AddStringToObject(tokens, "account_id", token->account_id);
+    cJSON_AddItemToObject(json, "tokens", tokens);
 
     char *json_str = cJSON_Print(json);
     cJSON_Delete(json);
@@ -406,11 +441,11 @@ static int save_token_to_disk(const OpenAIOAuthToken *token) {
     }
 
     int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    free(path);
     if (fd < 0) {
         LOG_ERROR("[OpenAI OAuth] Failed to open token file for writing: %s",
                   strerror(errno));
         free(json_str);
+        free(path);
         return -1;
     }
 
@@ -418,6 +453,7 @@ static int save_token_to_disk(const OpenAIOAuthToken *token) {
     if (!f) {
         close(fd);
         free(json_str);
+        free(path);
         return -1;
     }
 
@@ -425,7 +461,8 @@ static int save_token_to_disk(const OpenAIOAuthToken *token) {
     fclose(f);
     free(json_str);
 
-    LOG_DEBUG("[OpenAI OAuth] Token saved to disk");
+    LOG_DEBUG("[OpenAI OAuth] Token saved to disk: %s", path);
+    free(path);
     return 0;
 }
 
@@ -1116,7 +1153,14 @@ int openai_oauth_login(OpenAIOAuthManager *manager) {
     }
 
     oauth_display_message(manager, "  Authorization successful!", 0);
-    oauth_display_message(manager, "  Token saved to ~/.openai/auth.json", 0);
+    char *token_path = get_token_file_path();
+    if (token_path) {
+        snprintf(msg, sizeof(msg), "  Token saved to %s", token_path);
+        oauth_display_message(manager, msg, 0);
+        free(token_path);
+    } else {
+        oauth_display_message(manager, "  Token saved to disk", 0);
+    }
     oauth_display_message(manager, "", 0);
 
     return 0;
