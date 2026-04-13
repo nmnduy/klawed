@@ -21,6 +21,7 @@
 #include "openai_chat_parser.h"
 #include "openai_streaming.h"
 #include "tools/tool_definitions.h"
+#include "tools/codex_tools.h"
 #include "http_client.h"
 #include "logger.h"
 #include "arena.h"
@@ -636,9 +637,9 @@ static cJSON *build_chatgpt_backend_request(ConversationState *state,
                                 "You are a helpful coding assistant.");
     }
 
-    /* Use the canonical state-aware Responses tool list so this provider
-     * stays in sync with plan mode, MCP, dynamic tools, and validation. */
-    cJSON *tool_defs = get_tool_definitions_for_responses_api(state, 0);
+    /* Use Codex-compatible tools for the ChatGPT backend.
+     * This matches the exact tool schema used by OpenAI Codex. */
+    cJSON *tool_defs = get_codex_tool_definitions_for_responses_api();
     cJSON_AddItemToObject(req, "tools", tool_defs);
 
     conversation_state_unlock(state);
