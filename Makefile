@@ -542,6 +542,8 @@ TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 TEST_BEDROCK_CONVERSE_SRC = tests/test_bedrock_converse.c
 TEST_BEDROCK_CONVERSE_TARGET = $(BUILD_DIR)/test_bedrock_converse
+TEST_CODEX_TOOLS_SRC = tests/test_codex_tools.c
+TEST_CODEX_TOOLS_TARGET = $(BUILD_DIR)/test_codex_tools
 
 # Model switch tests
 TEST_MODEL_SWITCH_INTERACTIVE_SRC = tests/test_model_switch_interactive.c
@@ -553,7 +555,7 @@ TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET = $(BUILD_DIR)/test_model_switch_queue_re
 TEST_INSERT_SYSTEM_MESSAGE_SRC = tests/test_insert_system_message.c
 TEST_INSERT_SYSTEM_MESSAGE_TARGET = $(BUILD_DIR)/test_insert_system_message
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -568,7 +570,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-bedrock-converse test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message
+test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -784,6 +786,12 @@ test-bedrock-converse: check-deps $(TEST_BEDROCK_CONVERSE_TARGET)
 	@echo "Running Bedrock Converse format tests..."
 	@echo ""
 	@./$(TEST_BEDROCK_CONVERSE_TARGET)
+
+test-codex-tools: check-deps $(TEST_CODEX_TOOLS_TARGET)
+	@echo ""
+	@echo "Running Codex Tools unit tests..."
+	@echo ""
+	@./$(TEST_CODEX_TOOLS_TARGET)
 
 test-model-switch-interactive: check-deps $(TEST_MODEL_SWITCH_INTERACTIVE_TARGET)
 	@echo ""
@@ -2362,7 +2370,7 @@ $(TEST_OPENAI_RESPONSES_PROVIDER_TARGET): $(SRC) tests/test_openai_responses_pro
 		$(BUILD_DIR)/test_openai_responses_provider.o \
 		$(SQLITE_QUEUE_TEST_OBJ) \
 		$(TOOL_REGISTRY_TEST_OBJ) $(TOOL_EXECUTOR_TEST_OBJ) \
-		$(TOOL_DEFINITIONS_TEST_OBJ) $(DYNAMIC_TOOLS_TEST_OBJ) \
+		$(TOOL_DEFINITIONS_TEST_OBJ) $(DYNAMIC_TOOLS_TEST_OBJ) $(CODEX_TOOLS_TEST_OBJ) \
 		$(CRASH_HANDLER_OBJ) $(SSE_PARSER_OBJ) $(STREAMING_TOOL_ACCUMULATOR_OBJ) $(OPENAI_STREAMING_OBJ) \
 		$(TEST_COMMON_OBJS) $(LDFLAGS)
 	@echo ""
@@ -2497,6 +2505,19 @@ $(TEST_BEDROCK_CONVERSE_TARGET): $(BEDROCK_CONVERSE_SRC) $(TEST_BEDROCK_CONVERSE
 	@$(CC) -o $(TEST_BEDROCK_CONVERSE_TARGET) $(BUILD_DIR)/bedrock_converse_test.o $(BUILD_DIR)/test_bedrock_converse.o $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Bedrock Converse test build successful!"
+	@echo ""
+
+# Test target for Codex Tools
+$(TEST_CODEX_TOOLS_TARGET): $(CODEX_TOOLS_SRC) $(TEST_CODEX_TOOLS_SRC) $(FILE_UTILS_OBJ) $(BASE64_OBJ) $(PROCESS_UTILS_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Codex Tools implementation..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/codex_tools_test.o $(CODEX_TOOLS_SRC)
+	@echo "Compiling Codex Tools test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_codex_tools.o $(TEST_CODEX_TOOLS_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_CODEX_TOOLS_TARGET) $(BUILD_DIR)/codex_tools_test.o $(BUILD_DIR)/test_codex_tools.o $(FILE_UTILS_OBJ) $(BASE64_OBJ) $(PROCESS_UTILS_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Codex Tools test build successful!"
 	@echo ""
 
 $(TEST_MODEL_SWITCH_INTERACTIVE_TARGET): $(SRC) $(TEST_MODEL_SWITCH_INTERACTIVE_SRC) $(TEST_COMMON_OBJS)

@@ -114,7 +114,7 @@ static cJSON* create_apply_patch_tool(void) {
 
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "type", "object");
-    cJSON_AddStringToObject(params, "additionalProperties", "false");
+    cJSON_AddBoolToObject(params, "additionalProperties", 0);
 
     cJSON *props = cJSON_CreateObject();
     cJSON_AddItemToObject(props, "input", create_string_param(
@@ -145,7 +145,7 @@ static cJSON* create_shell_tool(void) {
 
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "type", "object");
-    cJSON_AddStringToObject(params, "additionalProperties", "false");
+    cJSON_AddBoolToObject(params, "additionalProperties", 0);
 
     cJSON *props = cJSON_CreateObject();
 
@@ -185,7 +185,7 @@ static cJSON* create_shell_command_tool(void) {
 
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "type", "object");
-    cJSON_AddStringToObject(params, "additionalProperties", "false");
+    cJSON_AddBoolToObject(params, "additionalProperties", 0);
 
     cJSON *props = cJSON_CreateObject();
     cJSON_AddItemToObject(props, "command", create_string_param(
@@ -220,7 +220,7 @@ static cJSON* create_list_dir_tool(void) {
 
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "type", "object");
-    cJSON_AddStringToObject(params, "additionalProperties", "false");
+    cJSON_AddBoolToObject(params, "additionalProperties", 0);
 
     cJSON *props = cJSON_CreateObject();
     cJSON_AddItemToObject(props, "dir_path", create_string_param(
@@ -259,7 +259,7 @@ static cJSON* create_view_image_tool(void) {
 
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "type", "object");
-    cJSON_AddStringToObject(params, "additionalProperties", "false");
+    cJSON_AddBoolToObject(params, "additionalProperties", 0);
 
     cJSON *props = cJSON_CreateObject();
     cJSON_AddItemToObject(props, "path", create_string_param(
@@ -292,7 +292,7 @@ static cJSON* create_spawn_agent_tool(void) {
 
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "type", "object");
-    cJSON_AddStringToObject(params, "additionalProperties", "false");
+    cJSON_AddBoolToObject(params, "additionalProperties", 0);
 
     cJSON *props = cJSON_CreateObject();
     cJSON_AddItemToObject(props, "task_name", create_string_param(
@@ -328,7 +328,7 @@ static cJSON* create_send_message_tool(void) {
 
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "type", "object");
-    cJSON_AddStringToObject(params, "additionalProperties", "false");
+    cJSON_AddBoolToObject(params, "additionalProperties", 0);
 
     cJSON *props = cJSON_CreateObject();
     cJSON_AddItemToObject(props, "target", create_string_param(
