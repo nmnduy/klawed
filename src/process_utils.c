@@ -22,17 +22,142 @@
 extern char **environ;
 #endif
 
-// Execute a command with timeout and interrupt support
-// Returns: exit code, output in *output (caller must free), *timed_out flag
-int execute_command_with_timeout(
-    const char *command,
+// Forward declaration for internal use
+static int read_output_from_pipes(int stdout_pipe[2], int stderr_pipe[2],
+                                  char **output, size_t *output_size,
+                                  pid_t pid, int timeout_seconds, int *timed_out,
+                                  volatile int *interrupt_requested, int *exit_status);
+
+// Internal helper: Spawn a child process with stdout/stderr pipes
+// Uses posix_spawn on macOS, fork/exec on Linux
+// Returns 0 on success, -1 on error. Outputs the pid via out_pid.
+static int spawn_child_with_pipes(const char *path, char **argv, const char *workdir,
+                                  int stdout_pipe[2], int stderr_pipe[2],
+                                  pid_t *out_pid)
+{
+#ifdef __APPLE__
+    /*
+     * macOS: Use posix_spawn() instead of fork() for thread safety.
+     *
+     * When fork() is called in a multi-threaded program on macOS, only the
+     * calling thread survives in the child. If other threads held locks
+     * (malloc, SQLite, log mutex, etc.), those locks remain locked forever
+     * in the child, causing deadlocks. This manifests as TUI freezes when
+     * multiple Bash tools run in parallel.
+     *
+     * posix_spawn() avoids this by creating a new process without copying
+     * the parent's memory space and mutex states.
+     */
+    posix_spawn_file_actions_t file_actions;
+    posix_spawnattr_t spawnattr;
+
+    int rc = posix_spawn_file_actions_init(&file_actions);
+    if (rc != 0) {
+        LOG_ERROR("Failed to init file actions: %s", strerror(rc));
+        return -1;
+    }
+
+    rc = posix_spawnattr_init(&spawnattr);
+    if (rc != 0) {
+        LOG_ERROR("Failed to init spawn attributes: %s", strerror(rc));
+        posix_spawn_file_actions_destroy(&file_actions);
+        return -1;
+    }
+
+    // Set up file actions: redirect stdout/stderr to pipes, stdin from /dev/null
+    posix_spawn_file_actions_addclose(&file_actions, stdout_pipe[0]);
+    posix_spawn_file_actions_addclose(&file_actions, stderr_pipe[0]);
+    posix_spawn_file_actions_adddup2(&file_actions, stdout_pipe[1], STDOUT_FILENO);
+    posix_spawn_file_actions_adddup2(&file_actions, stderr_pipe[1], STDERR_FILENO);
+    posix_spawn_file_actions_addclose(&file_actions, stdout_pipe[1]);
+    posix_spawn_file_actions_addclose(&file_actions, stderr_pipe[1]);
+    posix_spawn_file_actions_addopen(&file_actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+
+    // Change working directory if specified
+    if (workdir && workdir[0] != '\0') {
+        // Use the standard POSIX function (available in macOS 10.15+ and glibc 2.29+)
+        posix_spawn_file_actions_addchdir(&file_actions, workdir);
+    }
+
+    // Set spawn attributes: create new process group for kill(-pid, sig)
+    short flags = POSIX_SPAWN_SETPGROUP;
+    posix_spawnattr_setflags(&spawnattr, flags);
+    posix_spawnattr_setpgroup(&spawnattr, 0);
+
+    // Use posix_spawnp() to get PATH search behavior like execvp()
+    rc = posix_spawnp(out_pid, path, &file_actions, &spawnattr, argv, environ);
+
+    posix_spawn_file_actions_destroy(&file_actions);
+    posix_spawnattr_destroy(&spawnattr);
+
+    if (rc != 0) {
+        LOG_ERROR("Failed to spawn process '%s': %s", path, strerror(rc));
+        return -1;
+    }
+
+    return 0;
+#else
+    /*
+     * Linux: Use the traditional fork()/exec() approach.
+     */
+    pid_t pid = fork();
+    if (pid == -1) {
+        LOG_ERROR("Failed to fork: %s", strerror(errno));
+        return -1;
+    }
+
+    if (pid == 0) {
+        // Child process
+        close(stdout_pipe[0]);
+        close(stderr_pipe[0]);
+
+        dup2(stdout_pipe[1], STDOUT_FILENO);
+        dup2(stderr_pipe[1], STDERR_FILENO);
+
+        close(stdout_pipe[1]);
+        close(stderr_pipe[1]);
+
+        int devnull = open("/dev/null", O_RDONLY);
+        if (devnull != -1) {
+            dup2(devnull, STDIN_FILENO);
+            close(devnull);
+        }
+
+        // Create a new process group
+        setpgid(0, 0);
+
+        // Change working directory if specified
+        if (workdir && workdir[0] != '\0') {
+            if (chdir(workdir) != 0) {
+                fprintf(stderr, "Failed to change to working directory '%s': %s\n",
+                        workdir, strerror(errno));
+                _exit(127);
+            }
+        }
+
+        execvp(path, argv);
+
+        // If we get here, exec failed
+        _exit(127);
+    }
+
+    *out_pid = pid;
+    return 0;
+#endif
+}
+
+// Execute a command with explicit argv array and optional workdir
+int execute_command_with_timeout_argv(
+    const char *path,
+    char **argv,
+    const char *workdir,
     int timeout_seconds,
     int *timed_out,
     char **output,
     size_t *output_size,
     volatile int *interrupt_requested
 ) {
-    if (!command || !timed_out || !output || !output_size || !interrupt_requested) {
+    if (!path || !argv || !timed_out || !output || !output_size || !interrupt_requested) {
         return -1;
     }
 
@@ -49,26 +174,8 @@ int execute_command_with_timeout(
         return -1;
     }
 
-#ifdef __APPLE__
-    /*
-     * macOS: Use posix_spawn() instead of fork() for thread safety.
-     *
-     * When fork() is called in a multi-threaded program on macOS, only the
-     * calling thread survives in the child. If other threads held locks
-     * (malloc, SQLite, log mutex, etc.), those locks remain locked forever
-     * in the child, causing deadlocks. This manifests as TUI freezes when
-     * multiple Bash tools run in parallel.
-     *
-     * posix_spawn() avoids this by creating a new process without copying
-     * the parent's memory space and mutex states.
-     */
-    posix_spawn_file_actions_t file_actions;
-    posix_spawnattr_t spawnattr;
     pid_t pid;
-
-    int rc = posix_spawn_file_actions_init(&file_actions);
-    if (rc != 0) {
-        LOG_ERROR("Failed to init file actions: %s", strerror(rc));
+    if (spawn_child_with_pipes(path, argv, workdir, stdout_pipe, stderr_pipe, &pid) != 0) {
         close(stdout_pipe[0]);
         close(stdout_pipe[1]);
         close(stderr_pipe[0]);
@@ -76,163 +183,99 @@ int execute_command_with_timeout(
         return -1;
     }
 
-    rc = posix_spawnattr_init(&spawnattr);
-    if (rc != 0) {
-        LOG_ERROR("Failed to init spawn attributes: %s", strerror(rc));
-        posix_spawn_file_actions_destroy(&file_actions);
-        close(stdout_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[0]);
-        close(stderr_pipe[1]);
+    // Parent process: close write ends
+    close(stdout_pipe[1]);
+    close(stderr_pipe[1]);
+
+    int exit_status = -1;
+    int result = read_output_from_pipes(stdout_pipe, stderr_pipe, output, output_size,
+                                        pid, timeout_seconds, timed_out,
+                                        interrupt_requested, &exit_status);
+
+    return result == 0 ? exit_status : result;
+}
+
+// Execute a command with timeout using sh -c (wrapper around execute_command_with_timeout_argv)
+int execute_command_with_timeout(
+    const char *command,
+    int timeout_seconds,
+    int *timed_out,
+    char **output,
+    size_t *output_size,
+    volatile int *interrupt_requested
+) {
+    if (!command) {
         return -1;
     }
 
-    // Set up file actions: redirect stdout/stderr to pipes, stdin from /dev/null
-    posix_spawn_file_actions_addclose(&file_actions, stdout_pipe[0]);  // Close read end
-    posix_spawn_file_actions_addclose(&file_actions, stderr_pipe[0]);  // Close read end
-    posix_spawn_file_actions_adddup2(&file_actions, stdout_pipe[1], STDOUT_FILENO);
-    posix_spawn_file_actions_adddup2(&file_actions, stderr_pipe[1], STDERR_FILENO);
-    posix_spawn_file_actions_addclose(&file_actions, stdout_pipe[1]);  // Close original after dup
-    posix_spawn_file_actions_addclose(&file_actions, stderr_pipe[1]);  // Close original after dup
-    posix_spawn_file_actions_addopen(&file_actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
-
-    // Set spawn attributes: create new process group for kill(-pid, sig)
-    short flags = POSIX_SPAWN_SETPGROUP;
-    posix_spawnattr_setflags(&spawnattr, flags);
-    posix_spawnattr_setpgroup(&spawnattr, 0);  // New process group
-
-    // Build argv for shell execution (posix_spawn requires non-const char*)
+    // Build argv for shell execution
+    // Note: For macOS posix_spawn, argv needs to be mutable
     char shell_name[] = "sh";
     char dash_c[] = "-c";
-    // Need a mutable copy of command since posix_spawn may modify argv
     char *command_copy = strdup(command);
     if (!command_copy) {
         LOG_ERROR("Failed to allocate memory for command copy");
-        posix_spawn_file_actions_destroy(&file_actions);
-        posix_spawnattr_destroy(&spawnattr);
-        close(stdout_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[0]);
-        close(stderr_pipe[1]);
         return -1;
     }
     char *argv[] = {shell_name, dash_c, command_copy, NULL};
 
-    rc = posix_spawn(&pid, "/bin/sh", &file_actions, &spawnattr, argv, environ);
-    free(command_copy);  // Safe to free after posix_spawn returns
+    int result = execute_command_with_timeout_argv(
+        "/bin/sh", argv, NULL, timeout_seconds,
+        timed_out, output, output_size, interrupt_requested
+    );
 
-    posix_spawn_file_actions_destroy(&file_actions);
-    posix_spawnattr_destroy(&spawnattr);
+    free(command_copy);
+    return result;
+}
 
-    if (rc != 0) {
-        LOG_ERROR("Failed to spawn process: %s", strerror(rc));
-        close(stdout_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[0]);
-        close(stderr_pipe[1]);
-        return -1;
-    }
-#else
-    /*
-     * Linux: Use the traditional fork()/exec() approach.
-     *
-     * Linux has been working fine with fork() in multi-threaded programs,
-     * so we keep the original implementation to avoid any regressions.
-     */
-    pid_t pid = fork();
-    if (pid == -1) {
-        LOG_ERROR("Failed to fork: %s", strerror(errno));
-        close(stdout_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[0]);
-        close(stderr_pipe[1]);
-        return -1;
-    }
-
-    if (pid == 0) {
-        // Child process
-        // Close read ends
-        close(stdout_pipe[0]);
-        close(stderr_pipe[0]);
-
-        // Redirect stdout and stderr to pipes
-        dup2(stdout_pipe[1], STDOUT_FILENO);
-        dup2(stderr_pipe[1], STDERR_FILENO);
-
-        // Close write ends (now duplicated)
-        close(stdout_pipe[1]);
-        close(stderr_pipe[1]);
-
-        // Redirect stdin from /dev/null
-        int devnull = open("/dev/null", O_RDONLY);
-        if (devnull != -1) {
-            dup2(devnull, STDIN_FILENO);
-            close(devnull);
-        }
-
-        // Create a new process group so we can kill all children
-        setpgid(0, 0);
-
-        // Execute the command
-        execl("/bin/sh", "sh", "-c", command, (char *)NULL);
-
-        // If we get here, exec failed
-        _exit(127);  // Command not found
-    }
-#endif
-
-    // Parent process
-    // Close write ends
-    close(stdout_pipe[1]);
-    close(stderr_pipe[1]);
-
+// Internal helper: Read output from pipes with timeout and interrupt support
+static int read_output_from_pipes(int stdout_pipe[2], int stderr_pipe[2],
+                                  char **output, size_t *output_size,
+                                  pid_t pid, int timeout_seconds, int *timed_out,
+                                  volatile int *interrupt_requested, int *exit_status)
+{
     // Set pipes to non-blocking
     fcntl(stdout_pipe[0], F_SETFL, O_NONBLOCK);
     fcntl(stderr_pipe[0], F_SETFL, O_NONBLOCK);
 
-    // Read output from pipes
     char buffer[4096];
     size_t total_size = 0;
     char *result = NULL;
     time_t start_time = time(NULL);
     int process_exited = 0;
-    int exit_status = -1;
+    *exit_status = -1;
 
-    // Track whether both pipes have been closed (EOF reached)
     int stdout_eof = 0;
     int stderr_eof = 0;
 
     while (!process_exited || !stdout_eof || !stderr_eof) {
-        // Check for interrupt
         if (*interrupt_requested) {
             LOG_DEBUG("Command interrupted by user");
-            kill(-pid, SIGTERM);  // Kill entire process group
-            usleep(100000);  // 100ms
+            kill(-pid, SIGTERM);
+            usleep(100000);
             kill(-pid, SIGKILL);
             break;
         }
 
-        // Check for timeout
         time_t current_time = time(NULL);
         if (timeout_seconds > 0 && (current_time - start_time) >= timeout_seconds) {
             LOG_DEBUG("Command timed out after %d seconds", timeout_seconds);
             *timed_out = 1;
-            kill(-pid, SIGTERM);  // Kill entire process group
-            usleep(100000);  // 100ms
+            kill(-pid, SIGTERM);
+            usleep(100000);
             kill(-pid, SIGKILL);
             break;
         }
 
-        // Check if process has exited (only if not already known)
         if (!process_exited) {
             int status;
             pid_t wait_result = waitpid(pid, &status, WNOHANG);
             if (wait_result == pid) {
                 process_exited = 1;
                 if (WIFEXITED(status)) {
-                    exit_status = WEXITSTATUS(status);
+                    *exit_status = WEXITSTATUS(status);
                 } else if (WIFSIGNALED(status)) {
-                    exit_status = 128 + WTERMSIG(status);  // Standard shell convention
+                    *exit_status = 128 + WTERMSIG(status);
                 }
             } else if (wait_result == -1) {
                 LOG_ERROR("waitpid failed: %s", strerror(errno));
@@ -240,7 +283,6 @@ int execute_command_with_timeout(
             }
         }
 
-        // Read available output from pipes
         fd_set readfds;
         FD_ZERO(&readfds);
         int max_fd = -1;
@@ -253,7 +295,6 @@ int execute_command_with_timeout(
             if (stderr_pipe[0] > max_fd) max_fd = stderr_pipe[0];
         }
 
-        // If both pipes are closed, we're done reading
         if (max_fd == -1) {
             stdout_eof = 1;
             stderr_eof = 1;
@@ -262,18 +303,15 @@ int execute_command_with_timeout(
 
         struct timeval timeout;
         timeout.tv_sec = 0;
-        timeout.tv_usec = 100000;  // 100ms
+        timeout.tv_usec = 100000;
 
         int select_result = select(max_fd + 1, &readfds, NULL, NULL, &timeout);
 
         if (select_result > 0) {
-            // Read from stdout
             if (stdout_pipe[0] != -1 && FD_ISSET(stdout_pipe[0], &readfds)) {
                 ssize_t bytes_read = read(stdout_pipe[0], buffer, sizeof(buffer) - 1);
                 if (bytes_read > 0) {
                     buffer[bytes_read] = '\0';
-
-                    // Append to result
                     char *new_result = realloc(result, total_size + (size_t)bytes_read + 1);
                     if (!new_result) {
                         LOG_ERROR("Failed to allocate memory for command output");
@@ -289,20 +327,16 @@ int execute_command_with_timeout(
                     total_size += (size_t)bytes_read;
                     result[total_size] = '\0';
                 } else if (bytes_read == 0) {
-                    // EOF on stdout
                     close(stdout_pipe[0]);
                     stdout_pipe[0] = -1;
                     stdout_eof = 1;
                 }
             }
 
-            // Read from stderr (append to same output)
             if (stderr_pipe[0] != -1 && FD_ISSET(stderr_pipe[0], &readfds)) {
                 ssize_t bytes_read = read(stderr_pipe[0], buffer, sizeof(buffer) - 1);
                 if (bytes_read > 0) {
                     buffer[bytes_read] = '\0';
-
-                    // Append to result
                     char *new_result = realloc(result, total_size + (size_t)bytes_read + 1);
                     if (!new_result) {
                         LOG_ERROR("Failed to allocate memory for command output");
@@ -318,7 +352,6 @@ int execute_command_with_timeout(
                     total_size += (size_t)bytes_read;
                     result[total_size] = '\0';
                 } else if (bytes_read == 0) {
-                    // EOF on stderr
                     close(stderr_pipe[0]);
                     stderr_pipe[0] = -1;
                     stderr_eof = 1;
@@ -327,33 +360,24 @@ int execute_command_with_timeout(
         } else if (select_result == -1 && errno != EINTR) {
             LOG_ERROR("select failed: %s", strerror(errno));
             break;
-        } else if (select_result == 0) {
-            // Timeout on select - if process exited and both pipes are at EOF, we're done
-            // Otherwise, keep waiting for more data
         }
     }
 
-    // Clean up
     if (stdout_pipe[0] != -1) close(stdout_pipe[0]);
     if (stderr_pipe[0] != -1) close(stderr_pipe[0]);
 
-    // Wait for process to exit if it hasn't already
     if (!process_exited) {
         int status;
         waitpid(pid, &status, 0);
         if (WIFEXITED(status)) {
-            exit_status = WEXITSTATUS(status);
+            *exit_status = WEXITSTATUS(status);
         } else if (WIFSIGNALED(status)) {
-            exit_status = 128 + WTERMSIG(status);
+            *exit_status = 128 + WTERMSIG(status);
         }
     }
 
     *output = result;
     *output_size = total_size;
 
-    if (*timed_out) {
-        return -2;  // Special timeout code
-    }
-
-    return exit_status;
+    return *timed_out ? -2 : 0;
 }
