@@ -1,5 +1,7 @@
 #include "tool_registry.h"
 #include "tool_definitions.h"
+#include "codex_tools.h"
+#include "../openai_responses.h"
 #include "../tool_utils.h"
 #include "../logger.h"
 #include "../util/timestamp_utils.h"
@@ -15,6 +17,31 @@
 #include <stdlib.h>
 #include <strings.h>
 
+// Helper function to check for a tool name in a tool definition array
+// Handles both formats:
+//   - Chat Completions: { "type": "function", "function": { "name": "...", ... } }
+//   - Responses API:    { "type": "function", "name": "...", "description": "...", ... }
+static int check_tool_in_defs(cJSON *tool_defs, const char *name_to_find) {
+    cJSON *tool = NULL;
+    cJSON_ArrayForEach(tool, tool_defs) {
+        // Try Chat Completions format first (nested "function" object)
+        cJSON *func = cJSON_GetObjectItem(tool, "function");
+        if (func) {
+            cJSON *name = cJSON_GetObjectItem(func, "name");
+            if (name && cJSON_IsString(name) && strcmp(name->valuestring, name_to_find) == 0) {
+                return 1;
+            }
+        }
+
+        // Try Responses API format (top-level "name" field)
+        cJSON *name = cJSON_GetObjectItem(tool, "name");
+        if (name && cJSON_IsString(name) && strcmp(name->valuestring, name_to_find) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // Validate that a tool name is in the provided tools list
 // Returns 1 if valid, 0 if invalid (hallucinated)
 int is_tool_allowed(const char *tool_name, ConversationState *state) {
@@ -22,34 +49,38 @@ int is_tool_allowed(const char *tool_name, ConversationState *state) {
         return 0;
     }
 
-    // Get the list of tools that were sent to the API
-    cJSON *tool_defs = get_tool_definitions(state, 0);  // Don't need caching for validation
-    if (!tool_defs) {
-        LOG_ERROR("Failed to get tool definitions for validation");
-        return 0;  // Fail closed - reject if we can't verify
-    }
-
-    int found = 0;
-    cJSON *tool = NULL;
-    cJSON_ArrayForEach(tool, tool_defs) {
-        // Tools are in format: { "type": "function", "function": { "name": "ToolName", ... } }
-        cJSON *func = cJSON_GetObjectItem(tool, "function");
-        if (func) {
-            cJSON *name = cJSON_GetObjectItem(func, "name");
-            if (name && cJSON_IsString(name) && strcmp(name->valuestring, tool_name) == 0) {
-                found = 1;
-                break;
-            }
+    // Check standard tool definitions (Chat Completions format)
+    cJSON *tool_defs = get_tool_definitions(state, 0);
+    if (tool_defs) {
+        if (check_tool_in_defs(tool_defs, tool_name)) {
+            cJSON_Delete(tool_defs);
+            return 1;
         }
+        cJSON_Delete(tool_defs);
     }
 
-    cJSON_Delete(tool_defs);
-
-    if (!found) {
-        LOG_WARN("Tool validation failed: '%s' was not in the provided tools list (possible model hallucination)", tool_name);
+    // Check Responses API tool definitions (used by some providers)
+    cJSON *responses_defs = get_tool_definitions_for_responses_api(state, 0);
+    if (responses_defs) {
+        if (check_tool_in_defs(responses_defs, tool_name)) {
+            cJSON_Delete(responses_defs);
+            return 1;
+        }
+        cJSON_Delete(responses_defs);
     }
 
-    return found;
+    // Check Codex tool definitions (used by OpenAI subscription provider)
+    cJSON *codex_defs = get_codex_tool_definitions();
+    if (codex_defs) {
+        if (check_tool_in_defs(codex_defs, tool_name)) {
+            cJSON_Delete(codex_defs);
+            return 1;
+        }
+        cJSON_Delete(codex_defs);
+    }
+
+    LOG_WARN("Tool validation failed: '%s' was not in any provided tools list (possible model hallucination)", tool_name);
+    return 0;
 }
 
 cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *state) {
