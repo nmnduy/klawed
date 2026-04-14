@@ -352,7 +352,7 @@ static void test_shell_command_workdir(void) {
  */
 static void test_shell_command_with_single_quotes(void) {
     cJSON *args = cJSON_CreateObject();
-    cJSON_AddStringToObject(args, "command", "echo it's working");
+    cJSON_AddStringToObject(args, "command", "printf '%s\\n' 'it'\\''s working'");
 
     cJSON *result = codex_tool_shell_command(args);
     cJSON *stdout_json = cJSON_GetObjectItem(result, "stdout");
@@ -368,12 +368,89 @@ static void test_shell_command_with_single_quotes(void) {
     }
 
     int ok = (exit_code == 0 && stdout_json && cJSON_IsString(stdout_json) &&
-              strstr(stdout_json->valuestring, "it's working") != NULL);
+              strcmp(stdout_json->valuestring, "it's working\n") == 0);
 
     print_test_result("shell_command handles commands with single quotes", ok);
 
     cJSON_Delete(args);
     cJSON_Delete(result);
+}
+
+static void test_shell_command_preserves_regex_pipes(void) {
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "command",
+                            "printf 'reasoning_content\\n' | rg -n \"reasoning_content|STREAM_APPEND\"");
+
+    cJSON *result = codex_tool_shell_command(args);
+    cJSON *stdout_json = cJSON_GetObjectItem(result, "stdout");
+    cJSON *exit_json = cJSON_GetObjectItem(result, "exit_code");
+    int ok = (exit_json && cJSON_IsNumber(exit_json) && exit_json->valueint == 0 &&
+              stdout_json && cJSON_IsString(stdout_json) &&
+              strstr(stdout_json->valuestring, "reasoning_content") != NULL &&
+              strstr(stdout_json->valuestring, "command not found") == NULL);
+
+    print_test_result("shell_command preserves quoted regex pipes", ok);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+}
+
+static void test_shell_command_sed_with_single_quotes(void) {
+    setup_test_dir();
+    write_file(build_path("sed_case.txt"), "alpha\nbeta\ngamma\n");
+
+    cJSON *args = cJSON_CreateObject();
+    char command[1024];
+    snprintf(command, sizeof(command),
+             "sed -n '1,2p' %s/sed_case.txt",
+             TEST_DIR_APPLY);
+    cJSON_AddStringToObject(args, "command", command);
+
+    cJSON *result = codex_tool_shell_command(args);
+    cJSON *stdout_json = cJSON_GetObjectItem(result, "stdout");
+    cJSON *exit_json = cJSON_GetObjectItem(result, "exit_code");
+    int ok = (exit_json && cJSON_IsNumber(exit_json) && exit_json->valueint == 0 &&
+              stdout_json && cJSON_IsString(stdout_json) &&
+              strcmp(stdout_json->valuestring, "alpha\nbeta\n") == 0);
+
+    print_test_result("shell_command handles sed ranges with single quotes", ok);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+    cleanup_test_dir();
+}
+
+static void test_shell_command_perl_dollar_dot_not_redirected(void) {
+    setup_test_dir();
+    write_file(build_path("perl_case.txt"), "one\ntwo\nthree\n");
+
+    cJSON *args = cJSON_CreateObject();
+    char command[1024];
+    snprintf(command, sizeof(command),
+             "perl -ne 'print if $.>=1 && $.<=2' %s/perl_case.txt",
+             TEST_DIR_APPLY);
+    cJSON_AddStringToObject(args, "command", command);
+    cJSON_AddStringToObject(args, "workdir", TEST_DIR_APPLY);
+
+    cJSON *result = codex_tool_shell_command(args);
+    cJSON *stdout_json = cJSON_GetObjectItem(result, "stdout");
+    cJSON *exit_json = cJSON_GetObjectItem(result, "exit_code");
+
+    struct stat st_one = {0};
+    struct stat st_two = {0};
+    int created_eq1 = (stat(build_path("=1"), &st_one) == 0);
+    int created_eq2 = (stat(build_path("=2"), &st_two) == 0);
+
+    int ok = (exit_json && cJSON_IsNumber(exit_json) && exit_json->valueint == 0 &&
+              stdout_json && cJSON_IsString(stdout_json) &&
+              strcmp(stdout_json->valuestring, "one\ntwo\n") == 0 &&
+              !created_eq1 && !created_eq2);
+
+    print_test_result("shell_command keeps perl $. expressions intact", ok);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+    cleanup_test_dir();
 }
 
 // ============================================================================
@@ -848,6 +925,9 @@ int main(int argc, char *argv[]) {
     test_shell_command_basic();
     test_shell_command_workdir();
     test_shell_command_with_single_quotes();
+    test_shell_command_preserves_regex_pipes();
+    test_shell_command_sed_with_single_quotes();
+    test_shell_command_perl_dollar_dot_not_redirected();
     test_shell_command_timeout();
 
     print_section("shell");

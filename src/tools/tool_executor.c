@@ -319,7 +319,7 @@ cJSON* execute_tool(const char *tool_name, cJSON *input, ConversationState *stat
                         char *output = NULL;
                         size_t output_size = 0;
                         volatile int *interrupt_flag = state ? &state->interrupt_requested : NULL;
-                        execute_command_with_timeout(full_cmd, 35, &timed_out, &output, &output_size, interrupt_flag);
+                        execute_command_with_timeout(full_cmd, NULL, 35, &timed_out, &output, &output_size, interrupt_flag);
 
                         result = cJSON_CreateObject();
                         if (timed_out) {

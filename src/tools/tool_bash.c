@@ -167,6 +167,7 @@ cJSON* tool_bash(cJSON *params, ConversationState *state) {
 
     int exit_code = execute_command_with_timeout(
         full_command,
+        NULL,
         timeout_seconds,
         &timed_out,
         &output,

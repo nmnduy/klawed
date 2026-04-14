@@ -198,6 +198,7 @@ int execute_command_with_timeout_argv(
 // Execute a command with timeout using sh -c (wrapper around execute_command_with_timeout_argv)
 int execute_command_with_timeout(
     const char *command,
+    const char *workdir,
     int timeout_seconds,
     int *timed_out,
     char **output,
@@ -220,7 +221,7 @@ int execute_command_with_timeout(
     char *argv[] = {shell_name, dash_c, command_copy, NULL};
 
     int result = execute_command_with_timeout_argv(
-        "/bin/sh", argv, NULL, timeout_seconds,
+        "/bin/sh", argv, workdir, timeout_seconds,
         timed_out, output, output_size, interrupt_requested
     );
 

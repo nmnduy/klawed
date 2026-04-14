@@ -174,6 +174,7 @@ int handle_vim_command(TUIState *tui, TUIMessageQueue *queue, const char *comman
 
         int exit_code = execute_command_with_timeout(
             shell_cmd,
+            NULL,
             30,  // 30 second timeout
             &timed_out,
             &output,
