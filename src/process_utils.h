@@ -21,6 +21,7 @@
  */
 int execute_command_with_timeout(
     const char *command,
+    const char *workdir,
     int timeout_seconds,
     int *timed_out,
     char **output,
