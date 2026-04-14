@@ -1162,37 +1162,9 @@ cJSON* codex_tool_shell_command(cJSON *args) {
     size_t output_size = 0;
     volatile int interrupt_flag = 0;
 
-    /* Build shell command with proper escaping for sh -c.
-     * Escape single quotes as \' and backslashes as \\ so the shell
-     * can parse the command correctly.
-     */
-    char escaped_command[BUFFER_SIZE * 2];
-    size_t j = 0;
-    for (size_t i = 0; command[i] && j < sizeof(escaped_command) - 3; i++) {
-        if (command[i] == '\\') {
-            escaped_command[j++] = '\\';
-            escaped_command[j++] = '\\';
-        } else if (command[i] == '\'') {
-            escaped_command[j++] = '\\';
-            escaped_command[j++] = '\'';
-        } else if (command[i] == '"') {
-            escaped_command[j++] = '\\';
-            escaped_command[j++] = '"';
-        } else {
-            escaped_command[j++] = command[i];
-        }
-    }
-    escaped_command[j] = '\0';
-
-    char shell_command[BUFFER_SIZE * 4];
-    if (workdir && workdir[0] != '\0') {
-        snprintf(shell_command, sizeof(shell_command), "cd '%s' && %s 2>&1", workdir, escaped_command);
-    } else {
-        snprintf(shell_command, sizeof(shell_command), "%s 2>&1", escaped_command);
-    }
-
     int exit_code = execute_command_with_timeout(
-        shell_command,
+        command,
+        workdir,
         timeout_seconds,
         &timed_out,
         &output,
