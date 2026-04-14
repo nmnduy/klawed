@@ -133,7 +133,7 @@ static int test_send_streaming_chunk(void) {
                 } else if (is_false) {
                     printf("    [DEBUG] isComplete is FALSE (valueint=%d)\n", bool_value);
                 } else {
-                    printf("    [DEBUG] isComplete is neither TRUE nor FALSE (type=%d, valueint=%d)\n", 
+                    printf("    [DEBUG] isComplete is neither TRUE nor FALSE (type=%d, valueint=%d)\n",
                            is_complete->type, bool_value);
                 }
                 TEST_ASSERT(!is_true, "isComplete should not be true");
