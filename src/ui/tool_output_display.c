@@ -57,6 +57,159 @@ void print_human_readable_tool_output(const char *tool_name,
                     }
                 }
             }
+        } else if (strcmp(tool_name, "shell") == 0 || strcmp(tool_name, "shell_command") == 0) {
+            /* Codex shell tools - output format is different from standard Bash tool */
+            cJSON *exit_code = cJSON_GetObjectItem(tool_result, "exit_code");
+            cJSON *stdout_json = cJSON_GetObjectItem(tool_result, "stdout");
+            cJSON *stderr_json = cJSON_GetObjectItem(tool_result, "stderr");
+            cJSON *error = cJSON_GetObjectItem(tool_result, "error");
+
+            // Show error message if present (e.g., timeout)
+            if (error && cJSON_IsString(error)) {
+                printf("  Error: %s\n", error->valuestring);
+            }
+
+            // Show exit code if non-zero
+            if (exit_code && cJSON_IsNumber(exit_code) && exit_code->valueint != 0) {
+                printf("  Exit code: %d\n", exit_code->valueint);
+            }
+
+            // Print stdout (Codex shell tools combine stderr into stdout, so stderr is usually empty)
+            if (stdout_json && cJSON_IsString(stdout_json)) {
+                const char *output_str = stdout_json->valuestring;
+                if (output_str && strlen(output_str) > 0) {
+                    printf("%s", output_str);
+                    // Ensure newline at end if not present
+                    if (output_str[strlen(output_str)-1] != '\n') {
+                        printf("\n");
+                    }
+                }
+            }
+
+            // Print stderr if present and non-empty
+            if (stderr_json && cJSON_IsString(stderr_json)) {
+                const char *stderr_str = stderr_json->valuestring;
+                if (stderr_str && strlen(stderr_str) > 0) {
+                    printf("%s", stderr_str);
+                    // Ensure newline at end if not present
+                    if (stderr_str[strlen(stderr_str)-1] != '\n') {
+                        printf("\n");
+                    }
+                }
+            }
+        } else if (strcmp(tool_name, "apply_patch") == 0) {
+            /* Codex apply_patch tool */
+            cJSON *success = cJSON_GetObjectItem(tool_result, "success");
+            cJSON *error = cJSON_GetObjectItem(tool_result, "error");
+
+            if (error && cJSON_IsString(error)) {
+                printf("  Error: %s\n", error->valuestring);
+            } else if (success && cJSON_IsTrue(success)) {
+                printf("  Patch applied successfully\n");
+            } else {
+                printf("  Patch completed\n");
+            }
+        } else if (strcmp(tool_name, "list_dir") == 0) {
+            /* Codex list_dir tool */
+            cJSON *entries = cJSON_GetObjectItem(tool_result, "entries");
+            cJSON *total_count = cJSON_GetObjectItem(tool_result, "total_count");
+            cJSON *has_more = cJSON_GetObjectItem(tool_result, "has_more");
+            cJSON *error = cJSON_GetObjectItem(tool_result, "error");
+
+            if (error && cJSON_IsString(error)) {
+                printf("  Error: %s\n", error->valuestring);
+            } else if (entries && cJSON_IsArray(entries)) {
+                int count = cJSON_GetArraySize(entries);
+                int total = count;
+                if (total_count && cJSON_IsNumber(total_count)) {
+                    total = total_count->valueint;
+                }
+
+                printf("  %d item%s", total, total == 1 ? "" : "s");
+                if (has_more && cJSON_IsTrue(has_more)) {
+                    printf(" (more available)");
+                }
+                printf("\n");
+
+                // Show entries
+                for (int i = 0; i < count && i < 20; i++) {
+                    cJSON *entry = cJSON_GetArrayItem(entries, i);
+                    if (entry && cJSON_IsObject(entry)) {
+                        cJSON *name = cJSON_GetObjectItem(entry, "name");
+                        cJSON *type = cJSON_GetObjectItem(entry, "type");
+                        if (name && cJSON_IsString(name)) {
+                            const char *type_str = "";
+                            if (type && cJSON_IsString(type)) {
+                                type_str = type->valuestring;
+                            }
+                            printf("  %s (%s)\n", name->valuestring, type_str);
+                        }
+                    }
+                }
+                if (count > 20) {
+                    printf("  ... and %d more\n", count - 20);
+                }
+            }
+        } else if (strcmp(tool_name, "view_image") == 0) {
+            /* Codex view_image tool */
+            cJSON *image_url = cJSON_GetObjectItem(tool_result, "image_url");
+            cJSON *error = cJSON_GetObjectItem(tool_result, "error");
+
+            if (error && cJSON_IsString(error)) {
+                printf("  Error: %s\n", error->valuestring);
+            } else if (image_url && cJSON_IsString(image_url)) {
+                // Show mime type from data URL
+                const char *url = image_url->valuestring;
+                if (strncmp(url, "data:image/", 11) == 0) {
+                    const char *semicolon = strchr(url + 11, ';');
+                    if (semicolon) {
+                        size_t len = (size_t)(semicolon - (url + 11));
+                        printf("  Image loaded (%.*s)\n", (int)len, url + 11);
+                    } else {
+                        printf("  Image loaded\n");
+                    }
+                } else {
+                    printf("  Image loaded\n");
+                }
+            }
+        } else if (strcmp(tool_name, "spawn_agent") == 0) {
+            /* Codex spawn_agent tool */
+            cJSON *task_name = cJSON_GetObjectItem(tool_result, "task_name");
+            cJSON *pid = cJSON_GetObjectItem(tool_result, "pid");
+            cJSON *log_file = cJSON_GetObjectItem(tool_result, "log_file");
+            cJSON *error = cJSON_GetObjectItem(tool_result, "error");
+
+            if (error && cJSON_IsString(error)) {
+                printf("  Error: %s\n", error->valuestring);
+            } else {
+                if (task_name && cJSON_IsString(task_name)) {
+                    printf("  Task: %s\n", task_name->valuestring);
+                }
+                if (pid && cJSON_IsNumber(pid)) {
+                    printf("  PID: %d\n", pid->valueint);
+                }
+                if (log_file && cJSON_IsString(log_file)) {
+                    // Extract just the filename from the path
+                    const char *filename = strrchr(log_file->valuestring, '/');
+                    filename = filename ? filename + 1 : log_file->valuestring;
+                    printf("  Log: %s\n", filename);
+                }
+            }
+        } else if (strcmp(tool_name, "send_message") == 0) {
+            /* Codex send_message tool */
+            cJSON *success = cJSON_GetObjectItem(tool_result, "success");
+            cJSON *target = cJSON_GetObjectItem(tool_result, "target");
+            cJSON *error = cJSON_GetObjectItem(tool_result, "error");
+
+            if (error && cJSON_IsString(error)) {
+                printf("  Error: %s\n", error->valuestring);
+            } else if (success && cJSON_IsTrue(success)) {
+                if (target && cJSON_IsString(target)) {
+                    printf("  Message sent to %s\n", target->valuestring);
+                } else {
+                    printf("  Message sent\n");
+                }
+            }
         } else if (strcmp(tool_name, "Read") == 0) {
             cJSON *content = cJSON_GetObjectItem(tool_result, "content");
 
@@ -725,6 +878,121 @@ char* get_tool_details(const char *tool_name, cJSON *arguments) {
             } else {
                 strlcpy(details, command->valuestring, sizeof(details));
             }
+        }
+    } else if (strcmp(tool_name, "shell") == 0) {
+        /* Codex shell tool - command is an array of strings */
+        cJSON *command = cJSON_GetObjectItem(arguments, "command");
+        cJSON *workdir = cJSON_GetObjectItem(arguments, "workdir");
+        if (cJSON_IsArray(command)) {
+            // Build command string from array
+            details[0] = '\0';
+            size_t offset = 0;
+            int count = cJSON_GetArraySize(command);
+            for (int i = 0; i < count && offset < sizeof(details) - 2; i++) {
+                cJSON *item = cJSON_GetArrayItem(command, i);
+                if (cJSON_IsString(item)) {
+                    if (i > 0) {
+                        offset += (size_t)snprintf(details + offset, sizeof(details) - offset, " ");
+                    }
+                    offset += (size_t)snprintf(details + offset, sizeof(details) - offset, "%s", item->valuestring);
+                }
+            }
+            // Add workdir if present
+            if (cJSON_IsString(workdir) && workdir->valuestring && workdir->valuestring[0]) {
+                size_t len = strlen(details);
+                if (len < sizeof(details) - 30) {
+                    snprintf(details + len, sizeof(details) - len, " (in %s)", workdir->valuestring);
+                }
+            }
+        }
+    } else if (strcmp(tool_name, "shell_command") == 0) {
+        /* Codex shell_command tool - command is a string */
+        cJSON *command = cJSON_GetObjectItem(arguments, "command");
+        cJSON *workdir = cJSON_GetObjectItem(arguments, "workdir");
+        if (cJSON_IsString(command)) {
+            strlcpy(details, command->valuestring, sizeof(details));
+            // Add workdir if present
+            if (cJSON_IsString(workdir) && workdir->valuestring && workdir->valuestring[0]) {
+                size_t len = strlen(details);
+                if (len < sizeof(details) - 30) {
+                    snprintf(details + len, sizeof(details) - len, " (in %s)", workdir->valuestring);
+                }
+            }
+        }
+    } else if (strcmp(tool_name, "apply_patch") == 0) {
+        /* Codex apply_patch tool - show truncated patch input */
+        cJSON *input = cJSON_GetObjectItem(arguments, "input");
+        if (cJSON_IsString(input)) {
+            const char *patch = input->valuestring;
+            // Look for file operations in the patch
+            const char *add_file = strstr(patch, "*** Add File:");
+            const char *update_file = strstr(patch, "*** Update File:");
+            const char *delete_file = strstr(patch, "*** Delete File:");
+            if (add_file) {
+                const char *path = add_file + 14; // Skip "*** Add File:"
+                while (*path == ' ' || *path == '\t') path++;
+                size_t path_len = strcspn(path, "\n");
+                if (path_len > 40) path_len = 40;
+                snprintf(details, sizeof(details), "Add: %.*s", (int)path_len, path);
+            } else if (update_file) {
+                const char *path = update_file + 17; // Skip "*** Update File:"
+                while (*path == ' ' || *path == '\t') path++;
+                size_t path_len = strcspn(path, "\n");
+                if (path_len > 40) path_len = 40;
+                snprintf(details, sizeof(details), "Update: %.*s", (int)path_len, path);
+            } else if (delete_file) {
+                const char *path = delete_file + 17; // Skip "*** Delete File:"
+                while (*path == ' ' || *path == '\t') path++;
+                size_t path_len = strcspn(path, "\n");
+                if (path_len > 40) path_len = 40;
+                snprintf(details, sizeof(details), "Delete: %.*s", (int)path_len, path);
+            } else {
+                // Just show truncated patch start
+                size_t len = strlen(patch);
+                if (len > 50) {
+                    snprintf(details, sizeof(details), "%.47s...", patch);
+                } else {
+                    strlcpy(details, patch, sizeof(details));
+                }
+            }
+        }
+    } else if (strcmp(tool_name, "list_dir") == 0) {
+        /* Codex list_dir tool */
+        cJSON *dir_path = cJSON_GetObjectItem(arguments, "dir_path");
+        cJSON *depth = cJSON_GetObjectItem(arguments, "depth");
+        if (cJSON_IsString(dir_path)) {
+            const char *path = dir_path->valuestring;
+            strlcpy(details, path, sizeof(details));
+            if (cJSON_IsNumber(depth) && depth->valueint != 1) {
+                size_t len = strlen(details);
+                if (len < sizeof(details) - 20) {
+                    snprintf(details + len, sizeof(details) - len, " (depth=%d)", depth->valueint);
+                }
+            }
+        }
+    } else if (strcmp(tool_name, "view_image") == 0) {
+        /* Codex view_image tool */
+        cJSON *path = cJSON_GetObjectItem(arguments, "path");
+        if (cJSON_IsString(path)) {
+            strlcpy(details, path->valuestring, sizeof(details));
+        }
+    } else if (strcmp(tool_name, "spawn_agent") == 0) {
+        /* Codex spawn_agent tool */
+        cJSON *task_name = cJSON_GetObjectItem(arguments, "task_name");
+        cJSON *model = cJSON_GetObjectItem(arguments, "model");
+        if (cJSON_IsString(task_name)) {
+            const char *name = task_name->valuestring;
+            if (cJSON_IsString(model) && model->valuestring && model->valuestring[0]) {
+                snprintf(details, sizeof(details), "%s (model=%s)", name, model->valuestring);
+            } else {
+                strlcpy(details, name, sizeof(details));
+            }
+        }
+    } else if (strcmp(tool_name, "send_message") == 0) {
+        /* Codex send_message tool */
+        cJSON *target = cJSON_GetObjectItem(arguments, "target");
+        if (cJSON_IsString(target)) {
+            snprintf(details, sizeof(details), "to: %s", target->valuestring);
         }
     } else if (strncmp(tool_name, "mcp_", 4) == 0) {
         // Handle MCP tools (format: mcp_<server>_<toolname>)
