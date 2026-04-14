@@ -28,16 +28,16 @@ Provider* zai_coding_provider_create(const char *api_key, const char *base_url) 
         LOG_ERROR("[Z.AI] Authentication failed: api_key is NULL");
         return NULL;
     }
-    
+
     size_t key_len = strlen(api_key);
     if (key_len == 0) {
         LOG_ERROR("[Z.AI] Authentication failed: api_key is empty string");
         return NULL;
     }
-    
+
     // Log key details (safely - only first/last 4 chars if long enough)
     if (key_len >= 8) {
-        LOG_INFO("[Z.AI] API key provided: length=%zu, prefix=%.4s..., suffix=...%.4s", 
+        LOG_INFO("[Z.AI] API key provided: length=%zu, prefix=%.4s..., suffix=...%.4s",
                  key_len, api_key, api_key + key_len - 4);
     } else {
         LOG_INFO("[Z.AI] API key provided: length=%zu (short key)", key_len);
@@ -63,12 +63,12 @@ Provider* zai_coding_provider_create(const char *api_key, const char *base_url) 
 
     // Update provider name to Z.AI
     provider->name = "Z.AI GLM Coding";
-    
+
     // Verify the API key was stored correctly in the underlying config
     OpenAIConfig *cfg = (OpenAIConfig *)provider->config;
     if (cfg && cfg->api_key) {
         size_t stored_key_len = strlen(cfg->api_key);
-        LOG_INFO("[Z.AI] Provider created successfully (base URL: %s, stored key length: %zu)", 
+        LOG_INFO("[Z.AI] Provider created successfully (base URL: %s, stored key length: %zu)",
                  url, stored_key_len);
         if (stored_key_len != key_len) {
             LOG_WARN("[Z.AI] Key length mismatch: provided=%zu, stored=%zu", key_len, stored_key_len);
@@ -76,7 +76,7 @@ Provider* zai_coding_provider_create(const char *api_key, const char *base_url) 
     } else {
         LOG_WARN("[Z.AI] Provider created but unable to verify API key storage");
     }
-    
+
     return provider;
 }
 
@@ -84,7 +84,7 @@ Provider* zai_coding_provider_create_with_headers(const char *api_key,
                                                    const char *base_url,
                                                    const char *extra_headers) {
     LOG_DEBUG("[Z.AI] Creating provider with extra headers...");
-    
+
     // Log extra_headers info
     if (extra_headers && extra_headers[0] != '\0') {
         LOG_INFO("[Z.AI] Extra headers provided: %s", extra_headers);
