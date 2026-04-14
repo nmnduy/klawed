@@ -18,6 +18,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <cjson/cJSON.h>
 #include <stdarg.h>
 
@@ -595,6 +596,230 @@ static void test_send_message_missing_target(void) {
     cJSON_Delete(result);
 }
 
+static void test_send_message_valid_target(void) {
+    cJSON *args = cJSON_CreateObject();
+    /* Use our own PID as a target that definitely exists */
+    char target[32];
+    snprintf(target, sizeof(target), "%d", getpid());
+    cJSON_AddStringToObject(args, "target", target);
+    cJSON_AddStringToObject(args, "message", "hello");
+
+    cJSON *result = codex_tool_send_message(args);
+    int success = cJSON_IsObject(result) && cJSON_GetObjectItem(result, "success") != NULL &&
+                  cJSON_IsTrue(cJSON_GetObjectItem(result, "success"));
+
+    print_test_result("send_message accepts valid target (own PID)", success);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+}
+
+// ============================================================================
+// spawn_agent Tests
+// ============================================================================
+
+static void test_spawn_agent_missing_task_name(void) {
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "message", "do something");
+
+    cJSON *result = codex_tool_spawn_agent(args);
+    int has_error = cJSON_IsObject(result) && cJSON_GetObjectItem(result, "error") != NULL;
+
+    print_test_result("spawn_agent missing task_name returns error", has_error);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+}
+
+static void test_spawn_agent_missing_message(void) {
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "task_name", "test_task");
+
+    cJSON *result = codex_tool_spawn_agent(args);
+    int has_error = cJSON_IsObject(result) && cJSON_GetObjectItem(result, "error") != NULL;
+
+    print_test_result("spawn_agent missing message returns error", has_error);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+}
+
+static void test_spawn_agent_invalid_task_name(void) {
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "task_name", "Invalid-Name!");
+    cJSON_AddStringToObject(args, "message", "do something");
+
+    cJSON *result = codex_tool_spawn_agent(args);
+    int has_error = cJSON_IsObject(result) && cJSON_GetObjectItem(result, "error") != NULL;
+
+    print_test_result("spawn_agent invalid task_name returns error", has_error);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+}
+
+// ============================================================================
+// Additional shell Tests
+// ============================================================================
+
+static void test_shell_workdir(void) {
+    cJSON *args = cJSON_CreateObject();
+    cJSON *cmd = cJSON_CreateArray();
+    cJSON_AddItemToArray(cmd, cJSON_CreateString("pwd"));
+    cJSON_AddItemToObject(args, "command", cmd);
+    cJSON_AddStringToObject(args, "workdir", "/tmp");
+
+    cJSON *result = codex_tool_shell(args);
+    cJSON *stdout_json = cJSON_GetObjectItem(result, "stdout");
+    int ok = (stdout_json && cJSON_IsString(stdout_json) &&
+              strstr(stdout_json->valuestring, "/tmp") != NULL);
+
+    print_test_result("shell respects workdir parameter", ok);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+}
+
+static void test_shell_timeout(void) {
+    cJSON *args = cJSON_CreateObject();
+    cJSON *cmd = cJSON_CreateArray();
+    cJSON_AddItemToArray(cmd, cJSON_CreateString("sleep"));
+    cJSON_AddItemToArray(cmd, cJSON_CreateString("10"));
+    cJSON_AddItemToObject(args, "command", cmd);
+    cJSON_AddNumberToObject(args, "timeout_ms", 100); /* 100ms = should round up to 1s */
+
+    cJSON *result = codex_tool_shell(args);
+    cJSON *error = cJSON_GetObjectItem(result, "error");
+    int timed_out = (error && cJSON_IsString(error) &&
+                     strstr(error->valuestring, "timed out") != NULL);
+
+    print_test_result("shell respects timeout parameter", timed_out);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+}
+
+// ============================================================================
+// Additional shell_command Tests
+// ============================================================================
+
+static void test_shell_command_timeout(void) {
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "command", "sleep 10");
+    cJSON_AddNumberToObject(args, "timeout_ms", 100); /* 100ms */
+
+    cJSON *result = codex_tool_shell_command(args);
+    cJSON *error = cJSON_GetObjectItem(result, "error");
+    int timed_out = (error && cJSON_IsString(error) &&
+                     strstr(error->valuestring, "timed out") != NULL);
+
+    print_test_result("shell_command respects timeout parameter", timed_out);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+}
+
+// ============================================================================
+// Additional apply_patch Tests
+// ============================================================================
+
+static void test_apply_patch_multi_hunk(void) {
+    setup_test_dir();
+    write_file(build_path("multi_hunk.txt"), "line1\nline2\nline3\nline4\nline5\n");
+
+    char patch_buf[1024];
+    const char *patch = format_patch(patch_buf, sizeof(patch_buf),
+        "*** Begin Patch\n"
+        "*** Update File: %s/multi_hunk.txt\n"
+        "@@ line1\n"
+        " line1\n"
+        "-line2\n"
+        "+line2a\n"
+        "@@ line4\n"
+        " line4\n"
+        "-line5\n"
+        "+line5a\n"
+        "*** End Patch\n", TEST_DIR_APPLY);
+
+    cJSON *result = codex_tool_apply_patch(patch);
+    int success = cJSON_IsObject(result) && cJSON_GetObjectItem(result, "success") != NULL;
+
+    char *content = read_file(build_path("multi_hunk.txt"));
+    int content_ok = (content && strcmp(content, "line1\nline2a\nline3\nline4\nline5a\n") == 0);
+
+    print_test_result("apply_patch multi-hunk updates both locations",
+                      success && content_ok);
+
+    free(content);
+    cJSON_Delete(result);
+    cleanup_test_dir();
+}
+
+// ============================================================================
+// Additional list_dir Tests
+// ============================================================================
+
+static void test_list_dir_offset(void) {
+    setup_list_dir();
+
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "dir_path", TEST_DIR_LIST);
+    cJSON_AddNumberToObject(args, "offset", 2);
+    cJSON_AddNumberToObject(args, "limit", 10);
+
+    cJSON *result = codex_tool_list_dir(args);
+    cJSON *entries = cJSON_GetObjectItem(result, "entries");
+
+    int first_number = 0;
+    if (entries && cJSON_IsArray(entries) && cJSON_GetArraySize(entries) > 0) {
+        cJSON *first = cJSON_GetArrayItem(entries, 0);
+        cJSON *num = cJSON_GetObjectItem(first, "number");
+        if (num && cJSON_IsNumber(num)) {
+            first_number = num->valueint;
+        }
+    }
+
+    print_test_result("list_dir respects offset parameter", first_number >= 2);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+    cleanup_list_dir();
+}
+
+// ============================================================================
+// Additional view_image Tests
+// ============================================================================
+
+static void test_view_image_oversized(void) {
+    /* Create a sparse file just over 20MB */
+    int fd = open("/tmp/test_codex_tools_oversized.img", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        print_test_result("view_image rejects oversized files", 0);
+        return;
+    }
+    if (ftruncate(fd, 20 * 1024 * 1024 + 1) != 0) {
+        close(fd);
+        unlink("/tmp/test_codex_tools_oversized.img");
+        print_test_result("view_image rejects oversized files", 0);
+        return;
+    }
+    close(fd);
+
+    cJSON *args = cJSON_CreateObject();
+    cJSON_AddStringToObject(args, "path", "/tmp/test_codex_tools_oversized.img");
+
+    cJSON *result = codex_tool_view_image(args);
+    cJSON *error = cJSON_GetObjectItem(result, "error");
+    int has_error = (error && cJSON_IsString(error) &&
+                     strstr(error->valuestring, "too large") != NULL);
+
+    print_test_result("view_image rejects oversized files (>20MB)", has_error);
+
+    cJSON_Delete(args);
+    cJSON_Delete(result);
+    unlink("/tmp/test_codex_tools_oversized.img");
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -617,29 +842,41 @@ int main(int argc, char *argv[]) {
     test_apply_patch_empty_input();
     test_apply_patch_missing_begin_marker();
     test_apply_patch_context_not_found();
+    test_apply_patch_multi_hunk();
 
     print_section("shell_command");
     test_shell_command_basic();
     test_shell_command_workdir();
     test_shell_command_with_single_quotes();
+    test_shell_command_timeout();
 
     print_section("shell");
     test_shell_basic();
     test_shell_missing_command();
+    test_shell_workdir();
+    test_shell_timeout();
 
     print_section("list_dir");
     test_list_dir_basic();
     test_list_dir_limit();
     test_list_dir_depth();
     test_list_dir_nonexistent();
+    test_list_dir_offset();
 
     print_section("view_image");
     test_view_image_nonexistent();
     test_view_image_basic();
+    test_view_image_oversized();
 
     print_section("send_message");
     test_send_message_basic();
     test_send_message_missing_target();
+    test_send_message_valid_target();
+
+    print_section("spawn_agent");
+    test_spawn_agent_missing_task_name();
+    test_spawn_agent_missing_message();
+    test_spawn_agent_invalid_task_name();
 
     print_summary();
 
