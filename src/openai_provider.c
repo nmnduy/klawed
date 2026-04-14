@@ -704,7 +704,7 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
 
     // HTTP error
     result.is_retryable = is_http_error_retryable(result.http_status);
-    
+
     // Enhanced logging for 401 authentication errors
     if (result.http_status == 401) {
         LOG_ERROR("[OpenAI Provider] Authentication failed (HTTP 401) - API key invalid or missing");
