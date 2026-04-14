@@ -765,12 +765,20 @@ static int sqlite_queue_send_text_response(SQLiteQueueContext *ctx, const char *
         return -1;
     }
 
-    // Skip whitespace-only content
-    const char *p = text;
-    while (*p && isspace((unsigned char)*p)) p++;
+    const char *display_text = text;
+    const char *display_reasoning = reasoning_content;
 
-    if (*p == '\0') {  // Only whitespace
-        LOG_DEBUG("SQLite Queue: Skipping whitespace-only text response");
+    while (*display_text && isspace((unsigned char)*display_text)) {
+        display_text++;
+    }
+    if (display_reasoning) {
+        while (*display_reasoning && isspace((unsigned char)*display_reasoning)) {
+            display_reasoning++;
+        }
+    }
+
+    if (*display_text == '\0' && (!display_reasoning || *display_reasoning == '\0')) {
+        LOG_DEBUG("SQLite Queue: Skipping empty assistant response");
         return 0;
     }
 
@@ -797,10 +805,17 @@ static int sqlite_queue_send_text_response(SQLiteQueueContext *ctx, const char *
         text_color_start = ANSI_FALLBACK_FOREGROUND;
     }
 
-    // Print assistant message in TUI format: [Assistant] text
-    printf("\n%s[Assistant]%s %s%s%s\n",
-           assistant_color_start, ANSI_RESET,
-           text_color_start, p, ANSI_RESET);
+    if (display_reasoning && *display_reasoning) {
+        printf("\n%s[Assistant thinking]%s %s%s%s\n",
+               assistant_color_start, ANSI_RESET,
+               text_color_start, display_reasoning, ANSI_RESET);
+    }
+
+    if (*display_text != '\0') {
+        printf("\n%s[Assistant]%s %s%s%s\n",
+               assistant_color_start, ANSI_RESET,
+               text_color_start, display_text, ANSI_RESET);
+    }
     fflush(stdout);
 
     // Create JSON with optional reasoning_content
@@ -811,13 +826,13 @@ static int sqlite_queue_send_text_response(SQLiteQueueContext *ctx, const char *
     }
 
     cJSON_AddStringToObject(json, "messageType", "TEXT");
-    cJSON_AddStringToObject(json, "content", p);
+    cJSON_AddStringToObject(json, "content", display_text);
 
     // Add reasoning_content if present
-    if (reasoning_content && reasoning_content[0] != '\0') {
-        cJSON_AddStringToObject(json, "reasoningContent", reasoning_content);
+    if (display_reasoning && display_reasoning[0] != '\0') {
+        cJSON_AddStringToObject(json, "reasoningContent", display_reasoning);
         LOG_DEBUG("SQLite Queue: Added reasoning_content (%zu bytes) to TEXT message",
-                  strlen(reasoning_content));
+                  strlen(display_reasoning));
     }
 
     char *json_str = cJSON_PrintUnformatted(json);
@@ -986,7 +1001,8 @@ static void sqlite_on_tool_complete_ex(const char *tool_id, const char *tool_nam
 
 static void sqlite_on_assistant_text(const char *text, const char *reasoning_content, void *user_data) {
     SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
-    sqlite_queue_send_text_response(cb_ctx->ctx, cb_ctx->response_receiver, text, reasoning_content);
+    sqlite_queue_send_text_response(cb_ctx->ctx, cb_ctx->response_receiver,
+                                    text ? text : "", reasoning_content);
 }
 
 static void sqlite_on_assistant_reasoning(const char *reasoning_content, void *user_data) {
