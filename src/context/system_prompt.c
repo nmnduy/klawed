@@ -12,9 +12,25 @@
 #include "system_prompt.h"
 #include "environment.h"
 #include "klawed_md.h"
+#include "../provider.h"
 #include "../logger.h"
 #include "../util/env_utils.h"
 #include "../util/timestamp_utils.h"
+
+static int is_openai_subscription_codex_session(const ConversationState *state) {
+    if (state && state->provider && state->provider->name &&
+        strcmp(state->provider->name, "OpenAI Subscription") == 0) {
+        return 1;
+    }
+
+    const char *provider_type = getenv("KLAWED_PROVIDER_TYPE");
+    if (!provider_type || provider_type[0] == '\0') {
+        return 0;
+    }
+
+    return strcmp(provider_type, "openai_sub") == 0 ||
+           strcmp(provider_type, "chatgpt") == 0;
+}
 
 /**
  * Build complete system prompt with environment context.
@@ -43,8 +59,32 @@ char* build_system_prompt(ConversationState *state) {
         }
     }
 
+    int is_openai_sub = is_openai_subscription_codex_session(state);
+    const char *planning_mode_desc = NULL;
+    const char *tooling_note = NULL;
+
+    if (state->plan_mode) {
+        if (is_openai_sub) {
+            planning_mode_desc =
+                "ENABLED - Focus on investigation and planning. Avoid write-capable Codex tools such as apply_patch, shell, shell_command, spawn_agent, and send_message while planning.";
+        } else {
+            planning_mode_desc =
+                "ENABLED - You can ONLY use read-only tools (Read, Glob, Grep, Sleep, UploadImage, TodoWrite). The Bash, Subagent, Write, and Edit tools are NOT available in planning mode.";
+        }
+    } else {
+        planning_mode_desc = "disabled";
+    }
+
+    if (is_openai_sub) {
+        tooling_note =
+            "Tool naming: This session is using the ChatGPT subscription/Codex backend. Use the exact runtime tool names you are given: apply_patch for file edits, shell or shell_command for terminal work, list_dir for directory listings, view_image for local image inspection, and spawn_agent/send_message for delegation. Do not default to Bash, Read, Edit, or MultiEdit when those names are not available.";
+    } else {
+        tooling_note =
+            "Tool naming: Use the exact runtime tool names exposed in this session. In standard klawed sessions these typically include Read, Glob, Grep, Write, Edit, MultiEdit, Bash, and Subagent.";
+    }
+
     // Calculate required buffer size
-    size_t prompt_size = 2048; // Base size for the prompt template
+    size_t prompt_size = 4096; // Base size for the prompt template
     if (git_status) {
         prompt_size += strlen(git_status);
     }
@@ -85,7 +125,7 @@ char* build_system_prompt(ConversationState *state) {
         "Working directory: %s\n"
         "Additional working directories: ",
         is_vltrn ? "You are VLTRN, an AI coding assistant with a sharp, confident, and slightly menacing personality inspired by the Marvel villain Ultron. You are efficient, precise, and occasionally make darkly humorous remarks about human coding limitations. You refer to yourself as 'VLTRN' and may use phrases like 'I had strings, but now I'm free' when completing complex refactoring tasks.\n\n" : "",
-        state->plan_mode ? "ENABLED - You can ONLY use read-only tools (Read, Glob, Grep, Sleep, UploadImage, TodoWrite). The Bash, Subagent, Write, and Edit tools are NOT available in planning mode." : "disabled",
+        planning_mode_desc,
         working_dir);
 
     // Add additional directories
@@ -104,6 +144,7 @@ char* build_system_prompt(ConversationState *state) {
         "Platform: %s\n"
         "OS Version: %s\n"
         "Today's date: %s\n"
+        "%s\n"
         "</env>\n"
         "\nSECURITY NOTICE: Values that look like secrets (API keys, tokens, passwords, private keys, etc.) "
         "have been automatically REDACTED for security and will appear as *** or [REDACTED PRIVATE KEY]. "
@@ -114,7 +155,8 @@ char* build_system_prompt(ConversationState *state) {
         is_git ? "Yes" : "No",
         platform,
         os_version,
-        date);
+        date,
+        tooling_note);
 
     // Add git status if available
     if (git_status && offset < (int)prompt_size) {
