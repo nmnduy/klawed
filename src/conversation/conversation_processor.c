@@ -577,30 +577,39 @@ int process_response_unified(struct ConversationState *state,
             break;
         }
 
-        // Display assistant text with reasoning_content if present
-        if (current_response->message.text && current_response->message.text[0] != '\0') {
-            const char *p = current_response->message.text;
-            while (*p && isspace((unsigned char)*p)) p++;
+        // Display assistant text and/or reasoning_content if present
+        const char *display_text = current_response->message.text;
+        const char *display_reasoning = current_response->message.reasoning_content;
 
-            if (*p != '\0' && ctx->on_assistant_text) {
-                const char *reasoning = current_response->message.reasoning_content;
-                // Check for fallback reasoning in raw_response (for providers that don't populate AssistantMessage)
-                if (!reasoning && current_response->raw_response && ctx->on_assistant_reasoning) {
-                    cJSON *choices = cJSON_GetObjectItem(current_response->raw_response, "choices");
-                    if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
-                        cJSON *choice = cJSON_GetArrayItem(choices, 0);
-                        cJSON *message = cJSON_GetObjectItem(choice, "message");
-                        if (message) {
-                            cJSON *reasoning_json = cJSON_GetObjectItem(message, "reasoning_content");
-                            if (reasoning_json && cJSON_IsString(reasoning_json) &&
-                                reasoning_json->valuestring && reasoning_json->valuestring[0]) {
-                                reasoning = reasoning_json->valuestring;
-                            }
-                        }
+        if (display_text) {
+            while (*display_text && isspace((unsigned char)*display_text)) display_text++;
+        }
+
+        if (!display_reasoning && current_response->raw_response) {
+            cJSON *choices = cJSON_GetObjectItem(current_response->raw_response, "choices");
+            if (choices && cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
+                cJSON *choice = cJSON_GetArrayItem(choices, 0);
+                cJSON *message = cJSON_GetObjectItem(choice, "message");
+                if (message) {
+                    cJSON *reasoning_json = cJSON_GetObjectItem(message, "reasoning_content");
+                    if (reasoning_json && cJSON_IsString(reasoning_json) &&
+                        reasoning_json->valuestring && reasoning_json->valuestring[0]) {
+                        display_reasoning = reasoning_json->valuestring;
                     }
                 }
-                ctx->on_assistant_text(p, reasoning, ctx->user_data);
             }
+        }
+
+        if (display_reasoning) {
+            while (*display_reasoning && isspace((unsigned char)*display_reasoning)) display_reasoning++;
+        }
+
+        if (ctx->on_assistant_text &&
+            ((display_text && *display_text != '\0') ||
+             (display_reasoning && *display_reasoning != '\0'))) {
+            ctx->on_assistant_text((display_text && *display_text != '\0') ? display_text : "",
+                                   (display_reasoning && *display_reasoning != '\0') ? display_reasoning : NULL,
+                                   ctx->user_data);
         }
 
         // Add to conversation history
