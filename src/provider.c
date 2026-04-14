@@ -975,7 +975,7 @@ void provider_init(const char *model,
             LOG_INFO("[Provider] Model: %s", model);
             LOG_INFO("[Provider] API key source: %s", api_key_source ? api_key_source : "(none)");
             LOG_INFO("[Provider] Base URL: %s", base_url ? base_url : "(default)");
-            
+
             // Log API key status (safely)
             if (api_key_to_use && api_key_to_use[0] != '\0') {
                 size_t key_len = strlen(api_key_to_use);
@@ -988,7 +988,7 @@ void provider_init(const char *model,
             } else {
                 LOG_ERROR("[Provider] No API key available for Z.AI provider!");
             }
-            
+
             // Use create_with_headers if extra_headers are present in config
             Provider *prov;
             if (provider_config && provider_config->extra_headers[0] != '\0') {
