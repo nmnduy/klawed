@@ -1021,66 +1021,23 @@ cJSON* codex_tool_shell(cJSON *args) {
     }
     argv[cmd_count] = NULL;
 
-    /* Create pipe for output capture */
-    int stdout_pipe[2];
-    int stderr_pipe[2];
-    if (pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1) {
-        for (int i = 0; i < cmd_count; i++) {
-            free(argv[i]);
-        }
-        free(argv);
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Failed to create pipe");
-        return error;
-    }
+    /* Execute using cross-platform process_utils function.
+     * Uses posix_spawn on macOS (thread-safe) and fork/exec on Linux. */
+    int timed_out = 0;
+    char *output = NULL;
+    size_t output_size = 0;
+    volatile int interrupt_flag = 0;
 
-    /* Fork and execute */
-    pid_t pid = fork();
-    if (pid < 0) {
-        close(stdout_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[0]);
-        close(stderr_pipe[1]);
-        for (int i = 0; i < cmd_count; i++) {
-            free(argv[i]);
-        }
-        free(argv);
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Failed to fork process");
-        return error;
-    }
-
-    if (pid == 0) {
-        /* Child process */
-        close(stdout_pipe[0]);
-        close(stderr_pipe[0]);
-
-        /* Redirect stdout and stderr */
-        dup2(stdout_pipe[1], STDOUT_FILENO);
-        dup2(stderr_pipe[1], STDERR_FILENO);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[1]);
-
-        /* Change working directory if specified */
-        if (workdir && workdir[0] != '\0') {
-            if (chdir(workdir) != 0) {
-                fprintf(stderr, "Failed to change to working directory '%s': %s\n",
-                        workdir, strerror(errno));
-                exit(1);
-            }
-        }
-
-        /* Execute command */
-        execvp(argv[0], argv);
-
-        /* If we get here, execvp failed */
-        fprintf(stderr, "Failed to execute '%s': %s\n", argv[0], strerror(errno));
-        exit(127);
-    }
-
-    /* Parent process - close write ends */
-    close(stdout_pipe[1]);
-    close(stderr_pipe[1]);
+    int exit_code = execute_command_with_timeout_argv(
+        argv[0],           /* path - first element of argv is the program */
+        argv,              /* argv array */
+        workdir,           /* working directory */
+        timeout_seconds,
+        &timed_out,
+        &output,
+        &output_size,
+        &interrupt_flag
+    );
 
     /* Free argv */
     for (int i = 0; i < cmd_count; i++) {
@@ -1088,119 +1045,19 @@ cJSON* codex_tool_shell(cJSON *args) {
     }
     free(argv);
 
-    /* Read output with timeout */
-    char *stdout_data = NULL;
-    size_t stdout_size = 0;
-    char *stderr_data = NULL;
-    size_t stderr_size = 0;
-
-    /* Set non-blocking mode for pipes */
-    int flags = fcntl(stdout_pipe[0], F_GETFL, 0);
-    fcntl(stdout_pipe[0], F_SETFL, flags | O_NONBLOCK);
-    flags = fcntl(stderr_pipe[0], F_GETFL, 0);
-    fcntl(stderr_pipe[0], F_SETFL, flags | O_NONBLOCK);
-
-    /* Read with timeout */
-    time_t start_time = time(NULL);
-    int process_done = 0;
-    int exit_code = -1;
-
-    char buffer[4096];
-    while (!process_done) {
-        /* Check if process has finished */
-        int status;
-        pid_t result = waitpid(pid, &status, WNOHANG);
-        if (result == pid) {
-            process_done = 1;
-            if (WIFEXITED(status)) {
-                exit_code = WEXITSTATUS(status);
-            } else if (WIFSIGNALED(status)) {
-                exit_code = 128 + WTERMSIG(status);
-            }
-        } else if (result < 0) {
-            process_done = 1;
-        }
-
-        /* Read stdout */
-        ssize_t n = read(stdout_pipe[0], buffer, sizeof(buffer) - 1);
-        if (n > 0) {
-            buffer[n] = '\0';
-            char *new_data = realloc(stdout_data, stdout_size + (size_t)n + 1);
-            if (new_data) {
-                stdout_data = new_data;
-                memcpy(stdout_data + stdout_size, buffer, (size_t)n + 1);
-                stdout_size += (size_t)n;
-            }
-        }
-
-        /* Read stderr */
-        n = read(stderr_pipe[0], buffer, sizeof(buffer) - 1);
-        if (n > 0) {
-            buffer[n] = '\0';
-            char *new_data = realloc(stderr_data, stderr_size + (size_t)n + 1);
-            if (new_data) {
-                stderr_data = new_data;
-                memcpy(stderr_data + stderr_size, buffer, (size_t)n + 1);
-                stderr_size += (size_t)n;
-            }
-        }
-
-        /* Check timeout */
-        if (!process_done && timeout_seconds > 0) {
-            double elapsed = difftime(time(NULL), start_time);
-            if ((int)elapsed >= timeout_seconds) {
-                /* Kill the process */
-                kill(pid, SIGTERM);
-                sleep(1);
-                kill(pid, SIGKILL);
-                waitpid(pid, &status, 0);
-                exit_code = -1;
-                process_done = 1;
-            }
-        }
-
-        /* Small delay to prevent busy waiting */
-        if (!process_done) {
-            usleep(10000); /* 10ms */
-        }
-    }
-
-    /* Read any remaining output */
-    ssize_t n;
-    while ((n = read(stdout_pipe[0], buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[n] = '\0';
-        char *new_data = realloc(stdout_data, stdout_size + (size_t)n + 1);
-        if (new_data) {
-            stdout_data = new_data;
-            memcpy(stdout_data + stdout_size, buffer, (size_t)n + 1);
-            stdout_size += (size_t)n;
-        }
-    }
-    while ((n = read(stderr_pipe[0], buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[n] = '\0';
-        char *new_data = realloc(stderr_data, stderr_size + (size_t)n + 1);
-        if (new_data) {
-            stderr_data = new_data;
-            memcpy(stderr_data + stderr_size, buffer, (size_t)n + 1);
-            stderr_size += (size_t)n;
-        }
-    }
-
-    close(stdout_pipe[0]);
-    close(stderr_pipe[0]);
-
-    /* Build result */
+    /* Build result - note: execute_command_with_timeout_argv combines stdout and stderr */
     cJSON *result = cJSON_CreateObject();
     cJSON_AddNumberToObject(result, "exit_code", exit_code);
-    cJSON_AddStringToObject(result, "stdout", stdout_data ? stdout_data : "");
-    cJSON_AddStringToObject(result, "stderr", stderr_data ? stderr_data : "");
+    cJSON_AddStringToObject(result, "stdout", output ? output : "");
+    cJSON_AddStringToObject(result, "stderr", "");
 
-    free(stdout_data);
-    free(stderr_data);
+    if (timed_out) {
+        cJSON_AddStringToObject(result, "error", "Command timed out");
+    }
 
+    free(output);
     return result;
 }
-
 /* ============================================================================
  * shell_command Tool Implementation
  * ============================================================================ */
