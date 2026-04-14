@@ -846,7 +846,68 @@ handle_move_to:
 
                 /* Check for hunk header */
                 if (line_starts_with(next, "@@")) {
-                    /* @@ line is optional context, skip it for now */
+                    /* If we have accumulated hunk lines, apply them before starting new hunk */
+                    if (hunk_count > 0) {
+                        /* Apply accumulated hunk */
+                        char *content = read_file(path);
+                        if (!content) {
+                            char err_msg[512];
+                            snprintf(err_msg, sizeof(err_msg), "Failed to read file '%s': %s", path, strerror(errno));
+                            free(path);
+                            free(move_to);
+                            for (int i = 0; i < hunk_count; i++) {
+                                free(hunk_lines[i]);
+                            }
+                            free(hunk_lines);
+                            free(next);
+                            cJSON *error = cJSON_CreateObject();
+                            cJSON_AddStringToObject(error, "error", err_msg);
+                            return error;
+                        }
+
+                        const char *error_msg = NULL;
+                        char *new_content = apply_hunk(content, hunk_lines, hunk_count, &error_msg);
+                        free(content);
+
+                        if (!new_content) {
+                            free(path);
+                            free(move_to);
+                            for (int i = 0; i < hunk_count; i++) {
+                                free(hunk_lines[i]);
+                            }
+                            free(hunk_lines);
+                            free(next);
+                            cJSON *error = cJSON_CreateObject();
+                            cJSON_AddStringToObject(error, "error", error_msg);
+                            return error;
+                        }
+
+                        if (write_file(path, new_content) != 0) {
+                            char err_msg[512];
+                            snprintf(err_msg, sizeof(err_msg), "Failed to write file '%s': %s", path, strerror(errno));
+                            free(new_content);
+                            free(path);
+                            free(move_to);
+                            for (int i = 0; i < hunk_count; i++) {
+                                free(hunk_lines[i]);
+                            }
+                            free(hunk_lines);
+                            free(next);
+                            cJSON *error = cJSON_CreateObject();
+                            cJSON_AddStringToObject(error, "error", err_msg);
+                            return error;
+                        }
+
+                        free(new_content);
+
+                        for (int i = 0; i < hunk_count; i++) {
+                            free(hunk_lines[i]);
+                        }
+                        free(hunk_lines);
+                        hunk_lines = NULL;
+                        hunk_count = 0;
+                        hunk_capacity = 0;
+                    }
                     free(next);
                     continue;
                 }
