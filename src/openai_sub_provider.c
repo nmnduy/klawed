@@ -228,10 +228,10 @@ typedef struct {
  *
  * Events we care about:
  *   response.output_text.delta          -> accumulate text
- *   response.output_item.added          -> function call started (has item.id, call_id, name)
+ *   response.output_item.added          -> function/custom tool call started
  *   response.function_call_arguments.delta -> accumulate args
  *   response.function_call_arguments.done -> args complete
- *   response.output_item.done           -> item complete (has full arguments)
+ *   response.output_item.done           -> item complete (has full arguments/input)
  *   response.completed                  -> extract usage
  *   response.failed / error             -> surface error
  */
@@ -298,8 +298,9 @@ static cJSON *parse_chatgpt_sse_response(const char *sse_body) {
                         if (item) {
                             cJSON *item_type = cJSON_GetObjectItem(item, "type");
                             if (item_type && cJSON_IsString(item_type) &&
-                                strcmp(item_type->valuestring, "function_call") == 0) {
-                                /* Start tracking a new function call */
+                                (strcmp(item_type->valuestring, "function_call") == 0 ||
+                                 strcmp(item_type->valuestring, "custom_tool_call") == 0)) {
+                                /* Start tracking a new tool call */
                                 if (func_count >= func_cap) {
                                     func_cap = func_cap ? func_cap * 2 : 4;
                                     PendingFunctionCall *tmp = realloc(funcs,
@@ -395,6 +396,67 @@ static cJSON *parse_chatgpt_sse_response(const char *sse_body) {
                                             break;
                                         }
                                     }
+                                }
+                            } else if (item_type && cJSON_IsString(item_type) &&
+                                       strcmp(item_type->valuestring, "custom_tool_call") == 0) {
+                                cJSON *call_id_j = cJSON_GetObjectItem(item, "call_id");
+                                cJSON *name_j = cJSON_GetObjectItem(item, "name");
+                                cJSON *input_j = cJSON_GetObjectItem(item, "input");
+                                if (call_id_j && cJSON_IsString(call_id_j) &&
+                                    name_j && cJSON_IsString(name_j) &&
+                                    input_j && cJSON_IsString(input_j)) {
+                                    PendingFunctionCall *f = NULL;
+
+                                    for (int i = 0; i < func_count; i++) {
+                                        if ((funcs[i].call_id[0] &&
+                                             strcmp(funcs[i].call_id, call_id_j->valuestring) == 0) ||
+                                            (funcs[i].id[0] &&
+                                             strcmp(funcs[i].id, call_id_j->valuestring) == 0)) {
+                                            f = &funcs[i];
+                                            break;
+                                        }
+                                    }
+
+                                    if (!f) {
+                                        if (func_count >= func_cap) {
+                                            func_cap = func_cap ? func_cap * 2 : 4;
+                                            PendingFunctionCall *tmp = realloc(funcs,
+                                                (size_t)func_cap * sizeof(PendingFunctionCall));
+                                            if (!tmp) { free(text_buf); cJSON_Delete(ev); return NULL; }
+                                            funcs = tmp;
+                                        }
+                                        f = &funcs[func_count++];
+                                        memset(f, 0, sizeof(*f));
+                                    }
+
+                                    strlcpy(f->id, call_id_j->valuestring, sizeof(f->id));
+                                    strlcpy(f->call_id, call_id_j->valuestring, sizeof(f->call_id));
+                                    strlcpy(f->name, name_j->valuestring, sizeof(f->name));
+                                    free(f->arguments);
+
+                                    if (strcmp(name_j->valuestring, "apply_patch") == 0) {
+                                        cJSON *wrapped_input = cJSON_CreateObject();
+                                        if (!wrapped_input) {
+                                            free(text_buf);
+                                            cJSON_Delete(ev);
+                                            return NULL;
+                                        }
+                                        cJSON_AddStringToObject(wrapped_input, "input", input_j->valuestring);
+                                        f->arguments = cJSON_PrintUnformatted(wrapped_input);
+                                        cJSON_Delete(wrapped_input);
+                                    } else {
+                                        f->arguments = strdup(input_j->valuestring);
+                                    }
+
+                                    if (!f->arguments) {
+                                        free(text_buf);
+                                        cJSON_Delete(ev);
+                                        return NULL;
+                                    }
+
+                                    f->args_len = strlen(f->arguments);
+                                    f->args_cap = f->args_len + 1;
+                                    f->complete = 1;
                                 }
                             }
                         }

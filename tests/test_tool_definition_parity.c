@@ -15,6 +15,7 @@
 
 #include "../src/klawed_internal.h"
 #include "../src/tools/tool_definitions.h"
+#include "../src/tools/codex_tools.h"
 #include "../src/openai_responses.h"
 
 // Collect tool names into a malloc'd array of strings. Caller frees the array
@@ -138,6 +139,42 @@ static void run_subscription_case(const char *case_name, ConversationState *stat
     printf("OK\n");
 }
 
+static void run_codex_responses_case(void) {
+    printf("Running codex responses case... ");
+
+    cJSON *defs = get_codex_tool_definitions_for_responses_api();
+    assert(defs && cJSON_IsArray(defs));
+
+    cJSON *apply_patch = NULL;
+    cJSON_ArrayForEach(apply_patch, defs) {
+        cJSON *name = cJSON_GetObjectItem(apply_patch, "name");
+        if (cJSON_IsString(name) && strcmp(name->valuestring, "apply_patch") == 0) {
+            break;
+        }
+    }
+
+    assert(apply_patch != NULL);
+    cJSON *type = cJSON_GetObjectItem(apply_patch, "type");
+    assert(cJSON_IsString(type));
+    assert(strcmp(type->valuestring, "custom") == 0);
+
+    cJSON *format = cJSON_GetObjectItem(apply_patch, "format");
+    assert(format && cJSON_IsObject(format));
+
+    cJSON *format_type = cJSON_GetObjectItem(format, "type");
+    cJSON *syntax = cJSON_GetObjectItem(format, "syntax");
+    cJSON *definition = cJSON_GetObjectItem(format, "definition");
+    assert(cJSON_IsString(format_type));
+    assert(cJSON_IsString(syntax));
+    assert(cJSON_IsString(definition));
+    assert(strcmp(format_type->valuestring, "grammar") == 0);
+    assert(strcmp(syntax->valuestring, "lark") == 0);
+    assert(strstr(definition->valuestring, "*** Begin Patch") != NULL);
+
+    cJSON_Delete(defs);
+    printf("OK\n");
+}
+
 int main(void) {
     // Default case (plan_mode off, not subagent)
     ConversationState state_default = {0};
@@ -155,6 +192,8 @@ int main(void) {
     ConversationState state_sub = {0};
     run_parity_case("subagent", &state_sub);
     unsetenv("KLAWED_IS_SUBAGENT");
+
+    run_codex_responses_case();
 
     printf("\nAll tool definition parity tests passed.\n");
     return 0;

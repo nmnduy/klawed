@@ -132,6 +132,43 @@ static cJSON* create_apply_patch_tool(void) {
     return tool;
 }
 
+static cJSON* create_apply_patch_custom_tool(void) {
+    static const char *apply_patch_lark_grammar =
+        "start: begin_patch hunk+ end_patch\n"
+        "begin_patch: \"*** Begin Patch\" LF\n"
+        "end_patch: \"*** End Patch\" LF?\n"
+        "\n"
+        "hunk: add_hunk | delete_hunk | update_hunk\n"
+        "add_hunk: \"*** Add File: \" filename LF add_line+\n"
+        "delete_hunk: \"*** Delete File: \" filename LF\n"
+        "update_hunk: \"*** Update File: \" filename LF change_move? change?\n"
+        "\n"
+        "filename: /(.+)/\n"
+        "add_line: \"+\" /(.*)/ LF -> line\n"
+        "\n"
+        "change_move: \"*** Move to: \" filename LF\n"
+        "change: (change_context | change_line)+ eof_line?\n"
+        "change_context: (\"@@\" | \"@@ \" /(.+)/) LF\n"
+        "change_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\n"
+        "eof_line: \"*** End of File\" LF\n"
+        "\n"
+        "%import common.LF\n";
+
+    cJSON *tool = cJSON_CreateObject();
+    cJSON_AddStringToObject(tool, "type", "custom");
+    cJSON_AddStringToObject(tool, "name", "apply_patch");
+    cJSON_AddStringToObject(tool, "description",
+        "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.");
+
+    cJSON *format = cJSON_CreateObject();
+    cJSON_AddStringToObject(format, "type", "grammar");
+    cJSON_AddStringToObject(format, "syntax", "lark");
+    cJSON_AddStringToObject(format, "definition", apply_patch_lark_grammar);
+    cJSON_AddItemToObject(tool, "format", format);
+
+    return tool;
+}
+
 /* shell tool - Run shell commands */
 
 static cJSON* create_shell_tool(void) {
@@ -370,15 +407,20 @@ cJSON* get_codex_tool_definitions(void) {
 }
 
 cJSON* get_codex_tool_definitions_for_responses_api(void) {
-    /* The Codex tools are already in the format expected by the Responses API:
-     * {
-     *   "type": "function",
-     *   "name": "...",
-     *   "description": "...",
-     *   "parameters": {...}
-     * }
-     */
-    return get_codex_tool_definitions();
+    cJSON *tools = cJSON_CreateArray();
+    if (!tools) {
+        return NULL;
+    }
+
+    cJSON_AddItemToArray(tools, create_apply_patch_custom_tool());
+    cJSON_AddItemToArray(tools, create_shell_tool());
+    cJSON_AddItemToArray(tools, create_shell_command_tool());
+    cJSON_AddItemToArray(tools, create_list_dir_tool());
+    cJSON_AddItemToArray(tools, create_view_image_tool());
+    cJSON_AddItemToArray(tools, create_spawn_agent_tool());
+    cJSON_AddItemToArray(tools, create_send_message_tool());
+
+    return tools;
 }
 
 /* ============================================================================
