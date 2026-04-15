@@ -146,6 +146,7 @@ static void status_spinner_start(TUIState *tui) {
     }
     tui->status_spinner_active = 1;
     tui->status_spinner_last_update_ns = monotonic_time_ns();
+    tui_update_terminal_title(tui);
 }
 
 static void status_spinner_stop(TUIState *tui) {
@@ -163,6 +164,7 @@ static void status_spinner_stop(TUIState *tui) {
     tui->pacman_direction = 1;
     tui->pacman_anim_frame = 0;
     tui->pacman_last_step_ns = 0;
+    tui_update_terminal_title(tui);
 }
 
 // ============================================================================
