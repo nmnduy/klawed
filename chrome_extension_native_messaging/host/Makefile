@@ -1,8 +1,9 @@
 # Makefile for Klawed Browser Controller - Go Native Messaging Host
 
 GO      = go
-BINARY  = klawed_browser_controller
-GOFILES = main.go go.mod
+HOST    = klawed_browser_controller
+CLIENT  = browser_ctl
+GOFILES = main.go browser_ctl.go go.mod
 
 PREFIX        ?= $(HOME)/.local
 BINDIR         = $(PREFIX)/bin
@@ -19,14 +20,18 @@ EXTENSION_ID ?= EXTENSION_ID_PLACEHOLDER
 
 all: build
 
-build: $(BINARY)
+build: $(HOST) $(CLIENT)
 
-$(BINARY): $(GOFILES)
-	$(GO) build -o $(BINARY) ./main.go
-	@echo "Built: $(BINARY)"
+$(HOST): main.go go.mod
+	$(GO) build -o $(HOST) ./main.go
+	@echo "Built: $(HOST)"
+
+$(CLIENT): browser_ctl.go go.mod
+	$(GO) build -o $(CLIENT) ./browser_ctl.go
+	@echo "Built: $(CLIENT)"
 
 clean:
-	rm -f $(BINARY)
+	rm -f $(HOST) $(CLIENT)
 
 configure:
 	@echo "=========================================="
@@ -51,13 +56,14 @@ configure:
 
 install: build configure
 	@echo ""
-	@echo "Installing binary to $(BINDIR)/$(BINARY) ..."
+	@echo "Installing binaries to $(BINDIR) ..."
 	install -d "$(BINDIR)"
-	install -m 755 "$(BINARY)" "$(BINDIR)/"
+	install -m 755 "$(HOST)" "$(BINDIR)/"
+	install -m 755 "$(CLIENT)" "$(BINDIR)/"
 
 	@echo "Installing Chrome native messaging manifest ..."
 	install -d "$(CHROME_HOST_DIR)"
-	sed -e "s|HOST_PATH|$(BINDIR)/$(BINARY)|g" \
+	sed -e "s|HOST_PATH|$(BINDIR)/$(HOST)|g" \
 	    -e "s|EXTENSION_ID_PLACEHOLDER|$(EXTENSION_ID)|g" \
 	    com.klawed.browser_controller.json \
 	    > "$(CHROME_HOST_DIR)/com.klawed.browser_controller.json"
@@ -77,21 +83,23 @@ install: build configure
 
 	@echo ""
 	@echo "Installation complete!"
-	@echo "Binary: $(BINDIR)/$(BINARY)"
-	@echo "Extension ID: $(EXTENSION_ID)"
+	@echo "Host binary:   $(BINDIR)/$(HOST)"
+	@echo "Client binary: $(BINDIR)/$(CLIENT)"
+	@echo "Extension ID:  $(EXTENSION_ID)"
 	@echo ""
 	@echo "Now reload Chrome and click the extension icon to connect."
 
 uninstall:
-	rm -f "$(BINDIR)/$(BINARY)"
+	rm -f "$(BINDIR)/$(HOST)"
+	rm -f "$(BINDIR)/$(CLIENT)"
 	rm -f "$(CHROME_HOST_DIR)/com.klawed.browser_controller.json"
 	rm -f "$(CHROMIUM_HOST_DIR)/com.klawed.browser_controller.json"
 	@echo "Uninstalled."
 
 help:
 	@echo "Targets:"
-	@echo "  build                  Build the Go binary"
-	@echo "  install EXTENSION_ID=X Build, install binary, register native host"
-	@echo "  uninstall              Remove binary and manifests"
-	@echo "  clean                  Remove built binary"
+	@echo "  build                  Build both Go binaries"
+	@echo "  install EXTENSION_ID=X Build, install binaries, register native host"
+	@echo "  uninstall              Remove binaries and manifests"
+	@echo "  clean                  Remove built binaries"
 	@echo "  configure              Show setup instructions"
