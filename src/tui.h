@@ -338,6 +338,10 @@ void tui_start_vim_fugitive_check(TUIState *tui);
 // Call this after changing the theme to apply new colors immediately
 void tui_reload_colors(void);
 
+// Update terminal window title based on current spinner state
+// Shows a spinner frame in the title when the AI is working
+void tui_update_terminal_title(TUIState *tui);
+
 // Internal functions (used across TUI modules during refactoring)
 // These will eventually move to their respective specialized modules
 
