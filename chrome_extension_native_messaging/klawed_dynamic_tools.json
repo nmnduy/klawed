@@ -6,7 +6,7 @@
   "tools": [
     {
       "type": "function",
-      "exec": "python3 /home/fandalf/git/klawed/chrome_extension_native_messaging/host/browser_ctl.py",
+      "exec": "/Users/puter/.local/bin/browser_ctl",
       "function": {
         "name": "BrowserControl",
         "description": "Control a real Chrome/Chromium browser via the Klawed Browser Controller extension (must be connected - green dot in toolbar).\n\nNavigation: navigate, goBack, goForward, reload, newTab(url), closeTab(tabId), switchTab(tabId)\nTab info:   listTabs, getActiveTab\nPage text:  getReadableText(maxLength?), getText(selector?, maxLength?)\nPage HTML:  getPageSource(maxLength?) — scripts/styles stripped; default 20k chars\nDOM:        click(selector), type(selector,text,clearFirst?), getHtml(selector?), getAttribute(selector,attribute)\n            findElements(selector,limit?=50), getLinks(limit?=50), getForms, fillForm(data), submitForm(selector?), pressKey(selector,key)\nScroll:     scroll(x,y), scrollBy(dx,dy), scrollToElement(selector)\nJS:         evaluate(code), waitForElement(selector,timeout?)\nCapture:    screenshot\nDebug:      ping, getInfo\n\nTip: prefer getText/getReadableText with a selector or small maxLength over getPageSource. Use evaluate for targeted extraction.",
