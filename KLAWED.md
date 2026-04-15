@@ -186,6 +186,7 @@ export OPENAI_API_KEY="your-api-key"
 - **Logging**: `KLAWED_LOG_LEVEL` (DEBUG/INFO/WARN/ERROR), `KLAWED_LOG_PATH`
 - **Database**: `KLAWED_DB_PATH` for API call history (SQLite)
 - **Token Usage Database**: `KLAWED_TOKEN_USAGE_DB_PATH` - Path for token usage tracking (default: `.klawed/token_usage.db`)
+- **Token Usage Metadata**: `KLAWED_TOKEN_USAGE_METADATA` - JSON payload attached to all token usage records. The JSON is stored in a deduplicated `token_usage_metadata` table and referenced by `metadata_id` on each `token_usage` row. Useful for tagging usage with user/org identifiers in multi-tenant deployments.
 - **Diagnostics**: `KLAWED_NO_STORAGE` - Set to 1 to disable all SQLite database operations (API history, token usage tracking, memory database) and history file. Useful for debugging TUI hangs on certain platforms (e.g., Mac Apple Silicon).
 - **Database Rotation**:
   - `KLAWED_DB_MAX_DAYS` - Keep records for N days (default: 30, 0=unlimited)
