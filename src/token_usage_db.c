@@ -16,6 +16,15 @@
 #include "data_dir.h"
 #include "macos_sqlite_fix.h"
 
+// SQL schema for the token_usage_metadata table
+static const char *METADATA_SCHEMA_SQL =
+    "CREATE TABLE IF NOT EXISTS token_usage_metadata ("
+    "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
+    "    metadata_json TEXT NOT NULL,"
+    "    metadata_hash TEXT UNIQUE,"
+    "    created_at INTEGER NOT NULL"
+    ");";
+
 // SQL schema for the token_usage table
 // Uses BIGINT to avoid overflow with high-volume usage (int64_t)
 static const char *SCHEMA_SQL =
@@ -23,6 +32,7 @@ static const char *SCHEMA_SQL =
     "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
     "    api_call_id INTEGER,"
     "    session_id TEXT,"
+    "    metadata_id INTEGER,"
     "    prompt_tokens BIGINT DEFAULT 0,"
     "    completion_tokens BIGINT DEFAULT 0,"
     "    total_tokens BIGINT DEFAULT 0,"
@@ -36,6 +46,7 @@ static const char *SCHEMA_SQL =
 static const char *INDEX_SQL =
     "CREATE INDEX IF NOT EXISTS idx_token_usage_api_call_id ON token_usage(api_call_id);"
     "CREATE INDEX IF NOT EXISTS idx_token_usage_session_id ON token_usage(session_id);"
+    "CREATE INDEX IF NOT EXISTS idx_token_usage_metadata_id ON token_usage(metadata_id);"
     "CREATE INDEX IF NOT EXISTS idx_token_usage_created_at ON token_usage(created_at);";
 
 // Extract token usage from API response JSON
@@ -180,6 +191,82 @@ char* token_usage_db_get_default_path(void) {
     return strdup("./token_usage.db");
 }
 
+// Simple FNV-1a 64-bit hash for metadata deduplication
+static uint64_t fnv1a_64_hash(const char *str) {
+    uint64_t hash = 0xcbf29ce484222325ULL;
+    while (*str) {
+        hash ^= (unsigned char)*str;
+        hash *= 0x100000001b3ULL;
+        str++;
+    }
+    return hash;
+}
+
+// Load metadata from KLAWED_TOKEN_USAGE_METADATA env var and cache the ID.
+// Returns 0 on success, -1 on failure.
+static int token_usage_db_load_metadata(TokenUsageDB *db) {
+    if (!db || !db->db) {
+        return -1;
+    }
+
+    const char *metadata_json = getenv("KLAWED_TOKEN_USAGE_METADATA");
+    if (!metadata_json || metadata_json[0] == '\0') {
+        db->metadata_id = 0;
+        return 0;
+    }
+
+    uint64_t hash_val = fnv1a_64_hash(metadata_json);
+    char hash_str[32];
+    snprintf(hash_str, sizeof(hash_str), "%016llx", (unsigned long long)hash_val);
+
+    // Try to insert, ignore if hash already exists
+    const char *insert_sql =
+        "INSERT OR IGNORE INTO token_usage_metadata (metadata_json, metadata_hash, created_at) "
+        "VALUES (?, ?, ?);";
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db->db, insert_sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("Failed to prepare metadata insert: %s", sqlite3_errmsg(db->db));
+        return -1;
+    }
+
+    time_t now = time(NULL);
+    sqlite3_bind_text(stmt, 1, metadata_json, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, hash_str, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 3, now);
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
+        LOG_ERROR("Failed to insert token usage metadata: %s", sqlite3_errmsg(db->db));
+        return -1;
+    }
+
+    // Retrieve the metadata ID
+    const char *select_sql =
+        "SELECT id FROM token_usage_metadata WHERE metadata_hash = ?;";
+    rc = sqlite3_prepare_v2(db->db, select_sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("Failed to prepare metadata select: %s", sqlite3_errmsg(db->db));
+        return -1;
+    }
+
+    sqlite3_bind_text(stmt, 1, hash_str, -1, SQLITE_TRANSIENT);
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        db->metadata_id = sqlite3_column_int64(stmt, 0);
+        LOG_DEBUG("Token usage metadata loaded: id=%lld", (long long)db->metadata_id);
+    } else {
+        LOG_ERROR("Failed to retrieve token usage metadata ID");
+        sqlite3_finalize(stmt);
+        return -1;
+    }
+    sqlite3_finalize(stmt);
+
+    return 0;
+}
+
 // Create directory path recursively
 static int mkdir_recursive(const char *path) {
     char tmp[PATH_MAX];
@@ -299,6 +386,18 @@ TokenUsageDB* token_usage_db_init(const char *db_path) {
     sqlite3_busy_timeout(tdb->db, busy_timeout_ms);
     LOG_DEBUG("[TokenUsageDB] SQLite busy timeout set to %d ms", busy_timeout_ms);
 
+    // Create metadata schema
+    rc = sqlite3_exec(tdb->db, METADATA_SCHEMA_SQL, NULL, NULL, &err_msg);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("Failed to create token usage metadata schema: %s", err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_close(tdb->db);
+        free(tdb->db_path);
+        pthread_mutex_destroy(&tdb->mutex);
+        free(tdb);
+        return NULL;
+    }
+
     // Create schema
     rc = sqlite3_exec(tdb->db, SCHEMA_SQL, NULL, NULL, &err_msg);
     if (rc != SQLITE_OK) {
@@ -326,6 +425,12 @@ TokenUsageDB* token_usage_db_init(const char *db_path) {
         pthread_mutex_destroy(&tdb->mutex);
         free(tdb);
         return NULL;
+    }
+
+    // Load metadata from environment variable if set
+    if (token_usage_db_load_metadata(tdb) != 0) {
+        LOG_WARN("Failed to load token usage metadata from environment");
+        tdb->metadata_id = 0;
     }
 
     // Apply automatic rotation rules
@@ -373,9 +478,9 @@ int token_usage_db_log(
 
     const char *sql =
         "INSERT INTO token_usage "
-        "(api_call_id, session_id, prompt_tokens, completion_tokens, total_tokens, "
+        "(api_call_id, session_id, metadata_id, prompt_tokens, completion_tokens, total_tokens, "
         "cached_tokens, prompt_cache_hit_tokens, prompt_cache_miss_tokens, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
 
     sqlite3_stmt *stmt;
     int rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
@@ -399,13 +504,19 @@ int token_usage_db_log(
         sqlite3_bind_null(stmt, 2);
     }
 
-    sqlite3_bind_int64(stmt, 3, prompt_tokens);
-    sqlite3_bind_int64(stmt, 4, completion_tokens);
-    sqlite3_bind_int64(stmt, 5, total_tokens);
-    sqlite3_bind_int64(stmt, 6, cached_tokens);
-    sqlite3_bind_int64(stmt, 7, prompt_cache_hit_tokens);
-    sqlite3_bind_int64(stmt, 8, prompt_cache_miss_tokens);
-    sqlite3_bind_int64(stmt, 9, now);
+    if (db->metadata_id > 0) {
+        sqlite3_bind_int64(stmt, 3, db->metadata_id);
+    } else {
+        sqlite3_bind_null(stmt, 3);
+    }
+
+    sqlite3_bind_int64(stmt, 4, prompt_tokens);
+    sqlite3_bind_int64(stmt, 5, completion_tokens);
+    sqlite3_bind_int64(stmt, 6, total_tokens);
+    sqlite3_bind_int64(stmt, 7, cached_tokens);
+    sqlite3_bind_int64(stmt, 8, prompt_cache_hit_tokens);
+    sqlite3_bind_int64(stmt, 9, prompt_cache_miss_tokens);
+    sqlite3_bind_int64(stmt, 10, now);
 
     rc = sqlite3_step(stmt);
     if (rc != SQLITE_DONE) {
@@ -780,6 +891,52 @@ int token_usage_db_vacuum(TokenUsageDB *db) {
 
     LOG_INFO("Token usage database vacuum completed");
     return 0;
+}
+
+// Get metadata JSON by metadata_id
+int token_usage_db_get_metadata_by_id(
+    TokenUsageDB *db,
+    int64_t metadata_id,
+    char **out_json
+) {
+    if (!db || !db->db || !out_json) {
+        LOG_ERROR("Invalid parameters to token_usage_db_get_metadata_by_id");
+        return -1;
+    }
+
+    *out_json = NULL;
+
+    pthread_mutex_lock(&db->mutex);
+
+    const char *sql = "SELECT metadata_json FROM token_usage_metadata WHERE id = ?;";
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("Failed to prepare metadata query: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
+        return -1;
+    }
+
+    sqlite3_bind_int64(stmt, 1, metadata_id);
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        const char *json = (const char *)sqlite3_column_text(stmt, 0);
+        if (json) {
+            *out_json = strdup(json);
+        }
+        sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
+        return 0;
+    } else if (rc == SQLITE_DONE) {
+        sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
+        return 1;  // Not found
+    } else {
+        LOG_ERROR("Failed to execute metadata query: %s", sqlite3_errmsg(db->db));
+        sqlite3_finalize(stmt);
+        pthread_mutex_unlock(&db->mutex);
+        return -1;
+    }
 }
 
 // Parse integer from environment variable with default

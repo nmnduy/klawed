@@ -16,12 +16,22 @@
 #include <stdint.h>
 #include <pthread.h>
 
+// Database schema for token_usage_metadata table:
+//
+// CREATE TABLE IF NOT EXISTS token_usage_metadata (
+//     id INTEGER PRIMARY KEY AUTOINCREMENT,
+//     metadata_json TEXT NOT NULL,       -- JSON metadata payload
+//     metadata_hash TEXT UNIQUE,         -- Hash of metadata_json for deduplication
+//     created_at INTEGER NOT NULL        -- Unix timestamp
+// );
+//
 // Database schema for token_usage table:
 //
 // CREATE TABLE IF NOT EXISTS token_usage (
 //     id INTEGER PRIMARY KEY AUTOINCREMENT,
 //     api_call_id INTEGER,               -- Optional reference (not a foreign key)
 //     session_id TEXT,                   -- Unique session identifier
+//     metadata_id INTEGER,               -- Reference to token_usage_metadata
 //     prompt_tokens INTEGER DEFAULT 0,   -- Number of prompt tokens used
 //     completion_tokens INTEGER DEFAULT 0, -- Number of completion tokens used
 //     total_tokens INTEGER DEFAULT 0,    -- Total tokens used
@@ -35,6 +45,7 @@
 typedef struct TokenUsageDB {
     sqlite3 *db;
     char *db_path;
+    int64_t metadata_id;    // Cached metadata ID from KLAWED_TOKEN_USAGE_METADATA
     pthread_mutex_t mutex;  // Mutex for thread-safe SQLite access
 } TokenUsageDB;
 
@@ -167,6 +178,21 @@ int token_usage_db_vacuum(TokenUsageDB *db);
 //
 // Returns: 0 on success, -1 on error
 int token_usage_db_auto_rotate(TokenUsageDB *db);
+
+// Get metadata JSON by metadata_id
+//
+// Parameters:
+//   db: Token usage database handle
+//   metadata_id: ID of the metadata row to retrieve
+//   out_json: Output parameter for the metadata JSON string (caller must free)
+//
+// Returns:
+//   0 on success, -1 on error, 1 if not found
+int token_usage_db_get_metadata_by_id(
+    TokenUsageDB *db,
+    int64_t metadata_id,
+    char **out_json
+);
 
 // Extract token usage from API response JSON
 //
