@@ -155,6 +155,38 @@ static void status_spinner_tick(TUIState *tui) {
 
     tui->status_spinner_last_update_ns = now;
     render_status_window(tui);
+    tui_update_terminal_title(tui);
+}
+
+void tui_update_terminal_title(TUIState *tui) {
+    if (!tui) {
+        return;
+    }
+
+    const char *name = "klawed";
+    const char *vltrn_mode = getenv("VLTRN_MODE");
+    if (vltrn_mode && strcmp(vltrn_mode, "1") == 0) {
+        name = "vltrn";
+    }
+
+    char title[256];
+    if (tui->status_spinner_active) {
+        const spinner_variant_t *variant = status_spinner_variant();
+        int frame_count = variant->count;
+        const char **frames = variant->frames;
+        if (!frames || frame_count <= 0) {
+            frames = SPINNER_FRAMES;
+            frame_count = SPINNER_FRAME_COUNT;
+        }
+        const char *frame = frames[tui->status_spinner_frame % frame_count];
+        snprintf(title, sizeof(title), "%s %s", frame, name);
+    } else {
+        snprintf(title, sizeof(title), "%s", name);
+    }
+
+    // OSC 0: set icon name and window title
+    printf("\033]0;%s\007", title);
+    fflush(stdout);
 }
 
 // Initialize ncurses color pairs from our colorscheme
