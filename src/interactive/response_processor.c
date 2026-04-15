@@ -71,7 +71,7 @@ typedef struct {
 // Holds: ToolThreadArg (~80 bytes) + tool_use_id (~50 bytes) + tool_name (~30 bytes)
 // 512 bytes provides comfortable headroom
 #define TOOL_THREAD_ARENA_SIZE 512
-#define INTERACTIVE_TOOL_LOOP_MAX_ITERATIONS 4000
+#define INTERACTIVE_TOOL_LOOP_MAX_ITERATIONS 2000
 
 // Forward declarations
 static char *arena_strdup(Arena *arena, const char *src);
