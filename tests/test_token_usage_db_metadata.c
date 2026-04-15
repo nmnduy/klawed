@@ -13,6 +13,12 @@
 
 static void cleanup(void) {
     unlink(TEST_DB_PATH);
+    char wal_path[256];
+    char shm_path[256];
+    snprintf(wal_path, sizeof(wal_path), "%s-wal", TEST_DB_PATH);
+    snprintf(shm_path, sizeof(shm_path), "%s-shm", TEST_DB_PATH);
+    unlink(wal_path);
+    unlink(shm_path);
 }
 
 static void test_no_metadata_env(void) {
