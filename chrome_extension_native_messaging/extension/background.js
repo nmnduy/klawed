@@ -316,16 +316,34 @@ async function executeCommand(command, params) {
     }
 
     case 'evaluate': {
-      const result = await execInActiveTab((code) => {
-        try {
-          // eslint-disable-next-line no-eval
-          const val = eval(code);
-          return { result: typeof val === 'object' ? JSON.stringify(val) : String(val) };
-        } catch (e) {
-          return { error: e.message };
-        }
-      }, [params.code]);
-      return result[0].result;
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab) throw new Error('No active tab');
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: 'MAIN',
+        func: (code) => {
+          try {
+            // eslint-disable-next-line no-eval
+            const val = eval(code);
+            if (val === undefined) return { result: undefined };
+            if (val === null) return { result: null };
+            if (typeof val === 'object') {
+              try {
+                return { result: JSON.parse(JSON.stringify(val)) };
+              } catch (e) {
+                return { result: String(val) };
+              }
+            }
+            return { result: val };
+          } catch (err) {
+            return { error: err.message };
+          }
+        },
+        args: [params.code],
+      });
+      const r = results[0].result;
+      if (r.error) throw new Error(r.error);
+      return { result: r.result };
     }
 
     case 'waitForElement': {
