@@ -82,7 +82,7 @@ static void anthropic_sub_call_api(Provider *self, ConversationState *state,
     }
 
     /* Get access token (refreshes if needed) */
-    const char *access_token = anthropic_oauth_get_access_token(config->oauth_manager);
+    char *access_token = anthropic_oauth_get_access_token(config->oauth_manager);
     if (!access_token) {
         result.error_message = strdup(
             "Anthropic subscription: no valid token found.\n"
@@ -109,6 +109,7 @@ static void anthropic_sub_call_api(Provider *self, ConversationState *state,
         result.error_message = strdup("Failed to build request JSON");
         result.is_retryable  = 0;
         *out = result;
+        free(access_token);
         return;
     }
 
@@ -118,6 +119,7 @@ static void anthropic_sub_call_api(Provider *self, ConversationState *state,
         result.error_message = strdup("Failed to serialize request JSON");
         result.is_retryable  = 0;
         *out = result;
+        free(access_token);
         return;
     }
 
@@ -471,6 +473,7 @@ static void anthropic_sub_call_api(Provider *self, ConversationState *state,
     }
 
     free(openai_req);
+    free(access_token);
     *out = result;
 }
 
