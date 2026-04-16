@@ -35,13 +35,149 @@
 #include <time.h>
 #include <ncurses.h>
 #include <bsd/string.h>
-#include <stdlib.h>
 #include <wchar.h>
 #include <locale.h>
+#include <assert.h>
+
+#define TUI_DRAW_OK 0
+#define TUI_DRAW_CLIPPED 1
+#define TUI_DRAW_SKIPPED 2
+
+typedef struct {
+    int width;
+    int height;
+} TuiWindowSize;
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+static int clamp_nonnegative(int value) {
+    return value < 0 ? 0 : value;
+}
+
+static TuiWindowSize tui_get_window_size(WINDOW *win) {
+    TuiWindowSize size = {0};
+
+    if (!win) {
+        return size;
+    }
+
+    getmaxyx(win, size.height, size.width);
+    size.width = clamp_nonnegative(size.width);
+    size.height = clamp_nonnegative(size.height);
+    return size;
+}
+
+static int tui_window_has_point(WINDOW *win, int y, int x) {
+    TuiWindowSize size = tui_get_window_size(win);
+
+    if (!win) {
+        return 0;
+    }
+
+    if (y < 0 || x < 0) {
+        return 0;
+    }
+
+    if (y >= size.height || x >= size.width) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static int tui_window_remaining_columns(WINDOW *win, int y, int x) {
+    TuiWindowSize size = tui_get_window_size(win);
+
+    if (!tui_window_has_point(win, y, x)) {
+        return 0;
+    }
+
+    (void)y;
+    return clamp_nonnegative(size.width - x);
+}
+
+static int tui_safe_mvwaddnstr(WINDOW *win, int y, int x, const char *text, int len) {
+    int available = 0;
+    int clipped_len = 0;
+
+    if (!win || !text || len <= 0) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    available = tui_window_remaining_columns(win, y, x);
+    if (available <= 0) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    clipped_len = len;
+    if (clipped_len > available) {
+        clipped_len = available;
+    }
+
+    if (clipped_len <= 0) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    if (mvwaddnstr(win, y, x, text, clipped_len) == ERR) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    return clipped_len == len ? TUI_DRAW_OK : TUI_DRAW_CLIPPED;
+}
+
+static int tui_safe_mvwaddch(WINDOW *win, int y, int x, chtype ch) {
+    if (!tui_window_has_point(win, y, x)) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    if (mvwaddch(win, y, x, ch) == ERR) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    return TUI_DRAW_OK;
+}
+
+static int tui_safe_mvwprint_char(WINDOW *win, int y, int x, const char *glyph) {
+    if (!glyph) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    return tui_safe_mvwaddnstr(win, y, x, glyph, (int)strlen(glyph));
+}
+
+static int tui_safe_wmove(WINDOW *win, int y, int x) {
+    if (!tui_window_has_point(win, y, x)) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    if (wmove(win, y, x) == ERR) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    return TUI_DRAW_OK;
+}
+
+static int tui_safe_waddch(WINDOW *win, chtype ch) {
+    int cur_y = 0;
+    int cur_x = 0;
+
+    if (!win) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    getyx(win, cur_y, cur_x);
+    if (!tui_window_has_point(win, cur_y, cur_x)) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    if (waddch(win, ch) == ERR) {
+        return TUI_DRAW_SKIPPED;
+    }
+
+    return TUI_DRAW_OK;
+}
 
 // Calculate display width of a UTF-8 string
 static int utf8_display_width(const char *str) {
@@ -551,7 +687,7 @@ void render_status_window(TUIState *tui) {
             } else {
                 wattron(tui->wm.status_win, A_BOLD);
             }
-            mvwaddnstr(tui->wm.status_win, 0, left_col, pacman_buf, pacman_len);
+            tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, pacman_buf, pacman_len);
             if (has_colors()) {
                 wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             } else {
@@ -566,7 +702,7 @@ void render_status_window(TUIState *tui) {
             } else {
                 wattron(tui->wm.status_win, A_BOLD);
             }
-            mvwaddnstr(tui->wm.status_win, 0, left_col, spinner_frame, spinner_frame_len);
+            tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, spinner_frame, spinner_frame_len);
             if (has_colors()) {
                 wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             } else {
@@ -581,7 +717,7 @@ void render_status_window(TUIState *tui) {
                 } else {
                     wattron(tui->wm.status_win, A_BOLD);
                 }
-                mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
+                tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
                 if (has_colors()) {
                     wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
                 } else {
@@ -607,7 +743,7 @@ void render_status_window(TUIState *tui) {
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
-        mvwaddnstr(tui->wm.status_win, 0, left_col, pacman_buf, pacman_len);
+        tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, pacman_buf, pacman_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
@@ -621,7 +757,7 @@ void render_status_window(TUIState *tui) {
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
-        mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
+        tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
@@ -649,7 +785,7 @@ void render_status_window(TUIState *tui) {
             if (has_colors()) {
                 wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
-            mvwaddnstr(tui->wm.status_win, 0, help_col, active_help, active_help_len);
+            tui_safe_mvwaddnstr(tui->wm.status_win, 0, help_col, active_help, active_help_len);
             if (has_colors()) {
                 wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
@@ -665,7 +801,7 @@ void render_status_window(TUIState *tui) {
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
         }
-        mvwaddnstr(tui->wm.status_win, 0, right_col, token_str, token_str_len);
+        tui_safe_mvwaddnstr(tui->wm.status_win, 0, right_col, token_str, token_str_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
         }
@@ -677,7 +813,7 @@ void render_status_window(TUIState *tui) {
         if (has_colors()) {
             wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
-        mvwaddnstr(tui->wm.status_win, 0, right_col, scroll_str, scroll_str_len);
+        tui_safe_mvwaddnstr(tui->wm.status_win, 0, right_col, scroll_str, scroll_str_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
@@ -693,7 +829,7 @@ void render_status_window(TUIState *tui) {
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
-        mvwaddnstr(tui->wm.status_win, 0, right_col, plan_str, plan_str_len);
+        tui_safe_mvwaddnstr(tui->wm.status_win, 0, right_col, plan_str, plan_str_len);
         if (has_colors()) {
             wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         } else {
@@ -724,67 +860,72 @@ void refresh_conversation_viewport(TUIState *tui) {
 static int render_text_with_search_highlight(WINDOW *win, const char *text,
                                            int text_pair __attribute__((unused)),
                                            const char *search_pattern, int bg_pair) {
-    if (!text || !text[0]) {
+    const char *remaining = NULL;
+    const char *match = NULL;
+    size_t pattern_len = 0;
+    int rendered = 0;
+    int cur_y = 0;
+    int cur_x = 0;
+
+    if (!win || !text || !text[0]) {
         return 0;
     }
 
     if (!search_pattern || !search_pattern[0]) {
-        // No search pattern, render normally with background if provided
         if (bg_pair > 0 && has_colors()) {
             wattron(win, COLOR_PAIR(bg_pair));
         }
-        waddstr(win, text);
+        getyx(win, cur_y, cur_x);
+        rendered += (tui_safe_mvwaddnstr(win, cur_y, cur_x, text, (int)strlen(text)) != TUI_DRAW_SKIPPED)
+            ? (int)strlen(text) : 0;
         if (bg_pair > 0 && has_colors()) {
             wattroff(win, COLOR_PAIR(bg_pair));
         }
-        return (int)strlen(text);
+        return rendered;
     }
 
-    int rendered = 0;
-    const char *current = text;
-    size_t pattern_len = strlen(search_pattern);
+    pattern_len = strlen(search_pattern);
+    remaining = text;
 
-    // Apply background color if provided
     if (bg_pair > 0 && has_colors()) {
         wattron(win, COLOR_PAIR(bg_pair));
     }
 
-    while (*current) {
-        // Check if pattern matches at current position (case-insensitive)
-        if (strncasecmp(current, search_pattern, pattern_len) == 0) {
-            // Render text before the match
-            if (current > text) {
-                size_t before_len = (size_t)(current - text);
-                waddnstr(win, text, (int)before_len);
+    while (*remaining) {
+        match = strcasestr(remaining, search_pattern);
+        if (!match) {
+            break;
+        }
+
+        if (match > remaining) {
+            size_t before_len = (size_t)(match - remaining);
+            getyx(win, cur_y, cur_x);
+            if (tui_safe_mvwaddnstr(win, cur_y, cur_x, remaining, (int)before_len) != TUI_DRAW_SKIPPED) {
                 rendered += (int)before_len;
             }
+        }
 
-            // Render the match with highlight
-            if (has_colors()) {
-                wattron(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
-            }
-            waddnstr(win, current, (int)pattern_len);
-            if (has_colors()) {
-                wattroff(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
-            }
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
+        }
+        getyx(win, cur_y, cur_x);
+        if (tui_safe_mvwaddnstr(win, cur_y, cur_x, match, (int)pattern_len) != TUI_DRAW_SKIPPED) {
             rendered += (int)pattern_len;
+        }
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
+        }
 
-            // Move past the match
-            current += pattern_len;
-            text = current; // Update text pointer for next segment
-        } else {
-            // Move to next character
-            current++;
+        remaining = match + pattern_len;
+    }
+
+    if (*remaining) {
+        getyx(win, cur_y, cur_x);
+        if (tui_safe_mvwaddnstr(win, cur_y, cur_x, remaining, (int)strlen(remaining)) != TUI_DRAW_SKIPPED) {
+            rendered += (int)strlen(remaining);
         }
     }
 
-    // Render any remaining text after last match
-    if (*text) {
-        waddstr(win, text);
-        rendered += (int)strlen(text);
-    }
-
-    // Turn off background color if it was applied
     if (bg_pair > 0 && has_colors()) {
         wattroff(win, COLOR_PAIR(bg_pair));
     }
@@ -803,14 +944,24 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
     if (has_colors()) {
         wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
     }
-    waddstr(pad, "│");
+    {
+        int cur_y = 0;
+        int cur_x = 0;
+        getyx(pad, cur_y, cur_x);
+        (void)tui_safe_mvwprint_char(pad, cur_y, cur_x, "│");
+    }
     if (has_colors()) {
         wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
         // Reset to foreground color (no background) for the space and text
         wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
     }
     // Add space after border with foreground color (no background)
-    waddch(pad, ' ');
+    {
+        int cur_y = 0;
+        int cur_x = 0;
+        getyx(pad, cur_y, cur_x);
+        (void)tui_safe_mvwaddch(pad, cur_y, cur_x, ' ');
+    }
     (void)border_str;  // No longer used - we render │ and space separately
 
     // Render text content with search highlighting if active
@@ -822,10 +973,20 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
             render_text_with_search_highlight(pad, seg_buf, 0, tui->last_search_pattern, 0);
             free(seg_buf);
         } else {
-            waddnstr(pad, segment, (int)len);
+            {
+                int cur_y = 0;
+                int cur_x = 0;
+                getyx(pad, cur_y, cur_x);
+                (void)tui_safe_mvwaddnstr(pad, cur_y, cur_x, segment, (int)len);
+            }
         }
     } else {
-        waddnstr(pad, segment, (int)len);
+        {
+            int cur_y = 0;
+            int cur_x = 0;
+            getyx(pad, cur_y, cur_x);
+            (void)tui_safe_mvwaddnstr(pad, cur_y, cur_x, segment, (int)len);
+        }
     }
 
     if (has_colors()) {
@@ -841,7 +1002,7 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
         (void)cur_y;
         if (cur_x > 0) {
             // Cursor hasn't wrapped yet, need explicit newline
-            waddch(pad, '\n');
+            (void)tui_safe_waddch(pad, '\n');
         }
     }
 }
@@ -987,7 +1148,7 @@ static void render_text_with_left_border(TUIState *tui, const char *text, int te
     (void)cur_y;
     if (cur_x > 0) {
         // Cursor is not at column 0, need a newline
-        waddch(pad_final, '\n');
+        (void)tui_safe_waddch(pad_final, '\n');
     }
 
     (void)text_pair;  // Suppress unused warning (background pair used instead)
@@ -1050,7 +1211,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
 
     // Move to end of pad
     int start_line = window_manager_get_content_lines(&tui->wm);
-    wmove(tui->wm.conv_pad, start_line, 0);
+    (void)tui_safe_wmove(tui->wm.conv_pad, start_line, 0);
 
     // Check if this is a [User] or [Assistant] message to apply new styling
     int is_user_message = (prefix && strcmp(prefix, "[User]") == 0);
@@ -1063,13 +1224,13 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         tui->last_tool_name = NULL;
 
         // Add one blank line for top padding
-        waddch(tui->wm.conv_pad, '\n');
+        (void)tui_safe_waddch(tui->wm.conv_pad, '\n');
 
         // Render prefix '❯ ' with bold user color (matches input box caret)
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
         }
-        waddstr(tui->wm.conv_pad, "❯ ");
+        (void)tui_safe_mvwaddnstr(tui->wm.conv_pad, start_line + 1, 0, "❯ ", (int)strlen("❯ "));
         if (has_colors()) {
             wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
         }
@@ -1092,7 +1253,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
-            waddstr(tui->wm.conv_pad, ">>> ");
+            { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); (void)tui_safe_mvwaddnstr(tui->wm.conv_pad, cur_y, cur_x, ">>> ", (int)strlen(">>> ")); }
             if (has_colors()) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
@@ -1118,11 +1279,11 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
                 wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
 
-            waddstr(tui->wm.conv_pad, display_prefix);
+            { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); (void)tui_safe_mvwaddnstr(tui->wm.conv_pad, cur_y, cur_x, display_prefix, (int)strlen(display_prefix)); }
 
             // Add space after prefix, but not for tree connector (it already includes space)
             if (!is_tree_connector) {
-                waddch(tui->wm.conv_pad, ' ');
+                { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); (void)tui_safe_mvwaddch(tui->wm.conv_pad, cur_y, cur_x, ' '); }
             }
 
             if (has_colors()) {
@@ -1163,7 +1324,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
             render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern, 0);
         } else {
-            waddstr(tui->wm.conv_pad, text);
+            { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); (void)tui_safe_mvwaddnstr(tui->wm.conv_pad, cur_y, cur_x, text, (int)strlen(text)); }
         }
 
         if (has_colors()) {
@@ -1173,7 +1334,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         // For user messages, add padding line after
         if (is_user_message) {
             // Add one blank line for bottom padding
-            waddch(tui->wm.conv_pad, '\n');
+            (void)tui_safe_waddch(tui->wm.conv_pad, '\n');
 
             // Exit early to avoid duplicate newline below
             goto skip_newline;
@@ -1181,7 +1342,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     }
 
     // Add newline (for messages that didn't use goto skip_newline)
-    waddch(tui->wm.conv_pad, '\n');
+    (void)tui_safe_waddch(tui->wm.conv_pad, '\n');
 
 skip_newline:
     ; // Empty statement required after label
@@ -1442,7 +1603,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
         }
         for (int row = 0; row < input->win_height; row++) {
-            mvwaddch(win, row, 0, ACS_VLINE);
+            tui_safe_mvwaddch(win, row, 0, ACS_VLINE);
         }
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
@@ -1462,22 +1623,22 @@ void input_redraw(TUIState *tui, const char *prompt) {
         int max_y, max_x;
         getmaxyx(win, max_y, max_x);
         // Top-left corner
-        mvwprintw(win, 0, 0, "╭");
+        tui_safe_mvwprint_char(win, 0, 0, "╭");
         // Top-right corner
-        mvwprintw(win, 0, max_x - 1, "╮");
+        tui_safe_mvwprint_char(win, 0, max_x - 1, "╮");
         // Bottom-left corner
-        mvwprintw(win, max_y - 1, 0, "╰");
+        tui_safe_mvwprint_char(win, max_y - 1, 0, "╰");
         // Bottom-right corner
-        mvwprintw(win, max_y - 1, max_x - 1, "╯");
+        tui_safe_mvwprint_char(win, max_y - 1, max_x - 1, "╯");
         // Top and bottom horizontal lines
         for (int col = 1; col < max_x - 1; col++) {
-            mvwprintw(win, 0, col, "─");
-            mvwprintw(win, max_y - 1, col, "─");
+            tui_safe_mvwprint_char(win, 0, col, "─");
+            tui_safe_mvwprint_char(win, max_y - 1, col, "─");
         }
         // Left and right vertical lines
         for (int row = 1; row < max_y - 1; row++) {
-            mvwprintw(win, row, 0, "│");
-            mvwprintw(win, row, max_x - 1, "│");
+            tui_safe_mvwprint_char(win, row, 0, "│");
+            tui_safe_mvwprint_char(win, row, max_x - 1, "│");
         }
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
@@ -1496,11 +1657,11 @@ void input_redraw(TUIState *tui, const char *prompt) {
         }
         // Top border at row 0
         for (int col = 0; col < input->win_width; col++) {
-            mvwaddch(win, 0, col, ACS_HLINE);
+            tui_safe_mvwaddch(win, 0, col, ACS_HLINE);
         }
         // Bottom border at last row
         for (int col = 0; col < input->win_width; col++) {
-            mvwaddch(win, input->win_height - 1, col, ACS_HLINE);
+            tui_safe_mvwaddch(win, input->win_height - 1, col, ACS_HLINE);
         }
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_INPUT_BORDER));
@@ -1512,7 +1673,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
             if (has_colors()) {
                 wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
             }
-            mvwprintw(win, 1, 0, "❯ ");
+            tui_safe_mvwprint_char(win, 1, 0, "❯ ");
             if (has_colors()) {
                 wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
             }
@@ -1530,7 +1691,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
             if (has_colors()) {
                 wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
             }
-            mvwprintw(win, 0, 0, "❯ ");
+            tui_safe_mvwprint_char(win, 0, 0, "❯ ");
             if (has_colors()) {
                 wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
             }
@@ -1542,7 +1703,8 @@ void input_redraw(TUIState *tui, const char *prompt) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         }
-        mvwprintw(win, content_start_row, content_start_col, "%s", mode_prefix);
+        tui_safe_mvwaddnstr(win, content_start_row, content_start_col,
+                           mode_prefix, (int)strlen(mode_prefix));
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         }
@@ -1586,7 +1748,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
             current_line++;
             screen_x = content_start_col;
         } else {
-            mvwaddch(win, screen_y, screen_x, (chtype)(unsigned char)c);
+            tui_safe_mvwaddch(win, screen_y, screen_x, (chtype)(unsigned char)c);
             screen_x++;
 
             // Check if we need to wrap
@@ -1625,7 +1787,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
     if (cursor_screen_y >= content_start_row &&
         cursor_screen_y < bottom_boundary &&
         cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
-        wmove(win, cursor_screen_y, cursor_screen_x);
+        (void)tui_safe_wmove(win, cursor_screen_y, cursor_screen_x);
     }
 
     // Hide cursor in NORMAL mode, show it in INSERT/COMMAND modes
@@ -1673,12 +1835,12 @@ void input_redraw(TUIState *tui, const char *prompt) {
 
             // Draw track (offset by content_start_row for border style)
             for (int row = 0; row < track_height; row++) {
-                mvwaddch(win, row + content_start_row, indicator_col, ACS_VLINE);
+                (void)tui_safe_mvwaddch(win, row + content_start_row, indicator_col, ACS_VLINE);
             }
 
             // Draw thumb (offset by content_start_row for border style)
             for (int row = thumb_top; row < thumb_top + thumb_height; row++) {
-                mvwaddch(win, row + content_start_row, indicator_col, ACS_CKBOARD);
+                (void)tui_safe_mvwaddch(win, row + content_start_row, indicator_col, ACS_CKBOARD);
             }
 
             if (has_colors()) {
@@ -1689,7 +1851,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
             if (cursor_screen_y >= content_start_row &&
                 cursor_screen_y < bottom_boundary &&
                 cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
-                wmove(win, cursor_screen_y, cursor_screen_x);
+                (void)tui_safe_wmove(win, cursor_screen_y, cursor_screen_x);
             }
         }
     }
@@ -1835,7 +1997,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         }
-        mvwaddstr(win, row, 0, "│");
+        tui_safe_mvwprint_char(win, row, 0, "│");
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         }
@@ -1844,7 +2006,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         }
-        mvwaddstr(win, row, 2, icon);
+        tui_safe_mvwaddnstr(win, row, 2, icon, (int)strlen(icon));
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         }
@@ -1861,7 +2023,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
-        mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
+        tui_safe_mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
@@ -1881,7 +2043,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
-        mvwaddstr(win, row, 0, "│");
+        tui_safe_mvwprint_char(win, row, 0, "│");
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
@@ -1890,7 +2052,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
-        mvwaddstr(win, row, 2, icon);
+        tui_safe_mvwaddnstr(win, row, 2, icon, (int)strlen(icon));
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
@@ -1907,7 +2069,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
-        mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
+        tui_safe_mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
@@ -1927,7 +2089,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
-        mvwaddstr(win, row, 0, "│");
+        tui_safe_mvwprint_char(win, row, 0, "│");
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
@@ -1936,7 +2098,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
-        mvwaddstr(win, row, 2, icon);
+        tui_safe_mvwaddnstr(win, row, 2, icon, (int)strlen(icon));
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
@@ -1953,7 +2115,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
-        mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
+        tui_safe_mvwaddnstr(win, row, 4, task_buf, (int)strlen(task_buf));
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
@@ -1972,7 +2134,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
-        mvwaddstr(win, row, 0, "│");
+        tui_safe_mvwprint_char(win, row, 0, "│");
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
@@ -1980,7 +2142,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         if (has_colors()) {
             wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
-        mvwaddnstr(win, row, 4, more_buf, (int)strlen(more_buf));
+        (void)tui_safe_mvwaddnstr(win, row, 4, more_buf, (int)strlen(more_buf));
         if (has_colors()) {
             wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
         }
