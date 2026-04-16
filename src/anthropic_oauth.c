@@ -619,7 +619,9 @@ int anthropic_oauth_is_authenticated(AnthropicOAuthManager *manager) {
 /**
  * Get current access token, refreshing if needed.
  */
-const char *anthropic_oauth_get_access_token(AnthropicOAuthManager *manager) {
+char *anthropic_oauth_get_access_token(AnthropicOAuthManager *manager) {
+    char *token_copy = NULL;
+
     if (!manager) return NULL;
 
     pthread_mutex_lock(&manager->token_mutex);
@@ -666,9 +668,15 @@ const char *anthropic_oauth_get_access_token(AnthropicOAuthManager *manager) {
         }
     }
 
-    const char *tok = manager->token->access_token;
+    if (manager->token && manager->token->access_token) {
+        token_copy = strdup(manager->token->access_token);
+        if (!token_copy) {
+            LOG_ERROR("[Anthropic OAuth] Failed to duplicate access token");
+        }
+    }
+
     pthread_mutex_unlock(&manager->token_mutex);
-    return tok;
+    return token_copy;
 }
 
 /**
