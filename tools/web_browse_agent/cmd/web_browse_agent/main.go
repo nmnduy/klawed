@@ -68,7 +68,10 @@ USAGE
 GLOBAL FLAGS
   --session, -s <id>    Session ID (required for most commands)
   --json                Output in JSON format for machine parsing
-  --timeout <sec>       Per-command timeout in seconds (default: 30)
+  --timeout <sec>       Per-command timeout in seconds (default: 30).
+                        This applies to a single command, NOT session lifetime.
+                        To control how long the browser session stays alive,
+                        set WEB_AGENT_IDLE_TIMEOUT (default: 300, 0=disable).
   --headless            Run browser without visible UI (default: true)
   --headless=false      Run browser with visible UI (requires X server)
   --verbose, -v         Enable verbose output
@@ -168,6 +171,22 @@ COOKIES
 
   Note: JavaScript-set cookies only work for non-HttpOnly cookies.
 
+SESSION LIFETIME
+  The browser driver shuts down automatically after a period of inactivity
+  to conserve resources. This is controlled by WEB_AGENT_IDLE_TIMEOUT,
+  NOT by --timeout.
+
+  --timeout only limits how long a single command (e.g., open, html)
+  may take to execute.
+
+  To keep a session alive longer:
+    export WEB_AGENT_IDLE_TIMEOUT=7200  # 2 hours
+    web_browse_agent --session my-session open https://example.com
+
+  To disable idle timeout and keep the session alive indefinitely:
+    export WEB_AGENT_IDLE_TIMEOUT=0
+    web_browse_agent --session my-session open https://example.com
+
 ENVIRONMENT VARIABLES
   WEB_AGENT_PERSISTENT_STORAGE    Enable persistent storage (default: false)
   WEB_AGENT_IDLE_TIMEOUT          Idle timeout seconds (default: 300, 0=disable)
@@ -220,7 +239,7 @@ func main() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVarP(&sessionID, "session", "s", "", "Session ID (required for most commands)")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
-	rootCmd.PersistentFlags().IntVar(&timeout, "timeout", 30, "Command timeout in seconds")
+	rootCmd.PersistentFlags().IntVar(&timeout, "timeout", 30, "Per-command timeout in seconds (does NOT control session lifetime; use WEB_AGENT_IDLE_TIMEOUT for that)")
 	rootCmd.PersistentFlags().BoolVar(&headless, "headless", true, "Run browser in headless mode")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
 	rootCmd.PersistentFlags().StringVar(&browserExecutable, "browser", "", "Browser executable path (e.g., /usr/bin/brave-browser). If not set, auto-detects system Chromium/Chrome")
