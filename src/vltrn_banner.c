@@ -13,6 +13,80 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+    int width;
+    int height;
+} VltrnWindowSize;
+
+static int vltrn_clamp_nonnegative(int value) {
+    return value < 0 ? 0 : value;
+}
+
+static VltrnWindowSize vltrn_get_window_size(WINDOW *win) {
+    VltrnWindowSize size = {0};
+
+    if (!win) {
+        return size;
+    }
+
+    getmaxyx(win, size.height, size.width);
+    size.width = vltrn_clamp_nonnegative(size.width);
+    size.height = vltrn_clamp_nonnegative(size.height);
+    return size;
+}
+
+static int vltrn_window_has_point(WINDOW *win, int y, int x) {
+    VltrnWindowSize size = vltrn_get_window_size(win);
+
+    if (!win || y < 0 || x < 0) {
+        return 0;
+    }
+
+    if (y >= size.height || x >= size.width) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static int vltrn_window_remaining_columns(WINDOW *win, int y, int x) {
+    VltrnWindowSize size = vltrn_get_window_size(win);
+
+    if (!vltrn_window_has_point(win, y, x)) {
+        return 0;
+    }
+
+    (void)y;
+    return vltrn_clamp_nonnegative(size.width - x);
+}
+
+static void vltrn_safe_addch(WINDOW *win, int y, int x, chtype ch) {
+    if (!vltrn_window_has_point(win, y, x)) {
+        return;
+    }
+
+    if (mvwaddch(win, y, x, ch) == ERR) {
+        return;
+    }
+}
+
+static void vltrn_safe_addstr(WINDOW *win, int y, int x, const char *text) {
+    int available = 0;
+
+    if (!win || !text) {
+        return;
+    }
+
+    available = vltrn_window_remaining_columns(win, y, x);
+    if (available <= 0) {
+        return;
+    }
+
+    if (mvwaddnstr(win, y, x, text, available) == ERR) {
+        return;
+    }
+}
+
 // Color pair cache for ANSI colors
 #define MAX_COLOR_CACHE 512
 #define COLOR_CACHE_START 50  // Start at 50 to avoid conflicts
@@ -211,7 +285,7 @@ int vltrn_render_banner(WINDOW *win, const char *filepath, int start_y, int star
                 // Regular character - render with current colors
                 int pair = get_color_pair(current_fg, current_bg);
                 wattron(win, COLOR_PAIR(pair));
-                mvwaddch(win, y, x++, (unsigned char)*p);
+                vltrn_safe_addch(win, y, x++, (unsigned char)*p);
                 wattroff(win, COLOR_PAIR(pair));
                 p++;
             }
@@ -257,7 +331,7 @@ void vltrn_show_greeting(TUIState *tui) {
                 if (len > 0 && line[len-1] == '\n') {
                     line[len-1] = '\0';
                 }
-                mvwprintw(tui->wm.conv_pad, y++, 1, "%s", line);
+                vltrn_safe_addstr(tui->wm.conv_pad, y++, 1, line);
             }
             fclose(fp);
             end_y = y;
@@ -274,7 +348,7 @@ void vltrn_show_greeting(TUIState *tui) {
 
     // Show branding immediately
     wattron(tui->wm.conv_pad, COLOR_PAIR(COLOR_PAIR_ASSISTANT));
-    mvwprintw(tui->wm.conv_pad, brand_y, 10, "=== VLTRN ===");
+    vltrn_safe_addstr(tui->wm.conv_pad, brand_y, 10, "=== VLTRN ===");
     wattroff(tui->wm.conv_pad, COLOR_PAIR(COLOR_PAIR_ASSISTANT));
 
     // Set up text diffusion for quotes
@@ -294,7 +368,7 @@ void vltrn_show_greeting(TUIState *tui) {
     text_diffusion_set_target(&quote2_diffusion, quote2);
 
     // Show prompt initially
-    mvwprintw(tui->wm.conv_pad, prompt_y, 8, "[Press any key to continue...]");
+    vltrn_safe_addstr(tui->wm.conv_pad, prompt_y, 8, "[Press any key to continue...]");
 
     // Animation loop for quote diffusion
     nodelay(tui->wm.input_win, TRUE);  // Non-blocking mode
@@ -306,8 +380,8 @@ void vltrn_show_greeting(TUIState *tui) {
         text_diffusion_update(&quote2_diffusion);
 
         // Render current state of quotes
-        mvwprintw(tui->wm.conv_pad, quote1_y, 4, "%s", text_diffusion_get_display(&quote1_diffusion));
-        mvwprintw(tui->wm.conv_pad, quote2_y, 7, "%s", text_diffusion_get_display(&quote2_diffusion));
+        vltrn_safe_addstr(tui->wm.conv_pad, quote1_y, 4, text_diffusion_get_display(&quote1_diffusion));
+        vltrn_safe_addstr(tui->wm.conv_pad, quote2_y, 7, text_diffusion_get_display(&quote2_diffusion));
 
         window_manager_refresh_conversation(&tui->wm);
 
@@ -317,8 +391,8 @@ void vltrn_show_greeting(TUIState *tui) {
             // Key pressed - skip to final state
             text_diffusion_skip(&quote1_diffusion);
             text_diffusion_skip(&quote2_diffusion);
-            mvwprintw(tui->wm.conv_pad, quote1_y, 4, "%s", quote1);
-            mvwprintw(tui->wm.conv_pad, quote2_y, 7, "%s", quote2);
+            vltrn_safe_addstr(tui->wm.conv_pad, quote1_y, 4, quote1);
+            vltrn_safe_addstr(tui->wm.conv_pad, quote2_y, 7, quote2);
             window_manager_refresh_conversation(&tui->wm);
             break;
         }
@@ -331,8 +405,8 @@ void vltrn_show_greeting(TUIState *tui) {
     }
 
     // Ensure final text is displayed
-    mvwprintw(tui->wm.conv_pad, quote1_y, 4, "%s", quote1);
-    mvwprintw(tui->wm.conv_pad, quote2_y, 7, "%s", quote2);
+    vltrn_safe_addstr(tui->wm.conv_pad, quote1_y, 4, quote1);
+    vltrn_safe_addstr(tui->wm.conv_pad, quote2_y, 7, quote2);
     window_manager_refresh_conversation(&tui->wm);
 
     // Wait for any key press on input window
