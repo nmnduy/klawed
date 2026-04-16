@@ -107,7 +107,7 @@ int anthropic_oauth_is_authenticated(AnthropicOAuthManager *manager);
  * @param manager OAuth manager
  * @return Access token string, or NULL if not authenticated / refresh failed
  */
-const char* anthropic_oauth_get_access_token(AnthropicOAuthManager *manager);
+char* anthropic_oauth_get_access_token(AnthropicOAuthManager *manager);
 
 /**
  * Force token refresh.
