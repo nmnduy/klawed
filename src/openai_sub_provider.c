@@ -966,6 +966,37 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
                                 result.http_status == 502 ||
                                 result.http_status == 503 ||
                                 result.http_status == 504);
+
+        /* If we hit a 429 usage_limit_reached with a reset time beyond our
+         * max retry window, give up immediately instead of waiting fruitlessly. */
+        if (result.http_status == 429 && result.is_retryable && result.raw_response) {
+            cJSON *err_root = cJSON_Parse(result.raw_response);
+            if (err_root) {
+                cJSON *err_obj = cJSON_GetObjectItem(err_root, "error");
+                if (err_obj) {
+                    cJSON *type_item = cJSON_GetObjectItem(err_obj, "type");
+                    cJSON *resets_item = cJSON_GetObjectItem(err_obj, "resets_in_seconds");
+                    if (type_item && cJSON_IsString(type_item) &&
+                        strcmp(type_item->valuestring, "usage_limit_reached") == 0 &&
+                        resets_item && cJSON_IsNumber(resets_item)) {
+                        int resets_in_seconds = (int)resets_item->valuedouble;
+                        if (resets_in_seconds > MAX_RETRY_DURATION_MS / 1000) {
+                            result.is_retryable = 0;
+                            free(result.error_message);
+                            char msg[256];
+                            snprintf(msg, sizeof(msg),
+                                     "OpenAI subscription usage limit reached. Resets in %d minutes (%d seconds).",
+                                     resets_in_seconds / 60, resets_in_seconds);
+                            result.error_message = strdup(msg);
+                            LOG_INFO("OpenAI Sub: usage limit reset (%d s) exceeds max retry window, not retrying",
+                                     resets_in_seconds);
+                        }
+                    }
+                }
+                cJSON_Delete(err_root);
+            }
+        }
+
         if (enable_streaming) sub_streaming_context_free(&stream_ctx);
         *out = result;
         return;
