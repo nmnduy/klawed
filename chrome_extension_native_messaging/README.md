@@ -51,18 +51,18 @@ The native messaging host is written in Go (stdlib only, no dependencies) becaus
 ### Message Flow
 
 1. klawed calls `BrowserControl` tool with `{"command": "navigate", "params": {"url": "https://..."}}`
-2. `browser_ctl.py` connects to the Unix socket and sends the JSON + newline
+2. `browser_ctl` connects to the Unix socket and sends the JSON + newline
 3. Go host receives the line, assigns a unique ID, forwards to Chrome as `{"id": "abc123", "command": "navigate", "params": {...}}`
 4. Chrome extension's `background.js` receives the message, executes the Chrome API, sends back `{"id": "abc123", "result": {"success": true}}`
 5. Go host's `chromeReader` goroutine receives the response, looks up `pending["abc123"]`, sends to the waiting channel
 6. Go host writes the JSON response + newline back to the klawed socket connection
-7. `browser_ctl.py` reads the response line and prints it
+7. `browser_ctl` reads the response line and prints it
 
 ## Requirements
 
 - Chrome or Chromium browser
 - Go 1.21+ (`go build` — no external dependencies)
-- Python 3.6+ (for `browser_ctl.py` client script)
+
 
 ## Installation
 
@@ -110,7 +110,7 @@ export KLAWED_DYNAMIC_TOOLS=/path/to/klawed/chrome_extension_native_messaging/kl
 # The socket path (default: /tmp/klawed-browser.sock)
 # export KLAWED_BROWSER_SOCKET=/tmp/klawed-browser.sock
 
-# Point browser_ctl.py to the right socket (if customized)
+# Point browser_ctl to the right socket (if customized)
 # export KLAWED_BROWSER_SOCKET=/tmp/my-browser.sock
 ```
 
@@ -169,11 +169,15 @@ cp chrome_extension_native_messaging/klawed_dynamic_tools.json .klawed/dynamic_t
 | `scrollBy` | `{"dx": 0, "dy": 300}` | Scroll relative |
 | `scrollToElement` | `{"selector": "CSS"}` | Scroll element into view |
 
-### JavaScript
+### Wait
 | Command | Params | Description |
 |---------|--------|-------------|
-| `evaluate` | `{"code": "document.title"}` | Execute JS and return result |
 | `waitForElement` | `{"selector": "CSS", "timeout": 5000}` | Wait for element to appear |
+
+### Fallback
+| Command | Params | Description |
+|---------|--------|-------------|
+| `evaluate` | `{"code": "document.title"}` | Execute JS and return result. Use **only** when structured commands are insufficient. |
 
 ### Capture
 | Command | Params | Description |
@@ -208,23 +212,32 @@ list all open tabs
 
 ## Manual Testing
 
-Test the socket directly:
+Test the socket directly with `browser_ctl`:
 
 ```bash
 # Ping
-echo '{"command":"ping"}' | python3 chrome_extension_native_messaging/host/browser_ctl.py '{"command":"ping"}'
+browser_ctl ping
 
 # Navigate
-python3 chrome_extension_native_messaging/host/browser_ctl.py '{"command":"navigate","params":{"url":"https://example.com"}}'
+browser_ctl navigate https://example.com
+
+# Click an element
+browser_ctl click "button[type=submit]"
+
+# Type into an input
+browser_ctl type "#search" "hello world"
 
 # Get page text
-python3 chrome_extension_native_messaging/host/browser_ctl.py '{"command":"getReadableText"}'
+browser_ctl get-readable-text
 
 # List tabs
-python3 chrome_extension_native_messaging/host/browser_ctl.py '{"command":"listTabs"}'
+browser_ctl list-tabs
 
 # Screenshot
-python3 chrome_extension_native_messaging/host/browser_ctl.py '{"command":"screenshot"}'
+browser_ctl screenshot
+
+# Fallback: evaluate JS
+browser_ctl eval "document.title"
 ```
 
 ## Environment Variables
@@ -261,4 +274,5 @@ The Go host waits 30 seconds for a Chrome response. If you see timeouts:
 
 - The native host only accepts connections from Chrome extensions whose ID is listed in the manifest
 - The Unix socket is created in `/tmp` with default permissions; set a custom path if you need tighter control
-- `evaluate` executes arbitrary JavaScript in the active page — use with care
+- Prefer structured commands (`click`, `type`, `get-text`, etc.) over `evaluate` for reliability and security
+- `evaluate` executes arbitrary JavaScript in the active page — use only as a fallback
