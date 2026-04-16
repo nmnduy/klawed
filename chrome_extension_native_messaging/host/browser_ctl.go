@@ -1,11 +1,12 @@
 // browser_ctl — Klawed Browser Control CLI
 //
 // A thin client that speaks to the Klawed Browser Controller extension.
-// Philosophy: AI agents write JavaScript. This binary only does what
-// JavaScript inside a page cannot do (tabs, screenshots, navigation).
+// Philosophy: prefer structured commands for reliability and security.
+// Use eval only when structured commands are insufficient.
 //
 // Usage:
-//   browser_ctl eval "document.querySelector('h1').innerText"
+//   browser_ctl click "#submit"
+//   browser_ctl type "#search" "klawed"
 //   browser_ctl navigate https://example.com
 //   browser_ctl screenshot
 //   browser_ctl list-tabs
@@ -29,31 +30,18 @@ const version = "2.1.0"
 
 const helpText = `Klawed Browser Controller
 
-Philosophy: AI agents write JavaScript. This binary only exposes what
-JavaScript running inside a page cannot do on its own.
+Philosophy: prefer structured commands for reliability and security.
+Use eval only as a fallback when structured commands cannot do the job.
 
 QUICK START
-  browser_ctl eval "document.title"
-  browser_ctl eval "document.querySelector('#search').value = 'klawed'"
-  browser_ctl eval "document.querySelector('#search').click()"
+  browser_ctl click "#submit"
+  browser_ctl type "#search" "hello world"
   browser_ctl navigate https://example.com
   browser_ctl screenshot
   browser_ctl list-tabs
   browser_ctl ping
 
-COMMANDS
-  eval <javascript>
-      Execute JavaScript in the active tab and return the result.
-      This is the primary interface. Use it to click, type, scroll,
-      extract data, fill forms, and wait for elements.
-      Examples:
-        browser_ctl eval "document.title"
-        browser_ctl eval "document.querySelector('button').click()"
-        browser_ctl eval "document.querySelector('input').value = 'hello'"
-        browser_ctl eval "window.scrollTo(0, 500)"
-        browser_ctl eval "document.querySelector('.result')?.innerText"
-        browser_ctl eval "new Promise(r => setTimeout(r, 1000))"
-
+COMMANDS — Navigation & Tabs
   navigate <url>
       Navigate the active tab to <url>.
       Example: browser_ctl navigate https://github.com
@@ -67,12 +55,81 @@ COMMANDS
   list-tabs
       List all open tabs.
 
+COMMANDS — Page Content
+  get-text [selector]
+      Get innerText of an element (omit selector for <body>).
+      Example: browser_ctl get-text "h1"
+
+  get-html [selector]
+      Get innerHTML of an element.
+
+  get-readable-text
+      Extract cleaned readable text from the page.
+
+  get-page-source
+      Get full page HTML (scripts/styles stripped).
+
+  get-attribute <selector> <attribute>
+      Get an attribute value. Example: browser_ctl get-attribute "a" "href"
+
+COMMANDS — DOM Interaction (preferred over eval)
+  click <selector>
+      Click an element. Example: browser_ctl click "button[type=submit]"
+
+  type <selector> <text>
+      Type text into an input.
+      Example: browser_ctl type "#search" "klawed"
+
+  press-key [selector] <key>
+      Dispatch a keyboard event. Example: browser_ctl press-key "#input" "Enter"
+
+  scroll <x> <y>
+      Scroll to absolute position. Example: browser_ctl scroll 0 500
+
+  scroll-by <dx> <dy>
+      Scroll relative. Example: browser_ctl scroll-by 0 300
+
+  scroll-to-element <selector>
+      Scroll element into view.
+
+  find-elements <selector>
+      List matching elements with metadata.
+
+  get-links
+      List all links on the page.
+
+  get-forms
+      List all forms and their inputs.
+
+  fill-form '{"#name":"Ada","#email":"ada@example.com"}'
+      Fill multiple form fields in one call.
+
+  submit-form [selector]
+      Submit a form.
+
+  wait-for-element <selector> [timeoutMs]
+      Wait for an element to appear (default 10s).
+
+COMMANDS — Capture & Debug
   screenshot
       Capture the visible area as PNG. Saves to a temp file and prints
       the path.
 
   ping
       Health check. Returns quickly when the extension is connected.
+
+  get-info
+      Show host metadata and supported commands.
+
+COMMANDS — Fallback
+  eval <javascript>
+      Execute arbitrary JavaScript in the active tab.
+      Use only when structured commands above are insufficient.
+      Examples:
+        browser_ctl eval "document.title"
+        browser_ctl eval "window.scrollTo(0, 500)"
+        browser_ctl eval "document.querySelector('.result')?.innerText"
+        browser_ctl eval "new Promise(r => setTimeout(r, 1000))"
 
 FLAGS
   -socket string   Unix socket path (default: /tmp/klawed-browser.sock)
@@ -289,6 +346,98 @@ func buildPayload(args []string) string {
 				params["tabId"] = id
 			}
 		}
+	case "get-text", "get-html":
+		if len(args) > 1 {
+			params["selector"] = args[1]
+		}
+	case "get-page-source":
+		if len(args) > 1 {
+			if n, err := strconv.Atoi(args[1]); err == nil {
+				params["maxLength"] = n
+			}
+		}
+	case "get-attribute":
+		if len(args) > 1 {
+			params["selector"] = args[1]
+		}
+		if len(args) > 2 {
+			params["attribute"] = args[2]
+		}
+	case "click", "scroll-to-element":
+		if len(args) > 1 {
+			params["selector"] = args[1]
+		}
+	case "type":
+		if len(args) > 1 {
+			params["selector"] = args[1]
+		}
+		if len(args) > 2 {
+			params["text"] = strings.Join(args[2:], " ")
+		}
+	case "press-key":
+		if len(args) == 2 {
+			params["key"] = args[1]
+		} else if len(args) >= 3 {
+			params["selector"] = args[1]
+			params["key"] = args[2]
+		}
+	case "scroll":
+		if len(args) > 1 {
+			if n, err := strconv.Atoi(args[1]); err == nil {
+				params["x"] = n
+			}
+		}
+		if len(args) > 2 {
+			if n, err := strconv.Atoi(args[2]); err == nil {
+				params["y"] = n
+			}
+		}
+	case "scroll-by":
+		if len(args) > 1 {
+			if n, err := strconv.Atoi(args[1]); err == nil {
+				params["dx"] = n
+			}
+		}
+		if len(args) > 2 {
+			if n, err := strconv.Atoi(args[2]); err == nil {
+				params["dy"] = n
+			}
+		}
+	case "find-elements":
+		if len(args) > 1 {
+			params["selector"] = args[1]
+		}
+		if len(args) > 2 {
+			if n, err := strconv.Atoi(args[2]); err == nil {
+				params["limit"] = n
+			}
+		}
+	case "get-links":
+		if len(args) > 1 {
+			if n, err := strconv.Atoi(args[1]); err == nil {
+				params["limit"] = n
+			}
+		}
+	case "fill-form":
+		if len(args) > 1 {
+			var data map[string]any
+			if err := json.Unmarshal([]byte(args[1]), &data); err == nil {
+				params["data"] = data
+			}
+		}
+	case "submit-form":
+		if len(args) > 1 {
+			params["selector"] = args[1]
+		}
+	case "wait-for-element":
+		if len(args) > 1 {
+			params["selector"] = args[1]
+		}
+		if len(args) > 2 {
+			if n, err := strconv.Atoi(args[2]); err == nil {
+				params["timeout"] = n
+			}
+		}
 	case "eval":
 		if len(args) > 1 {
 			params["code"] = strings.Join(args[1:], " ")
@@ -297,10 +446,25 @@ func buildPayload(args []string) string {
 
 	// Map CLI names to camelCase extension commands
 	commandMap := map[string]string{
-		"eval":       "evaluate",
-		"new-tab":    "newTab",
-		"switch-tab": "switchTab",
-		"list-tabs":  "listTabs",
+		"eval":              "evaluate",
+		"new-tab":           "newTab",
+		"switch-tab":        "switchTab",
+		"list-tabs":         "listTabs",
+		"get-text":          "getText",
+		"get-html":          "getHtml",
+		"get-readable-text": "getReadableText",
+		"get-page-source":   "getPageSource",
+		"get-attribute":     "getAttribute",
+		"scroll-to-element": "scrollToElement",
+		"scroll-by":         "scrollBy",
+		"find-elements":     "findElements",
+		"get-links":         "getLinks",
+		"get-forms":         "getForms",
+		"fill-form":         "fillForm",
+		"submit-form":       "submitForm",
+		"press-key":         "pressKey",
+		"wait-for-element":  "waitForElement",
+		"get-info":          "getInfo",
 	}
 	if mapped, ok := commandMap[cmd]; ok {
 		cmd = mapped
