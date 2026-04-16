@@ -279,3 +279,34 @@ int main(void) {
 
     return (tests_failed == 0) ? 0 : 1;
 }
+
+
+static int clamp_nonnegative_test(int value) {
+    return value < 0 ? 0 : value;
+}
+
+static int safe_right_start_col_test(int width, int right_total_width) {
+    int col = width - right_total_width;
+    return clamp_nonnegative_test(col);
+}
+
+static int safe_remaining_columns_test(int width, int x) {
+    if (width <= 0 || x < 0 || x >= width) {
+        return 0;
+    }
+    return width - x;
+}
+
+static int test_status_layout_clamps_negative_right_column(void) {
+    ASSERT(safe_right_start_col_test(10, 25) == 0);
+    ASSERT(safe_right_start_col_test(80, 20) == 60);
+    return 1;
+}
+
+static int test_safe_remaining_columns_rejects_oob_positions(void) {
+    ASSERT(safe_remaining_columns_test(0, 0) == 0);
+    ASSERT(safe_remaining_columns_test(5, -1) == 0);
+    ASSERT(safe_remaining_columns_test(5, 5) == 0);
+    ASSERT(safe_remaining_columns_test(5, 2) == 3);
+    return 1;
+}

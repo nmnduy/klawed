@@ -18,25 +18,87 @@
 #include <ctype.h>
 #include <stdio.h>
 
+typedef struct {
+    int width;
+    int height;
+} TuiSearchPadSize;
+
+static TuiSearchPadSize tui_search_get_pad_size(WINDOW *pad) {
+    TuiSearchPadSize size = {0};
+
+    if (!pad) {
+        return size;
+    }
+
+    getmaxyx(pad, size.height, size.width);
+    if (size.width < 0) {
+        size.width = 0;
+    }
+    if (size.height < 0) {
+        size.height = 0;
+    }
+
+    return size;
+}
+
+static int tui_search_pad_has_point(WINDOW *pad, int line, int col) {
+    TuiSearchPadSize size = tui_search_get_pad_size(pad);
+
+    if (!pad || line < 0 || col < 0) {
+        return 0;
+    }
+
+    if (line >= size.height || col >= size.width) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static int tui_search_safe_mvwinch(WINDOW *pad, int line, int col, chtype *out_ch) {
+    chtype ch = 0;
+
+    if (!out_ch) {
+        return 0;
+    }
+
+    if (!tui_search_pad_has_point(pad, line, col)) {
+        return 0;
+    }
+
+    ch = mvwinch(pad, line, col);
+    if (ch == (chtype)ERR) {
+        return 0;
+    }
+
+    *out_ch = ch;
+    return 1;
+}
+
 // Check if a line in pad is empty
 int tui_search_is_line_empty(WINDOW *pad, int line) {
     if (!pad || line < 0) {
         return 0;
     }
 
-    int pad_width, pad_height;
-    getmaxyx(pad, pad_height, pad_width);
+    TuiSearchPadSize size = tui_search_get_pad_size(pad);
 
-    if (line >= pad_height) {
+    if (line >= size.height) {
         return 0;
     }
 
     // Check first 100 columns (or pad width, whichever is smaller)
-    int cols_to_check = pad_width < 100 ? pad_width : 100;
+    int cols_to_check = size.width < 100 ? size.width : 100;
 
     for (int col = 0; col < cols_to_check; col++) {
-        chtype ch = mvwinch(pad, line, col);
-        char c = (char)(ch & A_CHARTEXT);
+        chtype ch = 0;
+        char c = 0;
+
+        if (!tui_search_safe_mvwinch(pad, line, col, &ch)) {
+            continue;
+        }
+
+        c = (char)(ch & A_CHARTEXT);
 
         // If we find any non-whitespace character, line is not empty
         if (c != ' ' && c != '\t' && c != '\0' && c != '\n') {
@@ -172,8 +234,14 @@ int tui_search_perform(TUIState *tui, const char *pattern, int direction) {
 
         // Read up to 255 characters from the line
         while (col < pad_width && text_len < 255) {
-            chtype ch = mvwinch(pad, line, col);
-            char c = (char)(ch & A_CHARTEXT);
+            chtype ch = 0;
+            char c = 0;
+
+            if (!tui_search_safe_mvwinch(pad, line, col, &ch)) {
+                break;
+            }
+
+            c = (char)(ch & A_CHARTEXT);
 
             if (c == '\0' || c == '\n') {
                 break;
