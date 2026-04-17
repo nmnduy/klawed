@@ -80,11 +80,9 @@ static const char *portable_strcasestr(const char *haystack, const char *needle)
             if (hay_char == '\0') {
                 break;
             }
-
-            if (tolower((int)hay_char) != tolower((int)needle_char)) {
+            if (tolower(hay_char) != tolower(needle_char)) {
                 break;
             }
-
             offset++;
         }
 
