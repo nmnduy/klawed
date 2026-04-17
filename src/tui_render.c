@@ -8,6 +8,10 @@
  * - Search highlighting
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 600
 #endif
@@ -38,6 +42,7 @@
 #include <wchar.h>
 #include <locale.h>
 #include <assert.h>
+#include <ctype.h>
 
 #define TUI_DRAW_OK 0
 #define TUI_DRAW_CLIPPED 1
@@ -51,6 +56,45 @@ typedef struct {
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+static const char *portable_strcasestr(const char *haystack, const char *needle) {
+    size_t needle_len = 0;
+    const char *cursor = NULL;
+
+    if (!haystack || !needle) {
+        return NULL;
+    }
+
+    needle_len = strnlen(needle, SIZE_MAX);
+    if (needle_len == 0U) {
+        return haystack;
+    }
+
+    for (cursor = haystack; *cursor != '\0'; cursor++) {
+        size_t offset = 0;
+
+        while (offset < needle_len) {
+            unsigned char hay_char = (unsigned char)cursor[offset];
+            unsigned char needle_char = (unsigned char)needle[offset];
+
+            if (hay_char == '\0') {
+                break;
+            }
+
+            if (tolower((int)hay_char) != tolower((int)needle_char)) {
+                break;
+            }
+
+            offset++;
+        }
+
+        if (offset == needle_len) {
+            return cursor;
+        }
+    }
+
+    return NULL;
+}
 
 static int clamp_nonnegative(int value) {
     return value < 0 ? 0 : value;
@@ -892,7 +936,7 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
     }
 
     while (*remaining) {
-        match = strcasestr(remaining, search_pattern);
+        match = portable_strcasestr(remaining, search_pattern);
         if (!match) {
             break;
         }
