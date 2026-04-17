@@ -379,14 +379,15 @@ static void test_shell_command_with_single_quotes(void) {
 static void test_shell_command_preserves_regex_pipes(void) {
     cJSON *args = cJSON_CreateObject();
     cJSON_AddStringToObject(args, "command",
-                            "printf 'reasoning_content\\n' | rg -n \"reasoning_content|STREAM_APPEND\"");
+                            "printf 'reasoning_content\\nSTREAM_APPEND\\n' | grep -En 'reasoning_content|STREAM_APPEND'");
 
     cJSON *result = codex_tool_shell_command(args);
     cJSON *stdout_json = cJSON_GetObjectItem(result, "stdout");
     cJSON *exit_json = cJSON_GetObjectItem(result, "exit_code");
     int ok = (exit_json && cJSON_IsNumber(exit_json) && exit_json->valueint == 0 &&
               stdout_json && cJSON_IsString(stdout_json) &&
-              strstr(stdout_json->valuestring, "reasoning_content") != NULL &&
+              strstr(stdout_json->valuestring, "1:reasoning_content") != NULL &&
+              strstr(stdout_json->valuestring, "2:STREAM_APPEND") != NULL &&
               strstr(stdout_json->valuestring, "command not found") == NULL);
 
     print_test_result("shell_command preserves quoted regex pipes", ok);
