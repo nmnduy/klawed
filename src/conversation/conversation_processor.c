@@ -150,6 +150,8 @@ static void *tool_thread_func(void *arg) {
     if (content_type && cJSON_IsString(content_type) &&
         strcmp(content_type->valuestring, "image") == 0) {
         t->result_block->type = INTERNAL_IMAGE;
+        t->result_block->tool_id = strdup(t->tool_use_id);
+        t->result_block->tool_name = strdup(t->tool_name);
         t->result_block->image_path = strdup(cJSON_GetObjectItem(res, "file_path")->valuestring);
         t->result_block->mime_type = strdup(cJSON_GetObjectItem(res, "mime_type")->valuestring);
         t->result_block->base64_data = strdup(cJSON_GetObjectItem(res, "base64_data")->valuestring);
@@ -287,11 +289,26 @@ static int execute_tools_serial(struct ConversationState *state,
             ctx->on_tool_complete(tool->name, tool_result, is_err, ctx->user_data);
         }
 
-        // Store result
-        result_slot->tool_id = strdup(tool->id);
-        result_slot->tool_name = strdup(tool->name);
-        result_slot->tool_output = tool_result;
-        result_slot->is_error = tool_result ? cJSON_HasObjectItem(tool_result, "error") : 1;
+        // Check for image result
+        const cJSON *content_type = cJSON_GetObjectItem(tool_result, "content_type");
+        if (content_type && cJSON_IsString(content_type) &&
+            strcmp(content_type->valuestring, "image") == 0) {
+            result_slot->type = INTERNAL_IMAGE;
+            result_slot->tool_id = strdup(tool->id);
+            result_slot->tool_name = strdup(tool->name);
+            result_slot->image_path = strdup(cJSON_GetObjectItem(tool_result, "file_path")->valuestring);
+            result_slot->mime_type = strdup(cJSON_GetObjectItem(tool_result, "mime_type")->valuestring);
+            result_slot->base64_data = strdup(cJSON_GetObjectItem(tool_result, "base64_data")->valuestring);
+            result_slot->image_size = (size_t)cJSON_GetObjectItem(tool_result, "file_size_bytes")->valueint;
+            result_slot->is_error = 0;
+            cJSON_Delete(tool_result);
+        } else {
+            // Store result
+            result_slot->tool_id = strdup(tool->id);
+            result_slot->tool_name = strdup(tool->name);
+            result_slot->tool_output = tool_result;
+            result_slot->is_error = tool_result ? cJSON_HasObjectItem(tool_result, "error") : 1;
+        }
 
         cJSON_Delete(input);
 
