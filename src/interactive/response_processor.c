@@ -265,6 +265,9 @@ static void *tool_thread_func(void *arg) {
     if (content_type && cJSON_IsString(content_type) && strcmp(content_type->valuestring, "image") == 0) {
         // This is an image upload - create image content instead of tool response
         t->result_block->type = INTERNAL_IMAGE;
+        // Must set tool_id so ensure_tool_results can match this to the tool call
+        t->result_block->tool_id = strdup(t->tool_use_id);
+        t->result_block->tool_name = strdup(t->tool_name);
         t->result_block->image_path = strdup(cJSON_GetObjectItem(res, "file_path")->valuestring);
         t->result_block->mime_type = strdup(cJSON_GetObjectItem(res, "mime_type")->valuestring);
         t->result_block->base64_data = strdup(cJSON_GetObjectItem(res, "base64_data")->valuestring);

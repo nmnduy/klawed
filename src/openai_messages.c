@@ -105,14 +105,15 @@ void ensure_tool_results(ConversationState *state) {
                 }
             }
         } else if (msg->role == MSG_USER) {
-            // Check for tool results
+            // Check for tool results (including image uploads)
             for (int j = 0; j < msg->content_count; j++) {
                 InternalContent *c = &msg->contents[j];
-                if (c->type == INTERNAL_TOOL_RESPONSE && c->tool_id) {
-                    LOG_DEBUG("ensure_tool_results: Found tool result in msg[%d]: id=%s, tool=%s, is_error=%d",
+                if ((c->type == INTERNAL_TOOL_RESPONSE || c->type == INTERNAL_IMAGE) && c->tool_id) {
+                    LOG_DEBUG("ensure_tool_results: Found tool result in msg[%d]: id=%s, tool=%s, is_error=%d, type=%s",
                               i, c->tool_id ? c->tool_id : "NULL",
                               c->tool_name ? c->tool_name : "NULL",
-                              c->is_error);
+                              c->is_error,
+                              c->type == INTERNAL_IMAGE ? "image" : "tool_response");
                     // Mark this tool call as having a result
                     int found = 0;
                     for (int k = 0; k < tool_call_count; k++) {
@@ -390,6 +391,38 @@ cJSON* build_openai_request_with_reasoning(ConversationState *state, int enable_
                     free(output_str);
 
                     cJSON_AddItemToArray(messages_array, tool_msg);
+                }
+                else if (c->type == INTERNAL_IMAGE) {
+                    // Image upload result - emit a tool message to satisfy API requirements,
+                    // then emit a user message with the image so the model can see it
+                    if (c->tool_id) {
+                        cJSON *tool_msg = cJSON_CreateObject();
+                        cJSON_AddStringToObject(tool_msg, "role", "tool");
+                        cJSON_AddStringToObject(tool_msg, "tool_call_id", c->tool_id);
+                        cJSON_AddStringToObject(tool_msg, "content", "Image uploaded successfully");
+                        cJSON_AddItemToArray(messages_array, tool_msg);
+                    }
+
+                    cJSON *user_msg = cJSON_CreateObject();
+                    cJSON_AddStringToObject(user_msg, "role", "user");
+                    cJSON *content_array = cJSON_CreateArray();
+                    cJSON *image_block = cJSON_CreateObject();
+                    cJSON_AddStringToObject(image_block, "type", "image_url");
+                    cJSON *image_url = cJSON_CreateObject();
+
+                    size_t data_url_size = strlen("data:") + strlen(c->mime_type) +
+                                           strlen(";base64,") + strlen(c->base64_data) + 1;
+                    char *data_url = malloc(data_url_size);
+                    if (data_url) {
+                        snprintf(data_url, data_url_size, "data:%s;base64,%s",
+                                 c->mime_type, c->base64_data);
+                        cJSON_AddStringToObject(image_url, "url", data_url);
+                        free(data_url);
+                    }
+                    cJSON_AddItemToObject(image_block, "image_url", image_url);
+                    cJSON_AddItemToArray(content_array, image_block);
+                    cJSON_AddItemToObject(user_msg, "content", content_array);
+                    cJSON_AddItemToArray(messages_array, user_msg);
                 }
             }
         }
