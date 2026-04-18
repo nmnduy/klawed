@@ -41,6 +41,11 @@ typedef struct {
     // Tool calls accumulated using shared module
     ToolCallAccumulator *tool_accumulator;
 
+    // Usage tokens from final streaming chunk (if provided by API)
+    int prompt_tokens;
+    int completion_tokens;
+    int total_tokens;
+
     // Arena for allocations
     Arena *arena;
 
