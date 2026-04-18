@@ -51,7 +51,6 @@ static Tool tools[] = {
     {"list_dir", codex_tool_list_dir_wrapper},
     {"view_image", codex_tool_view_image_wrapper},
     {"spawn_agent", codex_tool_spawn_agent_wrapper},
-    {"send_message", codex_tool_send_message_wrapper},
 #ifndef TEST_BUILD
     {"ListMcpResources", tool_list_mcp_resources},
     {"ReadMcpResource", tool_read_mcp_resource},
