@@ -24,7 +24,7 @@ typedef struct ConversationState ConversationState;
  * - shell/shell_command: Codex's shell execution interface
  * - list_dir: Directory listing with pagination
  * - view_image: View local images
- * - spawn_agent/send_message: Agent coordination
+ * - spawn_agent: Agent coordination
  *
  * Returns: cJSON array of tool definitions (caller must free)
  */
@@ -107,15 +107,6 @@ cJSON* codex_tool_view_image(cJSON *args);
  */
 cJSON* codex_tool_spawn_agent(cJSON *args);
 
-/**
- * Execute the send_message tool.
- *
- * Sends a message to a spawned agent.
- *
- * Returns: cJSON object with result
- */
-cJSON* codex_tool_send_message(cJSON *args);
-
 /* ============================================================================
  * Wrapper functions for tool registry integration
  * These wrap the Codex tools to match the standard tool handler signature
@@ -127,6 +118,5 @@ cJSON* codex_tool_shell_command_wrapper(cJSON *params, ConversationState *state)
 cJSON* codex_tool_list_dir_wrapper(cJSON *params, ConversationState *state);
 cJSON* codex_tool_view_image_wrapper(cJSON *params, ConversationState *state);
 cJSON* codex_tool_spawn_agent_wrapper(cJSON *params, ConversationState *state);
-cJSON* codex_tool_send_message_wrapper(cJSON *params, ConversationState *state);
 
 #endif // CODEX_TOOLS_H

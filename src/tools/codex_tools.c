@@ -8,7 +8,7 @@
  * - apply_patch: Uses Codex's structured patch format instead of simple string replacement
  * - shell/shell_command: Codex's shell execution interface
  * - list_dir: Directory listing tool
- * - spawn_agent/send_message: Agent coordination tools
+ * - spawn_agent: Agent coordination tool
  */
 
 #include "codex_tools.h"
@@ -132,44 +132,47 @@ static cJSON* create_apply_patch_tool(void) {
     return tool;
 }
 
-static cJSON* create_apply_patch_custom_tool(void) {
-    static const char *apply_patch_lark_grammar =
-        "start: begin_patch hunk+ end_patch\n"
-        "begin_patch: \"*** Begin Patch\" LF\n"
-        "end_patch: \"*** End Patch\" LF?\n"
-        "\n"
-        "hunk: add_hunk | delete_hunk | update_hunk\n"
-        "add_hunk: \"*** Add File: \" filename LF add_line+\n"
-        "delete_hunk: \"*** Delete File: \" filename LF\n"
-        "update_hunk: \"*** Update File: \" filename LF change_move? change?\n"
-        "\n"
-        "filename: /(.+)/\n"
-        "add_line: \"+\" /(.*)/ LF -> line\n"
-        "\n"
-        "change_move: \"*** Move to: \" filename LF\n"
-        "change: (change_context | change_line)+ eof_line?\n"
-        "change_context: (\"@@\" | \"@@ \" /(.+)/) LF\n"
-        "change_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\n"
-        "eof_line: \"*** End of File\" LF\n"
-        "\n"
-        "%import common.LF\n";
+static const char *APPLY_PATCH_LARK_GRAMMAR =
+    "start: begin_patch hunk+ end_patch\n"
+    "begin_patch: \"*** Begin Patch\" LF\n"
+    "end_patch: \"*** End Patch\" LF?\n"
+    "\n"
+    "hunk: add_hunk | delete_hunk | update_hunk\n"
+    "add_hunk: \"*** Add File: \" filename LF add_line+\n"
+    "delete_hunk: \"*** Delete File: \" filename LF\n"
+    "update_hunk: \"*** Update File: \" filename LF change_move? change?\n"
+    "\n"
+    "filename: /(.+)/\n"
+    "add_line: \"+\" /(.*)/ LF -> line\n"
+    "\n"
+    "change_move: \"*** Move to: \" filename LF\n"
+    "change: (change_context | change_line)+ eof_line?\n"
+    "change_context: (\"@@\" | \"@@ \" /(.+)/) LF\n"
+    "change_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\n"
+    "eof_line: \"*** End of File\" LF\n"
+    "\n"
+    "%import common.LF\n";
 
+__attribute__((unused))
+static cJSON* create_apply_patch_custom_tool(void) {
     cJSON *tool = cJSON_CreateObject();
+    cJSON *options = cJSON_CreateObject();
+    if (!tool || !options) {
+        cJSON_Delete(tool);
+        cJSON_Delete(options);
+        return NULL;
+    }
+
     cJSON_AddStringToObject(tool, "type", "custom");
     cJSON_AddStringToObject(tool, "name", "apply_patch");
     cJSON_AddStringToObject(tool, "description",
-        "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.");
-
-    cJSON *format = cJSON_CreateObject();
-    cJSON_AddStringToObject(format, "type", "grammar");
-    cJSON_AddStringToObject(format, "syntax", "lark");
-    cJSON_AddStringToObject(format, "definition", apply_patch_lark_grammar);
-    cJSON_AddItemToObject(tool, "format", format);
-
+        "Use the apply_patch tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON. "
+        "IMPORTANT: This tool only accepts string inputs that obey the lark grammar start: begin_patch hunk+ end_patch.");
+    cJSON_AddStringToObject(options, "format", "grammar");
+    cJSON_AddStringToObject(options, "syntax", APPLY_PATCH_LARK_GRAMMAR);
+    cJSON_AddItemToObject(tool, "options", options);
     return tool;
 }
-
-/* shell tool - Run shell commands */
 
 static cJSON* create_shell_tool(void) {
     cJSON *tool = cJSON_CreateObject();
@@ -198,11 +201,27 @@ static cJSON* create_shell_tool(void) {
     cJSON_AddItemToObject(props, "timeout_ms", create_number_param(
         "The timeout for the command in milliseconds"
     ));
+    cJSON_AddItemToObject(props, "max_output_tokens", create_number_param(
+        "Maximum number of tokens to return. Excess output will be truncated."
+    ));
+    cJSON_AddItemToObject(props, "yield_time_ms", create_number_param(
+        "How long to wait (in milliseconds) for output before yielding."
+    ));
+    cJSON_AddItemToObject(props, "shell", create_string_param(
+        "Shell binary to launch. Defaults to the user's default shell."
+    ));
+    cJSON_AddItemToObject(props, "login", create_boolean_param(
+        "Whether to launch the shell as a login shell. Defaults to false."
+    ));
+    cJSON_AddItemToObject(props, "tty", create_boolean_param(
+        "Whether to allocate a TTY for the command. Defaults to false (plain pipes); set to true to open a PTY and access TTY process."
+    ));
 
     cJSON_AddItemToObject(params, "properties", props);
 
     cJSON *required = cJSON_CreateArray();
     cJSON_AddItemToArray(required, cJSON_CreateString("command"));
+    cJSON_AddItemToArray(required, cJSON_CreateString("workdir"));
     cJSON_AddItemToObject(params, "required", required);
 
     cJSON_AddItemToObject(tool, "parameters", params);
@@ -234,11 +253,27 @@ static cJSON* create_shell_command_tool(void) {
     cJSON_AddItemToObject(props, "timeout_ms", create_number_param(
         "The timeout for the command in milliseconds"
     ));
+    cJSON_AddItemToObject(props, "max_output_tokens", create_number_param(
+        "Maximum number of tokens to return. Excess output will be truncated."
+    ));
+    cJSON_AddItemToObject(props, "yield_time_ms", create_number_param(
+        "How long to wait (in milliseconds) for output before yielding."
+    ));
+    cJSON_AddItemToObject(props, "shell", create_string_param(
+        "Shell binary to launch. Defaults to the user's default shell."
+    ));
+    cJSON_AddItemToObject(props, "login", create_boolean_param(
+        "Whether to launch the shell as a login shell. Defaults to false."
+    ));
+    cJSON_AddItemToObject(props, "tty", create_boolean_param(
+        "Whether to allocate a TTY for the command. Defaults to false (plain pipes); set to true to open a PTY and access TTY process."
+    ));
 
     cJSON_AddItemToObject(params, "properties", props);
 
     cJSON *required = cJSON_CreateArray();
     cJSON_AddItemToArray(required, cJSON_CreateString("command"));
+    cJSON_AddItemToArray(required, cJSON_CreateString("workdir"));
     cJSON_AddItemToObject(params, "required", required);
 
     cJSON_AddItemToObject(tool, "parameters", params);
@@ -302,6 +337,9 @@ static cJSON* create_view_image_tool(void) {
     cJSON_AddItemToObject(props, "path", create_string_param(
         "Local filesystem path to an image file"
     ));
+    cJSON_AddItemToObject(props, "detail", create_string_param(
+        "Optional detail override. The only supported value is `original`; omit this field for default resized behavior. Use `original` to preserve the file's original resolution instead of resizing to fit. This is important when high-fidelity image perception or precise localization is needed, especially for CUA agents."
+    ));
 
     cJSON_AddItemToObject(params, "properties", props);
 
@@ -354,39 +392,6 @@ static cJSON* create_spawn_agent_tool(void) {
     return tool;
 }
 
-/* send_message tool - Send message to an agent */
-
-static cJSON* create_send_message_tool(void) {
-    cJSON *tool = cJSON_CreateObject();
-    cJSON_AddStringToObject(tool, "type", "function");
-    cJSON_AddStringToObject(tool, "name", "send_message");
-    cJSON_AddStringToObject(tool, "description",
-        "Send a message to an existing agent. Use this to communicate with a spawned agent.");
-
-    cJSON *params = cJSON_CreateObject();
-    cJSON_AddStringToObject(params, "type", "object");
-    cJSON_AddBoolToObject(params, "additionalProperties", 0);
-
-    cJSON *props = cJSON_CreateObject();
-    cJSON_AddItemToObject(props, "target", create_string_param(
-        "Agent id or canonical task name to message (from spawn_agent)."
-    ));
-    cJSON_AddItemToObject(props, "message", create_string_param(
-        "Message text to queue on the target agent."
-    ));
-
-    cJSON_AddItemToObject(params, "properties", props);
-
-    cJSON *required = cJSON_CreateArray();
-    cJSON_AddItemToArray(required, cJSON_CreateString("target"));
-    cJSON_AddItemToArray(required, cJSON_CreateString("message"));
-    cJSON_AddItemToObject(params, "required", required);
-
-    cJSON_AddItemToObject(tool, "parameters", params);
-
-    return tool;
-}
-
 /* Get all Codex-compatible tool definitions */
 
 cJSON* get_codex_tool_definitions(void) {
@@ -401,7 +406,6 @@ cJSON* get_codex_tool_definitions(void) {
     cJSON_AddItemToArray(tools, create_list_dir_tool());
     cJSON_AddItemToArray(tools, create_view_image_tool());
     cJSON_AddItemToArray(tools, create_spawn_agent_tool());
-    cJSON_AddItemToArray(tools, create_send_message_tool());
 
     return tools;
 }
@@ -412,13 +416,12 @@ cJSON* get_codex_tool_definitions_for_responses_api(void) {
         return NULL;
     }
 
-    cJSON_AddItemToArray(tools, create_apply_patch_custom_tool());
+    cJSON_AddItemToArray(tools, create_apply_patch_tool());
     cJSON_AddItemToArray(tools, create_shell_tool());
     cJSON_AddItemToArray(tools, create_shell_command_tool());
     cJSON_AddItemToArray(tools, create_list_dir_tool());
     cJSON_AddItemToArray(tools, create_view_image_tool());
     cJSON_AddItemToArray(tools, create_spawn_agent_tool());
-    cJSON_AddItemToArray(tools, create_send_message_tool());
 
     return tools;
 }
@@ -1038,12 +1041,6 @@ cJSON* codex_tool_view_image_wrapper(cJSON *params, ConversationState *state) {
 cJSON* codex_tool_spawn_agent_wrapper(cJSON *params, ConversationState *state) {
     (void)state;
     return codex_tool_spawn_agent(params);
-}
-
-/* Wrapper for send_message tool */
-cJSON* codex_tool_send_message_wrapper(cJSON *params, ConversationState *state) {
-    (void)state;
-    return codex_tool_send_message(params);
 }
 
 /* ============================================================================
@@ -1790,58 +1787,6 @@ cJSON* codex_tool_spawn_agent(cJSON *args) {
     cJSON_AddNumberToObject(result, "agent_id", pid);
     cJSON_AddNumberToObject(result, "pid", pid);
     cJSON_AddStringToObject(result, "log_file", log_file);
-
-    return result;
-}
-
-/* ============================================================================
- * send_message Tool Implementation
- * ============================================================================ */
-
-cJSON* codex_tool_send_message(cJSON *args) {
-    if (!args) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Missing arguments");
-        return error;
-    }
-
-    /* Get target (required) */
-    cJSON *target_json = cJSON_GetObjectItem(args, "target");
-    if (!target_json || !cJSON_IsString(target_json)) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Missing or invalid 'target' parameter");
-        return error;
-    }
-    const char *target = target_json->valuestring;
-
-    /* Get message (required) */
-    cJSON *message_json = cJSON_GetObjectItem(args, "message");
-    if (!message_json || !cJSON_IsString(message_json)) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "Missing or invalid 'message' parameter");
-        return error;
-    }
-    const char *message = message_json->valuestring;
-
-    /* Try to parse target as PID */
-    char *endptr;
-    long pid = strtol(target, &endptr, 10);
-    if (*endptr == '\0' && pid > 0) {
-        /* Target is a PID - check if process exists */
-        if (kill((pid_t)pid, 0) != 0) {
-            cJSON *error = cJSON_CreateObject();
-            cJSON_AddStringToObject(error, "error", "Target agent not found");
-            return error;
-        }
-    }
-
-    /* For now, we just return success - actual message delivery would require
-     * a more complex inter-process communication mechanism */
-    (void)message; /* Unused for now */
-
-    cJSON *result = cJSON_CreateObject();
-    cJSON_AddBoolToObject(result, "success", 1);
-    cJSON_AddStringToObject(result, "target", target);
 
     return result;
 }
