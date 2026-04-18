@@ -367,6 +367,13 @@ static void kimi_coding_plan_call_api(Provider *self, ConversationState *state, 
                 }
             }
             kimi_streaming_context_free(&stream_ctx);
+            /* Streaming leaves raw_response NULL; set it to the reconstructed
+             * JSON so downstream token extraction works. */
+            char *synthetic = cJSON_PrintUnformatted(raw_json);
+            if (synthetic) {
+                free(result.raw_response);
+                result.raw_response = synthetic;
+            }
         } else {
             // Non-streaming: parse response
             raw_json = cJSON_Parse(result.raw_response);

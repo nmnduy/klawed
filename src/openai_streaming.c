@@ -124,6 +124,19 @@ int openai_streaming_process_event(OpenAIStreamingAccumulator *acc, const Stream
         }
     }
 
+    // Capture usage from final chunk (some APIs send usage without choices)
+    cJSON *usage = cJSON_GetObjectItem(event->data, "usage");
+    if (usage && cJSON_IsObject(usage)) {
+        cJSON *pt = cJSON_GetObjectItem(usage, "prompt_tokens");
+        cJSON *ct = cJSON_GetObjectItem(usage, "completion_tokens");
+        cJSON *tt = cJSON_GetObjectItem(usage, "total_tokens");
+        if (pt && cJSON_IsNumber(pt)) acc->prompt_tokens = pt->valueint;
+        if (ct && cJSON_IsNumber(ct)) acc->completion_tokens = ct->valueint;
+        if (tt && cJSON_IsNumber(tt)) acc->total_tokens = tt->valueint;
+        LOG_DEBUG("OpenAI stream: captured usage prompt=%d completion=%d total=%d",
+                  acc->prompt_tokens, acc->completion_tokens, acc->total_tokens);
+    }
+
     // Process choices array
     cJSON *choices = cJSON_GetObjectItem(event->data, "choices");
     if (!choices || !cJSON_IsArray(choices)) {
@@ -284,11 +297,13 @@ cJSON* openai_streaming_build_response(const OpenAIStreamingAccumulator *acc) {
     cJSON_AddItemToArray(choices, choice);
     cJSON_AddItemToObject(response, "choices", choices);
 
-    // Add placeholder usage
+    // Add usage (captured from final chunk if API provided it)
     cJSON *usage = cJSON_CreateObject();
-    cJSON_AddNumberToObject(usage, "prompt_tokens", 0);
-    cJSON_AddNumberToObject(usage, "completion_tokens", 0);
-    cJSON_AddNumberToObject(usage, "total_tokens", 0);
+    cJSON_AddNumberToObject(usage, "prompt_tokens", acc->prompt_tokens);
+    cJSON_AddNumberToObject(usage, "completion_tokens", acc->completion_tokens);
+    cJSON_AddNumberToObject(usage, "total_tokens",
+                            acc->total_tokens > 0 ? acc->total_tokens
+                            : (acc->prompt_tokens + acc->completion_tokens));
     cJSON_AddItemToObject(response, "usage", usage);
 
     return response;

@@ -1016,9 +1016,23 @@ static void openai_sub_call_api(Provider *self, ConversationState *state,
             *out = result;
             return;
         }
+        /* Replace raw SSE body with synthesized JSON so downstream token
+         * extraction (api_client.c, persistence) can parse usage. */
+        char *synthetic = cJSON_PrintUnformatted(raw_json);
+        if (synthetic) {
+            free(result.raw_response);
+            result.raw_response = synthetic;
+        }
     } else if (enable_streaming) {
         raw_json = openai_streaming_build_response(&stream_ctx.acc);
         sub_streaming_context_free(&stream_ctx);
+        /* Streaming leaves raw_response NULL; set it to the reconstructed
+         * JSON so downstream token extraction works. */
+        char *synthetic = cJSON_PrintUnformatted(raw_json);
+        if (synthetic) {
+            free(result.raw_response);
+            result.raw_response = synthetic;
+        }
     } else {
         raw_json = cJSON_Parse(result.raw_response);
         if (!raw_json) {
