@@ -15,9 +15,7 @@
 #include "../model_capabilities.h"
 #include "../ui/print_helpers.h"
 
-#ifdef HAVE_MEMVID
 #include "../context/memory_injection.h"
-#endif
 
 #ifdef HAVE_ZMQ
 #include "../zmq_socket.h"
@@ -273,14 +271,12 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         // Call provider's single-attempt API call
         LOG_DEBUG("API call attempt %d (elapsed: %ld ms)", attempt_num, elapsed_ms);
 
-#ifdef HAVE_MEMVID
         // Inject/refresh memory context before each API call
         if (inject_memory_context(state) == 0) {
             LOG_DEBUG("Memory context injection/refresh completed");
         } else {
             LOG_WARN("Memory context injection/refresh failed");
         }
-#endif
 
         ApiCallResult result = {0};
         state->provider->call_api(state->provider, state, &result);
