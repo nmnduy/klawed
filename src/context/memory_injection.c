@@ -185,6 +185,252 @@ static char* remove_memory_context(const char *prompt) {
 }
 
 /**
+ * Extract the summary text from a compaction notice message.
+ * Returns a newly allocated string with the summary, or NULL on failure.
+ */
+static char* extract_compaction_summary(const char *notice_text) {
+    if (!notice_text) {
+        return NULL;
+    }
+
+    const char *marker = "### Summary of Compacted Context";
+    const char *start = strstr(notice_text, marker);
+    if (!start) {
+        return NULL;
+    }
+    start += strlen(marker);
+
+    // Skip whitespace and newlines after the marker
+    while (*start == '\n' || *start == '\r' || *start == ' ') {
+        start++;
+    }
+
+    const char *end = strstr(start, "\n---\n");
+    if (!end) {
+        end = strstr(start, "\n---");
+    }
+    if (!end) {
+        return NULL;
+    }
+
+    // Trim trailing whitespace before the separator
+    while (end > start && (*(end - 1) == '\n' || *(end - 1) == '\r' || *(end - 1) == ' ')) {
+        end--;
+    }
+
+    size_t len = (size_t)(end - start);
+    if (len == 0 || len >= 4096) {
+        return NULL;
+    }
+
+    char *summary = malloc(len + 1);
+    if (!summary) {
+        return NULL;
+    }
+    strlcpy(summary, start, len + 1);
+    return summary;
+}
+
+/**
+ * Build a memory context string from compacted conversation history.
+ * Searches the memory database using the compaction summary and current user query.
+ * Returns a newly allocated string, or NULL if no results.
+ */
+static char* build_compaction_memory_context(const char *summary, const char *user_text) {
+    if (!summary) {
+        return NULL;
+    }
+
+    size_t query_size = strlen(summary) + 1;
+    if (user_text) {
+        query_size += strlen(user_text) + 16;
+    }
+    char *query = malloc(query_size);
+    if (!query) {
+        return NULL;
+    }
+
+    if (user_text) {
+        snprintf(query, query_size, "%s user: %s", summary, user_text);
+    } else {
+        strlcpy(query, summary, query_size);
+    }
+
+    MemoryDB *handle = memory_db_get_global();
+    if (!handle) {
+        free(query);
+        return NULL;
+    }
+
+    MemorySearchResult *results = memory_db_search(handle, query, 10);
+    free(query);
+
+    if (!results || results->count == 0) {
+        if (results) {
+            memory_db_free_result(results);
+        }
+        return NULL;
+    }
+
+    size_t buf_size = 4096;
+    char *context = malloc(buf_size);
+    if (!context) {
+        memory_db_free_result(results);
+        return NULL;
+    }
+    context[0] = '\0';
+    size_t offset = 0;
+
+    #define CTX_APPEND(...) do { \
+        int written = snprintf(context + offset, buf_size - offset, __VA_ARGS__); \
+        if (written > 0 && (size_t)written < buf_size - offset) { \
+            offset += (size_t)written; \
+        } \
+    } while(0)
+
+    CTX_APPEND("<memory-context>\n");
+    CTX_APPEND("[System note: The following is recalled memory context from compacted "
+               "conversation history. This is NOT new user input. "
+               "Use it to maintain continuity with the user's prior work.]\n\n");
+
+    for (size_t i = 0; i < results->count && i < 10; i++) {
+        MemoryCard *card = &results->cards[i];
+        if (card->value) {
+            CTX_APPEND("%s\n", card->value);
+        }
+    }
+
+    CTX_APPEND("</memory-context>\n");
+
+    #undef CTX_APPEND
+
+    memory_db_free_result(results);
+    return context;
+}
+
+/**
+ * Inject compacted memory context as a system message when the user sends
+ * the first message after a context compaction event.
+ * Returns: 0 on success (or nothing to do), -1 on error.
+ */
+static int inject_compaction_memory_context(ConversationState *state) {
+    if (!state || state->count < 2) {
+        return 0;
+    }
+
+    // Only act when the last message is a fresh user message (not a tool response)
+    const InternalMessage *last_msg = &state->messages[state->count - 1];
+    if (last_msg->role != MSG_USER) {
+        return 0;
+    }
+
+    int is_tool_response = 0;
+    for (int j = 0; j < last_msg->content_count; j++) {
+        if (last_msg->contents[j].type == INTERNAL_TOOL_RESPONSE) {
+            is_tool_response = 1;
+            break;
+        }
+    }
+    if (is_tool_response) {
+        return 0;
+    }
+
+    // Find the most recent compaction notice
+    int compaction_idx = -1;
+    const char *notice_text = NULL;
+    for (int i = state->count - 2; i >= 0; i--) {
+        if (state->messages[i].role == MSG_AUTO_COMPACTION) {
+            compaction_idx = i;
+            for (int j = 0; j < state->messages[i].content_count; j++) {
+                if (state->messages[i].contents[j].type == INTERNAL_TEXT &&
+                    state->messages[i].contents[j].text) {
+                    notice_text = state->messages[i].contents[j].text;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+
+    if (compaction_idx < 0 || !notice_text) {
+        return 0;
+    }
+
+    // Only inject for the first user turn after compaction.
+    // If an assistant has already responded since compaction, skip.
+    for (int i = compaction_idx + 1; i < state->count - 1; i++) {
+        if (state->messages[i].role == MSG_ASSISTANT) {
+            return 0;
+        }
+    }
+
+    // Check if we already injected for this turn
+    if (state->count >= 2) {
+        const InternalMessage *prev = &state->messages[state->count - 2];
+        if (prev->role == MSG_SYSTEM && prev->content_count > 0 &&
+            prev->contents[0].text &&
+            strstr(prev->contents[0].text, "<memory-context>") != NULL) {
+            return 0;
+        }
+    }
+
+    // Extract summary and build search query
+    char *summary = extract_compaction_summary(notice_text);
+    if (!summary) {
+        return 0;
+    }
+
+    // Get user text
+    const char *user_text = NULL;
+    for (int j = 0; j < last_msg->content_count; j++) {
+        if (last_msg->contents[j].type == INTERNAL_TEXT && last_msg->contents[j].text) {
+            user_text = last_msg->contents[j].text;
+            break;
+        }
+    }
+
+    char *context = build_compaction_memory_context(summary, user_text);
+    free(summary);
+
+    if (!context) {
+        return 0;
+    }
+
+    // Insert as a system message before the user message
+    if (state->count >= MAX_MESSAGES) {
+        free(context);
+        return -1;
+    }
+
+    int insert_pos = state->count - 1;
+    for (int i = state->count; i > insert_pos; i--) {
+        state->messages[i] = state->messages[i - 1];
+    }
+
+    memset(&state->messages[insert_pos], 0, sizeof(InternalMessage));
+    state->messages[insert_pos].role = MSG_SYSTEM;
+    state->messages[insert_pos].content_count = 1;
+    state->messages[insert_pos].contents = calloc(1, sizeof(InternalContent));
+    if (!state->messages[insert_pos].contents) {
+        // Undo shift
+        for (int i = insert_pos; i < state->count; i++) {
+            state->messages[i] = state->messages[i + 1];
+        }
+        free(context);
+        return -1;
+    }
+
+    state->messages[insert_pos].contents[0].type = INTERNAL_TEXT;
+    state->messages[insert_pos].contents[0].text = context;
+    state->count++;
+
+    LOG_INFO("Injected compaction memory context (%zu bytes) at position %d",
+             strlen(context), insert_pos);
+
+    return 0;
+}
+
+/**
  * Inject memory context into conversation state.
  * Can be called before each API request to refresh memory context.
  * Removes any existing memory section before adding a new one.
@@ -192,6 +438,11 @@ static char* remove_memory_context(const char *prompt) {
 int inject_memory_context(ConversationState *state) {
     if (!state) {
         return -1;
+    }
+
+    // Inject compacted memory context if this is the first user turn after compaction
+    if (inject_compaction_memory_context(state) != 0) {
+        LOG_WARN("Memory context injection: Compaction memory injection failed");
     }
 
     // Check if memory database is available
