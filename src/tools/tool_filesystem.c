@@ -19,6 +19,9 @@
 #include <glob.h>
 #include <limits.h>
 #include <pthread.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 // ============================================================================
 // Read Tool
@@ -581,6 +584,118 @@ cJSON* tool_multiedit(cJSON *params, ConversationState *state) {
 }
 
 // ============================================================================
+// Glob Tool Helpers (for ** recursive glob support)
+// ============================================================================
+
+/**
+ * Check if a character matches a glob pattern component
+ * Supports: * (match any sequence), ? (match single char)
+ */
+static int match_simple_glob(const char *filename, const char *pattern) {
+    while (*pattern && *filename) {
+        if (*pattern == '*') {
+            // Skip consecutive asterisks
+            while (*pattern == '*') pattern++;
+            // If asterisk is at end, match everything
+            if (!*pattern) return 1;
+            // Try to match rest of pattern
+            while (*filename) {
+                if (match_simple_glob(filename, pattern)) return 1;
+                filename++;
+            }
+            return 0;
+        } else if (*pattern == '?') {
+            // Match any single character (but not end of string)
+            if (!*filename) return 0;
+            pattern++;
+            filename++;
+        } else {
+            // Literal match
+            if (*pattern != *filename) return 0;
+            pattern++;
+            filename++;
+        }
+    }
+    // Skip trailing asterisks in pattern
+    while (*pattern == '*') pattern++;
+    // Both should be at end for a match
+    return (*pattern == '\0' && *filename == '\0');
+}
+
+/**
+ * Recursively traverse directory and match files against pattern
+ * base_path: the starting directory path
+ * rel_path: current relative path from base (or empty string for root)
+ * file_pattern: the glob pattern to match (e.g., "*.tex")
+ * files: cJSON array to add matches to
+ * total_count: pointer to counter for total matches
+ */
+static void glob_recursive(const char *base_path, const char *rel_path,
+                           const char *file_pattern, cJSON *files, int *total_count) {
+    char current_dir[PATH_MAX];
+    if (rel_path[0] == '\0') {
+        strlcpy(current_dir, base_path, sizeof(current_dir));
+    } else {
+        snprintf(current_dir, sizeof(current_dir), "%s/%s", base_path, rel_path);
+    }
+
+    DIR *dir = opendir(current_dir);
+    if (!dir) return;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        // Skip . and ..
+        if (entry->d_name[0] == '.' &&
+            (entry->d_name[1] == '\0' ||
+             (entry->d_name[1] == '.' && entry->d_name[2] == '\0'))) {
+            continue;
+        }
+
+        char full_path[PATH_MAX];
+        char new_rel_path[PATH_MAX];
+        if (rel_path[0] == '\0') {
+            strlcpy(new_rel_path, entry->d_name, sizeof(new_rel_path));
+        } else {
+            snprintf(new_rel_path, sizeof(new_rel_path), "%s/%s", rel_path, entry->d_name);
+        }
+        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, new_rel_path);
+
+        struct stat st;
+        if (stat(full_path, &st) != 0) continue;
+
+        if (S_ISDIR(st.st_mode)) {
+            // Recurse into subdirectory
+            glob_recursive(base_path, new_rel_path, file_pattern, files, total_count);
+        } else if (S_ISREG(st.st_mode)) {
+            // Check if file matches pattern
+            if (match_simple_glob(entry->d_name, file_pattern)) {
+                cJSON_AddItemToArray(files, cJSON_CreateString(full_path));
+                (*total_count)++;
+            }
+        }
+    }
+
+    closedir(dir);
+}
+
+/**
+ * Check if pattern contains ** (recursive glob)
+ */
+static int has_recursive_glob(const char *pattern) {
+    const char *p = pattern;
+    while ((p = strstr(p, "**")) != NULL) {
+        // Make sure it's a standalone ** (not part of longer sequence)
+        // and followed by / or end of string
+        if ((p == pattern || p[-1] == '/') &&
+            (p[2] == '\0' || p[2] == '/')) {
+            return 1;
+        }
+        p += 2;
+    }
+    return 0;
+}
+
+// ============================================================================
 // Glob Tool
 // ============================================================================
 
@@ -597,27 +712,39 @@ cJSON* tool_glob(cJSON *params, ConversationState *state) {
     cJSON *files = cJSON_CreateArray();
     int total_count = 0;
 
-    // Search in main working directory
-    char full_pattern[PATH_MAX];
-    snprintf(full_pattern, sizeof(full_pattern), "%s/%s", state->working_dir, pattern);
-
-    glob_t glob_result;
-    int ret = glob(full_pattern, GLOB_TILDE, NULL, &glob_result);
-
-    if (ret == 0) {
-        for (size_t i = 0; i < glob_result.gl_pathc; i++) {
-            cJSON_AddItemToArray(files, cJSON_CreateString(glob_result.gl_pathv[i]));
-            total_count++;
+    // Check if pattern contains ** (recursive glob)
+    // Standard glob() on macOS/BSD does not support **, so we handle it manually
+    if (has_recursive_glob(pattern)) {
+        // Extract the file pattern after **/
+        const char *file_pattern = pattern;
+        const char *starstar = strstr(pattern, "**/");
+        if (starstar) {
+            file_pattern = starstar + 3;  // Skip "**/"
+        } else {
+            starstar = strstr(pattern, "**");
+            if (starstar) {
+                file_pattern = starstar + 2;  // Skip "**"
+                if (*file_pattern == '/') file_pattern++;
+            }
         }
-        globfree(&glob_result);
-    }
+        if (file_pattern[0] == '\0') {
+            file_pattern = "*";  // ** alone means match all files recursively
+        }
 
-    // Search in additional working directories
-    for (int dir_idx = 0; dir_idx < state->additional_dirs_count; dir_idx++) {
-        snprintf(full_pattern, sizeof(full_pattern), "%s/%s",
-                 state->additional_dirs[dir_idx], pattern);
+        // Search in main working directory
+        glob_recursive(state->working_dir, "", file_pattern, files, &total_count);
 
-        ret = glob(full_pattern, GLOB_TILDE, NULL, &glob_result);
+        // Search in additional working directories
+        for (int dir_idx = 0; dir_idx < state->additional_dirs_count; dir_idx++) {
+            glob_recursive(state->additional_dirs[dir_idx], "", file_pattern, files, &total_count);
+        }
+    } else {
+        // Use standard glob() for non-recursive patterns
+        char full_pattern[PATH_MAX];
+        snprintf(full_pattern, sizeof(full_pattern), "%s/%s", state->working_dir, pattern);
+
+        glob_t glob_result;
+        int ret = glob(full_pattern, GLOB_TILDE, NULL, &glob_result);
 
         if (ret == 0) {
             for (size_t i = 0; i < glob_result.gl_pathc; i++) {
@@ -625,6 +752,22 @@ cJSON* tool_glob(cJSON *params, ConversationState *state) {
                 total_count++;
             }
             globfree(&glob_result);
+        }
+
+        // Search in additional working directories
+        for (int dir_idx = 0; dir_idx < state->additional_dirs_count; dir_idx++) {
+            snprintf(full_pattern, sizeof(full_pattern), "%s/%s",
+                     state->additional_dirs[dir_idx], pattern);
+
+            ret = glob(full_pattern, GLOB_TILDE, NULL, &glob_result);
+
+            if (ret == 0) {
+                for (size_t i = 0; i < glob_result.gl_pathc; i++) {
+                    cJSON_AddItemToArray(files, cJSON_CreateString(glob_result.gl_pathv[i]));
+                    total_count++;
+                }
+                globfree(&glob_result);
+            }
         }
     }
 
