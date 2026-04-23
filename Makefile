@@ -142,6 +142,7 @@ TARGET = $(BUILD_DIR)/klawed
 TEST_EDIT_TARGET = $(BUILD_DIR)/test_edit
 TEST_EDIT_REGEX_TARGET = $(BUILD_DIR)/test_edit_regex_enhancements
 TEST_READ_TARGET = $(BUILD_DIR)/test_read
+TEST_GLOB_RECURSIVE_TARGET = $(BUILD_DIR)/test_glob_recursive
 TEST_TODO_TARGET = $(BUILD_DIR)/test_todo
 TEST_TODO_WRITE_TARGET = $(BUILD_DIR)/test_todo_write
 TEST_MODEL_CAPABILITIES_TARGET = $(BUILD_DIR)/test_model_capabilities
@@ -468,6 +469,7 @@ PERPETUAL_MODE_OBJ = $(BUILD_DIR)/perpetual_mode.o
 TEST_EDIT_SRC = tests/test_edit.c
 TEST_EDIT_REGEX_SRC = tests/test_edit_regex_enhancements.c
 TEST_READ_SRC = tests/test_read.c
+TEST_GLOB_RECURSIVE_SRC = tests/test_glob_recursive.c
 TEST_TODO_SRC = tests/test_todo.c
 TEST_TODO_WRITE_SRC = tests/test_todo_write.c
 TEST_MODEL_CAPABILITIES_SRC = tests/test_model_capabilities.c
@@ -2136,6 +2138,14 @@ $(TEST_READ_TARGET): $(SRC) $(TEST_READ_SRC) $(TEST_COMMON_OBJS)
 	@echo "✓ Read tool test build successful!"
 	@echo ""
 
+# Test target for Glob tool with ** recursive support
+$(TEST_GLOB_RECURSIVE_TARGET): $(TEST_GLOB_RECURSIVE_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Glob tool test suite..."
+	@$(CC) $(CFLAGS) -o $(TEST_GLOB_RECURSIVE_TARGET) $(TEST_GLOB_RECURSIVE_SRC) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Glob recursive test build successful!"
+	@echo ""
 
 # Test target for TODO list - tests task management functionality
 $(TEST_TODO_TARGET): $(TODO_SRC) $(TEST_TODO_SRC) tests/test_todo_stubs.c
