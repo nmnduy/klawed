@@ -83,7 +83,7 @@ static void setup_test_dirs(void) {
     mkdir("/tmp/glob_test", 0755);
     mkdir("/tmp/glob_test/subdir", 0755);
     mkdir("/tmp/glob_test/subdir/nested", 0755);
-    
+
     // Create test files
     FILE *f;
     f = fopen("/tmp/glob_test/file1.tex", "w"); if (f) fclose(f);
@@ -257,23 +257,23 @@ static cJSON* tool_glob(cJSON *params, TestConversationState *state) {
 // Test recursive glob starstar/.tex
 static void test_recursive_tex_files(void) {
     print_test_header("Recursive glob starstar/.tex");
-    
+
     TestConversationState state = {0};
     strlcpy(state.working_dir, "/tmp/glob_test", sizeof(state.working_dir));
     state.additional_dirs_count = 0;
-    
+
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "pattern", "**/*.tex");
-    
+
     cJSON *result = tool_glob(params, &state);
     cJSON *files = cJSON_GetObjectItem(result, "files");
     cJSON *count = cJSON_GetObjectItem(result, "count");
-    
+
     assert_test(cJSON_IsArray(files) && cJSON_GetArraySize(files) == 3,
                 "Should find 3 .tex files recursively");
     assert_test(count && count->valueint == 3,
                 "Count should be 3");
-    
+
     cJSON_Delete(params);
     cJSON_Delete(result);
 }
@@ -281,23 +281,23 @@ static void test_recursive_tex_files(void) {
 // Test recursive glob starstar/.md
 static void test_recursive_md_files(void) {
     print_test_header("Recursive glob starstar/.md");
-    
+
     TestConversationState state = {0};
     strlcpy(state.working_dir, "/tmp/glob_test", sizeof(state.working_dir));
     state.additional_dirs_count = 0;
-    
+
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "pattern", "**/*.md");
-    
+
     cJSON *result = tool_glob(params, &state);
     cJSON *files = cJSON_GetObjectItem(result, "files");
     cJSON *count = cJSON_GetObjectItem(result, "count");
-    
+
     assert_test(cJSON_IsArray(files) && cJSON_GetArraySize(files) == 1,
                 "Should find 1 .md file recursively");
     assert_test(count && count->valueint == 1,
                 "Count should be 1");
-    
+
     cJSON_Delete(params);
     cJSON_Delete(result);
 }
@@ -305,23 +305,23 @@ static void test_recursive_md_files(void) {
 // Test recursive glob starstar/filestar.tex
 static void test_recursive_pattern_with_prefix(void) {
     print_test_header("Recursive glob starstar/filestar.tex");
-    
+
     TestConversationState state = {0};
     strlcpy(state.working_dir, "/tmp/glob_test", sizeof(state.working_dir));
     state.additional_dirs_count = 0;
-    
+
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "pattern", "**/file*.tex");
-    
+
     cJSON *result = tool_glob(params, &state);
     cJSON *files = cJSON_GetObjectItem(result, "files");
     cJSON *count = cJSON_GetObjectItem(result, "count");
-    
+
     assert_test(cJSON_IsArray(files) && cJSON_GetArraySize(files) == 3,
                 "Should find 3 file*.tex files recursively");
     assert_test(count && count->valueint == 3,
                 "Count should be 3");
-    
+
     cJSON_Delete(params);
     cJSON_Delete(result);
 }
@@ -329,23 +329,23 @@ static void test_recursive_pattern_with_prefix(void) {
 // Test standard (non-recursive) glob star.tex
 static void test_standard_glob_tex(void) {
     print_test_header("Standard glob star.tex (non-recursive)");
-    
+
     TestConversationState state = {0};
     strlcpy(state.working_dir, "/tmp/glob_test", sizeof(state.working_dir));
     state.additional_dirs_count = 0;
-    
+
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "pattern", "*.tex");
-    
+
     cJSON *result = tool_glob(params, &state);
     cJSON *files = cJSON_GetObjectItem(result, "files");
     cJSON *count = cJSON_GetObjectItem(result, "count");
-    
+
     assert_test(cJSON_IsArray(files) && cJSON_GetArraySize(files) == 1,
                 "Should find 1 .tex file in root only");
     assert_test(count && count->valueint == 1,
                 "Count should be 1");
-    
+
     cJSON_Delete(params);
     cJSON_Delete(result);
 }
@@ -353,23 +353,23 @@ static void test_standard_glob_tex(void) {
 // Test standard glob subdir/star.tex
 static void test_standard_glob_subdir(void) {
     print_test_header("Standard glob subdir/star.tex");
-    
+
     TestConversationState state = {0};
     strlcpy(state.working_dir, "/tmp/glob_test", sizeof(state.working_dir));
     state.additional_dirs_count = 0;
-    
+
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "pattern", "subdir/*.tex");
-    
+
     cJSON *result = tool_glob(params, &state);
     cJSON *files = cJSON_GetObjectItem(result, "files");
     cJSON *count = cJSON_GetObjectItem(result, "count");
-    
+
     assert_test(cJSON_IsArray(files) && cJSON_GetArraySize(files) == 1,
                 "Should find 1 .tex file in subdir");
     assert_test(count && count->valueint == 1,
                 "Count should be 1");
-    
+
     cJSON_Delete(params);
     cJSON_Delete(result);
 }
@@ -377,23 +377,23 @@ static void test_standard_glob_subdir(void) {
 // Test recursive glob starstar (match all files)
 static void test_recursive_all_files(void) {
     print_test_header("Recursive glob starstar (all files)");
-    
+
     TestConversationState state = {0};
     strlcpy(state.working_dir, "/tmp/glob_test", sizeof(state.working_dir));
     state.additional_dirs_count = 0;
-    
+
     cJSON *params = cJSON_CreateObject();
     cJSON_AddStringToObject(params, "pattern", "**");
-    
+
     cJSON *result = tool_glob(params, &state);
     cJSON *files = cJSON_GetObjectItem(result, "files");
     cJSON *count = cJSON_GetObjectItem(result, "count");
-    
+
     assert_test(cJSON_IsArray(files) && cJSON_GetArraySize(files) == 5,
                 "Should find all 5 files recursively");
     assert_test(count && count->valueint == 5,
                 "Count should be 5");
-    
+
     cJSON_Delete(params);
     cJSON_Delete(result);
 }
@@ -402,19 +402,19 @@ int main(void) {
     printf("%s========================================%s\n", COLOR_CYAN, COLOR_RESET);
     printf("Glob Tool Unit Tests (with starstar support)\n");
     printf("%s========================================%s\n", COLOR_CYAN, COLOR_RESET);
-    
+
     setup_test_dirs();
-    
+
     test_recursive_tex_files();
     test_recursive_md_files();
     test_recursive_pattern_with_prefix();
     test_standard_glob_tex();
     test_standard_glob_subdir();
     test_recursive_all_files();
-    
+
     cleanup_test_dirs();
-    
+
     print_test_summary();
-    
+
     return tests_failed > 0 ? 1 : 0;
 }

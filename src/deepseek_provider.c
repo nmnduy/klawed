@@ -27,9 +27,10 @@ Provider* deepseek_provider_create(const char *api_key, const char *base_url) {
     // Use provided base_url or default to DeepSeek URL
     const char *url = (base_url && base_url[0] != '\0') ? base_url : DEFAULT_DEEPSEEK_URL;
 
-    // Create OpenAI provider with REASONING_CONTENT_PRESERVE mode
-    // DeepSeek reasoning models (e.g. deepseek-v4-flash, deepseek-reasoner)
-    // require reasoning_content to be passed back in subsequent requests.
+    // Create OpenAI provider with REASONING_CONTENT_PRESERVE mode.
+    // DeepSeek reasoning models require reasoning_content on assistant
+    // messages that contain tool_calls, even if empty. Omitting it
+    // causes HTTP 400. Plain text assistant messages do not need it.
     Provider *provider = openai_provider_create_with_reasoning_mode(
         api_key,
         url,
