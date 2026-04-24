@@ -14,8 +14,10 @@
  * Reasoning content handling mode for thinking models
  *
  * Different providers handle reasoning_content differently in multi-turn conversations:
- * - DeepSeek: MUST NOT include reasoning_content in subsequent requests (causes 400 error)
- * - Moonshot/Kimi: MUST include reasoning_content in subsequent requests (causes 400 error if missing)
+ * - DeepSeek: MUST include reasoning_content on assistant messages with tool_calls
+ *   when using reasoning models. Omitting it causes HTTP 400.
+ * - Moonshot/Kimi: MUST include reasoning_content in subsequent requests when it was
+ *   originally present (causes 400 error if missing).
  * - OpenAI: Does not use reasoning_content (uses different mechanism for o1/o3 models)
  */
 typedef enum {

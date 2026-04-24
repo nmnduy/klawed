@@ -507,9 +507,17 @@ cJSON* build_openai_request_with_reasoning(ConversationState *state, int enable_
                 cJSON_AddNullToObject(asst_msg, "content");
             }
 
-            // Add reasoning_content if preserving it (for Moonshot/Kimi)
-            if (reasoning_content_str) {
-                cJSON_AddStringToObject(asst_msg, "reasoning_content", reasoning_content_str);
+            // Add reasoning_content if preserving it (for Moonshot/Kimi/DeepSeek).
+            // Only include it when the message actually needs it:
+            // - DeepSeek requires reasoning_content on assistant messages with
+            //   tool_calls, even if empty. Omitting it causes HTTP 400.
+            // - Moonshot/Kimi require reasoning_content when it was originally
+            //   present in the response.
+            // Avoid adding it to plain text assistant messages to keep requests
+            // clean and provider-specific behavior isolated.
+            if (include_reasoning_content && (tool_calls || reasoning_content_str)) {
+                cJSON_AddStringToObject(asst_msg, "reasoning_content",
+                                        reasoning_content_str ? reasoning_content_str : "");
                 LOG_DEBUG("Including reasoning_content in assistant message (msg %d)", i);
             }
 
