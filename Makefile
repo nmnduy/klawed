@@ -149,6 +149,7 @@ TEST_MODEL_CAPABILITIES_TARGET = $(BUILD_DIR)/test_model_capabilities
 TEST_COMPACTION_TARGET = $(BUILD_DIR)/test_compaction
 TEST_TIMING_TARGET = $(BUILD_DIR)/test_tool_timing
 TEST_PASTE_TARGET = $(BUILD_DIR)/test_paste
+TEST_PASTE_PLACEHOLDER_TARGET = $(BUILD_DIR)/test_paste_placeholder
 TEST_RETRY_JITTER_TARGET = $(BUILD_DIR)/test_retry_jitter
 TEST_CONTEXT_LENGTH_ERROR_TARGET = $(BUILD_DIR)/test_context_length_error
 TEST_OPENAI_FORMAT_TARGET = $(BUILD_DIR)/test_openai_format
@@ -475,6 +476,7 @@ TEST_TODO_WRITE_SRC = tests/test_todo_write.c
 TEST_MODEL_CAPABILITIES_SRC = tests/test_model_capabilities.c
 TEST_COMPACTION_SRC = tests/test_compaction.c
 TEST_PASTE_SRC = tests/test_paste.c
+TEST_PASTE_PLACEHOLDER_SRC = tests/test_paste_placeholder.c
 TEST_RETRY_JITTER_SRC = tests/test_retry_jitter.c
 TEST_CONTEXT_LENGTH_ERROR_SRC = tests/test_context_length_error.c
 TEST_OPENAI_FORMAT_SRC = tests/test_openai_format.c
@@ -559,7 +561,7 @@ TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET = $(BUILD_DIR)/test_model_switch_queue_re
 TEST_INSERT_SYSTEM_MESSAGE_SRC = tests/test_insert_system_message.c
 TEST_INSERT_SYSTEM_MESSAGE_TARGET = $(BUILD_DIR)/test_insert_system_message
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-paste-placeholder test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -574,7 +576,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message
+test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -629,6 +631,12 @@ test-paste: check-deps $(TEST_PASTE_TARGET)
 	@echo "Running Paste Handler tests..."
 	@echo ""
 	@./$(TEST_PASTE_TARGET)
+
+test-paste-placeholder: check-deps $(TEST_PASTE_PLACEHOLDER_TARGET)
+	@echo ""
+	@echo "Running Paste Placeholder resolution tests..."
+	@echo ""
+	@./$(TEST_PASTE_PLACEHOLDER_TARGET)
 
 test-json-parsing: check-deps $(TEST_JSON_PARSING_TARGET)
 	@echo ""
@@ -2209,6 +2217,16 @@ $(TEST_PASTE_TARGET): $(TEST_PASTE_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_PASTE_TARGET) $(TEST_PASTE_SRC)
 	@echo ""
 	@echo "✓ Paste Handler test build successful!"
+	@echo ""
+
+# Test target for Paste Placeholder resolution - tests the fix for
+# multiple paste placeholders losing content (commit 1340cfd).
+$(TEST_PASTE_PLACEHOLDER_TARGET): $(TEST_PASTE_PLACEHOLDER_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Paste Placeholder test suite..."
+	@$(CC) $(CFLAGS) -o $(TEST_PASTE_PLACEHOLDER_TARGET) $(TEST_PASTE_PLACEHOLDER_SRC)
+	@echo ""
+	@echo "✓ Paste Placeholder test build successful!"
 	@echo ""
 
 # Test target for Bash Timeout - tests bash command timeout functionality
