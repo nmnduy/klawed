@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <bsd/string.h>
 #include <errno.h>
 #include <glob.h>
 #include <limits.h>
@@ -636,7 +637,9 @@ static void glob_recursive(const char *base_path, const char *rel_path,
     if (rel_path[0] == '\0') {
         strlcpy(current_dir, base_path, sizeof(current_dir));
     } else {
-        snprintf(current_dir, sizeof(current_dir), "%s/%s", base_path, rel_path);
+        strlcpy(current_dir, base_path, sizeof(current_dir));
+        strlcat(current_dir, "/", sizeof(current_dir));
+        strlcat(current_dir, rel_path, sizeof(current_dir));
     }
 
     DIR *dir = opendir(current_dir);
@@ -656,9 +659,13 @@ static void glob_recursive(const char *base_path, const char *rel_path,
         if (rel_path[0] == '\0') {
             strlcpy(new_rel_path, entry->d_name, sizeof(new_rel_path));
         } else {
-            snprintf(new_rel_path, sizeof(new_rel_path), "%s/%s", rel_path, entry->d_name);
+            strlcpy(new_rel_path, rel_path, sizeof(new_rel_path));
+            strlcat(new_rel_path, "/", sizeof(new_rel_path));
+            strlcat(new_rel_path, entry->d_name, sizeof(new_rel_path));
         }
-        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, new_rel_path);
+        strlcpy(full_path, base_path, sizeof(full_path));
+        strlcat(full_path, "/", sizeof(full_path));
+        strlcat(full_path, new_rel_path, sizeof(full_path));
 
         struct stat st;
         if (stat(full_path, &st) != 0) continue;
