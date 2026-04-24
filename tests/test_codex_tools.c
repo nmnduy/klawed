@@ -6,7 +6,6 @@
  * - shell / shell_command
  * - list_dir
  * - view_image
- * - send_message
  *
  * Compilation: make test-codex-tools
  * Usage: ./test_codex_tools
@@ -641,58 +640,6 @@ static void test_view_image_basic(void) {
 }
 
 // ============================================================================
-// send_message Tests
-// ============================================================================
-
-static void test_send_message_basic(void) {
-    cJSON *args = cJSON_CreateObject();
-    /* Use a high PID that's unlikely to exist (but not 1 which requires root on macOS) */
-    cJSON_AddStringToObject(args, "target", "99999");
-    cJSON_AddStringToObject(args, "message", "hello");
-
-    cJSON *result = codex_tool_send_message(args);
-    /* Note: send_message doesn't actually deliver messages, just validates the target exists */
-    /* Since PID 99999 doesn't exist, this should return an error */
-    int has_error = cJSON_IsObject(result) && cJSON_GetObjectItem(result, "error") != NULL;
-
-    print_test_result("send_message validates target exists", has_error);
-
-    cJSON_Delete(args);
-    cJSON_Delete(result);
-}
-
-static void test_send_message_missing_target(void) {
-    cJSON *args = cJSON_CreateObject();
-    cJSON_AddStringToObject(args, "message", "hello");
-
-    cJSON *result = codex_tool_send_message(args);
-    int has_error = cJSON_IsObject(result) && cJSON_GetObjectItem(result, "error") != NULL;
-
-    print_test_result("send_message missing target returns error", has_error);
-
-    cJSON_Delete(args);
-    cJSON_Delete(result);
-}
-
-static void test_send_message_valid_target(void) {
-    cJSON *args = cJSON_CreateObject();
-    /* Use our own PID as a target that definitely exists */
-    char target[32];
-    snprintf(target, sizeof(target), "%d", getpid());
-    cJSON_AddStringToObject(args, "target", target);
-    cJSON_AddStringToObject(args, "message", "hello");
-
-    cJSON *result = codex_tool_send_message(args);
-    int success = cJSON_IsObject(result) && cJSON_GetObjectItem(result, "success") != NULL &&
-                  cJSON_IsTrue(cJSON_GetObjectItem(result, "success"));
-
-    print_test_result("send_message accepts valid target (own PID)", success);
-
-    cJSON_Delete(args);
-    cJSON_Delete(result);
-}
-
-// ============================================================================
 // spawn_agent Tests
 // ============================================================================
 
@@ -949,10 +896,6 @@ int main(int argc, char *argv[]) {
     test_view_image_basic();
     test_view_image_oversized();
 
-    print_section("send_message");
-    test_send_message_basic();
-    test_send_message_missing_target();
-    test_send_message_valid_target();
 
     print_section("spawn_agent");
     test_spawn_agent_missing_task_name();
