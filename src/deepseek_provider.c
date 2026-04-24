@@ -27,12 +27,13 @@ Provider* deepseek_provider_create(const char *api_key, const char *base_url) {
     // Use provided base_url or default to DeepSeek URL
     const char *url = (base_url && base_url[0] != '\0') ? base_url : DEFAULT_DEEPSEEK_URL;
 
-    // Create OpenAI provider with REASONING_CONTENT_DISCARD mode
-    // DeepSeek MUST NOT include reasoning_content in subsequent requests
+    // Create OpenAI provider with REASONING_CONTENT_PRESERVE mode
+    // DeepSeek reasoning models (e.g. deepseek-v4-flash, deepseek-reasoner)
+    // require reasoning_content to be passed back in subsequent requests.
     Provider *provider = openai_provider_create_with_reasoning_mode(
         api_key,
         url,
-        REASONING_CONTENT_DISCARD
+        REASONING_CONTENT_PRESERVE
     );
 
     if (!provider) {
