@@ -2,7 +2,7 @@
 
 A lightweight, modular implementation of a coding agent that interacts with an Open API compatible API. This is a pure C port of the core functionality from the TypeScript/Node.js Claude Code CLI.
 
-![klawed preview](assets/images/klawed-preview.webp)
+![klawed preview](assets/images/claude-c-preview.webp)
 
 ## Installation
 
@@ -112,7 +112,7 @@ Override via env var `KLAWED_THEME`
 
 ## Memory footprint
 
-![Memory usage](assets/images/klawed-memory-usage.webp)
+![Memory usage](assets/images/claude-c-memory-usage.webp)
 
 ## Security Notes
 
