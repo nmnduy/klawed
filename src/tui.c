@@ -211,6 +211,58 @@ static void tui_clear_resize_flag(void) {
 // Threshold for when to use placeholder vs direct insertion (characters)
 #define PASTE_PLACEHOLDER_THRESHOLD 200
 
+// Expand a previous paste's placeholder into actual content in the buffer.
+// This is called when a new paste starts while a previous paste still has
+// an unresolved placeholder. It replaces the placeholder with the full
+// paste content, ensuring each paste is resolved before the next begins.
+static void input_expand_paste_content(TUIInputBuffer *input) {
+    if (!input || !input->paste_content || input->paste_content_len == 0 ||
+        input->paste_placeholder_len == 0) {
+        return;
+    }
+
+    int insert_pos = input->paste_start_pos;
+    if (insert_pos < 0) insert_pos = 0;
+    if (insert_pos > input->length) insert_pos = input->length;
+
+    int paste_len = (int)input->paste_content_len;
+    int placeholder_len = input->paste_placeholder_len;
+    int size_change = paste_len - placeholder_len;
+
+    // Check if we need to grow the buffer
+    if (input->length + size_change >= (int)input->capacity - 1) {
+        size_t needed = (size_t)(input->length + size_change + 4096);
+        void *buf_ptr = (void *)input->buffer;
+        if (buffer_reserve(&buf_ptr, &input->capacity, needed) != 0) {
+            LOG_WARN("[TUI] Cannot grow buffer to expand paste content (%zu chars)",\
+                     input->paste_content_len);
+            return;
+        }
+        input->buffer = (char *)buf_ptr;
+    }
+
+    int after_pos = insert_pos + placeholder_len;
+    int after_len = input->length - after_pos;
+
+    // Move the text after the placeholder to make room for paste content
+    memmove(&input->buffer[insert_pos + paste_len],
+            &input->buffer[after_pos],
+            (size_t)(after_len + 1));  // +1 for null terminator
+
+    // Copy paste content into the gap
+    memcpy(&input->buffer[insert_pos], input->paste_content, input->paste_content_len);
+
+    input->length += size_change;
+    input->cursor = insert_pos + paste_len;
+
+    // Mark this paste as resolved (placeholder is gone)
+    input->paste_placeholder_len = 0;
+    input->paste_content_len = 0;
+
+    LOG_DEBUG("[TUI] Expanded previous paste placeholder at position %d: %d chars → %d chars",
+              insert_pos, placeholder_len, paste_len);
+}
+
 // Insert paste content or placeholder into visible buffer
 static void input_finalize_paste(TUIInputBuffer *input) {
     if (!input || !input->paste_content || input->paste_content_len == 0) {
@@ -522,6 +574,8 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         if (elapsed_ms < g_paste_gap_ms) {
             input->rapid_input_count++;
             if (input->rapid_input_count >= g_paste_burst_min && !input->paste_mode) {
+                // If there's a previous unresolved paste, expand it first
+                input_expand_paste_content(input);
                 input->paste_mode = 1;
 
                 // For heuristic mode, we've already inserted some characters
@@ -793,6 +847,8 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
             // Check for ESC[200~ (paste start) or ESC[201~ (paste end)
             if (ch1 == '2' && ch2 == '0' && ch3 == '0' && ch4 == '~') {
                 // Bracketed paste start
+                // First, expand any previous unresolved paste placeholder
+                input_expand_paste_content(input);
                 input->paste_mode = 1;
                 input->paste_start_pos = input->cursor;
                 input->paste_content_len = 0;
