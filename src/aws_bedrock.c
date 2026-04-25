@@ -170,6 +170,9 @@ static char* exec_command_impl(const char *command) {
 
     pclose(fp);
 
+    // Ensure null-termination (handles empty output case)
+    output[size] = '\0';
+
     // Remove trailing newline
     if (size > 0 && output[size - 1] == '\n') {
         output[size - 1] = '\0';
