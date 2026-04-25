@@ -348,9 +348,7 @@ static void render_streaming_border(WINDOW *pad) {
         wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
     }
     waddch(pad, ' ');
-    if (has_colors()) {
-        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-    }
+    /* Leave FOREGROUND active so subsequent text uses theme fg color */
 }
 
 // Write text to pad with border awareness for streaming in bordered mode
@@ -465,6 +463,10 @@ static void write_streaming_text_bordered(TUIState *tui, const char *text) {
                 p++;
             }
         }
+    }
+    /* Turn off foreground color that render_streaming_border left active */
+    if (has_colors()) {
+        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
     }
 }
 
@@ -596,8 +598,14 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                 // Use bordered streaming to handle wrapping with border
                 write_streaming_text_bordered(tui, text);
             } else {
-                // Non-bordered: use simple waddstr
+                // Non-bordered: use foreground color for text
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+                }
                 waddstr(tui->wm.conv_pad, text);
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+                }
             }
 
             // Update content lines
