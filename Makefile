@@ -550,6 +550,8 @@ TEST_BEDROCK_CONVERSE_SRC = tests/test_bedrock_converse.c
 TEST_BEDROCK_CONVERSE_TARGET = $(BUILD_DIR)/test_bedrock_converse
 TEST_CODEX_TOOLS_SRC = tests/test_codex_tools.c
 TEST_CODEX_TOOLS_TARGET = $(BUILD_DIR)/test_codex_tools
+TEST_TOOL_DISABLE_SRC = tests/test_tool_disable.c
+TEST_TOOL_DISABLE_TARGET = $(BUILD_DIR)/test_tool_disable
 
 # Model switch tests
 TEST_MODEL_SWITCH_INTERACTIVE_SRC = tests/test_model_switch_interactive.c
@@ -576,7 +578,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message
+test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-tool-disable
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -804,6 +806,12 @@ test-codex-tools: check-deps $(TEST_CODEX_TOOLS_TARGET)
 	@echo "Running Codex Tools unit tests..."
 	@echo ""
 	@./$(TEST_CODEX_TOOLS_TARGET)
+
+test-tool-disable: check-deps $(TEST_TOOL_DISABLE_TARGET)
+	@echo ""
+	@echo "Running tool disable tests..."
+	@echo ""
+	@./$(TEST_TOOL_DISABLE_TARGET)
 
 test-model-switch-interactive: check-deps $(TEST_MODEL_SWITCH_INTERACTIVE_TARGET)
 	@echo ""
@@ -2554,6 +2562,20 @@ $(TEST_CODEX_TOOLS_TARGET): $(CODEX_TOOLS_SRC) $(TEST_CODEX_TOOLS_SRC) $(FILE_UT
 	@$(CC) -o $(TEST_CODEX_TOOLS_TARGET) $(BUILD_DIR)/codex_tools_test.o $(BUILD_DIR)/test_codex_tools.o $(FILE_UTILS_OBJ) $(BASE64_OBJ) $(PROCESS_UTILS_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Codex Tools test build successful!"
+	@echo ""
+
+$(TEST_TOOL_DISABLE_TARGET): $(TOOL_UTILS_SRC) $(TEST_TOOL_DISABLE_SRC) $(ENV_UTILS_SRC) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(REDACT_UTILS_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling tool_utils implementation..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/tool_utils_test.o $(TOOL_UTILS_SRC)
+	@echo "Compiling env_utils implementation..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/env_utils_test.o $(ENV_UTILS_SRC)
+	@echo "Compiling tool disable test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_tool_disable.o $(TEST_TOOL_DISABLE_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_TOOL_DISABLE_TARGET) $(BUILD_DIR)/tool_utils_test.o $(BUILD_DIR)/test_tool_disable.o $(BUILD_DIR)/env_utils_test.o $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(REDACT_UTILS_OBJ) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Tool disable test build successful!"
 	@echo ""
 
 $(TEST_MODEL_SWITCH_INTERACTIVE_TARGET): $(SRC) $(TEST_MODEL_SWITCH_INTERACTIVE_SRC) $(TEST_COMMON_OBJS)

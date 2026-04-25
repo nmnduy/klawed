@@ -16,6 +16,7 @@
 #include "../logger.h"
 #include "../util/env_utils.h"
 #include "../util/timestamp_utils.h"
+#include "../tool_utils.h"
 
 static int is_openai_subscription_codex_session(const ConversationState *state) {
     if (state && state->provider && state->provider->name &&
@@ -67,9 +68,12 @@ char* build_system_prompt(ConversationState *state) {
         if (is_openai_sub) {
             planning_mode_desc =
                 "ENABLED - Focus on investigation and planning. Avoid write-capable Codex tools such as apply_patch, shell, shell_command, spawn_agent, and send_message while planning.";
-        } else {
+        } else if (is_upload_image_enabled()) {
             planning_mode_desc =
                 "ENABLED - You can ONLY use read-only tools (Read, Glob, Grep, Sleep, UploadImage, TodoWrite). The Bash, Subagent, Write, and Edit tools are NOT available in planning mode.";
+        } else {
+            planning_mode_desc =
+                "ENABLED - You can ONLY use read-only tools (Read, Glob, Grep, Sleep, TodoWrite). The Bash, Subagent, Write, and Edit tools are NOT available in planning mode.";
         }
     } else {
         planning_mode_desc = "disabled";

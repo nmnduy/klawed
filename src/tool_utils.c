@@ -229,3 +229,7 @@ int is_streaming_enabled(const struct ConversationState *state) {
     }
     return is_truthy_string(getenv("KLAWED_ENABLE_STREAMING"));
 }
+
+int is_upload_image_enabled(void) {
+    return is_truthy_string(getenv("KLAWED_ENABLE_UPLOAD_IMAGE"));
+}

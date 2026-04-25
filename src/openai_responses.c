@@ -1114,8 +1114,8 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
         LOG_INFO("Tool 'Grep' is disabled via KLAWED_DISABLE_TOOLS");
     }
 
-    // UploadImage tool (conditionally added based on KLAWED_DISABLE_TOOLS)
-    if (!is_tool_disabled("UploadImage")) {
+    // UploadImage tool (opt-in via KLAWED_ENABLE_UPLOAD_IMAGE)
+    if (is_upload_image_enabled() && !is_tool_disabled("UploadImage")) {
         cJSON *upload_image_params = cJSON_CreateObject();
         cJSON_AddStringToObject(upload_image_params, "type", "object");
         cJSON *upload_image_props = cJSON_CreateObject();
@@ -1132,7 +1132,7 @@ cJSON* get_tool_definitions_for_responses_api(ConversationState *state, int enab
         CREATE_TOOL(upload_image_tool, "UploadImage",
                     "Uploads an image file to be included in the conversation context using OpenAI-compatible format. Supports common image formats (PNG, JPEG, GIF, WebP).",
                     upload_image_params);
-    } else {
+    } else if (is_upload_image_enabled()) {
         LOG_INFO("Tool 'UploadImage' is disabled via KLAWED_DISABLE_TOOLS");
     }
 

@@ -204,7 +204,8 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_SUBAGENT_ENV_VARS` - Comma-separated list of KEY=VALUE pairs to set in subagent processes (e.g., "OPENAI_MODEL=gpt-4,DEBUG=1")
   - `KLAWED_TOOL_VERBOSE` - Verbose tool logging (0=off, 1=basic, 2=detailed, default: 0)
   - `KLAWED_IS_SUBAGENT` - Internal flag set automatically when running as a subagent (1/true/yes=subagent mode). Excludes Subagent, CheckSubagentProgress, and InterruptSubagent tools to prevent recursion
-  - `KLAWED_DISABLE_TOOLS` - Comma-separated list of tool names to disable (e.g., "UploadImage,Subagent"). Disabled tools won't appear in tool definitions and will return an error if called
+  - `KLAWED_DISABLE_TOOLS` - Comma-separated list of tool names to disable (e.g., "Subagent"). Disabled tools won't appear in tool definitions and will return an error if called
+  - `KLAWED_ENABLE_UPLOAD_IMAGE` - Set to `1`/`true`/`yes` to expose the `UploadImage` tool. Most providers do not support image uploads by default, so this tool is opt-in
   - `KLAWED_ONESHOT_FORMAT` - Output format for one-shot mode: `human` (clean, human-readable, default) or `json`/`machine` (HTML+JSON for machine parsing)
   - `KLAWED_ONESHOT_STYLE` - Visual style for one-shot mode: `boxes` (Unicode box-drawing, default), `compact` (minimal single-line output), or `minimal` (ultra-minimal)
   - `KLAWED_LLM_PROVIDER` - Select which named LLM provider to use from configuration (e.g., "sonnet-4.5-bedrock")
