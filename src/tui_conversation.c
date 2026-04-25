@@ -532,6 +532,10 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                 if (use_bordered) {
                     // In bordered mode at line start, add the border first
                     render_streaming_border(tui->wm.conv_pad);
+                } else if (is_assistant) {
+                    // Caret-style assistant: don't render prefix on continuation lines.
+                    // The '>>> ' caret was already rendered on the first line by
+                    // render_entry_to_pad. On wrapped lines, just let text flow.
                 } else {
                     // For non-bordered messages (reasoning, tools, etc.),
                     // render the prefix first before writing text
