@@ -147,6 +147,7 @@ static Provider* init_test_provider(const TestProviderConfig *test_config,
     }
 
     if (api_url_out) {
+        free(*api_url_out);
         *api_url_out = result.api_url;
     } else {
         free(result.api_url);
