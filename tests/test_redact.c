@@ -133,13 +133,13 @@ static void test_prefix_patterns(void) {
     free(r);
 
     /* Stripe live */
-    r = redact("EXAMPLE_STRIPE_LIVE_KEY");
-    check("stripe sk_live_: raw secret gone", not_contains(r, "EXAMPLE_STRIPE_LIVE_KEY"));
+    r = redact("sk_live_abcdefghijklmnopqrstuvwx");
+    check("stripe sk_live_: raw secret gone", not_contains(r, "sk_live_abcdefghijklmnopqrstuvwx"));
     free(r);
 
     /* Stripe test */
-    r = redact("EXAMPLE_STRIPE_TEST_KEY");
-    check("stripe sk_test_: raw secret gone", not_contains(r, "EXAMPLE_STRIPE_TEST_KEY"));
+    r = redact("sk_test_abcdefghijklmnopqrstuvwx");
+    check("stripe sk_test_: raw secret gone", not_contains(r, "sk_test_abcdefghijklmnopqrstuvwx"));
     free(r);
 
     /* HuggingFace */
@@ -158,8 +158,8 @@ static void test_prefix_patterns(void) {
     free(r);
 
     /* Slack */
-    r = redact("EXAMPLE_SLACK_TOKEN");
-    check("slack xoxb-: raw secret gone", not_contains(r, "EXAMPLE_SLACK_TOKEN"));
+    r = redact("xoxb-1234567890-abcdefghijklmnopqrstuvwxyz");
+    check("slack xoxb-: raw secret gone", not_contains(r, "xoxb-1234567890-abcdefghijklmnopqrstuvwxyz"));
     free(r);
 
     /* DigitalOcean */

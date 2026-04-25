@@ -32,7 +32,7 @@ sudo apt-get install libcurl4-openssl-dev libcjson-dev libbsd-dev libncurses-dev
 ### Build
 
 ```bash
-git clone https://github.com/nmnduy/klawed.git
+git clone --branch v0.32.65 https://github.com/nmnduy/klawed.git
 cd klawed
 make
 ```
@@ -98,6 +98,17 @@ KLAWED_LLM_PROVIDER=deepseek-chat ./build/klawed "hello"
 ```
 
 **OAuth providers** (Kimi Coding Plan, OpenAI Subscription, Anthropic Subscription) require no API key — just browser authentication on first use.
+
+You can also create shell aliases for quick provider switching:
+
+```bash
+alias deepseek-chat="OPENAI_API_KEY=*** OPENAI_API_BASE=https://api.deepseek.com OPENAI_MODEL=deepseek-chat klawed"
+alias glm-4.7="OPENAI_API_KEY=*** OPENAI_API_BASE=https://api.z.ai/api/paas/v4/chat/completions OPENAI_MODEL=glm-4.7 klawed"
+alias kimi-k2-thinking="OPENAI_API_KEY=$MOONS..._KEY OPENAI_API_BASE=https://api.moonshot.ai OPENAI_MODEL=kimi-k2-thinking klawed"
+alias kimi-for-coding="KLAWED_LLM_PROVIDER=kimi-for-coding klawed"
+alias gpt-5-1-codex-max="OPENAI_API_KEY=$OPENR..._KEY OPENAI_API_BASE=https://openrouter.ai/api/v1/chat/completions OPENAI_MODEL=openai/gpt-5.1-codex-max klawed"
+alias minimax-2.1-coding-plan="ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic/v1/messages OPENAI_API_KEY=$MINIM..._KEY OPENAI_MODEL=MiniMax-M2.1 ANTHROPIC_VERSION=2023-06-01 OPENAI_API_BASE= klawed"
+```
 
 See [docs/llm-provider-configuration.md](docs/llm-provider-configuration.md) for full details.
 
