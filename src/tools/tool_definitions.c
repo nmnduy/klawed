@@ -1193,8 +1193,8 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         LOG_INFO("Tool 'Grep' is disabled via KLAWED_DISABLE_TOOLS");
     }
 
-    // UploadImage tool (conditionally added based on KLAWED_DISABLE_TOOLS)
-    if (!is_tool_disabled("UploadImage")) {
+    // UploadImage tool (opt-in via KLAWED_ENABLE_UPLOAD_IMAGE)
+    if (is_upload_image_enabled() && !is_tool_disabled("UploadImage")) {
         cJSON *upload_image_tool = cJSON_CreateObject();
         cJSON_AddStringToObject(upload_image_tool, "type", "function");
         cJSON *upload_image_func = cJSON_CreateObject();
@@ -1215,7 +1215,7 @@ cJSON* get_tool_definitions(ConversationState *state, int enable_caching) {
         cJSON_AddItemToObject(upload_image_func, "parameters", upload_image_params);
         cJSON_AddItemToObject(upload_image_tool, "function", upload_image_func);
         cJSON_AddItemToArray(tool_array, upload_image_tool);
-    } else {
+    } else if (is_upload_image_enabled()) {
         LOG_INFO("Tool 'UploadImage' is disabled via KLAWED_DISABLE_TOOLS");
     }
 

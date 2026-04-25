@@ -49,4 +49,10 @@ int is_tool_disabled_for_state(const char *tool_name, const struct ConversationS
 // KLAWED_ENABLE_STREAMING.
 int is_streaming_enabled(const struct ConversationState *state);
 
+// Check whether the UploadImage tool should be exposed.
+// Most providers do not support image uploads by default, so this tool is
+// opt-in via KLAWED_ENABLE_UPLOAD_IMAGE=1 (or "true"/"yes").
+// Returns 1 if enabled, 0 otherwise.
+int is_upload_image_enabled(void);
+
 #endif // TOOL_UTILS_H

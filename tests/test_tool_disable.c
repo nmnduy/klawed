@@ -95,6 +95,41 @@ static void test_null_input(void) {
     printf("PASSED\n");
 }
 
+static void test_upload_image_disabled_by_default(void) {
+    printf("  test_upload_image_disabled_by_default... ");
+    unsetenv("KLAWED_ENABLE_UPLOAD_IMAGE");
+
+    assert(is_upload_image_enabled() == 0);
+
+    printf("PASSED\n");
+}
+
+static void test_upload_image_enabled_via_env(void) {
+    printf("  test_upload_image_enabled_via_env... ");
+
+    setenv("KLAWED_ENABLE_UPLOAD_IMAGE", "1", 1);
+    assert(is_upload_image_enabled() == 1);
+    unsetenv("KLAWED_ENABLE_UPLOAD_IMAGE");
+
+    setenv("KLAWED_ENABLE_UPLOAD_IMAGE", "true", 1);
+    assert(is_upload_image_enabled() == 1);
+    unsetenv("KLAWED_ENABLE_UPLOAD_IMAGE");
+
+    setenv("KLAWED_ENABLE_UPLOAD_IMAGE", "yes", 1);
+    assert(is_upload_image_enabled() == 1);
+    unsetenv("KLAWED_ENABLE_UPLOAD_IMAGE");
+
+    setenv("KLAWED_ENABLE_UPLOAD_IMAGE", "0", 1);
+    assert(is_upload_image_enabled() == 0);
+    unsetenv("KLAWED_ENABLE_UPLOAD_IMAGE");
+
+    setenv("KLAWED_ENABLE_UPLOAD_IMAGE", "", 1);
+    assert(is_upload_image_enabled() == 0);
+    unsetenv("KLAWED_ENABLE_UPLOAD_IMAGE");
+
+    printf("PASSED\n");
+}
+
 int main(void) {
     printf("Running tool disable tests...\n");
 
@@ -105,6 +140,8 @@ int main(void) {
     test_case_insensitive();
     test_empty_env();
     test_null_input();
+    test_upload_image_disabled_by_default();
+    test_upload_image_enabled_via_env();
 
     printf("All tool disable tests PASSED!\n");
     return 0;
