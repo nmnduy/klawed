@@ -169,6 +169,11 @@ static void cleanup_daemon(SimulatedDaemon *daemon) {
     if (!daemon) return;
 
     if (daemon->state) {
+        // Clean up provider first
+        if (daemon->state->provider) {
+            daemon->state->provider->cleanup(daemon->state->provider);
+        }
+
         // Free messages
         for (int i = 0; i < daemon->state->count; i++) {
             for (int j = 0; j < daemon->state->messages[i].content_count; j++) {
