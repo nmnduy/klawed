@@ -528,8 +528,10 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
         long long msg_id = message_ids[i];
 
         LOG_DEBUG("SQLite Queue: Processing message ID: %lld (length: %zu)", msg_id, strlen(message));
-        LOG_DEBUG("SQLite Queue: Raw message (first 500 chars): %.*s",
-                 (int)(strlen(message) > 500 ? 500 : strlen(message)), message);
+        if (message) {
+            LOG_DEBUG("SQLite Queue: Raw message (first 500 chars): %.*s",
+                     (int)(strlen(message) > 500 ? 500 : strlen(message)), message);
+        }
 
         // Print to console with subtle formatting
         char status_color[32] = {0};
