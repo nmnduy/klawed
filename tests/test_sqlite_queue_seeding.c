@@ -187,6 +187,7 @@ static void test_basic_text_messages(void) {
                    "first message should have text content");
     }
 
+    conversation_free(&state);
     conversation_state_destroy(&state);
     sqlite_queue_cleanup(ctx);
     cleanup_test_db();
@@ -259,6 +260,7 @@ static void test_tool_result_pairing(void) {
                    "tool result should have output");
     }
 
+    conversation_free(&state);
     conversation_state_destroy(&state);
     sqlite_queue_cleanup(ctx);
     cleanup_test_db();
@@ -305,6 +307,7 @@ static void test_orphaned_tool_result(void) {
                    "both messages should be text");
     }
 
+    conversation_free(&state);
     conversation_state_destroy(&state);
     sqlite_queue_cleanup(ctx);
     cleanup_test_db();
@@ -370,6 +373,7 @@ static void test_synthetic_error_injection(void) {
                    "tool result should contain error message");
     }
 
+    conversation_free(&state);
     conversation_state_destroy(&state);
     sqlite_queue_cleanup(ctx);
     cleanup_test_db();
@@ -448,6 +452,7 @@ static void test_user_message_interrupts_tool(void) {
                    "fourth message should be deferred user text");
     }
 
+    conversation_free(&state);
     conversation_state_destroy(&state);
     sqlite_queue_cleanup(ctx);
     cleanup_test_db();
@@ -533,6 +538,7 @@ static void test_multiple_tool_calls(void) {
                    "fifth message should be successful tool_result for call_2");
     }
 
+    conversation_free(&state);
     conversation_state_destroy(&state);
     sqlite_queue_cleanup(ctx);
     cleanup_test_db();
@@ -629,6 +635,7 @@ static void test_mixed_tool_completion(void) {
                    "[5] should be deferred user text");
     }
 
+    conversation_free(&state);
     conversation_state_destroy(&state);
     sqlite_queue_cleanup(ctx);
     cleanup_test_db();
@@ -651,6 +658,7 @@ static void test_empty_database(void) {
     assert_equal_int("test_empty_database: seed count", 0, seeded);
     assert_equal_int("test_empty_database: message count", 0, state.count);
 
+    conversation_free(&state);
     conversation_state_destroy(&state);
     sqlite_queue_cleanup(ctx);
     cleanup_test_db();
@@ -691,6 +699,7 @@ static void test_only_assistant_messages(void) {
                    "message should be from assistant");
     }
 
+    conversation_free(&state);
     conversation_state_destroy(&state);
     sqlite_queue_cleanup(ctx);
     cleanup_test_db();
@@ -774,6 +783,7 @@ static void test_user_text_between_tool_and_result(void) {
                    "[3] should be the deferred user text (injected after tool round-trip)");
     }
 
+    conversation_free(&state);
     conversation_state_destroy(&state);
     sqlite_queue_cleanup(ctx);
     cleanup_test_db();
