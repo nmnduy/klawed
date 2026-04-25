@@ -218,7 +218,8 @@ static inline void spinner_effect_get_color(const SpinnerEffectConfig* config,
             if (mod_b < 0) mod_b = 0;
 
             // Output as true color (24-bit) ANSI escape sequence
-            snprintf(color_buffer, buffer_size, "\033[38;2;%d;%d;%dm", mod_r, mod_g, mod_b);
+            snprintf(color_buffer, buffer_size, "\033[38;2;%hhu;%hhu;%hhum",
+                     (unsigned char)mod_r, (unsigned char)mod_g, (unsigned char)mod_b);
             return;
         }
 
@@ -264,7 +265,8 @@ static inline void spinner_effect_get_color(const SpinnerEffectConfig* config,
             if (mod_b < 0) mod_b = 0;
 
             // Output as true color (24-bit) ANSI escape sequence
-            snprintf(color_buffer, buffer_size, "\033[38;2;%d;%d;%dm", mod_r, mod_g, mod_b);
+            snprintf(color_buffer, buffer_size, "\033[38;2;%hhu;%hhu;%hhum",
+                     (unsigned char)mod_r, (unsigned char)mod_g, (unsigned char)mod_b);
             return;
         }
 
@@ -281,7 +283,8 @@ static inline void spinner_effect_get_color(const SpinnerEffectConfig* config,
             hsv_to_rgb(hue, saturation, value, &r, &g, &b);
 
             // Output as true color (24-bit) ANSI escape sequence
-            snprintf(color_buffer, buffer_size, "\033[38;2;%d;%d;%dm", r, g, b);
+            snprintf(color_buffer, buffer_size, "\033[38;2;%hhu;%hhu;%hhum",
+                     (unsigned char)r, (unsigned char)g, (unsigned char)b);
             return;
         }
 
