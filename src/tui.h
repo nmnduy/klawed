@@ -221,6 +221,11 @@ typedef struct TUIStateStruct {
 
     // Streaming state tracking (prevents user input from hijacking AI streaming)
     int streaming_entry_index;        // Index of entry currently being streamed to (-1 if none)
+
+    // Flag set when a non-last entry is updated via streaming (e.g., reasoning trace
+    // after user submits a message). Triggers a full conversation pad rebuild so the
+    // streaming content remains visible even after new entries are added after it.
+    int needs_conv_pad_rebuild;       // 1 if pad needs rebuild after deferred updates
 } TUIState;
 
 // Initialize TUI (must be called before any other TUI functions)

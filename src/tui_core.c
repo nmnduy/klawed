@@ -413,6 +413,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->entries_capacity = 0;
     tui->last_assistant_line = -1;  // No assistant message yet
     tui->streaming_entry_index = -1;  // No active streaming entry
+    tui->needs_conv_pad_rebuild = 0;   // No pending pad rebuild
     tui->status_message = NULL;
     tui->status_visible = 0;
     tui->status_spinner_active = 0;
