@@ -11,6 +11,7 @@ A fast, lightweight AI coding agent built entirely in C. Klawed provides a rich 
 - **Multi-provider support** — OpenAI, Anthropic, AWS Bedrock, OpenRouter, DeepSeek, Moonshot/Kimi, Z.AI, and any OpenAI-compatible API
 - **13+ built-in tools** — Read, Write, Edit, MultiEdit, Bash, Glob, Grep, Subagent, MemoryStore/Recall/Search, TodoWrite, Sleep
 - **Persistent memory** — SQLite-based long-term memory with FTS5 full-text search across sessions
+- **Secret redaction** — API keys, tokens, and passwords are automatically redacted in logs, TUI output, and tool results
 - **Auto-compaction** — Automatically archives old conversation context to keep within token limits
 - **MCP support** — Connect to external Model Context Protocol servers for additional tools
 - **Web research** — Explore mode with DuckDuckGo search and Playwright-based page reading
