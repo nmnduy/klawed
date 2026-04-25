@@ -484,8 +484,8 @@ static void test_simple_restart_with_switch(void) {
     add_assistant_message_to_queue(&daemon2, "Use open() function...");
     TEST_ASSERT(daemon2.state->count == 4, "Can add new message with Z.AI");
 
-    cleanup_daemon(&daemon2);
     sqlite_queue_cleanup(daemon2.queue_ctx);
+    cleanup_daemon(&daemon2);
     unlink(TEST_DB_PATH);
 }
 
@@ -538,8 +538,8 @@ static void test_restart_with_tool_calls(void) {
     TEST_ASSERT(daemon2.state->messages[2].contents[0].type == INTERNAL_TOOL_RESPONSE, "Msg 2 is tool result");
     TEST_ASSERT(strcmp(daemon2.state->messages[2].contents[0].tool_id, "call_1") == 0, "Tool result ID matches");
 
-    cleanup_daemon(&daemon2);
     sqlite_queue_cleanup(daemon2.queue_ctx);
+    cleanup_daemon(&daemon2);
     unlink(TEST_DB_PATH);
 }
 
@@ -588,8 +588,8 @@ static void test_multiple_restarts(void) {
                     "Message ordering preserved");
     }
 
-    cleanup_daemon(&daemons[2]);
     sqlite_queue_cleanup(daemons[2].queue_ctx);
+    cleanup_daemon(&daemons[2]);
     unlink(TEST_DB_PATH);
 }
 
