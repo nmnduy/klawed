@@ -454,13 +454,9 @@ static void test_session_loading_scenario(void) {
         InternalMessage msg = {0}; parse_openai_response(json, &msg);
 
         // Simulate adding to conversation (like session.c does)
-        if (msg.content_count > 0) {
-            // Would add to state->messages[state->count++] = msg;
-            // Then set assistant_msg.content_count = 0 to prevent double-free
-            msg.content_count = 0;
-            msg.contents = NULL;
-        }
-
+        // In real code: state->messages[state->count++] = msg;
+        // Then msg.content_count = 0 to prevent double-free.
+        // Here we just free normally since we're not persisting the message.
         free_internal_message(&msg);
         cJSON_Delete(json);
         messages_freed++;
