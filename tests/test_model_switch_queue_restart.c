@@ -616,5 +616,6 @@ int main(void) {
         printf("  You can switch providers by stopping klawed and restarting with different config.\n");
     }
 
+    sqlite3_shutdown();
     return tests_failed > 0 ? 1 : 0;
 }
