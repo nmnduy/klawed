@@ -264,9 +264,10 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
     // Redirect stdin from /dev/null
     posix_spawn_file_actions_addopen(&file_actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
 
-    // Change working directory if specified (macOS extension)
+    // Change working directory if specified
+    // macOS 26.0+ has posix_spawn_file_actions_addchdir; older macOS only has _np
     if (subagent_working_dir && subagent_working_dir[0] != '\0') {
-#if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 150000)
+#if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 260000)
         posix_spawn_file_actions_addchdir(&file_actions, subagent_working_dir);
 #else
         posix_spawn_file_actions_addchdir_np(&file_actions, subagent_working_dir);
