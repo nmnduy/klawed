@@ -364,6 +364,7 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
 
     // Reset streaming entry tracking (prevents stale streaming index)
     tui->streaming_entry_index = -1;
+    tui->needs_conv_pad_rebuild = 0;
 
     // Clear pad and reset content lines
     werase(tui->wm.conv_pad);
@@ -1281,6 +1282,14 @@ static int process_tui_messages(TUIState *tui,
         free(msg.text);
         msg.text = NULL;
         processed++;
+    }
+
+    // If any non-last streaming entry was updated (e.g., reasoning trace after
+    // user submitted a message), rebuild the conversation pad so the updated
+    // text becomes visible. We do this once per processed batch, not per message.
+    if (tui->needs_conv_pad_rebuild) {
+        redraw_conversation(tui);
+        tui->needs_conv_pad_rebuild = 0;
     }
 
     return processed;
