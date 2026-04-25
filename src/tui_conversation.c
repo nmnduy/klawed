@@ -671,8 +671,11 @@ void tui_update_conversation_entry(TUIState *tui, int entry_index, const char *t
         return;
     }
 
-    // Updating a non-last entry: update text in memory only
-    // The pad will be inconsistent until next redraw/resize
+    // Updating a non-last entry: update text in memory only.
+    // The pad becomes inconsistent with the in-memory entry because
+    // we cannot simply append to the pad's current cursor position
+    // (the cursor is past subsequent entries). Flag the conversation
+    // pad for a full rebuild so the streaming content becomes visible.
     ConversationEntry *entry = &tui->entries[entry_index];
 
     // Append new text to the existing text
@@ -686,6 +689,11 @@ void tui_update_conversation_entry(TUIState *tui, int entry_index, const char *t
         strlcat(new_text, text, old_len + new_len + 1);
         entry->text = new_text;
         LOG_DEBUG("[TUI] Updated entry %d with %zu bytes (deferred redraw)", entry_index, new_len);
+
+        // Schedule a full pad rebuild so the updated text becomes visible.
+        // This is triggered by the per-frame TUI message processing loop
+        // which calls redraw_conversation() at most once per frame.
+        tui->needs_conv_pad_rebuild = 1;
     }
 }
 
