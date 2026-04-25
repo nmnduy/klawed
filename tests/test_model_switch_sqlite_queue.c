@@ -557,7 +557,7 @@ static void test_multiple_queue_ops_with_switch(void) {
     TEST_ASSERT(sender != NULL && receiver != NULL, "Both queue contexts initialized");
 
     // Round 1: Start with Kimi
-    InternalMessage msgs1[5];
+    InternalMessage msgs1[10];
     int count1 = 0;
     build_test_conversation(msgs1, &count1);
 
@@ -780,7 +780,7 @@ static void test_all_real_providers(void) {
         // Save conversation with this provider
         SQLiteQueueContext *ctx = sqlite_queue_init(TEST_DB_PATH, "sender");
 
-        InternalMessage msgs[5];
+        InternalMessage msgs[10];
         int count = 0;
         build_test_conversation(msgs, &count);
 
