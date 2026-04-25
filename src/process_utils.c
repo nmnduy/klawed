@@ -74,9 +74,13 @@ static int spawn_child_with_pipes(const char *path, char **argv, const char *wor
     posix_spawn_file_actions_addopen(&file_actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
 
     // Change working directory if specified
+    // macOS 26.0+ has posix_spawn_file_actions_addchdir; older macOS only has _np
     if (workdir && workdir[0] != '\0') {
-        // Use the standard POSIX function (available in macOS 10.15+ and glibc 2.29+)
+#if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 260000)
         posix_spawn_file_actions_addchdir(&file_actions, workdir);
+#else
+        posix_spawn_file_actions_addchdir_np(&file_actions, workdir);
+#endif
     }
 
     // Set spawn attributes: create new process group for kill(-pid, sig)
