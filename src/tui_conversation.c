@@ -464,10 +464,10 @@ static void write_streaming_text_bordered(TUIState *tui, const char *text) {
             }
         }
     }
-    /* Turn off foreground color that render_streaming_border left active */
-    if (has_colors()) {
-        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-    }
+    /* Leave FOREGROUND active for the next streaming chunk.
+     * render_streaming_border turns it on when starting a new line;
+     * if we turn it off here, continuing chunks on the same line
+     * will write with no color pair (appearing dimmed/default). */
 }
 
 // Update the last conversation line (for streaming responses)
