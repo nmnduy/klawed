@@ -917,9 +917,14 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
         if (bg_pair > 0 && has_colors()) {
             wattron(win, COLOR_PAIR(bg_pair));
         }
+        /* Use waddnstr directly to let ncurses handle line wrapping.
+         * tui_safe_mvwaddnstr clips to remaining columns on the current line,
+         * which would silently truncate long text. */
         getyx(win, cur_y, cur_x);
-        rendered += (tui_safe_mvwaddnstr(win, cur_y, cur_x, text, (int)strlen(text)) != TUI_DRAW_SKIPPED)
-            ? (int)strlen(text) : 0;
+        if (cur_y >= 0 && cur_x >= 0) {
+            int written = waddnstr(win, text, (int)strlen(text));
+            rendered = (written != ERR) ? (int)strlen(text) : 0;
+        }
         if (bg_pair > 0 && has_colors()) {
             wattroff(win, COLOR_PAIR(bg_pair));
         }
@@ -942,7 +947,8 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
         if (match > remaining) {
             size_t before_len = (size_t)(match - remaining);
             getyx(win, cur_y, cur_x);
-            if (tui_safe_mvwaddnstr(win, cur_y, cur_x, remaining, (int)before_len) != TUI_DRAW_SKIPPED) {
+            /* Use waddnstr to let ncurses wrap; don't clip to line width */
+            if (cur_y >= 0 && cur_x >= 0 && waddnstr(win, remaining, (int)before_len) != ERR) {
                 rendered += (int)before_len;
             }
         }
@@ -951,7 +957,7 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
             wattron(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
         }
         getyx(win, cur_y, cur_x);
-        if (tui_safe_mvwaddnstr(win, cur_y, cur_x, match, (int)pattern_len) != TUI_DRAW_SKIPPED) {
+        if (cur_y >= 0 && cur_x >= 0 && waddnstr(win, match, (int)pattern_len) != ERR) {
             rendered += (int)pattern_len;
         }
         if (has_colors()) {
@@ -963,7 +969,7 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
 
     if (*remaining) {
         getyx(win, cur_y, cur_x);
-        if (tui_safe_mvwaddnstr(win, cur_y, cur_x, remaining, (int)strlen(remaining)) != TUI_DRAW_SKIPPED) {
+        if (cur_y >= 0 && cur_x >= 0 && waddnstr(win, remaining, (int)strlen(remaining)) != ERR) {
             rendered += (int)strlen(remaining);
         }
     }
@@ -1019,7 +1025,7 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
                 int cur_y = 0;
                 int cur_x = 0;
                 getyx(pad, cur_y, cur_x);
-                (void)tui_safe_mvwaddnstr(pad, cur_y, cur_x, segment, (int)len);
+                if (cur_y >= 0 && cur_x >= 0) waddnstr(pad, segment, (int)len);
             }
         }
     } else {
@@ -1027,7 +1033,7 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
             int cur_y = 0;
             int cur_x = 0;
             getyx(pad, cur_y, cur_x);
-            (void)tui_safe_mvwaddnstr(pad, cur_y, cur_x, segment, (int)len);
+            if (cur_y >= 0 && cur_x >= 0) waddnstr(pad, segment, (int)len);
         }
     }
 
@@ -1366,7 +1372,9 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
             render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern, 0);
         } else {
-            { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); (void)tui_safe_mvwaddnstr(tui->wm.conv_pad, cur_y, cur_x, text, (int)strlen(text)); }
+            /* Use waddnstr directly to let ncurses handle line wrapping
+             * (tui_safe_mvwaddnstr clips to remaining columns, truncating long text) */
+            { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); if (cur_y >= 0 && cur_x >= 0) waddnstr(tui->wm.conv_pad, text, (int)strlen(text)); }
         }
 
         if (has_colors()) {
