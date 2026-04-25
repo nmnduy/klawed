@@ -581,9 +581,10 @@ int mcp_connect_server(MCPServer *server) {
     posix_spawn_file_actions_addclose(&file_actions, stdout_pipe[1]);  // Close original after dup
     posix_spawn_file_actions_addclose(&file_actions, stderr_pipe[1]);  // Close original after dup
 
-    // Change working directory if provided (macOS extension)
+    // Change working directory if provided
+    // macOS 26.0+ has posix_spawn_file_actions_addchdir; older macOS only has _np
     if (server->cwd) {
-#if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 150000)
+#if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 260000)
         posix_spawn_file_actions_addchdir(&file_actions, server->cwd);
 #else
         posix_spawn_file_actions_addchdir_np(&file_actions, server->cwd);
