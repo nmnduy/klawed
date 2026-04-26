@@ -31,6 +31,7 @@
 #include "persistence.h"
 #include "spinner_effects.h"
 #include "text_diffusion.h"
+#include "markdown_render.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -1108,31 +1109,183 @@ static size_t find_wrap_point(const char *text, size_t text_len, int max_display
     return bytes_used > 0 ? bytes_used : 1;
 }
 
+// ============================================================================
+// Markdown-aware border segment rendering
+// ============================================================================
+
+static void md_border_glyph(WINDOW *pad, int in_code_block) {
+    if (has_colors()) {
+        if (in_code_block) {
+            wattron(pad, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
+        } else {
+            wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
+        }
+    }
+    {
+        int cur_y = 0;
+        int cur_x = 0;
+        getyx(pad, cur_y, cur_x);
+        (void)tui_safe_mvwprint_char(pad, cur_y, cur_x, "│");
+    }
+    if (has_colors()) {
+        if (in_code_block) {
+            wattroff(pad, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
+        } else {
+            wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
+        }
+    }
+}
+
+static void md_text_space(WINDOW *pad, int in_code_block) {
+    if (has_colors()) {
+        wattron(pad, COLOR_PAIR(in_code_block ? NCURSES_PAIR_TOOL_DIM : NCURSES_PAIR_FOREGROUND));
+    }
+    {
+        int cur_y = 0;
+        int cur_x = 0;
+        getyx(pad, cur_y, cur_x);
+        (void)tui_safe_mvwaddch(pad, cur_y, cur_x, ' ');
+    }
+    if (has_colors()) {
+        wattroff(pad, COLOR_PAIR(in_code_block ? NCURSES_PAIR_TOOL_DIM : NCURSES_PAIR_FOREGROUND));
+    }
+}
+
+static void render_md_segment(TUIState *tui, const char *segment, size_t len,
+                              int border_pair, const char *border_str,
+                              bool add_newline, int in_code_block,
+                              int text_pair, int search_active) {
+    WINDOW *pad = tui->wm.conv_pad;
+
+    (void)border_pair;
+    (void)border_str;
+
+    md_border_glyph(pad, in_code_block);
+    md_text_space(pad, in_code_block);
+
+    if (in_code_block) {
+        wattron(pad, A_DIM);
+    }
+
+    if (search_active) {
+        char *seg_buf = malloc(len + 1);
+        if (seg_buf) {
+            memcpy(seg_buf, segment, len);
+            seg_buf[len] = '\0';
+            render_text_with_search_highlight(pad, seg_buf, 0, tui->last_search_pattern, 0);
+            free(seg_buf);
+        } else {
+            int cur_y = 0;
+            int cur_x = 0;
+            getyx(pad, cur_y, cur_x);
+            if (cur_y >= 0 && cur_x >= 0) {
+                waddnstr(pad, segment, (int)len);
+            }
+        }
+    } else {
+        if (in_code_block) {
+            int cur_y = 0;
+            int cur_x = 0;
+            getyx(pad, cur_y, cur_x);
+            if (cur_y >= 0 && cur_x >= 0) {
+                waddnstr(pad, segment, (int)len);
+            }
+        } else {
+            markdown_render_inline(tui, segment, len, text_pair);
+        }
+    }
+
+    if (in_code_block) {
+        wattroff(pad, A_DIM);
+    }
+
+    if (add_newline) {
+        int cur_y = 0;
+        int cur_x = 0;
+        getyx(pad, cur_y, cur_x);
+        if (cur_x > 0) {
+            (void)tui_safe_waddch(pad, '\n');
+        }
+    }
+}
+
+static void render_md_header_segment(TUIState *tui, const char *segment, size_t len,
+                                     int border_pair, const char *border_str,
+                                     bool add_newline, int text_pair, int search_active) {
+    WINDOW *pad = tui->wm.conv_pad;
+
+    (void)border_pair;
+    (void)border_str;
+
+    md_border_glyph(pad, 0);
+    md_text_space(pad, 0);
+
+    if (has_colors()) {
+        wattron(pad, COLOR_PAIR(text_pair));
+    }
+    wattron(pad, A_BOLD);
+
+    if (search_active) {
+        char *seg_buf = malloc(len + 1);
+        if (seg_buf) {
+            memcpy(seg_buf, segment, len);
+            seg_buf[len] = '\0';
+            render_text_with_search_highlight(pad, seg_buf, 0, tui->last_search_pattern, 0);
+            free(seg_buf);
+        } else {
+            int cur_y = 0;
+            int cur_x = 0;
+            getyx(pad, cur_y, cur_x);
+            if (cur_y >= 0 && cur_x >= 0) {
+                waddnstr(pad, segment, (int)len);
+            }
+        }
+    } else {
+        markdown_render_inline(tui, segment, len, text_pair);
+    }
+
+    wattroff(pad, A_BOLD);
+    if (has_colors()) {
+        wattroff(pad, COLOR_PAIR(text_pair));
+    }
+
+    if (add_newline) {
+        int cur_y = 0;
+        int cur_x = 0;
+        getyx(pad, cur_y, cur_x);
+        if (cur_x > 0) {
+            (void)tui_safe_waddch(pad, '\n');
+        }
+    }
+}
+
 // Helper to render text with a left border for assistant messages
 // Handles line wrapping by adding border at start of each new line
 // Uses NCURSES_PAIR_ASSISTANT_BG for subtle background highlighting
 void render_text_with_left_border(TUIState *tui, const char *text, int text_pair,
                                   int border_pair, const char *border_str) {
-    if (!text || !text[0]) return;
+    if (!text || !text[0]) {
+        return;
+    }
 
     WINDOW *pad = tui->wm.conv_pad;
-    int pad_width;
-    int pad_height;
+    int pad_width = 0;
+    int pad_height = 0;
     getmaxyx(pad, pad_height, pad_width);
     (void)pad_height;
 
-    // Calculate border display width (for UTF-8 characters like │)
     int border_display_width = utf8_display_width(border_str);
-
-    // Available width for text content (after border)
     int content_width = pad_width - border_display_width;
-    if (content_width < 1) content_width = 1;
+    if (content_width < 1) {
+        content_width = 1;
+    }
 
     const char *line_start = text;
     const char *p = text;
+    int in_code_block = 0;
+    int search_active = (tui->last_search_pattern && tui->last_search_pattern[0] != '\0');
 
     while (*p) {
-        // Find end of current logical line (newline or end of string)
         while (*p && *p != '\n') {
             p++;
         }
@@ -1140,12 +1293,20 @@ void render_text_with_left_border(TUIState *tui, const char *text, int text_pair
         size_t line_len = (size_t)(p - line_start);
 
         if (line_len == 0) {
-            // Empty line - just render border and newline
             render_bordered_segment(tui, "", 0, border_pair, border_str, (*p == '\n'));
         } else {
-            // Check if the line needs wrapping
-            int line_display_width = 0;
-            {
+            int fence = markdown_code_fence(line_start, line_len);
+            int is_code_line = 0;
+
+            if (fence != 0) {
+                in_code_block = !in_code_block;
+                is_code_line = 1;
+            } else if (in_code_block) {
+                is_code_line = 1;
+            }
+
+            if (is_code_line) {
+                int line_display_width = 0;
                 char *tmp = malloc(line_len + 1);
                 if (tmp) {
                     memcpy(tmp, line_start, line_len);
@@ -1153,53 +1314,137 @@ void render_text_with_left_border(TUIState *tui, const char *text, int text_pair
                     line_display_width = utf8_display_width(tmp);
                     free(tmp);
                 } else {
-                    line_display_width = (int)line_len;  // Fallback
+                    line_display_width = (int)line_len;
                 }
-            }
 
-            if (line_display_width <= content_width) {
-                // Line fits - render normally
-                render_bordered_segment(tui, line_start, line_len, border_pair, border_str, (*p == '\n'));
+                if (line_display_width <= content_width) {
+                    render_md_segment(tui, line_start, line_len, border_pair, border_str,
+                                      (*p == '\n'), 1, text_pair, search_active);
+                } else {
+                    const char *chunk_start = line_start;
+                    size_t remaining = line_len;
+
+                    while (remaining > 0) {
+                        size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
+                        render_md_segment(tui, chunk_start, chunk_bytes, border_pair, border_str,
+                                          true, 1, text_pair, search_active);
+                        chunk_start += chunk_bytes;
+                        remaining -= chunk_bytes;
+                    }
+                }
             } else {
-                // Line needs wrapping - break into chunks
-                const char *chunk_start = line_start;
-                size_t remaining = line_len;
+                int hlevel = markdown_header_level(line_start, line_len);
+                int is_hrule = markdown_hrule(line_start, line_len);
+                size_t prefix_len = 0;
+                int list_number = 0;
+                char list_type = markdown_list_item(line_start, line_len, &prefix_len, &list_number);
+                size_t quote_len = 0;
+                int is_quote = markdown_blockquote(line_start, line_len, &quote_len);
+                int is_special_prefix = 0;
+                size_t skip_prefix = 0;
 
-                while (remaining > 0) {
-                    size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
-                    bool is_last_chunk = (chunk_bytes >= remaining);
-                    bool add_nl = is_last_chunk && (*p == '\n');
+                if (list_type != 0) {
+                    is_special_prefix = 1;
+                    skip_prefix = prefix_len;
+                } else if (is_quote) {
+                    is_special_prefix = 1;
+                    skip_prefix = quote_len;
+                }
 
-                    render_bordered_segment(tui, chunk_start, chunk_bytes, border_pair, border_str, true);
+                if (is_hrule) {
+                    static const char hrule[] = "────────────────────────";
+                    render_md_segment(tui, hrule, sizeof(hrule) - 1, border_pair, border_str,
+                                      (*p == '\n'), 1, text_pair, search_active);
+                } else {
+                    int line_display_width = 0;
+                    char *tmp = malloc(line_len + 1);
+                    if (tmp) {
+                        memcpy(tmp, line_start, line_len);
+                        tmp[line_len] = '\0';
+                        line_display_width = utf8_display_width(tmp);
+                        free(tmp);
+                    } else {
+                        line_display_width = (int)line_len;
+                    }
 
-                    chunk_start += chunk_bytes;
-                    remaining -= chunk_bytes;
+                    if (line_display_width <= content_width) {
+                        if (hlevel > 0) {
+                            size_t skip = 0;
+                            while (skip < line_len && (line_start[skip] == '#' || isspace((unsigned char)line_start[skip]))) {
+                                skip++;
+                            }
+                            render_md_header_segment(tui, line_start + skip, line_len - skip,
+                                                     border_pair, border_str, (*p == '\n'),
+                                                     text_pair, search_active);
+                        } else if (is_special_prefix) {
+                            render_md_segment(tui, line_start + skip_prefix, line_len - skip_prefix,
+                                              border_pair, border_str, (*p == '\n'), 0,
+                                              text_pair, search_active);
+                        } else {
+                            render_md_segment(tui, line_start, line_len, border_pair, border_str,
+                                              (*p == '\n'), 0, text_pair, search_active);
+                        }
+                    } else {
+                        const char *chunk_start = line_start;
+                        size_t remaining = line_len;
+                        int first_chunk = 1;
 
-                    // Suppress unused - add_nl used for clarity but last chunk newline
-                    // is handled by adding newline to all wrapped segments
-                    (void)add_nl;
+                        while (remaining > 0) {
+                            size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
+
+                            if (first_chunk && hlevel > 0) {
+                                size_t skip = 0;
+                                while (skip < line_len && (line_start[skip] == '#' || isspace((unsigned char)line_start[skip]))) {
+                                    skip++;
+                                }
+                                if (chunk_bytes > skip) {
+                                    render_md_header_segment(tui, chunk_start + skip, chunk_bytes - skip,
+                                                             border_pair, border_str, true,
+                                                             text_pair, search_active);
+                                } else {
+                                    render_md_header_segment(tui, chunk_start, chunk_bytes,
+                                                             border_pair, border_str, true,
+                                                             text_pair, search_active);
+                                }
+                                first_chunk = 0;
+                            } else if (first_chunk && is_special_prefix) {
+                                if (chunk_bytes > skip_prefix) {
+                                    render_md_segment(tui, chunk_start + skip_prefix, chunk_bytes - skip_prefix,
+                                                      border_pair, border_str, true, 0,
+                                                      text_pair, search_active);
+                                } else {
+                                    render_md_segment(tui, chunk_start, chunk_bytes,
+                                                      border_pair, border_str, true, 0,
+                                                      text_pair, search_active);
+                                }
+                                first_chunk = 0;
+                            } else {
+                                render_md_segment(tui, chunk_start, chunk_bytes, border_pair, border_str,
+                                                  true, 0, text_pair, search_active);
+                                first_chunk = 0;
+                            }
+
+                            chunk_start += chunk_bytes;
+                            remaining -= chunk_bytes;
+                        }
+                    }
                 }
             }
         }
 
-        // Move past newline if present
         if (*p == '\n') {
             p++;
             line_start = p;
         }
     }
 
-    // Ensure we end on a new line - check cursor position
     WINDOW *pad_final = tui->wm.conv_pad;
-    int cur_y, cur_x;
+    int cur_y = 0;
+    int cur_x = 0;
     getyx(pad_final, cur_y, cur_x);
-    (void)cur_y;
     if (cur_x > 0) {
-        // Cursor is not at column 0, need a newline
         (void)tui_safe_waddch(pad_final, '\n');
     }
-
-    (void)text_pair;  // Suppress unused warning (background pair used instead)
 }
 
 
