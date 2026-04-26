@@ -157,10 +157,9 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
 
     // Add blank line if transitioning between different message types
     // OR between consecutive AI assistant messages
-    // (but not for empty lines or unknown types, and not if previous was empty/unknown)
+    // (but not for empty lines, and not if previous was empty)
     int should_add_spacing = 0;
-    if (current_type != MSG_TYPE_EMPTY && current_type != MSG_TYPE_UNKNOWN &&
-        previous_type != MSG_TYPE_EMPTY && previous_type != MSG_TYPE_UNKNOWN) {
+    if (current_type != MSG_TYPE_EMPTY && previous_type != MSG_TYPE_EMPTY) {
         if (current_type != previous_type) {
             should_add_spacing = 1;
         } else if (current_type == MSG_TYPE_ASSISTANT && previous_type == MSG_TYPE_ASSISTANT) {
@@ -389,10 +388,10 @@ static void write_streaming_text_bordered(TUIState *tui, const char *text) {
         // Calculate how many characters we can fit on the current line
         int available_width = pad_width - cur_x;
         if (available_width <= 0) {
-            // Line is full, cursor should auto-wrap on next write
-            // Write a single character to trigger wrap
-            waddch(pad, (chtype)(unsigned char)*p);
-            p++;
+            // Line is full (cursor is at or past the right edge).
+            // Force a newline to get to a clean next line; the next
+            // loop iteration will see cur_x == 0 and render the border.
+            waddch(pad, '\n');
             continue;
         }
 

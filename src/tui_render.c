@@ -1111,8 +1111,8 @@ static size_t find_wrap_point(const char *text, size_t text_len, int max_display
 // Helper to render text with a left border for assistant messages
 // Handles line wrapping by adding border at start of each new line
 // Uses NCURSES_PAIR_ASSISTANT_BG for subtle background highlighting
-static void render_text_with_left_border(TUIState *tui, const char *text, int text_pair,
-                                         int border_pair, const char *border_str) {
+void render_text_with_left_border(TUIState *tui, const char *text, int text_pair,
+                                  int border_pair, const char *border_str) {
     if (!text || !text[0]) return;
 
     WINDOW *pad = tui->wm.conv_pad;
