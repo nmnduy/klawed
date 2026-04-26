@@ -430,47 +430,10 @@ void tui_handle_resize(TUIState *tui) {
             }
         } else if (is_assistant_message) {
             // Assistant message: use left border decoration (│) on each line
-            // No background fill - just border and text
-
+            // with proper line wrapping
             if (entry->text && entry->text[0] != '\0') {
-                const char *line_start = entry->text;
-                const char *p = entry->text;
-
-                while (*p) {
-                    // Find end of current line
-                    while (*p && *p != '\n') {
-                        p++;
-                    }
-
-                    // Calculate line length
-                    size_t line_len = (size_t)(p - line_start);
-
-                    // Render border character only (│) with border color
-                    if (has_colors()) {
-                        wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-                    }
-                    waddstr(tui->wm.conv_pad, "│");
-                    if (has_colors()) {
-                        wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-                        // Reset to foreground color (no background) for space and text
-                        wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-                    }
-                    // Add space after border with foreground color (no background)
-                    waddch(tui->wm.conv_pad, ' ');
-
-                    // Render text content (no background)
-                    waddnstr(tui->wm.conv_pad, line_start, (int)line_len);
-
-                    if (has_colors()) {
-                        wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-                    }
-
-                    if (*p == '\n') {
-                        waddch(tui->wm.conv_pad, '\n');
-                        p++;
-                        line_start = p;
-                    }
-                }
+                render_text_with_left_border(tui, entry->text, NCURSES_PAIR_FOREGROUND,
+                                             NCURSES_PAIR_ASSISTANT_BORDER_BG, "│ ");
             }
 
             continue;  // Skip regular text/newline handling below
