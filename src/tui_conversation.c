@@ -640,18 +640,18 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
             LOG_DEBUG("[TUI] Auto-scroll (update): not scrolling (was_at_bottom=0)");
         }
     }
+    // NOTE: needs_conv_pad_rebuild is NOT set here per-token to avoid the
+    // expensive full-pad rebuild (redraw_conversation) on every streaming
+    // delta.  The rebuild re-renders ALL entries through markdown which causes
+    // severe visual jank when the page is full.  Markdown rendering is deferred
+    // until the response is complete and the next conversation entry is added
+    // via tui_add_conversation_line(), which calls render_entry_to_pad().
     window_manager_refresh_conversation(&tui->wm);
 
     // Re-render file search popup if active (must be on top of conversation)
     if (tui->mode == TUI_MODE_FILE_SEARCH && tui->file_search.is_active) {
         file_search_render(&tui->file_search);
     }
-
-    // Schedule a full pad rebuild so markdown rendering is applied incrementally
-    // during streaming.  process_tui_messages() calls redraw_conversation() at
-    // most once per frame, which re-renders all entries through
-    // render_text_with_left_border() + markdown_render_inline().
-    tui->needs_conv_pad_rebuild = 1;
 }
 
 // Update a specific conversation entry by index (for streaming to tracked entry)
