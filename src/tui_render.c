@@ -1273,12 +1273,24 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
     const char *line_start = text;
     const char *p = text;
 
+    /* Table buffering state */
+    #define TABLE_BUF_MAX 64
+    const char *table_rows[TABLE_BUF_MAX];
+    size_t table_row_lens[TABLE_BUF_MAX];
+    size_t table_buf_count = 0;
+
     while (*p) {
         while (*p && *p != '\n') p++;
 
         size_t line_len = (size_t)(p - line_start);
 
         if (line_len == 0) {
+            /* Empty line flushes any buffered table */
+            if (table_buf_count > 0) {
+                markdown_render_table(tui, table_rows, table_row_lens,
+                                      table_buf_count, text_pair);
+                table_buf_count = 0;
+            }
             if (*p == '\n') {
                 waddch(pad, '\n');
                 p++;
@@ -1287,6 +1299,46 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
             continue;
         }
 
+        /* Check if this is a table-related line */
+        int is_row = markdown_is_table_row(line_start, line_len);
+
+        if (is_row) {
+            /* Buffer this row */
+            if (table_buf_count < TABLE_BUF_MAX) {
+                table_rows[table_buf_count] = line_start;
+                table_row_lens[table_buf_count] = line_len;
+                table_buf_count++;
+            }
+            if (*p == '\n') p++;
+            line_start = p;
+            continue;
+        }
+
+        /* Non-table line: flush buffered table if it's valid */
+        if (table_buf_count > 0) {
+            /* Check if buffer contains a separator (valid table) */
+            int has_sep = 0;
+            for (size_t ti = 0; ti < table_buf_count; ti++) {
+                if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
+                    has_sep = 1;
+                    break;
+                }
+            }
+            if (has_sep) {
+                markdown_render_table(tui, table_rows, table_row_lens,
+                                      table_buf_count, text_pair);
+            } else {
+                /* Not a valid table, render as normal lines */
+                for (size_t ti = 0; ti < table_buf_count; ti++) {
+                    markdown_render_inline(tui, table_rows[ti],
+                                           table_row_lens[ti], text_pair);
+                    waddch(pad, '\n');
+                }
+            }
+            table_buf_count = 0;
+        }
+
+        /* Render this non-table line normally */
         int line_display_width;
         char *tmp = malloc(line_len + 1);
         if (tmp) {
@@ -1320,6 +1372,27 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
         }
         line_start = p;
     }
+
+    /* Flush any remaining buffered table at end of text */
+    if (table_buf_count > 0) {
+        int has_sep = 0;
+        for (size_t ti = 0; ti < table_buf_count; ti++) {
+            if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
+                has_sep = 1;
+                break;
+            }
+        }
+        if (has_sep) {
+            markdown_render_table(tui, table_rows, table_row_lens,
+                                  table_buf_count, text_pair);
+        } else {
+            for (size_t ti = 0; ti < table_buf_count; ti++) {
+                markdown_render_inline(tui, table_rows[ti],
+                                       table_row_lens[ti], text_pair);
+                waddch(pad, '\n');
+            }
+        }
+    }
 }
 
 // Helper to render text with a left border for assistant messages
@@ -1348,6 +1421,12 @@ void render_text_with_left_border(TUIState *tui, const char *text, int text_pair
     int in_code_block = 0;
     int search_active = (tui->last_search_pattern && tui->last_search_pattern[0] != '\0');
 
+    /* Table buffering state */
+    #define BORDERED_TABLE_BUF_MAX 64
+    const char *table_rows[BORDERED_TABLE_BUF_MAX];
+    size_t table_row_lens[BORDERED_TABLE_BUF_MAX];
+    size_t table_buf_count = 0;
+
     while (*p) {
         while (*p && *p != '\n') {
             p++;
@@ -1356,16 +1435,99 @@ void render_text_with_left_border(TUIState *tui, const char *text, int text_pair
         size_t line_len = (size_t)(p - line_start);
 
         if (line_len == 0) {
+            /* Empty line flushes buffered table */
+            if (table_buf_count > 0) {
+                int has_sep = 0;
+                for (size_t ti = 0; ti < table_buf_count; ti++) {
+                    if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
+                        has_sep = 1;
+                        break;
+                    }
+                }
+                if (has_sep) {
+                    markdown_render_table(tui, table_rows, table_row_lens,
+                                          table_buf_count, text_pair);
+                } else {
+                    for (size_t ti = 0; ti < table_buf_count; ti++) {
+                        render_md_segment(tui, table_rows[ti], table_row_lens[ti],
+                                          border_pair, border_str, false, 0,
+                                          text_pair, search_active);
+                    }
+                    waddch(pad, '\n');
+                }
+                table_buf_count = 0;
+            }
             render_bordered_segment(tui, "", 0, border_pair, border_str, (*p == '\n'));
         } else {
             int fence = markdown_code_fence(line_start, line_len);
             int is_code_line = 0;
 
             if (fence != 0) {
+                /* Flush table before code block */
+                if (table_buf_count > 0) {
+                    int has_sep = 0;
+                    for (size_t ti = 0; ti < table_buf_count; ti++) {
+                        if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
+                            has_sep = 1;
+                            break;
+                        }
+                    }
+                    if (has_sep) {
+                        markdown_render_table(tui, table_rows, table_row_lens,
+                                              table_buf_count, text_pair);
+                    } else {
+                        for (size_t ti = 0; ti < table_buf_count; ti++) {
+                            render_md_segment(tui, table_rows[ti], table_row_lens[ti],
+                                              border_pair, border_str, false, 0,
+                                              text_pair, search_active);
+                        }
+                        waddch(pad, '\n');
+                    }
+                    table_buf_count = 0;
+                }
                 in_code_block = !in_code_block;
                 is_code_line = 1;
             } else if (in_code_block) {
                 is_code_line = 1;
+            }
+
+            /* Check for table rows (only when not in code block) */
+            if (!is_code_line) {
+                int is_table_row_line = markdown_is_table_row(line_start, line_len);
+
+                if (is_table_row_line) {
+                    if (table_buf_count < BORDERED_TABLE_BUF_MAX) {
+                        table_rows[table_buf_count] = line_start;
+                        table_row_lens[table_buf_count] = line_len;
+                        table_buf_count++;
+                    }
+                    if (*p == '\n') p++;
+                    line_start = p;
+                    continue;
+                }
+
+                /* Non-table line: flush buffered table if valid */
+                if (table_buf_count > 0) {
+                    int has_sep = 0;
+                    for (size_t ti = 0; ti < table_buf_count; ti++) {
+                        if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
+                            has_sep = 1;
+                            break;
+                        }
+                    }
+                    if (has_sep) {
+                        markdown_render_table(tui, table_rows, table_row_lens,
+                                              table_buf_count, text_pair);
+                    } else {
+                        for (size_t ti = 0; ti < table_buf_count; ti++) {
+                            render_md_segment(tui, table_rows[ti], table_row_lens[ti],
+                                              border_pair, border_str, false, 0,
+                                              text_pair, search_active);
+                        }
+                        waddch(pad, '\n');
+                    }
+                    table_buf_count = 0;
+                }
             }
 
             if (is_code_line) {
@@ -1498,6 +1660,28 @@ void render_text_with_left_border(TUIState *tui, const char *text, int text_pair
         if (*p == '\n') {
             p++;
             line_start = p;
+        }
+    }
+
+    /* Flush any remaining buffered table at end of text */
+    if (table_buf_count > 0) {
+        int has_sep = 0;
+        for (size_t ti = 0; ti < table_buf_count; ti++) {
+            if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
+                has_sep = 1;
+                break;
+            }
+        }
+        if (has_sep) {
+            markdown_render_table(tui, table_rows, table_row_lens,
+                                  table_buf_count, text_pair);
+        } else {
+            for (size_t ti = 0; ti < table_buf_count; ti++) {
+                render_md_segment(tui, table_rows[ti], table_row_lens[ti],
+                                  border_pair, border_str, false, 0,
+                                  text_pair, search_active);
+            }
+            waddch(pad, '\n');
         }
     }
 
