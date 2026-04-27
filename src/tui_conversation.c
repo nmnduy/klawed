@@ -646,6 +646,12 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
     if (tui->mode == TUI_MODE_FILE_SEARCH && tui->file_search.is_active) {
         file_search_render(&tui->file_search);
     }
+
+    // Schedule a full pad rebuild so markdown rendering is applied incrementally
+    // during streaming.  process_tui_messages() calls redraw_conversation() at
+    // most once per frame, which re-renders all entries through
+    // render_text_with_left_border() + markdown_render_inline().
+    tui->needs_conv_pad_rebuild = 1;
 }
 
 // Update a specific conversation entry by index (for streaming to tracked entry)

@@ -1259,6 +1259,69 @@ static void render_md_header_segment(TUIState *tui, const char *segment, size_t 
     }
 }
 
+// Render text with inline markdown, handling line wrapping.
+// Used for caret-style assistant messages (no left border).
+static void render_caret_text_markdown(TUIState *tui, const char *text, int text_pair) {
+    WINDOW *pad = tui->wm.conv_pad;
+    int pad_width, pad_height;
+    getmaxyx(pad, pad_height, pad_width);
+    (void)pad_height;
+
+    int content_width = pad_width;
+    if (content_width < 1) content_width = 1;
+
+    const char *line_start = text;
+    const char *p = text;
+
+    while (*p) {
+        while (*p && *p != '\n') p++;
+
+        size_t line_len = (size_t)(p - line_start);
+
+        if (line_len == 0) {
+            if (*p == '\n') {
+                waddch(pad, '\n');
+                p++;
+            }
+            line_start = p;
+            continue;
+        }
+
+        int line_display_width;
+        char *tmp = malloc(line_len + 1);
+        if (tmp) {
+            memcpy(tmp, line_start, line_len);
+            tmp[line_len] = '\0';
+            line_display_width = utf8_display_width(tmp);
+            free(tmp);
+        } else {
+            line_display_width = (int)line_len;
+        }
+
+        if (line_display_width <= content_width) {
+            markdown_render_inline(tui, line_start, line_len, text_pair);
+        } else {
+            const char *chunk_start = line_start;
+            size_t remaining = line_len;
+            while (remaining > 0) {
+                size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
+                markdown_render_inline(tui, chunk_start, chunk_bytes, text_pair);
+                chunk_start += chunk_bytes;
+                remaining -= chunk_bytes;
+                if (remaining > 0) {
+                    waddch(pad, '\n');
+                }
+            }
+        }
+
+        if (*p == '\n') {
+            waddch(pad, '\n');
+            p++;
+        }
+        line_start = p;
+    }
+}
+
 // Helper to render text with a left border for assistant messages
 // Handles line wrapping by adding border at start of each new line
 // Uses NCURSES_PAIR_ASSISTANT_BG for subtle background highlighting
@@ -1616,6 +1679,9 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         // Check if we have an active search pattern to highlight
         if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
             render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern, 0);
+        } else if (is_assistant_message && tui->response_style == RESPONSE_STYLE_CARET) {
+            // Caret-style assistant: render line by line with inline markdown
+            render_caret_text_markdown(tui, text, text_pair);
         } else {
             /* Use waddnstr directly to let ncurses handle line wrapping
              * (tui_safe_mvwaddnstr clips to remaining columns, truncating long text) */
