@@ -1465,6 +1465,7 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_conversation_all.o $(TUI_CONVERSATION_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_window_all.o $(TUI_WINDOW_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_render_all.o $(TUI_RENDER_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/markdown_render_all.o $(MARKDOWN_RENDER_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_modes_all.o $(TUI_MODES_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_input_all.o $(TUI_INPUT_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/tui_history_all.o $(TUI_HISTORY_SRC); \
@@ -1580,7 +1581,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/settings_menu_all.o \
 		$(BUILD_DIR)/completion_all.o \
 		$(BUILD_DIR)/tui_all.o $(BUILD_DIR)/tui_core_all.o $(BUILD_DIR)/tui_conversation_all.o \
-		$(BUILD_DIR)/tui_window_all.o $(BUILD_DIR)/tui_render_all.o $(BUILD_DIR)/tui_modes_all.o \
+		$(BUILD_DIR)/tui_window_all.o $(BUILD_DIR)/tui_render_all.o $(BUILD_DIR)/markdown_render_all.o $(BUILD_DIR)/tui_modes_all.o \
 		$(BUILD_DIR)/tui_input_all.o $(BUILD_DIR)/tui_history_all.o $(BUILD_DIR)/tui_completion_all.o \
 		$(BUILD_DIR)/tui_paste_all.o $(BUILD_DIR)/tui_search_all.o \
 		$(BUILD_DIR)/vltrn_banner_all.o \
