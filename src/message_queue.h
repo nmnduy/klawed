@@ -27,7 +27,8 @@ typedef enum {
     TUI_MSG_TODO_UPDATE,    /* Update TODO list */
     TUI_MSG_TODO_HIDE,      /* Hide TODO banner (AI idle) */
     TUI_MSG_STREAM_START,   /* Open a new streaming line (thread-safe, from worker) */
-    TUI_MSG_STREAM_APPEND   /* Append incremental text to last streaming line */
+    TUI_MSG_STREAM_APPEND,  /* Append incremental text to last streaming line */
+    TUI_MSG_STREAM_END      /* Signal end of streaming — trigger pad rebuild */
 } TUIMessageType;
 
 /**
