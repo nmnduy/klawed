@@ -66,4 +66,23 @@ char markdown_list_item(const char *line, size_t len, size_t *prefix_len, int *n
  */
 int markdown_blockquote(const char *line, size_t len, size_t *prefix_len);
 
+/*
+ * Table detection and rendering
+ */
+
+/* Returns 1 if line is a table row (starts and ends with | after whitespace trim). */
+int markdown_is_table_row(const char *line, size_t len);
+
+/* Returns 1 if line is a table separator row (only |, -, :, and spaces). */
+int markdown_is_table_separator(const char *line, size_t len);
+
+/*
+ * Render a multi-line table.  rows/row_lens arrays contain num_rows entries.
+ * The first row is treated as header, any separator rows are skipped, and
+ * remaining rows are data.  Columns are padded for even-width display with
+ * text rendered through the inline markdown formatter.
+ */
+void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_lens,
+                           size_t num_rows, int base_pair);
+
 #endif /* MARKDOWN_RENDER_H */
