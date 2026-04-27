@@ -1253,6 +1253,14 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
             }
             break;
 
+        case TUI_MSG_STREAM_END:
+            /* Streaming complete: schedule a full pad rebuild so markdown
+             * rendering (tables, inline formatting) is applied to the
+             * accumulated text. */
+            tui->needs_conv_pad_rebuild = 1;
+            tui->streaming_entry_index = -1;
+            break;
+
         default:
             /* Unknown message type; ignore */
             break;

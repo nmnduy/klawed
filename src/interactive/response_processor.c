@@ -335,6 +335,18 @@ void process_response(ConversationState *state,
             }
         }
 
+        /* If the assistant text was streamed, the raw text is already in the
+         * conversation pad but has not been through markdown rendering. Trigger
+         * a full pad rebuild so tables and inline formatting are applied before
+         * we proceed to tool execution. */
+        if (current_response->ui_streamed) {
+            if (tui) {
+                redraw_conversation(tui);
+            } else if (queue) {
+                post_tui_message(queue, TUI_MSG_STREAM_END, NULL);
+            }
+        }
+
         // Add to conversation history (using raw response for now)
         // Extract message from raw_response for backward compatibility
         // Defense in depth: check for NULL raw_response
