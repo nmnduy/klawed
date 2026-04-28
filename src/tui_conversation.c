@@ -601,13 +601,29 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                 // Use bordered streaming to handle wrapping with border
                 write_streaming_text_bordered(tui, text);
             } else {
-                // Non-bordered: use foreground color for text
+                // Determine text color based on prefix, matching the logic
+                // in render_entry_to_pad() so reasoning/tool text is dimmed
+                // during streaming, not just after the full rebuild.
+                int text_pair = NCURSES_PAIR_FOREGROUND;
+                if (last_entry->prefix && last_entry->prefix[0] != '\0') {
+                    // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F)
+                    int is_tool_message = (last_entry->prefix[0] == '\xe2' &&
+                                           last_entry->prefix[1] == '\x97' &&
+                                           last_entry->prefix[2] == '\x8f');
+                    // Check for reasoning messages: prefix starts with "⟨" (UTF-8: 0xE2 0x9F 0xA8)
+                    int is_reasoning_message = (last_entry->prefix[0] == '\xe2' &&
+                                                 last_entry->prefix[1] == '\x9f' &&
+                                                 last_entry->prefix[2] == '\xa8');
+                    if (is_tool_message || is_reasoning_message) {
+                        text_pair = NCURSES_PAIR_TOOL_DIM;
+                    }
+                }
                 if (has_colors()) {
-                    wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
                 }
                 waddstr(tui->wm.conv_pad, text);
                 if (has_colors()) {
-                    wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
                 }
             }
 
