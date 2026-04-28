@@ -1844,8 +1844,10 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         } else if (prefix && prefix[0] != '\0') {
             // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F)
             int is_tool_message = (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f');
-            if (is_tool_message) {
-                // Tool message: use dimmed color for text (tag keeps tool color)
+            // Check for reasoning messages: prefix starts with "⟨" (UTF-8: 0xE2 0x9F 0xA8)
+            int is_reasoning_message = (prefix[0] == '\xe2' && prefix[1] == '\x9f' && prefix[2] == '\xa8');
+            if (is_tool_message || is_reasoning_message) {
+                // Tool or reasoning message: use dimmed color for text (tag keeps its color)
                 text_pair = NCURSES_PAIR_TOOL_DIM;
             } else {
                 // Other messages with prefix use foreground

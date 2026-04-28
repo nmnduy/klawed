@@ -808,9 +808,9 @@ static int sqlite_queue_send_text_response(SQLiteQueueContext *ctx, const char *
     }
 
     if (display_reasoning && *display_reasoning) {
-        printf("\n%s[Assistant thinking]%s %s%s%s\n",
+        printf("\n%s⟨Reasoning⟩%s %s%s%s\n",
                assistant_color_start, ANSI_RESET,
-               text_color_start, display_reasoning, ANSI_RESET);
+               ANSI_FALLBACK_DIM, display_reasoning, ANSI_RESET);
     }
 
     if (*display_text != '\0') {

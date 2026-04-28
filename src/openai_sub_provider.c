@@ -195,9 +195,18 @@ static int sub_streaming_event_handler(StreamEvent *event, void *userdata) {
     if (reasoning && cJSON_IsString(reasoning) && reasoning->valuestring[0] != '\0') {
         if (!ctx->reasoning_line_added && ctx->state) {
             if (ctx->state->tui_queue) {
-                post_tui_stream_start(ctx->state->tui_queue, "[Reasoning]", COLOR_PAIR_STATUS);
+                post_tui_stream_start(ctx->state->tui_queue, "⟨Reasoning⟩", COLOR_PAIR_TOOL_DIM);
+            } else if (ctx->state->tui) {
+                tui_add_conversation_line(ctx->state->tui, "⟨Reasoning⟩", "", COLOR_PAIR_TOOL_DIM);
             }
             ctx->reasoning_line_added = 1;
+        }
+        if (ctx->state) {
+            if (ctx->state->tui_queue) {
+                post_tui_message(ctx->state->tui_queue, TUI_MSG_STREAM_APPEND, reasoning->valuestring);
+            } else if (ctx->state->tui) {
+                tui_update_last_conversation_line(ctx->state->tui, reasoning->valuestring);
+            }
         }
     }
 
