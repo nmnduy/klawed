@@ -497,25 +497,24 @@ cJSON* build_openai_request_with_reasoning(ConversationState *state, int enable_
             }
 
             // Add content (required field in OpenAI API)
-            // Note: Moonshot/Kimi requires empty string "" instead of null when reasoning_content is present
+            // Note: Moonshot/Kimi/DeepSeek require empty string "" instead of null
+            // when reasoning_content is present.
             if (text_content) {
                 cJSON_AddStringToObject(asst_msg, "content", text_content);
-            } else if (include_reasoning_content && reasoning_content_str) {
-                // Moonshot/Kimi: use empty string when reasoning_content is present
+            } else if (include_reasoning_content) {
+                // Reasoning-mode providers: use empty string when no text content
                 cJSON_AddStringToObject(asst_msg, "content", "");
             } else {
                 cJSON_AddNullToObject(asst_msg, "content");
             }
 
             // Add reasoning_content if preserving it (for Moonshot/Kimi/DeepSeek).
-            // Only include it when the message actually needs it:
-            // - DeepSeek requires reasoning_content on assistant messages with
-            //   tool_calls, even if empty. Omitting it causes HTTP 400.
-            // - Moonshot/Kimi require reasoning_content when it was originally
-            //   present in the response.
-            // Avoid adding it to plain text assistant messages to keep requests
-            // clean and provider-specific behavior isolated.
-            if (include_reasoning_content && (tool_calls || reasoning_content_str)) {
+            // All assistant messages must include reasoning_content when in preserve
+            // mode, as DeepSeek's reasoning models require it on every assistant
+            // message in a thinking-mode conversation. Omitting it on plain text
+            // assistant messages causes HTTP 400 ("reasoning_content in the thinking
+            // mode must be passed back to the API").
+            if (include_reasoning_content) {
                 cJSON_AddStringToObject(asst_msg, "reasoning_content",
                                         reasoning_content_str ? reasoning_content_str : "");
                 LOG_DEBUG("Including reasoning_content in assistant message (msg %d)", i);
