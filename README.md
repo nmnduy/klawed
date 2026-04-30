@@ -2,7 +2,7 @@
 
 A fast, lightweight AI coding agent built entirely in C. Klawed provides a rich terminal UI, supports multiple LLM providers, and ships with a comprehensive tool suite for code editing, file operations, task delegation, and persistent memory.
 
-![klawed preview](assets/images/claude-c-preview.webp)
+![klawed preview](assets/images/klawed-preview.png)
 
 ## Features
 
