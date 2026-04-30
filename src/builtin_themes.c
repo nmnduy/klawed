@@ -373,7 +373,41 @@ const BuiltInTheme built_in_themes[] = {
       "color14               #3d999f\n"
       "color7                #fffefe\n"
       "color15               #fffefe\n"
-      "selection_foreground #ffffff\n" }
+      "selection_foreground #ffffff\n" },
+    { "yorumi-shade",
+      "# vim:ft=kitty\n"
+      "\n"
+      "## name: Yorumi Shade\n"
+      "## author: yorumicolors\n"
+      "## license: GNU General Public License v3.0\n"
+      "## upstream: https://raw.githubusercontent.com/yorumicolors/kitty/refs/heads/main/yorumi-shade.conf\n"
+      "## blurb: A more washed off dark flavor of yorumi. Find more @ github/yorumicolors\n"
+      "\n"
+      "background              #0F101B\n"
+      "foreground              #BDBFCB\n"
+      "\n"
+      "selection_background    #343742\n"
+      "selection_foreground    #BDBFCB\n"
+      "\n"
+      "cursor                  #878996\n"
+      "cursor_text_color       #060914\n"
+      "\n"
+      "color0                  #0F1015\n"
+      "color1                  #913B3B\n"
+      "color2                  #697F4D\n"
+      "color3                  #9D672F\n"
+      "color4                  #42608A\n"
+      "color5                  #8D3F5A\n"
+      "color6                  #478584\n"
+      "color7                  #878996\n"
+      "color8                  #343742\n"
+      "color9                  #C65E53\n"
+      "color10                 #8CB167\n"
+      "color11                 #C39D55\n"
+      "color12                 #597BC0\n"
+      "color13                 #BB5D7D\n"
+      "color14                 #67BBB9\n"
+      "color15                 #BDBFCB\n" }
 };
 
 const size_t built_in_themes_count = sizeof(built_in_themes) / sizeof(built_in_themes[0]);
