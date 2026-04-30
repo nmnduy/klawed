@@ -1114,12 +1114,9 @@ static size_t find_wrap_point(const char *text, size_t text_len, int max_display
 // ============================================================================
 
 static void md_border_glyph(WINDOW *pad, int in_code_block) {
+    (void)in_code_block;  /* Border color is uniform regardless of code block state */
     if (has_colors()) {
-        if (in_code_block) {
-            wattron(pad, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
-        } else {
-            wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-        }
+        wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
     }
     {
         int cur_y = 0;
@@ -1128,17 +1125,14 @@ static void md_border_glyph(WINDOW *pad, int in_code_block) {
         (void)tui_safe_mvwprint_char(pad, cur_y, cur_x, "│");
     }
     if (has_colors()) {
-        if (in_code_block) {
-            wattroff(pad, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
-        } else {
-            wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-        }
+        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
     }
 }
 
 static void md_text_space(WINDOW *pad, int in_code_block) {
+    (void)in_code_block;  /* Space color is uniform regardless of code block state */
     if (has_colors()) {
-        wattron(pad, COLOR_PAIR(in_code_block ? NCURSES_PAIR_TOOL_DIM : NCURSES_PAIR_FOREGROUND));
+        wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
     }
     {
         int cur_y = 0;
@@ -1147,7 +1141,7 @@ static void md_text_space(WINDOW *pad, int in_code_block) {
         (void)tui_safe_mvwaddch(pad, cur_y, cur_x, ' ');
     }
     if (has_colors()) {
-        wattroff(pad, COLOR_PAIR(in_code_block ? NCURSES_PAIR_TOOL_DIM : NCURSES_PAIR_FOREGROUND));
+        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
     }
 }
 
