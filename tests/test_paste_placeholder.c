@@ -150,6 +150,14 @@ static void expand_previous(TestInputBuf *input)
 
     int paste_len      = (int)input->paste_content_len;
     int placeholder_len = input->paste_placeholder_len;
+
+    /* Validate that the placeholder still exists within the current buffer */
+    if (insert_pos + placeholder_len > input->length) {
+        input->paste_placeholder_len = 0;
+        input->paste_content_len = 0;
+        return;
+    }
+
     int size_change    = paste_len - placeholder_len;
 
     /* Grow buffer if needed */
@@ -656,6 +664,83 @@ static int test_paste_with_trailing_text(void)
 
 
 /* ================================================================
+ * Helper: simulate Ctrl+L — clear buffer but leave paste state stale
+ * (this replicates the bug where paste tracking was not reset on clear)
+ * ================================================================ */
+static void clear_buf_but_leave_stale_paste(TestInputBuf *b)
+{
+    b->buffer[0] = '\0';
+    b->length = 0;
+    b->cursor = 0;
+    /* Intentionally do NOT reset paste_placeholder_len / paste_content_len
+     * — this is exactly the bug condition. */
+}
+
+/* ================================================================
+ * TEST: Clear buffer then paste — stale placeholder should not crash
+ *
+ * Scenario (the reported crash):
+ *   1. Paste large content → placeholder inserted, paste state set
+ *   2. Clear buffer (Ctrl+L) → buffer emptied, BUT paste state stale
+ *   3. Start new paste → expand_previous() with invalid placeholder
+ *   BEFORE FIX: after_len = 0 - 26 = -26 → memmove with huge size → crash
+ *   AFTER FIX: bounds check detects placeholder no longer in buffer → safe return
+ * ================================================================ */
+static int test_clear_buffer_then_paste_no_crash(void)
+{
+    printf("\n" YELLOW "Clear buffer then paste — stale placeholder safety" RESET "\n");
+
+    TestInputBuf *b = make_buf(1024);
+    type_text(b, "prefix ");
+
+    /* Paste large content (triggers placeholder) */
+    char big[300];
+    memset(big, 'X', 299);
+    big[299] = '\0';
+
+    start_paste(b, big);
+    end_paste(b);
+
+    int has_ph = (strstr(b->buffer, "characters pasted") != NULL);
+    TEST_ASSERT(has_ph, "Placeholder present after first paste");
+    TEST_ASSERT(b->paste_placeholder_len > 0,
+                "paste_placeholder_len > 0 after first paste");
+
+    /* Simulate Ctrl+L bug: clear buffer but leave paste state stale */
+    clear_buf_but_leave_stale_paste(b);
+
+    TEST_ASSERT(b->length == 0, "Buffer length is 0 after clear");
+    TEST_ASSERT(b->paste_placeholder_len > 0,
+                "paste_placeholder_len still stale (bug condition)");
+
+    /* Start a new paste — this calls expand_previous() first */
+    char second[250];
+    memset(second, 'Y', 249);
+    second[249] = '\0';
+
+    start_paste(b, second);
+
+    /* With the fix, expand_previous should detect invalid placeholder and bail */
+    TEST_ASSERT(b->paste_placeholder_len == 0,
+                "Stale placeholder safely discarded (bounds check worked)");
+
+    end_paste(b);
+
+    /* Buffer should now contain the second paste's placeholder */
+    int has_ph2 = (strstr(b->buffer, "characters pasted") != NULL);
+    TEST_ASSERT(has_ph2, "Second paste placeholder in buffer after safe recovery");
+
+    const char *recon = get_reconstructed(b);
+    TEST_ASSERT(recon != NULL, "Reconstruction non-NULL after recovery");
+    int has_second = (strstr(recon, second) != NULL);
+    TEST_ASSERT(has_second, "Second paste content in reconstruction");
+
+    free_buf(b);
+    return 1;
+}
+
+
+/* ================================================================
  * Main
  * ================================================================ */
 int main(void)
@@ -671,6 +756,7 @@ int main(void)
     test_expand_previous_replaces_placeholder_in_buffer();
     test_three_consecutive_pastes();
     test_paste_with_trailing_text();
+    test_clear_buffer_then_paste_no_crash();
 
     printf(YELLOW "\n========================================\n" RESET);
     printf("Tests passed: " GREEN "%d" RESET "\n", tests_passed);

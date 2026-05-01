@@ -128,6 +128,11 @@ int tui_history_navigate_prev(TUIState *tui, const char *prompt) {
                 tui->input_buffer->cursor = (int)len;
                 tui->input_buffer->view_offset = 0;
                 tui->input_buffer->line_scroll_offset = 0;
+                tui->input_buffer->paste_mode = 0;
+                tui->input_buffer->rapid_input_count = 0;
+                tui->input_buffer->paste_content_len = 0;
+                tui->input_buffer->paste_placeholder_len = 0;
+                tui->input_buffer->paste_start_pos = 0;
                 tui_redraw_input(tui, prompt);
             }
         }
@@ -171,6 +176,11 @@ int tui_history_navigate_next(TUIState *tui, const char *prompt) {
             tui->input_buffer->cursor = (int)len;
             tui->input_buffer->view_offset = 0;
             tui->input_buffer->line_scroll_offset = 0;
+            tui->input_buffer->paste_mode = 0;
+            tui->input_buffer->rapid_input_count = 0;
+            tui->input_buffer->paste_content_len = 0;
+            tui->input_buffer->paste_placeholder_len = 0;
+            tui->input_buffer->paste_start_pos = 0;
             tui->input_history_index = -1;
             tui_redraw_input(tui, prompt);
         } else {
@@ -198,6 +208,11 @@ int tui_history_navigate_next(TUIState *tui, const char *prompt) {
                 tui->input_buffer->cursor = (int)len;
                 tui->input_buffer->view_offset = 0;
                 tui->input_buffer->line_scroll_offset = 0;
+                tui->input_buffer->paste_mode = 0;
+                tui->input_buffer->rapid_input_count = 0;
+                tui->input_buffer->paste_content_len = 0;
+                tui->input_buffer->paste_placeholder_len = 0;
+                tui->input_buffer->paste_start_pos = 0;
                 tui_redraw_input(tui, prompt);
             }
         }

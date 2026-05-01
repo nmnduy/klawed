@@ -227,6 +227,15 @@ static void input_expand_paste_content(TUIInputBuffer *input) {
 
     int paste_len = (int)input->paste_content_len;
     int placeholder_len = input->paste_placeholder_len;
+
+    // Validate that the placeholder still exists within the current buffer
+    if (insert_pos + placeholder_len > input->length) {
+        LOG_WARN("[TUI] Paste placeholder invalidated (buffer changed) — discarding stale paste");
+        input->paste_placeholder_len = 0;
+        input->paste_content_len = 0;
+        return;
+    }
+
     int size_change = paste_len - placeholder_len;
 
     // Check if we need to grow the buffer
@@ -726,6 +735,9 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         input->cursor = 0;
         input->paste_mode = 0;  // Reset paste mode
         input->rapid_input_count = 0;
+        input->paste_content_len = 0;
+        input->paste_placeholder_len = 0;
+        input->paste_start_pos = 0;
         // Also clear search status
         tui_update_status(tui, "");
         free(tui->last_search_pattern);
