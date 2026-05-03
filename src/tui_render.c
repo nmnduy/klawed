@@ -1266,6 +1266,7 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
 
     const char *line_start = text;
     const char *p = text;
+    int in_code_block = 0;
 
     /* Table buffering state */
     #define TABLE_BUF_MAX 64
@@ -1293,46 +1294,79 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
             continue;
         }
 
-        /* Check if this is a table-related line */
-        int is_row = markdown_is_table_row(line_start, line_len);
+        int fence = markdown_code_fence(line_start, line_len);
+        int is_code_line = 0;
 
-        if (is_row) {
-            /* Buffer this row */
-            if (table_buf_count < TABLE_BUF_MAX) {
-                table_rows[table_buf_count] = line_start;
-                table_row_lens[table_buf_count] = line_len;
-                table_buf_count++;
-            }
-            if (*p == '\n') p++;
-            line_start = p;
-            continue;
-        }
-
-        /* Non-table line: flush buffered table if it's valid */
-        if (table_buf_count > 0) {
-            /* Check if buffer contains a separator (valid table) */
-            int has_sep = 0;
-            for (size_t ti = 0; ti < table_buf_count; ti++) {
-                if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
-                    has_sep = 1;
-                    break;
-                }
-            }
-            if (has_sep) {
-                markdown_render_table(tui, table_rows, table_row_lens,
-                                      table_buf_count, text_pair);
-            } else {
-                /* Not a valid table, render as normal lines */
+        if (fence != 0) {
+            /* Flush table before code block */
+            if (table_buf_count > 0) {
+                int has_sep = 0;
                 for (size_t ti = 0; ti < table_buf_count; ti++) {
-                    markdown_render_inline(tui, table_rows[ti],
-                                           table_row_lens[ti], text_pair);
-                    waddch(pad, '\n');
+                    if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
+                        has_sep = 1;
+                        break;
+                    }
                 }
+                if (has_sep) {
+                    markdown_render_table(tui, table_rows, table_row_lens,
+                                          table_buf_count, text_pair);
+                } else {
+                    for (size_t ti = 0; ti < table_buf_count; ti++) {
+                        markdown_render_inline(tui, table_rows[ti],
+                                               table_row_lens[ti], text_pair);
+                        waddch(pad, '\n');
+                    }
+                }
+                table_buf_count = 0;
             }
-            table_buf_count = 0;
+            in_code_block = !in_code_block;
+            is_code_line = 1;
+        } else if (in_code_block) {
+            is_code_line = 1;
         }
 
-        /* Render this non-table line normally */
+        /* Check if this is a table-related line (only when not in code block) */
+        if (!is_code_line) {
+            int is_row = markdown_is_table_row(line_start, line_len);
+
+            if (is_row) {
+                /* Buffer this row */
+                if (table_buf_count < TABLE_BUF_MAX) {
+                    table_rows[table_buf_count] = line_start;
+                    table_row_lens[table_buf_count] = line_len;
+                    table_buf_count++;
+                }
+                if (*p == '\n') p++;
+                line_start = p;
+                continue;
+            }
+
+            /* Non-table line: flush buffered table if it's valid */
+            if (table_buf_count > 0) {
+                /* Check if buffer contains a separator (valid table) */
+                int has_sep = 0;
+                for (size_t ti = 0; ti < table_buf_count; ti++) {
+                    if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
+                        has_sep = 1;
+                        break;
+                    }
+                }
+                if (has_sep) {
+                    markdown_render_table(tui, table_rows, table_row_lens,
+                                          table_buf_count, text_pair);
+                } else {
+                    /* Not a valid table, render as normal lines */
+                    for (size_t ti = 0; ti < table_buf_count; ti++) {
+                        markdown_render_inline(tui, table_rows[ti],
+                                               table_row_lens[ti], text_pair);
+                        waddch(pad, '\n');
+                    }
+                }
+                table_buf_count = 0;
+            }
+        }
+
+        /* Render this line */
         int line_display_width;
         char *tmp = malloc(line_len + 1);
         if (tmp) {
@@ -1344,18 +1378,40 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
             line_display_width = (int)line_len;
         }
 
-        if (line_display_width <= content_width) {
-            markdown_render_inline(tui, line_start, line_len, text_pair);
+        if (is_code_line) {
+            if (line_display_width <= content_width) {
+                wattron(pad, A_DIM);
+                waddnstr(pad, line_start, (int)line_len);
+                wattroff(pad, A_DIM);
+            } else {
+                const char *chunk_start = line_start;
+                size_t remaining = line_len;
+                while (remaining > 0) {
+                    size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
+                    wattron(pad, A_DIM);
+                    waddnstr(pad, chunk_start, (int)chunk_bytes);
+                    wattroff(pad, A_DIM);
+                    chunk_start += chunk_bytes;
+                    remaining -= chunk_bytes;
+                    if (remaining > 0) {
+                        waddch(pad, '\n');
+                    }
+                }
+            }
         } else {
-            const char *chunk_start = line_start;
-            size_t remaining = line_len;
-            while (remaining > 0) {
-                size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
-                markdown_render_inline(tui, chunk_start, chunk_bytes, text_pair);
-                chunk_start += chunk_bytes;
-                remaining -= chunk_bytes;
-                if (remaining > 0) {
-                    waddch(pad, '\n');
+            if (line_display_width <= content_width) {
+                markdown_render_inline(tui, line_start, line_len, text_pair);
+            } else {
+                const char *chunk_start = line_start;
+                size_t remaining = line_len;
+                while (remaining > 0) {
+                    size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
+                    markdown_render_inline(tui, chunk_start, chunk_bytes, text_pair);
+                    chunk_start += chunk_bytes;
+                    remaining -= chunk_bytes;
+                    if (remaining > 0) {
+                        waddch(pad, '\n');
+                    }
                 }
             }
         }

@@ -1,9 +1,14 @@
 /*
- * Unit Tests for Markdown Table Detection
+ * Unit Tests for Markdown Rendering
  *
- * Tests the table detection and parsing functions in markdown_render.c:
+ * Tests the markdown detection and parsing functions in markdown_render.c:
  * - markdown_is_table_row()
  * - markdown_is_table_separator()
+ * - markdown_code_fence()
+ * - find_italic_underscore() (word boundary behavior)
+ * - find_italic_star() (word boundary behavior)
+ * - find_bold_underscores()
+ * - find_bold_stars()
  *
  * Compilation: make test-markdown-render
  * Usage: ./test_markdown_render
@@ -14,9 +19,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <ctype.h>
 
 /* Include markdown render header */
 #include "../src/markdown_render.h"
+
+/* Forward declarations of internal helpers (exposed via TEST_BUILD) */
+const char *find_italic_underscore(const char *start, size_t len);
+const char *find_italic_star(const char *start, size_t len);
+const char *find_bold_underscores(const char *start, size_t len);
+const char *find_bold_stars(const char *start, size_t len);
 
 /* Test framework colors */
 #define COLOR_RESET "\033[0m"
@@ -211,6 +223,205 @@ static void test_separator_spaces_between(void) {
 }
 
 /* ==================================================================
+ * markdown_code_fence tests
+ * ================================================================== */
+
+static void test_code_fence_simple(void) {
+    const char *name = "code_fence_simple";
+    const char *line = "```";
+    int r = markdown_code_fence(line, strlen(line));
+    print_test_result(name, r == 1);
+}
+
+static void test_code_fence_with_language(void) {
+    const char *name = "code_fence_with_language";
+    const char *line = "```sql";
+    int r = markdown_code_fence(line, strlen(line));
+    print_test_result(name, r == 1);
+}
+
+static void test_code_fence_with_content_no_space(void) {
+    /* Fences can have content immediately after backticks */
+    const char *name = "code_fence_with_content_no_space";
+    const char *line = "```WITH lots AS (";
+    int r = markdown_code_fence(line, strlen(line));
+    print_test_result(name, r == 1);
+}
+
+static void test_code_fence_leading_whitespace(void) {
+    const char *name = "code_fence_leading_whitespace";
+    const char *line = "   ```python";
+    int r = markdown_code_fence(line, strlen(line));
+    print_test_result(name, r == 1);
+}
+
+static void test_code_fence_not_fence(void) {
+    const char *name = "code_fence_not_fence";
+    const char *line = "`` only two ticks";
+    int r = markdown_code_fence(line, strlen(line));
+    print_test_result(name, r == 0);
+}
+
+static void test_code_fence_inline_ticks(void) {
+    const char *name = "code_fence_inline_ticks";
+    const char *line = "some ```code``` here";
+    int r = markdown_code_fence(line, strlen(line));
+    print_test_result(name, r == 0);
+}
+
+static void test_code_fence_empty(void) {
+    const char *name = "code_fence_empty";
+    const char *line = "";
+    int r = markdown_code_fence(line, strlen(line));
+    print_test_result(name, r == 0);
+}
+
+static void test_code_fence_null(void) {
+    const char *name = "code_fence_null";
+    int r = markdown_code_fence(NULL, 0);
+    print_test_result(name, r == 0);
+}
+
+/* ==================================================================
+ * Italic underscore word boundary tests
+ * ================================================================== */
+
+static void test_italic_underscore_simple(void) {
+    const char *name = "italic_underscore_simple";
+    const char *text = "_italic_";
+    const char *close = find_italic_underscore(text, strlen(text));
+    print_test_result(name, close != NULL && close == text + 7);
+}
+
+static void test_italic_underscore_intra_word(void) {
+    /* Intra-word underscore should NOT be treated as emphasis */
+    const char *name = "italic_underscore_intra_word";
+    const char *text = "quantity_bought";
+    const char *close = find_italic_underscore(text, strlen(text));
+    print_test_result(name, close == NULL);
+}
+
+static void test_italic_underscore_snake_case(void) {
+    const char *name = "italic_underscore_snake_case";
+    const char *text = "purchase_timestamp";
+    const char *close = find_italic_underscore(text, strlen(text));
+    print_test_result(name, close == NULL);
+}
+
+static void test_italic_underscore_after_space(void) {
+    const char *name = "italic_underscore_after_space";
+    const char *text = "word _italic_ word";
+    const char *close = find_italic_underscore(text + 5, 8);
+    print_test_result(name, close != NULL && close == text + 12);
+}
+
+static void test_italic_underscore_at_start(void) {
+    const char *name = "italic_underscore_at_start";
+    const char *text = "_start_";
+    const char *close = find_italic_underscore(text, strlen(text));
+    print_test_result(name, close != NULL && close == text + 6);
+}
+
+static void test_italic_underscore_no_close(void) {
+    const char *name = "italic_underscore_no_close";
+    const char *text = "_no_close";
+    const char *close = find_italic_underscore(text, strlen(text));
+    print_test_result(name, close == NULL);
+}
+
+static void test_italic_underscore_followed_by_alnum(void) {
+    /* Closing _ followed by alphanumeric should not match */
+    const char *name = "italic_underscore_followed_by_alnum";
+    const char *text = "_test_x";
+    const char *close = find_italic_underscore(text, strlen(text));
+    print_test_result(name, close == NULL);
+}
+
+/* ==================================================================
+ * Italic star word boundary tests
+ * ================================================================== */
+
+static void test_italic_star_simple(void) {
+    const char *name = "italic_star_simple";
+    const char *text = "*italic*";
+    const char *close = find_italic_star(text, strlen(text));
+    print_test_result(name, close != NULL && close == text + 7);
+}
+
+static void test_italic_star_intra_word(void) {
+    /* Intra-word star should NOT be treated as emphasis */
+    const char *name = "italic_star_intra_word";
+    const char *text = "quantity*bought";
+    const char *close = find_italic_star(text, strlen(text));
+    print_test_result(name, close == NULL);
+}
+
+static void test_italic_star_after_space(void) {
+    const char *name = "italic_star_after_space";
+    const char *text = "word *italic* word";
+    const char *close = find_italic_star(text + 5, 8);
+    print_test_result(name, close != NULL && close == text + 12);
+}
+
+static void test_italic_star_at_start(void) {
+    const char *name = "italic_star_at_start";
+    const char *text = "*start*";
+    const char *close = find_italic_star(text, strlen(text));
+    print_test_result(name, close != NULL && close == text + 6);
+}
+
+static void test_italic_star_no_close(void) {
+    const char *name = "italic_star_no_close";
+    const char *text = "*no_close";
+    const char *close = find_italic_star(text, strlen(text));
+    print_test_result(name, close == NULL);
+}
+
+static void test_italic_star_followed_by_alnum(void) {
+    /* Closing * followed by alphanumeric should not match */
+    const char *name = "italic_star_followed_by_alnum";
+    const char *text = "*test*x";
+    const char *close = find_italic_star(text, strlen(text));
+    print_test_result(name, close == NULL);
+}
+
+/* ==================================================================
+ * Bold underscore tests
+ * ================================================================== */
+
+static void test_bold_underscore_simple(void) {
+    const char *name = "bold_underscore_simple";
+    const char *text = "__bold__";
+    const char *close = find_bold_underscores(text, strlen(text));
+    print_test_result(name, close != NULL && close == text + 6);
+}
+
+static void test_bold_underscore_no_close(void) {
+    const char *name = "bold_underscore_no_close";
+    const char *text = "__no_close";
+    const char *close = find_bold_underscores(text, strlen(text));
+    print_test_result(name, close == NULL);
+}
+
+/* ==================================================================
+ * Bold star tests
+ * ================================================================== */
+
+static void test_bold_star_simple(void) {
+    const char *name = "bold_star_simple";
+    const char *text = "**bold**";
+    const char *close = find_bold_stars(text, strlen(text));
+    print_test_result(name, close != NULL && close == text + 6);
+}
+
+static void test_bold_star_no_close(void) {
+    const char *name = "bold_star_no_close";
+    const char *text = "**no_close";
+    const char *close = find_bold_stars(text, strlen(text));
+    print_test_result(name, close == NULL);
+}
+
+/* ==================================================================
  * Integration-style tests: detecting tables from multi-line text
  * ================================================================== */
 
@@ -311,8 +522,8 @@ static void test_detect_multi_col_table(void) {
  * ================================================================== */
 
 int main(void) {
-    printf(COLOR_CYAN "Running Markdown Table Detection Tests\n" COLOR_RESET);
-    printf("======================================\n\n");
+    printf(COLOR_CYAN "Running Markdown Render Tests\n" COLOR_RESET);
+    printf("=============================\n\n");
 
     /* --- markdown_is_table_row --- */
     printf("--- markdown_is_table_row ---\n");
@@ -340,6 +551,46 @@ int main(void) {
     test_separator_empty();
     test_separator_null();
     test_separator_spaces_between();
+
+    /* --- markdown_code_fence --- */
+    printf("\n--- markdown_code_fence ---\n");
+    test_code_fence_simple();
+    test_code_fence_with_language();
+    test_code_fence_with_content_no_space();
+    test_code_fence_leading_whitespace();
+    test_code_fence_not_fence();
+    test_code_fence_inline_ticks();
+    test_code_fence_empty();
+    test_code_fence_null();
+
+    /* --- find_italic_underscore --- */
+    printf("\n--- find_italic_underscore ---\n");
+    test_italic_underscore_simple();
+    test_italic_underscore_intra_word();
+    test_italic_underscore_snake_case();
+    test_italic_underscore_after_space();
+    test_italic_underscore_at_start();
+    test_italic_underscore_no_close();
+    test_italic_underscore_followed_by_alnum();
+
+    /* --- find_italic_star --- */
+    printf("\n--- find_italic_star ---\n");
+    test_italic_star_simple();
+    test_italic_star_intra_word();
+    test_italic_star_after_space();
+    test_italic_star_at_start();
+    test_italic_star_no_close();
+    test_italic_star_followed_by_alnum();
+
+    /* --- find_bold_underscores --- */
+    printf("\n--- find_bold_underscores ---\n");
+    test_bold_underscore_simple();
+    test_bold_underscore_no_close();
+
+    /* --- find_bold_stars --- */
+    printf("\n--- find_bold_stars ---\n");
+    test_bold_star_simple();
+    test_bold_star_no_close();
 
     /* --- Integration tests --- */
     printf("\n--- integration / cross-checks ---\n");

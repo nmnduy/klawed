@@ -3373,7 +3373,7 @@ $(TEST_FILE_SEARCH_TARGET): $(FILE_SEARCH_SRC) $(TEST_FILE_SEARCH_SRC) $(LOGGER_
 $(TEST_MARKDOWN_RENDER_TARGET): src/markdown_render.c $(TEST_MARKDOWN_RENDER_SRC)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Markdown render test..."
-	@$(CC) $(CFLAGS) -I./src -o $(TEST_MARKDOWN_RENDER_TARGET) $(TEST_MARKDOWN_RENDER_SRC) src/markdown_render.c $(LDFLAGS)
+	@$(CC) $(CFLAGS) -DTEST_BUILD -I./src -o $(TEST_MARKDOWN_RENDER_TARGET) $(TEST_MARKDOWN_RENDER_SRC) src/markdown_render.c $(LDFLAGS)
 	@echo ""
 	@echo "✓ Markdown render test build successful!"
 

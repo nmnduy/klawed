@@ -13,11 +13,23 @@
 #include <ctype.h>
 #include <string.h>
 
+/* Forward declarations for test builds */
+#ifdef TEST_BUILD
+const char *find_bold_stars(const char *start, size_t len);
+const char *find_bold_underscores(const char *start, size_t len);
+const char *find_italic_star(const char *start, size_t len);
+const char *find_italic_underscore(const char *start, size_t len);
+#endif
+
 /* ============================================================================
  * Inline markdown helpers
  * ============================================================================ */
 
+#ifdef TEST_BUILD
+const char *find_bold_stars(const char *start, size_t len) {
+#else
 static const char *find_bold_stars(const char *start, size_t len) {
+#endif
     const char *p = start + 2;
     const char *end = start + len;
 
@@ -32,7 +44,11 @@ static const char *find_bold_stars(const char *start, size_t len) {
     return NULL;
 }
 
+#ifdef TEST_BUILD
+const char *find_bold_underscores(const char *start, size_t len) {
+#else
 static const char *find_bold_underscores(const char *start, size_t len) {
+#endif
     const char *p = start + 2;
     const char *end = start + len;
 
@@ -47,14 +63,21 @@ static const char *find_bold_underscores(const char *start, size_t len) {
     return NULL;
 }
 
+#ifdef TEST_BUILD
+const char *find_italic_star(const char *start, size_t len) {
+#else
 static const char *find_italic_star(const char *start, size_t len) {
+#endif
     const char *p = start + 1;
     const char *end = start + len;
 
     while (p < end) {
         if (p[0] == '*' && (p + 1 >= end || p[1] != '*')) {
             if ((size_t)(p - start) > 1) {
-                return p;
+                /* Closing delimiter: next char must be end-of-string or non-alphanumeric */
+                if (p + 1 >= end || !isalnum((unsigned char)p[1])) {
+                    return p;
+                }
             }
         }
         p++;
@@ -62,14 +85,21 @@ static const char *find_italic_star(const char *start, size_t len) {
     return NULL;
 }
 
+#ifdef TEST_BUILD
+const char *find_italic_underscore(const char *start, size_t len) {
+#else
 static const char *find_italic_underscore(const char *start, size_t len) {
+#endif
     const char *p = start + 1;
     const char *end = start + len;
 
     while (p < end) {
         if (p[0] == '_' && (p + 1 >= end || p[1] != '_')) {
             if ((size_t)(p - start) > 1) {
-                return p;
+                /* Closing delimiter: next char must be end-of-string or non-alphanumeric */
+                if (p + 1 >= end || !isalnum((unsigned char)p[1])) {
+                    return p;
+                }
             }
         }
         p++;
@@ -260,9 +290,21 @@ void markdown_render_inline(TUIState *tui, const char *line, size_t len, int bas
         } else if (remaining >= 2 && p[0] == '~' && p[1] == '~') {
             md_render_strike(pad, &p, remaining, base_pair);
         } else if (p[0] == '*') {
-            md_render_italic_star(pad, &p, remaining, base_pair);
+            /* Skip if preceded by alphanumeric (intra-word star is not emphasis) */
+            if (p > line && isalnum((unsigned char)p[-1])) {
+                md_output_plain(pad, p, 1);
+                p++;
+            } else {
+                md_render_italic_star(pad, &p, remaining, base_pair);
+            }
         } else if (p[0] == '_') {
-            md_render_italic_underscore(pad, &p, remaining, base_pair);
+            /* Skip if preceded by alphanumeric (intra-word underscore is not emphasis) */
+            if (p > line && isalnum((unsigned char)p[-1])) {
+                md_output_plain(pad, p, 1);
+                p++;
+            } else {
+                md_render_italic_underscore(pad, &p, remaining, base_pair);
+            }
         } else if (p[0] == '`') {
             md_render_code(pad, &p, remaining, base_pair);
         } else {
