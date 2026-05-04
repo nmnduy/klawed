@@ -85,15 +85,28 @@ This produces `klawed_browser_controller` binary.
 
 ### Step 3: Install the native host
 
+**Linux:**
+
 ```bash
 cd chrome_extension_native_messaging/host
 make install EXTENSION_ID=abcdefghijklmnopqrstuvwxyzabcdef
 ```
 
-This:
 - Installs the binary to `~/.local/bin/klawed_browser_controller`
 - Writes the native messaging manifest to `~/.config/google-chrome/NativeMessagingHosts/`
 - Also installs for Chromium if it exists
+
+**macOS:**
+
+```bash
+cd chrome_extension_native_messaging/host
+make build
+./install-macos.sh abcdefghijklmnopqrstuvwxyzabcdef
+```
+
+- Installs the binary to `~/.local/bin/klawed_browser_controller`
+- Writes the native messaging manifest to `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`
+- Also installs for Chrome Canary, Chromium, and Brave if they exist
 
 ### Step 4: Connect the extension
 
@@ -254,15 +267,17 @@ The Chrome extension is not connected. Click the 🤖 icon in Chrome and click *
 
 ### "Failed to connect to native host" (in Chrome)
 1. Verify the binary exists: `ls ~/.local/bin/klawed_browser_controller`
-2. Check the manifest: `cat ~/.config/google-chrome/NativeMessagingHosts/com.klawed.browser_controller.json`
+2. Check the manifest:
+   - **Linux:** `cat ~/.config/google-chrome/NativeMessagingHosts/com.klawed.browser_controller.json`
+   - **macOS:** `cat "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.klawed.browser_controller.json"`
 3. Verify the Extension ID in the manifest matches your extension
 4. Check the log: `tail -f /tmp/klawed-browser-host.log`
 
 ### Extension ID mismatch
 After reinstalling the extension, the ID changes. Re-run:
-```bash
-make install EXTENSION_ID=<new-id>
-```
+- **Linux:** `make install EXTENSION_ID=<new-id>`
+- **macOS:** `./install-macos.sh <new-id>`
+
 Then reload Chrome.
 
 ### Timeout errors
