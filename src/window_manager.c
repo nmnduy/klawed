@@ -602,8 +602,10 @@ void window_manager_refresh_all(WindowManager *wm) {
 
     window_manager_refresh_conversation(wm);
     window_manager_refresh_status(wm);
-    // Ensure the padding region (if any) stays clean
+    // Ensure the padding region (if any) stays clean, then
+    // refresh TODO over it (TODO lives in the same gap area)
     clear_gap_between_status_and_input(wm);
+    window_manager_refresh_todo(wm);
     window_manager_refresh_input(wm);
     refresh();  // Refresh stdscr
     doupdate(); // Update physical screen

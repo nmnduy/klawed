@@ -195,6 +195,11 @@ typedef struct TUIStateStruct {
     // TODO list display state
     int todo_display_active;          // Whether TODO list is being displayed
     int todo_display_scroll_offset;   // Scroll offset for TODO list
+    // TODO banner render cache — skip re-render when state unchanged
+    size_t todo_banner_last_in_progress;
+    size_t todo_banner_last_pending;
+    size_t todo_banner_last_completed;
+    int todo_banner_last_was_visible; // 1 if last render showed the banner
 
     // Cursor position for normal mode
     int normal_cursor_line;           // Current line in conversation (0-indexed)

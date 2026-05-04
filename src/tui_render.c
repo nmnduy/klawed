@@ -2546,6 +2546,14 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     size_t total_count = in_progress_count + pending_count + completed_count;
     size_t incomplete_count = in_progress_count + pending_count;
 
+    // Skip re-render if TODO state hasn't changed since last render
+    if (in_progress_count == tui->todo_banner_last_in_progress &&
+        pending_count     == tui->todo_banner_last_pending &&
+        completed_count   == tui->todo_banner_last_completed) {
+        // Visibility hasn't changed either — return cached result
+        return tui->todo_banner_last_was_visible;
+    }
+
     // If no todos at all, or all todos are completed, hide the TODO window
     if (total_count == 0 || incomplete_count == 0) {
         if (tui->wm.todo_win) {
@@ -2553,6 +2561,11 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
             // Refresh to clear the hidden window from screen
             window_manager_refresh_all(&tui->wm);
         }
+        // Update cache for "no banner" state
+        tui->todo_banner_last_in_progress = in_progress_count;
+        tui->todo_banner_last_pending     = pending_count;
+        tui->todo_banner_last_completed   = completed_count;
+        tui->todo_banner_last_was_visible = 0;
         return 0;
     }
 
@@ -2745,7 +2758,13 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
         }
     }
 
-    wnoutrefresh(win);
+    window_manager_refresh_todo(&tui->wm);
+
+    // Update render cache after successful banner render
+    tui->todo_banner_last_in_progress = in_progress_count;
+    tui->todo_banner_last_pending     = pending_count;
+    tui->todo_banner_last_completed   = completed_count;
+    tui->todo_banner_last_was_visible = 1;
 
     return 1;
 }
