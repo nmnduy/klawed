@@ -42,7 +42,7 @@
 #define INPUT_BUFFER_SIZE 8192
 #define INPUT_WIN_MIN_HEIGHT 2
 #define INPUT_WIN_MAX_HEIGHT_PERCENT 20
-#define CONV_WIN_PADDING 0
+#define CONV_WIN_PADDING 1
 #define STATUS_WIN_HEIGHT 1
 
 // Convert RGB (0-255) to ncurses color (0-1000)

@@ -18,8 +18,8 @@ const WindowManagerConfig DEFAULT_WINDOW_CONFIG = {
     .min_input_height = 2,  // Minimum content lines (no borders)
     .max_input_height = 5,  // Maximum content lines (no borders)
     .status_height = 1,
-    // No gap between status and input by default
-    .padding = 0,
+    // 1 blank line gap between conversation viewport and bottom windows
+    .padding = 1,
     .conv_h_padding = 0,    // No right padding (scrollbar removed)
     .initial_pad_capacity = 1000,
     .max_todo_height = 5    // Maximum TODO window height

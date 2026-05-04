@@ -52,7 +52,7 @@
 #define INPUT_BUFFER_SIZE 8192
 #define INPUT_WIN_MIN_HEIGHT 2  // Min height for input window (content lines, no borders)
 #define INPUT_WIN_MAX_HEIGHT_PERCENT 20  // Max height as percentage of viewport
-#define CONV_WIN_PADDING 0      // No padding between conv window and input window
+#define CONV_WIN_PADDING 1      // 1 blank line between conversation and bottom windows
 #define STATUS_WIN_HEIGHT 1     // Single-line status window
 #define TUI_MAX_MESSAGES_PER_FRAME 10  // Max messages processed per frame
 
