@@ -280,6 +280,30 @@ When this happens, the `navigate` command will return an error like:
 - Manually dismiss the dialog in the browser and retry
 - Use `click` to submit the form and let the page navigate naturally
 
+### Content Security Policy (CSP) blocks `evaluate`
+
+Many modern websites (GitHub, Twitter/X, Stripe, etc.) serve a strict `Content-Security-Policy` header that **forbids `eval()`**. The Chrome extension's `evaluate` command injects a function that calls `eval(code)` in the page's MAIN world, so on CSP-locked pages it will fail with an error like:
+
+```
+Refused to evaluate a string as JavaScript because 'unsafe-eval' is not an allowed source of script
+```
+
+Chrome extensions **cannot bypass CSP** via `chrome.scripting.executeScript`. This is a hard browser security boundary.
+
+**Workaround — use `web_browse_agent` instead:**
+
+The Playwright-based `web_browse_agent` (in `tools/web_browse_agent/`) enables `BypassCSP` by default, so its `eval` command works on CSP-locked pages:
+
+```bash
+# Start a session
+web_browse_agent --session mysession open https://github.com
+
+# Evaluate JS — this works even on CSP-strict pages
+web_browse_agent --session mysession eval "document.title"
+```
+
+For klawed, use the `web_search` / `web_read` explore tools (requires `KLAWED_EXPLORE_MODE=1`) or invoke `web_browse_agent` directly via the `Bash` tool.
+
 ## Troubleshooting
 
 ### "Socket not found"
