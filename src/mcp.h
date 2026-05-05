@@ -12,7 +12,7 @@
  * - Seamless integration with existing klawed tool system
  * - Configuration via JSON config file
  *
- * Configuration example (~/.config/klawed/mcp_servers.json):
+ * Configuration example (~/.klawed/mcp_servers.json):
  * {
  *   "mcpServers": {
  *     "filesystem": {
@@ -143,7 +143,7 @@ void mcp_cleanup(void);
  * Load MCP server configuration from JSON file
  * Config file format follows Claude Desktop's mcp_servers.json format
  *
- * Default location: ~/.config/klawed/mcp_servers.json
+ * Default location: ~/.klawed/mcp_servers.json
  * Can be overridden with KLAWED_MCP_CONFIG env var
  *
  * Returns: MCPConfig* on success, NULL on error

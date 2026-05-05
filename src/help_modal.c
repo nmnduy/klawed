@@ -98,7 +98,7 @@ static const HelpLine help_content[] = {
     {NULL, "", "API history stored in ./.klawed/api_calls.db"},
     {NULL, "", "Themes: tender, dracula, gruvbox-dark, solarized-dark, atom-one-light"},
     {NULL, "", "Light themes: pencil-light, solarized-light, tomorrow"},
-    {NULL, "", "MCP servers configured in ~/.config/klawed/"},
+    {NULL, "", "MCP servers configured in ~/.klawed/"},
 };
 
 #define HELP_LINE_COUNT (sizeof(help_content) / sizeof(help_content[0]))

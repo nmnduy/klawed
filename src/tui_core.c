@@ -873,7 +873,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         "Interrupt long tool runs any time with Ctrl+C.",
         "Press Ctrl+F to open file search popup (fuzzy find files, supports Alt+B/F/D/⌫).",
         "Press Ctrl+R to open history search popup (fuzzy find previous commands).",        /* "Disable prompt caching with DISABLE_PROMPT_CACHING=1 if needed.", */
-        "MCP is disabled by default; enable with KLAWED_MCP_ENABLED=1 and configure servers in ~/.config/klawed/.",
+        "MCP is disabled by default; enable with KLAWED_MCP_ENABLED=1 and configure servers in ~/.klawed.",
         "Use /clear to clear conversation; /quit or /exit to leave.",
         "Use :help to see all available commands.",
         "Token usage stats shown in status bar when in Normal mode (Esc).",

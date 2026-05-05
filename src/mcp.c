@@ -160,7 +160,7 @@ MCPConfig* mcp_load_config(const char *config_path) {
             LOG_ERROR("MCP: Failed to allocate memory for default path");
             return NULL;
         }
-        snprintf(allocated_path, 1024, "%s/.config/klawed/mcp_servers.json", home);
+        snprintf(allocated_path, 1024, "%s/.klawed/mcp_servers.json", home);
         config_path = allocated_path;
     }
 
