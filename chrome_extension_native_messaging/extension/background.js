@@ -135,17 +135,35 @@ async function executeCommand(command, params) {
     case 'navigate': {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab) throw new Error('No active tab');
+      const originalUrl = tab.url;
       await chrome.tabs.update(tab.id, { url: params.url });
       // Wait for the page to load
       await waitForTabLoad(tab.id);
-      return { success: true, url: params.url };
+      // Verify navigation actually happened — beforeunload dialogs block it silently
+      const updatedTab = await chrome.tabs.get(tab.id);
+      if (updatedTab.url === originalUrl && originalUrl !== params.url) {
+        return {
+          success: false,
+          error: `Navigation to "${params.url}" was blocked. The page likely displayed a confirmation dialog (e.g. "Are you sure you want to leave this page?"). The tab is still at "${originalUrl}". There is no programmatic way to dismiss this dialog — you must interact with the browser manually or use a different approach.`,
+        };
+      }
+      return { success: true, url: updatedTab.url };
     }
 
     case 'navigateTab': {
       const tabId = params.tabId;
+      const tab = await chrome.tabs.get(tabId);
+      const originalUrl = tab.url;
       await chrome.tabs.update(tabId, { url: params.url });
       await waitForTabLoad(tabId);
-      return { success: true, tabId, url: params.url };
+      const updatedTab = await chrome.tabs.get(tabId);
+      if (updatedTab.url === originalUrl && originalUrl !== params.url) {
+        return {
+          success: false,
+          error: `Navigation to "${params.url}" was blocked. The page likely displayed a confirmation dialog (e.g. "Are you sure you want to leave this page?"). The tab is still at "${originalUrl}". There is no programmatic way to dismiss this dialog — you must interact with the browser manually or use a different approach.`,
+        };
+      }
+      return { success: true, tabId, url: updatedTab.url };
     }
 
     case 'goBack': {

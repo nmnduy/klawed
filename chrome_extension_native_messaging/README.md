@@ -260,6 +260,26 @@ browser_ctl eval "document.title"
 | `KLAWED_BROWSER_SOCKET` | `/tmp/klawed-browser.sock` | Unix socket path |
 | `KLAWED_BROWSER_LOG` | `/tmp/klawed-browser-host.log` | Go host log file |
 
+## Known Limitations
+
+### Navigation confirmation dialogs
+
+If a page has a half-filled form or an active `beforeunload` handler, the browser may display a confirmation dialog such as **"Are you sure you want to leave this page?"** when `navigate` is called. Chrome extensions **cannot programmatically dismiss** these dialogs for security reasons.
+
+When this happens, the `navigate` command will return an error like:
+
+```json
+{
+  "success": false,
+  "error": "Navigation to \"https://example.com\" was blocked. The page likely displayed a confirmation dialog..."
+}
+```
+
+**Workarounds:**
+- Use `evaluate` to clear the form or remove the `beforeunload` handler before navigating
+- Manually dismiss the dialog in the browser and retry
+- Use `click` to submit the form and let the page navigate naturally
+
 ## Troubleshooting
 
 ### "Socket not found"
