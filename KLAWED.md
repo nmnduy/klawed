@@ -199,6 +199,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_GREP_MAX_RESULTS` - Max grep results (default: 100)
   - `KLAWED_GREP_DISPLAY_LIMIT` - Max grep results to display in TUI (default: 20)
   - `KLAWED_GLOB_DISPLAY_LIMIT` - Max glob results to display in TUI (default: 10)
+  - `KLAWED_GLOB_MAX_RESULTS` - Max glob results to return to the AI (default: 200)
   - `KLAWED_BASH_TIMEOUT` - Timeout for bash commands in seconds (default: 30, 0=no timeout)
   - `KLAWED_SUBAGENT_LOG_LINE_MAX_CHARS` - Maximum characters per log line in CheckSubagentProgress (default: 12000)
   - `KLAWED_SUBAGENT_ENV_VARS` - Comma-separated list of KEY=VALUE pairs to set in subagent processes (e.g., "OPENAI_MODEL=gpt-4,DEBUG=1")

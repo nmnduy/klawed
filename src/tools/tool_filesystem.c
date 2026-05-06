@@ -589,6 +589,27 @@ cJSON* tool_multiedit(cJSON *params, ConversationState *state) {
 // ============================================================================
 
 /**
+ * Check if a directory should be excluded from recursive traversal.
+ * Matches common build/dependency directories excluded by Grep.
+ */
+static int is_excluded_dir(const char *name) {
+    static const char *excluded[] = {
+        ".git", ".svn", ".hg",
+        "node_modules", "bower_components", "vendor",
+        "build", "dist", "target",
+        ".cache", ".venv", "venv", "__pycache__",
+        ".klawed",
+        NULL
+    };
+    for (int i = 0; excluded[i] != NULL; i++) {
+        if (strcmp(name, excluded[i]) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/**
  * Check if a character matches a glob pattern component
  * Supports: * (match any sequence), ? (match single char)
  */
@@ -629,10 +650,13 @@ static int match_simple_glob(const char *filename, const char *pattern) {
  * rel_path: current relative path from base (or empty string for root)
  * file_pattern: the glob pattern to match (e.g., "*.tex")
  * files: cJSON array to add matches to
- * total_count: pointer to counter for total matches
+ * total_found: pointer to counter for total matches found (including truncated)
+ * returned_count: pointer to counter for matches actually added to array
+ * max_results: maximum matches to add to array
  */
 static void glob_recursive(const char *base_path, const char *rel_path,
-                           const char *file_pattern, cJSON *files, int *total_count) {
+                           const char *file_pattern, cJSON *files,
+                           int *total_found, int *returned_count, int max_results) {
     char current_dir[PATH_MAX];
     if (rel_path[0] == '\0') {
         strlcpy(current_dir, base_path, sizeof(current_dir));
@@ -654,6 +678,11 @@ static void glob_recursive(const char *base_path, const char *rel_path,
             continue;
         }
 
+        // Skip common build/dependency directories
+        if (is_excluded_dir(entry->d_name)) {
+            continue;
+        }
+
         char full_path[PATH_MAX];
         char new_rel_path[PATH_MAX];
         if (rel_path[0] == '\0') {
@@ -672,12 +701,16 @@ static void glob_recursive(const char *base_path, const char *rel_path,
 
         if (S_ISDIR(st.st_mode)) {
             // Recurse into subdirectory
-            glob_recursive(base_path, new_rel_path, file_pattern, files, total_count);
+            glob_recursive(base_path, new_rel_path, file_pattern, files,
+                           total_found, returned_count, max_results);
         } else if (S_ISREG(st.st_mode)) {
             // Check if file matches pattern
             if (match_simple_glob(entry->d_name, file_pattern)) {
-                cJSON_AddItemToArray(files, cJSON_CreateString(full_path));
-                (*total_count)++;
+                (*total_found)++;
+                if (*returned_count < max_results) {
+                    cJSON_AddItemToArray(files, cJSON_CreateString(full_path));
+                    (*returned_count)++;
+                }
             }
         }
     }
@@ -717,7 +750,19 @@ cJSON* tool_glob(cJSON *params, ConversationState *state) {
     const char *pattern = pattern_json->valuestring;
     cJSON *result = cJSON_CreateObject();
     cJSON *files = cJSON_CreateArray();
-    int total_count = 0;
+    int total_found = 0;
+    int returned_count = 0;
+    int truncated = 0;
+
+    // Get max results from environment (no AI parameter for Glob currently)
+    int max_results = 200;  // Default limit
+    const char *max_env = getenv("KLAWED_GLOB_MAX_RESULTS");
+    if (max_env) {
+        int max_val = atoi(max_env);
+        if (max_val > 0) {
+            max_results = max_val;
+        }
+    }
 
     // Check if pattern contains ** (recursive glob)
     // Standard glob() on macOS/BSD does not support **, so we handle it manually
@@ -739,11 +784,13 @@ cJSON* tool_glob(cJSON *params, ConversationState *state) {
         }
 
         // Search in main working directory
-        glob_recursive(state->working_dir, "", file_pattern, files, &total_count);
+        glob_recursive(state->working_dir, "", file_pattern, files,
+                       &total_found, &returned_count, max_results);
 
         // Search in additional working directories
         for (int dir_idx = 0; dir_idx < state->additional_dirs_count; dir_idx++) {
-            glob_recursive(state->additional_dirs[dir_idx], "", file_pattern, files, &total_count);
+            glob_recursive(state->additional_dirs[dir_idx], "", file_pattern, files,
+                           &total_found, &returned_count, max_results);
         }
     } else {
         // Use standard glob() for non-recursive patterns
@@ -754,10 +801,11 @@ cJSON* tool_glob(cJSON *params, ConversationState *state) {
         int ret = glob(full_pattern, GLOB_TILDE, NULL, &glob_result);
 
         if (ret == 0) {
-            for (size_t i = 0; i < glob_result.gl_pathc; i++) {
+            for (size_t i = 0; i < glob_result.gl_pathc && returned_count < max_results; i++) {
                 cJSON_AddItemToArray(files, cJSON_CreateString(glob_result.gl_pathv[i]));
-                total_count++;
+                returned_count++;
             }
+            total_found += (int)glob_result.gl_pathc;
             globfree(&glob_result);
         }
 
@@ -769,17 +817,32 @@ cJSON* tool_glob(cJSON *params, ConversationState *state) {
             ret = glob(full_pattern, GLOB_TILDE, NULL, &glob_result);
 
             if (ret == 0) {
-                for (size_t i = 0; i < glob_result.gl_pathc; i++) {
+                for (size_t i = 0; i < glob_result.gl_pathc && returned_count < max_results; i++) {
                     cJSON_AddItemToArray(files, cJSON_CreateString(glob_result.gl_pathv[i]));
-                    total_count++;
+                    returned_count++;
                 }
+                total_found += (int)glob_result.gl_pathc;
                 globfree(&glob_result);
             }
         }
     }
 
+    if (total_found > returned_count) {
+        truncated = 1;
+    }
+
     cJSON_AddItemToObject(result, "files", files);
-    cJSON_AddNumberToObject(result, "count", total_count);
+    cJSON_AddNumberToObject(result, "count", returned_count);
+    cJSON_AddNumberToObject(result, "total_matches", total_found);
+    cJSON_AddBoolToObject(result, "truncated", truncated);
+
+    if (truncated) {
+        char warning[256];
+        snprintf(warning, sizeof(warning),
+                 "Results truncated: showing %d/%d matches. Use KLAWED_GLOB_MAX_RESULTS to adjust limit, or refine your pattern.",
+                 returned_count, total_found);
+        cJSON_AddStringToObject(result, "warning", warning);
+    }
 
     return result;
 }
