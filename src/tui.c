@@ -171,6 +171,11 @@ void tui_update_terminal_title(TUIState *tui) {
 
     const char *workdir = tui->conversation_state
         ? tui->conversation_state->working_dir : NULL;
+    const char *dirname = NULL;
+    if (workdir) {
+        const char *last_slash = strrchr(workdir, '/');
+        dirname = last_slash ? last_slash + 1 : workdir;
+    }
 
     char title[256];
     int len;
@@ -188,8 +193,8 @@ void tui_update_terminal_title(TUIState *tui) {
         len = snprintf(title, sizeof(title), "%s", name);
     }
 
-    if (workdir && len > 0 && (size_t)len < sizeof(title)) {
-        snprintf(title + len, sizeof(title) - (size_t)len, " %s", workdir);
+    if (dirname && len > 0 && (size_t)len < sizeof(title)) {
+        snprintf(title + len, sizeof(title) - (size_t)len, " %s", dirname);
     }
 
     // OSC 0: set icon name and window title
