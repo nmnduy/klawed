@@ -100,7 +100,8 @@ typedef enum {
 typedef enum {
     RESPONSE_STYLE_BORDER,   // Left border '│ ' on each line (default)
     RESPONSE_STYLE_CARET,    // Leading '>>> ' caret, no wrapping borders
-    RESPONSE_STYLE_ROBOT     // Robot face header with left border
+    RESPONSE_STYLE_ROBOT,    // Robot face header with left border
+    RESPONSE_STYLE_CAT       // Cat face header '=^..^='
 } TUIResponseStyle;
 
 // AI thinking style (visual appearance of thinking/spinner indicator)

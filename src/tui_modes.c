@@ -793,13 +793,16 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
             break;
 
         case 'r':  // Toggle response style
-            // Cycle through border → caret → robot → border
+            // Cycle through border → caret → robot → cat → border
             if (tui->response_style == RESPONSE_STYLE_BORDER) {
                 tui->response_style = RESPONSE_STYLE_CARET;
                 tui_update_status(tui, "Response style: caret");
             } else if (tui->response_style == RESPONSE_STYLE_CARET) {
                 tui->response_style = RESPONSE_STYLE_ROBOT;
                 tui_update_status(tui, "Response style: robot");
+            } else if (tui->response_style == RESPONSE_STYLE_ROBOT) {
+                tui->response_style = RESPONSE_STYLE_CAT;
+                tui_update_status(tui, "Response style: cat");
             } else {
                 tui->response_style = RESPONSE_STYLE_BORDER;
                 tui_update_status(tui, "Response style: border");

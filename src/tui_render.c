@@ -1848,6 +1848,16 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
             // Fall through to write text normally (no border)
+        } else if (tui->response_style == RESPONSE_STYLE_CAT) {
+            // Cat style: print cat face header, then text with no border
+            if (has_colors()) {
+                wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
+            waddstr(tui->wm.conv_pad, "=^..^=\n");
+            if (has_colors()) {
+                wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
+            // Fall through to write text normally (no border)
         } else {
             // Caret style: leading '>>> ' prefix with no border
             if (has_colors()) {
@@ -1904,8 +1914,10 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         } else if (prefix && prefix[0] != '\0') {
             // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F)
             int is_tool_message = (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f');
-            // Check for reasoning messages: prefix starts with "⟨" (UTF-8: 0xE2 0x9F 0xA8)
-            int is_reasoning_message = (prefix[0] == '\xe2' && prefix[1] == '\x9f' && prefix[2] == '\xa8');
+            // Check for reasoning messages: prefix is "<Reasoning >>>" or "<<< Reasoning>"
+            int is_reasoning_message = (prefix[0] == '<' &&
+                                        (strcmp(prefix, "<Reasoning >>>") == 0 ||
+                                         strcmp(prefix, "<<< Reasoning>") == 0));
             if (is_tool_message || is_reasoning_message) {
                 // Tool or reasoning message: use dimmed color for text (tag keeps its color)
                 text_pair = NCURSES_PAIR_TOOL_DIM;

@@ -317,6 +317,16 @@ void tui_handle_resize(TUIState *tui) {
                     wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
                 }
                 // Fall through to normal text rendering below
+            } else if (tui->response_style == RESPONSE_STYLE_CAT) {
+                // Cat style: print cat face header, then text with no border
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+                waddstr(tui->wm.conv_pad, "=^..^=\n");
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+                // Fall through to normal text rendering below
             } else {
                 // Border style: left border decoration on each line
                 if (entry->text && entry->text[0] != '\0') {
