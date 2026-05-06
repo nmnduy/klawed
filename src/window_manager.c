@@ -92,6 +92,18 @@ static void clear_gap_between_status_and_input(WindowManager *wm) {
     if (y_end >= wm->screen_height) y_end = wm->screen_height - 1;
     if (y_start > y_end) return;
 
+    // If the TODO window is visible, don't clear its area — it will be
+    // refreshed separately via window_manager_refresh_todo. This avoids
+    // flicker and prevents stdscr from overwriting the TODO content.
+    if (wm->todo_win && wm->todo_height > 0) {
+        int todo_y = wm->screen_height - wm->input_height
+                     - wm->status_height - wm->todo_height;
+        if (todo_y > y_start) {
+            y_end = todo_y - 1;  // Only clear the gap above the TODO window
+            if (y_start > y_end) return;
+        }
+    }
+
     for (int y = y_start; y <= y_end; y++) {
         move(y, 0);
         clrtoeol();
@@ -605,9 +617,11 @@ void window_manager_refresh_all(WindowManager *wm) {
     // Ensure the padding region (if any) stays clean, then
     // refresh TODO over it (TODO lives in the same gap area)
     clear_gap_between_status_and_input(wm);
-    window_manager_refresh_todo(wm);
     window_manager_refresh_input(wm);
     refresh();  // Refresh stdscr
+    // Refresh TODO AFTER stdscr refresh so it stays on top and isn't
+    // overwritten by wnoutrefresh(stdscr) which clears the gap area.
+    window_manager_refresh_todo(wm);
     doupdate(); // Update physical screen
 }
 
