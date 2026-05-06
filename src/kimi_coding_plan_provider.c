@@ -151,9 +151,9 @@ static int kimi_streaming_event_handler(StreamEvent *event, void *userdata) {
                     if (reasoning && cJSON_IsString(reasoning) && reasoning->valuestring && reasoning->valuestring[0]) {
                         if (!ctx->reasoning_line_added && ctx->state) {
                             if (ctx->state->tui_queue) {
-                                post_tui_stream_start(ctx->state->tui_queue, "⟨Reasoning⟩", COLOR_PAIR_TOOL_DIM);
+                                post_tui_stream_start(ctx->state->tui_queue, "<Reasoning >>>", COLOR_PAIR_TOOL_DIM);
                             } else if (ctx->state->tui) {
-                                tui_add_conversation_line(ctx->state->tui, "⟨Reasoning⟩", "", COLOR_PAIR_TOOL_DIM);
+                                tui_add_conversation_line(ctx->state->tui, "<Reasoning >>>", "", COLOR_PAIR_TOOL_DIM);
                             }
                             ctx->reasoning_line_added = 1;
                         }

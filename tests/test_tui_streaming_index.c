@@ -369,7 +369,7 @@ static void test_streaming_with_reasoning(void) {
     tui_init_test(&tui);
 
     // Reasoning stream
-    stream_start(&tui, "⟨Reasoning⟩", COLOR_PAIR_TOOL);
+    stream_start(&tui, "<Reasoning >>>", COLOR_PAIR_TOOL);
     stream_append_tracked(&tui, "Thinking...");
     ASSERT_INT_EQ(tui.streaming_entry_index, 0, "Reasoning index should be 0");
 

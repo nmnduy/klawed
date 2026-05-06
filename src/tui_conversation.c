@@ -614,10 +614,9 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                     int is_tool_message = (last_entry->prefix[0] == '\xe2' &&
                                            last_entry->prefix[1] == '\x97' &&
                                            last_entry->prefix[2] == '\x8f');
-                    // Check for reasoning messages: prefix starts with "⟨" (UTF-8: 0xE2 0x9F 0xA8)
-                    int is_reasoning_message = (last_entry->prefix[0] == '\xe2' &&
-                                                 last_entry->prefix[1] == '\x9f' &&
-                                                 last_entry->prefix[2] == '\xa8');
+                    // Check for reasoning messages: prefix is "<Reasoning >>>"
+                    int is_reasoning_message = (last_entry->prefix &&
+                                                strcmp(last_entry->prefix, "<Reasoning >>>") == 0);
                     if (is_tool_message || is_reasoning_message) {
                         text_pair = NCURSES_PAIR_TOOL_DIM;
                     }
@@ -1052,7 +1051,10 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
                         case INTERNAL_TEXT:
                             // Display reasoning content first (if present) - for thinking models
                             if (content->reasoning_content && strlen(content->reasoning_content) > 0) {
-                                tui_add_conversation_line(tui, "⟨Reasoning⟩", content->reasoning_content, COLOR_PAIR_TOOL_DIM);
+                                tui_add_conversation_line(tui, "<Reasoning >>>", "", COLOR_PAIR_TOOL_DIM);
+                                tui_add_conversation_line(tui, "", content->reasoning_content, COLOR_PAIR_TOOL_DIM);
+                                tui_add_conversation_line(tui, "", "", COLOR_PAIR_TOOL_DIM);
+                                tui_add_conversation_line(tui, "<<< Reasoning>", "", COLOR_PAIR_TOOL_DIM);
                             }
                             // Display regular text content
                             if (content->text && strlen(content->text) > 0) {
