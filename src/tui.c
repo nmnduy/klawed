@@ -169,7 +169,11 @@ void tui_update_terminal_title(TUIState *tui) {
         name = "vltrn";
     }
 
+    const char *workdir = tui->conversation_state
+        ? tui->conversation_state->working_dir : NULL;
+
     char title[256];
+    int len;
     if (tui->status_spinner_active) {
         const spinner_variant_t *variant = status_spinner_variant();
         int frame_count = variant->count;
@@ -179,9 +183,13 @@ void tui_update_terminal_title(TUIState *tui) {
             frame_count = SPINNER_FRAME_COUNT;
         }
         const char *frame = frames[tui->status_spinner_frame % frame_count];
-        snprintf(title, sizeof(title), "%s %s", frame, name);
+        len = snprintf(title, sizeof(title), "%s %s", frame, name);
     } else {
-        snprintf(title, sizeof(title), "%s", name);
+        len = snprintf(title, sizeof(title), "%s", name);
+    }
+
+    if (workdir && len > 0 && (size_t)len < sizeof(title)) {
+        snprintf(title + len, sizeof(title) - (size_t)len, " %s", workdir);
     }
 
     // OSC 0: set icon name and window title
