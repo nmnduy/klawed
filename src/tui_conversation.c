@@ -541,7 +541,16 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                     // render_entry_to_pad. On wrapped lines, just let text flow.
                 } else {
                     // For non-bordered messages (reasoning, tools, etc.),
-                    // render the prefix first before writing text
+                    // render the prefix first before writing text.
+                    // Skip reasoning prefixes — they are block delimiters
+                    // (<Reasoning >>>, <<< Reasoning>), not per-line labels.
+                    int is_reasoning_prefix = last_entry->prefix &&
+                        (strncmp(last_entry->prefix, "<Reasoning", 10) == 0 ||
+                         strncmp(last_entry->prefix, "<<< Reasoning", 13) == 0);
+                    if (is_reasoning_prefix) {
+                        // Just write the text without repeating the prefix
+                        goto write_text_without_prefix;
+                    }
                     // Map TUIColorPair to ncurses color pair
                     int mapped_pair = NCURSES_PAIR_FOREGROUND;
                     switch (last_entry->color_pair) {
@@ -600,6 +609,7 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                 }
             }
 
+write_text_without_prefix:
             // Write the new text at current position
             if (use_bordered) {
                 // Use bordered streaming to handle wrapping with border
@@ -614,9 +624,9 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                     int is_tool_message = (last_entry->prefix[0] == '\xe2' &&
                                            last_entry->prefix[1] == '\x97' &&
                                            last_entry->prefix[2] == '\x8f');
-                    // Check for reasoning messages: prefix is "<Reasoning >>>"
+                    // Check for reasoning messages: prefix is REASONING_TAG_OPEN
                     int is_reasoning_message = (last_entry->prefix &&
-                                                strcmp(last_entry->prefix, "<Reasoning >>>") == 0);
+                                                strcmp(last_entry->prefix, REASONING_TAG_OPEN) == 0);
                     if (is_tool_message || is_reasoning_message) {
                         text_pair = NCURSES_PAIR_TOOL_DIM;
                     }
@@ -1051,10 +1061,10 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
                         case INTERNAL_TEXT:
                             // Display reasoning content first (if present) - for thinking models
                             if (content->reasoning_content && strlen(content->reasoning_content) > 0) {
-                                tui_add_conversation_line(tui, "<Reasoning >>>", "", COLOR_PAIR_TOOL_DIM);
+                                tui_add_conversation_line(tui, REASONING_TAG_OPEN, "", COLOR_PAIR_TOOL_DIM);
                                 tui_add_conversation_line(tui, "", content->reasoning_content, COLOR_PAIR_TOOL_DIM);
                                 tui_add_conversation_line(tui, "", "", COLOR_PAIR_TOOL_DIM);
-                                tui_add_conversation_line(tui, "<<< Reasoning>", "", COLOR_PAIR_TOOL_DIM);
+                                tui_add_conversation_line(tui, REASONING_TAG_CLOSE, "", COLOR_PAIR_TOOL_DIM);
                             }
                             // Display regular text content
                             if (content->text && strlen(content->text) > 0) {

@@ -67,6 +67,7 @@ typedef struct {
     ConversationState *state;
     int assistant_line_added;
     int reasoning_line_added;
+    int reasoning_closed;
 } OpenAIProviderStreamingContext;
 
 // Streaming context functions removed - using openai_streaming.h now
@@ -98,6 +99,19 @@ static int openai_streaming_event_handler(StreamEvent *event, void *userdata) {
                     cJSON *content = cJSON_GetObjectItem(delta, "content");
                     if (content && cJSON_IsString(content) && content->valuestring && content->valuestring[0]) {
                         if (!ctx->assistant_line_added) {
+                            // Close reasoning block if it was active
+                            if (ctx->reasoning_line_added && !ctx->reasoning_closed) {
+                                if (ctx->state) {
+                                    if (ctx->state->tui_queue) {
+                                        post_tui_message(ctx->state->tui_queue, TUI_MSG_ADD_LINE, "");
+                                        post_tui_message(ctx->state->tui_queue, TUI_MSG_ADD_LINE, REASONING_TAG_CLOSE);
+                                    } else if (ctx->state->tui) {
+                                        tui_add_conversation_line(ctx->state->tui, "", "", COLOR_PAIR_DEFAULT);
+                                        tui_add_conversation_line(ctx->state->tui, REASONING_TAG_CLOSE, "", COLOR_PAIR_TOOL_DIM);
+                                    }
+                                }
+                                ctx->reasoning_closed = 1;
+                            }
                             if (ctx->state) {
                                 if (ctx->state->tui_queue) {
                                     post_tui_stream_start(ctx->state->tui_queue, "[Assistant]", COLOR_PAIR_ASSISTANT);
@@ -127,9 +141,9 @@ static int openai_streaming_event_handler(StreamEvent *event, void *userdata) {
                         if (!ctx->reasoning_line_added) {
                             if (ctx->state) {
                                 if (ctx->state->tui_queue) {
-                                    post_tui_stream_start(ctx->state->tui_queue, "<Reasoning >>>", COLOR_PAIR_TOOL_DIM);
+                                    post_tui_stream_start(ctx->state->tui_queue, REASONING_TAG_OPEN, COLOR_PAIR_TOOL_DIM);
                                 } else if (ctx->state->tui) {
-                                    tui_add_conversation_line(ctx->state->tui, "<Reasoning >>>", "", COLOR_PAIR_TOOL_DIM);
+                                    tui_add_conversation_line(ctx->state->tui, REASONING_TAG_OPEN, "", COLOR_PAIR_TOOL_DIM);
                                 }
                             }
                             ctx->reasoning_line_added = 1;

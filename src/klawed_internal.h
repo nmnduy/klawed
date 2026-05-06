@@ -47,6 +47,10 @@
 #define MAX_BACKOFF_MS 60000             // Maximum backoff delay in milliseconds (60 seconds)
 #define BACKOFF_MULTIPLIER 2.0           // Exponential backoff multiplier
 
+// Reasoning block delimiter tags (used by streaming providers and conversation display)
+#define REASONING_TAG_OPEN  "<Reasoning >>>"
+#define REASONING_TAG_CLOSE "<<< Reasoning>"
+
 // ============================================================================
 // Forward Declarations
 // ============================================================================
