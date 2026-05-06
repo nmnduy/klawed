@@ -306,14 +306,25 @@ void tui_handle_resize(TUIState *tui) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_USER) | A_BOLD);
             }
         } else if (is_assistant_message) {
-            // Assistant message: use left border decoration (│) on each line
-            // with proper line wrapping
-            if (entry->text && entry->text[0] != '\0') {
-                render_text_with_left_border(tui, entry->text, NCURSES_PAIR_FOREGROUND,
-                                             NCURSES_PAIR_ASSISTANT_BORDER_BG, "│ ");
+            // Assistant message: check response style
+            if (tui->response_style == RESPONSE_STYLE_ROBOT) {
+                // Robot style: print face header, then text with no border
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+                waddstr(tui->wm.conv_pad, "  ┬ ┬\n┌[◉_◉]┐\n");
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+                // Fall through to normal text rendering below
+            } else {
+                // Border style: left border decoration on each line
+                if (entry->text && entry->text[0] != '\0') {
+                    render_text_with_left_border(tui, entry->text, NCURSES_PAIR_FOREGROUND,
+                                                 NCURSES_PAIR_ASSISTANT_BORDER_BG, "│ ");
+                }
+                continue;  // Skip regular text/newline handling below
             }
-
-            continue;  // Skip regular text/newline handling below
         } else {
             // Write prefix for other (non-user, non-assistant) messages
             if (entry->prefix && entry->prefix[0] != '\0') {

@@ -1838,6 +1838,16 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             render_text_with_left_border(tui, text, text_pair, mapped_pair, border_str);
 
             goto skip_newline;
+        } else if (tui->response_style == RESPONSE_STYLE_ROBOT) {
+            // Robot style: print robot face header, then text with no border
+            if (has_colors()) {
+                wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
+            waddstr(tui->wm.conv_pad, "  ┬ ┬\n┌[◉_◉]┐\n");
+            if (has_colors()) {
+                wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+            }
+            // Fall through to write text normally (no border)
         } else {
             // Caret style: leading '>>> ' prefix with no border
             if (has_colors()) {

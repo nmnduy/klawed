@@ -91,6 +91,8 @@ const char* config_response_style_to_string(TUIResponseStyle style) {
     switch (style) {
         case RESPONSE_STYLE_CARET:
             return "caret";
+        case RESPONSE_STYLE_ROBOT:
+            return "robot";
         case RESPONSE_STYLE_BORDER:
         default:
             return "border";
@@ -102,6 +104,8 @@ TUIResponseStyle config_response_style_from_string(const char *str) {
 
     if (strcmp(str, "caret") == 0) {
         return RESPONSE_STYLE_CARET;
+    } else if (strcmp(str, "robot") == 0) {
+        return RESPONSE_STYLE_ROBOT;
     }
     return RESPONSE_STYLE_BORDER;
 }
