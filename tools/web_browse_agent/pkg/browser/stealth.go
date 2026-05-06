@@ -64,11 +64,19 @@ func stealthUserAgent() string {
 	return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 }
 
+// bypassCSP returns true (pointer) for BypassCSP option.
+// Automation tools need to evaluate JS even on CSP-locked pages.
+func bypassCSP() *bool {
+	b := true
+	return &b
+}
+
 // stealthContextOptions returns BrowserNewContextOptions that help evade detection.
 func stealthContextOptions(proxy *playwright.Proxy) playwright.BrowserNewContextOptions {
 	opts := playwright.BrowserNewContextOptions{
 		UserAgent: playwright.String(stealthUserAgent()),
 		Locale:    playwright.String("en-US"),
+		BypassCSP: bypassCSP(),
 		// Mimic a real desktop viewport
 		Viewport: &playwright.Size{
 			Width:  1920,
@@ -106,6 +114,7 @@ func stealthPersistentContextOptions(
 			Height: 1080,
 		},
 		TimezoneId: playwright.String("America/New_York"),
+		BypassCSP:  bypassCSP(),
 		ExtraHttpHeaders: map[string]string{
 			"sec-ch-ua":          `"Chromium";v="136", "Not.A/Brand";v="8", "Google Chrome";v="136"`,
 			"sec-ch-ua-mobile":   "?0",

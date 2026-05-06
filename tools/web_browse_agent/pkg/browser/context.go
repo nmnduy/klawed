@@ -154,7 +154,8 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 			launchOptions = stealthPersistentContextOptions(config.Headless, chromiumPath, playwrightProxy)
 		} else {
 			launchOptions = playwright.BrowserTypeLaunchPersistentContextOptions{
-				Headless: playwright.Bool(config.Headless),
+				Headless:  playwright.Bool(config.Headless),
+				BypassCSP: bypassCSP(),
 			}
 			if chromiumPath != "" {
 				launchOptions.ExecutablePath = playwright.String(chromiumPath)
@@ -208,7 +209,9 @@ func NewBrowserContextWithConfig(config BrowserContextConfig) (*BrowserContext, 
 		if stealth {
 			ctxOptions = stealthContextOptions(playwrightProxy)
 		} else {
-			ctxOptions = playwright.BrowserNewContextOptions{}
+			ctxOptions = playwright.BrowserNewContextOptions{
+				BypassCSP: bypassCSP(),
+			}
 			if playwrightProxy != nil {
 				ctxOptions.Proxy = playwrightProxy
 			}
