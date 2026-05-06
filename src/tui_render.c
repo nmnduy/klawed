@@ -1998,6 +1998,7 @@ void redraw_conversation(TUIState *tui) {
     // Re-render all entries
     for (int i = 0; i < tui->entries_count; i++) {
         ConversationEntry *entry = &tui->entries[i];
+        entry->pad_start_line = window_manager_get_content_lines(&tui->wm);
         render_entry_to_pad(tui, entry->prefix, entry->text, entry->color_pair);
     }
 

@@ -75,6 +75,7 @@ typedef struct {
     char *prefix;            // Role prefix (e.g., "[User]", "[Assistant]")
     char *text;              // Message text
     TUIColorPair color_pair; // Color for display
+    int pad_start_line;      // Exact line where this entry starts in the current pad
 } ConversationEntry;
 
 // TUI Mode (Vim-like)

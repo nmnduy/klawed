@@ -79,6 +79,7 @@ static int add_conversation_entry(TUIState *tui, const char *prefix, const char 
     entry->prefix = prefix ? strdup(prefix) : NULL;
     entry->text = text ? strdup(text) : NULL;
     entry->color_pair = color_pair;
+    entry->pad_start_line = -1;
 
     if ((prefix && !entry->prefix) || (text && !entry->text)) {
         free(entry->prefix);
@@ -230,7 +231,9 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
             // Continue anyway - spacing is not critical
         } else {
             // Render the spacing line
+            int spacing_start = window_manager_get_content_lines(&tui->wm);
             render_entry_to_pad(tui, NULL, "", COLOR_PAIR_FOREGROUND);
+            tui->entries[tui->entries_count - 1].pad_start_line = spacing_start;
         }
     }
 
@@ -246,6 +249,7 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
         LOG_ERROR("[TUI] Failed to render entry to pad");
         return;
     }
+    tui->entries[tui->entries_count - 1].pad_start_line = start_line;
 
     int cur_y = window_manager_get_content_lines(&tui->wm);
     LOG_DEBUG("[TUI] Added line, total_lines now %d (estimated %d, actual %d)",
