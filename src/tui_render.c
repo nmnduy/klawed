@@ -1914,10 +1914,10 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         } else if (prefix && prefix[0] != '\0') {
             // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F)
             int is_tool_message = (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f');
-            // Check for reasoning messages: prefix is REASONING_TAG_OPEN or REASONING_TAG_CLOSE
+            // Check for reasoning messages: prefix is "<Reasoning >>>" or "<<< Reasoning>"
             int is_reasoning_message = (prefix[0] == '<' &&
-                                        (strcmp(prefix, REASONING_TAG_OPEN) == 0 ||
-                                         strcmp(prefix, REASONING_TAG_CLOSE) == 0));
+                                        (strcmp(prefix, "<Reasoning >>>") == 0 ||
+                                         strcmp(prefix, "<<< Reasoning>") == 0));
             if (is_tool_message || is_reasoning_message) {
                 // Tool or reasoning message: use dimmed color for text (tag keeps its color)
                 text_pair = NCURSES_PAIR_TOOL_DIM;

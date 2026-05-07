@@ -117,7 +117,6 @@ typedef struct {
     ConversationState *state;
     int reasoning_line_added;
     int assistant_line_added;
-    int reasoning_closed;
 } SubStreamingContext;
 
 static void sub_streaming_context_init(SubStreamingContext *ctx,
@@ -165,18 +164,8 @@ static int sub_streaming_event_handler(StreamEvent *event, void *userdata) {
     if (content && cJSON_IsString(content) && content->valuestring[0] != '\0') {
         const char *text = content->valuestring;
 
-        /* First text: close reasoning if active, then add assistant line */
+        /* First text: add assistant line to TUI */
         if (!ctx->assistant_line_added && ctx->state) {
-            if (ctx->reasoning_line_added && !ctx->reasoning_closed) {
-                if (ctx->state->tui_queue) {
-                    post_tui_message(ctx->state->tui_queue, TUI_MSG_ADD_LINE, "");
-                    post_tui_message(ctx->state->tui_queue, TUI_MSG_ADD_LINE, REASONING_TAG_CLOSE);
-                } else if (ctx->state->tui) {
-                    tui_add_conversation_line(ctx->state->tui, "", "", COLOR_PAIR_DEFAULT);
-                    tui_add_conversation_line(ctx->state->tui, REASONING_TAG_CLOSE, "", COLOR_PAIR_TOOL_DIM);
-                }
-                ctx->reasoning_closed = 1;
-            }
             if (ctx->state->tui_queue) {
                 post_tui_stream_start(ctx->state->tui_queue, "[Assistant]", COLOR_PAIR_ASSISTANT);
             } else if (ctx->state->tui) {
@@ -206,9 +195,9 @@ static int sub_streaming_event_handler(StreamEvent *event, void *userdata) {
     if (reasoning && cJSON_IsString(reasoning) && reasoning->valuestring[0] != '\0') {
         if (!ctx->reasoning_line_added && ctx->state) {
             if (ctx->state->tui_queue) {
-                post_tui_stream_start(ctx->state->tui_queue, REASONING_TAG_OPEN, COLOR_PAIR_TOOL_DIM);
+                post_tui_stream_start(ctx->state->tui_queue, "<Reasoning >>>", COLOR_PAIR_TOOL_DIM);
             } else if (ctx->state->tui) {
-                tui_add_conversation_line(ctx->state->tui, REASONING_TAG_OPEN, "", COLOR_PAIR_TOOL_DIM);
+                tui_add_conversation_line(ctx->state->tui, "<Reasoning >>>", "", COLOR_PAIR_TOOL_DIM);
             }
             ctx->reasoning_line_added = 1;
         }
