@@ -382,10 +382,11 @@ const char* tui_icon_todo_completed(void);
 // Returns 0 on success, -1 on error
 int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair);
 
-// Render text with a left border for assistant messages (rendering module)
-// Handles line wrapping by adding border at start of each new visual line
-void render_text_with_left_border(TUIState *tui, const char *text, int text_pair,
-                                  int border_pair, const char *border_str);
+// Render a markdown document to the conversation pad.
+// If border_str is non-NULL, each line is prefixed with the border.
+// If border_str is NULL, no border is drawn (caret-style).
+void render_markdown_document(TUIState *tui, const char *text, int text_pair,
+                              int border_pair, const char *border_str);
 
 // Render the status window (rendering module)
 void render_status_window(TUIState *tui);

@@ -1109,204 +1109,10 @@ static void render_md_header_segment(TUIState *tui, const char *segment, size_t 
 
 // Render text with inline markdown, handling line wrapping.
 // Used for caret-style assistant messages (no left border).
-static void render_caret_text_markdown(TUIState *tui, const char *text, int text_pair) {
-    WINDOW *pad = tui->wm.conv_pad;
-    int pad_width, pad_height;
-    getmaxyx(pad, pad_height, pad_width);
-    (void)pad_height;
-
-    int content_width = pad_width;
-    if (content_width < 1) content_width = 1;
-
-    const char *line_start = text;
-    const char *p = text;
-    int in_code_block = 0;
-
-    /* Table buffering state */
-    #define TABLE_BUF_MAX 64
-    const char *table_rows[TABLE_BUF_MAX];
-    size_t table_row_lens[TABLE_BUF_MAX];
-    size_t table_buf_count = 0;
-
-    while (*p) {
-        while (*p && *p != '\n') p++;
-
-        size_t line_len = (size_t)(p - line_start);
-
-        if (line_len == 0) {
-            /* Empty line flushes any buffered table */
-            if (table_buf_count > 0) {
-                markdown_render_table(tui, table_rows, table_row_lens,
-                                      table_buf_count, text_pair,
-                                      NULL, 0);
-                table_buf_count = 0;
-            }
-            if (*p == '\n') {
-                waddch(pad, '\n');
-                p++;
-            }
-            line_start = p;
-            continue;
-        }
-
-        int fence = markdown_code_fence(line_start, line_len);
-        int is_code_line = 0;
-
-        if (fence != 0) {
-            /* Flush table before code block */
-            if (table_buf_count > 0) {
-                int has_sep = 0;
-                for (size_t ti = 0; ti < table_buf_count; ti++) {
-                    if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
-                        has_sep = 1;
-                        break;
-                    }
-                }
-                if (has_sep) {
-                    markdown_render_table(tui, table_rows, table_row_lens,
-                                          table_buf_count, text_pair,
-                                          NULL, 0);
-                } else {
-                    for (size_t ti = 0; ti < table_buf_count; ti++) {
-                        markdown_render_inline(tui, table_rows[ti],
-                                               table_row_lens[ti], text_pair);
-                        waddch(pad, '\n');
-                    }
-                }
-                table_buf_count = 0;
-            }
-            in_code_block = !in_code_block;
-            is_code_line = 1;
-        } else if (in_code_block) {
-            is_code_line = 1;
-        }
-
-        /* Check if this is a table-related line (only when not in code block) */
-        if (!is_code_line) {
-            int is_row = markdown_is_table_row(line_start, line_len);
-
-            if (is_row) {
-                /* Buffer this row */
-                if (table_buf_count < TABLE_BUF_MAX) {
-                    table_rows[table_buf_count] = line_start;
-                    table_row_lens[table_buf_count] = line_len;
-                    table_buf_count++;
-                }
-                if (*p == '\n') p++;
-                line_start = p;
-                continue;
-            }
-
-            /* Non-table line: flush buffered table if it's valid */
-            if (table_buf_count > 0) {
-                /* Check if buffer contains a separator (valid table) */
-                int has_sep = 0;
-                for (size_t ti = 0; ti < table_buf_count; ti++) {
-                    if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
-                        has_sep = 1;
-                        break;
-                    }
-                }
-                if (has_sep) {
-                    markdown_render_table(tui, table_rows, table_row_lens,
-                                          table_buf_count, text_pair,
-                                          NULL, 0);
-                } else {
-                    /* Not a valid table, render as normal lines */
-                    for (size_t ti = 0; ti < table_buf_count; ti++) {
-                        markdown_render_inline(tui, table_rows[ti],
-                                               table_row_lens[ti], text_pair);
-                        waddch(pad, '\n');
-                    }
-                }
-                table_buf_count = 0;
-            }
-        }
-
-        /* Render this line */
-        int line_display_width;
-        char *tmp = malloc(line_len + 1);
-        if (tmp) {
-            memcpy(tmp, line_start, line_len);
-            tmp[line_len] = '\0';
-            line_display_width = utf8_display_width(tmp);
-            free(tmp);
-        } else {
-            line_display_width = (int)line_len;
-        }
-
-        if (is_code_line) {
-            if (line_display_width <= content_width) {
-                wattron(pad, A_DIM);
-                waddnstr(pad, line_start, (int)line_len);
-                wattroff(pad, A_DIM);
-            } else {
-                const char *chunk_start = line_start;
-                size_t remaining = line_len;
-                while (remaining > 0) {
-                    size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
-                    wattron(pad, A_DIM);
-                    waddnstr(pad, chunk_start, (int)chunk_bytes);
-                    wattroff(pad, A_DIM);
-                    chunk_start += chunk_bytes;
-                    remaining -= chunk_bytes;
-                    if (remaining > 0) {
-                        waddch(pad, '\n');
-                    }
-                }
-            }
-        } else {
-            if (line_display_width <= content_width) {
-                markdown_render_inline(tui, line_start, line_len, text_pair);
-            } else {
-                const char *chunk_start = line_start;
-                size_t remaining = line_len;
-                while (remaining > 0) {
-                    size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
-                    markdown_render_inline(tui, chunk_start, chunk_bytes, text_pair);
-                    chunk_start += chunk_bytes;
-                    remaining -= chunk_bytes;
-                    if (remaining > 0) {
-                        waddch(pad, '\n');
-                    }
-                }
-            }
-        }
-
-        if (*p == '\n') {
-            waddch(pad, '\n');
-            p++;
-        }
-        line_start = p;
-    }
-
-    /* Flush any remaining buffered table at end of text */
-    if (table_buf_count > 0) {
-        int has_sep = 0;
-        for (size_t ti = 0; ti < table_buf_count; ti++) {
-            if (markdown_is_table_separator(table_rows[ti], table_row_lens[ti])) {
-                has_sep = 1;
-                break;
-            }
-        }
-        if (has_sep) {
-            markdown_render_table(tui, table_rows, table_row_lens,
-                                  table_buf_count, text_pair,
-                                  NULL, 0);
-        } else {
-            for (size_t ti = 0; ti < table_buf_count; ti++) {
-                markdown_render_inline(tui, table_rows[ti],
-                                       table_row_lens[ti], text_pair);
-                waddch(pad, '\n');
-            }
-        }
-    }
-}
-
 // Render a markdown document to the conversation pad.
 // If border_str is non-NULL, each line is prefixed with the border.
 // If border_str is NULL, no border is drawn (caret-style).
-static void render_markdown_document(TUIState *tui, const char *text, int text_pair,
+void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                               int border_pair, const char *border_str) {
     if (!text || !text[0]) {
         return;
@@ -1606,14 +1412,6 @@ static void render_markdown_document(TUIState *tui, const char *text, int text_p
     }
 }
 
-/* Thin wrapper: render_text_with_left_border → render_markdown_document.
- * Preserves the original name for callers that haven't been updated yet. */
-void render_text_with_left_border(TUIState *tui, const char *text, int text_pair,
-                                  int border_pair, const char *border_str) {
-    render_markdown_document(tui, text, text_pair, border_pair, border_str);
-}
-
-
 
 int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
     if (!tui || !tui->wm.conv_pad) {
@@ -1698,14 +1496,21 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         free(tui->last_tool_name);
         tui->last_tool_name = NULL;
         // Assistant message: check response style
-        if (tui->response_style == RESPONSE_STYLE_BORDER) {
-            // Border style: use left border decoration (│ ) on each line
+        if (tui->response_style == RESPONSE_STYLE_BORDER || tui->response_style == RESPONSE_STYLE_CARET) {
             int text_pair = NCURSES_PAIR_FOREGROUND;
-            const char *border_str = "│ ";
-
-            // Render the text content with left border
-            render_text_with_left_border(tui, text, text_pair, mapped_pair, border_str);
-
+            if (tui->response_style == RESPONSE_STYLE_CARET) {
+                // Caret style: leading '>>> ' prefix with no border
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+                { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); (void)tui_safe_mvwaddnstr(tui->wm.conv_pad, cur_y, cur_x, ">>> ", (int)strlen(">>> ")); }
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+            }
+            const char *border_str = (tui->response_style == RESPONSE_STYLE_BORDER) ? "│ " : NULL;
+            int bp = (tui->response_style == RESPONSE_STYLE_BORDER) ? mapped_pair : 0;
+            render_markdown_document(tui, text, text_pair, bp, border_str);
             goto skip_newline;
         } else if (tui->response_style == RESPONSE_STYLE_ROBOT) {
             // Robot style: print robot face header, then text with no border
@@ -1727,16 +1532,6 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
             // Fall through to write text normally (no border)
-        } else {
-            // Caret style: leading '>>> ' prefix with no border
-            if (has_colors()) {
-                wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-            }
-            { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); (void)tui_safe_mvwaddnstr(tui->wm.conv_pad, cur_y, cur_x, ">>> ", (int)strlen(">>> ")); }
-            if (has_colors()) {
-                wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-            }
-            // Fall through to write text normally
         }
     } else {
         // Write prefix for other (non-user, non-assistant) messages
@@ -1777,9 +1572,6 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         if (is_user_message) {
             // User message: use foreground color (no background)
             text_pair = NCURSES_PAIR_FOREGROUND;
-        } else if (is_assistant_message && tui->response_style == RESPONSE_STYLE_CARET) {
-            // Caret-style assistant: use foreground color
-            text_pair = NCURSES_PAIR_FOREGROUND;
         } else if (prefix && prefix[0] != '\0') {
             // Check for tool messages: prefix starts with "●" or ""
             int is_tool_message = ((prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ||
@@ -1806,9 +1598,6 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         // Check if we have an active search pattern to highlight
         if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
             render_text_with_search_highlight(tui->wm.conv_pad, text, text_pair, tui->last_search_pattern, 0);
-        } else if (is_assistant_message && tui->response_style == RESPONSE_STYLE_CARET) {
-            // Caret-style assistant: render line by line with inline markdown
-            render_caret_text_markdown(tui, text, text_pair);
         } else {
             /* Use waddnstr directly to let ncurses handle line wrapping
              * (tui_safe_mvwaddnstr clips to remaining columns, truncating long text) */

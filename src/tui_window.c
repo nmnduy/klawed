@@ -327,13 +327,27 @@ void tui_handle_resize(TUIState *tui) {
                     wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
                 }
                 // Fall through to normal text rendering below
-            } else {
+            } else if (tui->response_style == RESPONSE_STYLE_BORDER) {
                 // Border style: left border decoration on each line
                 if (entry->text && entry->text[0] != '\0') {
-                    render_text_with_left_border(tui, entry->text, NCURSES_PAIR_FOREGROUND,
-                                                 NCURSES_PAIR_ASSISTANT_BORDER_BG, "│ ");
+                    render_markdown_document(tui, entry->text, NCURSES_PAIR_FOREGROUND,
+                                             NCURSES_PAIR_ASSISTANT_BORDER_BG, "│ ");
                 }
                 continue;  // Skip regular text/newline handling below
+            } else if (tui->response_style == RESPONSE_STYLE_CARET) {
+                // Caret style: leading '>>> ' prefix with no border
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+                waddstr(tui->wm.conv_pad, ">>> ");
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                }
+                if (entry->text && entry->text[0] != '\0') {
+                    render_markdown_document(tui, entry->text, NCURSES_PAIR_FOREGROUND,
+                                             0, NULL);
+                }
+                continue;
             }
         } else {
             // Write prefix for other (non-user, non-assistant) messages
