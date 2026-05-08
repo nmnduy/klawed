@@ -1914,7 +1914,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         } else if (prefix && prefix[0] != '\0') {
             // Check for tool messages: prefix starts with "●" or ""
             int is_tool_message = ((prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ||
-                                   (prefix[0] == '\xef' && prefix[1] == '\xa0' && prefix[2] == '\xad'));
+                                   (prefix[0] == '\xef' && prefix[1] == '\x82' && prefix[2] == '\xad'));
             // Check for reasoning messages
             int is_reasoning_message = (strcmp(prefix, tui_icon_reasoning_open()) == 0 ||
                                         strcmp(prefix, tui_icon_reasoning_close()) == 0);

@@ -616,7 +616,7 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                                             last_entry->prefix[1] == '\x97' &&
                                             last_entry->prefix[2] == '\x8f') ||
                                            (last_entry->prefix[0] == '\xef' &&
-                                            last_entry->prefix[1] == '\xa0' &&
+                                            last_entry->prefix[1] == '\x82' &&
                                             last_entry->prefix[2] == '\xad'));
                     // Check for reasoning messages: prefix is "<Reasoning >>>" or ""
                     int is_reasoning_message = (last_entry->prefix &&
@@ -742,7 +742,7 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
     }
     // Check for tool prefix "● ToolName" or " ToolName"
     if ((prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ||
-        (prefix[0] == '\xef' && prefix[1] == '\xa0' && prefix[2] == '\xad')) {
+        (prefix[0] == '\xef' && prefix[1] == '\x82' && prefix[2] == '\xad')) {
         return COLOR_PAIR_TOOL;
     }
     if (strstr(prefix, "Error")) {

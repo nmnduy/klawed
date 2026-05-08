@@ -1237,6 +1237,37 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
                 break;
             }
 
+            // Check for nerd font user/assistant/reasoning prefixes
+            const char *user_icon = tui_icon_user();
+            const char *assistant_icon = tui_icon_assistant();
+            const char *reasoning_open_icon = tui_icon_reasoning_open();
+            const char *reasoning_close_icon = tui_icon_reasoning_close();
+            if (strncmp(mutable_text, user_icon, 3) == 0 ||
+                strncmp(mutable_text, assistant_icon, 3) == 0 ||
+                strncmp(mutable_text, reasoning_open_icon, 3) == 0 ||
+                strncmp(mutable_text, reasoning_close_icon, 3) == 0) {
+                const char *content_start = mutable_text + 3;
+                while (*content_start == ' ') content_start++;
+
+                TUIColorPair color = COLOR_PAIR_DEFAULT;
+                if (strncmp(mutable_text, user_icon, 3) == 0) {
+                    color = COLOR_PAIR_USER;
+                } else if (strncmp(mutable_text, assistant_icon, 3) == 0) {
+                    color = COLOR_PAIR_ASSISTANT;
+                } else {
+                    color = COLOR_PAIR_TOOL_DIM;
+                }
+
+                char prefix[4];
+                prefix[0] = mutable_text[0];
+                prefix[1] = mutable_text[1];
+                prefix[2] = mutable_text[2];
+                prefix[3] = '\0';
+
+                tui_add_conversation_line(tui, prefix, content_start, color);
+                break;
+            }
+
             if (mutable_text[0] == '[') {
                 char *close = strchr(mutable_text, ']');
                 if (close) {
