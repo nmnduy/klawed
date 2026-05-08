@@ -194,7 +194,12 @@ void tui_update_terminal_title(TUIState *tui) {
     }
 
     if (dirname && len > 0 && (size_t)len < sizeof(title)) {
-        snprintf(title + len, sizeof(title) - (size_t)len, " %s", dirname);
+        const char *no_nerd_font = getenv("KLAWED_NO_NERD_FONT");
+        int use_nerd = !(no_nerd_font && (strcmp(no_nerd_font, "1") == 0 ||
+                                          strcasecmp(no_nerd_font, "true") == 0 ||
+                                          strcasecmp(no_nerd_font, "yes") == 0));
+        const char *icon = use_nerd ? "\xef\x81\xbb" : "\xf0\x9f\x93\x81";
+        snprintf(title + len, sizeof(title) - (size_t)len, " %s %s", icon, dirname);
     }
 
     // OSC 0: set icon name and window title

@@ -49,6 +49,8 @@ The binary is produced at `build/klawed`.
 make install  # installs to $HOME/.local/bin/klawed
 ```
 
+**For the best visual experience**, use a terminal with [Nerd Fonts](https://www.nerdfonts.com/) patched fonts. klawed uses a Nerd Font folder icon (``) in the terminal title by default. If you don't have a Nerd Font, set `KLAWED_NO_NERD_FONT=1` to fall back to a standard emoji (`📁`).
+
 ## Quick Start
 
 ```bash

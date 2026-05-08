@@ -215,6 +215,7 @@ export OPENAI_API_KEY="your-api-key"
 - **API Limits**:
   - `KLAWED_MAX_TOKENS` - Maximum tokens for completion (default: 16384)
 - **Theme**: `KLAWED_THEME` pointing to Kitty .conf file
+- **Terminal Title**: `KLAWED_NO_NERD_FONT=1` to fall back to a Unicode emoji (`📁`) instead of the default Nerd Font folder icon (``)
 - **MCP**: `KLAWED_MCP_ENABLED=1` to enable (disabled by default), `KLAWED_MCP_CONFIG` for config path
   - `KLAWED_MCP_INIT_TIMEOUT` - Timeout for MCP server initialization in seconds (default: 10, 0=no timeout, overrides config file)
   - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
