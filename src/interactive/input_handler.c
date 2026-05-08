@@ -297,14 +297,14 @@ int submit_input_callback(const char *input, void *user_data) {
 
             if (verdict.done) {
                 goal_mark_done(state, verdict.reason);
-                ui_show_status(tui, queue, "Goal achieved");
+                ui_set_status(tui, queue, "Goal achieved");
                 free(verdict.reason);
                 break;
             }
 
             if (state->goal->turns_used >= state->goal->max_turns) {
                 goal_pause(state, "turn budget exhausted");
-                ui_show_status(tui, queue, "Goal paused — turn budget exhausted");
+                ui_set_status(tui, queue, "Goal paused — turn budget exhausted");
                 free(verdict.reason);
                 break;
             }

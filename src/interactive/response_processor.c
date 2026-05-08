@@ -1083,14 +1083,14 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
 
         if (verdict.done) {
             goal_mark_done(ctx->state, verdict.reason);
-            ui_show_status(ctx->tui_queue, "Goal achieved");
+            ui_set_status(NULL, ctx->tui_queue, "Goal achieved");
             free(verdict.reason);
             break;
         }
 
         if (ctx->state->goal->turns_used >= ctx->state->goal->max_turns) {
             goal_pause(ctx->state, "turn budget exhausted");
-            ui_show_status(ctx->tui_queue, "Goal paused — turn budget exhausted");
+            ui_set_status(NULL, ctx->tui_queue, "Goal paused — turn budget exhausted");
             free(verdict.reason);
             break;
         }

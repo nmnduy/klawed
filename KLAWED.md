@@ -31,6 +31,7 @@ Project instructions for Klawed when working with this codebase.
 - **Memory system**: `src/memory_db.c`, `src/memory_db.h` (SQLite-based persistent memory with FTS5)
 - **Memory injection**: `src/context/memory_injection.c`, `src/context/memory_injection.h` (automatic context injection before each API request)
 - **Auto-compaction**: `src/compaction.c`, `src/compaction.h`, `docs/auto_compaction.md` (automatic context management with API token tracking)
+- **Ralph mode (standing goals)**: `src/goal.c`, `src/goal.h` (persistent cross-turn goals with judge evaluation and autonomous continuation)
 - **Perpetual mode**: `src/perpetual/`, `docs/perpetual-mode.md` (stateless+persistent mode: fresh context each request, growing `perpetual.md` log, root LLM orchestrates via Bash+Subagent tools)
 
 **Vendors:**
@@ -221,6 +222,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_MCP_REQUEST_TIMEOUT` - Timeout for MCP server requests in seconds (default: 30, 0=no timeout, overrides config file)
 - **Memory**: `KLAWED_MEMORY_PATH` for custom memory database location (default: `.klawed/memory.db`)
 - **Extra KLAWED.md**: `KLAWED_EXTRA_KLAWED_MD` - Path to an additional KLAWED.md file to append to the system prompt (e.g., `/workspace/KLAWED.md`). Useful for deployment environments that need to inject additional context.
+- **Goal/Ralph mode**: `KLAWED_GOAL_JUDGE_MODEL` - Override the judge model for goal evaluation (defaults to main model)
 - **Auto-compaction**: `KLAWED_AUTO_COMPACT` - Enable automatic context compaction (1/true/yes)
   - `KLAWED_COMPACT_THRESHOLD` - Trigger compaction at this % of model token limit (default: 75)
   - `KLAWED_COMPACT_KEEP_RECENT` - Keep this many recent messages after compaction (default: 0 — rely entirely on compaction notice)

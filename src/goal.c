@@ -54,23 +54,6 @@ static char *strndup_safe(const char *s, size_t n) {
     return d;
 }
 
-static const char *str_find_case(const char *haystack, const char *needle) {
-    if (!haystack || !needle) return NULL;
-    size_t hlen = strlen(haystack);
-    size_t nlen = strlen(needle);
-    if (nlen == 0) return haystack;
-    if (nlen > hlen) return NULL;
-    for (size_t i = 0; i <= hlen - nlen; i++) {
-        size_t j = 0;
-        for (; j < nlen; j++) {
-            if (tolower((unsigned char)haystack[i + j]) != tolower((unsigned char)needle[j]))
-                break;
-        }
-        if (j == nlen) return haystack + i;
-    }
-    return NULL;
-}
-
 /* ==========================================================================
  * Lifecycle
  * ========================================================================== */
@@ -316,9 +299,13 @@ GoalVerdict goal_judge(const ConversationState *state, const char *last_response
         verdict.reason = strdup("memory allocation failed");
         return verdict;
     }
+    /* Suppress -Wformat-nonliteral since JUDGE_USER_TEMPLATE is a trusted constant */
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wformat-nonliteral"
     snprintf(user_prompt, user_len, JUDGE_USER_TEMPLATE,
              (int)strlen(goal_snip), goal_snip,
              (int)strlen(resp_snip), resp_snip);
+    #pragma GCC diagnostic pop
 
     /* Build temporary conversation state for judge */
     ConversationState *judge_state = calloc(1, sizeof(ConversationState));
@@ -427,7 +414,10 @@ char *goal_build_continuation_prompt(const GoalState *goal) {
     size_t len = strlen(CONTINUATION_TEMPLATE) + strlen(goal->text) + 1;
     char *prompt = malloc(len);
     if (!prompt) return NULL;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wformat-nonliteral"
     snprintf(prompt, len, CONTINUATION_TEMPLATE, goal->text);
+    #pragma GCC diagnostic pop
     return prompt;
 }
 

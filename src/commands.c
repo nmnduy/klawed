@@ -15,6 +15,7 @@
 #include "config_command.h"
 #include "settings_menu.h"
 #include "compaction.h"
+#include "goal.h"
 #define COLORSCHEME_EXTERN
 #include "colorscheme.h"
 #include <bsd/string.h>
@@ -664,8 +665,6 @@ static int cmd_autocompact(ConversationState *state, const char *args) {
     LOG_INFO("[CMD_AUTOCOMPACT] %s", status_msg);
     return 0;
 }
-
-#include "goal.h"
 
 static int cmd_goal(ConversationState *state, const char *args) {
     if (!state) return -1;

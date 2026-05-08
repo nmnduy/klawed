@@ -26,7 +26,7 @@
 #define GOAL_STATUS_DONE     "done"
 #define GOAL_STATUS_CLEARED  "cleared"
 
-typedef struct {
+typedef struct GoalState {
     char *text;           /* Goal description (owned) */
     char *status;         /* active | paused | done | cleared */
     int turns_used;       /* Turns consumed toward this goal */

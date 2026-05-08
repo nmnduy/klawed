@@ -17,6 +17,7 @@ A fast, lightweight AI coding agent built entirely in C. Klawed provides a rich 
 - **Persistent memory** — SQLite-based long-term memory with FTS5 full-text search across sessions
 - **Secret redaction** — API keys, tokens, and passwords are automatically redacted in logs, TUI output, and tool results
 - **Auto-compaction** — Automatically archives old conversation context to keep within token limits
+- **Ralph mode** — Set a standing goal with `/goal` and let klawed work autonomously across turns until complete
 - **MCP support** — Connect to external Model Context Protocol servers for additional tools
 - **Web research** — Explore mode with DuckDuckGo search and Playwright-based page reading
 
@@ -192,6 +193,15 @@ KLAWED_AUTO_COMPACT=1 ./build/klawed
 ```
 
 See [docs/auto_compaction.md](docs/auto_compaction.md).
+
+### Ralph Mode (Standing Goals)
+
+Set a persistent goal and let klawed work on it autonomously across multiple turns. After each turn, a lightweight judge call evaluates progress. If the goal isn't done, a continuation prompt is fed back automatically. Works seamlessly with auto-compaction so context never runs out.
+
+- `/goal <text>` — set a new goal and start working immediately
+- `/goal status` — show goal, turns used, and budget
+- `/goal pause` / `resume` / `clear` — manage the goal loop
+- `KLAWED_GOAL_JUDGE_MODEL` — override the judge model (defaults to main model)
 
 ### Subagents
 

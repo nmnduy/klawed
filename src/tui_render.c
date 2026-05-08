@@ -1306,7 +1306,7 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
 // Render a markdown document to the conversation pad.
 // If border_str is non-NULL, each line is prefixed with the border.
 // If border_str is NULL, no border is drawn (caret-style).
-void render_markdown_document(TUIState *tui, const char *text, int text_pair,
+static void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                               int border_pair, const char *border_str) {
     if (!text || !text[0]) {
         return;
@@ -1604,6 +1604,13 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
     if (cur_x > 0) {
         (void)tui_safe_waddch(pad_final, '\n');
     }
+}
+
+/* Thin wrapper: render_text_with_left_border → render_markdown_document.
+ * Preserves the original name for callers that haven't been updated yet. */
+void render_text_with_left_border(TUIState *tui, const char *text, int text_pair,
+                                  int border_pair, const char *border_str) {
+    render_markdown_document(tui, text, text_pair, border_pair, border_str);
 }
 
 
