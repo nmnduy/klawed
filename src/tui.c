@@ -241,15 +241,15 @@ const char* tui_icon_tool(void) {
 }
 
 const char* tui_icon_todo_current(void) {
-    return tui_is_nerd_font_enabled() ? "\xef\x80\x93" : "\xe2\x96\xb6"; //  or ▶
+    return "\xe2\x96\xb6"; // ▶
 }
 
 const char* tui_icon_todo_pending(void) {
-    return tui_is_nerd_font_enabled() ? "\xef\x84\x91" : "\xe2\x97\x8b"; //  or ○
+    return "\xe2\x97\x8b"; // ○
 }
 
 const char* tui_icon_todo_completed(void) {
-    return tui_is_nerd_font_enabled() ? "\xef\x81\x98" : "\xe2\x97\x8e"; //  or ◎
+    return "\xe2\x97\x8e"; // ◎
 }
 
 // Initialize ncurses color pairs from our colorscheme
