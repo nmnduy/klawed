@@ -376,63 +376,79 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                     // Caret-style assistant: don't render prefix on continuation lines.
                     // The '>>> ' caret was already rendered on the first line by
                     // render_entry_to_pad. On wrapped lines, just let text flow.
-                } else {
-                    // For non-bordered messages (reasoning, tools, etc.),
-                    // render the prefix first before writing text
-                    // Map TUIColorPair to ncurses color pair
-                    int mapped_pair = NCURSES_PAIR_FOREGROUND;
-                    switch (last_entry->color_pair) {
-                        case COLOR_PAIR_DEFAULT:
-                        case COLOR_PAIR_FOREGROUND:
-                            mapped_pair = NCURSES_PAIR_FOREGROUND;
-                            break;
-                        case COLOR_PAIR_USER:
-                            mapped_pair = NCURSES_PAIR_USER;
-                            break;
-                        case COLOR_PAIR_ASSISTANT:
-                            mapped_pair = NCURSES_PAIR_ASSISTANT;
-                            break;
-                        case COLOR_PAIR_TOOL:
-                            mapped_pair = NCURSES_PAIR_TOOL;
-                            break;
-                        case COLOR_PAIR_STATUS:
-                            mapped_pair = NCURSES_PAIR_STATUS;
-                            break;
-                        case COLOR_PAIR_ERROR:
-                            mapped_pair = NCURSES_PAIR_ERROR;
-                            break;
-                        case COLOR_PAIR_PROMPT:
-                            mapped_pair = NCURSES_PAIR_PROMPT;
-                            break;
-                        case COLOR_PAIR_TODO_COMPLETED:
-                            mapped_pair = NCURSES_PAIR_TODO_COMPLETED;
-                            break;
-                        case COLOR_PAIR_TODO_IN_PROGRESS:
-                            mapped_pair = NCURSES_PAIR_TODO_IN_PROGRESS;
-                            break;
-                        case COLOR_PAIR_TODO_PENDING:
-                            mapped_pair = NCURSES_PAIR_TODO_PENDING;
-                            break;
-                        case COLOR_PAIR_SEARCH:
-                            mapped_pair = NCURSES_PAIR_SEARCH;
-                            break;
-                        case COLOR_PAIR_TOOL_DIM:
-                            mapped_pair = NCURSES_PAIR_TOOL_DIM;
-                            break;
-                        case COLOR_PAIR_DIFF_CONTEXT:
-                            mapped_pair = NCURSES_PAIR_DIFF_CONTEXT;
-                            break;
-                        default:
-                            mapped_pair = NCURSES_PAIR_FOREGROUND;
-                            break;
-                    }
-                    if (has_colors()) {
-                        wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
-                    }
-                    waddstr(tui->wm.conv_pad, last_entry->prefix);
-                    waddch(tui->wm.conv_pad, ' ');
-                    if (has_colors()) {
-                        wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                } else if (last_entry->prefix && last_entry->prefix[0] != '\0') {
+                    // Check if this is a reasoning or tool message — for these,
+                    // we also don't re-render the prefix on continuation lines.
+                    // The prefix/tag was already rendered on the first line by
+                    // render_entry_to_pad. Re-rendering it on every wrapped line
+                    // creates inconsistency with the final (non-streaming) render.
+                    int is_reasoning = (strcmp(last_entry->prefix, tui_icon_reasoning_open()) == 0 ||
+                                        strcmp(last_entry->prefix, tui_icon_reasoning_close()) == 0);
+                    int is_tool = ((last_entry->prefix[0] == '\xe2' &&
+                                    last_entry->prefix[1] == '\x97' &&
+                                    last_entry->prefix[2] == '\x8f') ||
+                                   (last_entry->prefix[0] == '\xef' &&
+                                    last_entry->prefix[1] == '\x82' &&
+                                    last_entry->prefix[2] == '\xad'));
+                    if (is_reasoning || is_tool) {
+                        // Don't re-render prefix on continuation lines.
+                    } else {
+                        // Other messages with a prefix: re-render on continuation lines
+                        // Map TUIColorPair to ncurses color pair
+                        int mapped_pair = NCURSES_PAIR_FOREGROUND;
+                        switch (last_entry->color_pair) {
+                            case COLOR_PAIR_DEFAULT:
+                            case COLOR_PAIR_FOREGROUND:
+                                mapped_pair = NCURSES_PAIR_FOREGROUND;
+                                break;
+                            case COLOR_PAIR_USER:
+                                mapped_pair = NCURSES_PAIR_USER;
+                                break;
+                            case COLOR_PAIR_ASSISTANT:
+                                mapped_pair = NCURSES_PAIR_ASSISTANT;
+                                break;
+                            case COLOR_PAIR_TOOL:
+                                mapped_pair = NCURSES_PAIR_TOOL;
+                                break;
+                            case COLOR_PAIR_STATUS:
+                                mapped_pair = NCURSES_PAIR_STATUS;
+                                break;
+                            case COLOR_PAIR_ERROR:
+                                mapped_pair = NCURSES_PAIR_ERROR;
+                                break;
+                            case COLOR_PAIR_PROMPT:
+                                mapped_pair = NCURSES_PAIR_PROMPT;
+                                break;
+                            case COLOR_PAIR_TODO_COMPLETED:
+                                mapped_pair = NCURSES_PAIR_TODO_COMPLETED;
+                                break;
+                            case COLOR_PAIR_TODO_IN_PROGRESS:
+                                mapped_pair = NCURSES_PAIR_TODO_IN_PROGRESS;
+                                break;
+                            case COLOR_PAIR_TODO_PENDING:
+                                mapped_pair = NCURSES_PAIR_TODO_PENDING;
+                                break;
+                            case COLOR_PAIR_SEARCH:
+                                mapped_pair = NCURSES_PAIR_SEARCH;
+                                break;
+                            case COLOR_PAIR_TOOL_DIM:
+                                mapped_pair = NCURSES_PAIR_TOOL_DIM;
+                                break;
+                            case COLOR_PAIR_DIFF_CONTEXT:
+                                mapped_pair = NCURSES_PAIR_DIFF_CONTEXT;
+                                break;
+                            default:
+                                mapped_pair = NCURSES_PAIR_FOREGROUND;
+                                break;
+                        }
+                        if (has_colors()) {
+                            wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                        }
+                        waddstr(tui->wm.conv_pad, last_entry->prefix);
+                        waddch(tui->wm.conv_pad, ' ');
+                        if (has_colors()) {
+                            wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                        }
                     }
                 }
             }
