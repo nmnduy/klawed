@@ -1804,8 +1804,8 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     (void)tui_safe_wmove(tui->wm.conv_pad, start_line, 0);
 
     // Check if this is a [User] or [Assistant] message to apply new styling
-    int is_user_message = (prefix && strcmp(prefix, "[User]") == 0);
-    int is_assistant_message = (prefix && strcmp(prefix, "[Assistant]") == 0);
+    int is_user_message = (prefix && strcmp(prefix, tui_icon_user()) == 0);
+    int is_assistant_message = (prefix && strcmp(prefix, tui_icon_assistant()) == 0);
 
     // For user messages, add padding line before and caret prefix
     if (is_user_message) {
@@ -1912,12 +1912,12 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             // Caret-style assistant: use foreground color
             text_pair = NCURSES_PAIR_FOREGROUND;
         } else if (prefix && prefix[0] != '\0') {
-            // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F)
-            int is_tool_message = (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f');
-            // Check for reasoning messages: prefix is "<Reasoning >>>" or "<<< Reasoning>"
-            int is_reasoning_message = (prefix[0] == '<' &&
-                                        (strcmp(prefix, "<Reasoning >>>") == 0 ||
-                                         strcmp(prefix, "<<< Reasoning>") == 0));
+            // Check for tool messages: prefix starts with "●" or ""
+            int is_tool_message = ((prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ||
+                                   (prefix[0] == '\xef' && prefix[1] == '\xa0' && prefix[2] == '\xad'));
+            // Check for reasoning messages
+            int is_reasoning_message = (strcmp(prefix, tui_icon_reasoning_open()) == 0 ||
+                                        strcmp(prefix, tui_icon_reasoning_close()) == 0);
             if (is_tool_message || is_reasoning_message) {
                 // Tool or reasoning message: use dimmed color for text (tag keeps its color)
                 text_pair = NCURSES_PAIR_TOOL_DIM;
@@ -2539,10 +2539,11 @@ void tui_refresh(TUIState *tui) {
 // TODO Banner Rendering
 // ============================================================================
 
-// UTF-8 icons for TODO banner (using colorizable characters)
-#define TODO_ICON_CURRENT   "▶"    // Right-pointing triangle (colorizable)
-#define TODO_ICON_PENDING   "○"    // Unfilled circle (colorizable)
-#define TODO_ICON_COMPLETED "◎"    // Bullseye target (colorizable)
+// TODO banner icons are selected at runtime via tui_icon_*() helpers
+// to support both Unicode emoji and Nerd Font variants.
+#define TODO_ICON_CURRENT   tui_icon_todo_current()
+#define TODO_ICON_PENDING   tui_icon_todo_pending()
+#define TODO_ICON_COMPLETED tui_icon_todo_completed()
 
 int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     if (!tui || !tui->is_initialized) {

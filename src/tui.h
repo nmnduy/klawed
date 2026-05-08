@@ -355,6 +355,26 @@ void tui_reload_colors(void);
 // Shows a spinner frame in the title when the AI is working
 void tui_update_terminal_title(TUIState *tui);
 
+// ============================================================================
+// TUI Icons (selected based on KLAWED_NO_NERD_FONT env var)
+// ============================================================================
+
+// Role prefixes
+const char* tui_icon_assistant(void);
+const char* tui_icon_user(void);
+
+// Reasoning tags
+const char* tui_icon_reasoning_open(void);
+const char* tui_icon_reasoning_close(void);
+
+// Tool icon (just the icon character, e.g. "●" or "")
+const char* tui_icon_tool(void);
+
+// TODO icons
+const char* tui_icon_todo_current(void);
+const char* tui_icon_todo_pending(void);
+const char* tui_icon_todo_completed(void);
+
 // Internal functions (used across TUI modules during refactoring)
 // These will eventually move to their respective specialized modules
 

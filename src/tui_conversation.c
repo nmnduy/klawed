@@ -36,10 +36,10 @@ MessageType tui_conversation_get_message_type(const char *prefix) {
         return MSG_TYPE_EMPTY;
     }
 
-    if (strcmp(prefix, "[User]") == 0) {
+    if (strcmp(prefix, tui_icon_user()) == 0) {
         return MSG_TYPE_USER;
     }
-    if (strcmp(prefix, "[Assistant]") == 0) {
+    if (strcmp(prefix, tui_icon_assistant()) == 0) {
         return MSG_TYPE_ASSISTANT;
     }
     if (strcmp(prefix, "[System]") == 0 || strcmp(prefix, "[Error]") == 0 ||
@@ -47,9 +47,10 @@ MessageType tui_conversation_get_message_type(const char *prefix) {
         return MSG_TYPE_SYSTEM;
     }
     // Check for tools - must come after checking specific system prefixes
-    // Matches "● ToolName" format (circle prefix)
-    // The ● character is UTF-8: 0xE2 0x97 0x8F (3 bytes)
-    if (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') {
+    // Matches "● ToolName" or " ToolName" format
+    // ● in UTF-8: 0xE2 0x97 0x8F (3 bytes),  in UTF-8: 0xEF 0xA0 0xAD (3 bytes)
+    if ((prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ||
+        (prefix[0] == '\xef' && prefix[1] == '\xa0' && prefix[2] == '\xad')) {
         return MSG_TYPE_TOOL;
     }
 
@@ -137,7 +138,7 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
     }
 
     // Track the starting line of assistant messages for scroll-to-response feature
-    if (prefix && strcmp(prefix, "[Assistant]") == 0) {
+    if (prefix && strcmp(prefix, tui_icon_assistant()) == 0) {
         tui->last_assistant_line = window_manager_get_content_lines(&tui->wm);
         LOG_DEBUG("[TUI] Tracking assistant message at line %d", tui->last_assistant_line);
     }
@@ -525,7 +526,7 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
 
             // Check if this is an assistant message in bordered mode
             int is_assistant = last_entry->prefix &&
-                               strcmp(last_entry->prefix, "[Assistant]") == 0;
+                               strcmp(last_entry->prefix, tui_icon_assistant()) == 0;
             int use_bordered = is_assistant &&
                                (tui->response_style == RESPONSE_STYLE_BORDER);
 
@@ -610,13 +611,17 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                 // during streaming, not just after the full rebuild.
                 int text_pair = NCURSES_PAIR_FOREGROUND;
                 if (last_entry->prefix && last_entry->prefix[0] != '\0') {
-                    // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F)
-                    int is_tool_message = (last_entry->prefix[0] == '\xe2' &&
-                                           last_entry->prefix[1] == '\x97' &&
-                                           last_entry->prefix[2] == '\x8f');
-                    // Check for reasoning messages: prefix is "<Reasoning >>>"
+                    // Check for tool messages: prefix starts with "●" or ""
+                    int is_tool_message = ((last_entry->prefix[0] == '\xe2' &&
+                                            last_entry->prefix[1] == '\x97' &&
+                                            last_entry->prefix[2] == '\x8f') ||
+                                           (last_entry->prefix[0] == '\xef' &&
+                                            last_entry->prefix[1] == '\xa0' &&
+                                            last_entry->prefix[2] == '\xad'));
+                    // Check for reasoning messages: prefix is "<Reasoning >>>" or ""
                     int is_reasoning_message = (last_entry->prefix &&
-                                                strcmp(last_entry->prefix, "<Reasoning >>>") == 0);
+                                                (strcmp(last_entry->prefix, tui_icon_reasoning_open()) == 0 ||
+                                                 strcmp(last_entry->prefix, tui_icon_reasoning_close()) == 0));
                     if (is_tool_message || is_reasoning_message) {
                         text_pair = NCURSES_PAIR_TOOL_DIM;
                     }
@@ -726,17 +731,18 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
     if (!prefix) {
         return COLOR_PAIR_DEFAULT;
     }
-    if (strstr(prefix, "User")) {
+    if (strstr(prefix, "User") || strcmp(prefix, tui_icon_user()) == 0) {
         return COLOR_PAIR_USER;
     }
-    if (strstr(prefix, "Assistant")) {
+    if (strstr(prefix, "Assistant") || strcmp(prefix, tui_icon_assistant()) == 0) {
         return COLOR_PAIR_ASSISTANT;
     }
     if (strstr(prefix, "Tool")) {
         return COLOR_PAIR_TOOL;
     }
-    // Check for circle prefix "● ToolName" (UTF-8: 0xE2 0x97 0x8F)
-    if (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') {
+    // Check for tool prefix "● ToolName" or " ToolName"
+    if ((prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ||
+        (prefix[0] == '\xef' && prefix[1] == '\xa0' && prefix[2] == '\xad')) {
         return COLOR_PAIR_TOOL;
     }
     if (strstr(prefix, "Error")) {
@@ -783,11 +789,12 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
 // ============================================================================
 
 // UTF-8 bytes for "●" (black circle): 0xE2 0x97 0x8F
+// UTF-8 bytes for "" (wrench): 0xEF 0xA0 0xAD
 // UTF-8 bytes for "└" (box drawings light up and right): 0xE2 0x94 0x94
 // UTF-8 bytes for "─" (box drawings light horizontal): 0xE2 0x94 0x80
 
 // Extract tool name from tool prefix
-// Format: "● ToolName" (● is UTF-8: 0xE2 0x97 0x8F)
+// Format: "● ToolName" or " ToolName"
 // Returns allocated string with tool name, or NULL if not a tool prefix
 // Caller must free the returned string
 char* tui_conversation_extract_tool_name(const char *prefix) {
@@ -795,17 +802,19 @@ char* tui_conversation_extract_tool_name(const char *prefix) {
         return NULL;
     }
 
-    // Check for "● " prefix (circle + space)
-    // ● in UTF-8 is 0xE2 0x97 0x8F, followed by space 0x20
+    // Check for "● " or " " prefix (icon + space)
+    // ● in UTF-8 is 0xE2 0x97 0x8F,  in UTF-8 is 0xEF 0xA0 0xAD, followed by space 0x20
     const char *CIRCLE_PREFIX = "\xe2\x97\x8f ";
-    size_t circle_len = 4; // 3 bytes for ● + 1 byte for space
+    const char *WRENCH_PREFIX = "\xef\xa0\xad ";
+    size_t icon_len = 4; // 3 bytes for icon + 1 byte for space
 
-    if (strncmp(prefix, CIRCLE_PREFIX, circle_len) != 0) {
-        return NULL;  // Not a circle-prefixed tool message
+    if (strncmp(prefix, CIRCLE_PREFIX, icon_len) != 0 &&
+        strncmp(prefix, WRENCH_PREFIX, icon_len) != 0) {
+        return NULL;  // Not a tool message
     }
 
-    // Extract the tool name (everything after "● ")
-    const char *tool_name_start = prefix + circle_len;
+    // Extract the tool name (everything after the icon + space)
+    const char *tool_name_start = prefix + icon_len;
 
     // Find the end of the tool name (look for colon or end of string)
     const char *colon = strchr(tool_name_start, ':');
@@ -851,8 +860,10 @@ int tui_conversation_is_tool_message(const char *prefix) {
         return 0;
     }
 
-    // The ● character is UTF-8: 0xE2 0x97 0x8F (3 bytes)
-    return (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ? 1 : 0;
+    // ● in UTF-8: 0xE2 0x97 0x8F (3 bytes),  in UTF-8: 0xEF 0xA0 0xAD (3 bytes)
+    int is_circle = (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f');
+    int is_wrench = (prefix[0] == '\xef' && prefix[1] == '\xa0' && prefix[2] == '\xad');
+    return (is_circle || is_wrench) ? 1 : 0;
 }
 
 // Determine the display prefix for a tool message
@@ -1017,7 +1028,7 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
 
                         const char *tool_name = content->tool_name ? content->tool_name : "tool";
                         char prefix[128];
-                        snprintf(prefix, sizeof(prefix), "\xe2\x97\x8f %s", tool_name);
+                        snprintf(prefix, sizeof(prefix), "%s %s", tui_icon_tool(), tool_name);
 
                         char *output_text = format_tool_output(content->tool_output, content->is_error);
                         TUIColorPair color = content->is_error ? COLOR_PAIR_ERROR : COLOR_PAIR_TOOL;
@@ -1032,7 +1043,7 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
                     for (int j = 0; j < msg->content_count; j++) {
                         InternalContent *content = &msg->contents[j];
                         if (content->type == INTERNAL_TEXT && content->text) {
-                            tui_add_conversation_line(tui, "[User]", content->text, COLOR_PAIR_USER);
+                            tui_add_conversation_line(tui, tui_icon_user(), content->text, COLOR_PAIR_USER);
                             user_messages_added++;
                         }
                     }
@@ -1051,14 +1062,14 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
                         case INTERNAL_TEXT:
                             // Display reasoning content first (if present) - for thinking models
                             if (content->reasoning_content && strlen(content->reasoning_content) > 0) {
-                                tui_add_conversation_line(tui, "<Reasoning >>>", "", COLOR_PAIR_TOOL_DIM);
+                                tui_add_conversation_line(tui, tui_icon_reasoning_open(), "", COLOR_PAIR_TOOL_DIM);
                                 tui_add_conversation_line(tui, "", content->reasoning_content, COLOR_PAIR_TOOL_DIM);
                                 tui_add_conversation_line(tui, "", "", COLOR_PAIR_TOOL_DIM);
-                                tui_add_conversation_line(tui, "<<< Reasoning>", "", COLOR_PAIR_TOOL_DIM);
+                                tui_add_conversation_line(tui, tui_icon_reasoning_close(), "", COLOR_PAIR_TOOL_DIM);
                             }
                             // Display regular text content
                             if (content->text && strlen(content->text) > 0) {
-                                tui_add_conversation_line(tui, "[Assistant]", content->text, COLOR_PAIR_ASSISTANT);
+                                tui_add_conversation_line(tui, tui_icon_assistant(), content->text, COLOR_PAIR_ASSISTANT);
                                 text_content_added = 1;
                                 assistant_messages_added++;
                             }
@@ -1067,7 +1078,7 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
                         case INTERNAL_TOOL_CALL:
                             if (content->tool_name) {
                                 char prefix[128];
-                                snprintf(prefix, sizeof(prefix), "\xe2\x97\x8f %s", content->tool_name);
+                                snprintf(prefix, sizeof(prefix), "%s %s", tui_icon_tool(), content->tool_name);
 
                                 char *params_str = format_tool_params(content->tool_params);
                                 tui_add_conversation_line(tui, prefix, params_str ? params_str : "{}", COLOR_PAIR_TOOL);
@@ -1100,7 +1111,7 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
                     }
                     if (has_only_tool_calls) {
                         // Add empty assistant line for visual separation
-                        tui_add_conversation_line(tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
+                        tui_add_conversation_line(tui, tui_icon_assistant(), "", COLOR_PAIR_ASSISTANT);
                     }
                 }
                 break;

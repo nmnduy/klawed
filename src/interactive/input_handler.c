@@ -83,7 +83,7 @@ int submit_input_callback(const char *input, void *user_data) {
     }
 
     if (input_copy[0] == '/') {
-        ui_append_line(tui, queue, "[User]", input_copy, COLOR_PAIR_USER);
+        ui_append_line(tui, queue, tui_icon_user(), input_copy, COLOR_PAIR_USER);
 
         // Remember message count before command execution
         int msg_count_before = state->count;
@@ -219,7 +219,7 @@ int submit_input_callback(const char *input, void *user_data) {
         return 0;
     }
 
-    ui_append_line(tui, queue, "[User]", input_copy, COLOR_PAIR_USER);
+    ui_append_line(tui, queue, tui_icon_user(), input_copy, COLOR_PAIR_USER);
 
     if (state->is_perpetual_mode) {
         /* Perpetual mode: worker path handles it in ai_worker_handle_instruction.

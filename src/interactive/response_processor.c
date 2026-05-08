@@ -331,7 +331,7 @@ void process_response(ConversationState *state,
             while (*p && isspace((unsigned char)*p)) p++;
 
             if (*p != '\0') {  // Has non-whitespace content
-                ui_append_line(tui, queue, "[Assistant]", p, COLOR_PAIR_ASSISTANT);
+                ui_append_line(tui, queue, tui_icon_assistant(), p, COLOR_PAIR_ASSISTANT);
             }
         }
 
@@ -892,7 +892,7 @@ void process_response(ConversationState *state,
                 if (!tui && !queue) {
                     char *todo_text = todo_render_to_string(state->todo_list);
                     if (todo_text) {
-                        ui_append_line(tui, queue, "[Assistant]", todo_text, COLOR_PAIR_ASSISTANT);
+                        ui_append_line(tui, queue, tui_icon_assistant(), todo_text, COLOR_PAIR_ASSISTANT);
                         free(todo_text);
                     }
                 }

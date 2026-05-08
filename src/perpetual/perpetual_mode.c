@@ -317,7 +317,7 @@ static int run_response_loop(ConversationState *state, char **last_text_out,
             /* No tool calls — conversation is complete. */
             /* Display the final assistant response in the TUI. */
             if (*last_text_out && tui_queue) {
-                ui_append_line(NULL, tui_queue, "[Assistant]",
+                ui_append_line(NULL, tui_queue, tui_icon_assistant(),
                                *last_text_out, COLOR_PAIR_ASSISTANT);
             }
             api_response_free(response);

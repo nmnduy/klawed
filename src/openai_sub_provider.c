@@ -167,9 +167,9 @@ static int sub_streaming_event_handler(StreamEvent *event, void *userdata) {
         /* First text: add assistant line to TUI */
         if (!ctx->assistant_line_added && ctx->state) {
             if (ctx->state->tui_queue) {
-                post_tui_stream_start(ctx->state->tui_queue, "[Assistant]", COLOR_PAIR_ASSISTANT);
+                post_tui_stream_start(ctx->state->tui_queue, tui_icon_assistant(), COLOR_PAIR_ASSISTANT);
             } else if (ctx->state->tui) {
-                tui_add_conversation_line(ctx->state->tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(ctx->state->tui, tui_icon_assistant(), "", COLOR_PAIR_ASSISTANT);
             }
             ctx->assistant_line_added = 1;
         }
@@ -195,9 +195,9 @@ static int sub_streaming_event_handler(StreamEvent *event, void *userdata) {
     if (reasoning && cJSON_IsString(reasoning) && reasoning->valuestring[0] != '\0') {
         if (!ctx->reasoning_line_added && ctx->state) {
             if (ctx->state->tui_queue) {
-                post_tui_stream_start(ctx->state->tui_queue, "<Reasoning >>>", COLOR_PAIR_TOOL_DIM);
+                post_tui_stream_start(ctx->state->tui_queue, tui_icon_reasoning_open(), COLOR_PAIR_TOOL_DIM);
             } else if (ctx->state->tui) {
-                tui_add_conversation_line(ctx->state->tui, "<Reasoning >>>", "", COLOR_PAIR_TOOL_DIM);
+                tui_add_conversation_line(ctx->state->tui, tui_icon_reasoning_open(), "", COLOR_PAIR_TOOL_DIM);
             }
             ctx->reasoning_line_added = 1;
         }

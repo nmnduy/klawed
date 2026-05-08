@@ -474,10 +474,10 @@ int anthropic_streaming_event_handler(StreamEvent *event, void *userdata) {
             // Initialize TUI for streaming by adding an empty assistant line
             if (ctx->state) {
                 if (ctx->state->tui_queue) {
-                    post_tui_stream_start(ctx->state->tui_queue, "[Assistant]", COLOR_PAIR_ASSISTANT);
+                    post_tui_stream_start(ctx->state->tui_queue, tui_icon_assistant(), COLOR_PAIR_ASSISTANT);
                 } else if (ctx->state->tui) {
                     // Add assistant prefix with empty text - streaming will fill it in
-                    tui_add_conversation_line(ctx->state->tui, "[Assistant]", "", COLOR_PAIR_ASSISTANT);
+                    tui_add_conversation_line(ctx->state->tui, tui_icon_assistant(), "", COLOR_PAIR_ASSISTANT);
                 }
             }
 

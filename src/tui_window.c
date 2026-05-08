@@ -289,8 +289,8 @@ void tui_handle_resize(TUIState *tui) {
         }
 
         // Check if this is a [User] or [Assistant] message to apply new styling
-        int is_user_message = (entry->prefix && strcmp(entry->prefix, "[User]") == 0);
-        int is_assistant_message = (entry->prefix && strcmp(entry->prefix, "[Assistant]") == 0);
+        int is_user_message = (entry->prefix && strcmp(entry->prefix, tui_icon_user()) == 0);
+        int is_assistant_message = (entry->prefix && strcmp(entry->prefix, tui_icon_assistant()) == 0);
 
         // For user messages, add padding line before and caret prefix
         if (is_user_message) {

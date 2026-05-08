@@ -207,6 +207,51 @@ void tui_update_terminal_title(TUIState *tui) {
     fflush(stdout);
 }
 
+// Cached nerd font check (-1 = uninitialized, 0 = no, 1 = yes)
+static int tui_nerd_font_cached = -1;
+
+static int tui_is_nerd_font_enabled(void) {
+    if (tui_nerd_font_cached == -1) {
+        const char *no_nerd = getenv("KLAWED_NO_NERD_FONT");
+        tui_nerd_font_cached = !(no_nerd && (strcmp(no_nerd, "1") == 0 ||
+                                              strcasecmp(no_nerd, "true") == 0 ||
+                                              strcasecmp(no_nerd, "yes") == 0));
+    }
+    return tui_nerd_font_cached;
+}
+
+const char* tui_icon_assistant(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x81\xb5" : "[Assistant]"; // 
+}
+
+const char* tui_icon_user(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x80\x87" : "[User]"; // 
+}
+
+const char* tui_icon_reasoning_open(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x8f\xab" : "<Reasoning >>>"; // 
+}
+
+const char* tui_icon_reasoning_close(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x80\x8c" : "<<< Reasoning>"; // 
+}
+
+const char* tui_icon_tool(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\xa0\xad" : "\xe2\x97\x8f"; //  or ●
+}
+
+const char* tui_icon_todo_current(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x80\x93" : "\xe2\x96\xb6"; //  or ▶
+}
+
+const char* tui_icon_todo_pending(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x91\x91" : "\xe2\x97\x8b"; //  or ○
+}
+
+const char* tui_icon_todo_completed(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x81\x98" : "\xe2\x97\x8e"; //  or ◎
+}
+
 // Initialize ncurses color pairs from our colorscheme
 // Clear the resize flag (called after handling resize)
 /*
@@ -1081,16 +1126,19 @@ static TUIColorPair infer_color_from_prefix(const char *prefix) {
     if (!prefix) {
         return COLOR_PAIR_DEFAULT;
     }
-    // Check for circle prefix (● = UTF-8: 0xE2 0x97 0x8F) which indicates tool
-    if ((unsigned char)prefix[0] == 0xE2 &&
-        (unsigned char)prefix[1] == 0x97 &&
-        (unsigned char)prefix[2] == 0x8F) {
+    // Check for tool prefix (● = UTF-8: 0xE2 0x97 0x8F or  = UTF-8: 0xEF 0xA0 0xAD)
+    if (((unsigned char)prefix[0] == 0xE2 &&
+         (unsigned char)prefix[1] == 0x97 &&
+         (unsigned char)prefix[2] == 0x8F) ||
+        ((unsigned char)prefix[0] == 0xEF &&
+         (unsigned char)prefix[1] == 0xA0 &&
+         (unsigned char)prefix[2] == 0xAD)) {
         return COLOR_PAIR_TOOL;
     }
-    if (strstr(prefix, "User")) {
+    if (strstr(prefix, "User") || strcmp(prefix, tui_icon_user()) == 0) {
         return COLOR_PAIR_USER;
     }
-    if (strstr(prefix, "Assistant")) {
+    if (strstr(prefix, "Assistant") || strcmp(prefix, tui_icon_assistant()) == 0) {
         return COLOR_PAIR_ASSISTANT;
     }
     if (strstr(prefix, "Tool")) {
@@ -1150,14 +1198,18 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
             char *mutable_text = msg->text;
             const char *content = mutable_text;
 
-            // Check for circle prefix (● = UTF-8: 0xE2 0x97 0x8F) which indicates tool
-            if ((unsigned char)mutable_text[0] == 0xE2 &&
-                (unsigned char)mutable_text[1] == 0x97 &&
-                (unsigned char)mutable_text[2] == 0x8F) {
-                // Format is "● ToolName details"
+            // Check for tool prefix (● = UTF-8: 0xE2 0x97 0x8F or  = UTF-8: 0xEF 0xA0 0xAD)
+            int is_tool_circle = ((unsigned char)mutable_text[0] == 0xE2 &&
+                                  (unsigned char)mutable_text[1] == 0x97 &&
+                                  (unsigned char)mutable_text[2] == 0x8F);
+            int is_tool_wrench = ((unsigned char)mutable_text[0] == 0xEF &&
+                                  (unsigned char)mutable_text[1] == 0xA0 &&
+                                  (unsigned char)mutable_text[2] == 0xAD);
+            if (is_tool_circle || is_tool_wrench) {
+                // Format is "● ToolName details" or " ToolName details"
                 // Find the space after the tool name
-                const char *after_circle = mutable_text + 3;  // Skip the ● (3 bytes)
-                while (*after_circle == ' ') after_circle++;  // Skip space after ●
+                const char *after_circle = mutable_text + 3;  // Skip the icon (3 bytes)
+                while (*after_circle == ' ') after_circle++;  // Skip space after icon
 
                 // Find end of tool name (next space)
                 const char *tool_name_end = after_circle;
