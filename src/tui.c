@@ -229,7 +229,7 @@ const char* tui_icon_user(void) {
 }
 
 const char* tui_icon_reasoning_open(void) {
-    return tui_is_nerd_font_enabled() ? "\xef\x8f\xab" : "<Reasoning >>>"; // 
+    return tui_is_nerd_font_enabled() ? "\xef\x83\xab" : "<Reasoning >>>"; // 
 }
 
 const char* tui_icon_reasoning_close(void) {
@@ -237,7 +237,7 @@ const char* tui_icon_reasoning_close(void) {
 }
 
 const char* tui_icon_tool(void) {
-    return tui_is_nerd_font_enabled() ? "\xef\xa0\xad" : "\xe2\x97\x8f"; //  or ●
+    return tui_is_nerd_font_enabled() ? "\xef\x82\xad" : "\xe2\x97\x8f"; //  or ●
 }
 
 const char* tui_icon_todo_current(void) {
@@ -245,7 +245,7 @@ const char* tui_icon_todo_current(void) {
 }
 
 const char* tui_icon_todo_pending(void) {
-    return tui_is_nerd_font_enabled() ? "\xef\x91\x91" : "\xe2\x97\x8b"; //  or ○
+    return tui_is_nerd_font_enabled() ? "\xef\x84\x91" : "\xe2\x97\x8b"; //  or ○
 }
 
 const char* tui_icon_todo_completed(void) {
@@ -1126,12 +1126,12 @@ static TUIColorPair infer_color_from_prefix(const char *prefix) {
     if (!prefix) {
         return COLOR_PAIR_DEFAULT;
     }
-    // Check for tool prefix (● = UTF-8: 0xE2 0x97 0x8F or  = UTF-8: 0xEF 0xA0 0xAD)
+    // Check for tool prefix (● = UTF-8: 0xE2 0x97 0x8F or  = UTF-8: 0xEF 0x82 0xAD)
     if (((unsigned char)prefix[0] == 0xE2 &&
          (unsigned char)prefix[1] == 0x97 &&
          (unsigned char)prefix[2] == 0x8F) ||
         ((unsigned char)prefix[0] == 0xEF &&
-         (unsigned char)prefix[1] == 0xA0 &&
+         (unsigned char)prefix[1] == 0x82 &&
          (unsigned char)prefix[2] == 0xAD)) {
         return COLOR_PAIR_TOOL;
     }
@@ -1198,12 +1198,12 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
             char *mutable_text = msg->text;
             const char *content = mutable_text;
 
-            // Check for tool prefix (● = UTF-8: 0xE2 0x97 0x8F or  = UTF-8: 0xEF 0xA0 0xAD)
+            // Check for tool prefix (● = UTF-8: 0xE2 0x97 0x8F or  = UTF-8: 0xEF 0x82 0xAD)
             int is_tool_circle = ((unsigned char)mutable_text[0] == 0xE2 &&
                                   (unsigned char)mutable_text[1] == 0x97 &&
                                   (unsigned char)mutable_text[2] == 0x8F);
             int is_tool_wrench = ((unsigned char)mutable_text[0] == 0xEF &&
-                                  (unsigned char)mutable_text[1] == 0xA0 &&
+                                  (unsigned char)mutable_text[1] == 0x82 &&
                                   (unsigned char)mutable_text[2] == 0xAD);
             if (is_tool_circle || is_tool_wrench) {
                 // Format is "● ToolName details" or " ToolName details"

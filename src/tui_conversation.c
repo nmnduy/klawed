@@ -48,9 +48,9 @@ MessageType tui_conversation_get_message_type(const char *prefix) {
     }
     // Check for tools - must come after checking specific system prefixes
     // Matches "● ToolName" or " ToolName" format
-    // ● in UTF-8: 0xE2 0x97 0x8F (3 bytes),  in UTF-8: 0xEF 0xA0 0xAD (3 bytes)
+    // ● in UTF-8: 0xE2 0x97 0x8F (3 bytes),  in UTF-8: 0xEF 0x82 0xAD (3 bytes)
     if ((prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ||
-        (prefix[0] == '\xef' && prefix[1] == '\xa0' && prefix[2] == '\xad')) {
+        (prefix[0] == '\xef' && prefix[1] == '\x82' && prefix[2] == '\xad')) {
         return MSG_TYPE_TOOL;
     }
 
@@ -789,7 +789,7 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
 // ============================================================================
 
 // UTF-8 bytes for "●" (black circle): 0xE2 0x97 0x8F
-// UTF-8 bytes for "" (wrench): 0xEF 0xA0 0xAD
+// UTF-8 bytes for "" (wrench): 0xEF 0x82 0xAD
 // UTF-8 bytes for "└" (box drawings light up and right): 0xE2 0x94 0x94
 // UTF-8 bytes for "─" (box drawings light horizontal): 0xE2 0x94 0x80
 
@@ -803,9 +803,9 @@ char* tui_conversation_extract_tool_name(const char *prefix) {
     }
 
     // Check for "● " or " " prefix (icon + space)
-    // ● in UTF-8 is 0xE2 0x97 0x8F,  in UTF-8 is 0xEF 0xA0 0xAD, followed by space 0x20
+    // ● in UTF-8 is 0xE2 0x97 0x8F,  in UTF-8 is 0xEF 0x82 0xAD, followed by space 0x20
     const char *CIRCLE_PREFIX = "\xe2\x97\x8f ";
-    const char *WRENCH_PREFIX = "\xef\xa0\xad ";
+    const char *WRENCH_PREFIX = "\xef\x82\xad ";
     size_t icon_len = 4; // 3 bytes for icon + 1 byte for space
 
     if (strncmp(prefix, CIRCLE_PREFIX, icon_len) != 0 &&
@@ -860,9 +860,9 @@ int tui_conversation_is_tool_message(const char *prefix) {
         return 0;
     }
 
-    // ● in UTF-8: 0xE2 0x97 0x8F (3 bytes),  in UTF-8: 0xEF 0xA0 0xAD (3 bytes)
+    // ● in UTF-8: 0xE2 0x97 0x8F (3 bytes),  in UTF-8: 0xEF 0x82 0xAD (3 bytes)
     int is_circle = (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f');
-    int is_wrench = (prefix[0] == '\xef' && prefix[1] == '\xa0' && prefix[2] == '\xad');
+    int is_wrench = (prefix[0] == '\xef' && prefix[1] == '\x82' && prefix[2] == '\xad');
     return (is_circle || is_wrench) ? 1 : 0;
 }
 

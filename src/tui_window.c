@@ -369,8 +369,9 @@ void tui_handle_resize(TUIState *tui) {
                 // Skip the regular newline below for user messages
                 continue;
             } else if (entry->prefix && entry->prefix[0] != '\0') {
-                // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F)
-                int is_tool_message = (entry->prefix[0] == '\xe2' && entry->prefix[1] == '\x97' && entry->prefix[2] == '\x8f');
+                // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F) or "" (UTF-8: 0xEF 0x82 0xAD)
+                int is_tool_message = ((entry->prefix[0] == '\xe2' && entry->prefix[1] == '\x97' && entry->prefix[2] == '\x8f') ||
+                                       (entry->prefix[0] == '\xef' && entry->prefix[1] == '\x82' && entry->prefix[2] == '\xad'));
                 // Check for reasoning messages: prefix starts with "⟨" (UTF-8: 0xE2 0x9F 0xA8)
                 int is_reasoning_message = (entry->prefix[0] == '\xe2' && entry->prefix[1] == '\x9f' && entry->prefix[2] == '\xa8');
                 if (is_tool_message || is_reasoning_message) {

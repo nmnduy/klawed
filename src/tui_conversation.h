@@ -46,12 +46,12 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix);
 // ============================================================================
 
 // Extract tool name from tool prefix
-// Format: "● ToolName" (● is UTF-8: 0xE2 0x97 0x8F)
+// Format: "● ToolName" (● is UTF-8: 0xE2 0x97 0x8F) or " ToolName" ( is UTF-8: 0xEF 0x82 0xAD)
 // Returns allocated string with tool name, or NULL if not a tool prefix
 // Caller must free the returned string
 char* tui_conversation_extract_tool_name(const char *prefix);
 
-// Check if a prefix is a tool message (starts with ●)
+// Check if a prefix is a tool message (starts with ● or )
 // Returns 1 if tool message, 0 otherwise
 int tui_conversation_is_tool_message(const char *prefix);
 
