@@ -81,8 +81,12 @@ int markdown_is_table_separator(const char *line, size_t len);
  * The first row is treated as header, any separator rows are skipped, and
  * remaining rows are data.  Columns are padded for even-width display with
  * text rendered through the inline markdown formatter.
+ *
+ * left_border:      if non-NULL, drawn as the left edge instead of "|".
+ * left_border_pair: COLOR_PAIR for left_border (0 to use base_pair).
  */
 void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_lens,
-                           size_t num_rows, int base_pair);
+                           size_t num_rows, int base_pair,
+                           const char *left_border, int left_border_pair);
 
 #endif /* MARKDOWN_RENDER_H */

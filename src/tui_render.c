@@ -32,6 +32,7 @@
 #include "spinner_effects.h"
 #include "text_diffusion.h"
 #include "markdown_render.h"
+#include "line_printer.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -983,37 +984,17 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
 }
 
 // Helper to render a single visual line segment with border
-// Returns bytes consumed from segment
 static void render_bordered_segment(TUIState *tui, const char *segment, size_t len,
                                     int border_pair, const char *border_str, bool add_newline) {
     WINDOW *pad = tui->wm.conv_pad;
-    (void)border_pair;  // Unused, kept for API compatibility
+    int pad_width = 0, pad_height = 0;
+    getmaxyx(pad, pad_height, pad_width);
+    (void)pad_height;
 
-    // Render border character only (│) with border color - no space
-    if (has_colors()) {
-        wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-    }
-    {
-        int cur_y = 0;
-        int cur_x = 0;
-        getyx(pad, cur_y, cur_x);
-        (void)tui_safe_mvwprint_char(pad, cur_y, cur_x, "│");
-    }
-    if (has_colors()) {
-        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-        // Reset to foreground color (no background) for the space and text
-        wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-    }
-    // Add space after border with foreground color (no background)
-    {
-        int cur_y = 0;
-        int cur_x = 0;
-        getyx(pad, cur_y, cur_x);
-        (void)tui_safe_mvwaddch(pad, cur_y, cur_x, ' ');
-    }
-    (void)border_str;  // No longer used - we render │ and space separately
+    LinePrinter lp;
+    lp_init(&lp, pad, border_str, border_pair, NCURSES_PAIR_FOREGROUND, pad_width);
+    lp_border(&lp);
 
-    // Render text content with search highlighting if active
     if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
         char *seg_buf = malloc(len + 1);
         if (seg_buf) {
@@ -1022,20 +1003,10 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
             render_text_with_search_highlight(pad, seg_buf, 0, tui->last_search_pattern, 0);
             free(seg_buf);
         } else {
-            {
-                int cur_y = 0;
-                int cur_x = 0;
-                getyx(pad, cur_y, cur_x);
-                if (cur_y >= 0 && cur_x >= 0) waddnstr(pad, segment, (int)len);
-            }
+            lp_print_raw(&lp, segment, len, 0);
         }
     } else {
-        {
-            int cur_y = 0;
-            int cur_x = 0;
-            getyx(pad, cur_y, cur_x);
-            if (cur_y >= 0 && cur_x >= 0) waddnstr(pad, segment, (int)len);
-        }
+        lp_print_raw(&lp, segment, len, 0);
     }
 
     if (has_colors()) {
@@ -1043,119 +1014,26 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
     }
 
     if (add_newline) {
-        // Check if cursor has already wrapped to next line after filling
-        // If we filled to the right edge, ncurses auto-wraps and cursor is at x=0
-        // In that case, we don't need to add an explicit newline
-        int cur_y, cur_x;
-        getyx(pad, cur_y, cur_x);
-        (void)cur_y;
-        if (cur_x > 0) {
-            // Cursor hasn't wrapped yet, need explicit newline
-            (void)tui_safe_waddch(pad, '\n');
-        }
+        lp_newline(&lp);
     }
-}
-
-// Helper to find byte position that fits within a display width
-// Returns number of bytes that fit within max_display_width
-static size_t find_wrap_point(const char *text, size_t text_len, int max_display_width) {
-    if (max_display_width <= 0) {
-        return 1;  // At least one byte to make progress
-    }
-
-    // Save current locale
-    char *old_locale = setlocale(LC_ALL, NULL);
-    if (old_locale) {
-        old_locale = strdup(old_locale);
-    }
-    setlocale(LC_ALL, "C.UTF-8");
-
-    size_t bytes_used = 0;
-    int display_width = 0;
-    mbstate_t state;
-    memset(&state, 0, sizeof(state));
-
-    while (bytes_used < text_len && display_width < max_display_width) {
-        wchar_t wc;
-        size_t char_bytes = mbrtowc(&wc, text + bytes_used, text_len - bytes_used, &state);
-
-        if (char_bytes == 0) {
-            // Null character
-            break;
-        } else if (char_bytes == (size_t)-1 || char_bytes == (size_t)-2) {
-            // Invalid sequence or incomplete - treat as single byte
-            bytes_used++;
-            display_width++;
-        } else {
-            int char_width = wcwidth(wc);
-            if (char_width < 0) char_width = 1;  // Unknown character
-
-            if (display_width + char_width > max_display_width) {
-                // This character would exceed the limit
-                break;
-            }
-            bytes_used += char_bytes;
-            display_width += char_width;
-        }
-    }
-
-    // Restore locale
-    if (old_locale) {
-        setlocale(LC_ALL, old_locale);
-        free(old_locale);
-    }
-
-    // Ensure we make progress (at least 1 byte)
-    return bytes_used > 0 ? bytes_used : 1;
 }
 
 // ============================================================================
-// Markdown-aware border segment rendering
+// Markdown document rendering via LinePrinter
 // ============================================================================
-
-static void md_border_glyph(WINDOW *pad, int in_code_block) {
-    (void)in_code_block;  /* Border color is uniform regardless of code block state */
-    if (has_colors()) {
-        wattron(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-    }
-    {
-        int cur_y = 0;
-        int cur_x = 0;
-        getyx(pad, cur_y, cur_x);
-        (void)tui_safe_mvwprint_char(pad, cur_y, cur_x, "│");
-    }
-    if (has_colors()) {
-        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_ASSISTANT_BORDER_BG) | A_BOLD);
-    }
-}
-
-static void md_text_space(WINDOW *pad, int in_code_block) {
-    (void)in_code_block;  /* Space color is uniform regardless of code block state */
-    if (has_colors()) {
-        wattron(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-    }
-    {
-        int cur_y = 0;
-        int cur_x = 0;
-        getyx(pad, cur_y, cur_x);
-        (void)tui_safe_mvwaddch(pad, cur_y, cur_x, ' ');
-    }
-    if (has_colors()) {
-        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
-    }
-}
 
 static void render_md_segment(TUIState *tui, const char *segment, size_t len,
                               int border_pair, const char *border_str,
                               bool add_newline, int in_code_block,
                               int text_pair, int search_active) {
     WINDOW *pad = tui->wm.conv_pad;
+    int pad_width = 0, pad_height = 0;
+    getmaxyx(pad, pad_height, pad_width);
+    (void)pad_height;
 
-    (void)border_pair;
-    (void)border_str;
-
-    md_border_glyph(pad, in_code_block);
-    md_text_space(pad, in_code_block);
+    LinePrinter lp;
+    lp_init(&lp, pad, border_str, border_pair, text_pair, pad_width);
+    lp_border(&lp);
 
     if (in_code_block) {
         wattron(pad, A_DIM);
@@ -1169,21 +1047,11 @@ static void render_md_segment(TUIState *tui, const char *segment, size_t len,
             render_text_with_search_highlight(pad, seg_buf, 0, tui->last_search_pattern, 0);
             free(seg_buf);
         } else {
-            int cur_y = 0;
-            int cur_x = 0;
-            getyx(pad, cur_y, cur_x);
-            if (cur_y >= 0 && cur_x >= 0) {
-                waddnstr(pad, segment, (int)len);
-            }
+            waddnstr(pad, segment, (int)len);
         }
     } else {
         if (in_code_block) {
-            int cur_y = 0;
-            int cur_x = 0;
-            getyx(pad, cur_y, cur_x);
-            if (cur_y >= 0 && cur_x >= 0) {
-                waddnstr(pad, segment, (int)len);
-            }
+            waddnstr(pad, segment, (int)len);
         } else {
             markdown_render_inline(tui, segment, len, text_pair);
         }
@@ -1194,12 +1062,7 @@ static void render_md_segment(TUIState *tui, const char *segment, size_t len,
     }
 
     if (add_newline) {
-        int cur_y = 0;
-        int cur_x = 0;
-        getyx(pad, cur_y, cur_x);
-        if (cur_x > 0) {
-            (void)tui_safe_waddch(pad, '\n');
-        }
+        lp_newline(&lp);
     }
 }
 
@@ -1207,12 +1070,13 @@ static void render_md_header_segment(TUIState *tui, const char *segment, size_t 
                                      int border_pair, const char *border_str,
                                      bool add_newline, int text_pair, int search_active) {
     WINDOW *pad = tui->wm.conv_pad;
+    int pad_width = 0, pad_height = 0;
+    getmaxyx(pad, pad_height, pad_width);
+    (void)pad_height;
 
-    (void)border_pair;
-    (void)border_str;
-
-    md_border_glyph(pad, 0);
-    md_text_space(pad, 0);
+    LinePrinter lp;
+    lp_init(&lp, pad, border_str, border_pair, text_pair, pad_width);
+    lp_border(&lp);
 
     if (has_colors()) {
         wattron(pad, COLOR_PAIR(text_pair));
@@ -1227,12 +1091,7 @@ static void render_md_header_segment(TUIState *tui, const char *segment, size_t 
             render_text_with_search_highlight(pad, seg_buf, 0, tui->last_search_pattern, 0);
             free(seg_buf);
         } else {
-            int cur_y = 0;
-            int cur_x = 0;
-            getyx(pad, cur_y, cur_x);
-            if (cur_y >= 0 && cur_x >= 0) {
-                waddnstr(pad, segment, (int)len);
-            }
+            waddnstr(pad, segment, (int)len);
         }
     } else {
         markdown_render_inline(tui, segment, len, text_pair);
@@ -1244,12 +1103,7 @@ static void render_md_header_segment(TUIState *tui, const char *segment, size_t 
     }
 
     if (add_newline) {
-        int cur_y = 0;
-        int cur_x = 0;
-        getyx(pad, cur_y, cur_x);
-        if (cur_x > 0) {
-            (void)tui_safe_waddch(pad, '\n');
-        }
+        lp_newline(&lp);
     }
 }
 
@@ -1283,7 +1137,8 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
             /* Empty line flushes any buffered table */
             if (table_buf_count > 0) {
                 markdown_render_table(tui, table_rows, table_row_lens,
-                                      table_buf_count, text_pair);
+                                      table_buf_count, text_pair,
+                                      NULL, 0);
                 table_buf_count = 0;
             }
             if (*p == '\n') {
@@ -1309,7 +1164,8 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
                 }
                 if (has_sep) {
                     markdown_render_table(tui, table_rows, table_row_lens,
-                                          table_buf_count, text_pair);
+                                          table_buf_count, text_pair,
+                                          NULL, 0);
                 } else {
                     for (size_t ti = 0; ti < table_buf_count; ti++) {
                         markdown_render_inline(tui, table_rows[ti],
@@ -1353,7 +1209,8 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
                 }
                 if (has_sep) {
                     markdown_render_table(tui, table_rows, table_row_lens,
-                                          table_buf_count, text_pair);
+                                          table_buf_count, text_pair,
+                                          NULL, 0);
                 } else {
                     /* Not a valid table, render as normal lines */
                     for (size_t ti = 0; ti < table_buf_count; ti++) {
@@ -1434,7 +1291,8 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
         }
         if (has_sep) {
             markdown_render_table(tui, table_rows, table_row_lens,
-                                  table_buf_count, text_pair);
+                                  table_buf_count, text_pair,
+                                  NULL, 0);
         } else {
             for (size_t ti = 0; ti < table_buf_count; ti++) {
                 markdown_render_inline(tui, table_rows[ti],
@@ -1445,11 +1303,11 @@ static void render_caret_text_markdown(TUIState *tui, const char *text, int text
     }
 }
 
-// Helper to render text with a left border for assistant messages
-// Handles line wrapping by adding border at start of each new line
-// Uses NCURSES_PAIR_ASSISTANT_BG for subtle background highlighting
-void render_text_with_left_border(TUIState *tui, const char *text, int text_pair,
-                                  int border_pair, const char *border_str) {
+// Render a markdown document to the conversation pad.
+// If border_str is non-NULL, each line is prefixed with the border.
+// If border_str is NULL, no border is drawn (caret-style).
+void render_markdown_document(TUIState *tui, const char *text, int text_pair,
+                              int border_pair, const char *border_str) {
     if (!text || !text[0]) {
         return;
     }
@@ -1496,7 +1354,8 @@ void render_text_with_left_border(TUIState *tui, const char *text, int text_pair
                 }
                 if (has_sep) {
                     markdown_render_table(tui, table_rows, table_row_lens,
-                                          table_buf_count, text_pair);
+                                          table_buf_count, text_pair,
+                                          border_str, border_pair);
                 } else {
                     for (size_t ti = 0; ti < table_buf_count; ti++) {
                         render_md_segment(tui, table_rows[ti], table_row_lens[ti],
@@ -1524,7 +1383,8 @@ void render_text_with_left_border(TUIState *tui, const char *text, int text_pair
                     }
                     if (has_sep) {
                         markdown_render_table(tui, table_rows, table_row_lens,
-                                              table_buf_count, text_pair);
+                                              table_buf_count, text_pair,
+                                              border_str, border_pair);
                     } else {
                         for (size_t ti = 0; ti < table_buf_count; ti++) {
                             render_md_segment(tui, table_rows[ti], table_row_lens[ti],
@@ -1567,7 +1427,8 @@ void render_text_with_left_border(TUIState *tui, const char *text, int text_pair
                     }
                     if (has_sep) {
                         markdown_render_table(tui, table_rows, table_row_lens,
-                                              table_buf_count, text_pair);
+                                              table_buf_count, text_pair,
+                                              border_str, border_pair);
                     } else {
                         for (size_t ti = 0; ti < table_buf_count; ti++) {
                             render_md_segment(tui, table_rows[ti], table_row_lens[ti],
@@ -1724,7 +1585,8 @@ void render_text_with_left_border(TUIState *tui, const char *text, int text_pair
         }
         if (has_sep) {
             markdown_render_table(tui, table_rows, table_row_lens,
-                                  table_buf_count, text_pair);
+                                  table_buf_count, text_pair,
+                                  border_str, border_pair);
         } else {
             for (size_t ti = 0; ti < table_buf_count; ti++) {
                 render_md_segment(tui, table_rows[ti], table_row_lens[ti],

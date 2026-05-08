@@ -163,6 +163,7 @@ static void ensure_tool_results(struct ConversationState *state) {
 #endif
 #include "provider.h"  // For ApiCallResult and Provider definitions
 #include "todo.h"
+#include "goal.h"
 
 // API layer
 #include "api/api_response.h"
@@ -2093,6 +2094,13 @@ int main(int argc, char *argv[]) {
         free(state.todo_list);
         state.todo_list = NULL;
         LOG_DEBUG("Todo list cleaned up");
+    }
+
+    // Cleanup goal state
+    if (state.goal) {
+        goal_state_free(state.goal);
+        state.goal = NULL;
+        LOG_DEBUG("Goal state cleaned up");
     }
 
 #ifndef TEST_BUILD

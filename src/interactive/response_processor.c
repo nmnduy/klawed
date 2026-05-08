@@ -19,6 +19,7 @@
 #include "../sqlite_queue.h"
 #include "../tui.h"
 #include "../perpetual/perpetual_mode.h"
+#include "../goal.h"
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -1066,4 +1067,56 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
 
     process_response(ctx->state, response, NULL, ctx->tui_queue, ctx);
     api_response_free(response);
+
+    /* ──────────────────────────────────────────────────────────────
+     * Ralph loop: autonomous continuation toward standing goal
+     * ────────────────────────────────────────────────────────────── */
+    while (goal_is_active(ctx->state)) {
+        /* Yield if a real user message is queued */
+        if (ctx->instruction_queue && ai_queue_depth(ctx->instruction_queue) > 0) {
+            LOG_INFO("Ralph loop: pending user instruction, yielding");
+            break;
+        }
+
+        const char *last_response = goal_get_last_assistant_text(ctx->state);
+        GoalVerdict verdict = goal_judge(ctx->state, last_response);
+
+        if (verdict.done) {
+            goal_mark_done(ctx->state, verdict.reason);
+            ui_show_status(ctx->tui_queue, "Goal achieved");
+            free(verdict.reason);
+            break;
+        }
+
+        if (ctx->state->goal->turns_used >= ctx->state->goal->max_turns) {
+            goal_pause(ctx->state, "turn budget exhausted");
+            ui_show_status(ctx->tui_queue, "Goal paused — turn budget exhausted");
+            free(verdict.reason);
+            break;
+        }
+        free(verdict.reason);
+
+        char *prompt = goal_build_continuation_prompt(ctx->state->goal);
+        if (!prompt) break;
+        add_user_message(ctx->state, prompt);
+        ctx->state->goal->turns_used++;
+        free(prompt);
+
+        ui_set_status_varied(NULL, ctx->tui_queue, SPINNER_CONTEXT_API_CALL);
+        ApiResponse *cont_response = call_api_with_retries(ctx->state);
+        ui_set_status(NULL, ctx->tui_queue, "");
+
+        if (!cont_response) {
+            ui_show_error(NULL, ctx->tui_queue, "Ralph continuation failed");
+            break;
+        }
+        if (cont_response->error_message) {
+            ui_show_error(NULL, ctx->tui_queue, cont_response->error_message);
+            api_response_free(cont_response);
+            break;
+        }
+
+        process_response(ctx->state, cont_response, NULL, ctx->tui_queue, ctx);
+        api_response_free(cont_response);
+    }
 }

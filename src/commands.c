@@ -665,9 +665,79 @@ static int cmd_autocompact(ConversationState *state, const char *args) {
     return 0;
 }
 
+#include "goal.h"
+
+static int cmd_goal(ConversationState *state, const char *args) {
+    if (!state) return -1;
+
+    /* Trim leading whitespace */
+    while (*args == ' ' || *args == '\t') args++;
+
+    char *arg_lower = NULL;
+    if (args[0]) {
+        arg_lower = strdup(args);
+        if (arg_lower) {
+            for (char *p = arg_lower; *p; p++) *p = (char)tolower((unsigned char)*p);
+        }
+    }
+
+    /* Bare /goal or /goal status */
+    if (!args[0] || (arg_lower && strcmp(arg_lower, "status") == 0)) {
+        char *status = goal_status_line(state);
+        if (status) {
+            print_status(status);
+            free(status);
+        }
+        free(arg_lower);
+        return 0;
+    }
+
+    if (arg_lower && strcmp(arg_lower, "pause") == 0) {
+        goal_pause(state, "user-paused");
+        print_status("Goal paused");
+        free(arg_lower);
+        return 0;
+    }
+
+    if (arg_lower && strcmp(arg_lower, "resume") == 0) {
+        goal_resume(state, 1);
+        print_status("Goal resumed");
+        free(arg_lower);
+        return 0;
+    }
+
+    if (arg_lower && (strcmp(arg_lower, "clear") == 0 ||
+                      strcmp(arg_lower, "stop") == 0 ||
+                      strcmp(arg_lower, "done") == 0)) {
+        int had = goal_has_goal(state);
+        goal_clear(state);
+        print_status(had ? "Goal cleared" : "No active goal");
+        free(arg_lower);
+        return 0;
+    }
+
+    free(arg_lower);
+
+    /* Otherwise treat the remaining text as the new goal */
+    goal_set(state, args, 0);
+    if (state->goal) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "Goal set (%d-turn budget): %s",
+                 state->goal->max_turns, state->goal->text);
+        print_status(msg);
+        /* Also add the goal text as a user message so the agent starts working */
+        add_user_message(state, args);
+    } else {
+        print_error("Failed to set goal");
+        return -1;
+    }
+    return 0;
+}
+
 // ============================================================================
 // Command Definitions
-// ============================================================================
+// ==========================================================================
 
 static Command exit_cmd = {
     .name = "exit",
@@ -721,6 +791,15 @@ static Command voice_cmd = {
     .handler = cmd_voice,
     .completer = NULL,
     .needs_terminal = 1
+};
+
+static Command goal_cmd = {
+    .name = "goal",
+    .usage = "/goal [text | pause | resume | clear | status]",
+    .description = "Set a standing goal that persists across turns (Ralph mode)",
+    .handler = cmd_goal,
+    .completer = NULL,
+    .needs_terminal = 0
 };
 
 static Command themes_cmd = {
@@ -807,6 +886,7 @@ void commands_init(void) {
     commands_register(&add_dir_cmd);
     commands_register(&help_cmd);
     commands_register(&voice_cmd);
+    commands_register(&goal_cmd);
     commands_register(&themes_cmd);
     commands_register(&vim_cmd);
     commands_register(&dump_cmd);

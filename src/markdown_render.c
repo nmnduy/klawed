@@ -649,7 +649,8 @@ static int cell_display_width(const char *text, size_t len) {
 #define TABLE_MAX_COLS 16
 
 void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_lens,
-                           size_t num_rows, int base_pair) {
+                           size_t num_rows, int base_pair,
+                           const char *left_border, int left_border_pair) {
     WINDOW *pad;
     size_t display_rows[TABLE_MAX_ROWS];
     size_t num_display = 0;
@@ -659,6 +660,7 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
     size_t num_cols = 0;
     int col_widths[TABLE_MAX_COLS];
     size_t i, j;
+    int edge_pair;
 
     if (!tui || !rows || num_rows == 0) {
         return;
@@ -668,6 +670,8 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
     if (!pad) {
         return;
     }
+
+    edge_pair = (left_border_pair > 0) ? left_border_pair : base_pair;
 
     if (num_rows > TABLE_MAX_ROWS) {
         num_rows = TABLE_MAX_ROWS;
@@ -731,10 +735,14 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
     /* Render rows */
     for (i = 0; i < num_display; i++) {
         /* Left border */
-        if (base_pair > 0 && has_colors()) {
-            wattron(pad, COLOR_PAIR((unsigned)base_pair));
+        if (edge_pair > 0 && has_colors()) {
+            wattron(pad, COLOR_PAIR((unsigned)edge_pair));
         }
-        waddch(pad, '|');
+        if (left_border) {
+            waddstr(pad, left_border);
+        } else {
+            waddch(pad, '|');
+        }
 
         for (j = 0; j < col_counts[i] && j < num_cols; j++) {
             const char *cell_text;
@@ -778,18 +786,22 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
             waddch(pad, '|');
         }
 
-        if (base_pair > 0 && has_colors()) {
-            wattroff(pad, COLOR_PAIR((unsigned)base_pair));
+        if (edge_pair > 0 && has_colors()) {
+            wattroff(pad, COLOR_PAIR((unsigned)edge_pair));
         }
 
         waddch(pad, '\n');
 
         /* Separator line after header */
         if (i == 0 && num_display > 1) {
-            if (base_pair > 0 && has_colors()) {
-                wattron(pad, COLOR_PAIR((unsigned)base_pair));
+            if (edge_pair > 0 && has_colors()) {
+                wattron(pad, COLOR_PAIR((unsigned)edge_pair));
             }
-            waddch(pad, '|');
+            if (left_border) {
+                waddstr(pad, left_border);
+            } else {
+                waddch(pad, '|');
+            }
             for (j = 0; j < num_cols; j++) {
                 int w;
                 waddch(pad, '-');
@@ -799,8 +811,8 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
                 waddch(pad, '-');
                 waddch(pad, '|');
             }
-            if (base_pair > 0 && has_colors()) {
-                wattroff(pad, COLOR_PAIR((unsigned)base_pair));
+            if (edge_pair > 0 && has_colors()) {
+                wattroff(pad, COLOR_PAIR((unsigned)edge_pair));
             }
             waddch(pad, '\n');
         }

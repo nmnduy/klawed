@@ -59,6 +59,9 @@ struct PersistenceDB;
 // TodoList is defined in todo.h
 struct TodoList;
 
+// GoalState is defined in goal.h
+struct GoalState;
+
 // BedrockConfig is defined in aws_bedrock.h (opaque pointer)
 struct BedrockConfigStruct;
 
@@ -284,6 +287,9 @@ typedef struct ConversationState {
 
     // Context overflow recovery tracking
     int context_overflow_recovery_attempts;  // Track recovery retries to prevent infinite loops
+
+    // Persistent cross-turn goal (Ralph mode)
+    struct GoalState *goal;     // Active standing goal, NULL if none
 } ConversationState;
 
 // ============================================================================

@@ -17,6 +17,7 @@
 #include "../util/env_utils.h"
 #include "../util/timestamp_utils.h"
 #include "../tool_utils.h"
+#include "../goal.h"
 
 static int is_openai_subscription_codex_session(const ConversationState *state) {
     if (state && state->provider && state->provider->name &&
@@ -165,6 +166,17 @@ char* build_system_prompt(ConversationState *state) {
     // Add git status if available
     if (git_status && offset < (int)prompt_size) {
         offset += snprintf(prompt + offset, prompt_size - (size_t)offset, "\n%s\n", git_status);
+    }
+
+    // Add standing goal (Ralph mode) if active
+    if (state->goal && strcmp(state->goal->status, GOAL_STATUS_ACTIVE) == 0 &&
+        offset < (int)prompt_size) {
+        offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
+            "\nSTANDING GOAL: %s\n"
+            "You are working autonomously toward this goal across multiple turns. "
+            "When the goal is fully achieved, explicitly include 'GOAL_STATUS: DONE' in your response. "
+            "If you are blocked and need user input, include 'GOAL_STATUS: BLOCKED'.\n",
+            state->goal->text);
     }
 
     // Add SKILLS directory information if it exists

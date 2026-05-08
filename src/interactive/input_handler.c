@@ -8,6 +8,7 @@
 #include "../commands.h"
 #include "../context/system_prompt.h"
 #include "../perpetual/perpetual_mode.h"
+#include "../goal.h"
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -281,6 +282,57 @@ int submit_input_callback(const char *input, void *user_data) {
 
         process_response(state, response, tui, queue, NULL);
         api_response_free(response);
+
+        /* ──────────────────────────────────────────────────────────────
+         * Ralph loop (sync path)
+         * ────────────────────────────────────────────────────────────── */
+        while (goal_is_active(state)) {
+            if (state->interrupt_requested) {
+                LOG_INFO("Ralph loop: interrupted by user");
+                break;
+            }
+
+            const char *last_response = goal_get_last_assistant_text(state);
+            GoalVerdict verdict = goal_judge(state, last_response);
+
+            if (verdict.done) {
+                goal_mark_done(state, verdict.reason);
+                ui_show_status(tui, queue, "Goal achieved");
+                free(verdict.reason);
+                break;
+            }
+
+            if (state->goal->turns_used >= state->goal->max_turns) {
+                goal_pause(state, "turn budget exhausted");
+                ui_show_status(tui, queue, "Goal paused — turn budget exhausted");
+                free(verdict.reason);
+                break;
+            }
+            free(verdict.reason);
+
+            char *prompt = goal_build_continuation_prompt(state->goal);
+            if (!prompt) break;
+            add_user_message(state, prompt);
+            state->goal->turns_used++;
+            free(prompt);
+
+            ui_set_status_varied(tui, queue, SPINNER_CONTEXT_API_CALL);
+            ApiResponse *cont_response = call_api_with_retries(state);
+            ui_set_status(tui, queue, "");
+
+            if (!cont_response) {
+                ui_show_error(tui, queue, "Ralph continuation failed");
+                break;
+            }
+            if (cont_response->error_message) {
+                ui_show_error(tui, queue, cont_response->error_message);
+                api_response_free(cont_response);
+                break;
+            }
+
+            process_response(state, cont_response, tui, queue, NULL);
+            api_response_free(cont_response);
+        }
     }
 
     free(input_copy);
