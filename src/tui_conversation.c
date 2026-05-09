@@ -378,10 +378,10 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                     // render_entry_to_pad. On wrapped lines, just let text flow.
                 } else if (last_entry->prefix && last_entry->prefix[0] != '\0') {
                     // Check if this is a reasoning or tool message — for these,
-                    // we also don't re-render the prefix on continuation lines.
-                    // The prefix/tag was already rendered on the first line by
-                    // render_entry_to_pad. Re-rendering it on every wrapped line
-                    // creates inconsistency with the final (non-streaming) render.
+                    // we skip the prefix on wrapping continuation lines to avoid
+                    // re-rendering the tag on every wrapped line. On the first
+                    // streaming chunk, render_entry_to_pad skipped the prefix
+                    // (empty-text placeholder), so we render it here.
                     int is_reasoning = (strcmp(last_entry->prefix, tui_icon_reasoning_open()) == 0 ||
                                         strcmp(last_entry->prefix, tui_icon_reasoning_close()) == 0);
                     int is_tool = ((last_entry->prefix[0] == '\xe2' &&
@@ -390,9 +390,13 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                                    (last_entry->prefix[0] == '\xef' &&
                                     last_entry->prefix[1] == '\x82' &&
                                     last_entry->prefix[2] == '\xad'));
-                    if (is_reasoning || is_tool) {
-                        // Don't re-render prefix on continuation lines.
-                    } else {
+                    // For reasoning/tool messages, skip prefix on wrapping
+                    // continuation lines (old_len > 0) to avoid re-rendering
+                    // the tag on every wrapped line. But on the first streaming
+                    // chunk (old_len == 0), the prefix must be rendered since
+                    // render_entry_to_pad skipped it for the empty placeholder.
+                    int skip_prefix = (is_reasoning || is_tool) && (old_len > 0);
+                    if (!skip_prefix) {
                         // Other messages with a prefix: re-render on continuation lines
                         // Map TUIColorPair to ncurses color pair
                         int mapped_pair = NCURSES_PAIR_FOREGROUND;
