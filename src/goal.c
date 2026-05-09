@@ -6,6 +6,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <cjson/cJSON.h>
+#include <math.h>
 
 /*
  * Judge prompts
@@ -235,7 +236,7 @@ static GoalVerdict parse_judge_response(const char *raw) {
             v.done = (ds && (strcmp(ds, "true") == 0 || strcmp(ds, "yes") == 0 ||
                              strcmp(ds, "1") == 0 || strcmp(ds, "done") == 0));
         } else if (cJSON_IsNumber(done_item)) {
-            v.done = done_item->valuedouble != 0.0;
+            v.done = fabs(done_item->valuedouble) > 1e-9;
         }
     }
 
