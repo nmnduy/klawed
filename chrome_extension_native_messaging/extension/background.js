@@ -334,34 +334,53 @@ async function executeCommand(command, params) {
     }
 
     case 'evaluate': {
+      // Use Chrome DevTools Protocol (Runtime.evaluate) to bypass CSP.
+      // This enables arbitrary JS execution on any page, including SPAs with
+      // strict Content-Security-Policy headers. The tradeoff: Chrome shows a
+      // "debugging this browser" warning bar while the debugger is attached.
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab) throw new Error('No active tab');
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        world: 'MAIN',
-        func: (code) => {
-          try {
-            // eslint-disable-next-line no-eval
-            const val = eval(code);
-            if (val === undefined) return { result: undefined };
-            if (val === null) return { result: null };
-            if (typeof val === 'object') {
-              try {
-                return { result: JSON.parse(JSON.stringify(val)) };
-              } catch (e) {
-                return { result: String(val) };
-              }
-            }
-            return { result: val };
-          } catch (err) {
-            return { error: err.message };
+
+      // Attach debugger (swallows "already attached" so repeated evaluate
+      // calls are fast — the debugger stays attached across calls and is
+      // auto-detached by Chrome on tab navigation).
+      try {
+        await chrome.debugger.attach({ tabId: tab.id }, '1.3');
+      } catch (e) {
+        if (!e.message.includes('already attached')) {
+          throw new Error(`Cannot attach debugger: ${e.message}. Close DevTools or other debuggers on this tab.`);
+        }
+      }
+
+      try {
+        const evalResult = await chrome.debugger.sendCommand(
+          { tabId: tab.id },
+          'Runtime.evaluate',
+          {
+            expression: params.code,
+            returnByValue: true,
+            awaitPromise: true,
+            timeout: params.timeout || 5000,
           }
-        },
-        args: [params.code],
-      });
-      const r = results[0].result;
-      if (r.error) throw new Error(r.error);
-      return { result: r.result };
+        );
+
+        if (evalResult.exceptionDetails) {
+          const exc = evalResult.exceptionDetails;
+          const errMsg = exc.exception?.description || exc.text || 'Evaluation failed';
+          return { error: errMsg };
+        }
+
+        const value = evalResult.result?.value;
+        if (value === undefined) return { result: undefined };
+        if (value === null) return { result: null };
+        return { result: value };
+      } catch (e) {
+        return { error: e.message };
+      }
+      // NOTE: We intentionally do NOT detach the debugger here.
+      // Keeping it attached makes subsequent evaluate calls fast (no
+      // re-attach overhead). Chrome auto-detaches on tab navigation.
+      // The tradeoff is the persistent debugger warning bar in Chrome.
     }
 
     case 'waitForElement': {
@@ -492,7 +511,7 @@ async function executeCommand(command, params) {
     case 'getInfo':
       return {
         name: 'Klawed Browser Controller',
-        version: '2.0.0',
+        version: '2.2.0',
         hostType: 'go',
         commands: [
           'navigate', 'navigateTab', 'goBack', 'goForward', 'reload',
@@ -538,6 +557,23 @@ function waitForTabLoad(tabId) {
   });
 }
 
+// Detach debugger from all tabs (called on Disconnect to clear warning bar)
+async function detachDebuggerFromAll() {
+  const targets = await chrome.debugger.getTargets().catch(() => []);
+  for (const target of targets) {
+    if (target.attached && target.tabId) {
+      await chrome.debugger.detach({ tabId: target.tabId }).catch(() => {});
+    }
+  }
+}
+
+// Log debugger detach events (e.g., user pressed Esc or clicked stop on the bar)
+chrome.debugger.onDetach.addListener((source, reason) => {
+  console.log('Debugger detached from tab', source.tabId, 'reason:', reason);
+  // We don't need to clean up state since we attach on-demand; the next
+  // evaluate call will simply re-attach if needed.
+});
+
 // ─── Message Listener (from popup / content scripts) ─────────────────────────
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -550,6 +586,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           break;
         case 'disconnect':
           if (nativePort) { nativePort.disconnect(); nativePort = null; isConnected = false; }
+          // Detach debugger from all tabs so the warning bar disappears
+          await detachDebuggerFromAll();
           result = { connected: false };
           break;
         case 'getStatus':

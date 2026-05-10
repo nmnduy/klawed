@@ -280,29 +280,19 @@ When this happens, the `navigate` command will return an error like:
 - Manually dismiss the dialog in the browser and retry
 - Use `click` to submit the form and let the page navigate naturally
 
-### Content Security Policy (CSP) blocks `evaluate`
+### Debugger warning bar (CDP `evaluate`)
 
-Many modern websites (GitHub, Twitter/X, Stripe, etc.) serve a strict `Content-Security-Policy` header that **forbids `eval()`**. The Chrome extension's `evaluate` command injects a function that calls `eval(code)` in the page's MAIN world, so on CSP-locked pages it will fail with an error like:
+The `evaluate` command uses the **Chrome DevTools Protocol** (`chrome.debugger` API + `Runtime.evaluate`) to execute arbitrary JavaScript on any page. This **bypasses Content Security Policy (CSP)** completely — it works on GitHub, Twitter/X, Stripe, and any SPA with strict CSP headers.
 
-```
-Refused to evaluate a string as JavaScript because 'unsafe-eval' is not an allowed source of script
-```
+**The tradeoff:** Chrome shows a persistent warning bar at the top of the browser window while the debugger is attached:
 
-Chrome extensions **cannot bypass CSP** via `chrome.scripting.executeScript`. This is a hard browser security boundary.
+> ⚠️ **Klawed Browser Controller** is debugging this browser
 
-**Workaround — use `web_browse_agent` instead:**
+This bar disappears when:
+- You navigate to a new page (Chrome auto-detaches the debugger)
+- You click the **Disconnect** button in the extension popup (detaches from all tabs)
 
-The Playwright-based `web_browse_agent` (in `tools/web_browse_agent/`) enables `BypassCSP` by default, so its `eval` command works on CSP-locked pages:
-
-```bash
-# Start a session
-web_browse_agent --session mysession open https://github.com
-
-# Evaluate JS — this works even on CSP-strict pages
-web_browse_agent --session mysession eval "document.title"
-```
-
-For klawed, use the `web_search` / `web_read` explore tools (requires `KLAWED_EXPLORE_MODE=1`) or invoke `web_browse_agent` directly via the `Bash` tool.
+The debugger stays attached between `evaluate` calls for performance (no re-attach overhead), so if you're only using structured commands (click, type, getText, etc.), the bar won't appear — only `evaluate` attaches the debugger.
 
 ## Troubleshooting
 
