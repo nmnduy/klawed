@@ -124,7 +124,10 @@ COMMANDS — Capture & Debug
 COMMANDS — Fallback
   eval <javascript>
       Execute arbitrary JavaScript in the active tab.
-      Use only when structured commands above are insufficient.
+      Uses Chrome DevTools Protocol (Runtime.evaluate) to bypass CSP,
+      so it works on any page including SPAs with strict security headers.
+      Note: Chrome shows a "debugging this browser" warning bar while
+      the debugger is attached (auto-detaches on navigation).
       Examples:
         browser_ctl eval "document.title"
         browser_ctl eval "window.scrollTo(0, 500)"
