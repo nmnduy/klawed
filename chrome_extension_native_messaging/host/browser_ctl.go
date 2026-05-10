@@ -1,8 +1,9 @@
 // browser_ctl — Klawed Browser Control CLI
 //
 // A thin client that speaks to the Klawed Browser Controller extension.
-// Philosophy: prefer structured commands for reliability and security.
-// Use eval only when structured commands are insufficient.
+// Philosophy: evaluate() is the primary and most reliable way to control
+// the browser. It bypasses CSP everywhere and gives you full JS power.
+// Structured commands are convenience wrappers — code is king.
 //
 // Usage:
 //   browser_ctl click "#submit"
@@ -30,16 +31,34 @@ const version = "2.2.0"
 
 const helpText = `Klawed Browser Controller
 
-Philosophy: prefer structured commands for reliability and security.
-Use eval only as a fallback when structured commands cannot do the job.
+Philosophy: evaluate() is the primary and most reliable way to control
+the browser. It bypasses CSP everywhere and gives you full JS power.
+Structured commands are convenience wrappers — code is king.
 
 QUICK START
-  browser_ctl click "#submit"
-  browser_ctl type "#search" "hello world"
+  browser_ctl eval "document.title"
+  browser_ctl eval "document.querySelector('#submit').click()"
+  browser_ctl eval "window.scrollTo(0, 500)"
   browser_ctl navigate https://example.com
   browser_ctl screenshot
-  browser_ctl list-tabs
   browser_ctl ping
+
+COMMANDS — Primary (code is king)
+  eval <javascript>
+      Execute arbitrary JavaScript in the active tab via CDP
+      Runtime.evaluate. This is your go-to command for everything:
+      reading, clicking, typing, scrolling, form-filling, waiting.
+      Bypasses CSP on any page (SPAs, strict headers, all work).
+      Note: first eval call attaches the Chrome debugger, which
+      shows a "debugging this browser" warning bar — this is normal
+      and auto-detaches on navigation.
+      Examples:
+        browser_ctl eval "document.title"
+        browser_ctl eval "document.querySelector('.btn').click()"
+        browser_ctl eval "el=document.querySelector('#q'); el.value='hi'; el.dispatchEvent(new Event('input'))"
+        browser_ctl eval "window.scrollTo(0, document.body.scrollHeight)"
+        browser_ctl eval "new Promise(r => setTimeout(r, 2000))"
+        browser_ctl eval "JSON.stringify([...document.querySelectorAll('a')].map(a=>({href:a.href,text:a.innerText})))"
 
 COMMANDS — Navigation & Tabs
   navigate <url>
@@ -55,7 +74,7 @@ COMMANDS — Navigation & Tabs
   list-tabs
       List all open tabs.
 
-COMMANDS — Page Content
+COMMANDS — Page Content (convenience wrappers)
   get-text [selector]
       Get innerText of an element (omit selector for <body>).
       Example: browser_ctl get-text "h1"
@@ -72,7 +91,7 @@ COMMANDS — Page Content
   get-attribute <selector> <attribute>
       Get an attribute value. Example: browser_ctl get-attribute "a" "href"
 
-COMMANDS — DOM Interaction (preferred over eval)
+COMMANDS — DOM Interaction (convenience wrappers)
   click <selector>
       Click an element. Example: browser_ctl click "button[type=submit]"
 
@@ -121,19 +140,6 @@ COMMANDS — Capture & Debug
   get-info
       Show host metadata and supported commands.
 
-COMMANDS — Fallback
-  eval <javascript>
-      Execute arbitrary JavaScript in the active tab.
-      Uses Chrome DevTools Protocol (Runtime.evaluate) to bypass CSP,
-      so it works on any page including SPAs with strict security headers.
-      Note: Chrome shows a "debugging this browser" warning bar while
-      the debugger is attached (auto-detaches on navigation).
-      Examples:
-        browser_ctl eval "document.title"
-        browser_ctl eval "window.scrollTo(0, 500)"
-        browser_ctl eval "document.querySelector('.result')?.innerText"
-        browser_ctl eval "new Promise(r => setTimeout(r, 1000))"
-
 FLAGS
   -socket string   Unix socket path (default: /tmp/klawed-browser.sock)
   -json            Print raw JSON response
@@ -143,7 +149,7 @@ FLAGS
 
 LEGACY MODE
   If the first argument starts with '{' it is treated as raw JSON:
-    browser_ctl '{"command":"eval","params":{"code":"document.title"}}'
+    browser_ctl '{"command":"evaluate","params":{"code":"document.title"}}'
 
 TROUBLESHOOTING
   "socket not found"
@@ -152,7 +158,7 @@ TROUBLESHOOTING
 
   "connection refused"
       → The native host may not be running. Open Chrome with the extension
-        loaded and click Connect.
+      loaded and click Connect.
 
 ENVIRONMENT
   KLAWED_BROWSER_SOCKET    Override the default Unix socket path.
