@@ -452,6 +452,15 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
 
             // Free streaming context
             openai_streaming_context_free(&stream_ctx);
+
+            /* Streaming leaves result.raw_response NULL; serialize the
+             * reconstructed response so persistence and token extraction
+             * work downstream. */
+            char *synthetic_str = cJSON_PrintUnformatted(raw_json);
+            if (synthetic_str) {
+                free(result.raw_response);
+                result.raw_response = synthetic_str;
+            }
         } else {
             // Non-streaming: parse response
             raw_json = cJSON_Parse(result.raw_response);
