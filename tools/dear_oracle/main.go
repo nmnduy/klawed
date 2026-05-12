@@ -14,11 +14,16 @@ import (
 
 // --- Types for the Responses API ---
 
+type reasoningConfig struct {
+	Effort string `json:"effort,omitempty"`
+}
+
 type responsesRequest struct {
-	Model           string `json:"model"`
-	Input           string `json:"input"`
-	MaxOutputTokens int    `json:"max_output_tokens"`
-	Store           bool   `json:"store"`
+	Model           string           `json:"model"`
+	Input           string           `json:"input"`
+	MaxOutputTokens int              `json:"max_output_tokens"`
+	Store           bool             `json:"store"`
+	Reasoning       *reasoningConfig `json:"reasoning,omitempty"`
 }
 
 type responseOutputItem struct {
@@ -54,9 +59,10 @@ type chatMessage struct {
 }
 
 type chatRequest struct {
-	Model     string        `json:"model"`
-	Messages  []chatMessage `json:"messages"`
-	MaxTokens int           `json:"max_tokens"`
+	Model           string        `json:"model"`
+	Messages        []chatMessage `json:"messages"`
+	MaxTokens       int           `json:"max_tokens"`
+	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
 }
 
 type chatChoice struct {
@@ -82,15 +88,17 @@ type chatResponse struct {
 // --- Config ---
 
 type config struct {
-	prompt     string
-	promptFile string
-	outputFile string
-	model      string
-	maxTokens  int
-	apiKey     string
-	apiBase    string
-	useChat    bool
-	showUsage  bool
+	prompt          string
+	promptFile      string
+	outputFile      string
+	model           string
+	maxTokens       int
+	apiKey          string
+	apiBase         string
+	useChat         bool
+	showUsage       bool
+	reasoningEffort string
+	listEfforts     bool
 }
 
 func parseFlags() config {
@@ -102,8 +110,11 @@ func parseFlags() config {
 	flag.StringVar(&cfg.promptFile, "file", "", "Read prompt from file")
 	flag.StringVar(&cfg.outputFile, "o", "", "Write output to file (default: stdout)")
 	flag.StringVar(&cfg.outputFile, "output", "", "Write output to file (default: stdout)")
-	flag.StringVar(&cfg.model, "m", "gpt-5.5-codex", "Model name")
-	flag.StringVar(&cfg.model, "model", "gpt-5.5-codex", "Model name")
+	flag.StringVar(&cfg.reasoningEffort, "reasoning-effort", "", "Reasoning effort: low, medium, high")
+	flag.BoolVar(&cfg.listEfforts, "list-efforts", false, "List available reasoning effort values and exit")
+
+	flag.StringVar(&cfg.model, "m", "gpt-5.5", "Model name")
+	flag.StringVar(&cfg.model, "model", "gpt-5.5", "Model name")
 	flag.IntVar(&cfg.maxTokens, "max-tokens", 4096, "Maximum output tokens")
 	flag.StringVar(&cfg.apiKey, "api-key", "", "OpenAI API key (default: $OPENAI_API_KEY)")
 	flag.StringVar(&cfg.apiBase, "api-base", "https://api.openai.com/v1", "API base URL")
@@ -120,16 +131,18 @@ Usage:
   echo "your prompt" | dear_oracle [flags]
 
 Flags:
-  -p, --prompt TEXT        Prompt text (inline)
-  -f, --file PATH          Read prompt from file
-  -o, --output PATH        Write output to file (default: stdout)
-  -m, --model NAME         Model name (default: gpt-5.5-codex)
-  --max-tokens N           Max output tokens (default: 4096)
-  --api-key KEY            API key (default: $OPENAI_API_KEY)
-  --api-base URL           API base URL (default: https://api.openai.com/v1)
-  --chat                   Use Chat Completions API instead of Responses API
-  --show-usage             Print token usage to stderr
-  -h, --help               Show this help
+  -p, --prompt TEXT          Prompt text (inline)
+  -f, --file PATH            Read prompt from file
+  -o, --output PATH          Write output to file (default: stdout)
+  -m, --model NAME           Model name (default: gpt-5.5)
+  --max-tokens N             Max output tokens (default: 4096)
+  --reasoning-effort LEVEL   Reasoning effort: low, medium, high
+  --list-efforts             List available reasoning effort values and exit
+  --api-key KEY              API key (default: $OPENAI_API_KEY)
+  --api-base URL             API base URL (default: https://api.openai.com/v1)
+  --chat                     Use Chat Completions API instead of Responses API
+  --show-usage               Print token usage to stderr
+  -h, --help                 Show this help
 
 Environment:
   OPENAI_API_KEY            Required unless --api-key is provided
@@ -142,10 +155,13 @@ Examples:
   dear_oracle -f specs.txt -o answer.md
 
   # Pipe a prompt from another command
-  cat prompt.txt | dear_oracle -m gpt-5.6-codex
+  cat prompt.txt | dear_oracle -m gpt-5.5
 
   # Use chat completions with a cheaper model
   dear_oracle -p "summarize this" --chat -m gpt-4o-mini
+
+  # Use high reasoning effort for complex decisions
+  dear_oracle -p "do the hard thing" --reasoning-effort high
 `)
 	}
 
@@ -212,6 +228,10 @@ func callResponsesAPI(cfg config, prompt string) (string, responsesResponse, err
 		Store:           false,
 	}
 
+	if cfg.reasoningEffort != "" {
+		body.Reasoning = &reasoningConfig{Effort: cfg.reasoningEffort}
+	}
+
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return "", responsesResponse{}, fmt.Errorf("marshalling request: %w", err)
@@ -274,7 +294,8 @@ func callChatAPI(cfg config, prompt string) (string, chatResponse, error) {
 		Messages: []chatMessage{
 			{Role: "user", Content: prompt},
 		},
-		MaxTokens: cfg.maxTokens,
+		MaxTokens:       cfg.maxTokens,
+		ReasoningEffort: cfg.reasoningEffort,
 	}
 
 	payload, err := json.Marshal(body)
@@ -330,6 +351,28 @@ func writeOutput(cfg config, text string) error {
 func main() {
 	cfg := parseFlags()
 
+	// Handle --list-efforts
+	if cfg.listEfforts {
+		fmt.Fprintln(os.Stderr, "Available reasoning effort values:")
+		fmt.Fprintln(os.Stderr, "  low     - Fast, minimal reasoning (best for simple tasks)")
+		fmt.Fprintln(os.Stderr, "  medium  - Balanced reasoning (default)")
+		fmt.Fprintln(os.Stderr, "  high    - Deep, thorough reasoning (best for complex decisions)")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Usage: --reasoning-effort low|medium|high")
+		os.Exit(0)
+	}
+
+	// Validate reasoning effort
+	if cfg.reasoningEffort != "" {
+		switch cfg.reasoningEffort {
+		case "low", "medium", "high":
+			// valid
+		default:
+			fmt.Fprintf(os.Stderr, "Error: invalid reasoning effort %q. Valid values: low, medium, high (see --list-efforts)\n", cfg.reasoningEffort)
+			os.Exit(1)
+		}
+	}
+
 	// Resolve API key
 	if cfg.apiKey == "" {
 		cfg.apiKey = os.Getenv("OPENAI_API_KEY")
@@ -352,7 +395,11 @@ func main() {
 		if cfg.useChat {
 			mode = "chat"
 		}
-		fmt.Fprintf(os.Stderr, "🔮 dear_oracle: asking %s via %s API...\n", cfg.model, mode)
+		if cfg.reasoningEffort != "" {
+			fmt.Fprintf(os.Stderr, "🔮 dear_oracle: asking %s (%s reasoning) via %s API...\n", cfg.model, cfg.reasoningEffort, mode)
+		} else {
+			fmt.Fprintf(os.Stderr, "🔮 dear_oracle: asking %s via %s API...\n", cfg.model, mode)
+		}
 	}
 
 	// Call API
