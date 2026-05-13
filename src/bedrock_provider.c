@@ -550,6 +550,15 @@ static void bedrock_execute_request(BedrockConfig *config, const char *converse_
 
             // Free streaming context
             bedrock_streaming_context_free(&stream_ctx);
+
+            /* Streaming leaves result.raw_response NULL; serialize the
+             * reconstructed response so downstream persistence and
+             * token extraction work. */
+            char *synth_str = cJSON_PrintUnformatted(openai_json);
+            if (synth_str) {
+                free(result.raw_response);
+                result.raw_response = synth_str;
+            }
         } else {
             // Non-streaming: convert Converse API response to OpenAI format
             openai_json = bedrock_converse_convert_response(result.raw_response);

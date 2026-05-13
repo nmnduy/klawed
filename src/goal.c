@@ -392,6 +392,12 @@ GoalVerdict goal_judge(const ConversationState *state, const char *last_response
     }
 
     const char *raw = response->message.text ? response->message.text : "";
+    /* Some reasoning models (e.g. kimi-for-coding) may emit reasoning_content
+     * and leave content empty when the token budget is tight.  Fall back to
+     * reasoning_content so the judge verdict is not lost. */
+    if (!raw || !raw[0]) {
+        raw = response->message.reasoning_content ? response->message.reasoning_content : "";
+    }
     LOG_DEBUG("Goal judge: raw response: %.200s", raw);
 
     verdict = parse_judge_response(raw);
@@ -436,4 +442,11 @@ const char *goal_get_last_assistant_text(const ConversationState *state) {
         }
     }
     return "";
+}
+
+int goal_check_explicit_markers(const char *text) {
+    if (!text || !text[0]) return 0;
+    if (strstr(text, "GOAL_STATUS: DONE") != NULL) return 1;
+    if (strstr(text, "GOAL_STATUS: BLOCKED") != NULL) return -1;
+    return 0;
 }

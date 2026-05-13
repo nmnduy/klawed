@@ -189,6 +189,7 @@ TEST_PROVIDER_INIT_FROM_CONFIG_TARGET = $(BUILD_DIR)/test_provider_init_from_con
 TEST_OPENAI_RESPONSES_PROVIDER_TARGET = $(BUILD_DIR)/test_openai_responses_provider
 TEST_DATA_DIR_TARGET = $(BUILD_DIR)/test_data_dir
 TEST_REALTIME_STEERING_TARGET = $(BUILD_DIR)/test_realtime_steering
+TEST_STREAMING_PERSISTENCE_TARGET = $(BUILD_DIR)/test_streaming_persistence
 TEST_TUI_TOOL_CONNECTOR_TARGET = $(BUILD_DIR)/test_tui_tool_connector
 TEST_TUI_STREAMING_INDEX_TARGET = $(BUILD_DIR)/test_tui_streaming_index
 QUERY_TOOL = $(BUILD_DIR)/query_logs
@@ -543,6 +544,7 @@ TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
 TEST_SSE_PARSER_SRC = tests/test_sse_parser.c
 TEST_STREAMING_TOOL_ACCUMULATOR_SRC = tests/test_streaming_tool_accumulator.c
 TEST_STREAMING_TOOL_CALLS_SRC = tests/test_streaming_tool_calls.c
+TEST_STREAMING_PERSISTENCE_SRC = tests/test_streaming_persistence.c
 TEST_STREAMING_TOOL_CALLS_TARGET = $(BUILD_DIR)/test_streaming_tool_calls
 TEST_MOONSHOT_STREAMING_TOOLS_SRC = tests/test_moonshot_streaming_tools.c
 TEST_MOONSHOT_STREAMING_TOOLS_TARGET = $(BUILD_DIR)/test_moonshot_streaming_tools
@@ -574,7 +576,7 @@ TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET = $(BUILD_DIR)/test_model_switch_queue_re
 TEST_INSERT_SYSTEM_MESSAGE_SRC = tests/test_insert_system_message.c
 TEST_INSERT_SYSTEM_MESSAGE_TARGET = $(BUILD_DIR)/test_insert_system_message
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-paste-placeholder test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-paste-placeholder test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools test-streaming-persistence query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -589,7 +591,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-tool-disable
+test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-streaming-persistence test-tool-disable
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -978,6 +980,12 @@ test-http-client: check-deps $(TEST_HTTP_CLIENT_TARGET)
 	@echo "Running HTTP Client tests..."
 	@echo ""
 	@./$(TEST_HTTP_CLIENT_TARGET)
+
+test-streaming-persistence: check-deps $(TEST_STREAMING_PERSISTENCE_TARGET)
+	@echo ""
+	@echo "Running Streaming Persistence tests..."
+	@echo ""
+	@./$(TEST_STREAMING_PERSISTENCE_TARGET)
 
 test-sse-parser: check-deps $(TEST_SSE_PARSER_TARGET)
 	@echo ""
@@ -3273,6 +3281,9 @@ $(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(SSE_PAR
 
 $(TEST_SSE_PARSER_TARGET): $(TEST_SSE_PARSER_SRC) $(SSE_PARSER_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_SSE_PARSER_TARGET) $(TEST_SSE_PARSER_SRC) $(SSE_PARSER_OBJ) $(LDFLAGS)
+
+$(TEST_STREAMING_PERSISTENCE_TARGET): $(TEST_STREAMING_PERSISTENCE_SRC) $(OPENAI_STREAMING_OBJ) $(STREAMING_TOOL_ACCUMULATOR_OBJ) $(AWS_BEDROCK_OBJ) $(SSE_PARSER_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(TOOL_UTILS_OBJ)
+	@$(CC) $(CFLAGS) -DARENA_IMPLEMENTATION -I./src -o $(TEST_STREAMING_PERSISTENCE_TARGET) $(TEST_STREAMING_PERSISTENCE_SRC) $(OPENAI_STREAMING_OBJ) $(STREAMING_TOOL_ACCUMULATOR_OBJ) $(AWS_BEDROCK_OBJ) $(SSE_PARSER_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(TOOL_UTILS_OBJ) $(LDFLAGS)
 
 $(TEST_STREAMING_TOOL_ACCUMULATOR_TARGET): $(TEST_STREAMING_TOOL_ACCUMULATOR_SRC) $(STREAMING_TOOL_ACCUMULATOR_OBJ) $(SSE_PARSER_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_STREAMING_TOOL_ACCUMULATOR_TARGET) $(TEST_STREAMING_TOOL_ACCUMULATOR_SRC) $(STREAMING_TOOL_ACCUMULATOR_OBJ) $(SSE_PARSER_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
