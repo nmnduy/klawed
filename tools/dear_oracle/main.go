@@ -59,10 +59,10 @@ type chatMessage struct {
 }
 
 type chatRequest struct {
-	Model           string        `json:"model"`
-	Messages        []chatMessage `json:"messages"`
-	MaxTokens       int           `json:"max_tokens"`
-	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
+	Model               string        `json:"model"`
+	Messages            []chatMessage `json:"messages"`
+	MaxCompletionTokens int           `json:"max_completion_tokens"`
+	ReasoningEffort     string        `json:"reasoning_effort,omitempty"`
 }
 
 type chatChoice struct {
@@ -297,8 +297,8 @@ func callChatAPI(cfg config, prompt string) (string, chatResponse, error) {
 		Messages: []chatMessage{
 			{Role: "user", Content: prompt},
 		},
-		MaxTokens:       cfg.maxTokens,
-		ReasoningEffort: cfg.reasoningEffort,
+		MaxCompletionTokens: cfg.maxTokens,
+		ReasoningEffort:     cfg.reasoningEffort,
 	}
 
 	payload, err := json.Marshal(body)
