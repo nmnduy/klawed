@@ -174,6 +174,7 @@ cp chrome_extension_native_messaging/klawed_dynamic_tools.json .klawed/dynamic_t
 | `fillForm` | `{"data": {"#sel": "val"}}` | Fill multiple form fields |
 | `submitForm` | `{"selector": "form"}` | Submit a form |
 | `pressKey` | `{"selector": "CSS", "key": "Enter"}` | Dispatch keyboard event |
+| `uploadFile` | `{"selector": "input[type=file]", "filePaths": ["/path/to/file"]}` | Set files on a file input via CDP |
 
 ### Scrolling
 | Command | Params | Description |
@@ -248,6 +249,9 @@ browser_ctl list-tabs
 
 # Screenshot
 browser_ctl screenshot
+
+# Upload a file
+browser_ctl upload-file "input[type=file]" /path/to/file.pdf
 
 # Fallback: evaluate JS
 browser_ctl eval "document.title"

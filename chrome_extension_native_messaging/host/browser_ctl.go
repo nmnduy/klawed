@@ -126,6 +126,11 @@ COMMANDS — DOM Interaction (convenience wrappers)
   submit-form [selector]
       Submit a form.
 
+  upload-file <selector> <file...>
+      Upload one or more files to a file input element via CDP.
+      File paths must be absolute. Multiple files supported.
+      Example: browser_ctl upload-file "input[type=file]" /path/to/doc.pdf
+
   wait-for-element <selector> [timeoutMs]
       Wait for an element to appear (default 10s).
 
@@ -451,6 +456,13 @@ func buildPayload(args []string) string {
 		if len(args) > 1 {
 			params["code"] = strings.Join(args[1:], " ")
 		}
+	case "upload-file":
+		if len(args) > 1 {
+			params["selector"] = args[1]
+			if len(args) > 2 {
+				params["filePaths"] = args[2:]
+			}
+		}
 	}
 
 	// Map CLI names to camelCase extension commands
@@ -473,6 +485,7 @@ func buildPayload(args []string) string {
 		"submit-form":       "submitForm",
 		"press-key":         "pressKey",
 		"wait-for-element":  "waitForElement",
+		"upload-file":       "uploadFile",
 		"get-info":          "getInfo",
 	}
 	if mapped, ok := commandMap[cmd]; ok {

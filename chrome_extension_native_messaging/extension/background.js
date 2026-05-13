@@ -454,6 +454,51 @@ async function executeCommand(command, params) {
       return { forms: result[0].result };
     }
 
+    case 'uploadFile': {
+      // Use CDP DOM.setFileInputFiles — the only programmatic way to
+      // set files on <input type="file"> elements (browser security
+      // prevents content scripts and page JS from doing this).
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab) throw new Error('No active tab');
+
+      // Attach debugger (reuses existing attachment if already attached via evaluate)
+      try {
+        await chrome.debugger.attach({ tabId: tab.id }, '1.3');
+      } catch (e) {
+        if (!e.message.includes('already attached')) {
+          throw new Error(`Cannot attach debugger: ${e.message}`);
+        }
+      }
+
+      try {
+        // Step 1: Get the document root node
+        const doc = await chrome.debugger.sendCommand(
+          { tabId: tab.id }, 'DOM.getDocument', { depth: 0 }
+        );
+
+        // Step 2: Query for the file input element
+        const nodeResult = await chrome.debugger.sendCommand(
+          { tabId: tab.id }, 'DOM.querySelector',
+          { nodeId: doc.root.nodeId, selector: params.selector }
+        );
+
+        if (!nodeResult || !nodeResult.nodeId) {
+          return { success: false, error: `File input element not found: ${params.selector}` };
+        }
+
+        // Step 3: Set the files (absolute paths required)
+        await chrome.debugger.sendCommand(
+          { tabId: tab.id }, 'DOM.setFileInputFiles',
+          { files: params.filePaths, nodeId: nodeResult.nodeId }
+        );
+
+        return { success: true, selector: params.selector, fileCount: params.filePaths.length };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+      // NOTE: Debugger stays attached for fast subsequent evaluate/uploadFile calls.
+    }
+
     case 'fillForm': {
       const result = await execInActiveTab((data) => {
         const results = [];
@@ -520,7 +565,7 @@ async function executeCommand(command, params) {
           'click', 'type', 'getText', 'getHtml', 'getAttribute',
           'scroll', 'scrollBy', 'scrollToElement', 'evaluate',
           'waitForElement', 'findElements', 'getLinks', 'getForms',
-          'fillForm', 'submitForm', 'pressKey',
+          'fillForm', 'submitForm', 'pressKey', 'uploadFile',
           'screenshot', 'ping', 'getInfo',
         ],
       };
