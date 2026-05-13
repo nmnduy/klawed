@@ -293,6 +293,20 @@ int submit_input_callback(const char *input, void *user_data) {
             }
 
             const char *last_response = goal_get_last_assistant_text(state);
+
+            /* Fast path: honor explicit goal-status markers before
+             * spending a judge API call. */
+            int marker = goal_check_explicit_markers(last_response);
+            if (marker == 1) {
+                goal_mark_done(state, "assistant explicitly marked goal as done");
+                ui_set_status(tui, queue, "Goal achieved");
+                break;
+            } else if (marker == -1) {
+                goal_pause(state, "assistant explicitly marked goal as blocked");
+                ui_set_status(tui, queue, "Goal paused — blocked");
+                break;
+            }
+
             GoalVerdict verdict = goal_judge(state, last_response);
 
             if (verdict.done) {

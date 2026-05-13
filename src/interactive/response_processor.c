@@ -1079,6 +1079,21 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
         }
 
         const char *last_response = goal_get_last_assistant_text(ctx->state);
+
+        /* Fast path: the system prompt instructs the model to emit
+         * GOAL_STATUS: DONE / GOAL_STATUS: BLOCKED.  Honor these
+         * immediately without burning a judge API call. */
+        int marker = goal_check_explicit_markers(last_response);
+        if (marker == 1) {
+            goal_mark_done(ctx->state, "assistant explicitly marked goal as done");
+            ui_set_status(NULL, ctx->tui_queue, "Goal achieved");
+            break;
+        } else if (marker == -1) {
+            goal_pause(ctx->state, "assistant explicitly marked goal as blocked");
+            ui_set_status(NULL, ctx->tui_queue, "Goal paused — blocked");
+            break;
+        }
+
         GoalVerdict verdict = goal_judge(ctx->state, last_response);
 
         if (verdict.done) {

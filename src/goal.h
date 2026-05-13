@@ -18,7 +18,7 @@
  */
 
 #define DEFAULT_GOAL_MAX_TURNS 20
-#define GOAL_JUDGE_MAX_TOKENS 128
+#define GOAL_JUDGE_MAX_TOKENS 32000
 
 /* Goal status values */
 #define GOAL_STATUS_ACTIVE   "active"
@@ -121,5 +121,17 @@ char *goal_build_continuation_prompt(const GoalState *goal);
  * Returns "" if no assistant message found.
  */
 const char *goal_get_last_assistant_text(const ConversationState *state);
+
+/*
+ * Check for explicit goal-status markers in assistant text.
+ * The system prompt instructs the model to include:
+ *   GOAL_STATUS: DONE     when the goal is achieved
+ *   GOAL_STATUS: BLOCKED  when blocked waiting for user input
+ *
+ * Returns:  1 = DONE marker found
+ *          -1 = BLOCKED marker found
+ *           0 = neither
+ */
+int goal_check_explicit_markers(const char *text);
 
 #endif /* GOAL_H */
