@@ -99,6 +99,7 @@ type config struct {
 	showUsage       bool
 	reasoningEffort string
 	listEfforts     bool
+	doctor          bool
 }
 
 func parseFlags() config {
@@ -112,10 +113,11 @@ func parseFlags() config {
 	flag.StringVar(&cfg.outputFile, "output", "", "Write output to file (default: stdout)")
 	flag.StringVar(&cfg.reasoningEffort, "reasoning-effort", "", "Reasoning effort: low, medium, high")
 	flag.BoolVar(&cfg.listEfforts, "list-efforts", false, "List available reasoning effort values and exit")
+	flag.BoolVar(&cfg.doctor, "doctor", false, "Run self-diagnostic checks and exit")
 
 	flag.StringVar(&cfg.model, "m", "gpt-5.5", "Model name")
 	flag.StringVar(&cfg.model, "model", "gpt-5.5", "Model name")
-	flag.IntVar(&cfg.maxTokens, "max-tokens", 4096, "Maximum output tokens")
+	flag.IntVar(&cfg.maxTokens, "max-tokens", 32768, "Maximum output tokens")
 	flag.StringVar(&cfg.apiKey, "api-key", "", "OpenAI API key (default: $OPENAI_API_KEY)")
 	flag.StringVar(&cfg.apiBase, "api-base", "https://api.openai.com/v1", "API base URL")
 	flag.StringVar(&cfg.apiBase, "api-base-url", "https://api.openai.com/v1", "API base URL")
@@ -135,9 +137,10 @@ Flags:
   -f, --file PATH            Read prompt from file
   -o, --output PATH          Write output to file (default: stdout)
   -m, --model NAME           Model name (default: gpt-5.5)
-  --max-tokens N             Max output tokens (default: 4096)
+  --max-tokens N             Max output tokens (default: 32768)
   --reasoning-effort LEVEL   Reasoning effort: low, medium, high
   --list-efforts             List available reasoning effort values and exit
+  --doctor                   Run self-diagnostics to check configuration
   --api-key KEY              API key (default: $OPENAI_API_KEY)
   --api-base URL             API base URL (default: https://api.openai.com/v1)
   --chat                     Use Chat Completions API instead of Responses API
@@ -348,8 +351,100 @@ func writeOutput(cfg config, text string) error {
 	return err
 }
 
+// runDoctor performs self-diagnostics to check if dear_oracle is configured correctly.
+func runDoctor(cfg config) {
+	ok := 0
+	fail := 0
+
+	check := func(name string, passed bool, info string) {
+		if passed {
+			fmt.Fprintf(os.Stderr, "  ✅ %s — %s\n", name, info)
+			ok++
+		} else {
+			fmt.Fprintf(os.Stderr, "  ❌ %s — %s\n", name, info)
+			fail++
+		}
+	}
+
+	fmt.Fprintln(os.Stderr, "🔍 dear_oracle doctor — checking configuration")
+	fmt.Fprintln(os.Stderr, "")
+
+	// Check API key
+	key := cfg.apiKey
+	if key == "" {
+		key = os.Getenv("OPENAI_API_KEY")
+	}
+	if key != "" {
+		prefix := ""
+		if len(key) > 8 {
+			prefix = key[:8]
+		}
+		check("API key", true,
+			fmt.Sprintf("found (%s...%d chars)", prefix, len(key)))
+	} else {
+		check("API key", false,
+			"not set. Use --api-key or set OPENAI_API_KEY")
+	}
+
+	// Check API base URL
+	check("API base URL", cfg.apiBase != "",
+		fmt.Sprintf("configured as %s", cfg.apiBase))
+
+	// Check API reachability
+	if cfg.apiBase != "" {
+		client := &http.Client{Timeout: 10 * time.Second}
+		req, err := http.NewRequest("GET", cfg.apiBase+"/models", nil)
+		if err == nil {
+			if key != "" {
+				req.Header.Set("Authorization", "Bearer "+key)
+			}
+			resp, connErr := client.Do(req)
+			if connErr != nil {
+				check("API connectivity", false,
+					fmt.Sprintf("cannot reach %s: %v", cfg.apiBase, connErr))
+			} else {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusUnauthorized {
+					if resp.StatusCode == http.StatusOK {
+						check("API connectivity", true, "API is reachable and key is valid")
+					} else {
+						check("API connectivity", true,
+							fmt.Sprintf("API is reachable (HTTP %d — key may be invalid or endpoint requires auth)", resp.StatusCode))
+					}
+				} else {
+					check("API connectivity", false,
+						fmt.Sprintf("unexpected HTTP %d from %s/models", resp.StatusCode, cfg.apiBase))
+				}
+			}
+		} else {
+			check("API connectivity", false,
+				fmt.Sprintf("failed to create request: %v", err))
+		}
+	}
+
+	// Check model name
+	check("Model name", cfg.model != "",
+		fmt.Sprintf("configured as %q", cfg.model))
+
+	fmt.Fprintln(os.Stderr, "")
+
+	// Summary
+	if fail == 0 {
+		fmt.Fprintf(os.Stderr, "✅ All %d checks passed.\n", ok)
+	} else {
+		fmt.Fprintf(os.Stderr, "⚠️  %d passed, %d failed\n", ok, fail)
+		os.Exit(1)
+	}
+}
+
 func main() {
 	cfg := parseFlags()
+
+	// Handle --doctor (run before any other checks to avoid requiring a prompt)
+	if cfg.doctor {
+		runDoctor(cfg)
+		os.Exit(0)
+	}
 
 	// Handle --list-efforts
 	if cfg.listEfforts {
