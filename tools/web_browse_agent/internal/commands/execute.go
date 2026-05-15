@@ -9,6 +9,22 @@ import (
 	"github.com/klawed/tools/web_browse_agent/pkg/ipc"
 )
 
+// extractFrameFlag scans args for --frame <value> flag, extracts it,
+// and returns the frame value along with the remaining args.
+func extractFrameFlag(args []string) (string, []string) {
+	var remaining []string
+	frameValue := ""
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--frame" && i+1 < len(args) {
+			frameValue = args[i+1]
+			i++ // skip the value
+		} else {
+			remaining = append(remaining, args[i])
+		}
+	}
+	return frameValue, remaining
+}
+
 // Execute executes a command for a session
 func Execute(sess *session.Session, commandName string, args []string) (string, error) {
 	// Check if driver is running, start if needed
@@ -68,94 +84,107 @@ func ensureDriverRunning(sess *session.Session) error {
 
 // parseCommand parses CLI command into IPC command and arguments
 func parseCommand(commandName string, args []string) (ipc.CommandType, interface{}, error) {
+	// Extract --frame flag from args for frame-aware commands
+	frame, cleanArgs := extractFrameFlag(args)
+
 	switch strings.ToLower(commandName) {
 	case "open":
-		if len(args) < 1 {
+		if len(cleanArgs) < 1 {
 			return "", nil, fmt.Errorf("open requires URL argument")
 		}
 		return ipc.CommandOpen, ipc.CommandArguments{
-			URL: args[0],
+			URL: cleanArgs[0],
 		}, nil
 
 	case "list-tabs":
 		return ipc.CommandListTabs, nil, nil
 
+	case "list-frames":
+		return ipc.CommandListFrames, nil, nil
+
 	case "switch-tab":
-		if len(args) < 1 {
+		if len(cleanArgs) < 1 {
 			return "", nil, fmt.Errorf("switch-tab requires tab ID argument")
 		}
 		return ipc.CommandSwitchTab, ipc.CommandArguments{
-			TabID: args[0],
+			TabID: cleanArgs[0],
 		}, nil
 
 	case "close-tab":
-		if len(args) < 1 {
+		if len(cleanArgs) < 1 {
 			return "", nil, fmt.Errorf("close-tab requires tab ID argument")
 		}
 		return ipc.CommandCloseTab, ipc.CommandArguments{
-			TabID: args[0],
+			TabID: cleanArgs[0],
 		}, nil
 
 	case "eval":
-		if len(args) < 1 {
+		if len(cleanArgs) < 1 {
 			return "", nil, fmt.Errorf("eval requires JavaScript argument")
 		}
 		return ipc.CommandEval, ipc.CommandArguments{
-			JavaScript: strings.Join(args, " "),
+			JavaScript: strings.Join(cleanArgs, " "),
+			Frame:      frame,
 		}, nil
 
 	case "click":
-		if len(args) < 1 {
+		if len(cleanArgs) < 1 {
 			return "", nil, fmt.Errorf("click requires selector argument")
 		}
 		return ipc.CommandClick, ipc.CommandArguments{
-			Selector: args[0],
+			Selector: cleanArgs[0],
+			Frame:    frame,
 		}, nil
 
 	case "type":
-		if len(args) < 2 {
+		if len(cleanArgs) < 2 {
 			return "", nil, fmt.Errorf("type requires selector and text arguments")
 		}
 		return ipc.CommandTypeText, ipc.CommandArguments{
-			Selector: args[0],
-			Text:     strings.Join(args[1:], " "),
+			Selector: cleanArgs[0],
+			Text:     strings.Join(cleanArgs[1:], " "),
+			Frame:    frame,
 		}, nil
 
 	case "upload-file":
-		if len(args) < 2 {
+		if len(cleanArgs) < 2 {
 			return "", nil, fmt.Errorf("upload-file requires selector and at least one file path")
 		}
 		return ipc.CommandUploadFile, ipc.CommandArguments{
-			Selector:  args[0],
-			FilePaths: args[1:],
+			Selector:  cleanArgs[0],
+			FilePaths: cleanArgs[1:],
+			Frame:     frame,
 		}, nil
 
 	case "wait-for":
-		if len(args) < 1 {
+		if len(cleanArgs) < 1 {
 			return "", nil, fmt.Errorf("wait-for requires selector argument")
 		}
 		return ipc.CommandWaitFor, ipc.CommandArguments{
-			Selector: args[0],
+			Selector: cleanArgs[0],
+			Frame:    frame,
 		}, nil
 
 	case "screenshot":
 		// Optional path argument
 		argsMap := make(map[string]interface{})
-		if len(args) > 0 {
-			argsMap["path"] = args[0]
+		if len(cleanArgs) > 0 {
+			argsMap["path"] = cleanArgs[0]
 		}
 		return ipc.CommandScreenshot, argsMap, nil
 
 	case "html":
-		return ipc.CommandHTML, nil, nil
+		return ipc.CommandHTML, ipc.CommandArguments{
+			Frame: frame,
+		}, nil
 
 	case "set-viewport":
-		if len(args) < 2 {
+		if len(cleanArgs) < 2 {
 			return "", nil, fmt.Errorf("set-viewport requires width and height arguments")
 		}
 		var width, height int
-		fmt.Sscanf(args[0], "%d", &width)
-		fmt.Sscanf(args[1], "%d", &height)
+		fmt.Sscanf(cleanArgs[0], "%d", &width)
+		fmt.Sscanf(cleanArgs[1], "%d", &height)
 		return ipc.CommandSetViewport, ipc.CommandArguments{
 			Width:  width,
 			Height: height,
@@ -203,6 +232,8 @@ func formatResponse(resp *ipc.Response, commandName string) (string, error) {
 	switch commandName {
 	case "list-tabs":
 		return formatTabList(data)
+	case "list-frames":
+		return formatFrameList(data)
 	case "eval":
 		return formatEvalResult(data)
 	case "session-info":
@@ -246,6 +277,51 @@ func formatTabList(data interface{}) (string, error) {
 			result.WriteString(fmt.Sprintf("      URL: %s\n", tab.URL))
 		}
 	}
+	return result.String(), nil
+}
+
+// formatFrameList formats frame list for display
+func formatFrameList(data interface{}) (string, error) {
+	var list struct {
+		Iframes    []map[string]interface{} `json:"iframes"`
+		FrameCount int                      `json:"frame_count"`
+		Hint       string                   `json:"hint"`
+	}
+
+	jsonData, _ := json.Marshal(data)
+	if err := json.Unmarshal(jsonData, &list); err != nil {
+		return "", err
+	}
+
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Frames found: %d\n", list.FrameCount))
+	result.WriteString("\n")
+
+	for i, frame := range list.Iframes {
+		result.WriteString(fmt.Sprintf("  [%d]\n", i+1))
+
+		if id, ok := frame["id"].(string); ok && id != "" {
+			result.WriteString(fmt.Sprintf("      ID:       #%s\n", id))
+		}
+		if name, ok := frame["name"].(string); ok && name != "" {
+			result.WriteString(fmt.Sprintf("      Name:     %s\n", name))
+		}
+		if src, ok := frame["src"].(string); ok && src != "" {
+			result.WriteString(fmt.Sprintf("      Src:      %s\n", src))
+		}
+		if selector, ok := frame["selector"].(string); ok && selector != "" {
+			result.WriteString(fmt.Sprintf("      Selector: %s\n", selector))
+		}
+		if visible, ok := frame["visible"].(bool); ok {
+			result.WriteString(fmt.Sprintf("      Visible:  %v\n", visible))
+		}
+		if sandbox, ok := frame["sandbox"].(string); ok && sandbox != "" {
+			result.WriteString(fmt.Sprintf("      Sandbox:  %s\n", sandbox))
+		}
+		result.WriteString("\n")
+	}
+
+	result.WriteString(fmt.Sprintf("Hint: %s\n", list.Hint))
 	return result.String(), nil
 }
 

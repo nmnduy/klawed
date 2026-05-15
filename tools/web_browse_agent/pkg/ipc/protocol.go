@@ -22,6 +22,7 @@ const (
 	CommandTypeText   CommandType = "type"
 	CommandWaitFor    CommandType = "wait-for"
 	CommandUploadFile CommandType = "upload-file"
+	CommandListFrames CommandType = "list-frames"
 
 	// Page inspection commands
 	CommandScreenshot CommandType = "screenshot"
@@ -69,6 +70,9 @@ type CommandArguments struct {
 	JavaScript string `json:"javascript,omitempty"`
 	Width      int    `json:"width,omitempty"`
 	Height     int    `json:"height,omitempty"`
+
+	// Iframe support
+	Frame string `json:"frame,omitempty"` // CSS selector for an iframe element to target
 
 	// WaitFor specific
 	WaitType string `json:"wait_type,omitempty"` // "selector", "timeout", "navigation"

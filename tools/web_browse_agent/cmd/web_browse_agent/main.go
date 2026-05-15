@@ -43,6 +43,7 @@ var (
 	browserExecutable string
 	userDataDir       string
 	proxy             string
+	frame             string
 )
 
 // Enhanced help text - displayed with --help or help command
@@ -54,6 +55,13 @@ QUICK START
 
   # Get page content
   web_browse_agent --session my-session html
+
+  # List iframes and interact with them
+  web_browse_agent --session my-session list-frames
+  web_browse_agent --session my-session click "#btn" --frame "#my-iframe"
+
+  # Evaluate JavaScript inside an iframe
+  web_browse_agent --session my-session eval "document.title" --frame "#my-iframe"
 
   # Take a screenshot (use --json to get base64 data)
   web_browse_agent --session my-session --json screenshot
@@ -78,6 +86,8 @@ GLOBAL FLAGS
   --proxy <url>         HTTP/SOCKS proxy URL (overrides WEB_AGENT_PROXY)
   --browser <path>      Browser executable path (auto-detects if not set)
   --user-data-dir <dir> Browser profile directory
+  --frame <selector>    Target an iframe for click/type/eval/wait-for/html
+                        (command-level flag, place after the command name)
 
 AVAILABLE COMMANDS
 
@@ -89,13 +99,21 @@ AVAILABLE COMMANDS
 
   Page Interaction:
     click <selector>      Click an element (CSS or Playwright selector)
+                            Use --frame <sel> to click inside an iframe
     type <selector> <text>  Type text into element (clears first)
+                            Use --frame <sel> to type inside an iframe
     upload-file <sel> <paths...>  Upload file(s) to file input
+                            Use --frame <sel> to upload inside an iframe
     wait-for <selector>   Wait for element to appear
+                            Use --frame <sel> to wait inside an iframe
     eval <javascript>     Execute JavaScript, returns {"value": ...}
+                            Use --frame <sel> to evaluate inside an iframe
 
   Page Inspection:
     html                  Get full page HTML
+                            Use --frame <sel> to get HTML from an iframe
+    list-frames           List all iframes on the current page
+                            Use click/type/eval with --frame for iframe interaction
     screenshot            Take screenshot (use --json for base64 data)
 
   Browser Configuration:
@@ -140,6 +158,13 @@ open('shot.png','wb').write(base64.b64decode(d['data']))"
     web_browse_agent --session s upload-file "input[type=file]" /path/to/file.pdf
     web_browse_agent --session s click "#submit"
 
+  Iframe Interaction:
+    web_browse_agent --session s open https://example.com/page-with-iframes
+    web_browse_agent --session s list-frames
+    web_browse_agent --session s type "#email" "user@test.com" --frame "#login-frame"
+    web_browse_agent --session s click "#submit-btn" --frame "#login-frame"
+    web_browse_agent --session s eval "document.querySelector('.status').textContent" --frame "#login-frame"
+
 SELECTORS
   Commands accepting selectors support CSS and Playwright selectors:
 
@@ -151,6 +176,16 @@ SELECTORS
   Playwright selectors:
     text=Sign In
     role=button[name='Submit']
+
+IFRAME TARGETING
+  Use the --frame flag to target elements inside an <iframe>:
+
+    click "#btn" --frame "#my-iframe"
+    type "#email" "user@test.com" --frame "iframe[name='login']"
+    eval "document.title" --frame ".editor-frame"
+
+  The --frame value is a CSS selector for the iframe element itself.
+  Use 'list-frames' to discover iframes and their selectors on any page.
 
 ASYNC NAVIGATION
   The 'open' command returns immediately after HTTP headers are received.
@@ -228,8 +263,8 @@ For detailed command reference, run: web_browse_agent describe-commands
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "web_browse_agent [command] [args...]",
-		Short: "Sessionful web browser automation CLI",
+		Use:     "web_browse_agent [command] [args...]",
+		Short:   "Sessionful web browser automation CLI",
 		Long:    longHelpText,
 		Args:    cobra.ArbitraryArgs,
 		RunE:    runCommand,
@@ -245,6 +280,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&browserExecutable, "browser", "", "Browser executable path (e.g., /usr/bin/brave-browser). If not set, auto-detects system Chromium/Chrome")
 	rootCmd.PersistentFlags().StringVar(&userDataDir, "user-data-dir", "", "Browser profile directory (e.g., ~/.config/BraveSoftware/Brave-Browser/Default)")
 	rootCmd.PersistentFlags().StringVar(&proxy, "proxy", "", "HTTP/SOCKS proxy URL, e.g. http://host:8080 or socks5://host:1080 (overrides WEB_AGENT_PROXY env var)")
+	rootCmd.PersistentFlags().StringVar(&frame, "frame", "", "Target an iframe for click/type/eval/wait-for/html (CSS selector for the iframe element)")
 
 	// Don't mark session as required globally - check in runCommand instead
 
@@ -464,7 +500,7 @@ func executeCommand(sess *session.Session, commandName string, args []string) (s
 	}
 
 	// Parse command and arguments
-	ipcCommand, commandArgs, err := parseCommand(commandName, args)
+	ipcCommand, commandArgs, err := parseCommand(commandName, args, frame)
 	if err != nil {
 		return "", fmt.Errorf("invalid command: %w", err)
 	}
@@ -485,7 +521,25 @@ func executeCommand(sess *session.Session, commandName string, args []string) (s
 	return formatResponse(resp, commandName)
 }
 
-func parseCommand(commandName string, args []string) (ipc.CommandType, interface{}, error) {
+// extractFrameFlag scans args for --frame <value> flag, extracts it,
+// and returns the frame value along with the remaining args.
+func extractFrameFlag(args []string) (string, []string) {
+	var remaining []string
+	frameValue := ""
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--frame" && i+1 < len(args) {
+			frameValue = args[i+1]
+			i++ // skip the value
+		} else {
+			remaining = append(remaining, args[i])
+		}
+	}
+	return frameValue, remaining
+}
+
+func parseCommand(commandName string, args []string, frame string) (ipc.CommandType, interface{}, error) {
+	// frame parameter is provided by the --frame persistent flag (parsed by Cobra)
+
 	switch strings.ToLower(commandName) {
 	case "open":
 		if len(args) < 1 {
@@ -497,6 +551,9 @@ func parseCommand(commandName string, args []string) (ipc.CommandType, interface
 
 	case "list-tabs":
 		return ipc.CommandListTabs, nil, nil
+
+	case "list-frames":
+		return ipc.CommandListFrames, nil, nil
 
 	case "switch-tab":
 		if len(args) < 1 {
@@ -520,6 +577,7 @@ func parseCommand(commandName string, args []string) (ipc.CommandType, interface
 		}
 		return ipc.CommandEval, ipc.CommandArguments{
 			JavaScript: strings.Join(args, " "),
+			Frame:      frame,
 		}, nil
 
 	case "click":
@@ -528,6 +586,7 @@ func parseCommand(commandName string, args []string) (ipc.CommandType, interface
 		}
 		return ipc.CommandClick, ipc.CommandArguments{
 			Selector: args[0],
+			Frame:    frame,
 		}, nil
 
 	case "type":
@@ -537,6 +596,7 @@ func parseCommand(commandName string, args []string) (ipc.CommandType, interface
 		return ipc.CommandTypeText, ipc.CommandArguments{
 			Selector: args[0],
 			Text:     strings.Join(args[1:], " "),
+			Frame:    frame,
 		}, nil
 
 	case "upload-file":
@@ -546,6 +606,7 @@ func parseCommand(commandName string, args []string) (ipc.CommandType, interface
 		return ipc.CommandUploadFile, ipc.CommandArguments{
 			Selector:  args[0],
 			FilePaths: args[1:],
+			Frame:     frame,
 		}, nil
 
 	case "wait-for":
@@ -555,13 +616,16 @@ func parseCommand(commandName string, args []string) (ipc.CommandType, interface
 		return ipc.CommandWaitFor, ipc.CommandArguments{
 			Selector: args[0],
 			WaitType: "selector",
+			Frame:    frame,
 		}, nil
 
 	case "screenshot":
 		return ipc.CommandScreenshot, nil, nil
 
 	case "html":
-		return ipc.CommandHTML, nil, nil
+		return ipc.CommandHTML, ipc.CommandArguments{
+			Frame: frame,
+		}, nil
 
 	case "set-viewport":
 		if len(args) < 2 {
@@ -622,6 +686,8 @@ func formatResponse(resp *ipc.Response, commandName string) (string, error) {
 	switch commandName {
 	case "list-tabs":
 		return formatTabList(data)
+	case "list-frames":
+		return formatFrameList(data)
 	case "session-info":
 		return formatSessionInfo(data)
 	case "describe-commands":
@@ -666,6 +732,49 @@ func formatTabList(data interface{}) (string, error) {
 			result.WriteString(fmt.Sprintf("      URL: %s\n", tab.URL))
 		}
 	}
+	return result.String(), nil
+}
+
+func formatFrameList(data interface{}) (string, error) {
+	jsonData, _ := json.Marshal(data)
+	var list struct {
+		Iframes    []map[string]interface{} `json:"iframes"`
+		FrameCount int                      `json:"frame_count"`
+		Hint       string                   `json:"hint"`
+	}
+	if err := json.Unmarshal(jsonData, &list); err != nil {
+		return "", err
+	}
+
+	if len(list.Iframes) == 0 {
+		return "No iframes found on this page", nil
+	}
+
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Frames found: %d\n\n", list.FrameCount))
+	for i, frame := range list.Iframes {
+		result.WriteString(fmt.Sprintf("  [%d]\n", i+1))
+		if id, ok := frame["id"].(string); ok && id != "" {
+			result.WriteString(fmt.Sprintf("      ID:       #%s\n", id))
+		}
+		if name, ok := frame["name"].(string); ok && name != "" {
+			result.WriteString(fmt.Sprintf("      Name:     %s\n", name))
+		}
+		if src, ok := frame["src"].(string); ok && src != "" {
+			result.WriteString(fmt.Sprintf("      Src:      %s\n", src))
+		}
+		if selector, ok := frame["selector"].(string); ok && selector != "" {
+			result.WriteString(fmt.Sprintf("      Selector: %s\n", selector))
+		}
+		if visible, ok := frame["visible"].(bool); ok {
+			result.WriteString(fmt.Sprintf("      Visible:  %v\n", visible))
+		}
+		if sandbox, ok := frame["sandbox"].(string); ok && sandbox != "" {
+			result.WriteString(fmt.Sprintf("      Sandbox:  %s\n", sandbox))
+		}
+		result.WriteString("\n")
+	}
+	result.WriteString(fmt.Sprintf("Hint: %s\n", list.Hint))
 	return result.String(), nil
 }
 

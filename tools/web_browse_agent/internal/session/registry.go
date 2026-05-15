@@ -118,7 +118,7 @@ func isPersistentStorageEnabled() bool {
 		// Check viper config as fallback
 		persistentStorage = viper.GetString("persistent_storage")
 	}
-	
+
 	// Enable if set to "true", "1", "yes", or "on" (case-insensitive)
 	switch persistentStorage {
 	case "true", "1", "yes", "on", "True", "TRUE", "YES", "ON":

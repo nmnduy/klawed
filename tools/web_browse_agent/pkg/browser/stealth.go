@@ -30,6 +30,11 @@ func stealthArgs() []string {
 		// Disable the component extensions that fingerprint automation
 		"--disable-extensions",
 
+		// Relax site-isolation so cross-origin iframes (e.g. Stripe 3-D Secure
+		// challenge frames) are easier to automate in headless mode.
+		"--disable-site-isolation-trials",
+		"--disable-features=IsolateOrigins,site-per-process",
+
 		// No sandbox in container environments (required)
 		"--no-sandbox",
 		"--disable-setuid-sandbox",
@@ -304,7 +309,15 @@ const stealthInitScript = `
       get: function() {
         const win = originalContentWindow.get.call(this);
         if (win && win.navigator) {
-          Object.defineProperty(win.navigator, 'webdriver', { get: () => undefined });
+          // Cross-origin iframes throw when we try to redefine properties on
+          // their navigator object from a different origin. Swallow the error
+          // so Stripe (and other payment/3-D Secure) nested iframe setups
+          // continue to work.
+          try {
+            Object.defineProperty(win.navigator, 'webdriver', { get: () => undefined });
+          } catch (e) {
+            // Cross-origin restriction — silently ignore.
+          }
         }
         return win;
       },
