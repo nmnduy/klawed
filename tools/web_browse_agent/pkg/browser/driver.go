@@ -25,9 +25,9 @@ type Driver struct {
 	sessionID         string
 	socketPath        string
 	headless          bool
-	userDataDir       string        // Path to persistent user data directory
-	browserExecutable string        // Path to browser executable (empty = auto-detect)
-	proxy             string        // HTTP/SOCKS proxy URL (empty = no proxy)
+	userDataDir       string // Path to persistent user data directory
+	browserExecutable string // Path to browser executable (empty = auto-detect)
+	proxy             string // HTTP/SOCKS proxy URL (empty = no proxy)
 	timeout           time.Duration
 	idleTimeout       time.Duration // Auto-shutdown after this duration of inactivity (0 = disabled)
 	parentPID         int           // Parent process to monitor for cleanup
@@ -55,9 +55,9 @@ type DriverConfig struct {
 	SessionID         string
 	SocketPath        string
 	Headless          bool
-	UserDataDir       string        // Path to persistent user data directory (empty = no persistence)
-	BrowserExecutable string        // Path to browser executable (empty = auto-detect)
-	Proxy             string        // HTTP/SOCKS proxy URL (empty = no proxy)
+	UserDataDir       string // Path to persistent user data directory (empty = no persistence)
+	BrowserExecutable string // Path to browser executable (empty = auto-detect)
+	Proxy             string // HTTP/SOCKS proxy URL (empty = no proxy)
 	Timeout           time.Duration
 	IdleTimeout       time.Duration // Auto-shutdown after this duration of inactivity (0 = disabled)
 	ParentPID         int           // Parent process to monitor - driver exits if parent dies
@@ -239,6 +239,7 @@ func (d *Driver) registerHandlers(server *ipc.Server) {
 	// Page inspection commands
 	server.RegisterHandler(ipc.CommandScreenshot, d.handleScreenshot)
 	server.RegisterHandler(ipc.CommandHTML, d.handleHTML)
+	server.RegisterHandler(ipc.CommandListFrames, d.handleListFrames)
 
 	// Browser configuration commands
 	server.RegisterHandler(ipc.CommandSetViewport, d.handleSetViewport)

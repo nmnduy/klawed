@@ -1,6 +1,6 @@
 # Web Browse Agent
 
-Version: `1.4.0`
+Version: `1.6.0`
 
 A sessionful browser automation CLI for persistent web browsing sessions. This tool provides a REPL-style interface where you start a browser session and send commands one at a time while maintaining session state.
 
@@ -152,15 +152,16 @@ web_browse_agent --session my-session wait-for --wait-type navigation
 - `close-tab <id>` - Close tab by ID
 
 ### Page Interaction
-- `eval <js>` - Evaluate JavaScript
-- `click <selector>` - Click element (CSS/Playwright selectors)
-- `type <selector> <text>` - Type text into element
-- `upload-file <selector> <file_path...>` - Upload file(s) to a file input element
-- `wait-for <selector>` - Wait for element to appear (also supports `wait_type=navigation` to wait for page load after `open`)
+- `eval <js>` - Evaluate JavaScript. Use `--frame <sel>` to evaluate inside an iframe
+- `click <selector>` - Click element (CSS/Playwright selectors). Use `--frame <sel>` to click inside an iframe
+- `type <selector> <text>` - Type text into element. Use `--frame <sel>` to type inside an iframe
+- `upload-file <selector> <file_path...>` - Upload file(s) to a file input element. Use `--frame <sel>` for file inputs inside iframes
+- `wait-for <selector>` - Wait for element to appear. Use `--frame <sel>` to wait inside an iframe (also supports `wait_type=navigation` to wait for page load after `open`)
 
 ### Page Inspection
 - `screenshot` - Take screenshot (returns base64)
-- `html` - Get page HTML
+- `html` - Get page HTML. Use `--frame <sel>` to get HTML from a specific iframe
+- `list-frames` - List all iframes on the current page with CSS selectors, IDs, names, and src
 
 ### Browser Configuration
 - `set-viewport <width> <height>` - Set viewport size
@@ -203,6 +204,95 @@ The tool will:
 | `BROWSER_VIEWPORT_HEIGHT` | Browser viewport height | `720` |
 | `BROWSER_ACTION_TIMEOUT` | Timeout for actions (ms) | `5000` |
 | `BROWSER_NAVIGATION_TIMEOUT` | Timeout for navigation (ms) | `30000` |
+
+## Iframe Interaction
+
+Many modern websites embed content inside `<iframe>` elements (e.g., embedded forms, rich text editors, login widgets, payment gateways). The web_browse_agent can now interact with content inside iframes using the `--frame` flag.
+
+### Discovering Iframes
+
+First, list all iframes on the current page:
+
+```bash
+# List all iframes with their CSS selectors, IDs, names, and src attributes
+web_browse_agent --session my-session list-frames
+```
+
+This will output something like:
+
+```
+Frames found: 3
+
+  [1]
+      ID:       #editor-frame
+      Src:      https://example.com/editor
+      Selector: #editor-frame
+      Visible:  true
+
+  [2]
+      Name:     login
+      Src:      https://auth.example.com/login
+      Selector: iframe[name="login"]
+      Visible:  true
+
+  [3]
+      Src:      https://ads.example.com/ad
+      Selector: iframe:nth-of-type(3)
+      Visible:  false
+```
+
+### Interacting with Iframe Content
+
+Use the `--frame` flag with any selector-based command to target content inside a specific iframe:
+
+```bash
+# Click an element inside an iframe
+web_browse_agent --session my-session click "button#submit" --frame "#editor-frame"
+
+# Type text into an input inside an iframe
+web_browse_agent --session my-session type "input#username" "myuser" --frame "iframe[name='login']"
+
+# Wait for an element inside an iframe
+web_browse_agent --session my-session wait-for ".loading-complete" --frame "#editor-frame"
+
+# Execute JavaScript inside an iframe's context
+web_browse_agent --session my-session eval "document.querySelector('h1').textContent" --frame "#editor-frame"
+
+# Get the full HTML content of an iframe
+web_browse_agent --session my-session html --frame "#editor-frame"
+
+# Upload a file to a file input inside an iframe
+web_browse_agent --session my-session upload-file "input[type=file]" /path/to/file.pdf --frame "#upload-frame"
+```
+
+### How It Works
+
+- **Click/Type/Wait-For**: Uses Playwright's `FrameLocator` API to locate the iframe by CSS selector and then find elements within it. This works for both same-origin and cross-origin iframes.
+- **Eval/HTML**: Uses JavaScript's `contentWindow.eval()` evaluated from the main page context to execute code inside the iframe's scope. This works for same-origin iframes.
+- The `--frame` value is a CSS selector that identifies the `<iframe>` element itself (e.g., `#editor-frame`, `iframe[name='login']`, `iframe:nth-of-type(1)`).
+
+### Workflow Example
+
+```bash
+# 1. Open a page with iframes
+web_browse_agent --session s open "https://example.com/page-with-iframes"
+
+# 2. Wait for the page to load
+web_browse_agent --session s wait-for "body"
+
+# 3. List iframes
+web_browse_agent --session s list-frames
+
+# 4. Wait for content inside an iframe to load
+web_browse_agent --session s wait-for "#submit-button" --frame "#editor-frame"
+
+# 5. Fill in a form inside the iframe
+web_browse_agent --session s type "#email" "user@example.com" --frame "#editor-frame"
+web_browse_agent --session s type "#password" "mypassword" --frame "#editor-frame"
+
+# 6. Submit
+web_browse_agent --session s click "#submit-btn" --frame "#editor-frame"
+```
 
 ## Persistent Browser Storage
 

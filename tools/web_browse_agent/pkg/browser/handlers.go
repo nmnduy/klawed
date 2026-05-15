@@ -3,11 +3,126 @@ package browser
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/klawed/tools/web_browse_agent/pkg/ipc"
 	"github.com/playwright-community/playwright-go"
 )
+
+// frameChainSeparator splits nested frame selectors for multi-level iframe targeting.
+// e.g. "iframe.outer >> iframe.nested" targets an element inside a nested iframe.
+const frameChainSeparator = " >> "
+
+// splitFrameSelectors splits a frame path into individual frame CSS selectors.
+func splitFrameSelectors(frameSelector string) []string {
+	if frameSelector == "" {
+		return nil
+	}
+	return strings.Split(frameSelector, frameChainSeparator)
+}
+
+// getLocator returns a Playwright Locator for the given selector.
+// If a frame CSS selector is provided, it locates the element inside that iframe
+// using Playwright's FrameLocator API for each level in the chain.
+// Supports nested iframes via " >> " separator.
+func getLocator(page playwright.Page, frameSelector, elementSelector string) playwright.Locator {
+	if frameSelector == "" {
+		return page.Locator(elementSelector)
+	}
+	frames := splitFrameSelectors(frameSelector)
+	fl := page.FrameLocator(frames[0])
+	for _, f := range frames[1:] {
+		fl = fl.FrameLocator(f)
+	}
+	return fl.Locator(elementSelector)
+}
+
+// evaluateInFrame evaluates JavaScript inside a specific iframe on the page.
+// It uses Playwright's ContentFrame() API (via CDP) to access the iframe's
+// JavaScript context. This works for both same-origin and cross-origin iframes.
+func evaluateInFrame(page playwright.Page, frameSelector, js string) (interface{}, error) {
+	// Find the iframe element and get its content frame via CDP
+	frame, err := getContentFrame(page, frameSelector)
+	if err != nil {
+		return nil, err
+	}
+
+	// Evaluate JavaScript in the frame's context (works for all origins via CDP)
+	result, err := frame.Evaluate(js)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate in frame: %w", err)
+	}
+
+	return result, nil
+}
+
+// getContentFrame finds an iframe (or nested iframe chain) by CSS selector(s)
+// and returns its content Frame via Playwright's CDP-based ContentFrame() API,
+// which works for cross-origin frames.
+// Supports nested iframes via " >> " separator in the selector.
+func getContentFrame(page playwright.Page, frameSelector string) (playwright.Frame, error) {
+	frames := splitFrameSelectors(frameSelector)
+
+	// First level: find the iframe on the page
+	locator := page.Locator(frames[0])
+	element, err := locator.ElementHandle()
+	if err != nil {
+		return nil, fmt.Errorf("frame element not found: %s (%w)", frames[0], err)
+	}
+	if element == nil {
+		return nil, fmt.Errorf("frame element not found: %s", frames[0])
+	}
+
+	// ContentFrame() returns the frame hosted by this iframe element.
+	// This works through CDP and is not subject to same-origin restrictions.
+	frame, err := element.ContentFrame()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get content frame for %s: %w", frames[0], err)
+	}
+	if frame == nil {
+		return nil, fmt.Errorf("element %s exists but has no content frame (not an iframe?)", frames[0])
+	}
+
+	// For nested frames, navigate deeper into the frame hierarchy
+	for _, fs := range frames[1:] {
+		nestedLocator := frame.Locator(fs)
+		nestedElement, err := nestedLocator.ElementHandle()
+		if err != nil {
+			return nil, fmt.Errorf("nested frame element not found: %s (%w)", fs, err)
+		}
+		if nestedElement == nil {
+			return nil, fmt.Errorf("nested frame element not found: %s", fs)
+		}
+		nestedFrame, err := nestedElement.ContentFrame()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get nested content frame for %s: %w", fs, err)
+		}
+		if nestedFrame == nil {
+			return nil, fmt.Errorf("nested element %s exists but has no content frame", fs)
+		}
+		frame = nestedFrame
+	}
+
+	return frame, nil
+}
+
+// getFrameContent returns the outerHTML of the document inside a specific iframe.
+// Uses Playwright's ContentFrame() API (via CDP), works for cross-origin frames.
+func getFrameContent(page playwright.Page, frameSelector string) (string, error) {
+	frame, err := getContentFrame(page, frameSelector)
+	if err != nil {
+		return "", err
+	}
+
+	// Get the full page HTML inside the iframe
+	content, err := frame.Content()
+	if err != nil {
+		return "", fmt.Errorf("failed to get frame HTML: %w", err)
+	}
+
+	return content, nil
+}
 
 // handleOpen navigates to a URL
 // This is async by default - it starts navigation and returns immediately.
@@ -106,6 +221,7 @@ func (d *Driver) handleCloseTab(req *ipc.Request) (*ipc.Response, error) {
 }
 
 // handleEval evaluates JavaScript in the browser
+// Supports an optional 'frame' parameter to evaluate JS inside a specific iframe.
 func (d *Driver) handleEval(req *ipc.Request) (*ipc.Response, error) {
 	args, err := req.ParseArguments()
 	if err != nil {
@@ -121,7 +237,12 @@ func (d *Driver) handleEval(req *ipc.Request) (*ipc.Response, error) {
 		return ipc.NewResponse(req.ID, false, nil, "no active tab")
 	}
 
-	result, err := tab.Page.Evaluate(args.JavaScript)
+	var result interface{}
+	if args.Frame != "" {
+		result, err = evaluateInFrame(tab.Page, args.Frame, args.JavaScript)
+	} else {
+		result, err = tab.Page.Evaluate(args.JavaScript)
+	}
 	if err != nil {
 		return ipc.NewResponse(req.ID, false, nil, fmt.Sprintf("failed to evaluate: %v", err))
 	}
@@ -132,6 +253,7 @@ func (d *Driver) handleEval(req *ipc.Request) (*ipc.Response, error) {
 }
 
 // handleClick clicks on an element
+// Supports an optional 'frame' parameter to click inside a specific iframe.
 func (d *Driver) handleClick(req *ipc.Request) (*ipc.Response, error) {
 	args, err := req.ParseArguments()
 	if err != nil {
@@ -147,17 +269,24 @@ func (d *Driver) handleClick(req *ipc.Request) (*ipc.Response, error) {
 		return ipc.NewResponse(req.ID, false, nil, "no active tab")
 	}
 
-	err = tab.Page.Click(args.Selector)
+	locator := getLocator(tab.Page, args.Frame, args.Selector)
+	err = locator.Click()
 	if err != nil {
 		return ipc.NewResponse(req.ID, false, nil, fmt.Sprintf("failed to click: %v", err))
 	}
 
+	target := args.Selector
+	if args.Frame != "" {
+		target = fmt.Sprintf("%s inside iframe %s", args.Selector, args.Frame)
+	}
+
 	return ipc.NewResponse(req.ID, true, map[string]string{
-		"clicked": args.Selector,
+		"clicked": target,
 	}, "")
 }
 
 // handleType types text into an element
+// Supports an optional 'frame' parameter to type inside a specific iframe.
 func (d *Driver) handleType(req *ipc.Request) (*ipc.Response, error) {
 	args, err := req.ParseArguments()
 	if err != nil {
@@ -174,17 +303,24 @@ func (d *Driver) handleType(req *ipc.Request) (*ipc.Response, error) {
 	}
 
 	// Fill clears and types
-	err = tab.Page.Fill(args.Selector, args.Text)
+	locator := getLocator(tab.Page, args.Frame, args.Selector)
+	err = locator.Fill(args.Text)
 	if err != nil {
 		return ipc.NewResponse(req.ID, false, nil, fmt.Sprintf("failed to type: %v", err))
 	}
 
+	target := args.Selector
+	if args.Frame != "" {
+		target = fmt.Sprintf("%s inside iframe %s", args.Selector, args.Frame)
+	}
+
 	return ipc.NewResponse(req.ID, true, map[string]string{
-		"typed_into": args.Selector,
+		"typed_into": target,
 	}, "")
 }
 
 // handleUploadFile uploads files to a file input element
+// Supports an optional 'frame' parameter to upload inside a specific iframe.
 func (d *Driver) handleUploadFile(req *ipc.Request) (*ipc.Response, error) {
 	args, err := req.ParseArguments()
 	if err != nil {
@@ -204,8 +340,8 @@ func (d *Driver) handleUploadFile(req *ipc.Request) (*ipc.Response, error) {
 		return ipc.NewResponse(req.ID, false, nil, "no active tab")
 	}
 
-	// Locate the file input element
-	locator := tab.Page.Locator(args.Selector)
+	// Locate the file input element inside the frame (or page)
+	locator := getLocator(tab.Page, args.Frame, args.Selector)
 
 	// Set the input files
 	err = locator.SetInputFiles(args.FilePaths)
@@ -215,12 +351,14 @@ func (d *Driver) handleUploadFile(req *ipc.Request) (*ipc.Response, error) {
 
 	return ipc.NewResponse(req.ID, true, map[string]interface{}{
 		"selector":    args.Selector,
+		"frame":       args.Frame,
 		"files_count": len(args.FilePaths),
 		"files":       args.FilePaths,
 	}, "")
 }
 
 // handleWaitFor waits for an element or condition
+// Supports an optional 'frame' parameter to wait for elements inside a specific iframe.
 func (d *Driver) handleWaitFor(req *ipc.Request) (*ipc.Response, error) {
 	args, err := req.ParseArguments()
 	if err != nil {
@@ -246,7 +384,8 @@ func (d *Driver) handleWaitFor(req *ipc.Request) (*ipc.Response, error) {
 		if args.Selector == "" {
 			return ipc.NewResponse(req.ID, false, nil, "selector is required for wait type 'selector'")
 		}
-		_, err = tab.Page.WaitForSelector(args.Selector, playwright.PageWaitForSelectorOptions{
+		locator := getLocator(tab.Page, args.Frame, args.Selector)
+		err = locator.WaitFor(playwright.LocatorWaitForOptions{
 			Timeout: playwright.Float(timeout),
 		})
 		if err != nil {
@@ -290,19 +429,118 @@ func (d *Driver) handleScreenshot(req *ipc.Request) (*ipc.Response, error) {
 }
 
 // handleHTML gets the page HTML
+// Supports an optional 'frame' parameter to get HTML from a specific iframe.
 func (d *Driver) handleHTML(req *ipc.Request) (*ipc.Response, error) {
+	args, err := req.ParseArguments()
+	if err != nil {
+		return ipc.NewResponse(req.ID, false, nil, fmt.Sprintf("failed to parse arguments: %v", err))
+	}
+
 	tab, ok := d.context.GetActiveTab()
 	if !ok {
 		return ipc.NewResponse(req.ID, false, nil, "no active tab")
 	}
 
-	content, err := tab.Page.Content()
+	var content string
+	if args.Frame != "" {
+		content, err = getFrameContent(tab.Page, args.Frame)
+	} else {
+		content, err = tab.Page.Content()
+	}
 	if err != nil {
 		return ipc.NewResponse(req.ID, false, nil, fmt.Sprintf("failed to get HTML: %v", err))
 	}
 
 	return ipc.NewResponse(req.ID, true, map[string]string{
-		"html": content,
+		"html":  content,
+		"frame": args.Frame,
+	}, "")
+}
+
+// handleListFrames lists all iframes on the current page with their selectors
+func (d *Driver) handleListFrames(req *ipc.Request) (*ipc.Response, error) {
+	tab, ok := d.context.GetActiveTab()
+	if !ok {
+		return ipc.NewResponse(req.ID, false, nil, "no active tab")
+	}
+
+	// Use JavaScript to enumerate all iframes on the page with useful metadata
+	js := `(function() {
+		var frames = document.querySelectorAll('iframe, frame');
+		var result = [];
+		var seen = new Set();
+		frames.forEach(function(f, i) {
+			var info = {
+				index: i,
+				selector: '',
+				id: f.id || '',
+				name: f.name || '',
+				src: f.src || '',
+				title: f.title || '',
+				width: f.width || f.getAttribute('width') || '',
+				height: f.height || f.getAttribute('height') || '',
+				sandbox: f.getAttribute('sandbox') || '',
+				visible: f.offsetWidth > 0 && f.offsetHeight > 0
+			};
+			// Build an optimal CSS selector for the iframe
+			if (f.id) {
+				info.selector = '#' + CSS.escape(f.id);
+			} else if (f.name) {
+				// name attribute selector is reliable
+				info.selector = 'iframe[name="' + f.name.replace(/"/g, '\\"') + '"], frame[name="' + f.name.replace(/"/g, '\\"') + '"]';
+			} else {
+				// Use nth-of-type based on parent
+				var parent = f.parentElement;
+				var tag = f.tagName.toLowerCase();
+				var siblings = parent.querySelectorAll(tag);
+				var nth = 1;
+				for (var j = 0; j < siblings.length; j++) {
+					if (siblings[j] === f) {
+						nth = j + 1;
+						break;
+					}
+				}
+				// Build a contextual selector from parent
+				var parentSel = '';
+				var p = f;
+				while (p.parentElement && p.parentElement !== document.body && p.parentElement !== document.documentElement) {
+					p = p.parentElement;
+					if (p.id) {
+						parentSel = '#' + CSS.escape(p.id) + ' ';
+						break;
+					}
+					// Max 2 levels up
+					if (p.tagName === 'BODY' || p.tagName === 'HTML') break;
+				}
+				info.selector = parentSel + tag + ':nth-of-type(' + nth + ')';
+			}
+			// Add full page overview info
+			info.frame_count = frames.length;
+			result.push(info);
+		});
+		return result;
+	})()`
+
+	result, err := tab.Page.Evaluate(js)
+	if err != nil {
+		return ipc.NewResponse(req.ID, false, nil, fmt.Sprintf("failed to list frames: %v", err))
+	}
+
+	// Also get frames from Playwright's own frame tree (includes cross-origin frames)
+	frames := tab.Page.Frames()
+	var frameURLs []map[string]interface{}
+	for _, f := range frames {
+		frameURLs = append(frameURLs, map[string]interface{}{
+			"name": f.Name,
+			"url":  f.URL,
+		})
+	}
+
+	return ipc.NewResponse(req.ID, true, map[string]interface{}{
+		"iframes":     result,
+		"frame_count": len(frames),
+		"frame_tree":  frameURLs,
+		"hint":        "Use the 'selector' value from any iframe entry as the 'frame' parameter in click/type/wait-for/eval/html commands to target that iframe's contents.",
 	}, "")
 }
 
@@ -413,39 +651,46 @@ func (d *Driver) handleDescribeCommands(req *ipc.Request) (*ipc.Response, error)
 			"example":     "close-tab tab_123456789",
 		},
 		{
+			"name":        "list-frames",
+			"description": "List all iframes on the current page with their CSS selectors, IDs, names, and src attributes. Use the 'selector' value from any iframe entry as the '--frame' parameter in click/type/wait-for/eval/html commands to interact with content inside that iframe.",
+			"arguments":   []string{},
+			"example":     "list-frames",
+			"notes":       "Returns frame selectors that can be used with --frame parameter on other commands",
+		},
+		{
 			"name":        "eval",
-			"description": "Execute JavaScript code in the browser context and return result in {\"value\": ...} format",
+			"description": "Execute JavaScript code in the browser context and return result in {\"value\": ...} format. Use --frame to evaluate inside an iframe.",
 			"arguments":   []string{"javascript"},
 			"example":     "eval document.title",
-			"notes":       "Returns JSON: {\"value\": <result>}. Use --json flag for machine parsing.",
+			"notes":       "Use --frame #my-iframe to evaluate in that iframe's context. For cross-origin iframes, use the page-level eval with contentWindow.eval().",
 		},
 		{
 			"name":        "click",
-			"description": "Click on an element using a CSS or Playwright selector",
+			"description": "Click on an element using a CSS or Playwright selector. Use --frame to click inside an iframe.",
 			"arguments":   []string{"selector"},
 			"example":     "click button#submit",
-			"notes":       "Supports CSS (#id, .class), text selectors (text=Sign In), role selectors (role=button[name='Submit'])",
+			"notes":       "Supports CSS (#id, .class), text selectors (text=Sign In), role selectors (role=button[name='Submit']). Use --frame #my-iframe to click inside an iframe.",
 		},
 		{
 			"name":        "type",
-			"description": "Type text into an input element. Clears existing content first.",
+			"description": "Type text into an input element. Clears existing content first. Use --frame to type inside an iframe.",
 			"arguments":   []string{"selector", "text"},
 			"example":     "type input#email user@example.com",
-			"notes":       "Spaces in text are supported: type #input hello world",
+			"notes":       "Spaces in text are supported: type #input hello world. Use --frame #my-iframe to type inside an iframe.",
 		},
 		{
 			"name":        "upload-file",
-			"description": "Upload one or more files to a file input element",
+			"description": "Upload one or more files to a file input element. Use --frame to select a file input inside an iframe.",
 			"arguments":   []string{"selector", "file_path..."},
 			"example":     "upload-file input[type=file] /path/to/file.pdf",
-			"notes":       "Multiple files: upload-file #input /file1.pdf /file2.jpg",
+			"notes":       "Multiple files: upload-file #input /file1.pdf /file2.jpg. Use --frame #my-iframe for file inputs inside iframes.",
 		},
 		{
 			"name":        "wait-for",
-			"description": "Wait for an element matching a CSS/Playwright selector to appear",
+			"description": "Wait for an element matching a CSS/Playwright selector to appear. Use --frame to wait inside an iframe.",
 			"arguments":   []string{"selector"},
 			"example":     "wait-for .loaded",
-			"notes":       "Common patterns: wait-for '#app', wait-for 'body', wait-for text='Welcome'",
+			"notes":       "Common patterns: wait-for '#app', wait-for 'body', wait-for text='Welcome'. Use --frame #my-iframe to wait inside iframe.",
 		},
 		{
 			"name":        "screenshot",
@@ -456,9 +701,10 @@ func (d *Driver) handleDescribeCommands(req *ipc.Request) (*ipc.Response, error)
 		},
 		{
 			"name":        "html",
-			"description": "Get the full HTML content of the current page",
+			"description": "Get the full HTML content of the current page. Use --frame to get an iframe's HTML content instead.",
 			"arguments":   []string{},
 			"example":     "html",
+			"notes":       "Use html --frame #my-iframe to get the HTML content of a specific iframe.",
 		},
 		{
 			"name":        "set-viewport",
