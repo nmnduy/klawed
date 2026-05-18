@@ -149,6 +149,7 @@ FLAGS
   -socket string   Unix socket path (default: /tmp/klawed-browser.sock)
   -json            Print raw JSON response
   -timeout int     Timeout in seconds (default: 35)
+  --ready          Readiness check — exits 0 if browser socket is reachable
   -help            Show this help text
   -version         Show version
 
@@ -175,13 +176,20 @@ var (
 	timeoutSec int
 )
 
-func main() {
-	flag.StringVar(&socketPath, "socket", defaultSocket(), "Unix socket path")
-	flag.BoolVar(&jsonMode, "json", false, "Print raw JSON response")
-	flag.IntVar(&timeoutSec, "timeout", 35, "Timeout in seconds")
-	flag.Usage = func() { fmt.Fprint(os.Stderr, helpText) }
-	flag.Parse()
+func readyCheck() {
+	path := defaultSocket()
+	// Quick socket existence check first (no network calls)
+	_, err := net.DialTimeout("unix", path, 2*time.Second)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "browser_ctl ready check — FAILED: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("browser_ctl ready check — PASSED")
+	os.Exit(0)
+}
 
+func main() {
+	// Check special flags before flag.Parse() to avoid unknown-flag errors
 	for _, a := range os.Args[1:] {
 		if a == "-help" || a == "--help" || a == "-h" {
 			fmt.Fprint(os.Stdout, helpText)
@@ -191,7 +199,16 @@ func main() {
 			fmt.Println("browser_ctl", version)
 			os.Exit(0)
 		}
+		if a == "--ready" {
+			readyCheck()
+		}
 	}
+
+	flag.StringVar(&socketPath, "socket", defaultSocket(), "Unix socket path")
+	flag.BoolVar(&jsonMode, "json", false, "Print raw JSON response")
+	flag.IntVar(&timeoutSec, "timeout", 35, "Timeout in seconds")
+	flag.Usage = func() { fmt.Fprint(os.Stderr, helpText) }
+	flag.Parse()
 
 	args := flag.Args()
 	if len(args) == 0 {

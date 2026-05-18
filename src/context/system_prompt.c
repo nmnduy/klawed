@@ -55,6 +55,25 @@ static int is_dear_oracle_available(void) {
 }
 
 /**
+ * Check if browser_ctl CLI tool is available.
+ * Disabled by default; enable with KLAWED_BROWSER_CTL=1 env var.
+ * Runs `browser_ctl --ready` which exits 0 if the socket is reachable
+ * (browser extension connected), without making any network calls.
+ */
+static int is_browser_ctl_available(void) {
+    // Disabled by default — must opt in via env var
+    const char *enabled = getenv("KLAWED_BROWSER_CTL");
+    if (!enabled || (strcmp(enabled, "1") != 0 && strcmp(enabled, "true") != 0 && strcmp(enabled, "yes") != 0)) {
+        return 0;
+    }
+    int ret = system("browser_ctl --ready > /dev/null 2>&1");
+    if (ret == -1) {
+        return 0;
+    }
+    return WIFEXITED(ret) && WEXITSTATUS(ret) == 0;
+}
+
+/**
  * Build complete system prompt with environment context.
  * Includes platform info, git status, KLAWED.md, and SKILLS directory.
  */
@@ -125,8 +144,8 @@ char* build_system_prompt(ConversationState *state) {
         prompt_size += strlen(state->additional_dirs[i]) + 4; // path + ", " separator
     }
 
-    // Add space for dear_oracle availability section
-    prompt_size += 512;
+    // Add space for available CLI tools section
+    prompt_size += 1024;
 
     char *prompt = malloc(prompt_size);
     if (!prompt) {
@@ -256,13 +275,29 @@ char* build_system_prompt(ConversationState *state) {
         offset += snprintf(prompt + offset, prompt_size - (size_t)offset, "\n");
     }
 
-    // Check if dear_oracle CLI tool is available and configured
-    if (is_dear_oracle_available() && offset < (int)prompt_size) {
+    // Check for available CLI tools
+    int dear_oracle_avail = is_dear_oracle_available();
+    int browser_ctl_avail = is_browser_ctl_available();
+
+    if ((dear_oracle_avail || browser_ctl_avail) && offset < (int)prompt_size) {
         offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
-            "\n### Available CLI Tools\n"
-            "\n"
-            "dear_oracle — A CLI tool to submit a prompt to a large model for hard questions. "
-            "Run `dear_oracle --help` for usage information.\n");
+            "\n### Available CLI Tools\n");
+
+        if (dear_oracle_avail && offset < (int)prompt_size) {
+            offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
+                "\n"
+                "dear_oracle — A CLI tool to submit a prompt to a large model for hard questions. "
+                "Run `dear_oracle --help` for usage information.\n");
+        }
+
+        if (browser_ctl_avail && offset < (int)prompt_size) {
+            offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
+                "\n"
+                "browser_ctl — A CLI tool to control a browser (Chrome/Chromium) connected via "
+                "the Klawed Browser Controller extension. Supports navigation, clicking, typing, "
+                "JavaScript evaluation, screenshot capture, and more. "
+                "Run `browser_ctl --help` for usage information.\n");
+        }
     }
 
     // Note: DeepSeek API detection removed - no longer limiting tokens to 4096
