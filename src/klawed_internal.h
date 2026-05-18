@@ -285,8 +285,8 @@ typedef struct ConversationState {
     int streaming_enabled;       // Runtime streaming toggle
     char *disabled_tools;        // Runtime comma-separated disabled tools list (owned)
 
-    // Context overflow recovery tracking
-    int context_overflow_recovery_attempts;  // Track recovery retries to prevent infinite loops
+    // Step-backward recovery tracking (context overflow, bad tool output, etc.)
+    int stepback_recovery_attempts;  // Track recovery retries to prevent infinite loops
 
     // Persistent cross-turn goal (Ralph mode)
     struct GoalState *goal;     // Active standing goal, NULL if none

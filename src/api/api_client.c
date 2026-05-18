@@ -27,17 +27,82 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <bsd/stdlib.h>
 #include <cjson/cJSON.h>
 
 
 
 /**
- * Maximum number of context overflow recovery attempts before giving up.
+ * Maximum number of step-backward recovery attempts before giving up.
  * Each recovery only removes a single tool result, which may be too small
  * to meaningfully reduce context size in extreme cases.
+ * This limit applies to both context overflow recovery and bad-tool-output recovery.
  */
-#define MAX_CONTEXT_OVERFLOW_RECOVERIES 5
+#define MAX_STEPBACK_RECOVERIES 5
+
+/**
+ * Find the most recent tool result in the conversation state.
+ *
+ * Searches backwards from the end for a USER message containing
+ * an INTERNAL_TOOL_RESPONSE content item.
+ *
+ * @param state Conversation state
+ * @param out_msg_idx Output: message index of found tool result
+ * @param out_content_idx Output: content index within that message
+ * @return 1 if found, 0 if not
+ */
+static int find_last_tool_result(ConversationState *state,
+                                  int *out_msg_idx,
+                                  int *out_content_idx) {
+    if (!state) return 0;
+
+    for (int i = state->count - 1; i >= 0; i--) {
+        InternalMessage *msg = &state->messages[i];
+        if (msg->role == MSG_USER) {
+            for (int j = 0; j < msg->content_count; j++) {
+                InternalContent *content = &msg->contents[j];
+                if (content->type == INTERNAL_TOOL_RESPONSE) {
+                    if (out_msg_idx) *out_msg_idx = i;
+                    if (out_content_idx) *out_content_idx = j;
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+/**
+ * Replace a tool result with an error message.
+ *
+ * Keeps the tool_id and tool_name on the content slot, replaces
+ * the tool_output with an error JSON object, and marks is_error.
+ *
+ * @param content The tool response content to replace
+ * @param error_text The error message to set
+ * @return 1 on success, 0 on failure
+ */
+static int replace_tool_result_with_error(InternalContent *content,
+                                           const char *error_text) {
+    if (!content || !error_text) return 0;
+
+    cJSON *error_output = cJSON_CreateObject();
+    if (!error_output) {
+        LOG_ERROR("Failed to create error JSON for tool result replacement");
+        return 0;
+    }
+
+    cJSON_AddStringToObject(error_output, "error", error_text);
+
+    if (content->tool_output) {
+        cJSON_Delete(content->tool_output);
+    }
+    content->tool_output = error_output;
+    content->is_error = 1;
+
+    return 1;
+}
 
 /**
  * Handle context overflow error by replacing last tool result
@@ -70,36 +135,14 @@ static int handle_context_overflow_recovery(ConversationState *state, const char
 
     LOG_INFO("Context overflow error detected with auto-compaction enabled");
 
-    // Find the last USER message with INTERNAL_TOOL_RESPONSE content
-    // Search backwards from the end
-    int found_msg_idx = -1;
-    int found_content_idx = -1;
-
-    for (int i = state->count - 1; i >= 0; i--) {
-        InternalMessage *msg = &state->messages[i];
-        if (msg->role == MSG_USER) {
-            // Check if this message contains tool responses
-            for (int j = 0; j < msg->content_count; j++) {
-                InternalContent *content = &msg->contents[j];
-                if (content->type == INTERNAL_TOOL_RESPONSE) {
-                    found_msg_idx = i;
-                    found_content_idx = j;
-                    break;
-                }
-            }
-            if (found_msg_idx >= 0) {
-                break;  // Found the most recent tool response
-            }
-        }
-    }
-
-    if (found_msg_idx < 0 || found_content_idx < 0) {
+    // Find the last tool result
+    int found_msg_idx = -1, found_content_idx = -1;
+    if (!find_last_tool_result(state, &found_msg_idx, &found_content_idx)) {
         LOG_WARN("Context overflow recovery: No tool result found to replace");
         return 0;
     }
 
-    InternalMessage *msg = &state->messages[found_msg_idx];
-    InternalContent *content = &msg->contents[found_content_idx];
+    InternalContent *content = &state->messages[found_msg_idx].contents[found_content_idx];
 
     // Calculate the size of the original tool output
     size_t original_size = 0;
@@ -120,13 +163,6 @@ static int handle_context_overflow_recovery(ConversationState *state, const char
              content->tool_id ? content->tool_id : "unknown",
              original_size, estimated_tokens);
 
-    // Create error message JSON
-    cJSON *error_output = cJSON_CreateObject();
-    if (!error_output) {
-        LOG_ERROR("Context overflow recovery: Failed to create error JSON");
-        return 0;
-    }
-
     // Build error message with size information
     char error_text[512];
     snprintf(error_text, sizeof(error_text),
@@ -136,16 +172,120 @@ static int handle_context_overflow_recovery(ConversationState *state, const char
             "that produces less output.",
             original_size, estimated_tokens);
 
-    cJSON_AddStringToObject(error_output, "error", error_text);
-
-    // Replace the tool output (preserve tool_id and tool_name)
-    if (content->tool_output) {
-        cJSON_Delete(content->tool_output);
+    if (!replace_tool_result_with_error(content, error_text)) {
+        return 0;
     }
-    content->tool_output = error_output;
-    content->is_error = 1;  // Mark as error
 
     LOG_INFO("Context overflow recovery: Successfully replaced tool result with error message");
+    return 1;  // Recovery performed
+}
+
+/**
+ * Handle API validation error (HTTP 400) caused by tool output
+ * containing binary/invalid content by replacing the last tool result
+ * with an error message and retrying.
+ *
+ * When a tool output contains binary/non-UTF-8 data (e.g., from
+ * `cat` on a binary file), the serialized JSON sent to the API
+ * may be invalid, resulting in HTTP 400 from providers like DeepSeek
+ * that strictly validate JSON content.
+ *
+ * This function steps backward by:
+ * - Keeping the assistant's tool call
+ * - Replacing the tool result with an error message explaining the issue
+ * - Letting the AI retry with a smarter approach (e.g., using `file`,
+ *   `head -c`, `xxd`, or `hexdump` instead of `cat`)
+ *
+ * Returns: 1 if recovery was attempted, 0 if not applicable
+ */
+static int handle_bad_tool_output_recovery(ConversationState *state,
+                                            long http_status,
+                                            const char *error_msg) {
+    if (!state) {
+        return 0;
+    }
+
+    // Only handle HTTP 400/422 (Bad Request / Unprocessable Entity) — these
+    // are what providers like DeepSeek return for invalid JSON content (binary
+    // data in tool output being serialized as non-UTF-8 bytes)
+    if (http_status != 400 && http_status != 422) {
+        return 0;
+    }
+
+    // Avoid false positives: check error message for binary/encoding-related
+    // keywords. If the message is available and doesn't suggest binary content,
+    // don't trigger recovery (it's likely a different kind of 400/422).
+    if (error_msg && error_msg[0] != '\0') {
+        // Make lowercase copy for case-insensitive matching
+        size_t msg_len = strlen(error_msg);
+        char *msg_lower = malloc(msg_len + 1);
+        if (msg_lower) {
+            for (size_t i = 0; i < msg_len; i++) {
+                msg_lower[i] = (char)tolower((unsigned char)error_msg[i]);
+            }
+            msg_lower[msg_len] = '\0';
+
+            int is_binary_related = (
+                strstr(msg_lower, "character") != NULL ||
+                strstr(msg_lower, "utf") != NULL ||
+                strstr(msg_lower, "encoding") != NULL ||
+                strstr(msg_lower, "invalid") != NULL ||
+                strstr(msg_lower, "binary") != NULL ||
+                strstr(msg_lower, "parse") != NULL ||
+                strstr(msg_lower, "malformed") != NULL
+            );
+            free(msg_lower);
+
+            if (!is_binary_related) {
+                LOG_DEBUG("Bad tool output recovery: HTTP %ld error message does not "
+                          "suggest binary content issue — not recovering: %s",
+                          http_status, error_msg);
+                return 0;
+            }
+        }
+    }
+
+    // Find the last tool result
+    int found_msg_idx = -1, found_content_idx = -1;
+    if (!find_last_tool_result(state, &found_msg_idx, &found_content_idx)) {
+        LOG_DEBUG("Bad tool output recovery: No tool result found to replace (HTTP %ld)",
+                  http_status);
+        return 0;
+    }
+
+    InternalContent *content = &state->messages[found_msg_idx].contents[found_content_idx];
+
+    // Guard against replacing the same tool result repeatedly
+    if (content->is_error) {
+        LOG_DEBUG("Bad tool output recovery: Last tool result is already an error — "
+                  "not recovering again to avoid loop (tool=%s, id=%s)",
+                  content->tool_name ? content->tool_name : "unknown",
+                  content->tool_id ? content->tool_id : "unknown");
+        return 0;
+    }
+
+    LOG_INFO("Bad tool output recovery: HTTP %ld detected — replacing tool result "
+             "(tool=%s, id=%s, error_body: %s)",
+             http_status,
+             content->tool_name ? content->tool_name : "unknown",
+             content->tool_id ? content->tool_id : "unknown",
+             error_msg ? error_msg : "(null)");
+
+    // Build error message explaining the issue
+    char error_text[512];
+    snprintf(error_text, sizeof(error_text),
+            "Error: The API rejected the request (HTTP %ld). This is likely because "
+            "the tool output contained binary or non-UTF-8 content (e.g., from `cat` on "
+            "a binary file). Use a different approach to inspect this file: "
+            "use `file` to check the file type, `head -c` to read a small portion, "
+            "or `xxd`/`hexdump` to view binary content.",
+            http_status);
+
+    if (!replace_tool_result_with_error(content, error_text)) {
+        return 0;
+    }
+
+    LOG_INFO("Bad tool output recovery: Successfully replaced tool result with error message");
     return 1;  // Recovery performed
 }
 
@@ -349,7 +489,7 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
             }
 
             // Reset recovery attempts on success
-            state->context_overflow_recovery_attempts = 0;
+            state->stepback_recovery_attempts = 0;
 
             // Cleanup and return
             free(result.raw_response);
@@ -397,21 +537,32 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         // Check if we should retry
         if (!result.is_retryable) {
             // Non-retryable error
+            int recovery_performed = 0;
 
-            // Try context overflow recovery if applicable
-            if (handle_context_overflow_recovery(state, result.error_message)) {
-                state->context_overflow_recovery_attempts++;
+            // Step backward 1: Try context overflow recovery (requires auto-compaction)
+            if (!recovery_performed && handle_context_overflow_recovery(state, result.error_message)) {
+                recovery_performed = 1;
+            }
 
-                if (state->context_overflow_recovery_attempts > MAX_CONTEXT_OVERFLOW_RECOVERIES) {
-                    LOG_ERROR("Context overflow recovery failed after %d attempts - giving up",
-                              MAX_CONTEXT_OVERFLOW_RECOVERIES);
+            // Step backward 2: Try bad tool output recovery (HTTP 400 from binary content)
+            // This works independently of auto-compaction setting
+            if (!recovery_performed && handle_bad_tool_output_recovery(state, result.http_status, result.error_message)) {
+                recovery_performed = 1;
+            }
+
+            if (recovery_performed) {
+                state->stepback_recovery_attempts++;
+
+                if (state->stepback_recovery_attempts > MAX_STEPBACK_RECOVERIES) {
+                    LOG_ERROR("Step-backward recovery failed after %d attempts - giving up",
+                              MAX_STEPBACK_RECOVERIES);
 
                     char error_msg[512];
                     snprintf(error_msg, sizeof(error_msg),
-                             "API context limit exceeded. Recovery failed after %d attempts. "
-                             "The conversation is too long. Please start a new conversation "
-                             "or use a model with a larger context window.",
-                             MAX_CONTEXT_OVERFLOW_RECOVERIES);
+                             "API call recovery failed after %d attempts. "
+                             "The conversation may have unrecoverable state. "
+                             "Please start a new conversation.",
+                             MAX_STEPBACK_RECOVERIES);
                     print_error(error_msg);
 
                     // Create an error response
@@ -427,8 +578,8 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
                     return error_response;
                 }
 
-                LOG_INFO("Context overflow recovery applied (attempt %d/%d) - retrying API call",
-                         state->context_overflow_recovery_attempts, MAX_CONTEXT_OVERFLOW_RECOVERIES);
+                LOG_INFO("Step-backward recovery applied (attempt %d/%d) - retrying API call",
+                         state->stepback_recovery_attempts, MAX_STEPBACK_RECOVERIES);
                 free(result.raw_response);
                 free(result.request_json);
                 free(result.error_message);
