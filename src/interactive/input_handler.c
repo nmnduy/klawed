@@ -9,6 +9,7 @@
 #include "../context/system_prompt.h"
 #include "../perpetual/perpetual_mode.h"
 #include "../goal.h"
+#include "../session.h"
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -282,6 +283,9 @@ int submit_input_callback(const char *input, void *user_data) {
 
         process_response(state, response, tui, queue, NULL);
         api_response_free(response);
+
+        // Generate and save a session title now that we have conversation context
+        session_maybe_generate_title(state);
 
         /* ──────────────────────────────────────────────────────────────
          * Ralph loop (sync path)

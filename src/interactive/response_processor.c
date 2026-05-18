@@ -20,6 +20,7 @@
 #include "../tui.h"
 #include "../perpetual/perpetual_mode.h"
 #include "../goal.h"
+#include "../session.h"
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -1067,6 +1068,9 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
 
     process_response(ctx->state, response, NULL, ctx->tui_queue, ctx);
     api_response_free(response);
+
+    // Generate and save a session title now that we have conversation context
+    session_maybe_generate_title(ctx->state);
 
     /* ──────────────────────────────────────────────────────────────
      * Ralph loop: autonomous continuation toward standing goal

@@ -502,6 +502,91 @@ int persistence_log_api_call(
     return 0;
 }
 
+// Set the title for a session (insert or update)
+int persistence_set_session_title(
+    PersistenceDB *db,
+    const char *session_id,
+    const char *title
+) {
+    if (!db || !db->db || !session_id || !title) {
+        LOG_ERROR("Invalid parameters to persistence_set_session_title");
+        return -1;
+    }
+
+    pthread_mutex_lock(&db->mutex);
+
+    const char *sql =
+        "INSERT OR REPLACE INTO sessions (session_id, title, created_at, updated_at) "
+        "VALUES (?, ?, "
+        "  COALESCE((SELECT created_at FROM sessions WHERE session_id = ?), ?), "
+        "  ?);";
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("Failed to prepare statement: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
+        return -1;
+    }
+
+    time_t now = time(NULL);
+    sqlite3_bind_text(stmt, 1, session_id, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, title, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, session_id, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 4, now);
+    sqlite3_bind_int64(stmt, 5, now);
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        LOG_ERROR("Failed to insert/update session title: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
+        return -1;
+    }
+
+    pthread_mutex_unlock(&db->mutex);
+    return 0;
+}
+
+// Get the title for a session
+char* persistence_get_session_title(
+    PersistenceDB *db,
+    const char *session_id
+) {
+    if (!db || !db->db || !session_id) {
+        LOG_ERROR("Invalid parameters to persistence_get_session_title");
+        return NULL;
+    }
+
+    pthread_mutex_lock(&db->mutex);
+
+    const char *sql = "SELECT title FROM sessions WHERE session_id = ?;";
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("Failed to prepare statement: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
+        return NULL;
+    }
+
+    sqlite3_bind_text(stmt, 1, session_id, -1, SQLITE_TRANSIENT);
+
+    char *title = NULL;
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        const unsigned char *text = sqlite3_column_text(stmt, 0);
+        if (text) {
+            title = strdup((const char *)text);
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    pthread_mutex_unlock(&db->mutex);
+    return title;
+}
+
 // Close persistence layer
 void persistence_close(PersistenceDB *db) {
     if (!db) return;

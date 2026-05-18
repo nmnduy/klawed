@@ -126,6 +126,43 @@ static int migration_003_add_session_id_to_token_usage(sqlite3 *db) {
     return 0;
 }
 
+// Migration 4: Create sessions table for session-level metadata (titles, etc.)
+static int migration_004_create_sessions_table(sqlite3 *db) {
+    const char *create_sql =
+        "CREATE TABLE IF NOT EXISTS sessions ("
+        "    session_id TEXT PRIMARY KEY,"
+        "    title TEXT,"
+        "    created_at INTEGER NOT NULL,"
+        "    updated_at INTEGER NOT NULL"
+        ");";
+
+    char *err_msg = NULL;
+    int rc = sqlite3_exec(db, create_sql, NULL, NULL, &err_msg);
+    if (rc != SQLITE_OK) {
+        // Check if table already exists (idempotent migration)
+        if (strstr(err_msg, "already exists")) {
+            sqlite3_free(err_msg);
+            return 0;  // Table already exists, consider it success
+        }
+        LOG_ERROR("Migration 004 failed: %s", err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // Create index on created_at for sorting sessions by start time
+    const char *index_sql =
+        "CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);";
+
+    rc = sqlite3_exec(db, index_sql, NULL, NULL, &err_msg);
+    if (rc != SQLITE_OK) {
+        LOG_WARN("Migration 004 index warning: %s", err_msg);
+        sqlite3_free(err_msg);
+        // Non-fatal, continue
+    }
+
+    return 0;
+}
+
 // ============================================================================
 // Migration Registry
 // ============================================================================
@@ -145,6 +182,11 @@ static const Migration MIGRATIONS[] = {
         .version = 3,
         .description = "Add session_id column to token_usage table",
         .up = migration_003_add_session_id_to_token_usage
+    },
+    {
+        .version = 4,
+        .description = "Create sessions table for session-level metadata",
+        .up = migration_004_create_sessions_table
     },
     // Add new migrations here with incrementing version numbers
 };

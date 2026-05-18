@@ -210,4 +210,39 @@ int persistence_get_last_prompt_tokens(
     int64_t *prompt_tokens
 );
 
+/**
+ * Set the title for a session
+ *
+ * Inserts or updates the session's title in the sessions table.
+ *
+ * Parameters:
+ *   db: Persistence database handle
+ *   session_id: Session identifier
+ *   title: Session title (will be stored as-is)
+ *
+ * Returns:
+ *   0 on success, -1 on error
+ */
+int persistence_set_session_title(
+    PersistenceDB *db,
+    const char *session_id,
+    const char *title
+);
+
+/**
+ * Get the title for a session
+ *
+ * Parameters:
+ *   db: Persistence database handle
+ *   session_id: Session identifier
+ *
+ * Returns:
+ *   Newly allocated string with session title (caller must free),
+ *   NULL if no title found or on error
+ */
+char* persistence_get_session_title(
+    PersistenceDB *db,
+    const char *session_id
+);
+
 #endif // PERSISTENCE_H

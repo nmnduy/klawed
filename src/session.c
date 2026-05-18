@@ -7,6 +7,8 @@
 #include <string.h>
 #include <sqlite3.h>
 #include <cjson/cJSON.h>
+#include <stdint.h>
+#include <bsd/string.h>
 
 #include "session.h"
 #include "logger.h"
@@ -439,11 +441,11 @@ int session_list_sessions(PersistenceDB *db, int limit) {
     }
 
     printf("\n");
-    printf("=================================================================\n");
-    printf("                    AVAILABLE SESSIONS\n");
-    printf("=================================================================\n");
-    printf("%-40s %-20s %-15s %s\n", "Session ID", "Started", "Model", "Messages");
-    printf("-----------------------------------------------------------------\n");
+    printf("================================================================================\n");
+    printf("                           AVAILABLE SESSIONS\n");
+    printf("================================================================================\n");
+    printf("%-36s %-11s %-22s %-8s %s\n", "Session ID", "Model", "Started", "Msgs", "Summary");
+    printf("--------------------------------------------------------------------------------\n");
 
     int count = 0;
     for (int i = 0; sessions[i] != NULL; i++) {
@@ -453,37 +455,249 @@ int session_list_sessions(PersistenceDB *db, int limit) {
 
         if (session_get_metadata(db, sessions[i], &timestamp, &model, &message_count) == 0) {
             // Truncate session ID for display
-            char display_id[41];
-            if (strlen(sessions[i]) > 40) {
-                snprintf(display_id, sizeof(display_id), "%.37s...", sessions[i]);
+            char display_id[37];
+            if (strlen(sessions[i]) > 36) {
+                snprintf(display_id, sizeof(display_id), "%.33s...", sessions[i]);
             } else {
                 snprintf(display_id, sizeof(display_id), "%s", sessions[i]);
             }
 
-            printf("%-40s %-20s %-15s %d\n",
-                   display_id,
-                   timestamp ? timestamp : "unknown",
-                   model ? model : "unknown",
-                   message_count);
+            // Get session title
+            char *title = persistence_get_session_title(db, sessions[i]);
+            char display_title[129];
+            if (title) {
+                // Truncate title for display
+                if (strlen(title) > 48) {
+                    snprintf(display_title, sizeof(display_title), "%.125s...", title);
+                } else {
+                    snprintf(display_title, sizeof(display_title), "%s", title);
+                }
+                free(title);
+            } else {
+                // Truncate session ID as fallback display
+                if (strlen(display_id) > 20) {
+                    snprintf(display_title, sizeof(display_title), "ID: %.17s...", sessions[i] + strlen(sessions[i]) - 3);
+                } else {
+                    snprintf(display_title, sizeof(display_title), "ID: %s", display_id);
+                }
+            }
 
-            free(timestamp);
-            free(model);
+            // Truncate model for display
+            char display_model[12];
+            if (model) {
+                if (strlen(model) > 11) {
+                    snprintf(display_model, sizeof(display_model), "%.8s...", model);
+                } else {
+                    strlcpy(display_model, model, sizeof(display_model));
+                }
+                free(model);
+            } else {
+                strlcpy(display_model, "unknown", sizeof(display_model));
+            }
+
+            // Truncate timestamp for display
+            char display_time[23];
+            if (timestamp) {
+                // Show just date + time (first 19 chars of ISO format)
+                if (strlen(timestamp) > 22) {
+                    snprintf(display_time, sizeof(display_time), "%.22s", timestamp);
+                } else {
+                    strlcpy(display_time, timestamp, sizeof(display_time));
+                }
+                free(timestamp);
+            } else {
+                strlcpy(display_time, "unknown", sizeof(display_time));
+            }
+
+            printf("%-36s %-11s %-22s %-8d %s\n",
+                   display_id,
+                   display_model,
+                   display_time,
+                   message_count,
+                   display_title);
+
             count++;
         } else {
-            printf("%-40s %-20s %-15s %s\n",
+            // Get session title
+            char *title = persistence_get_session_title(db, sessions[i]);
+            char display_title[129];
+            if (title) {
+                if (strlen(title) > 128) {
+                    snprintf(display_title, sizeof(display_title), "%.125s...", title);
+                } else {
+                    snprintf(display_title, sizeof(display_title), "%s", title);
+                }
+                free(title);
+            } else {
+                snprintf(display_title, sizeof(display_title), "ID: %.20s", sessions[i]);
+            }
+
+            printf("%-36s %-11s %-22s %-8s %s\n",
                    sessions[i],
-                   "unknown", "unknown", "unknown");
+                   "unknown", "unknown", "unknown",
+                   display_title);
             count++;
         }
     }
 
-    printf("-----------------------------------------------------------------\n");
+    printf("--------------------------------------------------------------------------------\n");
     printf("Total: %d session(s)\n", count);
     printf("\n");
     printf("To resume a session, use: klawed --resume <session_id>\n");
     printf("To dump a session, use: klawed --dump-conversation <session_id>\n");
-    printf("=================================================================\n\n");
+    printf("================================================================================\n\n");
 
     session_free_list(sessions);
+    return 0;
+}
+
+/**
+ * Generate a session title from conversation content
+ *
+ * Extracts the first user message and creates a concise title
+ * (~60 chars max, newlines removed, whitespace collapsed).
+ */
+char* session_generate_title(ConversationState *state) {
+    if (!state) {
+        return NULL;
+    }
+
+    // Find the first user message in the conversation
+    const char *user_text = NULL;
+    for (int i = 0; i < state->count; i++) {
+        if (state->messages[i].role == MSG_USER) {
+            // Extract text from first text content block
+            for (int j = 0; j < state->messages[i].content_count; j++) {
+                if (state->messages[i].contents[j].type == INTERNAL_TEXT &&
+                    state->messages[i].contents[j].text) {
+                    user_text = state->messages[i].contents[j].text;
+                    break;
+                }
+            }
+            if (user_text) break;
+        }
+    }
+
+    if (!user_text || user_text[0] == '\0') {
+        return NULL;
+    }
+
+    // Clean up the text: strip leading/trailing whitespace, collapse newlines
+    size_t len = strlen(user_text);
+    char *clean = malloc(len + 1);
+    if (!clean) return NULL;
+
+    int in_space = 1;  // Start in "space" mode to skip leading whitespace
+    size_t out_idx = 0;
+    int max_chars = 125;
+
+    for (size_t i = 0; i < len && (int)out_idx < max_chars; i++) {
+        char c = user_text[i];
+        if (c == '\n' || c == '\r' || c == '\t') {
+            if (!in_space) {
+                clean[out_idx++] = ' ';
+                in_space = 1;
+            }
+        } else if (c == ' ') {
+            if (!in_space) {
+                clean[out_idx++] = ' ';
+                in_space = 1;
+            }
+        } else {
+            clean[out_idx++] = c;
+            in_space = 0;
+        }
+    }
+
+    // Remove trailing space
+    if (out_idx > 0 && clean[out_idx - 1] == ' ') {
+        out_idx--;
+    }
+
+    clean[out_idx] = '\0';
+
+    if (out_idx == 0) {
+        free(clean);
+        return NULL;
+    }
+
+    return clean;
+}
+
+/**
+ * Try to generate and save a session title if one doesn't exist yet
+ *
+ * Checks the total token usage for the session, and if it exceeds the
+ * threshold (configurable via KLAWED_SESSION_TITLE_THRESHOLD env var,
+ * default: 1000 tokens), generates a title from conversation context
+ * and saves it to the database.
+ */
+int session_maybe_generate_title(ConversationState *state) {
+    if (!state || !state->persistence_db || !state->session_id) {
+        return -1;
+    }
+
+    // Check if a title already exists
+    char *existing_title = persistence_get_session_title(
+        state->persistence_db, state->session_id);
+    if (existing_title) {
+        free(existing_title);
+        return 0;  // Title already exists, nothing to do
+    }
+
+    // Check total token count against threshold
+    int64_t prompt_tokens = 0;
+    int64_t completion_tokens = 0;
+    int64_t cached_tokens = 0;
+
+    int result = persistence_get_session_token_totals(
+        state->persistence_db,
+        state->session_id,
+        &prompt_tokens,
+        &completion_tokens,
+        &cached_tokens
+    );
+
+    if (result != 0) {
+        // Can't determine token count, still try to generate a title
+        // if we have at least one user message
+        LOG_DEBUG("Could not get token totals, will generate title anyway");
+    } else {
+        // Check threshold
+        int threshold = 1000;  // Default threshold
+        const char *env_threshold = getenv("KLAWED_SESSION_TITLE_THRESHOLD");
+        if (env_threshold) {
+            int parsed = atoi(env_threshold);
+            if (parsed > 0) {
+                threshold = parsed;
+            }
+        }
+
+        int64_t total_tokens = prompt_tokens + completion_tokens;
+        if (total_tokens < threshold) {
+            LOG_DEBUG("Session tokens (%lld) below title threshold (%d), skipping",
+                     (long long)total_tokens, threshold);
+            return 0;
+        }
+    }
+
+    // Generate title from conversation content
+    char *title = session_generate_title(state);
+    if (!title) {
+        LOG_DEBUG("Could not generate session title from conversation");
+        return -1;
+    }
+
+    // Save to database
+    result = persistence_set_session_title(
+        state->persistence_db, state->session_id, title);
+    if (result != 0) {
+        LOG_WARN("Failed to save session title to database");
+        free(title);
+        return -1;
+    }
+
+    LOG_INFO("Generated session title: %s", title);
+    free(title);
     return 0;
 }

@@ -12,6 +12,7 @@
 #include "../logger.h"
 #include "../util/output_utils.h"
 #include "../session/token_usage.h"
+#include "../session.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -73,6 +74,9 @@ int oneshot_execute(ConversationState *state, const char *prompt) {
     // Process response recursively (handles tool calls and follow-up responses)
     int result = oneshot_process_response(state, response, (int)output_format);
     api_response_free(response);
+
+    // Generate and save a session title now that we have conversation context
+    session_maybe_generate_title(state);
 
     // Print token usage summary at the end of single command mode
     // This includes subagent executions

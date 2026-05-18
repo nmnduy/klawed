@@ -73,4 +73,39 @@ int session_get_metadata(PersistenceDB *db, const char *session_id,
  */
 int session_list_sessions(PersistenceDB *db, int limit);
 
+/**
+ * Generate a session title from conversation content
+ *
+ * Extracts the first user message from the conversation state and
+ * creates a concise title (truncated to ~60 characters, newlines removed).
+ * The title is intended to provide a meaningful summary of the session's topic.
+ *
+ * Parameters:
+ *   state: Conversation state with messages
+ *
+ * Returns:
+ *   Newly allocated string with session title (caller must free),
+ *   or NULL if no suitable content found for a title
+ */
+char* session_generate_title(ConversationState *state);
+
+/**
+ * Try to generate and save a session title if one doesn't exist yet
+ *
+ * Checks the total token usage for the session, and if it exceeds the
+ * threshold (configurable via KLAWED_SESSION_TITLE_THRESHOLD env var,
+ * default: 1000 tokens), generates a title from conversation context
+ * and saves it to the database.
+ *
+ * This is intended to be called after each API call completes.
+ *
+ * Parameters:
+ *   state: Conversation state with messages and persistence database
+ *
+ * Returns:
+ *   0 on success or if title already exists/below threshold,
+ *   -1 on error
+ */
+int session_maybe_generate_title(ConversationState *state);
+
 #endif // SESSION_H
