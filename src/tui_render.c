@@ -43,6 +43,7 @@
 #include <bsd/string.h>
 #include <wchar.h>
 #include <locale.h>
+#include <langinfo.h>
 #include <assert.h>
 #include <ctype.h>
 
@@ -142,6 +143,43 @@ static int tui_window_remaining_columns(WINDOW *win, int y, int x) {
     return clamp_nonnegative(size.width - x);
 }
 
+// Safely clip a UTF-8 string to fit within a given number of display columns.
+// Returns the number of bytes that fit without splitting a multi-byte character.
+static int utf8_clip_to_columns(const char *str, int str_bytes, int max_columns) {
+    if (!str || str_bytes <= 0 || max_columns <= 0) return 0;
+
+    // If not a multi-byte locale, just clip by column count
+    if (MB_CUR_MAX <= 1) {
+        return str_bytes < max_columns ? str_bytes : max_columns;
+    }
+
+    mbstate_t state = {0};
+    int columns = 0;
+    int bytes = 0;
+
+    while (bytes < str_bytes && columns < max_columns) {
+        wchar_t wc;
+        size_t consumed = mbrtowc(&wc, str + bytes, (size_t)(str_bytes - bytes), &state);
+        if (consumed == (size_t)-1 || consumed == (size_t)-2) {
+            // Invalid or incomplete sequence — stop here
+            break;
+        }
+        if (consumed == 0) {
+            // Null character
+            break;
+        }
+        int w = wcwidth(wc);
+        if (w < 0) w = 1; // Non-printable, treat as 1 column
+        if (columns + w > max_columns) {
+            break; // Would exceed the column limit
+        }
+        columns += w;
+        bytes += (int)consumed;
+    }
+
+    return bytes;
+}
+
 static int tui_safe_mvwaddnstr(WINDOW *win, int y, int x, const char *text, int len) {
     int available = 0;
     int clipped_len = 0;
@@ -155,10 +193,8 @@ static int tui_safe_mvwaddnstr(WINDOW *win, int y, int x, const char *text, int 
         return TUI_DRAW_SKIPPED;
     }
 
-    clipped_len = len;
-    if (clipped_len > available) {
-        clipped_len = available;
-    }
+    // Use UTF-8 safe clipping: only cut at character boundaries
+    clipped_len = utf8_clip_to_columns(text, len, available);
 
     if (clipped_len <= 0) {
         return TUI_DRAW_SKIPPED;
@@ -392,6 +428,13 @@ static int get_pacman_max_context(void) {
 //
 #define PACMAN_STEP_NS 150000000ULL  // 150ms per sweep step (real-time based)
 
+// Check if the current locale supports UTF-8 output
+static int is_utf8_locale(void) {
+    const char *codeset = nl_langinfo(CODESET);
+    return codeset && (strcasecmp(codeset, "UTF-8") == 0 ||
+                       strcasecmp(codeset, "UTF8") == 0);
+}
+
 static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int prompt_tokens, int is_working) {
     if (!tui || !buf || buf_size == 0) return;
 
@@ -442,6 +485,12 @@ static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int pr
 
     // Build the display string
     // Layout: positions 0…max_dots-1 then sentinel "•"
+    int use_ascii = !is_utf8_locale() || MB_CUR_MAX <= 1;
+    const char *dot_char = use_ascii ? "." : "\xC2\xB7";  // · or .
+    const char *mouth_open_char = use_ascii ? "C" : "\xE1\x97\xA7";  // ᗧ or C
+    const char *mouth_closed_char = use_ascii ? "O" : "\xE2\x97\x8F";  // ● or O
+    const char *sentinel_char = use_ascii ? "*" : "\xE2\x80\xA2";  // • or *
+
     char tmp[16] = {0};
     size_t idx = 0;
     int i;
@@ -449,17 +498,17 @@ static void build_pacman_frame(TUIState *tui, char *buf, size_t buf_size, int pr
     for (i = 0; i <= max_dots && idx < buf_size - 8; i++) {
         if (i == max_dots) {
             // End sentinel
-            strlcpy(tmp, "•", sizeof(tmp));
+            strlcpy(tmp, sentinel_char, sizeof(tmp));
         } else if (i == sweep) {
             // Pac-Man's current position
-            strlcpy(tmp, mouth_open ? "ᗧ" : "●", sizeof(tmp));
+            strlcpy(tmp, mouth_open ? mouth_open_char : mouth_closed_char, sizeof(tmp));
         } else if (i < sweep) {
             // Eaten trail — blank, EXCEPT position 0 always keeps the origin dot
             // when Pac-Man has moved past it (i.e. sweep > 0)
-            strlcpy(tmp, (i == 0) ? "·" : " ", sizeof(tmp));
+            strlcpy(tmp, (i == 0) ? dot_char : " ", sizeof(tmp));
         } else {
             // Uneaten dot
-            strlcpy(tmp, "·", sizeof(tmp));
+            strlcpy(tmp, dot_char, sizeof(tmp));
         }
         size_t len = strlen(tmp);
         if (idx + len < buf_size - 1) {

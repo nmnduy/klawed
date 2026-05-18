@@ -32,6 +32,7 @@
 #include <string.h>
 #include <bsd/string.h>
 #include <locale.h>
+#include <langinfo.h>
 #include <ncurses.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -329,6 +330,18 @@ int tui_init(TUIState *tui, ConversationState *state) {
     // Store global pointer for input resize callback
     // Set locale for UTF-8 support
     setlocale(LC_ALL, "");
+
+    // Log locale diagnostics for debugging encoding issues
+    {
+        const char *loc_name = setlocale(LC_CTYPE, NULL);
+        const char *codeset = nl_langinfo(CODESET);
+        const char *curses_ver = curses_version();
+        LOG_DEBUG("[TUI] Locale: LC_CTYPE=%s codeset=%s MB_CUR_MAX=%d curses=%s",
+                  loc_name ? loc_name : "(null)",
+                  codeset ? codeset : "(null)",
+                  (int)MB_CUR_MAX,
+                  curses_ver ? curses_ver : "(null)");
+    }
 
     // Initialize ncurses
     initscr();
