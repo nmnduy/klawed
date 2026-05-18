@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <dirent.h>
+#include <sys/wait.h>
 
 #include "system_prompt.h"
 #include "environment.h"
@@ -32,6 +33,25 @@ static int is_openai_subscription_codex_session(const ConversationState *state) 
 
     return strcmp(provider_type, "openai_sub") == 0 ||
            strcmp(provider_type, "chatgpt") == 0;
+}
+
+/**
+ * Check if dear_oracle CLI tool is available and configured.
+ * Disabled by default; enable with KLAWED_DEAR_ORACLE=1 env var.
+ * Runs `dear_oracle --ready` which exits 0 if the binary exists
+ * and has a valid API key available, without making any network calls.
+ */
+static int is_dear_oracle_available(void) {
+    // Disabled by default — must opt in via env var
+    const char *enabled = getenv("KLAWED_DEAR_ORACLE");
+    if (!enabled || (strcmp(enabled, "1") != 0 && strcmp(enabled, "true") != 0 && strcmp(enabled, "yes") != 0)) {
+        return 0;
+    }
+    int ret = system("dear_oracle --ready > /dev/null 2>&1");
+    if (ret == -1) {
+        return 0;
+    }
+    return WIFEXITED(ret) && WEXITSTATUS(ret) == 0;
 }
 
 /**
@@ -104,6 +124,9 @@ char* build_system_prompt(ConversationState *state) {
     for (int i = 0; i < state->additional_dirs_count; i++) {
         prompt_size += strlen(state->additional_dirs[i]) + 4; // path + ", " separator
     }
+
+    // Add space for dear_oracle availability section
+    prompt_size += 512;
 
     char *prompt = malloc(prompt_size);
     if (!prompt) {
@@ -231,6 +254,15 @@ char* build_system_prompt(ConversationState *state) {
         }
 
         offset += snprintf(prompt + offset, prompt_size - (size_t)offset, "\n");
+    }
+
+    // Check if dear_oracle CLI tool is available and configured
+    if (is_dear_oracle_available() && offset < (int)prompt_size) {
+        offset += snprintf(prompt + offset, prompt_size - (size_t)offset,
+            "\n### Available CLI Tools\n"
+            "\n"
+            "dear_oracle — A CLI tool to submit a prompt to a large model for hard questions. "
+            "Run `dear_oracle --help` for usage information.\n");
     }
 
     // Note: DeepSeek API detection removed - no longer limiting tokens to 4096

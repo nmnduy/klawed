@@ -100,6 +100,7 @@ type config struct {
 	reasoningEffort string
 	listEfforts     bool
 	doctor          bool
+	ready           bool
 }
 
 func parseFlags() config {
@@ -114,6 +115,7 @@ func parseFlags() config {
 	flag.StringVar(&cfg.reasoningEffort, "reasoning-effort", "", "Reasoning effort: low, medium, high")
 	flag.BoolVar(&cfg.listEfforts, "list-efforts", false, "List available reasoning effort values and exit")
 	flag.BoolVar(&cfg.doctor, "doctor", false, "Run self-diagnostic checks and exit")
+	flag.BoolVar(&cfg.ready, "ready", false, "Quick readiness check (no API calls) and exit")
 
 	flag.StringVar(&cfg.model, "m", "gpt-5.5", "Model name")
 	flag.StringVar(&cfg.model, "model", "gpt-5.5", "Model name")
@@ -141,6 +143,7 @@ Flags:
   --reasoning-effort LEVEL   Reasoning effort: low, medium, high
   --list-efforts             List available reasoning effort values and exit
   --doctor                   Run self-diagnostics to check configuration
+  --ready                    Quick readiness check (no API calls) and exit
   --api-key KEY              API key (default: $OPENAI_API_KEY)
   --api-base URL             API base URL (default: https://api.openai.com/v1)
   --chat                     Use Chat Completions API instead of Responses API
@@ -351,6 +354,61 @@ func writeOutput(cfg config, text string) error {
 	return err
 }
 
+// runReadyCheck performs a quick readiness check (no API calls) to verify
+// that dear_oracle has enough configuration to work. Exits with 0 if ready, 1 if not.
+func runReadyCheck(cfg config) {
+	ok := 0
+	fail := 0
+
+	check := func(name string, passed bool, info string) {
+		if passed {
+			fmt.Fprintf(os.Stderr, "  ✅ %s — %s\n", name, info)
+			ok++
+		} else {
+			fmt.Fprintf(os.Stderr, "  ❌ %s — %s\n", name, info)
+			fail++
+		}
+	}
+
+	fmt.Fprintln(os.Stderr, "⚡ dear_oracle ready check — no API calls")
+	fmt.Fprintln(os.Stderr, "")
+
+	// Check API key
+	key := cfg.apiKey
+	if key == "" {
+		key = os.Getenv("OPENAI_API_KEY")
+	}
+	if key != "" {
+		prefix := ""
+		if len(key) > 8 {
+			prefix = key[:8]
+		}
+		check("API key", true,
+			fmt.Sprintf("found (%s...%d chars)", prefix, len(key)))
+	} else {
+		check("API key", false,
+			"not set. Use --api-key or set OPENAI_API_KEY")
+	}
+
+	// Check API base URL
+	check("API base URL", cfg.apiBase != "",
+		fmt.Sprintf("configured as %s", cfg.apiBase))
+
+	// Check model name
+	check("Model name", cfg.model != "",
+		fmt.Sprintf("configured as %q", cfg.model))
+
+	fmt.Fprintln(os.Stderr, "")
+
+	// Summary
+	if fail == 0 {
+		fmt.Fprintf(os.Stderr, "✅ All %d checks passed — dear_oracle is ready.\n", ok)
+	} else {
+		fmt.Fprintf(os.Stderr, "⚠️  %d passed, %d failed\n", ok, fail)
+		os.Exit(1)
+	}
+}
+
 // runDoctor performs self-diagnostics to check if dear_oracle is configured correctly.
 func runDoctor(cfg config) {
 	ok := 0
@@ -439,6 +497,12 @@ func runDoctor(cfg config) {
 
 func main() {
 	cfg := parseFlags()
+
+	// Handle --ready (run before any other checks, no API calls)
+	if cfg.ready {
+		runReadyCheck(cfg)
+		os.Exit(0)
+	}
 
 	// Handle --doctor (run before any other checks to avoid requiring a prompt)
 	if cfg.doctor {
