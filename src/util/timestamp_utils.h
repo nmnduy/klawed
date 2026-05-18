@@ -36,7 +36,7 @@ char* get_current_date(void);
 
 /**
  * Generate unique session ID
- * Format: sess_<unix_timestamp>_<random_hex>
+ * Format: 10-character random hex string
  * @return Dynamically allocated session ID, or NULL on error
  *         Caller must free() the returned string
  */

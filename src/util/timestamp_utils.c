@@ -10,6 +10,7 @@
 #include <bsd/string.h>
 #include <bsd/stdlib.h>
 #include <time.h>
+#include <stdint.h>
 
 /**
  * Get current timestamp in YYYY-MM-DD HH:MM:SS format
@@ -72,21 +73,19 @@ char* get_current_date(void) {
 
 /**
  * Generate unique session ID
+ * Format: 10-character random hex string (40 bits of entropy)
  */
 char* generate_session_id(void) {
-    char *session_id = malloc(64);
+    // 10 hex chars + null = 11 bytes
+    char *session_id = malloc(16);
     if (!session_id) {
         return NULL;
     }
 
-    // Get current time for timestamp
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-
-    // Generate session ID: sess_<unix_timestamp>_<random_hex>
-    // Use arc4random() for cryptographically secure random numbers
-    unsigned int random_part = arc4random();
-    snprintf(session_id, 64, "sess_%ld_%08x", ts.tv_sec, random_part);
+    // Generate 40 bits (10 hex chars) of cryptographically secure randomness
+    uint64_t random_val = ((uint64_t)arc4random() << 32) | arc4random();
+    random_val &= 0xFFFFFFFFFFULL;  // Mask to 40 bits
+    snprintf(session_id, 16, "%010llx", (unsigned long long)random_val);
 
     return session_id;
 }

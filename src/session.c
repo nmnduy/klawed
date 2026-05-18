@@ -444,7 +444,7 @@ int session_list_sessions(PersistenceDB *db, int limit) {
     printf("================================================================================\n");
     printf("                           AVAILABLE SESSIONS\n");
     printf("================================================================================\n");
-    printf("%-36s %-11s %-22s %-8s %s\n", "Session ID", "Model", "Started", "Msgs", "Summary");
+    printf("%-45s %-30s %-10s %-19s %-5s\n", "Summary", "Session ID", "Model", "Started", "Msgs");
     printf("--------------------------------------------------------------------------------\n");
 
     int count = 0;
@@ -454,39 +454,28 @@ int session_list_sessions(PersistenceDB *db, int limit) {
         int message_count = 0;
 
         if (session_get_metadata(db, sessions[i], &timestamp, &model, &message_count) == 0) {
-            // Truncate session ID for display
-            char display_id[37];
-            if (strlen(sessions[i]) > 36) {
-                snprintf(display_id, sizeof(display_id), "%.33s...", sessions[i]);
-            } else {
-                snprintf(display_id, sizeof(display_id), "%s", sessions[i]);
-            }
 
-            // Get session title
+            // Get session title — display prominently in first column
             char *title = persistence_get_session_title(db, sessions[i]);
-            char display_title[129];
+            char display_title[48];
             if (title) {
-                // Truncate title for display
-                if (strlen(title) > 48) {
-                    snprintf(display_title, sizeof(display_title), "%.125s...", title);
+                // Truncate title for 45-char column
+                if (strlen(title) > 45) {
+                    snprintf(display_title, sizeof(display_title), "%.42s...", title);
                 } else {
-                    snprintf(display_title, sizeof(display_title), "%s", title);
+                    strlcpy(display_title, title, sizeof(display_title));
                 }
                 free(title);
             } else {
-                // Truncate session ID as fallback display
-                if (strlen(display_id) > 20) {
-                    snprintf(display_title, sizeof(display_title), "ID: %.17s...", sessions[i] + strlen(sessions[i]) - 3);
-                } else {
-                    snprintf(display_title, sizeof(display_title), "ID: %s", display_id);
-                }
+                // No title available — show placeholder
+                strlcpy(display_title, "-", sizeof(display_title));
             }
 
             // Truncate model for display
             char display_model[12];
             if (model) {
-                if (strlen(model) > 11) {
-                    snprintf(display_model, sizeof(display_model), "%.8s...", model);
+                if (strlen(model) > 10) {
+                    snprintf(display_model, sizeof(display_model), "%.7s...", model);
                 } else {
                     strlcpy(display_model, model, sizeof(display_model));
                 }
@@ -496,11 +485,11 @@ int session_list_sessions(PersistenceDB *db, int limit) {
             }
 
             // Truncate timestamp for display
-            char display_time[23];
+            char display_time[20];
             if (timestamp) {
                 // Show just date + time (first 19 chars of ISO format)
-                if (strlen(timestamp) > 22) {
-                    snprintf(display_time, sizeof(display_time), "%.22s", timestamp);
+                if (strlen(timestamp) > 19) {
+                    snprintf(display_time, sizeof(display_time), "%.19s", timestamp);
                 } else {
                     strlcpy(display_time, timestamp, sizeof(display_time));
                 }
@@ -509,33 +498,34 @@ int session_list_sessions(PersistenceDB *db, int limit) {
                 strlcpy(display_time, "unknown", sizeof(display_time));
             }
 
-            printf("%-36s %-11s %-22s %-8d %s\n",
-                   display_id,
+            printf("%-45s %-30s %-10s %-19s %-5d\n",
+                   display_title,
+                   sessions[i],
                    display_model,
                    display_time,
-                   message_count,
-                   display_title);
+                   message_count);
 
             count++;
         } else {
             // Get session title
             char *title = persistence_get_session_title(db, sessions[i]);
-            char display_title[129];
+            char display_title[48];
+
             if (title) {
-                if (strlen(title) > 128) {
-                    snprintf(display_title, sizeof(display_title), "%.125s...", title);
+                if (strlen(title) > 45) {
+                    snprintf(display_title, sizeof(display_title), "%.42s...", title);
                 } else {
-                    snprintf(display_title, sizeof(display_title), "%s", title);
+                    strlcpy(display_title, title, sizeof(display_title));
                 }
                 free(title);
             } else {
-                snprintf(display_title, sizeof(display_title), "ID: %.20s", sessions[i]);
+                strlcpy(display_title, "-", sizeof(display_title));
             }
 
-            printf("%-36s %-11s %-22s %-8s %s\n",
+            printf("%-45s %-30s %-10s %-19s %-5s\n",
+                   display_title,
                    sessions[i],
-                   "unknown", "unknown", "unknown",
-                   display_title);
+                   "unknown", "unknown", "unknown");
             count++;
         }
     }
