@@ -29,6 +29,7 @@
 #include <sqlite3.h>
 #include <cjson/cJSON.h>
 #include <ctype.h>
+#include "util/stream_id.h"
 #include <bsd/string.h>
 #include <bsd/stdlib.h>
 #include <assert.h>
@@ -2716,16 +2717,22 @@ static int sqlite_queue_prepare_statement(SQLiteQueueContext *ctx, sqlite3_stmt 
  *
  * Message format sent to receiver:
  *   { "messageType": "TEXT_STREAM_CHUNK",
+ *     "streamId": "<12-char hex>",
  *     "content": "<partial text chunk>",
  *     "isComplete": false }
+ *
+ * The streamId groups all chunks from the same assistant response.
+ * Providers generate a random streamId per response in their streaming
+ * context init (e.g. OpenAIStreamingAccumulator.stream_id).
  *
  * @param ctx       SQLite queue context
  * @param receiver  Receiver name (usually "client")
  * @param chunk     Partial text chunk (can be empty string for heartbeat)
+ * @param stream_id Stream identifier for grouping (12-char hex, or NULL to omit)
  * @return 0 on success, -1 on failure
  */
 int sqlite_queue_send_streaming_chunk(SQLiteQueueContext *ctx, const char *receiver,
-                                      const char *chunk) {
+                                      const char *chunk, const char *stream_id) {
     if (!ctx || !receiver) {
         LOG_ERROR("SQLite Queue: Invalid parameters for send_streaming_chunk");
         return -1;
@@ -2735,6 +2742,12 @@ int sqlite_queue_send_streaming_chunk(SQLiteQueueContext *ctx, const char *recei
         chunk = "";
     }
 
+    // Validate stream_id — warn if missing or wrong length, but still send (backward compat)
+    if (stream_id && strlen(stream_id) != STREAM_ID_HEX_LEN) {
+        LOG_WARN("SQLite Queue: Invalid stream_id length (got %zu, expected %d) — stream will not be groupable",
+                 strlen(stream_id), STREAM_ID_HEX_LEN);
+    }
+
     cJSON *json = cJSON_CreateObject();
     if (!json) {
         LOG_ERROR("SQLite Queue: Failed to create streaming chunk JSON object");
@@ -2742,6 +2755,9 @@ int sqlite_queue_send_streaming_chunk(SQLiteQueueContext *ctx, const char *recei
     }
 
     cJSON_AddStringToObject(json, "messageType", "TEXT_STREAM_CHUNK");
+    if (stream_id) {
+        cJSON_AddStringToObject(json, "streamId", stream_id);
+    }
     cJSON_AddStringToObject(json, "content", chunk);
     cJSON_AddBoolToObject(json, "isComplete", cJSON_False);
 
@@ -2782,8 +2798,8 @@ void sqlite_queue_streaming_callback(const char *chunk, void *userdata) {
 
     SQLiteQueueContext *ctx = (SQLiteQueueContext *)userdata;
 
-    // Send the chunk as a TEXT_STREAM_CHUNK message
-    sqlite_queue_send_streaming_chunk(ctx, "client", chunk);
+    // Send the chunk as a TEXT_STREAM_CHUNK message (no stream_id available here)
+    sqlite_queue_send_streaming_chunk(ctx, "client", chunk, NULL);
 }
 
 __attribute__((format(printf, 3, 4)))

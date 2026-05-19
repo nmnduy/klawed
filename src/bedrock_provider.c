@@ -23,6 +23,8 @@
 #include <string.h>
 #include <strings.h>  // for strcasecmp
 #include <bsd/string.h>  // for strlcpy
+#include <bsd/stdlib.h>  // for arc4random
+#include "util/stream_id.h"
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>  // for usleep
@@ -96,6 +98,9 @@ typedef struct {
     cJSON *message_start_data;       // Message metadata from message_start
     char *stop_reason;               // Stop reason from message_delta
     Arena *arena;                    // Arena for all string allocations (freed together at end)
+
+    // Stream identifier - groups all chunks from one assistant response
+    char stream_id[STREAM_ID_BUF_SIZE];
 } BedrockStreamingContext;
 
 static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, ConversationState *state) {
@@ -122,6 +127,9 @@ static void bedrock_streaming_context_init(BedrockStreamingContext *ctx, Convers
     if (ctx->tool_input_json) {
         ctx->tool_input_json[0] = '\0';
     }
+
+    // Generate a random 12-char stream ID to group streaming chunks
+    generate_stream_id(ctx->stream_id);
 }
 
 // Helper function to send streaming event to socket
@@ -276,7 +284,8 @@ static int bedrock_streaming_event_handler(StreamEvent *event, void *userdata) {
                                     // Send streaming chunk to SQLite queue if enabled
                                     if (ctx->state->sqlite_queue_context) {
                                         sqlite_queue_send_streaming_chunk(ctx->state->sqlite_queue_context,
-                                                                          "client", text->valuestring);
+                                                                          "client", text->valuestring,
+                                                                          ctx->stream_id);
                                     }
                                 }
 

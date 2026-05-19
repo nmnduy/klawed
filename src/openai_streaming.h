@@ -13,6 +13,7 @@
 #include "sse_parser.h"  // For StreamEvent
 #include "arena.h"       // For arena allocation
 #include "streaming_tool_accumulator.h"  // For tool call accumulation
+#include "util/stream_id.h"  // For STREAM_ID_BUF_SIZE
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,6 +49,10 @@ typedef struct {
 
     // Arena for allocations
     Arena *arena;
+
+    // Stream identifier - groups all chunks from one assistant response
+    // Generated randomly on init using arc4random
+    char stream_id[STREAM_ID_BUF_SIZE];
 
     // Flags for tracking first content (for TUI integration)
     int reasoning_line_added;

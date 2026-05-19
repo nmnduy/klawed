@@ -184,7 +184,8 @@ static int sub_streaming_event_handler(StreamEvent *event, void *userdata) {
             // Send streaming chunk to SQLite queue if enabled
             if (ctx->state->sqlite_queue_context) {
                 sqlite_queue_send_streaming_chunk(ctx->state->sqlite_queue_context,
-                                                  "client", text);
+                                                  "client", text,
+                                                  ctx->acc.stream_id);
             }
         }
 

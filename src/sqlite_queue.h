@@ -275,6 +275,7 @@ int sqlite_queue_send_auth_message(SQLiteQueueContext *ctx, const char *receiver
  *
  * Message format sent to receiver:
  *   { "messageType": "TEXT_STREAM_CHUNK",
+ *     "streamId": "<12-char hex>",
  *     "content": "<partial text chunk>",
  *     "isComplete": false }
  *
@@ -289,10 +290,11 @@ int sqlite_queue_send_auth_message(SQLiteQueueContext *ctx, const char *receiver
  * @param ctx       SQLite queue context
  * @param receiver  Receiver name (usually "client")
  * @param chunk     Partial text chunk (NULL or empty string for heartbeat)
+ * @param stream_id Stream identifier for grouping chunks (12-char hex, or NULL for backward compat)
  * @return 0 on success, -1 on failure
  */
 int sqlite_queue_send_streaming_chunk(SQLiteQueueContext *ctx, const char *receiver,
-                                      const char *chunk);
+                                      const char *chunk, const char *stream_id);
 
 /**
  * Streaming text callback function type.

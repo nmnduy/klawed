@@ -13,6 +13,7 @@
 #include "arena.h"
 #include "http_client.h"  /* StreamEvent */
 #include <cjson/cJSON.h>
+#include "util/stream_id.h"
 
 /**
  * Anthropic provider configuration
@@ -49,6 +50,9 @@ typedef struct {
     cJSON *message_start_data;
     char *stop_reason;
     Arena *arena;
+
+    // Stream identifier - groups all chunks from one assistant response
+    char stream_id[STREAM_ID_BUF_SIZE];
 } AnthropicStreamingContext;
 
 /**

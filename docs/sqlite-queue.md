@@ -50,6 +50,7 @@ All messages in the `message` field are JSON objects with a `messageType` field.
 | Type | Description | Direction |
 |------|-------------|-----------|
 | `TEXT` | Text prompt or response | Client → Klawed, Klawed → Client |
+| `TEXT_STREAM_CHUNK` | Streaming delta chunk (partial text of an in-progress AI response) | Klawed → Client |
 | `TRIGGER_COMPACT` | Request manual context compaction | Client → Klawed |
 | `TOOL` | Tool execution request | Klawed → Client |
 | `TOOL_RESULT` | Tool execution result | Klawed → Client |
@@ -297,9 +298,47 @@ Klawed responds on success:
 
 ### Output Messages (Klawed → Client)
 
+#### TEXT_STREAM_CHUNK (Streaming Delta)
+
+Partial text delta of an in-progress AI response, sent progressively as the model generates output:
+
+```json
+{
+  "messageType": "TEXT_STREAM_CHUNK",
+  "streamId": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "content": "partial text delta...",
+  "isComplete": false
+}
+```
+
+**Fields:**
+- `streamId`: 12-hex-char identifier (48-bit entropy) that groups all chunks from the same AI response. Generated randomly per response at the provider level.
+- `content`: The incremental text delta for this chunk (not accumulated — just the new characters since the last chunk). Clients should concatenate chunks with the same `streamId` to reconstruct the full text.
+- `isComplete`: Always `false` for streaming chunks. The end of streaming is signaled by the final `TEXT` message containing the complete accumulated response.
+
+**How clients should handle streaming:**
+
+1. Poll for `TEXT_STREAM_CHUNK` messages and group them by `streamId`
+2. Display/render chunks in real-time as they arrive for a responsive user experience
+3. When the final `TEXT` message arrives, use it as the canonical complete text (discard or ignore accumulated chunks)
+4. The `END_AI_TURN` message confirms the turn is fully done
+
+**Example multi-chunk sequence for one response:**
+
+```json
+{ "messageType": "TEXT_STREAM_CHUNK", "streamId": "a1b2...", "content": "Here is", "isComplete": false }
+{ "messageType": "TEXT_STREAM_CHUNK", "streamId": "a1b2...", "content": " the code y", "isComplete": false }
+{ "messageType": "TEXT_STREAM_CHUNK", "streamId": "a1b2...", "content": "ou requested", "isComplete": false }
+...
+{ "messageType": "TEXT", "content": "Here is the code you requested:\n\n```python\ndef hello():\n    print('hello')\n```" }
+{ "messageType": "END_AI_TURN" }
+```
+
+**Note:** Not all output modes support streaming. Clients that don't want to handle streaming can safely ignore `TEXT_STREAM_CHUNK` messages and wait for the final `TEXT` message instead.
+
 #### TEXT Response
 
-AI-generated text response:
+AI-generated text response (canonical complete text, sent after streaming ends or if streaming is disabled):
 
 ```json
 {
@@ -846,9 +885,15 @@ class KlawedSQLiteClient:
             message = json.loads(message_json)
             msg_type = message.get("messageType")
             
-            if msg_type == "TEXT":
+            if msg_type == "TEXT_STREAM_CHUNK":
+                stream_id = message.get("streamId", "")
                 content = message.get("content", "")
-                print(f"[TEXT AI] {content}")
+                print(f"[STREAM {stream_id[:8]}] {content}", end="", flush=True)
+                # Clients should accumulate chunks by streamId for display
+
+            elif msg_type == "TEXT":
+                content = message.get("content", "")
+                print(f"\n[TEXT AI] {content}")
                 
             elif msg_type == "TOOL_RESULT":
                 tool_name = message.get("toolName")

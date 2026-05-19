@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <bsd/string.h>
+#include <bsd/stdlib.h>
+#include "util/stream_id.h"
 
 /* ============================================================================
  * Public API Implementation
@@ -50,6 +52,9 @@ int openai_streaming_accumulator_init(OpenAIStreamingAccumulator *acc) {
         acc->arena = NULL;
         return -1;
     }
+
+    // Generate a random 12-char stream ID to group streaming chunks
+    generate_stream_id(acc->stream_id);
 
     return 0;
 }

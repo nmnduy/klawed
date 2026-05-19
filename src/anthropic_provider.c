@@ -22,6 +22,8 @@
 #include <errno.h>
 #include <curl/curl.h>
 #include <bsd/string.h>
+#include <bsd/stdlib.h>
+#include "util/stream_id.h"
 // Socket support removed - will be reimplemented with ZMQ
 #include "retry_logic.h"  // For common retry logic
 
@@ -419,6 +421,9 @@ void anthropic_streaming_context_init(AnthropicStreamingContext *ctx, Conversati
             ctx->tool_input_json[0] = '\0';
         }
     }
+
+    // Generate a random 12-char stream ID to group streaming chunks
+    generate_stream_id(ctx->stream_id);
 }
 
 void anthropic_streaming_context_free(AnthropicStreamingContext *ctx) {
@@ -572,7 +577,8 @@ int anthropic_streaming_event_handler(StreamEvent *event, void *userdata) {
                                     // Send streaming chunk to SQLite queue if enabled
                                     if (ctx->state->sqlite_queue_context) {
                                         sqlite_queue_send_streaming_chunk(ctx->state->sqlite_queue_context,
-                                                                          "client", text->valuestring);
+                                                                          "client", text->valuestring,
+                                                                          ctx->stream_id);
                                     }
                                 }
                             }
