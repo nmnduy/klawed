@@ -586,6 +586,323 @@ static void test_openai_default_model_and_id(void) {
 }
 
 /* ============================================================================
+ * Test: OpenAI streaming token usage capture and reporting
+ * ============================================================================ */
+
+static void test_openai_usage_zero_when_not_set(void) {
+    printf(COLOR_YELLOW "\\nOpenAI: Usage defaults to zero when no usage events\\n" COLOR_RESET);
+
+    /* When no usage chunk arrives, accumulator should have zero tokens */
+    OpenAIStreamingAccumulator acc;
+    int rc = openai_streaming_accumulator_init(&acc);
+    TEST_ASSERT(rc == 0, "init should succeed");
+
+    TEST_ASSERT(acc.prompt_tokens == 0, "prompt_tokens should be 0 by default");
+    TEST_ASSERT(acc.completion_tokens == 0, "completion_tokens should be 0 by default");
+    TEST_ASSERT(acc.total_tokens == 0, "total_tokens should be 0 by default");
+
+    /* Build response and verify usage object exists with zeros */
+    acc.message_id = strdup("chatcmpl-nousage");
+    acc.model = strdup("gpt-5");
+    acc.finish_reason = strdup("stop");
+    strcpy(acc.accumulated_text, "test");
+    acc.accumulated_size = strlen(acc.accumulated_text);
+
+    cJSON *response = openai_streaming_build_response(&acc);
+    TEST_ASSERT(response != NULL, "build_response should succeed");
+
+    char *raw_response = cJSON_PrintUnformatted(response);
+    TEST_ASSERT(raw_response != NULL, "serialization should succeed");
+
+    cJSON *parsed = cJSON_Parse(raw_response);
+    TEST_ASSERT(parsed != NULL, "JSON should be valid");
+
+    cJSON *usage = cJSON_GetObjectItem(parsed, "usage");
+    TEST_ASSERT(usage != NULL, "usage should be present");
+
+    cJSON *pt = cJSON_GetObjectItem(usage, "prompt_tokens");
+    TEST_ASSERT(pt != NULL && cJSON_IsNumber(pt) && pt->valueint == 0,
+                "prompt_tokens should be 0 when not set");
+
+    cJSON *ct = cJSON_GetObjectItem(usage, "completion_tokens");
+    TEST_ASSERT(ct != NULL && cJSON_IsNumber(ct) && ct->valueint == 0,
+                "completion_tokens should be 0 when not set");
+
+    cJSON *tt = cJSON_GetObjectItem(usage, "total_tokens");
+    TEST_ASSERT(tt != NULL && cJSON_IsNumber(tt) && tt->valueint == 0,
+                "total_tokens should be 0 when not set");
+
+    cJSON_Delete(parsed);
+    free(raw_response);
+    cJSON_Delete(response);
+    free(acc.message_id);
+    free(acc.model);
+    free(acc.finish_reason);
+    openai_streaming_accumulator_free(&acc);
+}
+
+static cJSON* make_openai_usage_chunk(int prompt, int completion, int total) {
+    /* Build a streaming final chunk (no choices, just usage).
+     * This simulates the final chunk from OpenAI streaming when
+     * stream_options: { include_usage: true } is set. */
+    cJSON *chunk = cJSON_CreateObject();
+    cJSON *usage = cJSON_CreateObject();
+    cJSON_AddNumberToObject(usage, "prompt_tokens", prompt);
+    cJSON_AddNumberToObject(usage, "completion_tokens", completion);
+    cJSON_AddNumberToObject(usage, "total_tokens", total);
+    cJSON_AddItemToObject(chunk, "usage", usage);
+    cJSON_AddNullToObject(chunk, "choices");  /* final chunk has empty choices */
+    return chunk;
+}
+
+static void test_openai_usage_captured_from_final_chunk(void) {
+    printf(COLOR_YELLOW "\\nOpenAI: Usage captured from final streaming chunk\\n" COLOR_RESET);
+
+    /* Simulate streaming: start with no usage, then get a final chunk with usage.
+     * The final chunk has only usage data (no choices/delta). */
+    OpenAIStreamingAccumulator acc;
+    int rc = openai_streaming_accumulator_init(&acc);
+    TEST_ASSERT(rc == 0, "init should succeed");
+
+    /* Process some regular content chunks first (no usage yet) */
+    cJSON *content_chunk = cJSON_CreateObject();
+    cJSON *choices = cJSON_CreateArray();
+    cJSON *choice = cJSON_CreateObject();
+    cJSON *delta = cJSON_CreateObject();
+    cJSON_AddStringToObject(delta, "content", "Hello");
+    cJSON_AddItemToObject(choice, "delta", delta);
+    cJSON_AddItemToArray(choices, choice);
+    cJSON_AddItemToObject(content_chunk, "choices", choices);
+
+    StreamEvent content_event = {
+        .type = SSE_EVENT_OPENAI_CHUNK,
+        .data = content_chunk
+    };
+    openai_streaming_process_event(&acc, &content_event);
+    cJSON_Delete(content_chunk);
+
+    /* Now simulate the final chunk with usage data (no choices) */
+    cJSON *usage_chunk = make_openai_usage_chunk(150, 42, 192);
+    StreamEvent usage_event = {
+        .type = SSE_EVENT_OPENAI_CHUNK,
+        .data = usage_chunk
+    };
+    openai_streaming_process_event(&acc, &usage_event);
+    cJSON_Delete(usage_chunk);
+
+    /* Verify accumulator captured the usage */
+    TEST_ASSERT(acc.prompt_tokens == 150,
+                "prompt_tokens should be captured from final chunk");
+    TEST_ASSERT(acc.completion_tokens == 42,
+                "completion_tokens should be captured from final chunk");
+    TEST_ASSERT(acc.total_tokens == 192,
+                "total_tokens should be captured from final chunk");
+
+    /* Now build the synthetic response and verify usage is serialized correctly */
+    acc.message_id = strdup("chatcmpl-usage123");
+    acc.model = strdup("gpt-5");
+    acc.finish_reason = strdup("stop");
+
+    cJSON *response = openai_streaming_build_response(&acc);
+    TEST_ASSERT(response != NULL, "build_response should succeed");
+
+    char *raw_response = cJSON_PrintUnformatted(response);
+    TEST_ASSERT(raw_response != NULL, "serialization should succeed");
+
+    cJSON *parsed = cJSON_Parse(raw_response);
+    TEST_ASSERT(parsed != NULL, "JSON should be valid");
+
+    cJSON *usage = cJSON_GetObjectItem(parsed, "usage");
+    TEST_ASSERT(usage != NULL, "usage should be present in response");
+
+    cJSON *pt = cJSON_GetObjectItem(usage, "prompt_tokens");
+    TEST_ASSERT(pt != NULL && cJSON_IsNumber(pt) && pt->valueint == 150,
+                "prompt_tokens should be 150");
+
+    cJSON *ct = cJSON_GetObjectItem(usage, "completion_tokens");
+    TEST_ASSERT(ct != NULL && cJSON_IsNumber(ct) && ct->valueint == 42,
+                "completion_tokens should be 42");
+
+    cJSON *tt = cJSON_GetObjectItem(usage, "total_tokens");
+    TEST_ASSERT(tt != NULL && cJSON_IsNumber(tt) && tt->valueint == 192,
+                "total_tokens should be 192");
+
+    /* Also verify the text content was accumulated correctly */
+    cJSON *choices_resp = cJSON_GetObjectItem(parsed, "choices");
+    cJSON *choice0 = cJSON_GetArrayItem(choices_resp, 0);
+    cJSON *msg = cJSON_GetObjectItem(choice0, "message");
+    cJSON *content = cJSON_GetObjectItem(msg, "content");
+    TEST_ASSERT(content != NULL && cJSON_IsString(content) &&
+                strcmp(content->valuestring, "Hello") == 0,
+                "text content should still be accumulated correctly");
+
+    cJSON_Delete(parsed);
+    free(raw_response);
+    cJSON_Delete(response);
+    free(acc.message_id);
+    free(acc.model);
+    free(acc.finish_reason);
+    openai_streaming_accumulator_free(&acc);
+}
+
+static void test_openai_usage_overwrites_on_multiple_chunks(void) {
+    printf(COLOR_YELLOW "\\nOpenAI: Usage overwritten by later chunks\\n" COLOR_RESET);
+
+    /* If multiple chunks have usage, the last one should win */
+    OpenAIStreamingAccumulator acc;
+    int rc = openai_streaming_accumulator_init(&acc);
+    TEST_ASSERT(rc == 0, "init should succeed");
+
+    cJSON *chunk1 = make_openai_usage_chunk(100, 20, 120);
+    StreamEvent ev1 = { .type = SSE_EVENT_OPENAI_CHUNK, .data = chunk1 };
+    openai_streaming_process_event(&acc, &ev1);
+    cJSON_Delete(chunk1);
+
+    TEST_ASSERT(acc.prompt_tokens == 100, "prompt_tokens should be 100 after first chunk");
+    TEST_ASSERT(acc.completion_tokens == 20, "completion_tokens should be 20 after first chunk");
+    TEST_ASSERT(acc.total_tokens == 120, "total_tokens should be 120 after first chunk");
+
+    cJSON *chunk2 = make_openai_usage_chunk(200, 50, 250);
+    StreamEvent ev2 = { .type = SSE_EVENT_OPENAI_CHUNK, .data = chunk2 };
+    openai_streaming_process_event(&acc, &ev2);
+    cJSON_Delete(chunk2);
+
+    /* Values should be overwritten (last chunk wins) */
+    TEST_ASSERT(acc.prompt_tokens == 200, "prompt_tokens should be overwritten to 200");
+    TEST_ASSERT(acc.completion_tokens == 50, "completion_tokens should be overwritten to 50");
+    TEST_ASSERT(acc.total_tokens == 250, "total_tokens should be overwritten to 250");
+
+    openai_streaming_accumulator_free(&acc);
+}
+
+static void test_openai_usage_fallback_total(void) {
+    printf(COLOR_YELLOW "\\nOpenAI: Usage fallback when total_tokens is 0\\n" COLOR_RESET);
+
+    /* Some APIs provide prompt_tokens and completion_tokens but not total_tokens.
+     * openai_streaming_build_response() should compute total = prompt + completion. */
+    OpenAIStreamingAccumulator acc;
+    int rc = openai_streaming_accumulator_init(&acc);
+    TEST_ASSERT(rc == 0, "init should succeed");
+
+    /* Set fields directly (simulating a chunk that only had prompt+completion) */
+    acc.prompt_tokens = 300;
+    acc.completion_tokens = 80;
+    acc.total_tokens = 0;  /* Not provided by API */
+    acc.message_id = strdup("chatcmpl-fallback");
+    acc.model = strdup("gpt-5");
+    acc.finish_reason = strdup("stop");
+    strcpy(acc.accumulated_text, "test");
+    acc.accumulated_size = strlen(acc.accumulated_text);
+
+    cJSON *response = openai_streaming_build_response(&acc);
+    TEST_ASSERT(response != NULL, "build_response should succeed");
+
+    char *raw_response = cJSON_PrintUnformatted(response);
+    TEST_ASSERT(raw_response != NULL, "serialization should succeed");
+
+    cJSON *parsed = cJSON_Parse(raw_response);
+    TEST_ASSERT(parsed != NULL, "JSON should be valid");
+
+    cJSON *usage = cJSON_GetObjectItem(parsed, "usage");
+    TEST_ASSERT(usage != NULL, "usage should be present");
+
+    cJSON *pt = cJSON_GetObjectItem(usage, "prompt_tokens");
+    TEST_ASSERT(pt != NULL && cJSON_IsNumber(pt) && pt->valueint == 300,
+                "prompt_tokens should be 300");
+
+    cJSON *ct = cJSON_GetObjectItem(usage, "completion_tokens");
+    TEST_ASSERT(ct != NULL && cJSON_IsNumber(ct) && ct->valueint == 80,
+                "completion_tokens should be 80");
+
+    cJSON *tt = cJSON_GetObjectItem(usage, "total_tokens");
+    TEST_ASSERT(tt != NULL && cJSON_IsNumber(tt) && tt->valueint == 380,
+                "total_tokens should fall back to prompt+completion (300+80=380)");
+
+    cJSON_Delete(parsed);
+    free(raw_response);
+    cJSON_Delete(response);
+    free(acc.message_id);
+    free(acc.model);
+    free(acc.finish_reason);
+    openai_streaming_accumulator_free(&acc);
+}
+
+static void test_openai_usage_extracted_by_persistence(void) {
+    printf(COLOR_YELLOW "\\nOpenAI: Usage in synthetic response can be extracted by persistence\\n" COLOR_RESET);
+
+    /* This tests the end-to-end path: the synthetic raw_response JSON
+     * produced by openai_streaming_build_response() must contain usage
+     * that can be parsed by token_usage_extract_from_response().
+     * This is exactly what persistence_log_api_call() does downstream. */
+
+    OpenAIStreamingAccumulator acc;
+    int rc = openai_streaming_accumulator_init(&acc);
+    TEST_ASSERT(rc == 0, "init should succeed");
+
+    /* First accumulate some text, then get usage from final chunk */
+    cJSON *content_chunk = cJSON_CreateObject();
+    cJSON *choices = cJSON_CreateArray();
+    cJSON *choice = cJSON_CreateObject();
+    cJSON *delta = cJSON_CreateObject();
+    cJSON_AddStringToObject(delta, "content", "Some response text");
+    cJSON_AddItemToObject(choice, "delta", delta);
+    cJSON_AddItemToArray(choices, choice);
+    cJSON_AddItemToObject(content_chunk, "choices", choices);
+
+    StreamEvent content_ev = { .type = SSE_EVENT_OPENAI_CHUNK, .data = content_chunk };
+    openai_streaming_process_event(&acc, &content_ev);
+    cJSON_Delete(content_chunk);
+
+    cJSON *usage_chunk = make_openai_usage_chunk(425, 99, 524);
+    StreamEvent usage_ev = { .type = SSE_EVENT_OPENAI_CHUNK, .data = usage_chunk };
+    openai_streaming_process_event(&acc, &usage_ev);
+    cJSON_Delete(usage_chunk);
+
+    acc.message_id = strdup("chatcmpl-persist");
+    acc.model = strdup("gpt-5");
+    acc.finish_reason = strdup("stop");
+
+    /* Build synthetic response — the same way openai_provider.c does it */
+    cJSON *response = openai_streaming_build_response(&acc);
+    TEST_ASSERT(response != NULL, "build_response should succeed");
+
+    char *raw_response = cJSON_PrintUnformatted(response);
+    TEST_ASSERT(raw_response != NULL, "serialization should succeed");
+
+    /* Now simulate what persistence_log_api_call does: parse the response
+     * and extract usage. This validates the end-to-end chain. */
+    cJSON *parsed = cJSON_Parse(raw_response);
+    TEST_ASSERT(parsed != NULL, "raw_response should be valid JSON");
+
+    cJSON *usage_obj = cJSON_GetObjectItem(parsed, "usage");
+    TEST_ASSERT(usage_obj != NULL, "usage object must exist for persistence extraction");
+
+    cJSON *prompt = cJSON_GetObjectItem(usage_obj, "prompt_tokens");
+    cJSON *completion = cJSON_GetObjectItem(usage_obj, "completion_tokens");
+    cJSON *total = cJSON_GetObjectItem(usage_obj, "total_tokens");
+
+    TEST_ASSERT(prompt != NULL && cJSON_IsNumber(prompt),
+                "prompt_tokens must be a number");
+    TEST_ASSERT(completion != NULL && cJSON_IsNumber(completion),
+                "completion_tokens must be a number");
+    TEST_ASSERT(total != NULL && cJSON_IsNumber(total),
+                "total_tokens must be a number");
+
+    /* Verify the numbers match what we fed in */
+    TEST_ASSERT(prompt->valueint == 425, "prompt_tokens should be 425");
+    TEST_ASSERT(completion->valueint == 99, "completion_tokens should be 99");
+    TEST_ASSERT(total->valueint == 524, "total_tokens should be 524");
+
+    cJSON_Delete(parsed);
+    free(raw_response);
+    cJSON_Delete(response);
+    free(acc.message_id);
+    free(acc.model);
+    free(acc.finish_reason);
+    openai_streaming_accumulator_free(&acc);
+}
+
+/* ============================================================================
  * Test: Bedrock streaming response raw_response
  *
  * Uses bedrock_build_streaming_raw_response() which is exported under
@@ -800,6 +1117,14 @@ int main(void) {
     test_openai_text_and_tool_calls();
     test_openai_default_finish_reason();
     test_openai_default_model_and_id();
+
+    /* -------- Usage tests -------- */
+    printf(COLOR_CYAN "\n--- Token Usage Capture ---\n" COLOR_RESET);
+    test_openai_usage_zero_when_not_set();
+    test_openai_usage_captured_from_final_chunk();
+    test_openai_usage_overwrites_on_multiple_chunks();
+    test_openai_usage_fallback_total();
+    test_openai_usage_extracted_by_persistence();
 
     /* -------- Bedrock tests -------- */
     printf(COLOR_CYAN "\n--- Bedrock Provider ---\n" COLOR_RESET);

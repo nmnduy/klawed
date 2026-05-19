@@ -443,11 +443,13 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
             cJSON_AddItemToArray(choices, choice);
             cJSON_AddItemToObject(raw_json, "choices", choices);
 
-            // Add usage (placeholder since OpenAI streaming doesn't always include it)
+            // Add usage (captured from final streaming chunk if API provided it)
             cJSON *usage = cJSON_CreateObject();
-            cJSON_AddNumberToObject(usage, "prompt_tokens", 0);
-            cJSON_AddNumberToObject(usage, "completion_tokens", 0);
-            cJSON_AddNumberToObject(usage, "total_tokens", 0);
+            cJSON_AddNumberToObject(usage, "prompt_tokens", stream_ctx.acc.prompt_tokens);
+            cJSON_AddNumberToObject(usage, "completion_tokens", stream_ctx.acc.completion_tokens);
+            cJSON_AddNumberToObject(usage, "total_tokens",
+                stream_ctx.acc.total_tokens > 0 ? stream_ctx.acc.total_tokens
+                : (stream_ctx.acc.prompt_tokens + stream_ctx.acc.completion_tokens));
             cJSON_AddItemToObject(raw_json, "usage", usage);
 
             // Free streaming context
