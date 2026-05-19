@@ -5,6 +5,8 @@
 #   make VOICE=0  - Disable voice input (default)
 #   make          - Disabled by default
 
+.DEFAULT_GOAL := all
+
 CC ?= gcc
 CLANG = clang
 # Detect OS for ncurses library linking
