@@ -198,7 +198,7 @@ int submit_input_callback(const char *input, void *user_data) {
             }
         }
 
-        // Check if command added new messages (e.g., /voice adds transcription)
+        // Check if command added new messages (e.g., /voice or /goal)
         if (cmd_result == 0 && state->count > msg_count_before) {
             // Display any new user messages that were added
             for (int i = msg_count_before; i < state->count; i++) {
@@ -207,9 +207,9 @@ int submit_input_callback(const char *input, void *user_data) {
                     for (int j = 0; j < state->messages[i].content_count; j++) {
                         // Compare against InternalContentType to avoid enum mismatch
                         if (state->messages[i].contents[j].type == INTERNAL_TEXT) {
-                            ui_append_line(tui, queue, "[Transcription]",
+                            ui_append_line(tui, queue, "[Goal]",
                                          state->messages[i].contents[j].text,
-                                         COLOR_PAIR_USER);
+                                         COLOR_PAIR_TODO_IN_PROGRESS);
                             break;
                         }
                     }

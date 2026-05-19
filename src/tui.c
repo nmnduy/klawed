@@ -1175,7 +1175,8 @@ static TUIColorPair infer_color_from_prefix(const char *prefix) {
                 strcmp(buf, "error") != 0 &&
                 strcmp(buf, "system") != 0 &&
                 strcmp(buf, "status") != 0 &&
-                strcmp(buf, "prompt") != 0) {
+                strcmp(buf, "prompt") != 0 &&
+                strcmp(buf, "goal") != 0) {
                 return COLOR_PAIR_TOOL;
             }
         }

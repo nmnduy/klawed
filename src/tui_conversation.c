@@ -44,7 +44,7 @@ MessageType tui_conversation_get_message_type(const char *prefix) {
         return MSG_TYPE_ASSISTANT;
     }
     if (strcmp(prefix, "[System]") == 0 || strcmp(prefix, "[Error]") == 0 ||
-        strcmp(prefix, "[Transcription]") == 0) {
+        strcmp(prefix, "[Transcription]") == 0 || strcmp(prefix, "[Goal]") == 0) {
         return MSG_TYPE_SYSTEM;
     }
     // Check for tools - must come after checking specific system prefixes
@@ -632,7 +632,8 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
                 strcmp(buf, "error") != 0 &&
                 strcmp(buf, "system") != 0 &&
                 strcmp(buf, "status") != 0 &&
-                strcmp(buf, "prompt") != 0) {
+                strcmp(buf, "prompt") != 0 &&
+                strcmp(buf, "goal") != 0) {
                 return COLOR_PAIR_TOOL;
             }
         }
