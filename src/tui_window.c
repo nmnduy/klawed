@@ -283,6 +283,9 @@ void tui_handle_resize(TUIState *tui) {
             case COLOR_PAIR_DIFF_CONTEXT:
                 mapped_pair = NCURSES_PAIR_DIFF_CONTEXT;
                 break;
+            case COLOR_PAIR_GOAL:
+                mapped_pair = NCURSES_PAIR_GOAL;
+                break;
             default:
                 /* Keep default mapped_pair (foreground) */
                 break;

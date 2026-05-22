@@ -46,7 +46,8 @@ typedef enum {
     COLOR_PAIR_TODO_PENDING = 11,     // Magenta for pending tasks (distinct from assistant cyan)
     COLOR_PAIR_SEARCH = 12,           // Highlight color for search matches
     COLOR_PAIR_TOOL_DIM = 13,         // Dimmed gray for tool text (arguments)
-    COLOR_PAIR_DIFF_CONTEXT = 14      // Dimmed gray for diff context lines
+    COLOR_PAIR_DIFF_CONTEXT = 14,     // Dimmed gray for diff context lines
+    COLOR_PAIR_GOAL = 15              // Goal tag using foreground color with italic text
 } TUIColorPair;
 
 // Ncurses color pair definitions (internal indices for init_pair/COLOR_PAIR)
@@ -69,6 +70,7 @@ typedef enum {
 #define NCURSES_PAIR_ASSISTANT_BORDER_BG 16  // Assistant border color on assistant background
 #define NCURSES_PAIR_TOOL_DIM 17             // Dimmed gray for tool text
 #define NCURSES_PAIR_DIFF_CONTEXT 18         // Dimmed gray for diff context lines
+#define NCURSES_PAIR_GOAL 19                 // Goal tag (same as foreground, italicized)
 
 // Conversation message entry
 typedef struct {

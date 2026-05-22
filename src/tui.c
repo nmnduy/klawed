@@ -1170,13 +1170,15 @@ static TUIColorPair infer_color_from_prefix(const char *prefix) {
             for (size_t i = 0; i < len; i++) {
                 if (buf[i] >= 'A' && buf[i] <= 'Z') buf[i] = (char)(buf[i] - 'A' + 'a');
             }
+            if (strcmp(buf, "goal") == 0) {
+                return COLOR_PAIR_GOAL;
+            }
             if (strcmp(buf, "user") != 0 &&
                 strcmp(buf, "assistant") != 0 &&
                 strcmp(buf, "error") != 0 &&
                 strcmp(buf, "system") != 0 &&
                 strcmp(buf, "status") != 0 &&
-                strcmp(buf, "prompt") != 0 &&
-                strcmp(buf, "goal") != 0) {
+                strcmp(buf, "prompt") != 0) {
                 return COLOR_PAIR_TOOL;
             }
         }

@@ -201,6 +201,7 @@ int submit_input_callback(const char *input, void *user_data) {
         // Check if command added new messages (e.g., /voice or /goal)
         if (cmd_result == 0 && state->count > msg_count_before) {
             // Display any new user messages that were added
+            const char *added_text = NULL;
             for (int i = msg_count_before; i < state->count; i++) {
                 if (state->messages[i].role == MSG_USER) {
                     // Get the text from the first text content
@@ -209,8 +210,123 @@ int submit_input_callback(const char *input, void *user_data) {
                         if (state->messages[i].contents[j].type == INTERNAL_TEXT) {
                             ui_append_line(tui, queue, "[Goal]",
                                          state->messages[i].contents[j].text,
-                                         COLOR_PAIR_TODO_IN_PROGRESS);
+                                         COLOR_PAIR_GOAL);
+                            added_text = state->messages[i].contents[j].text;
                             break;
+                        }
+                    }
+                }
+            }
+
+            // Auto-kickoff: if a goal was set and the agent isn't already
+            // processing, submit the goal text for processing now.
+            if (goal_is_active(state) && added_text && added_text[0]) {
+                if (worker) {
+                    // Worker mode: submit the goal text to trigger processing
+                    if (ai_worker_submit(worker, added_text) != 0) {
+                        ui_show_error(tui, queue, "Failed to queue goal for processing");
+                    }
+                } else {
+                    // Sync mode: call API directly and process response
+                    ui_set_status_varied(tui, queue, SPINNER_CONTEXT_API_CALL);
+                    ApiResponse *response = call_api_with_retries(state);
+                    ui_set_status(tui, queue, "");
+
+                    if (!response) {
+                        ui_show_error(tui, queue, "Failed to get response from API");
+                    } else if (response->error_message) {
+                        ui_show_error(tui, queue, response->error_message);
+                        api_response_free(response);
+                    } else {
+                        cJSON *error = cJSON_GetObjectItem(response->raw_response, "error");
+                        if (error && !cJSON_IsNull(error)) {
+                            cJSON *error_message = cJSON_GetObjectItem(error, "message");
+                            const char *error_msg = error_message ? error_message->valuestring : "Unknown error";
+                            ui_show_error(tui, queue, error_msg);
+                            api_response_free(response);
+                        } else {
+                            process_response(state, response, tui, queue, NULL);
+                            api_response_free(response);
+
+                            // Generate and save a session title
+                            session_maybe_generate_title(state);
+
+                            /* Ralph loop: autonomous continuation toward standing goal */
+                            while (goal_is_active(state)) {
+                                if (state->interrupt_requested) {
+                                    LOG_INFO("Ralph loop: interrupted by user");
+                                    break;
+                                }
+
+                                const char *last_response = goal_get_last_assistant_text(state);
+
+                                /* Fast path: honor explicit goal-status markers */
+                                int marker = goal_check_explicit_markers(last_response);
+                                if (marker == 1) {
+                                    goal_mark_done(state, "assistant explicitly marked goal as done");
+                                    ui_set_status(tui, queue, "Goal achieved");
+                                    break;
+                                } else if (marker == -1) {
+                                    goal_pause(state, "assistant explicitly marked goal as blocked");
+                                    ui_set_status(tui, queue, "Goal paused - blocked");
+                                    break;
+                                }
+
+                                GoalVerdict verdict = goal_judge(state, last_response);
+                                goal_update_after_judge(state, &verdict);
+
+                                if (verdict.parse_failed || verdict.schema_failed) {
+                                    goal_pause(state, verdict.reason);
+                                    ui_set_status(tui, queue, "Goal paused - judge failure");
+                                    free(verdict.reason);
+                                    break;
+                                }
+
+                                if (verdict.blocked) {
+                                    goal_mark_blocked(state, verdict.reason);
+                                    ui_set_status(tui, queue, "Goal blocked - waiting for input");
+                                    free(verdict.reason);
+                                    break;
+                                }
+
+                                if (verdict.done) {
+                                    goal_mark_done(state, verdict.reason);
+                                    ui_set_status(tui, queue, "Goal achieved");
+                                    free(verdict.reason);
+                                    break;
+                                }
+
+                                if (state->goal->turns_used >= state->goal->max_turns) {
+                                    goal_pause(state, "turn budget exhausted");
+                                    ui_set_status(tui, queue, "Goal paused - turn budget exhausted");
+                                    free(verdict.reason);
+                                    break;
+                                }
+                                free(verdict.reason);
+
+                                char *prompt = goal_build_continuation_prompt(state->goal);
+                                if (!prompt) break;
+                                add_user_message(state, prompt);
+                                state->goal->turns_used++;
+                                free(prompt);
+
+                                ui_set_status_varied(tui, queue, SPINNER_CONTEXT_API_CALL);
+                                ApiResponse *cont_response = call_api_with_retries(state);
+                                ui_set_status(tui, queue, "");
+
+                                if (!cont_response) {
+                                    ui_show_error(tui, queue, "Ralph continuation failed");
+                                    break;
+                                }
+                                if (cont_response->error_message) {
+                                    ui_show_error(tui, queue, cont_response->error_message);
+                                    api_response_free(cont_response);
+                                    break;
+                                }
+
+                                process_response(state, cont_response, tui, queue, NULL);
+                                api_response_free(cont_response);
+                            }
                         }
                     }
                 }

@@ -441,6 +441,9 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                             case COLOR_PAIR_DIFF_CONTEXT:
                                 mapped_pair = NCURSES_PAIR_DIFF_CONTEXT;
                                 break;
+                            case COLOR_PAIR_GOAL:
+                                mapped_pair = NCURSES_PAIR_GOAL;
+                                break;
                             default:
                                 mapped_pair = NCURSES_PAIR_FOREGROUND;
                                 break;

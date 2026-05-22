@@ -184,6 +184,7 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, 18, default_bg);  // Assistant color with no background (for border)
             init_pair(NCURSES_PAIR_TOOL_DIM, 26, default_bg);             // Dimmed gray for tool text
             init_pair(NCURSES_PAIR_DIFF_CONTEXT, 26, default_bg);         // Dimmed gray for diff context (same as tool dim)
+            init_pair(NCURSES_PAIR_GOAL, 16, default_bg);                 // Goal text uses foreground color
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -219,6 +220,7 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, (short)assistant_idx, default_bg);  // Assistant color with no background (for border)
             init_pair(NCURSES_PAIR_TOOL_DIM, (short)tool_dim_idx, default_bg);
             init_pair(NCURSES_PAIR_DIFF_CONTEXT, (short)tool_dim_idx, default_bg);
+            init_pair(NCURSES_PAIR_GOAL, (short)fg_idx, default_bg);  // Goal text uses foreground color
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -245,6 +247,7 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, COLOR_CYAN, default_bg);  // Fallback: cyan (assistant color)
             init_pair(NCURSES_PAIR_TOOL_DIM, COLOR_WHITE, default_bg);  // Fallback: foreground color for dimmed tool text
             init_pair(NCURSES_PAIR_DIFF_CONTEXT, COLOR_WHITE, default_bg);  // Fallback: foreground color for diff context
+            init_pair(NCURSES_PAIR_GOAL, COLOR_WHITE, default_bg);  // Goal uses foreground color
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -270,6 +273,7 @@ void tui_reload_colors(void) {
         init_pair(NCURSES_PAIR_ASSISTANT_BORDER_BG, COLOR_CYAN, default_bg);  // Fallback: cyan (assistant color)
         init_pair(NCURSES_PAIR_TOOL_DIM, COLOR_WHITE, default_bg);  // Fallback: foreground color for dimmed tool text
         init_pair(NCURSES_PAIR_DIFF_CONTEXT, COLOR_WHITE, default_bg);  // Fallback: foreground color for diff context
+        init_pair(NCURSES_PAIR_GOAL, COLOR_WHITE, default_bg);  // Goal uses foreground color
     }
 }
 

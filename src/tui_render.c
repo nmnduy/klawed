@@ -1510,6 +1510,9 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         case COLOR_PAIR_DIFF_CONTEXT:
             mapped_pair = NCURSES_PAIR_DIFF_CONTEXT;
             break;
+        case COLOR_PAIR_GOAL:
+            mapped_pair = NCURSES_PAIR_GOAL;
+            break;
         default:
             /* Keep default mapped_pair (foreground) */
             break;
@@ -1598,8 +1601,9 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             // Check if we're using the tree connector (└─)
             int is_tree_connector = (display_prefix != prefix);
 
+            chtype prefix_attr = (color_pair == COLOR_PAIR_GOAL) ? A_ITALIC : A_BOLD;
             if (has_colors()) {
-                wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | prefix_attr);
             }
 
             { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); (void)tui_safe_mvwaddnstr(tui->wm.conv_pad, cur_y, cur_x, display_prefix, (int)strlen(display_prefix)); }
@@ -1610,7 +1614,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             }
 
             if (has_colors()) {
-                wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | prefix_attr);
             }
         }
     }
@@ -1640,8 +1644,12 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             text_pair = mapped_pair;
         }
 
+        chtype text_attr = 0;
+        if (color_pair == COLOR_PAIR_GOAL) {
+            text_attr |= A_ITALIC;
+        }
         if (has_colors()) {
-            wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
+            wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair) | text_attr);
         }
 
         // Check if we have an active search pattern to highlight
@@ -1654,7 +1662,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         }
 
         if (has_colors()) {
-            wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
+            wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair) | text_attr);
         }
 
         // For user messages, add padding line after
