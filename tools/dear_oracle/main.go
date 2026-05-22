@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -85,6 +86,20 @@ type chatResponse struct {
 	Usage   *chatUsage   `json:"usage,omitempty"`
 }
 
+// --- Profile types ---
+
+type profile struct {
+	Model           string `json:"model,omitempty"`
+	APIBase         string `json:"api_base,omitempty"`
+	MaxTokens       int    `json:"max_tokens,omitempty"`
+	UseChat         *bool  `json:"use_chat,omitempty"`
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+}
+
+type profilesFile struct {
+	Profiles map[string]profile `json:"profiles"`
+}
+
 // --- Config ---
 
 type config struct {
@@ -101,6 +116,152 @@ type config struct {
 	listEfforts     bool
 	doctor          bool
 	ready           bool
+	profile         string
+	listProfiles    bool
+}
+
+func profilesConfigPath() string {
+	if dir := os.Getenv("DEAR_ORACLE_CONFIG_DIR"); dir != "" {
+		return filepath.Join(dir, "profiles.json")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".dear_oracle", "profiles.json")
+}
+
+func loadProfiles() (map[string]profile, error) {
+	path := profilesConfigPath()
+	if path == "" {
+		return nil, fmt.Errorf("cannot determine config directory")
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // no profiles file, that's ok
+		}
+		return nil, fmt.Errorf("reading profiles file %s: %w", path, err)
+	}
+
+	var pf profilesFile
+	if err := json.Unmarshal(data, &pf); err != nil {
+		return nil, fmt.Errorf("parsing profiles file %s: %w", path, err)
+	}
+
+	return pf.Profiles, nil
+}
+
+func applyProfile(cfg *config, name string) error {
+	profiles, err := loadProfiles()
+	if err != nil {
+		return fmt.Errorf("loading profiles: %w", err)
+	}
+
+	if profiles == nil {
+		return fmt.Errorf("no profiles file found at %s", profilesConfigPath())
+	}
+
+	p, ok := profiles[name]
+	if !ok {
+		return fmt.Errorf("profile %q not found", name)
+	}
+
+	if p.Model != "" {
+		cfg.model = p.Model
+	}
+	if p.APIBase != "" {
+		cfg.apiBase = p.APIBase
+	}
+	if p.MaxTokens != 0 {
+		cfg.maxTokens = p.MaxTokens
+	}
+	if p.UseChat != nil {
+		cfg.useChat = *p.UseChat
+	}
+	if p.ReasoningEffort != "" {
+		cfg.reasoningEffort = p.ReasoningEffort
+	}
+
+	return nil
+}
+
+func listProfiles() error {
+	profiles, err := loadProfiles()
+	if err != nil {
+		return fmt.Errorf("loading profiles: %w", err)
+	}
+
+	if profiles == nil || len(profiles) == 0 {
+		fmt.Fprintln(os.Stderr, "No profiles found.")
+		fmt.Fprintf(os.Stderr, "Create profiles at: %s\n", profilesConfigPath())
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Profile format (JSON):")
+		fmt.Fprintln(os.Stderr, `{
+  "profiles": {
+    "my-profile": {
+      "model": "gpt-4o-mini",
+      "api_base": "https://api.openai.com/v1",
+      "max_tokens": 16384,
+      "use_chat": true,
+      "reasoning_effort": ""
+    }
+  }
+}`)
+		return nil
+	}
+
+	fmt.Fprintf(os.Stderr, "Available profiles (from %s):\n", profilesConfigPath())
+	fmt.Fprintln(os.Stderr, "")
+
+	// Find longest name for alignment
+	maxName := 0
+	for name := range profiles {
+		if len(name) > maxName {
+			maxName = len(name)
+		}
+	}
+
+	for name, p := range profiles {
+		pad := maxName - len(name) + 2
+		padded := name + ":"
+		for i := 0; i < pad; i++ {
+			padded += " "
+		}
+
+		apiLabel := "responses"
+		if p.UseChat != nil && *p.UseChat {
+			apiLabel = "chat"
+		}
+
+		effort := ""
+		if p.ReasoningEffort != "" {
+			effort = fmt.Sprintf(", reasoning: %s", p.ReasoningEffort)
+		}
+
+		tokens := ""
+		if p.MaxTokens != 0 {
+			tokens = fmt.Sprintf(", max_tokens: %d", p.MaxTokens)
+		}
+
+		model := p.Model
+		if model == "" {
+			model = "(default)"
+		}
+
+		base := ""
+		if p.APIBase != "" {
+			base = fmt.Sprintf(", base: %s", p.APIBase)
+		}
+
+		fmt.Fprintf(os.Stderr, "  %s %s via %s%s%s%s\n",
+			padded, model, apiLabel, tokens, effort, base)
+	}
+
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Usage: dear_oracle --profile <name> -p \"your prompt\"")
+	return nil
 }
 
 func parseFlags() config {
@@ -125,6 +286,8 @@ func parseFlags() config {
 	flag.StringVar(&cfg.apiBase, "api-base-url", "https://api.openai.com/v1", "API base URL")
 	flag.BoolVar(&cfg.useChat, "chat", false, "Use Chat Completions API instead of Responses API")
 	flag.BoolVar(&cfg.showUsage, "show-usage", false, "Print token usage to stderr")
+	flag.StringVar(&cfg.profile, "profile", "", "Use a named profile from config (see --list-profiles)")
+	flag.BoolVar(&cfg.listProfiles, "list-profiles", false, "List available profiles and exit")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `dear_oracle — submit a prompt to a large model
@@ -142,6 +305,8 @@ Flags:
   --max-tokens N             Max output tokens (default: 32768)
   --reasoning-effort LEVEL   Reasoning effort: low, medium, high
   --list-efforts             List available reasoning effort values and exit
+  --profile NAME             Use a named profile (see --list-profiles)
+  --list-profiles            List available profiles and exit
   --doctor                   Run self-diagnostics to check configuration
   --ready                    Quick readiness check (no API calls) and exit
   --api-key KEY              API key (default: $OPENAI_API_KEY)
@@ -152,6 +317,12 @@ Flags:
 
 Environment:
   OPENAI_API_KEY            Required unless --api-key is provided
+  DEAR_ORACLE_CONFIG_DIR    Directory for profiles.json (default: ~/.dear_oracle/)
+
+Profiles:
+  Named configurations stored in ~/.dear_oracle/profiles.json (or
+  $DEAR_ORACLE_CONFIG_DIR/profiles.json). Use --profile <name> to select.
+  Use --list-profiles to see available profiles.
 
 Examples:
   # Send a prompt inline
@@ -162,6 +333,9 @@ Examples:
 
   # Pipe a prompt from another command
   cat prompt.txt | dear_oracle -m gpt-5.5
+
+  # Use a named profile
+  dear_oracle --profile cheap -p "summarize this"
 
   # Use chat completions with a cheaper model
   dear_oracle -p "summarize this" --chat -m gpt-4o-mini
@@ -498,6 +672,15 @@ func runDoctor(cfg config) {
 func main() {
 	cfg := parseFlags()
 
+	// Apply profile (if specified) — profile values act as defaults.
+	// Must happen before --ready/--doctor so they can use profile settings.
+	if cfg.profile != "" {
+		if err := applyProfile(&cfg, cfg.profile); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	// Handle --ready (run before any other checks, no API calls)
 	if cfg.ready {
 		runReadyCheck(cfg)
@@ -518,6 +701,15 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  high    - Deep, thorough reasoning (best for complex decisions)")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Usage: --reasoning-effort low|medium|high")
+		os.Exit(0)
+	}
+
+	// Handle --list-profiles
+	if cfg.listProfiles {
+		if err := listProfiles(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 
@@ -554,10 +746,14 @@ func main() {
 		if cfg.useChat {
 			mode = "chat"
 		}
+		profileInfo := ""
+		if cfg.profile != "" {
+			profileInfo = fmt.Sprintf(" [profile: %s]", cfg.profile)
+		}
 		if cfg.reasoningEffort != "" {
-			fmt.Fprintf(os.Stderr, "🔮 dear_oracle: asking %s (%s reasoning) via %s API...\n", cfg.model, cfg.reasoningEffort, mode)
+			fmt.Fprintf(os.Stderr, "🔮 dear_oracle: asking %s (%s reasoning) via %s API%s...\n", cfg.model, cfg.reasoningEffort, mode, profileInfo)
 		} else {
-			fmt.Fprintf(os.Stderr, "🔮 dear_oracle: asking %s via %s API...\n", cfg.model, mode)
+			fmt.Fprintf(os.Stderr, "🔮 dear_oracle: asking %s via %s API%s...\n", cfg.model, mode, profileInfo)
 		}
 	}
 
