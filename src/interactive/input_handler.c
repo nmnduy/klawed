@@ -307,11 +307,27 @@ int submit_input_callback(const char *input, void *user_data) {
                 break;
             } else if (marker == -1) {
                 goal_pause(state, "assistant explicitly marked goal as blocked");
-                ui_set_status(tui, queue, "Goal paused — blocked");
+                ui_set_status(tui, queue, "Goal paused - blocked");
                 break;
             }
 
             GoalVerdict verdict = goal_judge(state, last_response);
+            goal_update_after_judge(state, &verdict);
+
+            if (verdict.parse_failed || verdict.schema_failed) {
+                /* Parse/schema failure - pause for safety instead of continuing */
+                goal_pause(state, verdict.reason);
+                ui_set_status(tui, queue, "Goal paused - judge failure");
+                free(verdict.reason);
+                break;
+            }
+
+            if (verdict.blocked) {
+                goal_mark_blocked(state, verdict.reason);
+                ui_set_status(tui, queue, "Goal blocked - waiting for input");
+                free(verdict.reason);
+                break;
+            }
 
             if (verdict.done) {
                 goal_mark_done(state, verdict.reason);
@@ -322,7 +338,7 @@ int submit_input_callback(const char *input, void *user_data) {
 
             if (state->goal->turns_used >= state->goal->max_turns) {
                 goal_pause(state, "turn budget exhausted");
-                ui_set_status(tui, queue, "Goal paused — turn budget exhausted");
+                ui_set_status(tui, queue, "Goal paused - turn budget exhausted");
                 free(verdict.reason);
                 break;
             }

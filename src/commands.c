@@ -692,15 +692,26 @@ static int cmd_goal(ConversationState *state, const char *args) {
     }
 
     if (arg_lower && strcmp(arg_lower, "pause") == 0) {
-        goal_pause(state, "user-paused");
-        print_status("Goal paused");
+        if (!state->goal) {
+            print_status("No active goal to pause");
+        } else {
+            goal_pause(state, "user-paused");
+            print_status("Goal paused");
+        }
         free(arg_lower);
         return 0;
     }
 
     if (arg_lower && strcmp(arg_lower, "resume") == 0) {
-        goal_resume(state, 1);
-        print_status("Goal resumed");
+        if (!state->goal) {
+            print_status("No active goal to resume");
+        } else if (strcmp(state->goal->status, GOAL_STATUS_PAUSED) != 0 &&
+                   strcmp(state->goal->status, GOAL_STATUS_BLOCKED) != 0) {
+            print_status("Goal is not paused or blocked");
+        } else {
+            goal_resume(state, 1);
+            print_status("Goal resumed");
+        }
         free(arg_lower);
         return 0;
     }

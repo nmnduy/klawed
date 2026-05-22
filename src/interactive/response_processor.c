@@ -1082,11 +1082,17 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
             break;
         }
 
+        /* Yield if user requested interrupt */
+        if (ctx->state->interrupt_requested) {
+            LOG_INFO("Ralph loop: interrupted by user");
+            break;
+        }
+
         const char *last_response = goal_get_last_assistant_text(ctx->state);
 
         /* Fast path: the system prompt instructs the model to emit
-         * GOAL_STATUS: DONE / GOAL_STATUS: BLOCKED.  Honor these
-         * immediately without burning a judge API call. */
+         * GOAL_STATUS: DONE / GOAL_STATUS: BLOCKED on the final line.
+         * Honor these immediately without burning a judge API call. */
         int marker = goal_check_explicit_markers(last_response);
         if (marker == 1) {
             goal_mark_done(ctx->state, "assistant explicitly marked goal as done");
@@ -1094,11 +1100,27 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
             break;
         } else if (marker == -1) {
             goal_pause(ctx->state, "assistant explicitly marked goal as blocked");
-            ui_set_status(NULL, ctx->tui_queue, "Goal paused — blocked");
+            ui_set_status(NULL, ctx->tui_queue, "Goal paused - blocked");
             break;
         }
 
         GoalVerdict verdict = goal_judge(ctx->state, last_response);
+        goal_update_after_judge(ctx->state, &verdict);
+
+        if (verdict.parse_failed || verdict.schema_failed) {
+            /* Parse/schema failure - pause for safety instead of continuing */
+            goal_pause(ctx->state, verdict.reason);
+            ui_set_status(NULL, ctx->tui_queue, "Goal paused - judge failure");
+            free(verdict.reason);
+            break;
+        }
+
+        if (verdict.blocked) {
+            goal_mark_blocked(ctx->state, verdict.reason);
+            ui_set_status(NULL, ctx->tui_queue, "Goal blocked - waiting for input");
+            free(verdict.reason);
+            break;
+        }
 
         if (verdict.done) {
             goal_mark_done(ctx->state, verdict.reason);
@@ -1109,7 +1131,7 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
 
         if (ctx->state->goal->turns_used >= ctx->state->goal->max_turns) {
             goal_pause(ctx->state, "turn budget exhausted");
-            ui_set_status(NULL, ctx->tui_queue, "Goal paused — turn budget exhausted");
+            ui_set_status(NULL, ctx->tui_queue, "Goal paused - turn budget exhausted");
             free(verdict.reason);
             break;
         }
