@@ -24,6 +24,7 @@ typedef struct {
     int pad_width;               /* cached pad width */
     int content_width;           /* pad_width - border_display_width */
     const char *search_pattern;  /* NULL if no active search */
+    int fill_bg_pair;            /* If > 0, fill remaining line width with spaces using this pair */
 } LinePrinter;
 
 /* Initialize a LinePrinter.  border_str may be NULL for no border. */

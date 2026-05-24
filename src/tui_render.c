@@ -1564,6 +1564,13 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             int bp = (tui->response_style == RESPONSE_STYLE_BORDER) ? mapped_pair : 0;
             render_markdown_document(tui, text, text_pair, bp, border_str);
             goto skip_newline;
+        } else if (tui->response_style == RESPONSE_STYLE_BG) {
+            // BG style: render text with background-tinted pair, no border/prefix
+            // The NCURSES_PAIR_ASSISTANT_BG pair has foreground text on a subtle
+            // assistant-tinted background for a painted background effect
+            int text_pair = NCURSES_PAIR_ASSISTANT_BG;
+            render_markdown_document(tui, text, text_pair, 0, NULL);
+            goto skip_newline;
         } else if (tui->response_style == RESPONSE_STYLE_ROBOT) {
             // Robot style: print robot face header, then text with no border
             if (has_colors()) {

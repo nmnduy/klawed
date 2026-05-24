@@ -351,6 +351,13 @@ void tui_handle_resize(TUIState *tui) {
                                              0, NULL);
                 }
                 continue;
+            } else if (tui->response_style == RESPONSE_STYLE_BG) {
+                // BG style: render text with background-tinted pair, no border/prefix
+                if (entry->text && entry->text[0] != '\0') {
+                    render_markdown_document(tui, entry->text, NCURSES_PAIR_ASSISTANT_BG,
+                                             0, NULL);
+                }
+                continue;
             }
         } else {
             // Write prefix for other (non-user, non-assistant) messages

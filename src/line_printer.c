@@ -20,6 +20,16 @@
  * Static helpers
  * ============================================================================ */
 
+/* Check if a color pair has a non-default background color */
+static int pair_has_background(int pair) {
+    if (!has_colors() || pair <= 0) {
+        return 0;
+    }
+    short fg = 0, bg = 0;
+    pair_content((short)pair, &fg, &bg);
+    return bg != -1;  /* -1 = default background */
+}
+
 static int utf8_display_width(const char *str) {
     if (!str || !*str) {
         return 0;
@@ -122,6 +132,12 @@ void lp_init(LinePrinter *lp, WINDOW *pad, const char *border_str,
     lp->text_pair = text_pair;
     lp->pad_width = pad_width;
     lp->search_pattern = NULL;
+    lp->fill_bg_pair = 0;  // No background fill by default
+
+    // Auto-detect if text_pair has a background color and enable fill
+    if (pair_has_background(text_pair)) {
+        lp->fill_bg_pair = text_pair;
+    }
 
     if (border_str) {
         int bw = utf8_display_width(border_str);
@@ -181,6 +197,22 @@ void lp_newline(LinePrinter *lp) {
     int cur_y = 0, cur_x = 0;
     getyx(lp->pad, cur_y, cur_x);
     (void)cur_y;
+
+    // If background fill is active, fill remaining width with spaces
+    // to create a full-width painted background effect
+    if (lp->fill_bg_pair > 0 && cur_x < lp->pad_width && cur_x > 0) {
+        if (has_colors()) {
+            wattron(lp->pad, COLOR_PAIR((unsigned)lp->fill_bg_pair));
+        }
+        while (cur_x < lp->pad_width) {
+            waddch(lp->pad, ' ');
+            cur_x++;
+        }
+        if (has_colors()) {
+            wattroff(lp->pad, COLOR_PAIR((unsigned)lp->fill_bg_pair));
+        }
+    }
+
     if (cur_x > 0) {
         waddch(lp->pad, '\n');
     }

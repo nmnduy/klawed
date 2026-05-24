@@ -469,7 +469,10 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                 // in render_entry_to_pad() so reasoning/tool text is dimmed
                 // during streaming, not just after the full rebuild.
                 int text_pair = NCURSES_PAIR_FOREGROUND;
-                if (last_entry->prefix && last_entry->prefix[0] != '\0') {
+                if (is_assistant && tui->response_style == RESPONSE_STYLE_BG) {
+                    // BG style: use the background-tinted pair for assistant text
+                    text_pair = NCURSES_PAIR_ASSISTANT_BG;
+                } else if (last_entry->prefix && last_entry->prefix[0] != '\0') {
                     // Check for tool messages: prefix starts with "●" or ""
                     int is_tool_message = ((last_entry->prefix[0] == '\xe2' &&
                                             last_entry->prefix[1] == '\x97' &&

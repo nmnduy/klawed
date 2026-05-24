@@ -133,6 +133,10 @@ int tui_virtual_entry_height(TUIState *tui, ConversationEntry *entry) {
         } else if (tui->response_style == RESPONSE_STYLE_CAT) {
             prefix_display_width = 0;
             extra_lines = 1; // "=^..^=\n"
+        } else if (tui->response_style == RESPONSE_STYLE_BG) {
+            // BG style: no prefix/border, but each line fills full width with background
+            prefix_display_width = 0;
+            extra_lines = 0;
         }
     } else if (entry->prefix && entry->prefix[0] != '\0') {
         // Other prefix: rendered once at start of entry

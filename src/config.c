@@ -95,6 +95,8 @@ const char* config_response_style_to_string(TUIResponseStyle style) {
             return "robot";
         case RESPONSE_STYLE_CAT:
             return "cat";
+        case RESPONSE_STYLE_BG:
+            return "bg";
         case RESPONSE_STYLE_BORDER:
         default:
             return "border";
@@ -110,6 +112,8 @@ TUIResponseStyle config_response_style_from_string(const char *str) {
         return RESPONSE_STYLE_ROBOT;
     } else if (strcmp(str, "cat") == 0) {
         return RESPONSE_STYLE_CAT;
+    } else if (strcmp(str, "bg") == 0) {
+        return RESPONSE_STYLE_BG;
     }
     return RESPONSE_STYLE_BORDER;
 }
