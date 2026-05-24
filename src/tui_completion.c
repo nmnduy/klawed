@@ -28,6 +28,8 @@ static const char* vim_commands[] = {
     "wq",
     "noh",
     "nohlsearch",
+    "wrap",
+    "nowrap",
     "clear",
     "help",
     "vim",

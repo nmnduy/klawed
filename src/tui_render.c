@@ -671,6 +671,17 @@ void render_status_window(TUIState *tui) {
         snprintf(scroll_str, sizeof(scroll_str), " %d%%", percentage);
         scroll_str_len = (int)strlen(scroll_str);
         scroll_display_width = utf8_display_width(scroll_str);
+
+        // Add horizontal scroll indicator when scrolled right
+        int h_scroll_x = window_manager_get_scroll_x(&tui->wm);
+        if (h_scroll_x > 0) {
+            char hscroll_str[32];
+            snprintf(hscroll_str, sizeof(hscroll_str), " <%d", h_scroll_x);
+            // Append to scroll string
+            strlcat(scroll_str, hscroll_str, sizeof(scroll_str));
+            scroll_str_len = (int)strlen(scroll_str);
+            scroll_display_width = utf8_display_width(scroll_str);
+        }
     }
 
     // Prepare token usage (show when non-zero, regardless of mode)

@@ -56,8 +56,27 @@ static int utf8_display_width_simple(const char *str) {
  * ============================================================================ */
 
 // Count wrapped lines for plain text at a given content width.
-static int text_wrapped_height(const char *text, int content_width) {
-    if (!text || !text[0] || content_width <= 0) {
+// If wrap_enabled is 0, each newline-separated segment counts as exactly 1 line.
+static int text_wrapped_height(const char *text, int content_width, int wrap_enabled) {
+    if (!text || !text[0]) {
+        return 0;
+    }
+
+    if (!wrap_enabled) {
+        // No-wrap mode: count newlines only
+        int total_lines = 1; // At least 1 line for any text
+        const char *p = text;
+        while (*p) {
+            if (*p == '\n') {
+                total_lines++;
+            }
+            p++;
+        }
+        // If text ends with newline, no extra blank line needed
+        return total_lines;
+    }
+
+    if (content_width <= 0) {
         return 0;
     }
 
@@ -150,9 +169,9 @@ int tui_virtual_entry_height(TUIState *tui, ConversationEntry *entry) {
 
     int height = extra_lines;
 
-    // Count text lines (with wrapping)
+    // Count text lines (with wrapping, or without if wrap is disabled)
     if (entry->text && entry->text[0]) {
-        height += text_wrapped_height(entry->text, content_width);
+        height += text_wrapped_height(entry->text, content_width, tui->wrap_enabled);
     }
 
     // If there's a prefix and text, they share the first line (prefix + text on same line)

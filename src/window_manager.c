@@ -187,6 +187,7 @@ int window_manager_init(WindowManager *wm, const WindowManagerConfig *config) {
     scrollok(wm->conv_pad, TRUE);
     wm->conv_pad_content_lines = 0;
     wm->conv_scroll_offset = 0;
+    wm->conv_scroll_x = 0;
 
     LOG_DEBUG("[WM] Created conversation pad (capacity=%d, width=%d, right_padding=%d)",
               wm->conv_pad_capacity, conv_pad_width, wm->config.conv_h_padding);
@@ -304,6 +305,7 @@ int window_manager_resize_screen(WindowManager *wm) {
     // Recreate conversation pad with new width
     WINDOW *old_pad = wm->conv_pad;
     int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;
+    wm->conv_scroll_x = 0;  // Reset horizontal scroll on resize
     if (conv_pad_width < 1) conv_pad_width = 1; // Safety check
     wm->conv_pad = newpad(wm->conv_pad_capacity, conv_pad_width);
     if (!wm->conv_pad) {
@@ -462,6 +464,56 @@ int window_manager_ensure_pad_capacity(WindowManager *wm, int needed_lines) {
     return 0;
 }
 
+int window_manager_set_pad_width(WindowManager *wm, int new_width) {
+    if (!wm || !wm->is_initialized || !wm->conv_pad) {
+        return -1;
+    }
+
+    if (new_width < 1) new_width = 1;
+
+    int old_pad_h = 0, old_pad_w = 0;
+    getmaxyx(wm->conv_pad, old_pad_h, old_pad_w);
+    (void)old_pad_h;
+
+    if (old_pad_w == new_width) {
+        return 0;  // Already correct width
+    }
+
+    LOG_DEBUG("[WM] Changing pad width from %d to %d", old_pad_w, new_width);
+
+    // Create new pad with the requested width
+    WINDOW *new_pad = newpad(wm->conv_pad_capacity, new_width);
+    if (!new_pad) {
+        LOG_ERROR("[WM] Failed to create pad with new width %d", new_width);
+        return -1;
+    }
+    scrollok(new_pad, TRUE);
+
+    // Copy existing content (as much as fits)
+    int copy_lines = wm->conv_pad_content_lines;
+    if (copy_lines > wm->conv_pad_capacity) {
+        copy_lines = wm->conv_pad_capacity;
+    }
+    int copy_width = old_pad_w < new_width ? old_pad_w : new_width;
+    copy_pad_content(wm->conv_pad, new_pad, copy_lines, copy_width);
+
+    // Replace old pad
+    delwin(wm->conv_pad);
+    wm->conv_pad = new_pad;
+
+    // Clamp horizontal scroll position
+    int visible_width = wm->screen_width - wm->config.conv_h_padding;
+    if (visible_width < 1) visible_width = 1;
+    int max_scroll_x = new_width - visible_width;
+    if (max_scroll_x < 0) max_scroll_x = 0;
+    if (wm->conv_scroll_x > max_scroll_x) {
+        wm->conv_scroll_x = max_scroll_x;
+    }
+
+    LOG_DEBUG("[WM] Pad width change complete (new_width=%d)", new_width);
+    return 0;
+}
+
 int window_manager_resize_input(WindowManager *wm, int desired_content_lines) {
     if (!wm || !wm->is_initialized) {
         LOG_ERROR("[WM] Cannot resize input on uninitialized window manager");
@@ -576,17 +628,32 @@ void window_manager_refresh_conversation(WindowManager *wm) {
     }
 
     // Refresh pad viewport with horizontal padding offset
-    // prefresh(pad, pad_y, pad_x, screen_y1, screen_x1, screen_y2, screen_x2)
+    // prefresh(pad, pminrow, pmincol, sminrow, smincol, smaxrow, smaxcol)
+    // pmincol = horizontal scroll offset (when wrap is disabled, shifts view right)
+    int pad_x = wm->conv_scroll_x;
     int x1 = 0;  // No left padding
     int y2 = wm->conv_viewport_height - 1;
     int x2 = wm->screen_width - 1 - wm->config.conv_h_padding;  // Right padding
     if (y2 < 0) y2 = 0;
     if (x1 < 0) x1 = 0;
     if (x2 < x1) x2 = x1;
+
+    // Clamp horizontal scroll so we don't scroll past the right edge for small screens
+    int pad_h = 0, pad_w = 0;
+    getmaxyx(wm->conv_pad, pad_h, pad_w);
+    (void)pad_h;
+    int pad_actual_width = pad_w;
+    int visible_width = x2 - x1 + 1;
+    int max_scroll_x = pad_actual_width - visible_width;
+    if (max_scroll_x < 0) max_scroll_x = 0;
+    if (pad_x > max_scroll_x) pad_x = max_scroll_x;
+    if (pad_x < 0) pad_x = 0;
+    wm->conv_scroll_x = pad_x;
+
     prefresh(wm->conv_pad,
-             wm->conv_scroll_offset, 0,  // pad position
-             0, x1,                       // screen top-left (with horizontal offset)
-             y2, x2);                     // screen bottom-right (with horizontal offset)
+             wm->conv_scroll_offset, pad_x,  // pad position (vertical, horizontal)
+             0, x1,                            // screen top-left
+             y2, x2);                          // screen bottom-right
 }
 
 void window_manager_refresh_status(WindowManager *wm) {
@@ -712,6 +779,58 @@ int window_manager_get_max_scroll(WindowManager *wm) {
 
     int max_scroll = wm->conv_pad_content_lines - wm->conv_viewport_height;
     return max_scroll < 0 ? 0 : max_scroll;
+}
+
+// ============================================================================
+// Horizontal Scrolling (for no-wrap mode)
+// ============================================================================
+
+void window_manager_scroll_horizontal(WindowManager *wm, int delta) {
+    if (!wm || !wm->is_initialized) {
+        return;
+    }
+
+    int new_x = wm->conv_scroll_x + delta;
+    window_manager_set_scroll_x(wm, new_x);
+}
+
+void window_manager_set_scroll_x(WindowManager *wm, int scroll_x) {
+    if (!wm || !wm->is_initialized || !wm->conv_pad) {
+        return;
+    }
+
+    if (scroll_x < 0) scroll_x = 0;
+
+    // Get pad width to calculate max scroll
+    int pad_h = 0, pad_w = 0;
+    getmaxyx(wm->conv_pad, pad_h, pad_w);
+    (void)pad_h;
+
+    int visible_width = wm->screen_width - wm->config.conv_h_padding;
+    if (visible_width < 1) visible_width = 1;
+
+    int max_scroll_x = pad_w - visible_width;
+    if (max_scroll_x < 0) max_scroll_x = 0;
+    if (scroll_x > max_scroll_x) scroll_x = max_scroll_x;
+
+    wm->conv_scroll_x = scroll_x;
+}
+
+int window_manager_get_scroll_x(WindowManager *wm) {
+    if (!wm || !wm->is_initialized) {
+        return 0;
+    }
+    return wm->conv_scroll_x;
+}
+
+int window_manager_get_pad_width(WindowManager *wm) {
+    if (!wm || !wm->is_initialized || !wm->conv_pad) {
+        return 80;  // reasonable default
+    }
+    int pad_h = 0, pad_w = 0;
+    getmaxyx(wm->conv_pad, pad_h, pad_w);
+    (void)pad_h;
+    return pad_w;
 }
 
 // ============================================================================

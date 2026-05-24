@@ -195,10 +195,15 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
             }
         }
 
-        // Each newline in text is definitely a line break
-        // Text without newlines might wrap
-        // Be conservative: assume worst-case wrapping
-        estimated_lines += newline_count + ((prefix_len + text_len) / (pad_width / 2)) + 5;
+        if (tui->wrap_enabled) {
+            // Each newline in text is definitely a line break
+            // Text without newlines might wrap
+            // Be conservative: assume worst-case wrapping
+            estimated_lines += newline_count + ((prefix_len + text_len) / (pad_width / 2)) + 5;
+        } else {
+            // No-wrap mode: each newline is exactly one line, plus the base line
+            estimated_lines += newline_count;
+        }
     }
 
     // Ensure pad has enough capacity (centralized via WindowManager)

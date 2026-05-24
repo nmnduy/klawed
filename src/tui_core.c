@@ -457,16 +457,20 @@ int tui_init(TUIState *tui, ConversationState *state) {
         tui->input_box_style = loaded_config.input_box_style;
         tui->response_style = loaded_config.response_style;
         tui->thinking_style = loaded_config.thinking_style;
+        tui->wrap_enabled = loaded_config.wrap_enabled;
         LOG_DEBUG("[TUI] Loaded input_box_style from config: %s",
                   config_input_style_to_string(tui->input_box_style));
         LOG_DEBUG("[TUI] Loaded response_style from config: %s",
                   config_response_style_to_string(tui->response_style));
         LOG_DEBUG("[TUI] Loaded thinking_style from config: %s",
                   config_thinking_style_to_string(tui->thinking_style));
+        LOG_DEBUG("[TUI] Loaded wrap_enabled from config: %d",
+                  tui->wrap_enabled);
     } else {
         tui->input_box_style = INPUT_STYLE_HORIZONTAL;
         tui->response_style = RESPONSE_STYLE_BORDER;
         tui->thinking_style = THINKING_STYLE_WAVE;
+        tui->wrap_enabled = 1;
     }
 
     // Initialize command mode buffer

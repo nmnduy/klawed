@@ -230,6 +230,9 @@ typedef struct TUIStateStruct {
     // Tool output connection tracking (for └─ tree connector)
     char *last_tool_name;             // Last rendered tool name (for tree connector)
 
+    // Wrap toggle state
+    int wrap_enabled;                 // 1 = text wraps at screen width (default), 0 = horizontal scroll for long lines
+
     // Streaming state tracking (prevents user input from hijacking AI streaming)
     int streaming_entry_index;        // Index of entry currently being streamed to (-1 if none)
 

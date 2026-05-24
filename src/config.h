@@ -69,6 +69,7 @@ typedef struct {
     TUIInputBoxStyle input_box_style;
     TUIResponseStyle response_style;
     TUIThinkingStyle thinking_style;
+    int wrap_enabled;
     int streaming_enabled;
     int auto_compact_enabled;
     int compaction_threshold_percent;

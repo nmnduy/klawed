@@ -24,6 +24,7 @@ void config_init_defaults(KlawedConfig *config) {
     config->input_box_style = INPUT_STYLE_HORIZONTAL;
     config->response_style = RESPONSE_STYLE_BORDER;
     config->thinking_style = THINKING_STYLE_WAVE;
+    config->wrap_enabled = 1;
     config->streaming_enabled = 0;
     config->auto_compact_enabled = 0;
     config->compaction_threshold_percent = 75;
@@ -247,6 +248,17 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
     if (thinking_style_item && cJSON_IsString(thinking_style_item)) {
         config->thinking_style = config_thinking_style_from_string(thinking_style_item->valuestring);
         LOG_DEBUG("[Config] Loaded thinking_style from %s: %s", label, thinking_style_item->valuestring);
+    }
+
+    // Read wrap_enabled
+    cJSON *wrap_item = cJSON_GetObjectItem(root, "wrap_enabled");
+    if (wrap_item) {
+        if (cJSON_IsBool(wrap_item)) {
+            config->wrap_enabled = cJSON_IsTrue(wrap_item) ? 1 : 0;
+        } else if (cJSON_IsNumber(wrap_item)) {
+            double value = cJSON_GetNumberValue(wrap_item);
+            config->wrap_enabled = (value > 0.5) ? 1 : 0;
+        }
     }
 
     // Read streaming_enabled
@@ -615,6 +627,15 @@ int config_save(const KlawedConfig *config) {
         cJSON_SetValuestring(existing_thinking_style, config_thinking_style_to_string(config->thinking_style));
     } else if (config->thinking_style != defaults.thinking_style) {
         cJSON_AddStringToObject(root, "thinking_style", config_thinking_style_to_string(config->thinking_style));
+    }
+
+    // Update wrap_enabled - only add if differs from default or already exists
+    cJSON *existing_wrap = cJSON_GetObjectItem(root, "wrap_enabled");
+    if (existing_wrap) {
+        cJSON_DeleteItemFromObject(root, "wrap_enabled");
+        cJSON_AddBoolToObject(root, "wrap_enabled", config->wrap_enabled ? 1 : 0);
+    } else if (config->wrap_enabled != defaults.wrap_enabled) {
+        cJSON_AddBoolToObject(root, "wrap_enabled", config->wrap_enabled ? 1 : 0);
     }
 
     cJSON *existing_streaming = cJSON_GetObjectItem(root, "streaming_enabled");

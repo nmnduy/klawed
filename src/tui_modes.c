@@ -41,6 +41,48 @@
 // These are used but defined elsewhere - we need to access them
 extern int buffer_reserve(void **buffer, size_t *capacity, size_t new_capacity);
 
+// Width used for the conversation pad when wrap is disabled (horizontal scroll mode)
+#define NO_WRAP_PAD_WIDTH 4096
+
+// Toggle word wrap on/off
+// When wrap is off, long lines extend beyond screen width and can be scrolled horizontally
+static void tui_toggle_wrap(TUIState *tui) {
+    if (!tui || !tui->wm.conv_pad) {
+        return;
+    }
+
+    tui->wrap_enabled = !tui->wrap_enabled;
+
+    // Save to config
+    KlawedConfig cfg;
+    config_init_defaults(&cfg);
+    cfg.wrap_enabled = tui->wrap_enabled;
+    cfg.input_box_style = tui->input_box_style;
+    config_save(&cfg);
+
+    // Recreate pad with appropriate width
+    if (tui->wrap_enabled) {
+        // Wrap on: use screen width
+        window_manager_set_pad_width(&tui->wm, tui->wm.screen_width - tui->wm.config.conv_h_padding);
+        window_manager_set_scroll_x(&tui->wm, 0);  // Reset horizontal scroll
+        tui_update_status(tui, "Word wrap enabled");
+    } else {
+        // Wrap off: use wide pad to prevent ncurses auto-wrap
+        window_manager_set_pad_width(&tui->wm, NO_WRAP_PAD_WIDTH);
+        window_manager_set_scroll_x(&tui->wm, 0);  // Reset horizontal scroll
+        tui_update_status(tui, "Word wrap disabled (use h/l to scroll horizontally)");
+    }
+
+    // Re-render entire conversation with new width
+    redraw_conversation(tui);
+    refresh_conversation_viewport(tui);
+
+    if (tui->wm.status_height > 0) {
+        render_status_window(tui);
+    }
+    input_redraw(tui, NULL);
+}
+
 /*
  * Handle input in COMMAND mode
  * Returns:
@@ -328,6 +370,22 @@ int tui_modes_handle_command(TUIState *tui, int ch, const char *prompt) {
             }
             input_redraw(tui, prompt);
             return 0;
+        } else if (strcmp(cmd, "wrap") == 0 || strcmp(cmd, "set wrap") == 0) {
+            // Enable word wrap
+            if (!tui->wrap_enabled) {
+                tui_toggle_wrap(tui);
+                tui_add_conversation_line(tui, "[System]", "Word wrap enabled", COLOR_PAIR_STATUS);
+            } else {
+                tui_update_status(tui, "Word wrap is already enabled");
+            }
+        } else if (strcmp(cmd, "nowrap") == 0 || strcmp(cmd, "set nowrap") == 0) {
+            // Disable word wrap (horizontal scrolling)
+            if (tui->wrap_enabled) {
+                tui_toggle_wrap(tui);
+                tui_add_conversation_line(tui, "[System]", "Word wrap disabled (use horizontal scroll with h/l)", COLOR_PAIR_STATUS);
+            } else {
+                tui_update_status(tui, "Word wrap is already disabled");
+            }
         } else if (cmd[0] != '\0') {
             // Unknown command
             char error_msg[256];
@@ -847,6 +905,36 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
                 render_status_window(tui);
             }
             input_redraw(tui, prompt);
+            break;
+
+        case 'h':  // Scroll left (horizontal, for no-wrap mode)
+            window_manager_scroll_horizontal(&tui->wm, -8);
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            break;
+
+        case 'l':  // Scroll right (horizontal, for no-wrap mode)
+            window_manager_scroll_horizontal(&tui->wm, 8);
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            break;
+
+        case '0':  // Reset horizontal scroll to beginning of line
+            if (window_manager_get_scroll_x(&tui->wm) > 0) {
+                window_manager_set_scroll_x(&tui->wm, 0);
+                if (tui->wm.status_height > 0) {
+                    render_status_window(tui);
+                }
+                input_redraw(tui, prompt);
+            }
+            break;
+
+        case 'w':  // Toggle word wrap
+            tui_toggle_wrap(tui);
             break;
 
         default:

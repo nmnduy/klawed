@@ -40,7 +40,8 @@ typedef struct {
     int conv_pad_capacity;      // Total pad height (allocated)
     int conv_pad_content_lines; // Actual content lines (used)
     int conv_viewport_height;   // Visible area height
-    int conv_scroll_offset;     // Current scroll position (0 = top)
+    int conv_scroll_offset;     // Current vertical scroll position (0 = top)
+    int conv_scroll_x;          // Current horizontal scroll position (0 = left, for no-wrap mode)
 
     // Status window
     WINDOW *status_win;
@@ -87,6 +88,11 @@ int window_manager_resize_screen(WindowManager *wm);
 // Automatically expands pad and copies content if needed
 // Returns: 0 on success, -1 on failure
 int window_manager_ensure_pad_capacity(WindowManager *wm, int needed_lines);
+
+// Change the conversation pad width (used when toggling wrap on/off)
+// Recreates the pad and copies existing content
+// Returns: 0 on success, -1 on failure
+int window_manager_set_pad_width(WindowManager *wm, int new_width);
 
 // Resize input window to accommodate the specified number of content lines
 // Automatically adjusts conversation viewport height
@@ -148,6 +154,19 @@ int window_manager_get_scroll_offset(WindowManager *wm);
 
 // Get maximum scroll offset
 int window_manager_get_max_scroll(WindowManager *wm);
+
+// Horizontal scrolling (for no-wrap mode)
+// Scroll horizontally by delta columns (positive = right, negative = left)
+void window_manager_scroll_horizontal(WindowManager *wm, int delta);
+
+// Set horizontal scroll position (clamped to valid range)
+void window_manager_set_scroll_x(WindowManager *wm, int scroll_x);
+
+// Get current horizontal scroll position
+int window_manager_get_scroll_x(WindowManager *wm);
+
+// Get the actual pad width (may be larger than screen width in no-wrap mode)
+int window_manager_get_pad_width(WindowManager *wm);
 
 // ============================================================================
 // Content Management

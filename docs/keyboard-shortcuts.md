@@ -42,6 +42,10 @@ The TUI operates in different modes, similar to vim:
 - `b` - Toggle input box style (cycles: bland → background → border → horizontal → bland)
 - `r` - Toggle response style (cycles: border → caret → robot → border)
 - `t` - Toggle thinking style (cycles: wave → pacman → wave)
+- `w` - Toggle word wrap on/off (when off, use `h`/`l` to scroll horizontally)
+- `h` - Scroll left (horizontal scroll when wrap is disabled)
+- `l` - Scroll right (horizontal scroll when wrap is disabled)
+- `0` - Reset horizontal scroll to beginning of line
 
 ## Insert Mode Shortcuts
 
@@ -78,6 +82,8 @@ From Normal mode, press `:` to enter command mode. The command prompt will appea
 - `:w` or `:write` - Write/save (not yet implemented)
 - `:wq` - Write and quit
 - `:noh` or `:nohlsearch` - Clear search highlighting
+- `:wrap` or `:set wrap` - Enable word wrap
+- `:nowrap` or `:set nowrap` - Disable word wrap (horizontal scroll mode)
 - `:!<cmd>` - Execute shell command (e.g., `:!ls -la`)
 - `:re !<cmd>` - Replace input buffer with shell command output
 
