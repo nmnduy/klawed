@@ -204,6 +204,14 @@ void tui_update_terminal_title(TUIState *tui) {
 
     // OSC 0: set icon name and window title
     printf("\033]0;%s\007", title);
+
+    // Check if we're inside tmux and set the tmux window name too
+    const char *tmux_env = getenv("TMUX");
+    if (tmux_env && tmux_env[0] != '\0') {
+        // OSC k: set tmux window name (ESC k title ESC \)
+        printf("\033k%s\033\\", title);
+    }
+
     fflush(stdout);
 }
 
