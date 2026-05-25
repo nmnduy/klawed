@@ -34,6 +34,11 @@ The TUI operates in different modes, similar to vim:
 - `{` - Jump to previous paragraph (empty line)
 - `}` - Jump to next paragraph (empty line)
 
+### Marks (Vim-style)
+- `m{a-z}` - Set a mark at the current scroll position (e.g., `ma` sets mark 'a')
+- `'{a-z}` - Jump to a previously set mark (e.g., `'a` jumps to mark 'a')
+- Active marks are shown in the status bar as `◸ a b c`
+
 ### Search
 - `n` - Jump to next search result
 - `N` - Jump to previous search result

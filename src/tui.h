@@ -113,6 +113,20 @@ typedef enum {
     THINKING_STYLE_PACMAN    // Pacman eating dots, distance shows context usage
 } TUIThinkingStyle;
 
+// Vim-style marks for navigating the conversation
+#define MAX_MARKS 26  // a-z
+
+typedef struct {
+    int line_number;   // Pad content line (-1 if not set)
+    char name;         // Mark name ('a' - 'z')
+    char is_set;       // 1 if mark is set, 0 otherwise
+} TUIMark;
+
+typedef struct {
+    TUIMark marks[MAX_MARKS];  // Marks a-z (index 0='a', 1='b', etc.)
+    char pending;              // 'm' when waiting for mark char, '\'' when waiting for jump char, 0 otherwise
+} TUIMarkState;
+
 // TUI State
 typedef struct TUIStateStruct {
     // Centralized window manager (owns ncurses windows)
@@ -240,6 +254,9 @@ typedef struct TUIStateStruct {
     // after user submits a message). Triggers a full conversation pad rebuild so the
     // streaming content remains visible even after new entries are added after it.
     int needs_conv_pad_rebuild;       // 1 if pad needs rebuild after deferred updates
+
+    // Vim-style marks (m{a-z} to set, '{a-z} to jump)
+    TUIMarkState marks;               // Marks state for conversation navigation
 } TUIState;
 
 // Initialize TUI (must be called before any other TUI functions)

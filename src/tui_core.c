@@ -451,6 +451,15 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->mode = TUI_MODE_INSERT;
     tui->normal_mode_last_key = 0;
 
+    // Initialize marks (a-z, all unset)
+    memset(&tui->marks, 0, sizeof(tui->marks));
+    for (int i = 0; i < MAX_MARKS; i++) {
+        tui->marks.marks[i].line_number = -1;
+        tui->marks.marks[i].name = (char)('a' + i);
+        tui->marks.marks[i].is_set = 0;
+    }
+    tui->marks.pending = 0;
+
     // Load config and apply input box style (default to horizontal if not found)
     KlawedConfig loaded_config;
     if (config_load(&loaded_config) == 0) {

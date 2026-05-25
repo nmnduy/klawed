@@ -563,6 +563,51 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
         tui->normal_mode_last_key = 0;
     }
 
+    // Handle pending mark/jump character (m{a-z} or '{a-z})
+    if (tui->marks.pending != 0) {
+        char pending = tui->marks.pending;
+        tui->marks.pending = 0;
+
+        // Validate mark name (a-z only)
+        if (ch >= 'a' && ch <= 'z') {
+            int mark_index = ch - 'a';
+            if (pending == 'm') {
+                // Set mark at current scroll position
+                int line = window_manager_get_scroll_offset(&tui->wm);
+                tui->marks.marks[mark_index].line_number = line;
+                tui->marks.marks[mark_index].is_set = 1;
+                char status[64];
+                snprintf(status, sizeof(status), "Mark set: %c", (char)ch);
+                tui_update_status(tui, status);
+            } else if (pending == '\'') {
+                // Jump to mark
+                if (tui->marks.marks[mark_index].is_set) {
+                    int line = tui->marks.marks[mark_index].line_number;
+                    window_manager_scroll_to_line(&tui->wm, line);
+                    refresh_conversation_viewport(tui);
+                    char status[64];
+                    snprintf(status, sizeof(status), "Jump to mark: %c", (char)ch);
+                    tui_update_status(tui, status);
+                } else {
+                    char status[64];
+                    snprintf(status, sizeof(status), "Mark '%c' not set", (char)ch);
+                    tui_update_status(tui, status);
+                }
+            }
+        } else {
+            // Invalid mark character
+            char status[64];
+            snprintf(status, sizeof(status), "Invalid mark: %c (use a-z)", (char)ch);
+            tui_update_status(tui, status);
+        }
+
+        if (tui->wm.status_height > 0) {
+            render_status_window(tui);
+        }
+        input_redraw(tui, prompt);
+        return 0;
+    }
+
     switch (ch) {
         case 'i':  // Enter insert mode (insert at cursor)
         case 'a':  // Enter insert mode (append after cursor)
@@ -709,6 +754,14 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
                 render_status_window(tui);
             }
             input_redraw(tui, prompt);
+            break;
+
+        case 'm':  // Set mark (wait for mark character a-z)
+            tui->marks.pending = 'm';
+            break;
+
+        case '\'':  // Jump to mark (wait for mark character a-z)
+            tui->marks.pending = '\'';
             break;
 
         case ')':  // Jump to next paragraph (text block)

@@ -750,6 +750,34 @@ void render_status_window(TUIState *tui) {
         help_display_width_short = utf8_display_width(help_str_short);
     }
 
+    // Prepare marks display (show active marks when in NORMAL mode)
+    char marks_str[64] = {0};
+    int marks_str_len = 0;
+    int marks_display_width = 0;
+    if (tui->mode == TUI_MODE_NORMAL) {
+        // Count set marks and build display string
+        int marks_count = 0;
+        marks_str[0] = '\0';
+        for (int i = 0; i < MAX_MARKS; i++) {
+            if (tui->marks.marks[i].is_set) {
+                if (marks_count == 0) {
+                    strlcpy(marks_str, " \xE2\x97\xB8 ", sizeof(marks_str));  // ◸
+                }
+                size_t cur_len = strlen(marks_str);
+                if (cur_len + 2 < sizeof(marks_str)) {
+                    marks_str[cur_len] = tui->marks.marks[i].name;
+                    marks_str[cur_len + 1] = ' ';
+                    marks_str[cur_len + 2] = '\0';
+                }
+                marks_count++;
+            }
+        }
+        if (marks_count > 0) {
+            marks_str_len = (int)strlen(marks_str);
+            marks_display_width = utf8_display_width(marks_str);
+        }
+    }
+
     // Layout: spinner + status message on the LEFT, indicators on the RIGHT
     // Left side: spinner + LLM status message
     // Right side (in order from right): plan mode, scroll %, token usage
@@ -893,6 +921,22 @@ void render_status_window(TUIState *tui) {
             if (has_colors()) {
                 wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
+        }
+    }
+
+    // Render marks display on the left side (show active marks when space permits)
+    if (marks_str_len > 0 && left_col + marks_display_width <= left_limit) {
+        // Only show marks if there's enough space (at least 4 chars for " ◸ a")
+        if (marks_display_width >= 4 && left_col + marks_display_width <= left_limit) {
+            // Use status color but not bold, so marks are visible but not distracting
+            if (has_colors()) {
+                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+            }
+            tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, marks_str, marks_str_len);
+            if (has_colors()) {
+                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
+            }
+            left_col += marks_display_width;
         }
     }
 
