@@ -35,9 +35,27 @@ The TUI operates in different modes, similar to vim:
 - `}` - Jump to next paragraph (empty line)
 
 ### Marks (Vim-style)
-- `m{a-z}` - Set a mark at the current scroll position (e.g., `ma` sets mark 'a')
-- `'{a-z}` - Jump to a previously set mark (e.g., `'a` jumps to mark 'a')
-- Active marks are shown in the status bar as `◸ a b c`
+
+Marks let you bookmark positions in the conversation and quickly jump back to them — similar to vim's `m{a-z}` / `'{a-z}`.
+
+- `m{a-z}` — **Set a mark** at the current scroll position. Press `m` followed by a letter `a`-`z`.  
+  Example: `ma` sets mark 'a' at the current line.
+- `'{a-z}` — **Jump to a mark**. Press `'` followed by the mark's letter.  
+  Example: `'a` scrolls the conversation to mark 'a'.
+- **Status bar indicator**: Active marks appear in the status bar as `◸ a b c` (only visible in Normal mode).
+- **Status feedback**: Setting or jumping to a mark shows a confirmation (e.g., `Mark set: a` or `Jump to mark: a`). If you try to jump to an unset mark, it shows `Mark 'x' not set`.
+
+**Practical use cases:**
+1. **Compare two sections**: Scroll to the top of a function, press `ma`, scroll to another area, press `mb`, then toggle between them with `'a` and `'b`.
+2. **Mark an interesting response**: While reviewing a long conversation, mark positions you want to revisit later.
+3. **Anchoring**: Set mark 'a' at the beginning of a large assistant response, then use `'a` to return after scrolling through tool outputs.
+4. **Reference points**: Use marks like breadcrumbs — `ma` at a code diff, `mb` at an error message, `mc` at a TODO update — and jump between them.
+
+**Notes:**
+- Marks are **per-session** — they're only valid for the current TUI session and reset when you restart.
+- You can set all 26 marks (a-z) independently.
+- Mark names are case-sensitive: `ma` and `mA` are different (but `mA` is not a standard vim behavior; klawed only supports `a-z`).
+- Pressing an invalid character after `m` or `'` (anything outside `a-z`) cancels the operation and shows an error.
 
 ### Search
 - `n` - Jump to next search result
@@ -179,7 +197,13 @@ From Insert mode, type commands starting with `/`:
    - `n` to jump to next occurrence
    - `:noh<Tab><Enter>` to clear highlights
 
-6. **Input Box Styles** (toggle with `b` in Normal mode):
+6. **Use Marks for Navigation**:
+   - `ma` to mark a position, `'a` to return — works across entire conversation
+   - Set marks on key reference points (configs, error outputs, code blocks)
+   - Combine with `{`/`}` (paragraph jumps) for fast navigation: mark paragraphs as you go
+   - Active marks are shown in the status bar as `◸ a b c` — glance to see which marks are set
+
+7. **Input Box Styles** (toggle with `b` in Normal mode):
    - **Bland** (default): Minimal style with just '>>>' caret, no borders or padding
    - **Background**: Left border line + colored background with padding
    - **Border**: Full box border around input, no background color
