@@ -85,8 +85,6 @@ int submit_input_callback(const char *input, void *user_data) {
     }
 
     if (input_copy[0] == '/') {
-        ui_append_line(tui, queue, tui_icon_user(), input_copy, COLOR_PAIR_USER);
-
         // Remember message count before command execution
         int msg_count_before = state->count;
 
@@ -196,6 +194,12 @@ int submit_input_callback(const char *input, void *user_data) {
             } else {
                 ui_show_error(tui, queue, "Failed to rebuild system prompt");
             }
+        }
+
+        // Show raw command only if command didn't add its own messages
+        // (commands like /goal add [Goal]-tagged messages via add_user_message)
+        if (cmd_result == 0 && state->count == msg_count_before) {
+            ui_append_line(tui, queue, tui_icon_user(), input_copy, COLOR_PAIR_USER);
         }
 
         // Check if command added new messages (e.g., /voice or /goal)
