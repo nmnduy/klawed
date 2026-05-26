@@ -1089,14 +1089,15 @@ static int render_text_with_search_highlight(WINDOW *win, const char *text,
 
 // Helper to render a single visual line segment with border
 static void render_bordered_segment(TUIState *tui, const char *segment, size_t len,
-                                    int border_pair, const char *border_str, bool add_newline) {
+                                    int border_pair, const char *border_str, bool add_newline,
+                                    int text_pair) {
     WINDOW *pad = tui->wm.conv_pad;
     int pad_width = 0, pad_height = 0;
     getmaxyx(pad, pad_height, pad_width);
     (void)pad_height;
 
     LinePrinter lp;
-    lp_init(&lp, pad, border_str, border_pair, NCURSES_PAIR_FOREGROUND, pad_width);
+    lp_init(&lp, pad, border_str, border_pair, text_pair, pad_width);
     lp_border(&lp);
 
     if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
@@ -1114,7 +1115,7 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
     }
 
     if (has_colors()) {
-        wattroff(pad, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        wattroff(pad, COLOR_PAIR(text_pair));
     }
 
     if (add_newline) {
@@ -1276,7 +1277,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                 }
                 table_buf_count = 0;
             }
-            render_bordered_segment(tui, "", 0, border_pair, border_str, (*p == '\n'));
+            render_bordered_segment(tui, "", 0, border_pair, border_str, (*p == '\n'), text_pair);
         } else {
             int fence = markdown_code_fence(line_start, line_len);
             int is_code_line = 0;

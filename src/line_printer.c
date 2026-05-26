@@ -200,7 +200,9 @@ void lp_newline(LinePrinter *lp) {
 
     // If background fill is active, fill remaining width with spaces
     // to create a full-width painted background effect
-    if (lp->fill_bg_pair > 0 && cur_x < lp->pad_width && cur_x > 0) {
+    // Fill even when cur_x == 0 (empty lines) so blank separator lines
+    // within the response also get the background color painted.
+    if (lp->fill_bg_pair > 0 && cur_x < lp->pad_width) {
         if (has_colors()) {
             wattron(lp->pad, COLOR_PAIR((unsigned)lp->fill_bg_pair));
         }
