@@ -440,8 +440,11 @@ int window_manager_ensure_pad_capacity(WindowManager *wm, int needed_lines) {
     LOG_INFO("[WM] Expanding pad capacity from %d to %d lines",
              wm->conv_pad_capacity, new_capacity);
 
-    // Create new larger pad
-    int conv_pad_width = wm->screen_width - wm->config.conv_h_padding;
+    // Create new larger pad, preserving current pad width
+    // (may be wider than screen if no-wrap mode is active)
+    int old_pad_h = 0, old_pad_w = 0;
+    getmaxyx(wm->conv_pad, old_pad_h, old_pad_w);
+    int conv_pad_width = old_pad_w;
     if (conv_pad_width < 1) conv_pad_width = 1; // Safety check
     WINDOW *new_pad = newpad(new_capacity, conv_pad_width);
     if (!new_pad) {

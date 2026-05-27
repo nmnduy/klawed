@@ -60,20 +60,23 @@ static void tui_toggle_wrap(TUIState *tui) {
     cfg.input_box_style = tui->input_box_style;
     config_save(&cfg);
 
-    // Recreate pad with appropriate width
+    // Recreate pad with appropriate width.
+    // window_manager_set_pad_width clamps conv_scroll_x to 0 automatically.
     if (tui->wrap_enabled) {
-        // Wrap on: use screen width
+        // Wrap on: use screen width, ncurses auto-wraps text at pad boundary
         window_manager_set_pad_width(&tui->wm, tui->wm.screen_width - tui->wm.config.conv_h_padding);
-        window_manager_set_scroll_x(&tui->wm, 0);  // Reset horizontal scroll
         tui_update_status(tui, "Word wrap enabled");
     } else {
-        // Wrap off: use wide pad to prevent ncurses auto-wrap
+        // Wrap off: use wide pad so long lines extend beyond screen width
         window_manager_set_pad_width(&tui->wm, NO_WRAP_PAD_WIDTH);
-        window_manager_set_scroll_x(&tui->wm, 0);  // Reset horizontal scroll
         tui_update_status(tui, "Word wrap disabled (use h/l to scroll horizontally)");
     }
 
-    // Re-render entire conversation with new width
+    // Re-render entire conversation with new pad width.
+    // Text is re-rendered from original entries using waddnstr which
+    // auto-wraps (or doesn't) based on the new pad width.
+    // Reset vertical scroll to top since line counts change with wrapping.
+    tui->wm.conv_scroll_offset = 0;
     redraw_conversation(tui);
     refresh_conversation_viewport(tui);
 
@@ -962,6 +965,7 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
 
         case 'h':  // Scroll left (horizontal, for no-wrap mode)
             window_manager_scroll_horizontal(&tui->wm, -8);
+            window_manager_refresh_conversation(&tui->wm);
             if (tui->wm.status_height > 0) {
                 render_status_window(tui);
             }
@@ -970,6 +974,7 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
 
         case 'l':  // Scroll right (horizontal, for no-wrap mode)
             window_manager_scroll_horizontal(&tui->wm, 8);
+            window_manager_refresh_conversation(&tui->wm);
             if (tui->wm.status_height > 0) {
                 render_status_window(tui);
             }
@@ -979,6 +984,7 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
         case '0':  // Reset horizontal scroll to beginning of line
             if (window_manager_get_scroll_x(&tui->wm) > 0) {
                 window_manager_set_scroll_x(&tui->wm, 0);
+                window_manager_refresh_conversation(&tui->wm);
                 if (tui->wm.status_height > 0) {
                     render_status_window(tui);
                 }

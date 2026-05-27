@@ -159,6 +159,10 @@ static const ModelCapabilityEntry MODEL_CAPABILITIES_TABLE[] = {
     // ========================================================================
     // DeepSeek models
     // ========================================================================
+    { "deepseek-v4-pro", 1048576, 16384 },
+    { "deepseek-v4-flash", 1048576, 16384 },
+    { "accounts/fireworks/models/deepseek-v4-flash", 1048576, 16384 },
+    { "accounts/fireworks/models/deepseek-v4-pro", 1048576, 16384 },
     { "deepseek-v3.2-speciale", 163840, 163840 },
     { "deepseek-v3.1-nex-n1", 131072, 163840 },
     { "deepseek-chat-v3.1", 32768, 7168 },
