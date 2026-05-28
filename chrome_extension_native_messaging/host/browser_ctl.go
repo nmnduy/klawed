@@ -149,7 +149,7 @@ FLAGS
   -socket string   Unix socket path (default: /tmp/klawed-browser.sock)
   -json            Print raw JSON response
   -timeout int     Timeout in seconds (default: 35)
-  --ready          Readiness check — exits 0 if browser socket is reachable
+  --ready          Readiness check — dials socket then pings extension, exits 0 if both pass
   -help            Show this help text
   -version         Show version
 
@@ -178,12 +178,40 @@ var (
 
 func readyCheck() {
 	path := defaultSocket()
-	// Quick socket existence check first (no network calls)
-	_, err := net.DialTimeout("unix", path, 2*time.Second)
+	timeout := 2 * time.Second
+
+	// Phase 1: socket reachable?
+	conn, err := net.DialTimeout("unix", path, timeout)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "browser_ctl ready check — FAILED: %v\n", err)
+		fmt.Fprintf(os.Stderr, "browser_ctl ready check — FAILED (socket): %v\n", err)
 		os.Exit(1)
 	}
+	defer conn.Close()
+
+	// Phase 2: extension responsive? Send ping, read reply.
+	_ = conn.SetDeadline(time.Now().Add(timeout))
+	fmt.Fprintln(conn, `{"command":"ping"}`)
+
+	buf := make([]byte, 65536)
+	n, err := conn.Read(buf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "browser_ctl ready check — FAILED (ping read): %v\n", err)
+		os.Exit(1)
+	}
+
+	line := strings.TrimSpace(string(buf[:n]))
+
+	// Check for error in response
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(line), &resp); err != nil {
+		fmt.Fprintf(os.Stderr, "browser_ctl ready check — FAILED (bad json): %v\n", err)
+		os.Exit(1)
+	}
+	if errMsg, ok := resp["error"].(string); ok && errMsg != "" {
+		fmt.Fprintf(os.Stderr, "browser_ctl ready check — FAILED (extension error): %s\n", errMsg)
+		os.Exit(1)
+	}
+
 	fmt.Println("browser_ctl ready check — PASSED")
 	os.Exit(0)
 }

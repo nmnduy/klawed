@@ -57,8 +57,8 @@ static int is_dear_oracle_available(void) {
 /**
  * Check if browser_ctl CLI tool is available.
  * Disabled by default; enable with KLAWED_BROWSER_CTL=1 env var.
- * Runs `browser_ctl --ready` which exits 0 if the socket is reachable
- * (browser extension connected), without making any network calls.
+ * Runs `browser_ctl --ready` which dials the Unix socket and sends a ping
+ * command to verify the browser extension is connected and responsive.
  */
 static int is_browser_ctl_available(void) {
     // Disabled by default — must opt in via env var
