@@ -82,11 +82,17 @@ int markdown_is_table_separator(const char *line, size_t len);
  * remaining rows are data.  Columns are padded for even-width display with
  * text rendered through the inline markdown formatter.
  *
+ * When the table would overflow the pad, and conditions are favorable
+ * (2-6 columns, viewport >= 40 chars), columns are auto-wrapped to fit.
+ * Otherwise falls back to traditional fixed-width rendering.
+ *
  * left_border:      if non-NULL, drawn as the left edge instead of "|".
  * left_border_pair: COLOR_PAIR for left_border (0 to use base_pair).
+ * pad_width:        total width available for the table (from pad dimensions).
  */
 void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_lens,
                            size_t num_rows, int base_pair,
-                           const char *left_border, int left_border_pair);
+                           const char *left_border, int left_border_pair,
+                           int pad_width);
 
 #endif /* MARKDOWN_RENDER_H */

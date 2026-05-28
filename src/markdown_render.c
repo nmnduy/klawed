@@ -12,6 +12,8 @@
 #include <ncurses.h>
 #include <ctype.h>
 #include <string.h>
+#include <wchar.h>
+#include <locale.h>
 
 /* Forward declarations for test builds */
 #ifdef TEST_BUILD
@@ -648,9 +650,346 @@ static int cell_display_width(const char *text, size_t len) {
 #define TABLE_MAX_ROWS 64
 #define TABLE_MAX_COLS 16
 
+/* Wrapping mode thresholds */
+#define TABLE_WRAP_MIN_COL_WIDTH 8
+#define TABLE_WRAP_MAX_COLS 6
+#define TABLE_WRAP_MIN_SCREEN_WIDTH 40
+#define TABLE_WRAP_MAX_WRAP_LINES 32
+/* Per-column rendering overhead: space + cell + space + | = 3 chars beyond col width */
+#define TABLE_WRAP_PER_COL_OVERHEAD 3
+
+/*
+ * Compute the display width of a UTF-8 byte sequence using mbrtowc/wcwidth.
+ * Returns the number of terminal columns the text occupies (capped at max_width).
+ */
+static int cell_display_width_mb(const char *text, size_t len, int max_width) {
+    int w = 0;
+    size_t i = 0;
+    mbstate_t state;
+    memset(&state, 0, sizeof(state));
+
+    while (i < len && w < max_width) {
+        wchar_t wc;
+        size_t char_bytes = mbrtowc(&wc, text + i, len - i, &state);
+        if (char_bytes == 0) {
+            break;
+        } else if (char_bytes == (size_t)-1 || char_bytes == (size_t)-2) {
+            i++;
+            w++;
+        } else {
+            int char_width = wcwidth(wc);
+            if (char_width < 0) {
+                char_width = 1;
+            }
+            if (w + char_width > max_width) {
+                break;
+            }
+            i += char_bytes;
+            w += char_width;
+        }
+    }
+    return i > 0 ? w : 0;
+}
+
+/*
+ * Find the byte length of text that fits within max_display_width columns.
+ * Uses mbrtowc/wcwidth for accurate UTF-8 display width calculation.
+ */
+static size_t cell_wrap_point(const char *text, size_t text_len, int max_display_width) {
+    size_t bytes_used = 0;
+    int display_width = 0;
+    mbstate_t state;
+    memset(&state, 0, sizeof(state));
+
+    while (bytes_used < text_len && display_width < max_display_width) {
+        wchar_t wc;
+        size_t char_bytes = mbrtowc(&wc, text + bytes_used, text_len - bytes_used, &state);
+        if (char_bytes == 0) {
+            break;
+        } else if (char_bytes == (size_t)-1 || char_bytes == (size_t)-2) {
+            bytes_used++;
+            display_width++;
+        } else {
+            int char_width = wcwidth(wc);
+            if (char_width < 0) {
+                char_width = 1;
+            }
+            if (display_width + char_width > max_display_width) {
+                break;
+            }
+            bytes_used += char_bytes;
+            display_width += char_width;
+        }
+    }
+    return bytes_used > 0 ? bytes_used : 1;
+}
+
+/*
+ * Get the n-th wrapped line of a cell (0-indexed).
+ * Returns 1 and sets *out_start and *out_len on success, 0 if beyond end.
+ */
+static int cell_get_wrapped_line(const char *text, size_t text_len, int max_width,
+                                 int line_idx, const char **out_start, size_t *out_len) {
+    const char *p = text;
+    size_t remaining = text_len;
+    int current_line = 0;
+
+    while (remaining > 0 && current_line < line_idx) {
+        size_t chunk = cell_wrap_point(p, remaining, max_width);
+        p += chunk;
+        remaining -= chunk;
+        current_line++;
+    }
+
+    if (remaining == 0) {
+        *out_start = NULL;
+        *out_len = 0;
+        return 0;
+    }
+
+    size_t chunk = cell_wrap_point(p, remaining, max_width);
+    *out_start = p;
+    *out_len = chunk;
+    return 1;
+}
+
+/*
+ * Count how many wrapped lines a cell will produce at the given column width.
+ */
+static int cell_wrap_count(const char *text, size_t text_len, int max_width) {
+    if (!text || text_len == 0 || max_width <= 0) {
+        return 1;
+    }
+    int count = 0;
+    const char *p = text;
+    size_t remaining = text_len;
+    while (remaining > 0) {
+        size_t chunk = cell_wrap_point(p, remaining, max_width);
+        p += chunk;
+        remaining -= chunk;
+        count++;
+        if (count >= TABLE_WRAP_MAX_WRAP_LINES) {
+            break;
+        }
+    }
+    return count;
+}
+
+/*
+ * Decide whether wrapped table rendering is viable.
+ * Returns 1 if wrapping should be used, 0 to fall back to fixed-width mode.
+ */
+static int table_should_wrap(size_t num_cols, int pad_width,
+                             int left_border_width, const int *max_content_widths) {
+    /* Must have 2-6 columns */
+    if (num_cols < 2 || num_cols > TABLE_WRAP_MAX_COLS) {
+        return 0;
+    }
+
+    /* Screen must be wide enough */
+    if (pad_width < TABLE_WRAP_MIN_SCREEN_WIDTH) {
+        return 0;
+    }
+
+    /* Left border width: if non-NULL border string, measure it; else 1 for '|' */
+    int left_bw = (left_border_width > 0) ? left_border_width : 1;
+
+    /* Available width for column content */
+    int avail = pad_width - left_bw - ((int)num_cols * TABLE_WRAP_PER_COL_OVERHEAD);
+
+    /* Check if table would overflow without wrapping */
+    size_t total_natural_width = 0;
+    for (size_t j = 0; j < num_cols; j++) {
+        int w = max_content_widths[j] < 3 ? 3 : max_content_widths[j];
+        total_natural_width += (size_t)(w + TABLE_WRAP_PER_COL_OVERHEAD);
+    }
+    int natural_total = left_bw + (int)total_natural_width;
+    if (natural_total <= pad_width) {
+        /* Table fits naturally; no need to wrap */
+        return 0;
+    }
+
+    /* Check if wrapping is viable: each column must get at least min width */
+    if (avail < (int)num_cols * TABLE_WRAP_MIN_COL_WIDTH) {
+        return 0;
+    }
+
+    return 1;
+}
+
+/*
+ * Distribute available width among columns.
+ * First assigns min width, then distributes extra proportionally to content width.
+ */
+static void table_distribute_widths(int *col_widths, size_t num_cols, int pad_width,
+                                    int left_border_width, const int *max_content_widths) {
+    int left_bw = (left_border_width > 0) ? left_border_width : 1;
+    int avail = pad_width - left_bw - ((int)num_cols * TABLE_WRAP_PER_COL_OVERHEAD);
+
+    /* Minimum guaranteed */
+    int used = 0;
+    for (size_t j = 0; j < num_cols; j++) {
+        col_widths[j] = TABLE_WRAP_MIN_COL_WIDTH;
+        used += TABLE_WRAP_MIN_COL_WIDTH;
+    }
+
+    int extra = avail - used;
+    if (extra <= 0) {
+        return;
+    }
+
+    /* Compute total content width for proportional distribution */
+    int total_content = 0;
+    for (size_t j = 0; j < num_cols; j++) {
+        total_content += max_content_widths[j];
+    }
+
+    if (total_content > 0) {
+        /* Distribute proportionally */
+        int assigned = 0;
+        for (size_t j = 0; j < num_cols - 1; j++) {
+            int share = (max_content_widths[j] * extra) / total_content;
+            col_widths[j] += share;
+            assigned += share;
+        }
+        /* Last column gets remainder to avoid rounding errors */
+        col_widths[num_cols - 1] += (extra - assigned);
+    } else {
+        /* Equal distribution if all content widths are 0 */
+        int each = extra / (int)num_cols;
+        int remainder = extra - each * (int)num_cols;
+        for (size_t j = 0; j < num_cols; j++) {
+            col_widths[j] += each;
+            if ((int)j < remainder) {
+                col_widths[j]++;
+            }
+        }
+    }
+}
+
+/*
+ * Render a single wrapped row.
+ * Each cell's text is wrapped at col_widths[j]; all cells align on the same
+ * visual line boundaries (the row may span multiple pad lines).
+ */
+static void table_render_wrapped_row(TUIState *tui, WINDOW *pad,
+                                     const char **cells, const size_t *cell_lens,
+                                     size_t num_cols, const int *col_widths,
+                                     int row_idx, int base_pair, int edge_pair,
+                                     const char *left_border) {
+    size_t j;
+    int max_lines = 1;
+
+    /* Determine max wrapped lines for this row */
+    for (j = 0; j < num_cols; j++) {
+        int lines;
+        if (cells[j] && cell_lens[j] > 0) {
+            lines = cell_wrap_count(cells[j], cell_lens[j], col_widths[j]);
+        } else {
+            lines = 1;
+        }
+        if (lines > max_lines) {
+            max_lines = lines;
+        }
+    }
+
+    if (max_lines > TABLE_WRAP_MAX_WRAP_LINES) {
+        max_lines = TABLE_WRAP_MAX_WRAP_LINES;
+    }
+
+    /* Render each visual line */
+    for (int line = 0; line < max_lines; line++) {
+        /* Left border */
+        if (edge_pair > 0 && has_colors()) {
+            wattron(pad, COLOR_PAIR((unsigned)edge_pair));
+        }
+        if (left_border) {
+            waddstr(pad, left_border);
+        } else {
+            waddch(pad, '|');
+        }
+
+        for (j = 0; j < num_cols; j++) {
+            const char *seg = NULL;
+            size_t seg_len = 0;
+            int seg_w = 0;
+
+            if (cells[j] && cell_lens[j] > 0) {
+                if (cell_get_wrapped_line(cells[j], cell_lens[j], col_widths[j],
+                                         line, &seg, &seg_len) && seg_len > 0) {
+                    seg_w = cell_display_width_mb(seg, seg_len, col_widths[j]);
+                }
+            }
+
+            int pad_w = col_widths[j] - seg_w;
+            if (pad_w < 0) {
+                pad_w = 0;
+            }
+
+            waddch(pad, ' ');
+
+            if (row_idx == 0 && base_pair > 0 && has_colors()) {
+                wattron(pad, A_BOLD);
+            }
+
+            if (seg && seg_len > 0) {
+                markdown_render_inline(tui, seg, seg_len, base_pair);
+            }
+
+            if (row_idx == 0 && base_pair > 0 && has_colors()) {
+                wattroff(pad, A_BOLD);
+            }
+
+            /* Pad to column width */
+            while (pad_w > 0) {
+                waddch(pad, ' ');
+                pad_w--;
+            }
+
+            waddch(pad, ' ');
+            waddch(pad, '|');
+        }
+
+        if (edge_pair > 0 && has_colors()) {
+            wattroff(pad, COLOR_PAIR((unsigned)edge_pair));
+        }
+
+        waddch(pad, '\n');
+    }
+}
+
+/*
+ * Render a separator line at the given column widths.
+ */
+static void table_render_separator(WINDOW *pad, size_t num_cols,
+                                   const int *col_widths, int edge_pair,
+                                   const char *left_border) {
+    if (edge_pair > 0 && has_colors()) {
+        wattron(pad, COLOR_PAIR((unsigned)edge_pair));
+    }
+    if (left_border) {
+        waddstr(pad, left_border);
+    } else {
+        waddch(pad, '|');
+    }
+    for (size_t j = 0; j < num_cols; j++) {
+        waddch(pad, '-');
+        for (int w = 0; w < col_widths[j]; w++) {
+            waddch(pad, '-');
+        }
+        waddch(pad, '-');
+        waddch(pad, '|');
+    }
+    if (edge_pair > 0 && has_colors()) {
+        wattroff(pad, COLOR_PAIR((unsigned)edge_pair));
+    }
+    waddch(pad, '\n');
+}
+
 void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_lens,
                            size_t num_rows, int base_pair,
-                           const char *left_border, int left_border_pair) {
+                           const char *left_border, int left_border_pair,
+                           int pad_width) {
     WINDOW *pad;
     size_t display_rows[TABLE_MAX_ROWS];
     size_t num_display = 0;
@@ -659,6 +998,7 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
     size_t col_counts[TABLE_MAX_ROWS];
     size_t num_cols = 0;
     int col_widths[TABLE_MAX_COLS];
+    int max_content_widths[TABLE_MAX_COLS];
     size_t i, j;
     int edge_pair;
 
@@ -708,6 +1048,64 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
     if (num_cols > TABLE_MAX_COLS) {
         num_cols = TABLE_MAX_COLS;
     }
+
+    /* Calculate max content widths for each column */
+    memset(max_content_widths, 0, sizeof(max_content_widths));
+    for (i = 0; i < num_display; i++) {
+        for (j = 0; j < col_counts[i] && j < num_cols; j++) {
+            int w;
+            if (cells[i][j] && cell_lens[i][j] > 0) {
+                w = cell_display_width(cells[i][j], cell_lens[i][j]);
+            } else {
+                w = 0;
+            }
+            if (w > max_content_widths[j]) {
+                max_content_widths[j] = w;
+            }
+        }
+    }
+
+    /* Compute left border display width for wrapping decisions */
+    int left_bw = left_border ? cell_display_width(left_border, strlen(left_border)) : 0;
+
+    /* Decide whether to use wrapping mode */
+    if (table_should_wrap(num_cols, pad_width, left_bw, max_content_widths)) {
+        /* --- Wrapped rendering mode --- */
+        table_distribute_widths(col_widths, num_cols, pad_width, left_bw,
+                                max_content_widths);
+
+        /* Render rows with wrapping */
+        for (i = 0; i < num_display; i++) {
+            /* Build per-cell pointer array for this row */
+            const char *row_cells[TABLE_MAX_COLS];
+            size_t row_cell_lens[TABLE_MAX_COLS];
+            size_t nc = col_counts[i];
+            if (nc > num_cols) nc = num_cols;
+            for (j = 0; j < nc; j++) {
+                row_cells[j] = cells[i][j];
+                row_cell_lens[j] = cell_lens[i][j];
+            }
+            /* Pad missing columns with empty cells */
+            for (j = nc; j < num_cols; j++) {
+                row_cells[j] = NULL;
+                row_cell_lens[j] = 0;
+            }
+
+            table_render_wrapped_row(tui, pad, row_cells, row_cell_lens,
+                                     num_cols, col_widths,
+                                     (int)i, base_pair, edge_pair, left_border);
+
+            /* Separator line after header */
+            if (i == 0 && num_display > 1) {
+                table_render_separator(pad, num_cols, col_widths,
+                                       edge_pair, left_border);
+            }
+        }
+
+        return;
+    }
+
+    /* --- Traditional fixed-width rendering (fallback) --- */
 
     /* Calculate column widths */
     memset(col_widths, 0, sizeof(col_widths));
@@ -776,7 +1174,6 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
 
             /* Pad to column width */
             if (pad_w > 0) {
-                /* waddnstr with spaces */
                 while (pad_w > 0) {
                     waddch(pad, ' ');
                     pad_w--;

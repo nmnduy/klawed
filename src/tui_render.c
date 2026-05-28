@@ -1266,7 +1266,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                 if (has_sep) {
                     markdown_render_table(tui, table_rows, table_row_lens,
                                           table_buf_count, text_pair,
-                                          border_str, border_pair);
+                                          border_str, border_pair, pad_width);
                 } else {
                     for (size_t ti = 0; ti < table_buf_count; ti++) {
                         render_md_segment(tui, table_rows[ti], table_row_lens[ti],
@@ -1295,7 +1295,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                     if (has_sep) {
                         markdown_render_table(tui, table_rows, table_row_lens,
                                               table_buf_count, text_pair,
-                                              border_str, border_pair);
+                                              border_str, border_pair, pad_width);
                     } else {
                         for (size_t ti = 0; ti < table_buf_count; ti++) {
                             render_md_segment(tui, table_rows[ti], table_row_lens[ti],
@@ -1339,7 +1339,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                     if (has_sep) {
                         markdown_render_table(tui, table_rows, table_row_lens,
                                               table_buf_count, text_pair,
-                                              border_str, border_pair);
+                                              border_str, border_pair, pad_width);
                     } else {
                         for (size_t ti = 0; ti < table_buf_count; ti++) {
                             render_md_segment(tui, table_rows[ti], table_row_lens[ti],
@@ -1497,7 +1497,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
         if (has_sep) {
             markdown_render_table(tui, table_rows, table_row_lens,
                                   table_buf_count, text_pair,
-                                  border_str, border_pair);
+                                  border_str, border_pair, pad_width);
         } else {
             for (size_t ti = 0; ti < table_buf_count; ti++) {
                 render_md_segment(tui, table_rows[ti], table_row_lens[ti],

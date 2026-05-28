@@ -316,6 +316,26 @@ static void write_streaming_text_bordered(TUIState *tui, const char *text) {
      * will write with no color pair (appearing dimmed/default). */
 }
 
+/* Streaming helper for BG (background-tinted) response style.
+ * Uses a LinePrinter with NCURSES_PAIR_ASSISTANT_BG which has a
+ * non-default background color.  lp_print_text_wrapped fills each
+ * line to full width with background-tinted spaces, and lp_fill_line
+ * (called at the end) paints the current incomplete line without
+ * adding a newline, so the next streaming chunk continues at the
+ * correct cursor position. */
+static void write_streaming_text_bg(TUIState *tui, const char *text) {
+    WINDOW *pad = tui->wm.conv_pad;
+    int pad_width;
+    int pad_height;
+    getmaxyx(pad, pad_height, pad_width);
+    (void)pad_height;
+
+    LinePrinter lp;
+    /* border_str=NULL, border_pair=0 — no left border decoration */
+    lp_init(&lp, pad, NULL, 0, NCURSES_PAIR_ASSISTANT_BG, pad_width);
+    lp_print_text_wrapped(&lp, text);
+}
+
 // Update the last conversation line (for streaming responses)
 void tui_update_last_conversation_line(TUIState *tui, const char *text) {
     if (!tui || !tui->is_initialized || !text) return;
@@ -469,15 +489,16 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
             if (use_bordered) {
                 // Use bordered streaming to handle wrapping with border
                 write_streaming_text_bordered(tui, text);
+            } else if (is_assistant && tui->response_style == RESPONSE_STYLE_BG) {
+                // BG style: use LinePrinter-based streaming with full-width
+                // background fill via lp_print_text_wrapped + lp_fill_line
+                write_streaming_text_bg(tui, text);
             } else {
                 // Determine text color based on prefix, matching the logic
                 // in render_entry_to_pad() so reasoning/tool text is dimmed
                 // during streaming, not just after the full rebuild.
                 int text_pair = NCURSES_PAIR_FOREGROUND;
-                if (is_assistant && tui->response_style == RESPONSE_STYLE_BG) {
-                    // BG style: use the background-tinted pair for assistant text
-                    text_pair = NCURSES_PAIR_ASSISTANT_BG;
-                } else if (last_entry->prefix && last_entry->prefix[0] != '\0') {
+                if (last_entry->prefix && last_entry->prefix[0] != '\0') {
                     // Check for tool messages: prefix starts with "●" or ""
                     int is_tool_message = ((last_entry->prefix[0] == '\xe2' &&
                                             last_entry->prefix[1] == '\x97' &&

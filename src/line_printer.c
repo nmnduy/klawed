@@ -20,16 +20,6 @@
  * Static helpers
  * ============================================================================ */
 
-/* Check if a color pair has a non-default background color */
-static int pair_has_background(int pair) {
-    if (!has_colors() || pair <= 0) {
-        return 0;
-    }
-    short fg = 0, bg = 0;
-    pair_content((short)pair, &fg, &bg);
-    return bg != -1;  /* -1 = default background */
-}
-
 static int utf8_display_width(const char *str) {
     if (!str || !*str) {
         return 0;
@@ -134,8 +124,10 @@ void lp_init(LinePrinter *lp, WINDOW *pad, const char *border_str,
     lp->search_pattern = NULL;
     lp->fill_bg_pair = 0;  // No background fill by default
 
-    // Auto-detect if text_pair has a background color and enable fill
-    if (pair_has_background(text_pair)) {
+    // Explicit: enable full-width background fill for the assistant BG
+    // response style.  This is simpler and more maintainable than runtime
+    // introspection via pair_content() — the intent is immediately clear.
+    if (text_pair == NCURSES_PAIR_ASSISTANT_BG) {
         lp->fill_bg_pair = text_pair;
     }
 
@@ -220,6 +212,34 @@ void lp_newline(LinePrinter *lp) {
     }
 }
 
+void lp_fill_line(LinePrinter *lp) {
+    if (!lp || !lp->pad) {
+        return;
+    }
+    int cur_y = 0, cur_x = 0;
+    getyx(lp->pad, cur_y, cur_x);
+    int orig_x = cur_x;
+
+    // Fill remaining width with background spaces without adding a newline.
+    // Used at the end of a streaming chunk to paint the incomplete line,
+    // then the cursor is restored so the next chunk continues from the
+    // correct position.
+    if (lp->fill_bg_pair > 0 && cur_x < lp->pad_width) {
+        if (has_colors()) {
+            wattron(lp->pad, COLOR_PAIR((unsigned)lp->fill_bg_pair));
+        }
+        while (cur_x < lp->pad_width) {
+            waddch(lp->pad, ' ');
+            cur_x++;
+        }
+        if (has_colors()) {
+            wattroff(lp->pad, COLOR_PAIR((unsigned)lp->fill_bg_pair));
+        }
+        // Restore cursor to where it was before filling
+        wmove(lp->pad, cur_y, orig_x);
+    }
+}
+
 void lp_print_raw(LinePrinter *lp, const char *text, size_t len, int dim) {
     if (!lp || !lp->pad || !text || len == 0) {
         return;
@@ -257,14 +277,14 @@ void lp_print_text_wrapped(LinePrinter *lp, const char *text) {
         }
 
         if (*p == '\n') {
-            waddch(lp->pad, '\n');
+            lp_newline(lp);
             p++;
             continue;
         }
 
         int available = lp->pad_width - cur_x;
         if (available <= 0) {
-            waddch(lp->pad, '\n');
+            lp_newline(lp);
             continue;
         }
 
@@ -300,4 +320,9 @@ void lp_print_text_wrapped(LinePrinter *lp, const char *text) {
             }
         }
     }
+
+    // Fill the rest of the current line for a clean visual when
+    // text_pair has a background (e.g., BG response style). Does
+    // NOT add a newline so the caller can append more text later.
+    lp_fill_line(lp);
 }

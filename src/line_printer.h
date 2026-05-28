@@ -39,6 +39,12 @@ void lp_border(LinePrinter *lp);
  * This avoids double newlines after ncurses auto-wrap. */
 void lp_newline(LinePrinter *lp);
 
+/* Fill rest of current line with background-tinted spaces.
+ * Does NOT add a newline — cursor is restored to original position
+ * after filling so subsequent writes continue at the correct spot.
+ * Only active when fill_bg_pair > 0. */
+void lp_fill_line(LinePrinter *lp);
+
 /* Print raw text without markdown interpretation.
  * If dim != 0, applies A_DIM attribute. */
 void lp_print_raw(LinePrinter *lp, const char *text, size_t len, int dim);

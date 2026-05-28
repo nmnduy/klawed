@@ -242,7 +242,15 @@ static void paste_expand_previous(TUIInputBuffer *input) {
     memcpy(&input->buffer[insert_pos], input->paste_content, input->paste_content_len);
 
     input->length += size_change;
-    input->cursor = insert_pos + paste_len;
+
+    // Preserve cursor position relative to the expansion.
+    // If cursor was after the placeholder, shift it by size_change.
+    // If cursor was within/at the placeholder, place it at end of expanded content.
+    if (input->cursor > insert_pos + placeholder_len) {
+        input->cursor += size_change;
+    } else {
+        input->cursor = insert_pos + paste_len;
+    }
 
     // Mark this paste as resolved
     input->paste_placeholder_len = 0;
