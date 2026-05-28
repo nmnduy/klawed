@@ -15,6 +15,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -146,12 +147,21 @@ COMMANDS — Capture & Debug
       Show host metadata and supported commands.
 
 FLAGS
-  -socket string   Unix socket path (default: /tmp/klawed-browser.sock)
-  -json            Print raw JSON response
-  -timeout int     Timeout in seconds (default: 35)
-  --ready          Readiness check — dials socket then pings extension, exits 0 if both pass
-  -help            Show this help text
-  -version         Show version
+  -socket string      Unix socket path (default: /tmp/klawed-browser.sock)
+  -json               Print raw JSON response
+  -timeout int        Timeout in seconds (default: 35)
+  -agent-id string    Agent identifier (auto-generated from PID+hostname)
+  -new-session        Force a new browser tab for this agent
+  --ready             Readiness check — dials socket then pings extension, exits 0 if both pass
+  -help               Show this help text
+  -version            Show version
+
+MULTI-AGENT SUPPORT
+  Multiple klawed agents (main + subagents) can share a single browser.
+  Each agent automatically gets its own tab, identified by a hash of its
+  PID and hostname. Commands like navigate, click, type, evaluate are
+  automatically routed to the agent's assigned tab — no tab management
+  needed. Use --new-session to force a fresh tab.
 
 LEGACY MODE
   If the first argument starts with '{' it is treated as raw JSON:
@@ -171,9 +181,11 @@ ENVIRONMENT
 `
 
 var (
-	socketPath string
-	jsonMode   bool
-	timeoutSec int
+	socketPath  string
+	jsonMode    bool
+	timeoutSec  int
+	newSession  bool
+	agentID     string
 )
 
 func readyCheck() {
@@ -235,6 +247,8 @@ func main() {
 	flag.StringVar(&socketPath, "socket", defaultSocket(), "Unix socket path")
 	flag.BoolVar(&jsonMode, "json", false, "Print raw JSON response")
 	flag.IntVar(&timeoutSec, "timeout", 35, "Timeout in seconds")
+	flag.BoolVar(&newSession, "new-session", false, "Force a new browser tab/session for this agent")
+	flag.StringVar(&agentID, "agent-id", "", "Agent identifier (default: auto-generated from PID+hostname)")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, helpText) }
 	flag.Parse()
 
@@ -246,7 +260,7 @@ func main() {
 
 	var payload string
 	if strings.HasPrefix(args[0], "{") {
-		payload = args[0]
+		payload = injectAgentID(args[0])
 		if err := validateJSON(payload); err != nil {
 			printErr("invalid JSON: %v", err)
 		}
@@ -340,6 +354,14 @@ func prettyPrint(line string) {
 		return
 	}
 
+	// Show agent/tab info on first line for multi-agent awareness
+	if agentTab, ok := m["agentTab"].(float64); ok {
+		fmt.Fprintf(os.Stderr, "## Agent tab: %d\n", int(agentTab))
+	}
+	if agentMsg, ok := m["agentMessage"].(string); ok && agentMsg != "" {
+		fmt.Fprintf(os.Stderr, "# %s\n", agentMsg)
+	}
+
 	// Save screenshots to temp files instead of dumping base64.
 	// The dataUrl may be at the top level or nested inside "result".
 	extractAndSaveScreenshot := func(obj map[string]any) bool {
@@ -384,6 +406,32 @@ func saveScreenshot(dataURL string) {
 		return
 	}
 	fmt.Printf("Screenshot saved to: %s\n", fname)
+}
+
+// getAgentID returns a stable agent identifier for this process.
+// Uses PID + hostname hash to create a compact, unique-per-machine ID.
+func getAgentID() string {
+	if agentID != "" {
+		return agentID
+	}
+	hostname, _ := os.Hostname()
+	seed := fmt.Sprintf("%s-%d", hostname, os.Getpid())
+	h := sha256.Sum256([]byte(seed))
+	return fmt.Sprintf("%x", h[:8])
+}
+
+// injectAgentID parses a raw JSON payload string and injects the agentId field.
+func injectAgentID(rawJSON string) string {
+	var m map[string]any
+	if err := json.Unmarshal([]byte(rawJSON), &m); err != nil {
+		return rawJSON // let caller handle the error
+	}
+	m["agentId"] = getAgentID()
+	if newSession {
+		m["newSession"] = true
+	}
+	b, _ := json.Marshal(m)
+	return string(b)
 }
 
 func buildPayload(args []string) string {
@@ -537,7 +585,10 @@ func buildPayload(args []string) string {
 		cmd = mapped
 	}
 
-	msg := map[string]any{"command": cmd}
+	msg := map[string]any{"command": cmd, "agentId": getAgentID()}
+	if newSession {
+		msg["newSession"] = true
+	}
 	if len(params) > 0 {
 		msg["params"] = params
 	}
