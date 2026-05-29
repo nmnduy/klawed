@@ -4,25 +4,18 @@
 // with a Unix domain socket that klawed connects to, enabling klawed to
 // control a real Chrome/Chromium browser.
 //
-// Multi-agent support: each agent process (identified by PID+hostname hash)
-// gets its own browser tab. Commands are automatically routed to the agent's
-// assigned tab. Multiple klawed processes (main + subagents) can share a
-// single browser without interfering with each other.
-//
 // Architecture:
 //
-//   klawed agent(s) ──┐
-//   klawed subagent ──┤  JSON over Unix socket (/tmp/klawed-browser.sock)
-//   explore agent ────┘
-//       │
+//   klawed agent
+//       │  JSON over Unix socket (/tmp/klawed-browser.sock)
 //       ▼
-//   This Go host process (agent session manager)
+//   This Go host process
 //       │  Chrome Native Messaging (4-byte LE length + JSON on stdin/stdout)
 //       ▼
 //   Chrome Extension (background service worker)
 //       │  Chrome APIs (tabs, scripting, etc.)
 //       ▼
-//   Real Chrome browser (one tab per agent)
+//   Real Chrome browser
 //
 // The Go host is launched by Chrome when the extension calls
 // chrome.runtime.connectNative("com.klawed.browser_controller").
@@ -49,30 +42,24 @@ import (
 )
 
 const (
-	defaultSocketPath    = "/tmp/klawed-browser.sock"
-	defaultLogPath       = "/tmp/klawed-browser-host.log"
-	responseTimeout      = 30 * time.Second
-	maxMessageSize       = 4 * 1024 * 1024 // 4MB
-	agentSessionTTL      = 10 * time.Minute // Close orphaned agent tabs after 10min of inactivity
-	cleanupInterval      = 2 * time.Minute  // How often to check for stale sessions
+	defaultSocketPath = "/tmp/klawed-browser.sock"
+	defaultLogPath    = "/tmp/klawed-browser-host.log"
+	responseTimeout   = 30 * time.Second
+	maxMessageSize    = 4 * 1024 * 1024 // 4MB
 )
 
 // Message is the common structure for all messages between components.
+// When klawed → host: Command + Params are set (ID is assigned by host).
+// When host → Chrome: ID + Command + Params are set.
+// When Chrome → host: ID + Result or Error are set.
+// When host → klawed: ID + Result or Error are set.
 type Message struct {
-	ID         string          `json:"id,omitempty"`
-	Command    string          `json:"command,omitempty"`
-	Params     json.RawMessage `json:"params,omitempty"`
-	Result     json.RawMessage `json:"result,omitempty"`
-	Error      string          `json:"error,omitempty"`
-	Type       string          `json:"type,omitempty"`
-	AgentID    string          `json:"agentId,omitempty"`
-	NewSession bool            `json:"newSession,omitempty"`
-}
-
-// agentSession tracks one agent's assigned browser tab.
-type agentSession struct {
-	tabID    int
-	lastSeen time.Time
+	ID      string          `json:"id,omitempty"`
+	Command string          `json:"command,omitempty"`
+	Params  json.RawMessage `json:"params,omitempty"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   string          `json:"error,omitempty"`
+	Type    string          `json:"type,omitempty"`
 }
 
 var (
@@ -80,56 +67,11 @@ var (
 	pending   = make(map[string]chan Message)
 	pendingMu sync.Mutex
 
-	// agentSessions maps agentId → tab assignment
-	agentSessions   = make(map[string]*agentSession)
-	agentSessionsMu sync.Mutex
-
 	// writeMu serializes writes to Chrome stdout
 	writeMu sync.Mutex
 
 	logger *log.Logger
 )
-
-// ─── Commands that are tab-aware (routed to agent's assigned tab) ────────────
-var tabAwareCommands = map[string]bool{
-	"navigate":         true,
-	"navigateTab":      true,
-	"goBack":           true,
-	"goForward":        true,
-	"reload":           true,
-	"click":            true,
-	"type":             true,
-	"pressKey":         true,
-	"getText":          true,
-	"getHtml":          true,
-	"getAttribute":     true,
-	"getPageInfo":      true,
-	"getPageSource":    true,
-	"getReadableText":  true,
-	"scroll":           true,
-	"scrollBy":         true,
-	"scrollToElement":  true,
-	"evaluate":         true,
-	"findElements":     true,
-	"getLinks":         true,
-	"getForms":         true,
-	"fillForm":         true,
-	"submitForm":       true,
-	"waitForElement":   true,
-	"uploadFile":       true,
-	"screenshot":       true,
-}
-
-// ─── Commands that don't need tab routing (shared/global) ────────────────────
-var sharedCommands = map[string]bool{
-	"listTabs":    true,
-	"getActiveTab": true,
-	"newTab":      true,
-	"closeTab":    true,
-	"switchTab":   true,
-	"ping":        true,
-	"getInfo":     true,
-}
 
 func initLogger() {
 	logPath := os.Getenv("KLAWED_BROWSER_LOG")
@@ -138,12 +80,15 @@ func initLogger() {
 	}
 	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
+		// Cannot log — use discard to avoid any output on stderr/stdout
 		logger = log.New(io.Discard, "", 0)
 		return
 	}
 	logger = log.New(f, "[klawed-browser-host] ", log.LstdFlags)
 }
 
+// readNativeMessage reads one Chrome native messaging frame from r.
+// Format: 4-byte little-endian uint32 length, then that many bytes of JSON.
 func readNativeMessage(r io.Reader) ([]byte, error) {
 	var length uint32
 	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
@@ -159,6 +104,7 @@ func readNativeMessage(r io.Reader) ([]byte, error) {
 	return buf, nil
 }
 
+// writeNativeMessage writes one Chrome native messaging frame to w.
 func writeNativeMessage(w io.Writer, data []byte) error {
 	writeMu.Lock()
 	defer writeMu.Unlock()
@@ -170,6 +116,7 @@ func writeNativeMessage(w io.Writer, data []byte) error {
 	return err
 }
 
+// sendToChrome serializes msg and sends it to the Chrome extension.
 func sendToChrome(msg Message) error {
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -179,267 +126,14 @@ func sendToChrome(msg Message) error {
 	return writeNativeMessage(os.Stdout, data)
 }
 
+// generateID creates a unique message ID.
 func generateID() string {
 	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Int63())
 }
 
-// ─── Agent Session Management ────────────────────────────────────────────────
-
-// getOrCreateAgentTab returns the tab ID for an agent, creating a new tab if needed.
-// Returns the tab ID and a message string (empty if tab already existed).
-func getOrCreateAgentTab(agentID string, forceNew bool) (int, string, error) {
-	agentSessionsMu.Lock()
-	defer agentSessionsMu.Unlock()
-
-	// Check if agent already has a valid session
-	if !forceNew {
-		if sess, exists := agentSessions[agentID]; exists {
-			// Verify the tab still exists by trying to get it
-			tabExists := verifyTabExists(sess.tabID)
-			if tabExists {
-				sess.lastSeen = time.Now()
-				return sess.tabID, "", nil
-			}
-			// Tab was closed externally — remove stale session
-			logger.Printf("agent %s tab %d was closed externally, creating new tab", agentID, sess.tabID)
-			delete(agentSessions, agentID)
-		}
-	} else {
-		logger.Printf("agent %s requested new session (force)", agentID)
-	}
-
-	// Create a new tab for this agent
-	tabID, err := createAgentTab(agentID)
-	if err != nil {
-		return 0, "", fmt.Errorf("failed to create tab for agent %s: %w", agentID, err)
-	}
-
-	msg := fmt.Sprintf("New browser session created for agent %s (tab %d)", agentID, tabID)
-	agentSessions[agentID] = &agentSession{
-		tabID:    tabID,
-		lastSeen: time.Now(),
-	}
-	logger.Printf("created tab %d for agent %s", tabID, agentID)
-	return tabID, msg, nil
-}
-
-// verifyTabExists checks whether a tab ID is still valid by sending a ping
-// through the extension. Returns true if the tab exists.
-func verifyTabExists(tabID int) bool {
-	// We use a special "verifyTab" command that the extension handles.
-	// Avoids the overhead of a full listTabs call.
-	msg := Message{
-		ID:      generateID(),
-		Command: "verifyTab",
-		Params:  json.RawMessage(fmt.Sprintf(`{"tabId":%d}`, tabID)),
-	}
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return false
-	}
-
-	ch := make(chan Message, 1)
-	pendingMu.Lock()
-	pending[msg.ID] = ch
-	pendingMu.Unlock()
-	defer func() {
-		pendingMu.Lock()
-		delete(pending, msg.ID)
-		pendingMu.Unlock()
-	}()
-
-	if err := writeNativeMessage(os.Stdout, data); err != nil {
-		return false
-	}
-
-	select {
-	case resp := <-ch:
-		var result struct {
-			Exists bool `json:"exists"`
-		}
-		if resp.Result != nil {
-			json.Unmarshal(resp.Result, &result)
-		}
-		return result.Exists
-	case <-time.After(3 * time.Second):
-		return false
-	}
-}
-
-// createAgentTab creates a new browser tab via the Chrome extension.
-func createAgentTab(agentID string) (int, error) {
-	url := "about:blank"
-	title := fmt.Sprintf("Klawed Agent [%s]", agentID)
-
-	// Use newTab command with a special title
-	// The extension will create the tab and set its title
-	paramsJSON := fmt.Sprintf(`{"url":"%s","title":"%s"}`, url, title)
-	msg := Message{
-		ID:      generateID(),
-		Command: "newTab",
-		Params:  json.RawMessage(paramsJSON),
-	}
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return 0, err
-	}
-
-	ch := make(chan Message, 1)
-	pendingMu.Lock()
-	pending[msg.ID] = ch
-	pendingMu.Unlock()
-	defer func() {
-		pendingMu.Lock()
-		delete(pending, msg.ID)
-		pendingMu.Unlock()
-	}()
-
-	logger.Printf("→ Chrome (create tab for %s): %s", agentID, string(data))
-	writeMu.Lock()
-	writeErr := writeNativeMessage(os.Stdout, data)
-	writeMu.Unlock()
-	if writeErr != nil {
-		return 0, writeErr
-	}
-
-	select {
-	case resp := <-ch:
-		if resp.Error != "" {
-			return 0, fmt.Errorf("Chrome error: %s", resp.Error)
-		}
-		var result struct {
-			TabID int    `json:"tabId"`
-			URL   string `json:"url"`
-		}
-		if resp.Result != nil {
-			if err := json.Unmarshal(resp.Result, &result); err != nil {
-				return 0, fmt.Errorf("failed to parse tab result: %w", err)
-			}
-		}
-		if result.TabID == 0 {
-			return 0, fmt.Errorf("no tab ID in response")
-		}
-		return result.TabID, nil
-	case <-time.After(10 * time.Second):
-		return 0, fmt.Errorf("timeout creating tab for agent %s", agentID)
-	}
-}
-
-// injectTabIDIntoParams adds the agent's tabId to the params JSON.
-// If params already has a tabId, it's overridden (agent's tab takes priority).
-func injectTabIDIntoParams(params json.RawMessage, tabID int) (json.RawMessage, error) {
-	if len(params) == 0 || string(params) == "{}" {
-		return json.RawMessage(fmt.Sprintf(`{"tabId":%d}`, tabID)), nil
-	}
-
-	var m map[string]any
-	if err := json.Unmarshal(params, &m); err != nil {
-		return nil, fmt.Errorf("failed to parse params: %w", err)
-	}
-	m["tabId"] = tabID
-	b, err := json.Marshal(m)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal params: %w", err)
-	}
-	return json.RawMessage(b), nil
-}
-
-// touchAgentSession updates the lastSeen timestamp for an agent.
-func touchAgentSession(agentID string) {
-	agentSessionsMu.Lock()
-	defer agentSessionsMu.Unlock()
-	if sess, exists := agentSessions[agentID]; exists {
-		sess.lastSeen = time.Now()
-	}
-}
-
-// cleanupStaleSessions periodically closes tabs for agents that haven't
-// been active for longer than agentSessionTTL.
-func cleanupStaleSessions() {
-	ticker := time.NewTicker(cleanupInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		agentSessionsMu.Lock()
-		var staleAgents []string
-		now := time.Now()
-		for agentID, sess := range agentSessions {
-			if now.Sub(sess.lastSeen) > agentSessionTTL {
-				staleAgents = append(staleAgents, agentID)
-			}
-		}
-		// Don't hold lock while closing tabs (network calls)
-		agentSessionsMu.Unlock()
-
-		for _, agentID := range staleAgents {
-			logger.Printf("cleaning up stale session for agent %s", agentID)
-			closeAgentTab(agentID)
-		}
-	}
-}
-
-// closeAgentTab closes the tab and removes the session.
-func closeAgentTab(agentID string) {
-	agentSessionsMu.Lock()
-	sess, exists := agentSessions[agentID]
-	if !exists {
-		agentSessionsMu.Unlock()
-		return
-	}
-	tabID := sess.tabID
-	delete(agentSessions, agentID)
-	agentSessionsMu.Unlock()
-
-	// Close the tab via Chrome
-	paramsJSON := fmt.Sprintf(`{"tabId":%d}`, tabID)
-	msg := Message{
-		ID:      generateID(),
-		Command: "closeTab",
-		Params:  json.RawMessage(paramsJSON),
-	}
-	data, err := json.Marshal(msg)
-	if err != nil {
-		logger.Printf("error marshaling closeTab for agent %s: %v", agentID, err)
-		return
-	}
-
-	ch := make(chan Message, 1)
-	pendingMu.Lock()
-	pending[msg.ID] = ch
-	pendingMu.Unlock()
-	defer func() {
-		pendingMu.Lock()
-		delete(pending, msg.ID)
-		pendingMu.Unlock()
-	}()
-
-	writeMu.Lock()
-	writeErr := writeNativeMessage(os.Stdout, data)
-	writeMu.Unlock()
-	if writeErr != nil {
-		logger.Printf("error closing tab for agent %s: %v", agentID, writeErr)
-		return
-	}
-
-	select {
-	case resp := <-ch:
-		if resp.Error != "" {
-			logger.Printf("error response closing tab for agent %s: %s", agentID, resp.Error)
-		} else {
-			logger.Printf("closed tab %d for agent %s", tabID, agentID)
-		}
-	case <-time.After(5 * time.Second):
-		logger.Printf("timeout closing tab for agent %s", agentID)
-	}
-}
-
-// isTabAwareCommand returns true if the command should be routed to the agent's tab.
-func isTabAwareCommand(cmd string) bool {
-	return tabAwareCommands[cmd]
-}
-
-// ─── Chrome Reader ───────────────────────────────────────────────────────────
-
+// chromeReader reads responses from Chrome native messaging (stdin) in a loop.
+// It dispatches each response to the waiting goroutine via pending map.
+// When stdin closes (Chrome disconnected), it closes the done channel.
 func chromeReader(done chan struct{}) {
 	stdin := bufio.NewReader(os.Stdin)
 	for {
@@ -473,6 +167,7 @@ func chromeReader(done chan struct{}) {
 		pendingMu.Unlock()
 
 		if ok {
+			// Non-blocking send — the receiver might have timed out
 			select {
 			case ch <- msg:
 			default:
@@ -484,8 +179,9 @@ func chromeReader(done chan struct{}) {
 	}
 }
 
-// ─── Klawed Connection Handler ───────────────────────────────────────────────
-
+// handleKlawedConn handles one klawed client connection on the Unix socket.
+// It reads newline-delimited JSON commands, forwards each to Chrome,
+// waits for a response, and writes back the JSON response + newline.
 func handleKlawedConn(conn net.Conn) {
 	defer conn.Close()
 	logger.Printf("klawed client connected")
@@ -513,32 +209,6 @@ func handleKlawedConn(conn net.Conn) {
 			continue
 		}
 
-		// ── Agent session routing ──────────────────────────────────────────
-		agentMsg := ""
-		if req.AgentID != "" && isTabAwareCommand(req.Command) {
-			tabID, msg, err := getOrCreateAgentTab(req.AgentID, req.NewSession)
-			if err != nil {
-				logger.Printf("error creating agent tab: %v", err)
-				resp := Message{Error: fmt.Sprintf("agent session error: %v", err)}
-				writeJSONLine(conn, resp)
-				continue
-			}
-			agentMsg = msg
-
-			newParams, err := injectTabIDIntoParams(req.Params, tabID)
-			if err != nil {
-				logger.Printf("error injecting tabId: %v", err)
-				resp := Message{Error: fmt.Sprintf("param error: %v", err)}
-				writeJSONLine(conn, resp)
-				continue
-			}
-			req.Params = newParams
-			logger.Printf("agent %s → tab %d, command %s", req.AgentID, tabID, req.Command)
-		} else if req.AgentID != "" {
-			// Shared command — just touch the session timestamp
-			touchAgentSession(req.AgentID)
-		}
-
 		// Assign a unique ID for this request
 		req.ID = generateID()
 		ch := make(chan Message, 1)
@@ -547,18 +217,13 @@ func handleKlawedConn(conn net.Conn) {
 		pending[req.ID] = ch
 		pendingMu.Unlock()
 
-		// Forward command to Chrome extension (strip agentId before sending)
-		chromeMsg := Message{
-			ID:      req.ID,
-			Command: req.Command,
-			Params:  req.Params,
-		}
-		if err := sendToChrome(chromeMsg); err != nil {
+		// Forward command to Chrome extension
+		if err := sendToChrome(req); err != nil {
 			logger.Printf("error sending to Chrome: %v", err)
 			pendingMu.Lock()
 			delete(pending, req.ID)
 			pendingMu.Unlock()
-			resp := Message{Error: fmt.Sprintf("failed to send to Chrome: %v", err)}
+			resp := Message{ID: req.ID, Error: fmt.Sprintf("failed to send to Chrome: %v", err)}
 			writeJSONLine(conn, resp)
 			continue
 		}
@@ -572,28 +237,8 @@ func handleKlawedConn(conn net.Conn) {
 			pendingMu.Lock()
 			delete(pending, req.ID)
 			pendingMu.Unlock()
-			resp = Message{Error: "timeout waiting for Chrome response (30s)"}
+			resp = Message{ID: req.ID, Error: "timeout waiting for Chrome response (30s)"}
 			logger.Printf("timeout waiting for Chrome response for id %s", req.ID)
-		}
-
-		// Add agent info to response
-		if agentMsg != "" {
-			respData, _ := json.Marshal(resp)
-			var respMap map[string]any
-			json.Unmarshal(respData, &respMap)
-			if respMap == nil {
-				respMap = make(map[string]any)
-			}
-			respMap["agentMessage"] = agentMsg
-			if req.AgentID != "" && isTabAwareCommand(req.Command) {
-				agentSessionsMu.Lock()
-				if sess, exists := agentSessions[req.AgentID]; exists {
-					respMap["agentTab"] = sess.tabID
-				}
-				agentSessionsMu.Unlock()
-			}
-			respData, _ = json.Marshal(respMap)
-			json.Unmarshal(respData, &resp)
 		}
 
 		if err := writeJSONLine(conn, resp); err != nil {
@@ -608,6 +253,7 @@ func handleKlawedConn(conn net.Conn) {
 	logger.Printf("klawed client disconnected")
 }
 
+// writeJSONLine marshals msg to JSON and writes it followed by a newline.
 func writeJSONLine(w io.Writer, msg Message) error {
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -618,17 +264,16 @@ func writeJSONLine(w io.Writer, msg Message) error {
 	return err
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
-
 func main() {
 	initLogger()
-	logger.Printf("starting (pid=%d) with multi-agent support", os.Getpid())
+	logger.Printf("starting (pid=%d)", os.Getpid())
 
 	socketPath := os.Getenv("KLAWED_BROWSER_SOCKET")
 	if socketPath == "" {
 		socketPath = defaultSocketPath
 	}
 
+	// Remove any stale socket file from a previous run
 	os.Remove(socketPath)
 
 	ln, err := net.Listen("unix", socketPath)
@@ -643,15 +288,15 @@ func main() {
 
 	logger.Printf("listening for klawed on Unix socket: %s", socketPath)
 
+	// Handle OS signals for graceful shutdown
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
+	// Start reading from Chrome native messaging
 	chromeDone := make(chan struct{})
 	go chromeReader(chromeDone)
 
-	// Start stale session cleanup goroutine
-	go cleanupStaleSessions()
-
+	// Accept klawed connections in a goroutine
 	acceptDone := make(chan struct{})
 	go func() {
 		defer close(acceptDone)
@@ -670,6 +315,7 @@ func main() {
 		}
 	}()
 
+	// Block until shutdown is triggered
 	select {
 	case sig := <-sigCh:
 		logger.Printf("received signal %v, shutting down", sig)
