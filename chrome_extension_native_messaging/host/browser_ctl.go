@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-const version = "2.2.1"
+const version = "2.3.0"
 
 const helpText = `Klawed Browser Controller
 
@@ -36,12 +36,20 @@ the browser. It bypasses CSP everywhere and gives you full JS power.
 Structured commands are convenience wrappers — code is king.
 
 QUICK START
-  browser_ctl eval "document.title"
-  browser_ctl eval "document.querySelector('#submit').click()"
-  browser_ctl eval "window.scrollTo(0, 500)"
-  browser_ctl navigate https://example.com
-  browser_ctl screenshot
-  browser_ctl ping
+  # First, create a window for your agent:
+  browser_ctl new-window https://example.com
+  # => {"windowId": 123}
+
+  # Use that window for all subsequent commands:
+  browser_ctl -window-id 123 eval "document.title"
+  browser_ctl -window-id 123 eval "document.querySelector('#submit').click()"
+  browser_ctl -window-id 123 eval "window.scrollTo(0, 500)"
+  browser_ctl -window-id 123 navigate https://github.com
+  browser_ctl -window-id 123 screenshot
+  browser_ctl -window-id 123 ping
+
+  # When done:
+  browser_ctl close-window 123
 
 COMMANDS — Primary (code is king)
   eval <javascript>
@@ -53,20 +61,32 @@ COMMANDS — Primary (code is king)
       shows a "debugging this browser" warning bar — this is normal
       and auto-detaches on navigation.
       Examples:
-        browser_ctl eval "document.title"
-        browser_ctl eval "document.querySelector('.btn').click()"
-        browser_ctl eval "el=document.querySelector('#q'); el.value='hi'; el.dispatchEvent(new Event('input'))"
-        browser_ctl eval "window.scrollTo(0, document.body.scrollHeight)"
-        browser_ctl eval "new Promise(r => setTimeout(r, 2000))"
-        browser_ctl eval "JSON.stringify([...document.querySelectorAll('a')].map(a=>({href:a.href,text:a.innerText})))"
+        browser_ctl -window-id 5 eval "document.title"
+        browser_ctl -window-id 5 eval "document.querySelector('.btn').click()"
+        browser_ctl -window-id 5 eval "el=document.querySelector('#q'); el.value='hi'; el.dispatchEvent(new Event('input'))"
+        browser_ctl -window-id 5 eval "window.scrollTo(0, document.body.scrollHeight)"
+        browser_ctl -window-id 5 eval "new Promise(r => setTimeout(r, 2000))"
+        browser_ctl -window-id 5 eval "JSON.stringify([...document.querySelectorAll('a')].map(a=>({href:a.href,text:a.innerText})))"
+
+COMMANDS — Windows (multi-agent isolation)
+  new-window [url]
+      Create a new Chrome window, optionally navigating to [url].
+      Returns the windowId for use with --window-id.
+
+  close-window <windowId>
+      Close a Chrome window and all its tabs.
+
+  list-windows
+      List all open Chrome windows with their IDs and tab counts.
 
 COMMANDS — Navigation & Tabs
   navigate <url>
       Navigate the active tab to <url>.
-      Example: browser_ctl navigate https://github.com
+      When --window-id is set, targets the active tab in that window.
+      Example: browser_ctl -window-id 3 navigate https://github.com
 
   new-tab [url]
-      Open a new tab. Optionally navigate to [url].
+      Open a new tab in the current (or specified) window.
 
   switch-tab <tabId>
       Focus the tab with the given ID.
@@ -147,12 +167,15 @@ COMMANDS — Capture & Debug
       Show host metadata and supported commands.
 
 FLAGS
-  -socket string   Unix socket path (default: /tmp/klawed-browser.sock)
-  -json            Print raw JSON response
-  -timeout int     Timeout in seconds (default: 35)
-  --ready          Readiness check — dials socket then pings extension, exits 0 if both pass
-  -help            Show this help text
-  -version         Show version
+  -socket string      Unix socket path (default: /tmp/klawed-browser.sock)
+  -window-id int      Chrome window ID to scope all commands to (REQUIRED for multi-agent use).
+                      When set, all commands target this window's active tab instead of the
+                      global active tab. Each agent should own one window.
+  -json               Print raw JSON response
+  -timeout int        Timeout in seconds (default: 35)
+  --ready             Readiness check — dials socket then pings extension, exits 0 if both pass
+  -help               Show this help text
+  -version            Show version
 
 LEGACY MODE
   If the first argument starts with '{' it is treated as raw JSON:
@@ -175,6 +198,7 @@ var (
 	socketPath string
 	jsonMode   bool
 	timeoutSec int
+	windowId   int = -1 // -1 means not set; when >= 0, scopes all commands to this Chrome window
 )
 
 func readyCheck() {
@@ -236,6 +260,7 @@ func main() {
 	flag.StringVar(&socketPath, "socket", defaultSocket(), "Unix socket path")
 	flag.BoolVar(&jsonMode, "json", false, "Print raw JSON response")
 	flag.IntVar(&timeoutSec, "timeout", 35, "Timeout in seconds")
+	flag.IntVar(&windowId, "window-id", -1, "Chrome window ID (required for multi-agent use)")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, helpText) }
 	flag.Parse()
 
@@ -509,6 +534,30 @@ func buildPayload(args []string) string {
 				params["filePaths"] = args[2:]
 			}
 		}
+	case "new-window":
+		if len(args) > 1 {
+			params["url"] = args[1]
+		}
+	case "close-window":
+		if len(args) > 1 {
+			if id, err := strconv.Atoi(args[1]); err == nil {
+				params["windowId"] = id
+			}
+		}
+	case "list-windows":
+		// no params needed
+	}
+
+	// Inject windowId into params for all commands when --window-id is set,
+	// unless the command already has a windowId set (e.g., close-window),
+	// or is a window-management command that targets its own windowId.
+	if windowId >= 0 {
+		if _, exists := params["windowId"]; !exists {
+			// Skip injection for commands that manage windows themselves
+			if cmd != "new-window" && cmd != "list-windows" {
+				params["windowId"] = windowId
+			}
+		}
 	}
 
 	// Map CLI names to camelCase extension commands
@@ -533,6 +582,9 @@ func buildPayload(args []string) string {
 		"wait-for-element":  "waitForElement",
 		"upload-file":       "uploadFile",
 		"get-info":          "getInfo",
+		"new-window":        "newWindow",
+		"close-window":      "closeWindow",
+		"list-windows":      "listWindows",
 	}
 	if mapped, ok := commandMap[cmd]; ok {
 		cmd = mapped

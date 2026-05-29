@@ -133,8 +133,7 @@ async function executeCommand(command, params) {
   switch (command) {
     // ── Navigation ──────────────────────────────────────────────────────────
     case 'navigate': {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab) throw new Error('No active tab');
+      const tab = await getActiveTab(params.windowId);
       const originalUrl = tab.url;
       await chrome.tabs.update(tab.id, { url: params.url });
       // Wait for the page to load
@@ -167,27 +166,61 @@ async function executeCommand(command, params) {
     }
 
     case 'goBack': {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const tab = await getActiveTab(params.windowId);
       await chrome.tabs.goBack(tab.id);
       return { success: true };
     }
 
     case 'goForward': {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const tab = await getActiveTab(params.windowId);
       await chrome.tabs.goForward(tab.id);
       return { success: true };
     }
 
     case 'reload': {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const tab = await getActiveTab(params.windowId);
       await chrome.tabs.reload(tab.id);
       await waitForTabLoad(tab.id);
       return { success: true };
     }
 
+    // ── Window Management ────────────────────────────────────────────────────
+    case 'newWindow': {
+      const createParams = { url: params.url || 'about:blank' };
+      if (params.incognito) createParams.incognito = true;
+      if (params.focused !== false) createParams.focused = true;
+      const win = await chrome.windows.create(createParams);
+      // Wait for the tab to load if a URL was given
+      if (params.url && win.tabs && win.tabs[0]) {
+        await waitForTabLoad(win.tabs[0].id);
+      }
+      return { windowId: win.id, focused: win.focused, tabCount: win.tabs?.length || 1 };
+    }
+
+    case 'closeWindow': {
+      await chrome.windows.remove(params.windowId);
+      return { success: true };
+    }
+
+    case 'listWindows': {
+      const windows = await chrome.windows.getAll({ populate: true });
+      return {
+        windows: windows.map(w => ({
+          id: w.id,
+          focused: w.focused,
+          incognito: w.incognito,
+          tabCount: w.tabs?.length || 0,
+          tabs: (w.tabs || []).map(t => ({
+            id: t.id, url: t.url, title: t.title, active: t.active,
+          })),
+        })),
+      };
+    }
+
     // ── Tab Management ───────────────────────────────────────────────────────
     case 'listTabs': {
-      const tabs = await chrome.tabs.query({});
+      const query = (params.windowId != null) ? { windowId: params.windowId } : {};
+      const tabs = await chrome.tabs.query(query);
       return {
         tabs: tabs.map(t => ({
           id: t.id, url: t.url, title: t.title, active: t.active,
@@ -197,15 +230,20 @@ async function executeCommand(command, params) {
     }
 
     case 'getActiveTab': {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab) throw new Error('No active tab');
-      return { id: tab.id, url: tab.url, title: tab.title };
+      const query = (params.windowId != null)
+        ? { active: true, windowId: params.windowId }
+        : { active: true, currentWindow: true };
+      const [tab] = await chrome.tabs.query(query);
+      if (!tab) throw new Error(params.windowId ? `No active tab in window ${params.windowId}` : 'No active tab');
+      return { id: tab.id, url: tab.url, title: tab.title, windowId: tab.windowId };
     }
 
     case 'newTab': {
-      const tab = await chrome.tabs.create({ url: params.url || 'about:blank' });
+      const createParams = { url: params.url || 'about:blank' };
+      if (params.windowId != null) createParams.windowId = params.windowId;
+      const tab = await chrome.tabs.create(createParams);
       if (params.url) await waitForTabLoad(tab.id);
-      return { tabId: tab.id, url: tab.url };
+      return { tabId: tab.id, url: tab.url, windowId: tab.windowId };
     }
 
     case 'closeTab': {
@@ -220,7 +258,7 @@ async function executeCommand(command, params) {
 
     // ── Page Info ────────────────────────────────────────────────────────────
     case 'getPageInfo': {
-      const result = await execInActiveTab(() => ({
+      const result = await execInWindowTab(params.windowId, () => ({
         url: window.location.href,
         title: document.title,
         readyState: document.readyState,
@@ -233,7 +271,7 @@ async function executeCommand(command, params) {
     }
 
     case 'getPageSource': {
-      const result = await execInActiveTab(() => {
+      const result = await execInWindowTab(params.windowId, () => {
         const clone = document.documentElement.cloneNode(true);
         // Strip noise that LLMs don't need
         clone.querySelectorAll('script, style, noscript, svg, link[rel="stylesheet"]').forEach(el => el.remove());
@@ -245,7 +283,7 @@ async function executeCommand(command, params) {
     }
 
     case 'getReadableText': {
-      const result = await execInActiveTab(() => {
+      const result = await execInWindowTab(params.windowId, () => {
         const clone = document.documentElement.cloneNode(true);
         clone.querySelectorAll('script, style, noscript').forEach(el => el.remove());
         // Collapse excessive whitespace
@@ -258,7 +296,7 @@ async function executeCommand(command, params) {
 
     // ── DOM Interaction ──────────────────────────────────────────────────────
     case 'click': {
-      const result = await execInActiveTab((selector) => {
+      const result = await execInWindowTab(params.windowId, (selector) => {
         const el = document.querySelector(selector);
         if (!el) return { success: false, error: 'Element not found: ' + selector };
         el.click();
@@ -271,7 +309,7 @@ async function executeCommand(command, params) {
       // Human-like typing: types character-by-character with randomized
       // delays (50–200ms per char, avg ~125ms = ~480 CPM) to avoid bot
       // detection. Most sites flag instantaneous form fills as automated.
-      const result = await execInActiveTab(async (selector, text, clearFirst) => {
+      const result = await execInWindowTab(params.windowId, async (selector, text, clearFirst) => {
         const el = document.querySelector(selector);
         if (!el) return { success: false, error: 'Element not found: ' + selector };
         el.focus();
@@ -296,7 +334,7 @@ async function executeCommand(command, params) {
     }
 
     case 'getText': {
-      const result = await execInActiveTab((selector) => {
+      const result = await execInWindowTab(params.windowId, (selector) => {
         const el = selector ? document.querySelector(selector) : document.body;
         return el ? el.innerText : null;
       }, [params.selector || null]);
@@ -306,7 +344,7 @@ async function executeCommand(command, params) {
     }
 
     case 'getHtml': {
-      const result = await execInActiveTab((selector) => {
+      const result = await execInWindowTab(params.windowId, (selector) => {
         const el = selector ? document.querySelector(selector) : document.body;
         return el ? el.innerHTML : null;
       }, [params.selector || null]);
@@ -314,7 +352,7 @@ async function executeCommand(command, params) {
     }
 
     case 'getAttribute': {
-      const result = await execInActiveTab((selector, attr) => {
+      const result = await execInWindowTab(params.windowId, (selector, attr) => {
         const el = document.querySelector(selector);
         return el ? el.getAttribute(attr) : null;
       }, [params.selector, params.attribute]);
@@ -322,7 +360,7 @@ async function executeCommand(command, params) {
     }
 
     case 'scroll': {
-      const result = await execInActiveTab((x, y) => {
+      const result = await execInWindowTab(params.windowId, (x, y) => {
         window.scrollTo(x, y);
         return { scrollX: window.scrollX, scrollY: window.scrollY };
       }, [params.x || 0, params.y || 0]);
@@ -330,7 +368,7 @@ async function executeCommand(command, params) {
     }
 
     case 'scrollBy': {
-      const result = await execInActiveTab((dx, dy) => {
+      const result = await execInWindowTab(params.windowId, (dx, dy) => {
         window.scrollBy(dx, dy);
         return { scrollX: window.scrollX, scrollY: window.scrollY };
       }, [params.dx || 0, params.dy || 0]);
@@ -338,7 +376,7 @@ async function executeCommand(command, params) {
     }
 
     case 'scrollToElement': {
-      const result = await execInActiveTab((selector) => {
+      const result = await execInWindowTab(params.windowId, (selector) => {
         const el = document.querySelector(selector);
         if (!el) return { success: false, error: 'Element not found: ' + selector };
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -352,8 +390,7 @@ async function executeCommand(command, params) {
       // This enables arbitrary JS execution on any page, including SPAs with
       // strict Content-Security-Policy headers. The tradeoff: Chrome shows a
       // "debugging this browser" warning bar while the debugger is attached.
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab) throw new Error('No active tab');
+      const tab = await getActiveTab(params.windowId);
 
       // Attach debugger (swallows "already attached" so repeated evaluate
       // calls are fast — the debugger stays attached across calls and is
@@ -398,7 +435,7 @@ async function executeCommand(command, params) {
     }
 
     case 'waitForElement': {
-      const result = await execInActiveTab((selector, timeout) => {
+      const result = await execInWindowTab(params.windowId, (selector, timeout) => {
         return new Promise((resolve) => {
           const el = document.querySelector(selector);
           if (el) { resolve({ found: true, selector }); return; }
@@ -421,7 +458,7 @@ async function executeCommand(command, params) {
     }
 
     case 'findElements': {
-      const result = await execInActiveTab((selector, limit) => {
+      const result = await execInWindowTab(params.windowId, (selector, limit) => {
         const els = document.querySelectorAll(selector);
         return Array.from(els).slice(0, limit).map((el, idx) => {
           const rect = el.getBoundingClientRect();
@@ -440,7 +477,7 @@ async function executeCommand(command, params) {
     }
 
     case 'getLinks': {
-      const result = await execInActiveTab((limit) => {
+      const result = await execInWindowTab(params.windowId, (limit) => {
         const seen = new Set();
         return Array.from(document.links)
           .filter(l => { if (seen.has(l.href)) return false; seen.add(l.href); return true; })
@@ -452,7 +489,7 @@ async function executeCommand(command, params) {
     }
 
     case 'getForms': {
-      const result = await execInActiveTab(() =>
+      const result = await execInWindowTab(params.windowId, () =>
         Array.from(document.forms).map((form, idx) => ({
           index: idx,
           id: form.id || null,
@@ -472,8 +509,7 @@ async function executeCommand(command, params) {
       // Use CDP DOM.setFileInputFiles — the only programmatic way to
       // set files on <input type="file"> elements (browser security
       // prevents content scripts and page JS from doing this).
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab) throw new Error('No active tab');
+      const tab = await getActiveTab(params.windowId);
 
       // Attach debugger (reuses existing attachment if already attached via evaluate)
       try {
@@ -514,7 +550,7 @@ async function executeCommand(command, params) {
     }
 
     case 'fillForm': {
-      const result = await execInActiveTab((data) => {
+      const result = await execInWindowTab(params.windowId, (data) => {
         const results = [];
         for (const [selector, value] of Object.entries(data)) {
           const el = document.querySelector(selector);
@@ -535,7 +571,7 @@ async function executeCommand(command, params) {
     }
 
     case 'submitForm': {
-      const result = await execInActiveTab((selector) => {
+      const result = await execInWindowTab(params.windowId, (selector) => {
         const form = selector ? document.querySelector(selector) : document.querySelector('form');
         if (form) { form.submit(); return { success: true }; }
         return { success: false, error: 'Form not found' };
@@ -544,7 +580,7 @@ async function executeCommand(command, params) {
     }
 
     case 'pressKey': {
-      const result = await execInActiveTab((selector, key) => {
+      const result = await execInWindowTab(params.windowId, (selector, key) => {
         const el = selector ? document.querySelector(selector) : document.activeElement;
         if (!el) return { success: false, error: 'Element not found' };
         el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
@@ -557,9 +593,15 @@ async function executeCommand(command, params) {
 
     // ── Screenshot ───────────────────────────────────────────────────────────
     case 'screenshot': {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab) throw new Error('No active tab');
-      const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+      let captureWindowId;
+      if (params.windowId != null) {
+        captureWindowId = params.windowId;
+      } else {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab) throw new Error('No active tab');
+        captureWindowId = tab.windowId;
+      }
+      const dataUrl = await chrome.tabs.captureVisibleTab(captureWindowId, { format: 'png' });
       return { dataUrl, format: 'png' };
     }
 
@@ -570,9 +612,10 @@ async function executeCommand(command, params) {
     case 'getInfo':
       return {
         name: 'Klawed Browser Controller',
-        version: '2.2.1',
+        version: '2.3.0',
         hostType: 'go',
         commands: [
+          'newWindow', 'closeWindow', 'listWindows',
           'navigate', 'navigateTab', 'goBack', 'goForward', 'reload',
           'listTabs', 'getActiveTab', 'newTab', 'closeTab', 'switchTab',
           'getPageInfo', 'getPageSource', 'getReadableText',
@@ -591,11 +634,26 @@ async function executeCommand(command, params) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// Shorthand for chrome.scripting.executeScript on the active tab
-async function execInActiveTab(func, args = []) {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) throw new Error('No active tab');
+// Get the active tab, optionally scoped to a specific window.
+// When windowId is undefined/null, falls back to currentWindow.
+async function getActiveTab(windowId) {
+  const query = (windowId != null)
+    ? { active: true, windowId }
+    : { active: true, currentWindow: true };
+  const [tab] = await chrome.tabs.query(query);
+  if (!tab) throw new Error(windowId ? `No active tab in window ${windowId}` : 'No active tab');
+  return tab;
+}
+
+// Execute script in the active tab of a specific window (or current window if no windowId).
+async function execInWindowTab(windowId, func, args = []) {
+  const tab = await getActiveTab(windowId);
   return chrome.scripting.executeScript({ target: { tabId: tab.id }, func, args });
+}
+
+// Shorthand for chrome.scripting.executeScript on the active tab (legacy backward-compat).
+async function execInActiveTab(func, args = []) {
+  return execInWindowTab(null, func, args);
 }
 
 // Wait for a tab to finish loading (up to 15 seconds)
