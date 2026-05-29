@@ -570,7 +570,7 @@ async function executeCommand(command, params) {
     case 'getInfo':
       return {
         name: 'Klawed Browser Controller',
-        version: '2.2.0',
+        version: '2.2.1',
         hostType: 'go',
         commands: [
           'navigate', 'navigateTab', 'goBack', 'goForward', 'reload',
