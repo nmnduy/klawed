@@ -96,7 +96,8 @@ COMMANDS — DOM Interaction (convenience wrappers)
       Click an element. Example: browser_ctl click "button[type=submit]"
 
   type <selector> <text>
-      Type text into an input.
+      Type text into an input with human-like speed (randomized 50-200ms
+      delays between characters) to avoid bot detection.
       Example: browser_ctl type "#search" "klawed"
 
   press-key [selector] <key>

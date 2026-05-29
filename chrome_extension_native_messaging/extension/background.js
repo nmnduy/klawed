@@ -268,13 +268,27 @@ async function executeCommand(command, params) {
     }
 
     case 'type': {
-      const result = await execInActiveTab((selector, text, clearFirst) => {
+      // Human-like typing: types character-by-character with randomized
+      // delays (50–200ms per char, avg ~125ms = ~480 CPM) to avoid bot
+      // detection. Most sites flag instantaneous form fills as automated.
+      const result = await execInActiveTab(async (selector, text, clearFirst) => {
         const el = document.querySelector(selector);
         if (!el) return { success: false, error: 'Element not found: ' + selector };
         el.focus();
-        if (clearFirst) el.value = '';
-        el.value = text;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+        if (clearFirst) {
+          el.value = '';
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        for (const char of text) {
+          el.value += char;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          // Random delay 50–200ms, averaging ~125ms (~480 CPM).
+          // Slower for whitespace (humans pause between words).
+          const delayMs = char === ' '
+            ? 80 + Math.random() * 200
+            : 50 + Math.random() * 150;
+          await new Promise(r => setTimeout(r, delayMs));
+        }
         el.dispatchEvent(new Event('change', { bubbles: true }));
         return { success: true, selector, textLength: text.length };
       }, [params.selector, params.text, params.clearFirst !== false]);
