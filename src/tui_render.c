@@ -1166,6 +1166,13 @@ static void render_md_segment(TUIState *tui, const char *segment, size_t len,
         wattroff(pad, A_DIM);
     }
 
+    // Balance lp_border's wattron(COLOR_PAIR(text_pair)) so the ncurses
+    // attribute stack doesn't leak — overflow would cause lp_newline's
+    // background-fill wattron to fail silently.
+    if (has_colors()) {
+        wattroff(pad, COLOR_PAIR(text_pair));
+    }
+
     if (add_newline) {
         lp_newline(&lp);
     }
@@ -1183,9 +1190,7 @@ static void render_md_header_segment(TUIState *tui, const char *segment, size_t 
     lp_init(&lp, pad, border_str, border_pair, text_pair, pad_width);
     lp_border(&lp);
 
-    if (has_colors()) {
-        wattron(pad, COLOR_PAIR(text_pair));
-    }
+    // lp_border already enabled COLOR_PAIR(text_pair) — no redundant wattron needed.
     wattron(pad, A_BOLD);
 
     if (search_active) {
