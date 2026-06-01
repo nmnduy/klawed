@@ -30,7 +30,55 @@ async function connectNativeHost() {
       // Command FROM the host (klawed → host → extension): execute it
       if (message.command && message.id) {
         try {
+          // Enforce windowId for all commands except window-agnostic system commands.
+          // This eliminates any chance of multi-agent collision — every agent must
+          // explicitly declare which window it's operating on.
+          const windowAgnostic = new Set(['newWindow', 'closeWindow', 'listWindows', 'ping', 'getInfo']);
+          if (!windowAgnostic.has(message.command)) {
+            const params = message.params || {};
+            if (params.windowId == null) {
+              throw new Error(
+                `windowId is REQUIRED for '${message.command}'. ` +
+                `Commands that target a page/DOM/tab MUST specify a Chrome window ID ` +
+                `to prevent multi-agent collisions. Obtain a windowId from newWindow first.`
+              );
+            }
+          }
+
+          // For page-interacting commands, enable dialog monitoring on the
+          // target tab so alerts/confirms/prompts are auto-dismissed and reported.
+          // System commands (ping, getInfo, newWindow, listWindows, listTabs, etc.) are excluded.
+          const pageCommands = new Set([
+            'navigate', 'navigateTab', 'goBack', 'goForward', 'reload',
+            'getPageInfo', 'getPageSource', 'getReadableText',
+            'click', 'type', 'getText', 'getHtml', 'getAttribute',
+            'scroll', 'scrollBy', 'scrollToElement', 'evaluate',
+            'waitForElement', 'findElements', 'getLinks', 'getForms',
+            'fillForm', 'submitForm', 'pressKey', 'uploadFile', 'cdpSend',
+            'screenshot',
+          ]);
+          let targetTab = null;
+          if (pageCommands.has(message.command)) {
+            try {
+              targetTab = await getActiveTab(
+                message.params?.windowId != null ? message.params.windowId : undefined
+              );
+              await ensureDialogMonitoring(targetTab.id).catch(() => {});
+            } catch (e) {
+              // No active tab is OK (e.g., first command after browser launch)
+            }
+          }
+
           const result = await executeCommand(message.command, message.params || {});
+
+          // Attach any alerts that fired during (or since) the last command on this tab
+          if (targetTab) {
+            const alerts = drainAlerts(targetTab.id);
+            if (alerts.length > 0) {
+              result._alerts = alerts;
+            }
+          }
+
           nativePort.postMessage({ id: message.id, result });
         } catch (err) {
           nativePort.postMessage({ id: message.id, error: err.message });
@@ -143,7 +191,7 @@ async function executeCommand(command, params) {
       if (updatedTab.url === originalUrl && originalUrl !== params.url) {
         return {
           success: false,
-          error: `Navigation to "${params.url}" was blocked. The page likely displayed a confirmation dialog (e.g. "Are you sure you want to leave this page?"). The tab is still at "${originalUrl}". There is no programmatic way to dismiss this dialog — you must interact with the browser manually or use a different approach.`,
+          error: `Navigation to "${params.url}" was blocked. The page likely displayed a confirmation dialog (e.g. "Are you sure you want to leave this page?"). The tab is still at "${originalUrl}". The dialog was auto-dismissed; check _alerts on this response for details. If navigation still failed, you may need to interact with the browser manually or use evaluate() to clear the form before navigating.`,
         };
       }
       return { success: true, url: updatedTab.url };
@@ -159,7 +207,7 @@ async function executeCommand(command, params) {
       if (updatedTab.url === originalUrl && originalUrl !== params.url) {
         return {
           success: false,
-          error: `Navigation to "${params.url}" was blocked. The page likely displayed a confirmation dialog (e.g. "Are you sure you want to leave this page?"). The tab is still at "${originalUrl}". There is no programmatic way to dismiss this dialog — you must interact with the browser manually or use a different approach.`,
+          error: `Navigation to "${params.url}" was blocked. The page likely displayed a confirmation dialog (e.g. "Are you sure you want to leave this page?"). The tab is still at "${originalUrl}". The dialog was auto-dismissed; check _alerts on this response for details. If navigation still failed, you may need to clear the form before navigating.`,
         };
       }
       return { success: true, tabId, url: updatedTab.url };
@@ -434,6 +482,31 @@ async function executeCommand(command, params) {
       // The tradeoff is the persistent debugger warning bar in Chrome.
     }
 
+    case 'cdpSend': {
+      // Send an arbitrary CDP command via chrome.debugger.sendCommand.
+      // This enables Input.dispatchKeyEvent (real keystrokes with isTrusted:true),
+      // DOM manipulation, network interception, and any other CDP method.
+      // Uses the same debugger attachment as evaluate.
+      const tab = await getActiveTab(params.windowId);
+      try {
+        await chrome.debugger.attach({ tabId: tab.id }, '1.3');
+      } catch (e) {
+        if (!e.message.includes('already attached')) {
+          throw new Error(`Cannot attach debugger: ${e.message}. Close DevTools or other debuggers on this tab.`);
+        }
+      }
+      try {
+        const result = await chrome.debugger.sendCommand(
+          { tabId: tab.id },
+          params.method,
+          params.cdpParams || {}
+        );
+        return { result };
+      } catch (e) {
+        return { error: e.message };
+      }
+    }
+
     case 'waitForElement': {
       const result = await execInWindowTab(params.windowId, (selector, timeout) => {
         return new Promise((resolve) => {
@@ -612,7 +685,7 @@ async function executeCommand(command, params) {
     case 'getInfo':
       return {
         name: 'Klawed Browser Controller',
-        version: '2.3.0',
+        version: '2.4.0',
         hostType: 'go',
         commands: [
           'newWindow', 'closeWindow', 'listWindows',
@@ -623,7 +696,7 @@ async function executeCommand(command, params) {
           'scroll', 'scrollBy', 'scrollToElement', 'evaluate',
           'waitForElement', 'findElements', 'getLinks', 'getForms',
           'fillForm', 'submitForm', 'pressKey', 'uploadFile',
-          'screenshot', 'ping', 'getInfo',
+          'screenshot', 'ping', 'getInfo', 'cdpSend',
         ],
       };
 
@@ -687,9 +760,82 @@ async function detachDebuggerFromAll() {
 // Log debugger detach events (e.g., user pressed Esc or clicked stop on the bar)
 chrome.debugger.onDetach.addListener((source, reason) => {
   console.log('Debugger detached from tab', source.tabId, 'reason:', reason);
+  dialogTabs.delete(source.tabId);
+  tabAlerts.delete(source.tabId);
   // We don't need to clean up state since we attach on-demand; the next
   // evaluate call will simply re-attach if needed.
 });
+
+// ─── Alert / Dialog Monitoring ──────────────────────────────────────────────
+//
+// Browser dialogs (alert, confirm, prompt, beforeunload) block script
+// execution on the tab. Without detection, commands silently hang and
+// agents have no idea why. We use CDP to listen for Page.javascriptDialogOpening
+// events, auto-dismiss dialogs, and report them on the next command.
+//
+// tabAlerts:  Map<tabId, Array<{type, message, url, timestamp}>>
+//   Queued alerts waiting to be reported to the agent.
+// dialogTabs: Set<tabId>
+//   Tabs where debugger + dialog listener are active.
+
+const tabAlerts = new Map();
+const dialogTabs = new Set();
+
+// Ensure CDP dialog monitoring is active for a tab.
+// Attaches the debugger and enables Page domain for dialog events.
+// Safe to call repeatedly — no-ops if already attached.
+async function ensureDialogMonitoring(tabId) {
+  if (dialogTabs.has(tabId)) return;
+  try {
+    await chrome.debugger.attach({ tabId }, '1.3');
+  } catch (e) {
+    // "already attached" is fine — evaluate() may have attached before us
+    if (!e.message || !e.message.includes('already attached')) {
+      console.warn('ensureDialogMonitoring: cannot attach debugger to tab', tabId, e.message);
+      return;
+    }
+  }
+  try {
+    await chrome.debugger.sendCommand({ tabId }, 'Page.enable');
+  } catch (e) {
+    console.warn('ensureDialogMonitoring: Page.enable failed for tab', tabId, e.message);
+  }
+  dialogTabs.add(tabId);
+  console.log('Dialog monitoring active on tab', tabId);
+}
+
+// CDP event listener for JavaScript dialogs.
+// Auto-dismisses every dialog (accept=true) and queues the alert info
+// so the next command response can surface it to the agent.
+function dialogEventListener(source, method, params) {
+  if (method !== 'Page.javascriptDialogOpening') return;
+  const tabId = source.tabId;
+  const alert = {
+    type: params.type || 'alert', // 'alert', 'confirm', 'prompt', 'beforeunload'
+    message: params.message || '',
+    url: params.url || '',
+    timestamp: Date.now(),
+  };
+  console.log('Dialog detected on tab', tabId, alert);
+  // Store alert for later reporting
+  if (!tabAlerts.has(tabId)) tabAlerts.set(tabId, []);
+  tabAlerts.get(tabId).push(alert);
+  // Auto-dismiss so the tab is unblocked
+  chrome.debugger.sendCommand({ tabId }, 'Page.handleJavaScriptDialog', {
+    accept: true,
+    promptText: '', // empty string for prompt() defaults
+  }).catch(err => console.warn('Failed to dismiss dialog on tab', tabId, err.message));
+}
+
+// Register the global CDP event listener (fires for all tabs with debugger attached)
+chrome.debugger.onEvent.addListener(dialogEventListener);
+
+// Drain and return all pending alerts for a tab, then clear the queue.
+function drainAlerts(tabId) {
+  const alerts = tabAlerts.get(tabId) || [];
+  tabAlerts.delete(tabId);
+  return alerts;
+}
 
 // ─── Message Listener (from popup / content scripts) ─────────────────────────
 

@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-const version = "2.3.0"
+const version = "2.4.0"
 
 const helpText = `Klawed Browser Controller
 
@@ -40,13 +40,20 @@ QUICK START
   browser_ctl new-window https://example.com
   # => {"windowId": 123}
 
-  # Use that window for all subsequent commands:
+  # windowId is MANDATORY for all page/DOM/tab commands:
   browser_ctl -window-id 123 eval "document.title"
   browser_ctl -window-id 123 eval "document.querySelector('#submit').click()"
   browser_ctl -window-id 123 eval "window.scrollTo(0, 500)"
   browser_ctl -window-id 123 navigate https://github.com
   browser_ctl -window-id 123 screenshot
   browser_ctl -window-id 123 ping
+
+  # Only these commands work without -window-id:
+  browser_ctl new-window https://example.com
+  browser_ctl close-window 123
+  browser_ctl list-windows
+  browser_ctl ping
+  browser_ctl get-info
 
   # When done:
   browser_ctl close-window 123
@@ -168,9 +175,11 @@ COMMANDS — Capture & Debug
 
 FLAGS
   -socket string      Unix socket path (default: /tmp/klawed-browser.sock)
-  -window-id int      Chrome window ID to scope all commands to (REQUIRED for multi-agent use).
-                      When set, all commands target this window's active tab instead of the
-                      global active tab. Each agent should own one window.
+  -window-id int      Chrome window ID to scope all commands to (REQUIRED for all
+                      commands except new-window, close-window, list-windows,
+                      ping, get-info). Each agent MUST own one window. Obtain a
+                      windowId from new-window before running any page/DOM/tab
+                      commands.
   -json               Print raw JSON response
   -timeout int        Timeout in seconds (default: 35)
   --ready             Readiness check — dials socket then pings extension, exits 0 if both pass
@@ -260,7 +269,7 @@ func main() {
 	flag.StringVar(&socketPath, "socket", defaultSocket(), "Unix socket path")
 	flag.BoolVar(&jsonMode, "json", false, "Print raw JSON response")
 	flag.IntVar(&timeoutSec, "timeout", 35, "Timeout in seconds")
-	flag.IntVar(&windowId, "window-id", -1, "Chrome window ID (required for multi-agent use)")
+	flag.IntVar(&windowId, "window-id", -1, "Chrome window ID (REQUIRED for all commands except new-window, close-window, list-windows, ping, get-info)")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, helpText) }
 	flag.Parse()
 
@@ -271,13 +280,33 @@ func main() {
 	}
 
 	var payload string
+	var cmdName string
 	if strings.HasPrefix(args[0], "{") {
 		payload = args[0]
 		if err := validateJSON(payload); err != nil {
 			printErr("invalid JSON: %v", err)
 		}
+		// Inject --window-id into raw JSON payloads so the safety net
+		// works in all modes (structured CLI AND raw JSON from dynamic tools).
+		if windowId >= 0 {
+			payload = injectWindowId(payload, windowId)
+		}
+		// Extract command name from JSON for validation
+		var msg map[string]any
+		if err := json.Unmarshal([]byte(payload), &msg); err == nil {
+			if c, ok := msg["command"].(string); ok {
+				cmdName = c
+			}
+		}
 	} else {
+		cmdName = args[0]
 		payload = buildPayload(args)
+	}
+
+	// Enforce window-id for all commands that target a specific window.
+	// new-window, close-window, list-windows, ping, and get-info are the only exceptions.
+	if commandNeedsWindow(cmdName) && !payloadHasWindowId(payload) {
+		printErr("--window-id is REQUIRED for '%s'. Commands that target a page/dom/tab MUST specify a Chrome window ID to prevent multi-agent collisions. Obtain a windowId from new-window first.", cmdName)
 	}
 
 	resp, err := sendPayload(payload)
@@ -302,6 +331,58 @@ func defaultSocket() string {
 func validateJSON(s string) error {
 	var v any
 	return json.Unmarshal([]byte(s), &v)
+}
+
+// injectWindowId parses a raw JSON payload and ensures params.windowId is set.
+// This provides the --window-id safety net for raw JSON mode (used by dynamic tools).
+// Does NOT override an existing windowId in the params.
+func injectWindowId(rawJSON string, windowId int) string {
+	var msg map[string]any
+	if err := json.Unmarshal([]byte(rawJSON), &msg); err != nil {
+		return rawJSON // Can't parse, return as-is
+	}
+	// Check if params already has a windowId
+	if params, ok := msg["params"].(map[string]any); ok {
+		if _, exists := params["windowId"]; !exists {
+			params["windowId"] = windowId
+		}
+	} else {
+		msg["params"] = map[string]any{"windowId": windowId}
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return rawJSON
+	}
+	return string(b)
+}
+
+// commandNeedsWindow returns true for commands that target a specific
+// window/tab. Only new-window, close-window, list-windows, ping, and
+// get-info are window-agnostic system commands.
+func commandNeedsWindow(cmd string) bool {
+	switch cmd {
+	case "new-window", "newWindow",
+		"close-window", "closeWindow",
+		"list-windows", "listWindows",
+		"ping",
+		"get-info", "getInfo":
+		return false
+	}
+	return true
+}
+
+// payloadHasWindowId parses the JSON payload and checks if params.windowId is set.
+func payloadHasWindowId(payload string) bool {
+	var msg map[string]any
+	if err := json.Unmarshal([]byte(payload), &msg); err != nil {
+		return false
+	}
+	if params, ok := msg["params"].(map[string]any); ok {
+		if _, exists := params["windowId"]; exists {
+			return true
+		}
+	}
+	return false
 }
 
 func printErr(format string, v ...any) {
@@ -546,6 +627,16 @@ func buildPayload(args []string) string {
 		}
 	case "list-windows":
 		// no params needed
+	case "cdp-send":
+		if len(args) > 1 {
+			params["method"] = args[1]
+		}
+		if len(args) > 2 {
+			var cdpParams map[string]any
+			if err := json.Unmarshal([]byte(strings.Join(args[2:], " ")), &cdpParams); err == nil {
+				params["cdpParams"] = cdpParams
+			}
+		}
 	}
 
 	// Inject windowId into params for all commands when --window-id is set,
@@ -585,6 +676,7 @@ func buildPayload(args []string) string {
 		"new-window":        "newWindow",
 		"close-window":      "closeWindow",
 		"list-windows":      "listWindows",
+		"cdp-send":          "cdpSend",
 	}
 	if mapped, ok := commandMap[cmd]; ok {
 		cmd = mapped
