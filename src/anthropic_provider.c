@@ -72,6 +72,75 @@ static char* arena_strdup(Arena *arena, const char *str) {
 // Anthropic Request/Response Conversion
 // ============================================================================
 
+/**
+ * Convert an OpenAI image_url content block to Anthropic native image format.
+ *
+ * OpenAI format:  { type: "image_url", image_url: { url: "data:image/jpeg;base64,..." } }
+ * Anthropic format: { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "..." } }
+ *
+ * Returns a new cJSON object in Anthropic format, or NULL if the block is not
+ * an image_url or the data URL cannot be parsed.
+ */
+static cJSON* convert_image_url_to_anthropic_block(cJSON *image_url_block) {
+    if (!image_url_block) return NULL;
+
+    cJSON *type = cJSON_GetObjectItem(image_url_block, "type");
+    if (!type || !cJSON_IsString(type) || strcmp(type->valuestring, "image_url") != 0) {
+        return NULL;
+    }
+
+    cJSON *image_url = cJSON_GetObjectItem(image_url_block, "image_url");
+    if (!image_url) return NULL;
+
+    cJSON *url = cJSON_GetObjectItem(image_url, "url");
+    if (!url || !cJSON_IsString(url)) return NULL;
+
+    const char *url_str = url->valuestring;
+
+    /* Parse data URL: "data:image/jpeg;base64,<base64_data>" */
+    if (strncmp(url_str, "data:", 5) != 0) {
+        LOG_WARN("Image URL is not a data URL, skipping conversion: %.50s...", url_str);
+        return NULL;
+    }
+
+    const char *media_start = url_str + 5;  /* Skip "data:" */
+    const char *semicolon = strchr(media_start, ';');
+    if (!semicolon) {
+        LOG_WARN("Invalid data URL format (no semicolon): %.50s...", url_str);
+        return NULL;
+    }
+
+    /* Extract media type (e.g., "image/jpeg") */
+    size_t media_len = (size_t)(semicolon - media_start);
+    char media_type[64];  /* Stack allocation - media types are short */
+    if (media_len >= sizeof(media_type)) media_len = sizeof(media_type) - 1;
+    strlcpy(media_type, media_start, media_len + 1);
+
+    /* Find base64 data (after "base64,") */
+    const char *base64_marker = strstr(semicolon, "base64,");
+    if (!base64_marker) {
+        LOG_WARN("Invalid data URL format (no base64 marker): %.50s...", url_str);
+        return NULL;
+    }
+
+    const char *base64_data = base64_marker + 7;  /* Skip "base64," */
+
+    LOG_DEBUG("Converting image_url to Anthropic image format (media_type: %s)", media_type);
+
+    /* Create Anthropic format */
+    cJSON *anthropic_image = cJSON_CreateObject();
+    cJSON_AddStringToObject(anthropic_image, "type", "image");
+
+    cJSON *source = cJSON_CreateObject();
+    cJSON_AddStringToObject(source, "type", "base64");
+    cJSON_AddStringToObject(source, "media_type", media_type);
+    cJSON_AddStringToObject(source, "data", base64_data);
+
+    cJSON_AddItemToObject(anthropic_image, "source", source);
+
+    return anthropic_image;
+}
+
 // Convert OpenAI-style request (our internal builder outputs) to Anthropic native
 char* anthropic_convert_openai_to_anthropic_request(const char *openai_req) {
     cJSON *openai_json = cJSON_Parse(openai_req);
@@ -164,20 +233,37 @@ char* anthropic_convert_openai_to_anthropic_request(const char *openai_req) {
                 if (cJSON_IsString(content)) {
                     cJSON_AddStringToObject(anth_m, "content", content->valuestring);
                 } else if (cJSON_IsArray(content)) {
-                    // Validate and filter content blocks - remove empty text blocks
+                    // Validate and filter content blocks - remove empty text blocks,
+                    // and convert image_url blocks to Anthropic native image format
                     cJSON *filtered_content = cJSON_CreateArray();
                     cJSON *block = NULL;
                     cJSON_ArrayForEach(block, content) {
                         cJSON *type = cJSON_GetObjectItem(block, "type");
-                        if (type && cJSON_IsString(type) && strcmp(type->valuestring, "text") == 0) {
-                            cJSON *text = cJSON_GetObjectItem(block, "text");
-                            // Skip text blocks with empty or missing text
-                            if (!text || !cJSON_IsString(text) || !text->valuestring || !text->valuestring[0]) {
-                                LOG_DEBUG("Skipping empty text block in user content array");
-                                continue;
+                        if (type && cJSON_IsString(type)) {
+                            if (strcmp(type->valuestring, "text") == 0) {
+                                cJSON *text = cJSON_GetObjectItem(block, "text");
+                                // Skip text blocks with empty or missing text
+                                if (!text || !cJSON_IsString(text) || !text->valuestring || !text->valuestring[0]) {
+                                    LOG_DEBUG("Skipping empty text block in user content array");
+                                    continue;
+                                }
+                                cJSON_AddItemToArray(filtered_content, cJSON_Duplicate(block, 1));
+                            } else if (strcmp(type->valuestring, "image_url") == 0) {
+                                // Convert OpenAI image_url to Anthropic native image format
+                                cJSON *anth_image = convert_image_url_to_anthropic_block(block);
+                                if (anth_image) {
+                                    cJSON_AddItemToArray(filtered_content, anth_image);
+                                } else {
+                                    LOG_WARN("Failed to convert image_url block to Anthropic format, skipping");
+                                }
+                            } else {
+                                // Other block types (cache_control, etc.) - pass through as-is
+                                cJSON_AddItemToArray(filtered_content, cJSON_Duplicate(block, 1));
                             }
+                        } else {
+                            // Unknown block without type - copy as-is
+                            cJSON_AddItemToArray(filtered_content, cJSON_Duplicate(block, 1));
                         }
-                        cJSON_AddItemToArray(filtered_content, cJSON_Duplicate(block, 1));
                     }
                     if (cJSON_GetArraySize(filtered_content) > 0) {
                         cJSON_AddItemToObject(anth_m, "content", filtered_content);
