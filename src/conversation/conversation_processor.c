@@ -249,10 +249,24 @@ static int execute_tools_serial(struct ConversationState *state,
             result_slot->tool_id = strdup(tool->id);
             result_slot->tool_name = strdup(tool->name);
             cJSON *error = cJSON_CreateObject();
-            char error_msg[512];
-            snprintf(error_msg, sizeof(error_msg),
-                     "ERROR: Tool '%s' does not exist or was not provided to you.",
-                     tool->name);
+            char error_msg[768];
+            if (strcmp(tool->name, "web_search") == 0) {
+                snprintf(error_msg, sizeof(error_msg),
+                         "ERROR: Tool 'web_search' is not a built-in tool. "
+                         "To search the web, use the Bash tool to invoke the CLI command instead. "
+                         "Example: Bash(command=\"web_search '<query>'\"). "
+                         "Run 'web_search --help' for usage information.");
+            } else if (strcmp(tool->name, "web_fetch") == 0) {
+                snprintf(error_msg, sizeof(error_msg),
+                         "ERROR: Tool 'web_fetch' is not a built-in tool. "
+                         "To fetch web pages, use the Bash tool to invoke the CLI command instead. "
+                         "Example: Bash(command=\"web_fetch '<url>'\"). "
+                         "Run 'web_fetch --help' for usage information.");
+            } else {
+                snprintf(error_msg, sizeof(error_msg),
+                         "ERROR: Tool '%s' does not exist or was not provided to you.",
+                         tool->name);
+            }
             cJSON_AddStringToObject(error, "error", error_msg);
             result_slot->tool_output = error;
             result_slot->is_error = 1;
@@ -407,10 +421,24 @@ static int execute_tools_parallel(struct ConversationState *state,
             result_slot->tool_id = strdup(tool->id);
             result_slot->tool_name = strdup(tool->name);
             cJSON *error = cJSON_CreateObject();
-            char error_msg[512];
-            snprintf(error_msg, sizeof(error_msg),
-                     "ERROR: Tool '%s' does not exist or was not provided to you.",
-                     tool->name);
+            char error_msg[768];
+            if (strcmp(tool->name, "web_search") == 0) {
+                snprintf(error_msg, sizeof(error_msg),
+                         "ERROR: Tool 'web_search' is not a built-in tool. "
+                         "To search the web, use the Bash tool to invoke the CLI command instead. "
+                         "Example: Bash(command=\"web_search '<query>'\"). "
+                         "Run 'web_search --help' for usage information.");
+            } else if (strcmp(tool->name, "web_fetch") == 0) {
+                snprintf(error_msg, sizeof(error_msg),
+                         "ERROR: Tool 'web_fetch' is not a built-in tool. "
+                         "To fetch web pages, use the Bash tool to invoke the CLI command instead. "
+                         "Example: Bash(command=\"web_fetch '<url>'\"). "
+                         "Run 'web_fetch --help' for usage information.");
+            } else {
+                snprintf(error_msg, sizeof(error_msg),
+                         "ERROR: Tool '%s' does not exist or was not provided to you.",
+                         tool->name);
+            }
             cJSON_AddStringToObject(error, "error", error_msg);
             result_slot->tool_output = error;
             result_slot->is_error = 1;

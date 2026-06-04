@@ -569,6 +569,18 @@ void process_response(ConversationState *state,
                                  "Read, Glob, Grep, Sleep, UploadImage, TodoWrite, ListMcpResources, ReadMcpResource. "
                                  "Please reformulate your request using only these available tools.",
                                  tool->name);
+                    } else if (strcmp(tool->name, "web_search") == 0) {
+                        snprintf(error_msg, sizeof(error_msg),
+                                 "ERROR: Tool 'web_search' is not a built-in tool. "
+                                 "To search the web, use the Bash tool to invoke the CLI command instead. "
+                                 "Example: Bash(command=\"web_search '<query>'\"). "
+                                 "Run 'web_search --help' for usage information.");
+                    } else if (strcmp(tool->name, "web_fetch") == 0) {
+                        snprintf(error_msg, sizeof(error_msg),
+                                 "ERROR: Tool 'web_fetch' is not a built-in tool. "
+                                 "To fetch web pages, use the Bash tool to invoke the CLI command instead. "
+                                 "Example: Bash(command=\"web_fetch '<url>'\"). "
+                                 "Run 'web_fetch --help' for usage information.");
                     } else {
                         snprintf(error_msg, sizeof(error_msg),
                                  "ERROR: Tool '%s' does not exist or was not provided to you. "
@@ -588,6 +600,10 @@ void process_response(ConversationState *state,
                         snprintf(display_error, sizeof(display_error),
                                  "Error: Tool '%s' not available in planning mode (read-only mode)",
                                  tool->name);
+                    } else if (strcmp(tool->name, "web_search") == 0 || strcmp(tool->name, "web_fetch") == 0) {
+                        snprintf(display_error, sizeof(display_error),
+                                 "Error: Use Bash to run '%s' CLI command. Run '%s --help' for usage.",
+                                 tool->name, tool->name);
                     } else {
                         snprintf(display_error, sizeof(display_error),
                                  "Error: Tool '%s' not available (not in provided tools list)",
