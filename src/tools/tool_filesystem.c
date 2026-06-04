@@ -97,6 +97,33 @@ cJSON* tool_read(cJSON *params, ConversationState *state) {
         return error;
     }
 
+    /* Check for binary files before reading — binary content in API
+     * requests can cause HTTP 400 errors from providers like DeepSeek
+     * that strictly validate JSON content. Return a helpful error
+     * suggesting alternative inspection methods instead. */
+    const char *allow_binary_env = getenv("KLAWED_ALLOW_BINARY_READ");
+    int allow_binary = (allow_binary_env && strcmp(allow_binary_env, "1") == 0);
+    if (!allow_binary) {
+        int binary_check = is_binary_file(resolved_path);
+        if (binary_check == 1) {
+            if (tool_verbose >= 1) {
+                LOG_DEBUG("[TOOL VERBOSE] Read tool detected binary file: %s", file_path);
+            }
+            cJSON *error = cJSON_CreateObject();
+            cJSON_AddStringToObject(error, "error",
+                "This file appears to be binary (contains null bytes or non-printable "
+                "characters). Reading binary files can cause errors with API providers. "
+                "To inspect this file, use Bash instead. For example:\n"
+                "  - \"file <path>\" to identify the file type\n"
+                "  - \"xxd <path> | head -20\" for a hex dump with ASCII preview\n"
+                "  - \"strings <path>\" to extract printable text strings\n"
+                "  - \"head -c 500 <path>\" to see the raw beginning of the file\n"
+                "  - \"od -c <path> | head -20\" for an octal dump");
+            free(resolved_path);
+            return error;
+        }
+    }
+
     char *content = read_file(resolved_path);
     free(resolved_path);
 

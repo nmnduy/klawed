@@ -139,6 +139,53 @@ char* resolve_path(const char *path, const char *working_dir) {
 }
 
 /**
+ * Check if a file appears to be binary (non-text) by examining its content.
+ *
+ * Heuristics (first 8KB):
+ *   - Any null byte (0x00) → binary
+ *   - >10% non-printable chars (control chars except \t \n \r) → binary
+ *
+ * Returns 1 if binary, 0 if text, -1 on error.
+ */
+int is_binary_file(const char *path) {
+    if (!path) return -1;
+
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+
+    unsigned char buf[8192];
+    size_t n = fread(buf, 1, sizeof(buf), f);
+    fclose(f);
+
+    if (n == 0) return 0;  /* Empty file is not binary */
+
+    /* Check for null bytes — definitive binary indicator */
+    for (size_t i = 0; i < n; i++) {
+        if (buf[i] == 0) return 1;
+    }
+
+    /* Check non-printable character ratio. Require both:
+     *   - >10% non-printable chars
+     *   - At least 5 non-printable chars (avoid false positives on tiny files
+     *     with a few ANSI escape codes) */
+    size_t non_printable = 0;
+    for (size_t i = 0; i < n; i++) {
+        unsigned char c = buf[i];
+        if (c < 0x20 && c != '\t' && c != '\n' && c != '\r') {
+            non_printable++;
+        } else if (c == 0x7F) {
+            non_printable++;  /* DEL character */
+        }
+    }
+
+    if (non_printable >= 5 && (non_printable * 100) / n > 10) {
+        return 1;
+    }
+
+    return 0;
+}
+
+/**
  * Save binary data to file
  */
 int save_binary_file(const char *filename, const void *data, size_t size) {

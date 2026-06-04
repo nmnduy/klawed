@@ -43,6 +43,21 @@ char* resolve_path(const char *path, const char *working_dir);
 int mkdir_p(const char *path);
 
 /**
+ * Check if a file appears to be binary (non-text) by examining its content.
+ * Uses null-byte detection and non-printable character ratio heuristics
+ * on the first 8KB of the file.
+ *
+ * Heuristics (first 8KB):
+ *   - Any null byte (0x00) → binary
+ *   - >10% non-printable chars AND >= 5 such chars
+ *     (control chars except \t \n \r) → binary
+ *
+ * @param path Path to file
+ * @return 1 if binary, 0 if text, -1 on error (can't open file)
+ */
+int is_binary_file(const char *path);
+
+/**
  * Save binary data to file
  * Creates parent directories if they don't exist
  * @param filename Path to file
