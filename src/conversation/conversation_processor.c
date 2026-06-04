@@ -262,6 +262,12 @@ static int execute_tools_serial(struct ConversationState *state,
                          "To fetch web pages, use the Bash tool to invoke the CLI command instead. "
                          "Example: Bash(command=\"web_fetch '<url>'\"). "
                          "Run 'web_fetch --help' for usage information.");
+            } else if (strcmp(tool->name, "browser_ctl") == 0) {
+                snprintf(error_msg, sizeof(error_msg),
+                         "ERROR: Tool 'browser_ctl' is not a built-in tool. "
+                         "To control a browser, use the Bash tool to invoke the CLI command instead. "
+                         "Example: Bash(command=\"browser_ctl '<action>' '<param>'\"). "
+                         "Run 'browser_ctl --help' for usage information.");
             } else {
                 snprintf(error_msg, sizeof(error_msg),
                          "ERROR: Tool '%s' does not exist or was not provided to you.",
@@ -434,6 +440,12 @@ static int execute_tools_parallel(struct ConversationState *state,
                          "To fetch web pages, use the Bash tool to invoke the CLI command instead. "
                          "Example: Bash(command=\"web_fetch '<url>'\"). "
                          "Run 'web_fetch --help' for usage information.");
+            } else if (strcmp(tool->name, "browser_ctl") == 0) {
+                snprintf(error_msg, sizeof(error_msg),
+                         "ERROR: Tool 'browser_ctl' is not a built-in tool. "
+                         "To control a browser, use the Bash tool to invoke the CLI command instead. "
+                         "Example: Bash(command=\"browser_ctl '<action>' '<param>'\"). "
+                         "Run 'browser_ctl --help' for usage information.");
             } else {
                 snprintf(error_msg, sizeof(error_msg),
                          "ERROR: Tool '%s' does not exist or was not provided to you.",
