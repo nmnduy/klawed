@@ -195,8 +195,9 @@ void tui_update_terminal_title(TUIState *tui) {
     }
 
     if (dirname && len > 0 && (size_t)len < sizeof(title)) {
-        const char *icon = tui_icon_folder();
-        snprintf(title + len, sizeof(title) - (size_t)len, " %s %s", icon, dirname);
+        // Use plain ASCII separator for terminal title — terminal title bars
+        // often cannot render Nerd Font glyphs or emojis, causing a ? box.
+        snprintf(title + len, sizeof(title) - (size_t)len, " · %s", dirname);
     }
 
     // OSC 0: set icon name and window title
