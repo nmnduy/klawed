@@ -398,6 +398,19 @@ const char* tui_icon_todo_current(void);
 const char* tui_icon_todo_pending(void);
 const char* tui_icon_todo_completed(void);
 
+// Status indicators (success, error, warning, active, pending)
+const char* tui_icon_success(void);
+const char* tui_icon_error(void);
+const char* tui_icon_warning(void);
+const char* tui_icon_active(void);
+const char* tui_icon_pending(void);
+
+// Folder icon for path display
+const char* tui_icon_folder(void);
+
+// Mode label text (returns compact mode name like "NORMAL", "INSERT", etc.)
+const char* tui_mode_label(TUIMode mode);
+
 // Internal functions (used across TUI modules during refactoring)
 // These will eventually move to their respective specialized modules
 

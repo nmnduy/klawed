@@ -31,6 +31,31 @@
 // Initial capacity for conversation entries array
 #define INITIAL_CONV_CAPACITY 1000
 
+static int tui_prefix_has_tool_icon(const char *prefix, int require_space) {
+    if (!prefix) {
+        return 0;
+    }
+
+    size_t need_len = require_space ? 4U : 3U;
+    if (strnlen(prefix, need_len) < need_len) {
+        return 0;
+    }
+    if (require_space && prefix[3] != ' ') {
+        return 0;
+    }
+
+    if (strncmp(prefix, "\xe2\x97\x8f", 3) == 0) return 1;      // ●
+    if (strncmp(prefix, "\xef\x82\xad", 3) == 0) return 1;      // 
+    if (strncmp(prefix, "\xe2\x9c\x93", 3) == 0) return 1;      // ✓
+    if (strncmp(prefix, "\xef\x81\x98", 3) == 0) return 1;      // 
+    if (strncmp(prefix, "\xe2\x9c\x97", 3) == 0) return 1;      // ✗
+    if (strncmp(prefix, "\xef\x81\x97", 3) == 0) return 1;      // 
+    if (strncmp(prefix, "\xe2\x9a\xa0", 3) == 0) return 1;      // ⚠
+    if (strncmp(prefix, "\xef\x81\xb1", 3) == 0) return 1;      // 
+
+    return 0;
+}
+
 // Helper: Classify message type from prefix
 MessageType tui_conversation_get_message_type(const char *prefix) {
     if (!prefix || prefix[0] == '\0') {
@@ -48,10 +73,8 @@ MessageType tui_conversation_get_message_type(const char *prefix) {
         return MSG_TYPE_SYSTEM;
     }
     // Check for tools - must come after checking specific system prefixes
-    // Matches "● ToolName" or " ToolName" format
-    // ● in UTF-8: 0xE2 0x97 0x8F (3 bytes),  in UTF-8: 0xEF 0x82 0xAD (3 bytes)
-    if ((prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ||
-        (prefix[0] == '\xef' && prefix[1] == '\x82' && prefix[2] == '\xad')) {
+    // Matches tool/status icon prefixes such as " ToolName", "✓ ToolName", or "✗ ToolName".
+    if (tui_prefix_has_tool_icon(prefix, 0)) {
         return MSG_TYPE_TOOL;
     }
 
@@ -628,9 +651,8 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
     if (strstr(prefix, "Tool")) {
         return COLOR_PAIR_TOOL;
     }
-    // Check for tool prefix "● ToolName" or " ToolName"
-    if ((prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ||
-        (prefix[0] == '\xef' && prefix[1] == '\x82' && prefix[2] == '\xad')) {
+    // Check for tool/status icon prefix " ToolName", "✓ ToolName", "✗ ToolName", etc.
+    if (tui_prefix_has_tool_icon(prefix, 0)) {
         return COLOR_PAIR_TOOL;
     }
     if (strstr(prefix, "Error")) {
@@ -682,24 +704,14 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
 // UTF-8 bytes for "└" (box drawings light up and right): 0xE2 0x94 0x94
 // UTF-8 bytes for "─" (box drawings light horizontal): 0xE2 0x94 0x80
 
-// Extract tool name from tool prefix
-// Format: "● ToolName" or " ToolName"
-// Returns allocated string with tool name, or NULL if not a tool prefix
-// Caller must free the returned string
+// Extract tool name from tool/status prefix.
+// Formats include " ToolName", "● ToolName", "✓ ToolName", "✗ ToolName", and "⚠ ToolName".
+// Returns allocated string with tool name, or NULL if not a tool prefix.
+// Caller must free the returned string.
 char* tui_conversation_extract_tool_name(const char *prefix) {
-    if (!prefix || prefix[0] == '\0') {
+    const size_t icon_len = 4; // 3 bytes for icon + 1 byte for space
+    if (!tui_prefix_has_tool_icon(prefix, 1)) {
         return NULL;
-    }
-
-    // Check for "● " or " " prefix (icon + space)
-    // ● in UTF-8 is 0xE2 0x97 0x8F,  in UTF-8 is 0xEF 0x82 0xAD, followed by space 0x20
-    const char *CIRCLE_PREFIX = "\xe2\x97\x8f ";
-    const char *WRENCH_PREFIX = "\xef\x82\xad ";
-    size_t icon_len = 4; // 3 bytes for icon + 1 byte for space
-
-    if (strncmp(prefix, CIRCLE_PREFIX, icon_len) != 0 &&
-        strncmp(prefix, WRENCH_PREFIX, icon_len) != 0) {
-        return NULL;  // Not a tool message
     }
 
     // Extract the tool name (everything after the icon + space)
@@ -742,17 +754,14 @@ char* tui_conversation_extract_tool_name(const char *prefix) {
     return tool_name;
 }
 
-// Check if a prefix is a tool message (starts with ●)
+// Check if a prefix is a tool message (starts with tool/status icon)
 // Returns 1 if tool message, 0 otherwise
 int tui_conversation_is_tool_message(const char *prefix) {
     if (!prefix || prefix[0] == '\0') {
         return 0;
     }
 
-    // ● in UTF-8: 0xE2 0x97 0x8F (3 bytes),  in UTF-8: 0xEF 0x82 0xAD (3 bytes)
-    int is_circle = (prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f');
-    int is_wrench = (prefix[0] == '\xef' && prefix[1] == '\x82' && prefix[2] == '\xad');
-    return (is_circle || is_wrench) ? 1 : 0;
+    return tui_prefix_has_tool_icon(prefix, 0);
 }
 
 // Determine the display prefix for a tool message
@@ -917,7 +926,10 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
 
                         const char *tool_name = content->tool_name ? content->tool_name : "tool";
                         char prefix[128];
-                        snprintf(prefix, sizeof(prefix), "%s %s", tui_icon_tool(), tool_name);
+                        // Build prefix with status-appropriate icon
+                        const char *status_icon = content->is_error ?
+                            tui_icon_error() : tui_icon_success();
+                        snprintf(prefix, sizeof(prefix), "%s %s", status_icon, tool_name);
 
                         char *output_text = format_tool_output(content->tool_output, content->is_error);
                         TUIColorPair color = content->is_error ? COLOR_PAIR_ERROR : COLOR_PAIR_TOOL;

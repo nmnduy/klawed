@@ -194,11 +194,7 @@ void tui_update_terminal_title(TUIState *tui) {
     }
 
     if (dirname && len > 0 && (size_t)len < sizeof(title)) {
-        const char *no_nerd_font = getenv("KLAWED_NO_NERD_FONT");
-        int use_nerd = !(no_nerd_font && (strcmp(no_nerd_font, "1") == 0 ||
-                                          strcasecmp(no_nerd_font, "true") == 0 ||
-                                          strcasecmp(no_nerd_font, "yes") == 0));
-        const char *icon = use_nerd ? "\xef\x81\xbb" : "\xf0\x9f\x93\x81";
+        const char *icon = tui_icon_folder();
         snprintf(title + len, sizeof(title) - (size_t)len, " %s %s", icon, dirname);
     }
 
@@ -258,6 +254,42 @@ const char* tui_icon_todo_pending(void) {
 
 const char* tui_icon_todo_completed(void) {
     return "\xe2\x97\x8e"; // ◎
+}
+
+const char* tui_icon_success(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x81\x98" : "\xe2\x9c\x93"; //  or ✓
+}
+
+const char* tui_icon_error(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x81\x97" : "\xe2\x9c\x97"; //  or ✗
+}
+
+const char* tui_icon_warning(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x81\xb1" : "\xe2\x9a\xa0"; //  or ⚠
+}
+
+const char* tui_icon_active(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x84\x90" : "\xe2\x96\xb6"; //  or ▶
+}
+
+const char* tui_icon_pending(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x84\x97" : "\xe2\x97\x8b"; //  or ○
+}
+
+const char* tui_icon_folder(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x81\xbb" : "\xf0\x9f\x93\x81"; //  or 📁
+}
+
+const char* tui_mode_label(TUIMode mode) {
+    switch (mode) {
+        case TUI_MODE_NORMAL:   return "NORMAL";
+        case TUI_MODE_INSERT:   return "INSERT";
+        case TUI_MODE_COMMAND:  return "CMD";
+        case TUI_MODE_SEARCH:   return "SEARCH";
+        case TUI_MODE_FILE_SEARCH:  return "FILES";
+        case TUI_MODE_HISTORY_SEARCH: return "HIST";
+        default: return "?";
+    }
 }
 
 // Initialize ncurses color pairs from our colorscheme
