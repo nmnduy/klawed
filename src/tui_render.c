@@ -741,14 +741,14 @@ void render_status_window(TUIState *tui) {
         if (tui->mode == TUI_MODE_NORMAL) {
             // Full: compact key hints; mode label is rendered as a persistent prefix
             int n = snprintf(help_str, sizeof(help_str),
-                             " j/k scroll · i insert · r style · ? help · q quit");
+                             " j/k scroll · i resume · r style · ? help · q quit");
             if (n >= 0 && (size_t)n < sizeof(help_str)) {
                 help_str_len = n;
                 help_display_width = utf8_display_width(help_str);
             }
             // Short fallback for narrow screens
             n = snprintf(help_str_short, sizeof(help_str_short),
-                         " i insert · j/k scroll · / search");
+                         " i resume · j/k scroll · / search");
             if (n >= 0 && (size_t)n < sizeof(help_str_short)) {
                 help_str_short_len = n;
                 help_display_width_short = utf8_display_width(help_str_short);
@@ -756,14 +756,14 @@ void render_status_window(TUIState *tui) {
         } else if (tui->mode == TUI_MODE_INSERT) {
             // Full hint for insert mode; mode label is rendered as a persistent prefix
             int n = snprintf(help_str, sizeof(help_str),
-                             " enter send · shift+enter newline · ctrl+c cancel · ctrl+r history");
+                             " enter send · ctrl+c cancel · ctrl+r history");
             if (n >= 0 && (size_t)n < sizeof(help_str)) {
                 help_str_len = n;
                 help_display_width = utf8_display_width(help_str);
             }
             // Short fallback
             n = snprintf(help_str_short, sizeof(help_str_short),
-                         " enter send · shift+enter nl · ctrl+c cancel");
+                         " enter send · ctrl+c cancel");
             if (n >= 0 && (size_t)n < sizeof(help_str_short)) {
                 help_str_short_len = n;
                 help_display_width_short = utf8_display_width(help_str_short);
