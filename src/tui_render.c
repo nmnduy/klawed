@@ -801,13 +801,19 @@ void render_status_window(TUIState *tui) {
 
     // Layout: spinner + status message on the LEFT, indicators on the RIGHT
     // Left side: spinner + LLM status message
-    // Right side (in order from right): plan mode, scroll %, token usage
+    // Right side (in order from right): plan mode, scroll %, token usage, mode label
+
+    // Mode label (rendered on right side before token count)
+    const char *mode_label = tui_mode_label(tui->mode);
+    int mode_label_len = (int)strlen(mode_label);
+    int mode_label_width = utf8_display_width(mode_label);
 
     // Calculate total width needed for right-side indicators
     int right_total_width = 0;
     if (plan_str_len > 0) right_total_width += plan_display_width;
     if (scroll_str_len > 0) right_total_width += scroll_display_width;
     if (token_str_len > 0) right_total_width += token_display_width;
+    if (mode_label_len > 0) right_total_width += mode_label_width;
 
     // Calculate where right-side content starts
     int right_start_col = width - right_total_width;
@@ -816,23 +822,6 @@ void render_status_window(TUIState *tui) {
     // Render spinner and status text on the LEFT
     int left_col = 0;
     int left_limit = right_start_col;  // Don't overlap with right-side indicators
-
-    // Render mode label prefix (dim, always shown when there's room)
-    {
-        const char *mode_label = tui_mode_label(tui->mode);
-        int mode_label_len = (int)strlen(mode_label);
-        int mode_label_width = utf8_display_width(mode_label);
-        if (left_col + mode_label_width + 2 <= left_limit) {
-            if (has_colors()) {
-                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
-            }
-            tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, mode_label, mode_label_len);
-            if (has_colors()) {
-                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
-            }
-            left_col += mode_label_width + 1;  // +1 for spacing
-        }
-    }
 
     if (has_spinner && spinner_frame_len > 0 && left_col + status_display_width <= left_limit) {
         // Check if we should render pacman style instead of regular spinner
@@ -978,9 +967,21 @@ void render_status_window(TUIState *tui) {
         }
     }
 
-    // Render right-aligned indicators (token usage, scroll %, plan mode)
-    // Order from left to right: token usage, scroll %, plan mode
+    // Render right-aligned indicators (mode label, token usage, scroll %, plan mode)
+    // Order from left to right: mode label, token usage, scroll %, plan mode
     int right_col = right_start_col;
+
+    // Mode label
+    if (mode_label_len > 0 && right_col + mode_label_width <= width) {
+        if (has_colors()) {
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
+        }
+        tui_safe_mvwaddnstr(tui->wm.status_win, 0, right_col, mode_label, mode_label_len);
+        if (has_colors()) {
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
+        }
+        right_col += mode_label_width;
+    }
 
     // Token usage
     if (token_str_len > 0 && right_col + token_display_width <= width) {
