@@ -68,6 +68,8 @@
 #include "openai_messages.h"
 #endif
 #include "config.h"
+#include "voice_transcriber.h"
+#include "openai_transcribe.h"
 #include "provider_config_loader.h"
 
 #ifdef TEST_BUILD
@@ -2060,6 +2062,9 @@ int main(int argc, char *argv[]) {
 
         // Skip main execution if there was an error
         if (exit_code == 0) {
+            // Register voice transcription backends
+            voice_transcriber_register(openai_transcribe_get_backend());
+
             if (is_perpetual_mode && is_single_command_mode) {
                 // One-shot perpetual: prompt given on CLI, run once and exit
                 exit_code = perpetual_mode_run(&state, single_command, NULL);
@@ -2078,6 +2083,9 @@ int main(int argc, char *argv[]) {
 
     // Cleanup background loaders (wait for threads to complete)
     cleanup_background_loaders(&state);
+
+    // Cleanup voice transcription backends
+    voice_transcriber_shutdown();
 
     // Cleanup conversation messages
     conversation_free(&state);

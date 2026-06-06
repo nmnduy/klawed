@@ -753,17 +753,31 @@ void render_status_window(TUIState *tui) {
                 help_str_short_len = n;
                 help_display_width_short = utf8_display_width(help_str_short);
             }
+        } else if (tui->mode == TUI_MODE_VOICE) {
+            // Voice mode hint
+            int n = snprintf(help_str, sizeof(help_str),
+                             " enter finalize · esc cancel · space hold to record");
+            if (n >= 0 && (size_t)n < sizeof(help_str)) {
+                help_str_len = n;
+                help_display_width = utf8_display_width(help_str);
+            }
+            n = snprintf(help_str_short, sizeof(help_str_short),
+                         " enter finalize · esc cancel");
+            if (n >= 0 && (size_t)n < sizeof(help_str_short)) {
+                help_str_short_len = n;
+                help_display_width_short = utf8_display_width(help_str_short);
+            }
         } else if (tui->mode == TUI_MODE_INSERT) {
             // Full hint for insert mode; mode label is rendered as a persistent prefix
             int n = snprintf(help_str, sizeof(help_str),
-                             " enter send · ctrl+c cancel · ctrl+r history");
+                             " enter send · ctrl+j newline · ctrl+c cancel · ctrl+r history");
             if (n >= 0 && (size_t)n < sizeof(help_str)) {
                 help_str_len = n;
                 help_display_width = utf8_display_width(help_str);
             }
             // Short fallback
             n = snprintf(help_str_short, sizeof(help_str_short),
-                         " enter send · ctrl+c cancel");
+                         " enter send · ctrl+j nl · ctrl+c cancel");
             if (n >= 0 && (size_t)n < sizeof(help_str_short)) {
                 help_str_short_len = n;
                 help_display_width_short = utf8_display_width(help_str_short);
@@ -2108,6 +2122,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
         }
 
         // Draw the '❯ ' caret in prompt color at content area (only in INSERT mode)
+        // Draw the '🎤 ' mic icon in prompt color for VOICE mode
         // In COMMAND/SEARCH mode, the mode prefix (: or /) will be displayed instead
         if (tui->mode == TUI_MODE_INSERT) {
             if (has_colors()) {
@@ -2116,6 +2131,14 @@ void input_redraw(TUIState *tui, const char *prompt) {
             tui_safe_mvwprint_char(win, 1, 0, "❯ ");
             if (has_colors()) {
                 wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
+            }
+        } else if (tui->mode == TUI_MODE_VOICE) {
+            if (has_colors()) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+            }
+            tui_safe_mvwprint_char(win, 1, 0, "🎤 ");
+            if (has_colors()) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             }
         }
     } else {
@@ -2126,6 +2149,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
         }
 
         // Draw the '❯ ' caret in prompt color (only in INSERT mode)
+        // Draw the '🎤 ' mic icon for VOICE mode
         // In COMMAND/SEARCH mode, the mode prefix (: or /) will be displayed instead
         if (tui->mode == TUI_MODE_INSERT) {
             if (has_colors()) {
@@ -2134,6 +2158,14 @@ void input_redraw(TUIState *tui, const char *prompt) {
             tui_safe_mvwprint_char(win, 0, 0, "❯ ");
             if (has_colors()) {
                 wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
+            }
+        } else if (tui->mode == TUI_MODE_VOICE) {
+            if (has_colors()) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+            }
+            tui_safe_mvwprint_char(win, 0, 0, "🎤 ");
+            if (has_colors()) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             }
         }
     }
@@ -2240,7 +2272,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
     // Draw vertical scroll bar on the right edge when input has scrolled
     // Only show when there's content above or below the visible area
     if (tui->mode == TUI_MODE_INSERT || tui->mode == TUI_MODE_COMMAND ||
-        tui->mode == TUI_MODE_SEARCH) {
+        tui->mode == TUI_MODE_SEARCH || tui->mode == TUI_MODE_VOICE) {
         int total_lines = needed_lines;
         int visible_lines = max_visible_lines;  // Use calculated visible lines (accounts for borders)
         int indicator_col = input->win_width - 1;

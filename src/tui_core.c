@@ -27,6 +27,7 @@
 #include "config.h"
 #include "data_dir.h"
 #include "text_diffusion.h"
+#include "voice_mode.h"
 #include <stdlib.h>
 #include <bsd/stdlib.h>
 #include <string.h>
@@ -560,6 +561,14 @@ int tui_init(TUIState *tui, ConversationState *state) {
     // Initialize tool output connection tracking
     tui->last_tool_name = NULL;
 
+    // Initialize voice mode state
+    tui->voice_mode = (VoiceModeState *)calloc(1, sizeof(VoiceModeState));
+    if (tui->voice_mode) {
+        voice_mode_init(tui->voice_mode, tui);
+    } else {
+        LOG_WARN("[TUI] Failed to allocate voice mode state");
+    }
+
     tui->is_initialized = 1;
 
     LOG_DEBUG("[TUI] Initialized (screen=%dx%d, conv_h=%d, status_h=%d, input_h=%d)",
@@ -653,6 +662,13 @@ void tui_cleanup(TUIState *tui) {
     // Free tool name tracking
     free(tui->last_tool_name);
     tui->last_tool_name = NULL;
+
+    // Free voice mode state
+    if (tui->voice_mode) {
+        voice_mode_cleanup(tui->voice_mode);
+        free(tui->voice_mode);
+        tui->voice_mode = NULL;
+    }
 }
 
 int tui_suspend(TUIState *tui) {

@@ -47,6 +47,7 @@
 #include "array_resize.h"
 #include "subagent_manager.h"
 #include "commands.h"
+#include "voice_mode.h"
 
 #define INITIAL_CONV_CAPACITY 1000
 #define INPUT_BUFFER_SIZE 8192
@@ -288,6 +289,7 @@ const char* tui_mode_label(TUIMode mode) {
         case TUI_MODE_SEARCH:   return "SEARCH";
         case TUI_MODE_FILE_SEARCH:  return "FILES";
         case TUI_MODE_HISTORY_SEARCH: return "HIST";
+        case TUI_MODE_VOICE: return "VOICE";
         default: return "?";
     }
 }
@@ -684,6 +686,87 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         return tui_history_process_search_key(tui, ch, prompt);
     }
 
+    // Handle voice mode separately
+    if (tui->mode == TUI_MODE_VOICE) {
+        if (!tui->voice_mode || !voice_mode_is_active(tui->voice_mode)) {
+            // Voice mode ended (timeout or error), switch back to INSERT
+            tui->mode = TUI_MODE_INSERT;
+            input_redraw(tui, prompt);
+            return 0;
+        }
+
+        /* In voice mode, spacebar refreshes the hold timer */
+        if (ch == ' ') {
+            struct timespec now_ts;
+            clock_gettime(CLOCK_MONOTONIC, &now_ts);
+            uint64_t now = (uint64_t)now_ts.tv_sec * 1000000000ULL +
+                           (uint64_t)now_ts.tv_nsec;
+            voice_mode_handle_spacebar(tui->voice_mode, tui, now);
+            input_redraw(tui, prompt);
+            return 0;
+        }
+
+        /* Enter: stop recording and finalize transcription */
+        if (ch == 13 || ch == KEY_ENTER) {
+            voice_mode_exit(tui->voice_mode, tui);
+            tui->mode = TUI_MODE_INSERT;
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            return 1;  /* Submit the transcribed text */
+        }
+
+        /* ESC: cancel recording, discard transcription */
+        if (ch == 27) {
+            nodelay(tui->wm.input_win, TRUE);
+            int next_ch = wgetch(tui->wm.input_win);
+            nodelay(tui->wm.input_win, FALSE);
+
+            if (next_ch == ERR) {
+                /* Standalone ESC — cancel voice mode */
+                if (tui->voice_mode->saved_buffer && input) {
+                    strlcpy(input->buffer, tui->voice_mode->saved_buffer,
+                            input->capacity);
+                    input->length = tui->voice_mode->saved_length;
+                    input->cursor = tui->voice_mode->saved_cursor;
+                }
+                /* Clean up the voice session but preserve saved buffer */
+                voice_mode_cleanup(tui->voice_mode);
+                voice_mode_init(tui->voice_mode, tui);
+                tui->mode = TUI_MODE_INSERT;
+                if (tui->wm.status_height > 0) {
+                    render_status_window(tui);
+                }
+                input_redraw(tui, prompt);
+                return 0;
+            }
+            /* ESC+something — ignore */
+            return 0;
+        }
+
+        /* Ctrl+C: cancel like ESC */
+        if (ch == 3) {
+            if (tui->voice_mode->saved_buffer && input) {
+                strlcpy(input->buffer, tui->voice_mode->saved_buffer,
+                        input->capacity);
+                input->length = tui->voice_mode->saved_length;
+                input->cursor = tui->voice_mode->saved_cursor;
+            }
+            voice_mode_cleanup(tui->voice_mode);
+            voice_mode_init(tui->voice_mode, tui);
+            tui->mode = TUI_MODE_INSERT;
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            return 0;
+        }
+
+        /* Ignore other keys during voice mode */
+        return 0;
+    }
+
     if (g_enable_paste_heuristic) {
         struct timespec current_time;
         clock_gettime(CLOCK_MONOTONIC, &current_time);
@@ -818,6 +901,25 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
     } else if (ch == 18) {  // Ctrl+R: History search (in INSERT mode)
         // Start history search popup
         tui_history_start_search(tui);
+        return 0;
+    } else if (ch == ' ' && input->length == 0) {  // Spacebar on empty input: enter voice mode
+        if (tui->voice_mode) {
+            struct timespec now_ts;
+            clock_gettime(CLOCK_MONOTONIC, &now_ts);
+            uint64_t now = (uint64_t)now_ts.tv_sec * 1000000000ULL +
+                           (uint64_t)now_ts.tv_nsec;
+            int result = voice_mode_handle_spacebar(tui->voice_mode, tui, now);
+            if (result == 1) {
+                /* Successfully entered voice mode */
+                tui->mode = TUI_MODE_VOICE;
+                if (tui->wm.status_height > 0) {
+                    render_status_window(tui);
+                }
+                input_redraw(tui, prompt);
+            }
+            /* If result == 0, already in voice mode (shouldn't happen here) */
+            /* If result == -1, backend unavailable (status already shown) */
+        }
         return 0;
     } else if (ch == 1) {  // Ctrl+A: beginning of line
         input->cursor = 0;
@@ -1522,6 +1624,24 @@ int tui_event_loop(TUIState *tui, const char *prompt,
 
         // 2. Check for paste timeout (even when no input arrives)
         check_paste_timeout(tui, prompt);
+
+        // 2b. Poll voice mode (read audio, check hold timeout, update partial text)
+        if (tui->voice_mode && voice_mode_is_active(tui->voice_mode)) {
+            struct timespec now_ts;
+            clock_gettime(CLOCK_MONOTONIC, &now_ts);
+            uint64_t now_ns = (uint64_t)now_ts.tv_sec * 1000000000ULL +
+                              (uint64_t)now_ts.tv_nsec;
+            voice_mode_poll(tui->voice_mode, tui, prompt, now_ns);
+
+            /* If voice mode ended during poll, restore INSERT mode */
+            if (!voice_mode_is_active(tui->voice_mode)) {
+                tui->mode = TUI_MODE_INSERT;
+                if (tui->wm.status_height > 0) {
+                    render_status_window(tui);
+                }
+                input_redraw(tui, prompt);
+            }
+        }
 
         // 3. Check for external input (e.g., sockets)
         if (external_input_callback) {

@@ -30,6 +30,7 @@ struct PersistenceDB;
 typedef struct _win_st WINDOW;
 
 typedef struct TUIInputBuffer TUIInputBuffer;
+typedef struct VoiceModeState VoiceModeState;
 
 // TUI Color pairs (public API for conversation entries)
 typedef enum {
@@ -86,8 +87,9 @@ typedef enum {
     TUI_MODE_INSERT,      // Insert mode (text input for sending messages)
     TUI_MODE_COMMAND,     // Command mode (entered with ':' from normal mode)
     TUI_MODE_SEARCH,      // Search mode (entered with '/' or '?' from normal mode)
-    TUI_MODE_FILE_SEARCH,  // File search mode (entered with Ctrl+F from insert mode)
-    TUI_MODE_HISTORY_SEARCH  // History search mode (entered with Ctrl+R from insert mode)
+    TUI_MODE_FILE_SEARCH,   // File search mode (entered with Ctrl+F from insert mode)
+    TUI_MODE_HISTORY_SEARCH, // History search mode (entered with Ctrl+R from insert mode)
+    TUI_MODE_VOICE           // Voice mode (entered by holding spacebar in INSERT mode)
 } TUIMode;
 
 // Input box style (visual appearance)
@@ -257,6 +259,9 @@ typedef struct TUIStateStruct {
 
     // Vim-style marks (m{a-z} to set, '{a-z} to jump)
     TUIMarkState marks;               // Marks state for conversation navigation
+
+    // Voice mode state (push-to-talk recording + transcription)
+    VoiceModeState *voice_mode;       // Voice mode state (NULL if not initialized)
 } TUIState;
 
 // Initialize TUI (must be called before any other TUI functions)

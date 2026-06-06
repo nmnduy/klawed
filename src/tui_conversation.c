@@ -289,7 +289,7 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
     // - In INSERT mode: always auto-scroll
     // - In NORMAL/COMMAND mode: auto-scroll only if we WERE at 98-100% scroll height
     //   BEFORE content was added (using was_at_bottom captured earlier)
-    if (tui->mode == TUI_MODE_INSERT) {
+    if (tui->mode == TUI_MODE_INSERT || tui->mode == TUI_MODE_VOICE) {
         window_manager_scroll_to_bottom(&tui->wm);
     } else if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
         // Use the was_at_bottom state captured BEFORE content was added
@@ -564,7 +564,7 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
     // - In INSERT mode: always auto-scroll
     // - In NORMAL/COMMAND mode: auto-scroll only if we WERE at 98-100% scroll height
     //   BEFORE content was added (using was_at_bottom captured earlier)
-    if (tui->mode == TUI_MODE_INSERT) {
+    if (tui->mode == TUI_MODE_INSERT || tui->mode == TUI_MODE_VOICE) {
         window_manager_scroll_to_bottom(&tui->wm);
     } else if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
         // Use the was_at_bottom state captured BEFORE content was added
