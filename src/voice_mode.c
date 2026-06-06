@@ -62,6 +62,26 @@ static void partial_callback(void *user_data, const char *text) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Remote session detection                                              */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Check if we're running in a remote session (SSH, etc.) where the
+ * local microphone is not accessible. Voice mode uses ffmpeg to capture
+ * from the machine's audio devices, which won't work remotely.
+ *
+ * Returns 1 if remote, 0 if local.
+ */
+static int is_remote_session(void) {
+    /* Standard SSH environment variables set by sshd */
+    if (getenv("SSH_TTY"))       return 1;
+    if (getenv("SSH_CLIENT"))    return 1;
+    if (getenv("SSH_CONNECTION")) return 1;
+
+    return 0;
+}
+
+/* ------------------------------------------------------------------ */
 /* Get monotonic time in nanoseconds                                     */
 /* ------------------------------------------------------------------ */
 
@@ -373,6 +393,22 @@ int voice_mode_enter(VoiceModeState *vms, TUIState *tui) {
         input->cursor = 0;
     }
 
+    /* Check for remote session — voice mode needs local microphone */
+    if (is_remote_session()) {
+        LOG_WARN("[voice_mode] Remote session detected, voice mode cannot access local microphone");
+        tui_update_status(tui,
+            "Voice mode unavailable: remote session. Your microphone is on "
+            "your local machine, not the remote server. Run klawed locally "
+            "for voice input.");
+        /* Restore saved input */
+        if (input && vms->saved_buffer) {
+            strlcpy(input->buffer, vms->saved_buffer, input->capacity);
+            input->length = vms->saved_length;
+            input->cursor = vms->saved_cursor;
+        }
+        return -1;
+    }
+
     /* Initialize transcription session */
     vms->transcriber = backend->open_stream(partial_callback, vms,
                                             DEFAULT_SAMPLE_RATE,
@@ -396,6 +432,9 @@ int voice_mode_enter(VoiceModeState *vms, TUIState *tui) {
     /* Start recording */
     if (start_ffmpeg_recording(vms) != 0) {
         LOG_ERROR("[voice_mode] Failed to start ffmpeg recording");
+        tui_update_status(tui,
+            "Voice mode unavailable: could not access microphone. "
+            "Check that a microphone is connected and ffmpeg is installed.");
         backend->close_stream(vms->transcriber);
         vms->transcriber = NULL;
         /* Restore saved input */
@@ -534,7 +573,7 @@ void voice_mode_poll(VoiceModeState *vms, TUIState *tui,
     /* Check hold timeout: if no spacebar event for hold_timeout_ms, release */
     if (vms->recording && vms->last_spacebar_ns > 0) {
         uint64_t elapsed_ns = current_ns - vms->last_spacebar_ns;
-        uint64_t timeout_ns = (uint64_t)vms->hold_timeout_ms * 1000000ULL;
+        uint64_t timeout_ns = (uint64_t)((unsigned int)vms->hold_timeout_ms) * 1000000ULL;
 
         if (elapsed_ns >= timeout_ns) {
             LOG_DEBUG("[voice_mode] Hold timeout reached, stopping recording");

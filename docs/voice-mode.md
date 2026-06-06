@@ -368,6 +368,20 @@ Check microphone permissions:
 | Dependency install | Easy | Moderate |
 | Binary size | +50KB | +2MB |
 
+## Push-to-Talk Voice Mode (TUI)
+
+In addition to the `/voice` command, the TUI supports a **push-to-talk voice mode** activated by pressing and holding the **spacebar** on an empty input line in INSERT mode.
+
+This mode:
+- Uses `ffmpeg` to capture microphone audio in real time
+- Streams audio to a transcription backend (OpenAI `gpt-4o-transcribe` by default, requires `OPENAI_API_KEY`)
+- Shows partial transcription results in the input area as you speak
+- Finalizes transcription when you release the spacebar (or press Enter)
+
+**Remote sessions (SSH):** Push-to-talk voice mode cannot access your local microphone when klawed runs on a remote server. The status bar will display: _"Voice mode unavailable: remote session. Your microphone is on your local machine, not the remote server. Run klawed locally for voice input."_
+
+To use voice input from a remote session, run klawed locally on your machine.
+
 ## Future Enhancements
 
 - [ ] Streaming transcription (real-time)
