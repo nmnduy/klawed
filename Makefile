@@ -563,6 +563,8 @@ TEST_REALTIME_STEERING_SRC = tests/test_realtime_steering.c
 TEST_TUI_TOOL_CONNECTOR_SRC = tests/test_tui_tool_connector.c
 TEST_TUI_STREAMING_INDEX_SRC = tests/test_tui_streaming_index.c
 TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
+TEST_TRANSCRIBE_SRC = tests/test_transcribe.c
+TEST_TRANSCRIBE_TARGET = $(BUILD_DIR)/test_transcribe
 TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 TEST_MARKDOWN_RENDER_SRC = tests/test_markdown_render.c
@@ -2894,6 +2896,14 @@ $(TEST_MCP_IMAGE_TARGET): $(TEST_MCP_IMAGE_SRC) $(BASE64_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_MCP_IMAGE_TARGET) $(TEST_MCP_IMAGE_SRC) $(BASE64_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ MCP image test build successful!"
+	@echo ""
+
+$(TEST_TRANSCRIBE_TARGET): $(TEST_TRANSCRIBE_SRC) $(OPENAI_TRANSCRIBE_OBJ) $(VOICE_TRANSCRIBER_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(REDACT_UTILS_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling voice transcription test..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -o $(TEST_TRANSCRIBE_TARGET) $(TEST_TRANSCRIBE_SRC) $(OPENAI_TRANSCRIBE_OBJ) $(VOICE_TRANSCRIBER_OBJ) $(LOGGER_OBJ) $(DATA_DIR_OBJ) $(REDACT_UTILS_OBJ) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Voice transcription test build successful!"
 	@echo ""
 
 install: $(TARGET)
