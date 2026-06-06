@@ -21,7 +21,7 @@
 
 void config_init_defaults(KlawedConfig *config) {
     if (!config) return;
-    config->input_box_style = INPUT_STYLE_HORIZONTAL;
+    config->input_box_style = INPUT_STYLE_BACKGROUND;
     config->response_style = RESPONSE_STYLE_BORDER;
     config->thinking_style = THINKING_STYLE_WAVE;
     config->wrap_enabled = 1;

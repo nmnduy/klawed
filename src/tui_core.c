@@ -477,7 +477,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
         LOG_DEBUG("[TUI] Loaded wrap_enabled from config: %d",
                   tui->wrap_enabled);
     } else {
-        tui->input_box_style = INPUT_STYLE_HORIZONTAL;
+        tui->input_box_style = INPUT_STYLE_BACKGROUND;
         tui->response_style = RESPONSE_STYLE_BORDER;
         tui->thinking_style = THINKING_STYLE_WAVE;
         tui->wrap_enabled = 1;
