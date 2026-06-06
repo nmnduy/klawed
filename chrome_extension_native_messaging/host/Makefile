@@ -16,7 +16,7 @@ BRAVE_HOST_DIR    = $(HOME)/.config/BraveSoftware/Brave-Browser/NativeMessagingH
 # Extension ID — must be set after loading the extension in Chrome
 EXTENSION_ID ?= EXTENSION_ID_PLACEHOLDER
 
-.PHONY: all build clean install uninstall configure help
+.PHONY: all build clean test install uninstall configure help
 
 all: build
 
@@ -32,6 +32,9 @@ $(CLIENT): browser_ctl.go go.mod
 
 clean:
 	rm -f $(HOST) $(CLIENT)
+
+test:
+	$(GO) test -v -run TestWrite main_test.go main.go
 
 configure:
 	@echo "=========================================="

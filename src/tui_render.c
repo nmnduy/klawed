@@ -729,25 +729,46 @@ void render_status_window(TUIState *tui) {
         token_display_width = utf8_display_width(token_str);
         LOG_FINE("[TUI] Rendering token display: %s (mode=%d, width=%d)", token_str, tui->mode, width);
     }
-    // Prepare help text for NORMAL mode (shown when no active status)
-    // Two variants: full (wide screens) and short (narrow screens)
+    // Prepare help text (shown when no active status/spinner)
+    // Adaptive: full/short variants for different screen widths
     char help_str[128] = {0};
     int help_str_len = 0;
     int help_display_width = 0;
     char help_str_short[64] = {0};
     int help_str_short_len = 0;
     int help_display_width_short = 0;
-    if (tui->mode == TUI_MODE_NORMAL && !has_spinner && status_text_len == 0) {
-        // Full hint: includes backward search, page-down/up
-        snprintf(help_str, sizeof(help_str),
-                 " i=insert  j/k=scroll  /=search  ?=back  ^D/^U=pgdn/up ");
-        help_str_len = (int)strlen(help_str);
-        help_display_width = utf8_display_width(help_str);
-        // Short fallback: existing hints only
-        snprintf(help_str_short, sizeof(help_str_short),
-                 " i=insert  j/k=scroll  /=search ");
-        help_str_short_len = (int)strlen(help_str_short);
-        help_display_width_short = utf8_display_width(help_str_short);
+    if (!has_spinner && status_text_len == 0) {
+        if (tui->mode == TUI_MODE_NORMAL) {
+            // Full: compact key hints; mode label is rendered as a persistent prefix
+            int n = snprintf(help_str, sizeof(help_str),
+                             " j/k scroll · i insert · r style · ? help · q quit");
+            if (n >= 0 && (size_t)n < sizeof(help_str)) {
+                help_str_len = n;
+                help_display_width = utf8_display_width(help_str);
+            }
+            // Short fallback for narrow screens
+            n = snprintf(help_str_short, sizeof(help_str_short),
+                         " i insert · j/k scroll · / search");
+            if (n >= 0 && (size_t)n < sizeof(help_str_short)) {
+                help_str_short_len = n;
+                help_display_width_short = utf8_display_width(help_str_short);
+            }
+        } else if (tui->mode == TUI_MODE_INSERT) {
+            // Full hint for insert mode; mode label is rendered as a persistent prefix
+            int n = snprintf(help_str, sizeof(help_str),
+                             " enter send · shift+enter newline · ctrl+c cancel · ctrl+r history");
+            if (n >= 0 && (size_t)n < sizeof(help_str)) {
+                help_str_len = n;
+                help_display_width = utf8_display_width(help_str);
+            }
+            // Short fallback
+            n = snprintf(help_str_short, sizeof(help_str_short),
+                         " enter send · shift+enter nl · ctrl+c cancel");
+            if (n >= 0 && (size_t)n < sizeof(help_str_short)) {
+                help_str_short_len = n;
+                help_display_width_short = utf8_display_width(help_str_short);
+            }
+        }
     }
 
     // Prepare marks display (show active marks when in NORMAL mode)
@@ -795,6 +816,23 @@ void render_status_window(TUIState *tui) {
     // Render spinner and status text on the LEFT
     int left_col = 0;
     int left_limit = right_start_col;  // Don't overlap with right-side indicators
+
+    // Render mode label prefix (dim, only in non-INSERT modes)
+    if (tui->mode != TUI_MODE_INSERT) {
+        const char *mode_label = tui_mode_label(tui->mode);
+        int mode_label_len = (int)strlen(mode_label);
+        int mode_label_width = utf8_display_width(mode_label);
+        if (left_col + mode_label_width + 2 <= left_limit) {
+            if (has_colors()) {
+                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
+            }
+            tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, mode_label, mode_label_len);
+            if (has_colors()) {
+                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
+            }
+            left_col += mode_label_width + 1;  // +1 for spacing
+        }
+    }
 
     if (has_spinner && spinner_frame_len > 0 && left_col + status_display_width <= left_limit) {
         // Check if we should render pacman style instead of regular spinner
@@ -1694,9 +1732,8 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             // User message: use foreground color (no background)
             text_pair = NCURSES_PAIR_FOREGROUND;
         } else if (prefix && prefix[0] != '\0') {
-            // Check for tool messages: prefix starts with "●" or ""
-            int is_tool_message = ((prefix[0] == '\xe2' && prefix[1] == '\x97' && prefix[2] == '\x8f') ||
-                                   (prefix[0] == '\xef' && prefix[1] == '\x82' && prefix[2] == '\xad'));
+            // Check for tool messages using centralized detection
+            int is_tool_message = tui_conversation_is_tool_message(prefix);
             // Check for reasoning messages
             int is_reasoning_message = (strcmp(prefix, tui_icon_reasoning_open()) == 0 ||
                                         strcmp(prefix, tui_icon_reasoning_close()) == 0);

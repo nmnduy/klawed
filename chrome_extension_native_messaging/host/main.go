@@ -6,23 +6,24 @@
 //
 // Architecture:
 //
-//   klawed agent
-//       │  JSON over Unix socket (/tmp/klawed-browser.sock)
-//       ▼
-//   This Go host process
-//       │  Chrome Native Messaging (4-byte LE length + JSON on stdin/stdout)
-//       ▼
-//   Chrome Extension (background service worker)
-//       │  Chrome APIs (tabs, scripting, etc.)
-//       ▼
-//   Real Chrome browser
+//	klawed agent
+//	    │  JSON over Unix socket (/tmp/klawed-browser.sock)
+//	    ▼
+//	This Go host process
+//	    │  Chrome Native Messaging (4-byte LE length + JSON on stdin/stdout)
+//	    ▼
+//	Chrome Extension (background service worker)
+//	    │  Chrome APIs (tabs, scripting, etc.)
+//	    ▼
+//	Real Chrome browser
 //
 // The Go host is launched by Chrome when the extension calls
 // chrome.runtime.connectNative("com.klawed.browser_controller").
 //
 // Environment variables:
-//   KLAWED_BROWSER_SOCKET  - Unix socket path (default: /tmp/klawed-browser.sock)
-//   KLAWED_BROWSER_LOG     - Log file path (default: /tmp/klawed-browser-host.log)
+//
+//	KLAWED_BROWSER_SOCKET  - Unix socket path (default: /tmp/klawed-browser.sock)
+//	KLAWED_BROWSER_LOG     - Log file path (default: /tmp/klawed-browser-host.log)
 package main
 
 import (
@@ -199,13 +200,13 @@ func handleKlawedConn(conn net.Conn) {
 		if err := json.Unmarshal(line, &req); err != nil {
 			logger.Printf("error parsing klawed request: %v", err)
 			resp := Message{Error: fmt.Sprintf("invalid JSON: %v", err)}
-			writeJSONLine(conn, resp)
+			writeKlawedResponse(conn, resp)
 			continue
 		}
 
 		if req.Command == "" {
 			resp := Message{Error: "missing 'command' field"}
-			writeJSONLine(conn, resp)
+			writeKlawedResponse(conn, resp)
 			continue
 		}
 
@@ -224,7 +225,7 @@ func handleKlawedConn(conn net.Conn) {
 			delete(pending, req.ID)
 			pendingMu.Unlock()
 			resp := Message{ID: req.ID, Error: fmt.Sprintf("failed to send to Chrome: %v", err)}
-			writeJSONLine(conn, resp)
+			writeKlawedResponse(conn, resp)
 			continue
 		}
 
@@ -241,7 +242,7 @@ func handleKlawedConn(conn net.Conn) {
 			logger.Printf("timeout waiting for Chrome response for id %s", req.ID)
 		}
 
-		if err := writeJSONLine(conn, resp); err != nil {
+		if err := writeKlawedResponse(conn, resp); err != nil {
 			logger.Printf("error writing response to klawed: %v", err)
 			return
 		}
@@ -253,14 +254,23 @@ func handleKlawedConn(conn net.Conn) {
 	logger.Printf("klawed client disconnected")
 }
 
-// writeJSONLine marshals msg to JSON and writes it followed by a newline.
-func writeJSONLine(w io.Writer, msg Message) error {
-	data, err := json.Marshal(msg)
-	if err != nil {
-		logger.Printf("error marshaling message: %v", err)
-		return err
+// writeKlawedResponse sends a response back to the klawed client.
+// It strips the internal message ID and unwraps the result/error
+// from the Chrome response, sending only the payload the client expects.
+// For successful commands this is the raw result object
+// (e.g., {"windowId": 123} for newWindow).
+func writeKlawedResponse(w io.Writer, msg Message) error {
+	var data []byte
+	if msg.Error != "" {
+		data, _ = json.Marshal(map[string]string{"error": msg.Error})
+	} else if msg.Result != nil {
+		// Send the result directly — the client expects the raw response
+		// object without any ID or result wrapper.
+		data = msg.Result
+	} else {
+		data = []byte("{}")
 	}
-	_, err = w.Write(append(data, '\n'))
+	_, err := w.Write(append(data, '\n'))
 	return err
 }
 

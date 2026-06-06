@@ -6,12 +6,13 @@
 // Structured commands are convenience wrappers — code is king.
 //
 // Usage:
-//   browser_ctl click "#submit"
-//   browser_ctl type "#search" "klawed"
-//   browser_ctl navigate https://example.com
-//   browser_ctl screenshot
-//   browser_ctl list-tabs
-//   browser_ctl ping
+//
+//	browser_ctl click "#submit"
+//	browser_ctl type "#search" "klawed"
+//	browser_ctl navigate https://example.com
+//	browser_ctl screenshot
+//	browser_ctl list-tabs
+//	browser_ctl ping
 package main
 
 import (
