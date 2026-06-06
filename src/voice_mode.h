@@ -59,6 +59,9 @@ struct VoiceModeState {
     int   saved_length;
     int   saved_cursor;
 
+    /* Audio feed tracking (per-session, reset on enter) */
+    size_t last_fed_samples;       /* Number of samples already fed to transcriber */
+
     /* Reference to TUI state (for updating input buffer) */
     TUIState *tui;
 };

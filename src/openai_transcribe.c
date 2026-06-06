@@ -4,6 +4,11 @@
  * Uses OpenAI's /v1/audio/transcriptions endpoint with gpt-4o-transcribe.
  * Simulates streaming by sending accumulated audio chunks at ~1.5s intervals
  * and surfacing partial results via the VoiceTranscriberPartialFn callback.
+ *
+ * Architecture: A background worker thread handles all HTTP requests to avoid
+ * blocking the TUI event loop. The main thread feeds audio into a shared
+ * buffer and signals the worker. The worker sends chunks periodically and
+ * invokes the partial callback from its own thread.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -17,6 +22,8 @@
 #include <bsd/string.h>
 #include <pthread.h>
 #include <curl/curl.h>
+#include <unistd.h>
+#include <errno.h>
 
 /* ------------------------------------------------------------------ */
 /* WAV header writer                                                   */
@@ -78,7 +85,7 @@ struct VoiceTranscriber {
     int sample_rate;
     int channels;
 
-    /* Accumulated PCM audio buffer (grows as audio is fed) */
+    /* Accumulated PCM audio buffer (shared between main and worker threads) */
     int16_t *pcm_buf;
     size_t   pcm_buf_len;      /* Number of int16_t samples */
     size_t   pcm_buf_cap;      /* Capacity in int16_t samples */
@@ -92,6 +99,17 @@ struct VoiceTranscriber {
 
     /* Last partial result text (so we don't repeat same text) */
     char *last_partial;
+
+    /* --- Background worker thread --- */
+    pthread_t       worker_thread;
+    pthread_mutex_t mutex;
+    pthread_cond_t  cond;
+    int             worker_running;   /* 1 while worker thread should continue */
+    int             shutdown;         /* 1 to signal shutdown */
+    int             new_audio;        /* 1 when new audio has been added since last send */
+    int             finalize_requested; /* 1 when finalize() wants the final result */
+    char           *final_result;     /* Set by worker thread after finalize */
+    int             final_result_ready; /* 1 when final_result is available */
 };
 
 /* Forward declarations */
@@ -151,7 +169,7 @@ static size_t curl_write_cb(void *contents, size_t size, size_t nmemb,
 }
 
 /* ------------------------------------------------------------------ */
-/* Send audio chunk to OpenAI and parse transcription result           */
+/* Parse transcription text from JSON response                         */
 /* ------------------------------------------------------------------ */
 
 /*
@@ -211,9 +229,16 @@ static char* parse_transcription_text(const char *json_body) {
     return result;
 }
 
+/* ------------------------------------------------------------------ */
+/* HTTP request: send audio to OpenAI (blocking, called from worker)   */
+/* ------------------------------------------------------------------ */
+
 /*
  * Send the accumulated PCM audio as a WAV file to OpenAI.
  * Returns the transcription text (caller must free) or NULL.
+ *
+ * This function performs a blocking HTTP request and should only be
+ * called from the background worker thread.
  */
 static char* transcribe_audio_chunk(const int16_t *pcm, size_t n_samples,
                                     int sample_rate) {
@@ -343,6 +368,130 @@ static char* transcribe_audio_chunk(const int16_t *pcm, size_t n_samples,
 }
 
 /* ------------------------------------------------------------------ */
+/* Background worker thread                                            */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Worker thread function.
+ * Waits for new audio to be available, then sends it to OpenAI in chunks.
+ * Runs until shutdown is signaled.
+ */
+static void* transcriber_worker(void *arg) {
+    VoiceTranscriber *vt = (VoiceTranscriber *)arg;
+    if (!vt) return NULL;
+
+    LOG_DEBUG("[openai_transcribe] Worker thread started");
+
+    /* Minimum audio to accumulate before sending (in samples) */
+    size_t chunk_interval = (size_t)(vt->sample_rate * 1500 / 1000);  /* 1.5 seconds */
+
+    pthread_mutex_lock(&vt->mutex);
+
+    while (vt->worker_running) {
+        /* Wait for: new audio, finalize request, or shutdown */
+        while (vt->worker_running && !vt->shutdown &&
+               !vt->new_audio && !vt->finalize_requested) {
+            pthread_cond_wait(&vt->cond, &vt->mutex);
+        }
+
+        if (vt->shutdown || !vt->worker_running) {
+            break;
+        }
+
+        /* Handle finalize request */
+        if (vt->finalize_requested) {
+            size_t n_samples = vt->pcm_buf_len;
+
+            /* If no audio, nothing to send */
+            if (n_samples == 0) {
+                vt->final_result_ready = 1;
+                vt->final_result = NULL;
+                vt->finalize_requested = 0;
+                pthread_cond_signal(&vt->cond);
+                continue;
+            }
+
+            /* Copy audio buffer snapshot (release mutex for curl call) */
+            int16_t *snapshot = (int16_t *)malloc(n_samples * sizeof(int16_t));
+            if (!snapshot) {
+                vt->final_result_ready = 1;
+                vt->final_result = NULL;
+                vt->finalize_requested = 0;
+                pthread_cond_signal(&vt->cond);
+                continue;
+            }
+            memcpy(snapshot, vt->pcm_buf, n_samples * sizeof(int16_t));
+            int sr = vt->sample_rate;
+            int finalize_is_active = 1;
+            vt->new_audio = 0;
+
+            /* Unlock while doing the blocking HTTP call */
+            pthread_mutex_unlock(&vt->mutex);
+
+            char *result = transcribe_audio_chunk(snapshot, n_samples, sr);
+            free(snapshot);
+
+            /* Re-acquire lock to store result */
+            pthread_mutex_lock(&vt->mutex);
+
+            vt->final_result = result ? strdup(result) : NULL;
+            free(result);
+            vt->final_result_ready = 1;
+            vt->finalize_requested = 0;
+            (void)finalize_is_active;
+
+            /* Signal the caller that the result is ready */
+            pthread_cond_signal(&vt->cond);
+            continue;
+        }
+
+        /* Handle new audio: send partial chunk */
+        if (vt->new_audio) {
+            size_t unsent = vt->pcm_buf_len - vt->last_sent_samples;
+
+            if (unsent >= chunk_interval && vt->partial_fn) {
+                size_t n_samples = vt->pcm_buf_len;
+
+                /* Copy audio buffer snapshot */
+                int16_t *snapshot = (int16_t *)malloc(n_samples * sizeof(int16_t));
+                if (snapshot) {
+                    memcpy(snapshot, vt->pcm_buf, n_samples * sizeof(int16_t));
+                    int sr = vt->sample_rate;
+                    vt->new_audio = 0;
+
+                    /* Unlock while doing the blocking HTTP call */
+                    pthread_mutex_unlock(&vt->mutex);
+
+                    char *partial = transcribe_audio_chunk(snapshot, n_samples, sr);
+                    free(snapshot);
+
+                    if (partial) {
+                        /* Callback from worker thread (thread-safe: just copies text) */
+                        vt->partial_fn(vt->partial_user_data, partial);
+                        free(partial);
+                    }
+
+                    /* Re-acquire lock */
+                    pthread_mutex_lock(&vt->mutex);
+
+                    /* Update sent position (audio buffer may have grown) */
+                    if (vt->pcm_buf_len >= n_samples) {
+                        vt->last_sent_samples = vt->pcm_buf_len;
+                    }
+                }
+            } else {
+                /* Not enough audio yet, clear flag and wait for more */
+                vt->new_audio = 0;
+            }
+        }
+    }
+
+    LOG_DEBUG("[openai_transcribe] Worker thread exiting");
+    pthread_mutex_unlock(&vt->mutex);
+    return NULL;
+}
+
+/* ------------------------------------------------------------------ */
 /* Backend function implementations                                     */
 /* ------------------------------------------------------------------ */
 
@@ -386,6 +535,42 @@ static VoiceTranscriber* openai_open_stream(VoiceTranscriberPartialFn partial_fn
     vt->pcm_buf_len = 0;
     vt->last_sent_samples = 0;
 
+    /* Initialize synchronization primitives */
+    if (pthread_mutex_init(&vt->mutex, NULL) != 0) {
+        LOG_ERROR("[openai_transcribe] Failed to initialize mutex");
+        free(vt->pcm_buf);
+        free(vt);
+        return NULL;
+    }
+
+    if (pthread_cond_init(&vt->cond, NULL) != 0) {
+        LOG_ERROR("[openai_transcribe] Failed to initialize condition variable");
+        pthread_mutex_destroy(&vt->mutex);
+        free(vt->pcm_buf);
+        free(vt);
+        return NULL;
+    }
+
+    vt->worker_running = 1;
+    vt->shutdown = 0;
+    vt->new_audio = 0;
+    vt->finalize_requested = 0;
+    vt->final_result = NULL;
+    vt->final_result_ready = 0;
+
+    /* Spawn worker thread */
+    int rc = pthread_create(&vt->worker_thread, NULL, transcriber_worker, vt);
+    if (rc != 0) {
+        LOG_ERROR("[openai_transcribe] Failed to create worker thread: %s",
+                  strerror(rc));
+        pthread_cond_destroy(&vt->cond);
+        pthread_mutex_destroy(&vt->mutex);
+        free(vt->pcm_buf);
+        free(vt);
+        return NULL;
+    }
+
+    LOG_DEBUG("[openai_transcribe] Stream opened, worker thread spawned");
     return vt;
 }
 
@@ -395,16 +580,24 @@ static int openai_feed_audio(VoiceTranscriber *vt,
 
     size_t n_samples = n_bytes / sizeof(int16_t);
 
+    pthread_mutex_lock(&vt->mutex);
+
     /* Grow buffer if needed */
     if (vt->pcm_buf_len + n_samples > vt->pcm_buf_cap) {
         size_t new_cap = vt->pcm_buf_cap * 2;
         if (new_cap < vt->pcm_buf_len + n_samples) {
             new_cap = vt->pcm_buf_len + n_samples;
         }
+        /* Cap to prevent unlimited growth (~60s at 16kHz) */
+        size_t max_cap = (size_t)(vt->sample_rate * 60);
+        if (new_cap > max_cap) {
+            new_cap = max_cap;
+        }
         int16_t *new_buf = (int16_t *)realloc(vt->pcm_buf,
                                               new_cap * sizeof(int16_t));
         if (!new_buf) {
             LOG_ERROR("[openai_transcribe] Failed to grow PCM buffer");
+            pthread_mutex_unlock(&vt->mutex);
             return -1;
         }
         vt->pcm_buf = new_buf;
@@ -412,40 +605,15 @@ static int openai_feed_audio(VoiceTranscriber *vt,
     }
 
     /* Append samples */
-    memcpy(vt->pcm_buf + vt->pcm_buf_len, pcm, n_bytes);
-    vt->pcm_buf_len += n_samples;
-
-    /*
-     * Send partial chunk every ~1.5 seconds of audio.
-     * 16000 Hz * 1.5s = 24000 samples per chunk.
-     */
-    size_t chunk_interval = (size_t)(vt->sample_rate * 1.5);
-    size_t unsent = vt->pcm_buf_len - vt->last_sent_samples;
-
-    if (unsent >= chunk_interval && vt->partial_fn) {
-        char *partial = transcribe_audio_chunk(vt->pcm_buf, vt->pcm_buf_len,
-                                                vt->sample_rate);
-        if (partial) {
-            /* Notify callback (only if text differs from last partial) */
-            if (!vt->last_partial || strcmp(partial, vt->last_partial) != 0) {
-                vt->partial_fn(vt->partial_user_data, partial);
-
-                /* Trim whitespace for comparison storage */
-                char *trimmed = partial;
-                while (*trimmed == ' ' || *trimmed == '\t') trimmed++;
-                char *end = trimmed + strlen(trimmed);
-                while (end > trimmed && (*(end - 1) == ' ' || *(end - 1) == '\t')) {
-                    end--;
-                }
-                *end = '\0';
-
-                free(vt->last_partial);
-                vt->last_partial = strdup(trimmed);
-            }
-            free(partial);
-        }
-        vt->last_sent_samples = vt->pcm_buf_len;
+    if (n_samples > 0) {
+        memcpy(vt->pcm_buf + vt->pcm_buf_len, pcm, n_bytes);
+        vt->pcm_buf_len += n_samples;
+        vt->new_audio = 1;
     }
+
+    /* Signal worker thread that new audio is available */
+    pthread_cond_signal(&vt->cond);
+    pthread_mutex_unlock(&vt->mutex);
 
     return 0;
 }
@@ -454,14 +622,42 @@ static int openai_finalize(VoiceTranscriber *vt, char **result_out) {
     if (!vt || !result_out) return -1;
     *result_out = NULL;
 
+    LOG_DEBUG("[openai_transcribe] Finalize requested");
+
+    pthread_mutex_lock(&vt->mutex);
+
     if (vt->pcm_buf_len == 0) {
         LOG_WARN("[openai_transcribe] No audio recorded, nothing to transcribe");
+        vt->worker_running = 0;
+        vt->shutdown = 1;
+        pthread_cond_signal(&vt->cond);
+        pthread_mutex_unlock(&vt->mutex);
+        pthread_join(vt->worker_thread, NULL);
         return -1;
     }
 
-    /* If we haven't sent the final chunk yet (or the audio is too short), send now */
-    char *final = transcribe_audio_chunk(vt->pcm_buf, vt->pcm_buf_len,
-                                          vt->sample_rate);
+    /* Request the worker to send the final chunk */
+    vt->finalize_requested = 1;
+    vt->final_result_ready = 0;
+    pthread_cond_signal(&vt->cond);
+
+    /* Wait for the worker to complete the final transcription */
+    while (!vt->final_result_ready && vt->worker_running) {
+        pthread_cond_wait(&vt->cond, &vt->mutex);
+    }
+
+    char *final = vt->final_result;
+    vt->final_result = NULL;
+
+    /* Signal worker to shut down */
+    vt->worker_running = 0;
+    vt->shutdown = 1;
+    pthread_cond_signal(&vt->cond);
+    pthread_mutex_unlock(&vt->mutex);
+
+    /* Wait for worker thread to exit */
+    pthread_join(vt->worker_thread, NULL);
+
     if (!final) {
         LOG_ERROR("[openai_transcribe] Final transcription failed");
         return -1;
@@ -493,8 +689,29 @@ static int openai_finalize(VoiceTranscriber *vt, char **result_out) {
 
 static void openai_close_stream(VoiceTranscriber *vt) {
     if (!vt) return;
+
+    LOG_DEBUG("[openai_transcribe] Closing stream");
+
+    /* Signal worker to shut down if still running */
+    pthread_mutex_lock(&vt->mutex);
+    if (vt->worker_running) {
+        vt->worker_running = 0;
+        vt->shutdown = 1;
+        pthread_cond_signal(&vt->cond);
+    }
+    pthread_mutex_unlock(&vt->mutex);
+
+    /* Wait for worker thread to exit */
+    pthread_join(vt->worker_thread, NULL);
+
+    /* Clean up synchronization primitives */
+    pthread_cond_destroy(&vt->cond);
+    pthread_mutex_destroy(&vt->mutex);
+
+    /* Free resources */
     free(vt->pcm_buf);
     free(vt->last_partial);
+    free(vt->final_result);
     free(vt);
 }
 

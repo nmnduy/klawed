@@ -301,22 +301,22 @@ static void read_audio_pipe(VoiceModeState *vms) {
 static void feed_transcriber(VoiceModeState *vms) {
     if (!vms->transcriber || vms->audio_buf_len == 0) return;
 
-    /* Feed in chunks to keep latency low */
-    static size_t last_fed = 0;
-    if (last_fed >= vms->audio_buf_len) {
-        /* No new data, but check if enough time passed for another partial */
+    /* Feed in chunks to keep latency low.
+     * last_fed_samples is per-session, reset in voice_mode_enter(). */
+    if (vms->last_fed_samples >= vms->audio_buf_len) {
+        /* No new data */
         return;
     }
 
-    size_t n_bytes = (vms->audio_buf_len - last_fed) * sizeof(int16_t);
+    size_t n_bytes = (vms->audio_buf_len - vms->last_fed_samples) * sizeof(int16_t);
 
     const VoiceTranscriberBackend *backend = voice_transcriber_get_default();
     if (backend && backend->feed_audio) {
         backend->feed_audio(vms->transcriber,
-                            vms->audio_buf + last_fed,
+                            vms->audio_buf + vms->last_fed_samples,
                             n_bytes);
     }
-    last_fed = vms->audio_buf_len;
+    vms->last_fed_samples = vms->audio_buf_len;
 }
 
 /* ------------------------------------------------------------------ */
@@ -424,8 +424,9 @@ int voice_mode_enter(VoiceModeState *vms, TUIState *tui) {
         return -1;
     }
 
-    /* Reset audio buffer */
+    /* Reset audio buffer and feed tracking */
     vms->audio_buf_len = 0;
+    vms->last_fed_samples = 0;
     vms->partial_text[0] = '\0';
     vms->partial_dirty = 0;
 
