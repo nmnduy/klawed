@@ -903,7 +903,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         // Start history search popup
         tui_history_start_search(tui);
         return 0;
-    } else if (ch == ' ' && input->length == 0) {  // Spacebar on empty input: enter voice mode
+    } else if (ch == ' ' && input->length == 0 && !input->paste_mode) {  // Spacebar on empty input: enter voice mode (skip during paste)
         if (tui->voice_mode) {
             struct timespec now_ts;
             clock_gettime(CLOCK_MONOTONIC, &now_ts);

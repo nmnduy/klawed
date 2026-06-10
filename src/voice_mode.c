@@ -5,7 +5,7 @@
  * Activated by holding spacebar in INSERT mode.
  *
  * Hold detection: holding spacebar generates repeated KEY_SPACE events
- * via terminal key-repeat. A 300ms silence after the last event signals
+ * via terminal key-repeat. A 1s silence after the last event signals
  * release, which stops recording and finalizes transcription.
  */
 
@@ -40,7 +40,7 @@ extern char **environ;
 
 #define DEFAULT_SAMPLE_RATE     16000
 #define DEFAULT_CHANNELS        1
-#define HOLD_TIMEOUT_MS         300     /* Silence after last spacebar to trigger release */
+#define HOLD_TIMEOUT_MS         1000    /* Silence after last spacebar to trigger release */
 #define AUDIO_BUF_CHUNK_SAMPLES 4096    /* Samples to read from pipe at once */
 #define AUDIO_BUF_MAX_SAMPLES   480000  /* ~30 seconds at 16kHz */
 
