@@ -55,6 +55,11 @@ char* tui_conversation_extract_tool_name(const char *prefix);
 // Returns 1 if tool message, 0 otherwise
 int tui_conversation_is_tool_message(const char *prefix);
 
+// Check if a prefix is a reasoning message (matches reasoning open/close icons)
+// Returns 1 if reasoning message, 0 otherwise
+// Handles both Nerd Font (/) and ASCII ("<Reasoning >>>"/"<<< Reasoning>") variants
+int tui_conversation_is_reasoning_message(const char *prefix);
+
 // Determine the display prefix for a tool message
 // If same tool as last output, returns "└─"
 // Otherwise returns the full prefix

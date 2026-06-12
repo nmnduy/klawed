@@ -194,6 +194,7 @@ TEST_REALTIME_STEERING_TARGET = $(BUILD_DIR)/test_realtime_steering
 TEST_STREAMING_PERSISTENCE_TARGET = $(BUILD_DIR)/test_streaming_persistence
 TEST_TUI_TOOL_CONNECTOR_TARGET = $(BUILD_DIR)/test_tui_tool_connector
 TEST_TUI_STREAMING_INDEX_TARGET = $(BUILD_DIR)/test_tui_streaming_index
+TEST_TUI_REASONING_DETECTION_TARGET = $(BUILD_DIR)/test_tui_reasoning_detection
 QUERY_TOOL = $(BUILD_DIR)/query_logs
 SRC = src/klawed.c
 ARRAY_RESIZE_SRC = src/array_resize.c
@@ -562,6 +563,7 @@ TEST_SQLITE_QUEUE_SEEDING_SRC = tests/test_sqlite_queue_seeding.c
 TEST_REALTIME_STEERING_SRC = tests/test_realtime_steering.c
 TEST_TUI_TOOL_CONNECTOR_SRC = tests/test_tui_tool_connector.c
 TEST_TUI_STREAMING_INDEX_SRC = tests/test_tui_streaming_index.c
+TEST_TUI_REASONING_DETECTION_SRC = tests/test_tui_reasoning_detection.c
 TEST_DUMP_UTILS_SRC = tests/test_dump_utils.c
 TEST_TRANSCRIBE_SRC = tests/test_transcribe.c
 TEST_TRANSCRIBE_TARGET = $(BUILD_DIR)/test_transcribe
@@ -601,7 +603,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-streaming-persistence test-tool-disable
+test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-tui-reasoning-detection test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-streaming-persistence test-tool-disable
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -922,6 +924,12 @@ test-tui-streaming-index: check-deps $(TEST_TUI_STREAMING_INDEX_TARGET)
 	@echo "Running TUI Streaming Index tests..."
 	@echo ""
 	@./$(TEST_TUI_STREAMING_INDEX_TARGET)
+
+test-tui-reasoning-detection: check-deps $(TEST_TUI_REASONING_DETECTION_TARGET)
+	@echo ""
+	@echo "Running TUI Reasoning Detection tests..."
+	@echo ""
+	@./$(TEST_TUI_REASONING_DETECTION_TARGET)
 
 test-config: check-deps $(TEST_CONFIG_TARGET)
 	@echo ""
@@ -2412,6 +2420,17 @@ $(TEST_TUI_STREAMING_INDEX_TARGET): $(TEST_TUI_STREAMING_INDEX_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_TUI_STREAMING_INDEX_TARGET) $(TEST_TUI_STREAMING_INDEX_SRC)
 	@echo ""
 	@echo "✓ TUI Streaming Index test build successful!"
+	@echo ""
+
+# Test target for TUI Reasoning Detection - tests centralized reasoning
+# message detection across Nerd Font and ASCII icon variants.
+# Self-contained test with embedded implementations.
+$(TEST_TUI_REASONING_DETECTION_TARGET): $(TEST_TUI_REASONING_DETECTION_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling TUI Reasoning Detection test suite..."
+	@$(CC) $(CFLAGS) -o $(TEST_TUI_REASONING_DETECTION_TARGET) $(TEST_TUI_REASONING_DETECTION_SRC)
+	@echo ""
+	@echo "✓ TUI Reasoning Detection test build successful!"
 	@echo ""
 
 # Test target for Config module - tests save/load and style conversion

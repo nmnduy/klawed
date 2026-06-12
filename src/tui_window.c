@@ -11,6 +11,7 @@
 #include "tui_window.h"
 #include "tui.h"
 #include "tui_input.h"
+#include "tui_conversation.h"
 #include "logger.h"
 #include "window_manager.h"
 #include <ncurses.h>
@@ -393,13 +394,9 @@ void tui_handle_resize(TUIState *tui) {
                 // Skip the regular newline below for user messages
                 continue;
             } else if (entry->prefix && entry->prefix[0] != '\0') {
-                // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F) or "" (UTF-8: 0xEF 0x82 0xAD)
-                int is_tool_message = ((entry->prefix[0] == '\xe2' && entry->prefix[1] == '\x97' && entry->prefix[2] == '\x8f') ||
-                                       (entry->prefix[0] == '\xef' && entry->prefix[1] == '\x82' && entry->prefix[2] == '\xad'));
-                // Check for reasoning messages using centralized icon functions
-                // (matches both Nerd Font / and ASCII "<Reasoning >>>"/"<<< Reasoning>" fallbacks)
-                int is_reasoning_message = (strcmp(entry->prefix, tui_icon_reasoning_open()) == 0 ||
-                                            strcmp(entry->prefix, tui_icon_reasoning_close()) == 0);
+                // Check for tool and reasoning messages using centralized detection
+                int is_tool_message = tui_conversation_is_tool_message(entry->prefix);
+                int is_reasoning_message = tui_conversation_is_reasoning_message(entry->prefix);
                 if (is_tool_message || is_reasoning_message) {
                     // Tool or reasoning message: use dimmed color for text (tag keeps its color)
                     text_pair = NCURSES_PAIR_TOOL_DIM;

@@ -430,14 +430,8 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                     // re-rendering the tag on every wrapped line. On the first
                     // streaming chunk, render_entry_to_pad skipped the prefix
                     // (empty-text placeholder), so we render it here.
-                    int is_reasoning = (strcmp(last_entry->prefix, tui_icon_reasoning_open()) == 0 ||
-                                        strcmp(last_entry->prefix, tui_icon_reasoning_close()) == 0);
-                    int is_tool = ((last_entry->prefix[0] == '\xe2' &&
-                                    last_entry->prefix[1] == '\x97' &&
-                                    last_entry->prefix[2] == '\x8f') ||
-                                   (last_entry->prefix[0] == '\xef' &&
-                                    last_entry->prefix[1] == '\x82' &&
-                                    last_entry->prefix[2] == '\xad'));
+                    int is_reasoning = tui_conversation_is_reasoning_message(last_entry->prefix);
+                    int is_tool = tui_conversation_is_tool_message(last_entry->prefix);
                     // For reasoning/tool messages, skip prefix on wrapping
                     // continuation lines (old_len > 0) to avoid re-rendering
                     // the tag on every wrapped line. But on the first streaming
@@ -522,17 +516,8 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                 // during streaming, not just after the full rebuild.
                 int text_pair = NCURSES_PAIR_FOREGROUND;
                 if (last_entry->prefix && last_entry->prefix[0] != '\0') {
-                    // Check for tool messages: prefix starts with "●" or ""
-                    int is_tool_message = ((last_entry->prefix[0] == '\xe2' &&
-                                            last_entry->prefix[1] == '\x97' &&
-                                            last_entry->prefix[2] == '\x8f') ||
-                                           (last_entry->prefix[0] == '\xef' &&
-                                            last_entry->prefix[1] == '\x82' &&
-                                            last_entry->prefix[2] == '\xad'));
-                    // Check for reasoning messages: prefix is "<Reasoning >>>" or ""
-                    int is_reasoning_message = (last_entry->prefix &&
-                                                (strcmp(last_entry->prefix, tui_icon_reasoning_open()) == 0 ||
-                                                 strcmp(last_entry->prefix, tui_icon_reasoning_close()) == 0));
+                    int is_tool_message = tui_conversation_is_tool_message(last_entry->prefix);
+                    int is_reasoning_message = tui_conversation_is_reasoning_message(last_entry->prefix);
                     if (is_tool_message || is_reasoning_message) {
                         text_pair = NCURSES_PAIR_TOOL_DIM;
                     }
@@ -762,6 +747,18 @@ int tui_conversation_is_tool_message(const char *prefix) {
     }
 
     return tui_prefix_has_tool_icon(prefix, 0);
+}
+
+// Check if a prefix is a reasoning message (matches reasoning open/close icons)
+// Returns 1 if reasoning message, 0 otherwise
+// Handles both Nerd Font (/) and ASCII ("<Reasoning >>>"/"<<< Reasoning>") variants
+int tui_conversation_is_reasoning_message(const char *prefix) {
+    if (!prefix || prefix[0] == '\0') {
+        return 0;
+    }
+
+    return (strcmp(prefix, tui_icon_reasoning_open()) == 0 ||
+            strcmp(prefix, tui_icon_reasoning_close()) == 0);
 }
 
 // Determine the display prefix for a tool message

@@ -1748,9 +1748,8 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         } else if (prefix && prefix[0] != '\0') {
             // Check for tool messages using centralized detection
             int is_tool_message = tui_conversation_is_tool_message(prefix);
-            // Check for reasoning messages
-            int is_reasoning_message = (strcmp(prefix, tui_icon_reasoning_open()) == 0 ||
-                                        strcmp(prefix, tui_icon_reasoning_close()) == 0);
+            // Check for reasoning messages using centralized detection
+            int is_reasoning_message = tui_conversation_is_reasoning_message(prefix);
             if (is_tool_message || is_reasoning_message) {
                 // Tool or reasoning message: use dimmed color for text (tag keeps its color)
                 text_pair = NCURSES_PAIR_TOOL_DIM;
