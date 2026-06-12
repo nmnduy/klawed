@@ -16,11 +16,11 @@ int main(void) {
     // Test 1: Initialize defaults
     printf("Test 1: config_init_defaults()\n");
     config_init_defaults(&config);
-    if (config.input_box_style != INPUT_STYLE_HORIZONTAL) {
-        printf("  FAIL: Expected INPUT_STYLE_HORIZONTAL as default\n");
+    if (config.input_box_style != INPUT_STYLE_BACKGROUND) {
+        printf("  FAIL: Expected INPUT_STYLE_BACKGROUND as default\n");
         failures++;
     } else {
-        printf("  PASS: Default style is INPUT_STYLE_HORIZONTAL\n");
+        printf("  PASS: Default style is INPUT_STYLE_BACKGROUND\n");
     }
 
     // Test 2: Style to string conversion
