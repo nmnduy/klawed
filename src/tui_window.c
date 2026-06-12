@@ -396,8 +396,10 @@ void tui_handle_resize(TUIState *tui) {
                 // Check for tool messages: prefix starts with "●" (UTF-8: 0xE2 0x97 0x8F) or "" (UTF-8: 0xEF 0x82 0xAD)
                 int is_tool_message = ((entry->prefix[0] == '\xe2' && entry->prefix[1] == '\x97' && entry->prefix[2] == '\x8f') ||
                                        (entry->prefix[0] == '\xef' && entry->prefix[1] == '\x82' && entry->prefix[2] == '\xad'));
-                // Check for reasoning messages: prefix starts with "⟨" (UTF-8: 0xE2 0x9F 0xA8)
-                int is_reasoning_message = (entry->prefix[0] == '\xe2' && entry->prefix[1] == '\x9f' && entry->prefix[2] == '\xa8');
+                // Check for reasoning messages using centralized icon functions
+                // (matches both Nerd Font / and ASCII "<Reasoning >>>"/"<<< Reasoning>" fallbacks)
+                int is_reasoning_message = (strcmp(entry->prefix, tui_icon_reasoning_open()) == 0 ||
+                                            strcmp(entry->prefix, tui_icon_reasoning_close()) == 0);
                 if (is_tool_message || is_reasoning_message) {
                     // Tool or reasoning message: use dimmed color for text (tag keeps its color)
                     text_pair = NCURSES_PAIR_TOOL_DIM;
