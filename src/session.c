@@ -457,6 +457,14 @@ int session_list_sessions(PersistenceDB *db, int limit) {
 
             // Get session title — display prominently in first column
             char *title = persistence_get_session_title(db, sessions[i]);
+            if (!title) {
+                // No stored title — extract first user message as fallback
+                title = persistence_extract_first_user_message(db, sessions[i]);
+                if (title) {
+                    // Save it for future listings
+                    persistence_set_session_title(db, sessions[i], title);
+                }
+            }
             char display_title[48];
             if (title) {
                 // Truncate title for 45-char column
@@ -507,8 +515,14 @@ int session_list_sessions(PersistenceDB *db, int limit) {
 
             count++;
         } else {
-            // Get session title
+            // Get session title — fall back to first user message if no stored title
             char *title = persistence_get_session_title(db, sessions[i]);
+            if (!title) {
+                title = persistence_extract_first_user_message(db, sessions[i]);
+                if (title) {
+                    persistence_set_session_title(db, sessions[i], title);
+                }
+            }
             char display_title[48];
 
             if (title) {

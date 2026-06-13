@@ -43,7 +43,7 @@ int persistence_get_session_token_usage(
     *completion_tokens = 0;
     *cached_tokens = 0;
     LOG_DEBUG("Token usage database not initialized");
-    return 0;
+    return -1;
 }
 
 // Get cumulative token totals for a session (sums all records)
@@ -585,6 +585,117 @@ char* persistence_get_session_title(
     sqlite3_finalize(stmt);
     pthread_mutex_unlock(&db->mutex);
     return title;
+}
+
+// Extract the first user message text from a session's api_calls
+char* persistence_extract_first_user_message(
+    PersistenceDB *db,
+    const char *session_id
+) {
+    if (!db || !db->db || !session_id) {
+        LOG_ERROR("Invalid parameters to persistence_extract_first_user_message");
+        return NULL;
+    }
+
+    pthread_mutex_lock(&db->mutex);
+
+    // Get the earliest request_json for this session
+    const char *sql =
+        "SELECT request_json FROM api_calls "
+        "WHERE session_id = ? AND request_json IS NOT NULL "
+        "ORDER BY created_at ASC LIMIT 1;";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(db->db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("Failed to prepare statement: %s", sqlite3_errmsg(db->db));
+        pthread_mutex_unlock(&db->mutex);
+        return NULL;
+    }
+
+    sqlite3_bind_text(stmt, 1, session_id, -1, SQLITE_TRANSIENT);
+
+    char *result = NULL;
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        const unsigned char *request_json = sqlite3_column_text(stmt, 0);
+        if (request_json) {
+            // Parse JSON to extract first user message text
+            cJSON *request = cJSON_Parse((const char *)request_json);
+            if (request) {
+                cJSON *messages = cJSON_GetObjectItem(request, "messages");
+                if (messages && cJSON_IsArray(messages)) {
+                    int msg_count = cJSON_GetArraySize(messages);
+                    for (int i = 0; i < msg_count; i++) {
+                        cJSON *msg = cJSON_GetArrayItem(messages, i);
+                        cJSON *role = cJSON_GetObjectItem(msg, "role");
+                        if (role && cJSON_IsString(role) &&
+                            strcmp(role->valuestring, "user") == 0) {
+                            cJSON *content = cJSON_GetObjectItem(msg, "content");
+                            if (content && cJSON_IsString(content) &&
+                                content->valuestring && content->valuestring[0] != '\0') {
+                                result = strdup(content->valuestring);
+                            }
+                            break;  // Take first user message
+                        }
+                    }
+                }
+                cJSON_Delete(request);
+            }
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    pthread_mutex_unlock(&db->mutex);
+
+    if (!result) {
+        return NULL;
+    }
+
+    // Clean up: collapse whitespace, strip newlines, limit length
+    size_t len = strlen(result);
+    char *clean = malloc(128);  // Max 125 chars + null + margin
+    if (!clean) {
+        free(result);
+        return NULL;
+    }
+
+    int in_space = 1;  // Start in "space" mode to skip leading whitespace
+    size_t out_idx = 0;
+    int max_chars = 125;
+
+    for (size_t i = 0; i < len && (int)out_idx < max_chars; i++) {
+        char c = result[i];
+        if (c == '\n' || c == '\r' || c == '\t') {
+            if (!in_space) {
+                clean[out_idx++] = ' ';
+                in_space = 1;
+            }
+        } else if (c == ' ') {
+            if (!in_space) {
+                clean[out_idx++] = ' ';
+                in_space = 1;
+            }
+        } else {
+            clean[out_idx++] = c;
+            in_space = 0;
+        }
+    }
+
+    // Remove trailing space
+    if (out_idx > 0 && clean[out_idx - 1] == ' ') {
+        out_idx--;
+    }
+
+    clean[out_idx] = '\0';
+    free(result);
+
+    if (out_idx == 0) {
+        free(clean);
+        return NULL;
+    }
+
+    return clean;
 }
 
 // Close persistence layer

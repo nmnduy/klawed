@@ -245,4 +245,24 @@ char* persistence_get_session_title(
     const char *session_id
 );
 
+/**
+ * Extract the first user message text from a session.
+ *
+ * Queries the api_calls table for the earliest request in the session and
+ * extracts the text content of the first user message. Used as a fallback
+ * when no session title has been stored yet.
+ *
+ * Parameters:
+ *   db: Persistence database handle
+ *   session_id: Session ID to query
+ *
+ * Returns:
+ *   Newly allocated string with cleaned text (single line, max ~125 chars),
+ *   or NULL if no user message found or on error. Caller must free.
+ */
+char* persistence_extract_first_user_message(
+    PersistenceDB *db,
+    const char *session_id
+);
+
 #endif // PERSISTENCE_H
