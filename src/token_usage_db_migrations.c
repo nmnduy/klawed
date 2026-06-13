@@ -24,17 +24,16 @@ typedef struct {
 // ============================================================================
 
 static int migration_001_add_metadata(sqlite3 *db) {
-    const char *sql =
+    const char *create_meta_sql =
         "CREATE TABLE IF NOT EXISTS token_usage_metadata ("
         "    id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "    metadata_json TEXT NOT NULL,"
         "    metadata_hash TEXT UNIQUE,"
         "    created_at INTEGER NOT NULL"
-        ");"
-        "CREATE INDEX IF NOT EXISTS idx_token_usage_metadata_id ON token_usage(metadata_id);";
+        ");";
 
     char *err_msg = NULL;
-    int rc = sqlite3_exec(db, sql, NULL, NULL, &err_msg);
+    int rc = sqlite3_exec(db, create_meta_sql, NULL, NULL, &err_msg);
     if (rc != SQLITE_OK) {
         LOG_ERROR("Migration 001 failed (create metadata table): %s", err_msg);
         sqlite3_free(err_msg);
@@ -51,6 +50,16 @@ static int migration_001_add_metadata(sqlite3 *db) {
             return -1;
         }
         sqlite3_free(err_msg);
+    }
+
+    // Create index on metadata_id (must be after ALTER TABLE adds the column)
+    const char *index_sql =
+        "CREATE INDEX IF NOT EXISTS idx_token_usage_metadata_id ON token_usage(metadata_id);";
+    rc = sqlite3_exec(db, index_sql, NULL, NULL, &err_msg);
+    if (rc != SQLITE_OK) {
+        LOG_WARN("Migration 001: could not create metadata_id index: %s", err_msg);
+        sqlite3_free(err_msg);
+        // Non-fatal: index is an optimization, not required for correctness
     }
 
     return 0;
