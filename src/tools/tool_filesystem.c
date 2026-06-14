@@ -626,9 +626,6 @@ static int is_excluded_dir(const char *name) {
         "build", "dist", "target",
         ".cache", ".venv", "venv", "__pycache__",
         ".klawed",
-        /* Common macOS/Linux home-directory dirs — prevent deep traversal */
-        "Library", ".Trash", ".local", ".npm", ".cargo",
-        ".docker", ".bundle", ".gradle", ".m2",
         NULL
     };
     for (int i = 0; excluded[i] != NULL; i++) {

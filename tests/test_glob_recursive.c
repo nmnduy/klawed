@@ -46,7 +46,8 @@ static int tests_failed = 0;
 static int match_simple_glob(const char *filename, const char *pattern);
 static void glob_recursive(const char *base_path, const char *rel_path,
                            const char *file_pattern, cJSON *files,
-                           int *total_found, int *returned_count, int max_results);
+                           int *total_found, int *returned_count,
+                           int max_results, int depth);
 static int has_recursive_glob(const char *pattern);
 static cJSON* tool_glob(cJSON *params, TestConversationState *state);
 
@@ -142,15 +143,22 @@ static int match_simple_glob(const char *filename, const char *pattern) {
     return (*pattern == '\0' && *filename == '\0');
 }
 
+/* Maximum recursion depth for glob_recursive.
+ * Prevents stack overflow on deeply nested directory trees. */
+#define GLOB_MAX_DEPTH 30
+
 // Recursively traverse directory and match files against pattern
 static void glob_recursive(const char *base_path, const char *rel_path,
                            const char *file_pattern, cJSON *files,
-                           int *total_found, int *returned_count, int max_results) {
+                           int *total_found, int *returned_count,
+                           int max_results, int depth) {
     char current_dir[PATH_MAX];
     if (rel_path[0] == '\0') {
         strlcpy(current_dir, base_path, sizeof(current_dir));
     } else {
-        snprintf(current_dir, sizeof(current_dir), "%s/%s", base_path, rel_path);
+        strlcpy(current_dir, base_path, sizeof(current_dir));
+        strlcat(current_dir, "/", sizeof(current_dir));
+        strlcat(current_dir, rel_path, sizeof(current_dir));
     }
 
     DIR *dir = opendir(current_dir);
@@ -173,16 +181,25 @@ static void glob_recursive(const char *base_path, const char *rel_path,
         if (rel_path[0] == '\0') {
             strlcpy(new_rel_path, entry->d_name, sizeof(new_rel_path));
         } else {
-            snprintf(new_rel_path, sizeof(new_rel_path), "%s/%s", rel_path, entry->d_name);
+            strlcpy(new_rel_path, rel_path, sizeof(new_rel_path));
+            strlcat(new_rel_path, "/", sizeof(new_rel_path));
+            strlcat(new_rel_path, entry->d_name, sizeof(new_rel_path));
         }
-        snprintf(full_path, sizeof(full_path), "%s/%s", base_path, new_rel_path);
+        strlcpy(full_path, base_path, sizeof(full_path));
+        strlcat(full_path, "/", sizeof(full_path));
+        strlcat(full_path, new_rel_path, sizeof(full_path));
 
         struct stat st;
-        if (stat(full_path, &st) != 0) continue;
+        /* Use lstat to avoid following symlinks — a symlink loop would
+         * cause infinite recursion and stack overflow. */
+        if (lstat(full_path, &st) != 0) continue;
 
         if (S_ISDIR(st.st_mode)) {
+            /* Enforce hard depth limit to prevent stack overflow on
+             * deeply-nested trees (e.g. macOS home dir). */
+            if (depth >= GLOB_MAX_DEPTH) continue;
             glob_recursive(base_path, new_rel_path, file_pattern, files,
-                           total_found, returned_count, max_results);
+                           total_found, returned_count, max_results, depth + 1);
         } else if (S_ISREG(st.st_mode)) {
             if (match_simple_glob(entry->d_name, file_pattern)) {
                 (*total_found)++;
@@ -251,11 +268,11 @@ static cJSON* tool_glob(cJSON *params, TestConversationState *state) {
         }
 
         glob_recursive(state->working_dir, "", file_pattern, files,
-                       &total_found, &returned_count, max_results);
+                       &total_found, &returned_count, max_results, 0);
 
         for (int dir_idx = 0; dir_idx < state->additional_dirs_count; dir_idx++) {
             glob_recursive(state->additional_dirs[dir_idx], "", file_pattern, files,
-                           &total_found, &returned_count, max_results);
+                           &total_found, &returned_count, max_results, 0);
         }
     } else {
         char full_pattern[PATH_MAX];
@@ -669,6 +686,146 @@ static void test_no_truncation_fields_absent(void) {
     cJSON_Delete(result);
 }
 
+// Test: depth limit prevents stack overflow on deep directory trees
+static void test_depth_limit(void) {
+    print_test_header("Depth limit prevents crash on deep tree");
+
+    system("rm -rf /tmp/glob_test_deep");
+    mkdir("/tmp/glob_test_deep", 0755);
+
+    /* Build a directory chain deeper than GLOB_MAX_DEPTH.  At depth 31,
+     * each component is a single-character name to keep path length short
+     * while maximizing directory count. */
+    char path[PATH_MAX];
+    strlcpy(path, "/tmp/glob_test_deep", sizeof(path));
+    for (int i = 0; i < 35; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "%d", i);
+        strlcat(path, "/", sizeof(path));
+        strlcat(path, name, sizeof(path));
+        mkdir(path, 0755);
+    }
+
+    /* Put a file at depth 35 (beyond GLOB_MAX_DEPTH=30) — should NOT be found */
+    char deep_file[PATH_MAX];
+    snprintf(deep_file, sizeof(deep_file), "%s/deep_file.tex", path);
+    FILE *f = fopen(deep_file, "w");
+    if (f) fclose(f);
+
+    /* Put a file at depth 5 (within limit) — should be found */
+    char shallow_path[PATH_MAX];
+    strlcpy(shallow_path, "/tmp/glob_test_deep", sizeof(shallow_path));
+    for (int i = 0; i < 5; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "%d", i);
+        strlcat(shallow_path, "/", sizeof(shallow_path));
+        strlcat(shallow_path, name, sizeof(shallow_path));
+    }
+    char shallow_file[PATH_MAX];
+    snprintf(shallow_file, sizeof(shallow_file), "%s/shallow_file.tex", shallow_path);
+    f = fopen(shallow_file, "w");
+    if (f) fclose(f);
+
+    TestConversationState state = {0};
+    strlcpy(state.working_dir, "/tmp/glob_test_deep", sizeof(state.working_dir));
+    state.additional_dirs_count = 0;
+
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddStringToObject(params, "pattern", "**/*.tex");
+
+    cJSON *result = tool_glob(params, &state);
+    cJSON *files = cJSON_GetObjectItem(result, "files");
+    cJSON *count = cJSON_GetObjectItem(result, "count");
+
+    /* The glob should not crash, and should find the shallow file only */
+    assert_test(cJSON_IsArray(files),
+                "Should return a files array (not crash)");
+    assert_test(count && count->valueint == 1,
+                "Should find only 1 .tex file (shallow one, deep one beyond limit)");
+
+    cJSON_Delete(params);
+    cJSON_Delete(result);
+    system("rm -rf /tmp/glob_test_deep");
+}
+
+// Test: symlinks to directories are not followed (lstat safety)
+static void test_symlink_not_followed(void) {
+    print_test_header("Symlinks to directories are not followed");
+
+    system("rm -rf /tmp/glob_test_symlink");
+    mkdir("/tmp/glob_test_symlink", 0755);
+    mkdir("/tmp/glob_test_symlink/realdir", 0755);
+
+    FILE *f = fopen("/tmp/glob_test_symlink/file_at_root.txt", "w");
+    if (f) fclose(f);
+    f = fopen("/tmp/glob_test_symlink/realdir/file_inside.txt", "w");
+    if (f) fclose(f);
+
+    /* Create a symlink pointing to realdir */
+    symlink("realdir", "/tmp/glob_test_symlink/link_to_dir");
+
+    TestConversationState state = {0};
+    strlcpy(state.working_dir, "/tmp/glob_test_symlink", sizeof(state.working_dir));
+    state.additional_dirs_count = 0;
+
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddStringToObject(params, "pattern", "**/*.txt");
+
+    cJSON *result = tool_glob(params, &state);
+    cJSON *files = cJSON_GetObjectItem(result, "files");
+    cJSON *count = cJSON_GetObjectItem(result, "count");
+
+    /* With lstat, the symlink link_to_dir is skipped (not followed),
+     * but the real directory realdir is still traversed normally.
+     * So we find file_at_root.txt AND realdir/file_inside.txt = 2 files. */
+    assert_test(cJSON_IsArray(files) && cJSON_GetArraySize(files) == 2,
+                "Should find 2 .txt files (symlink skipped, realdir traversed)");
+    assert_test(count && count->valueint == 2,
+                "Count should be 2");
+
+    cJSON_Delete(params);
+    cJSON_Delete(result);
+    system("rm -rf /tmp/glob_test_symlink");
+}
+
+// Test: symlink loop does not cause infinite recursion
+static void test_symlink_loop_safety(void) {
+    print_test_header("Symlink loop does not crash");
+
+    system("rm -rf /tmp/glob_test_loop");
+    mkdir("/tmp/glob_test_loop", 0755);
+    mkdir("/tmp/glob_test_loop/dir_a", 0755);
+
+    FILE *f = fopen("/tmp/glob_test_loop/dir_a/file_a.txt", "w");
+    if (f) fclose(f);
+
+    /* Create a symlink loop: dir_a/self -> dir_a */
+    symlink("../dir_a", "/tmp/glob_test_loop/dir_a/self");
+
+    TestConversationState state = {0};
+    strlcpy(state.working_dir, "/tmp/glob_test_loop", sizeof(state.working_dir));
+    state.additional_dirs_count = 0;
+
+    cJSON *params = cJSON_CreateObject();
+    cJSON_AddStringToObject(params, "pattern", "**/*.txt");
+
+    cJSON *result = tool_glob(params, &state);
+    cJSON *files = cJSON_GetObjectItem(result, "files");
+    cJSON *count = cJSON_GetObjectItem(result, "count");
+
+    /* The symlink loop should not cause infinite recursion — with lstat,
+     * the symlink is skipped as a non-directory.  We should find exactly
+     * 1 file. */
+    assert_test(cJSON_IsArray(files) && cJSON_GetArraySize(files) == 1,
+                "Should find exactly 1 .txt file (no infinite loop)");
+    assert_test(count && count->valueint == 1,
+                "Count should be 1");
+
+    cJSON_Delete(params);
+    cJSON_Delete(result);
+    system("rm -rf /tmp/glob_test_loop");
+}
+
 int main(void) {
     printf("%s========================================%s\n", COLOR_CYAN, COLOR_RESET);
     printf("Glob Tool Unit Tests (with starstar support)\n");
@@ -688,6 +845,9 @@ int main(void) {
     test_truncation_non_recursive();
     test_truncation_fields_present();
     test_no_truncation_fields_absent();
+    test_depth_limit();
+    test_symlink_not_followed();
+    test_symlink_loop_safety();
 
     cleanup_test_dirs();
 
