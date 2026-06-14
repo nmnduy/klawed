@@ -626,6 +626,9 @@ static int is_excluded_dir(const char *name) {
         "build", "dist", "target",
         ".cache", ".venv", "venv", "__pycache__",
         ".klawed",
+        /* Common macOS/Linux home-directory dirs — prevent deep traversal */
+        "Library", ".Trash", ".local", ".npm", ".cargo",
+        ".docker", ".bundle", ".gradle", ".m2",
         NULL
     };
     for (int i = 0; excluded[i] != NULL; i++) {
@@ -681,9 +684,16 @@ static int match_simple_glob(const char *filename, const char *pattern) {
  * returned_count: pointer to counter for matches actually added to array
  * max_results: maximum matches to add to array
  */
+/* Maximum recursion depth for glob_recursive.
+ * Prevents stack overflow on deeply nested directory trees (e.g. macOS
+ * ~/Library/Containers).  30 levels is far deeper than any real project
+ * needs but low enough to stay well within a default 8 MiB thread stack. */
+#define GLOB_MAX_DEPTH 30
+
 static void glob_recursive(const char *base_path, const char *rel_path,
                            const char *file_pattern, cJSON *files,
-                           int *total_found, int *returned_count, int max_results) {
+                           int *total_found, int *returned_count,
+                           int max_results, int depth) {
     char current_dir[PATH_MAX];
     if (rel_path[0] == '\0') {
         strlcpy(current_dir, base_path, sizeof(current_dir));
@@ -724,12 +734,16 @@ static void glob_recursive(const char *base_path, const char *rel_path,
         strlcat(full_path, new_rel_path, sizeof(full_path));
 
         struct stat st;
-        if (stat(full_path, &st) != 0) continue;
+        /* Use lstat to avoid following symlinks — a symlink loop would
+         * cause infinite recursion and stack overflow. */
+        if (lstat(full_path, &st) != 0) continue;
 
         if (S_ISDIR(st.st_mode)) {
-            // Recurse into subdirectory
+            /* Enforce hard depth limit to prevent stack overflow on
+             * deeply-nested trees (e.g. macOS home dir). */
+            if (depth >= GLOB_MAX_DEPTH) continue;
             glob_recursive(base_path, new_rel_path, file_pattern, files,
-                           total_found, returned_count, max_results);
+                           total_found, returned_count, max_results, depth + 1);
         } else if (S_ISREG(st.st_mode)) {
             // Check if file matches pattern
             if (match_simple_glob(entry->d_name, file_pattern)) {
@@ -812,12 +826,12 @@ cJSON* tool_glob(cJSON *params, ConversationState *state) {
 
         // Search in main working directory
         glob_recursive(state->working_dir, "", file_pattern, files,
-                       &total_found, &returned_count, max_results);
+                       &total_found, &returned_count, max_results, 0);
 
         // Search in additional working directories
         for (int dir_idx = 0; dir_idx < state->additional_dirs_count; dir_idx++) {
             glob_recursive(state->additional_dirs[dir_idx], "", file_pattern, files,
-                           &total_found, &returned_count, max_results);
+                           &total_found, &returned_count, max_results, 0);
         }
     } else {
         // Use standard glob() for non-recursive patterns
