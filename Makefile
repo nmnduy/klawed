@@ -364,6 +364,7 @@ BASE64_OBJ = $(BUILD_DIR)/base64.o
 SESSION_SRC = src/session.c
 SESSION_OBJ = $(BUILD_DIR)/session.o
 SESSION_RESOLVE_OBJ = $(BUILD_DIR)/session_resolve.o
+SESSION_RESOLVE_SRC = src/session_resolve.c
 # Socket support removed - will be reimplemented with ZMQ
 RETRY_LOGIC_SRC = src/retry_logic.c
 RETRY_LOGIC_OBJ = $(BUILD_DIR)/retry_logic.o
@@ -1577,6 +1578,7 @@ sanitize-all: check-deps
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/array_resize_all.o $(ARRAY_RESIZE_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/http_client_all.o $(HTTP_CLIENT_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/session_all.o $(SESSION_SRC); \
+	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/session_resolve_all.o $(SESSION_RESOLVE_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/retry_logic_all.o $(RETRY_LOGIC_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/memory_db_all.o $(MEMORY_DB_SRC); \
 	$(CC) $(filter-out -O2 -D_FORTIFY_SOURCE=2,$(CFLAGS)) -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer $$EXTRA_FLAGS -c -o $(BUILD_DIR)/compaction_all.o $(COMPACTION_SRC); \
@@ -1682,6 +1684,7 @@ sanitize-all: check-deps
 		$(BUILD_DIR)/base64_all.o $(BUILD_DIR)/history_file_all.o \
 		$(BUILD_DIR)/array_resize_all.o $(BUILD_DIR)/http_client_all.o \
 		$(BUILD_DIR)/session_all.o \
+		$(BUILD_DIR)/session_resolve_all.o \
 		$(BUILD_DIR)/retry_logic_all.o \
 		$(BUILD_DIR)/memory_db_all.o \
 		$(BUILD_DIR)/compaction_all.o \
