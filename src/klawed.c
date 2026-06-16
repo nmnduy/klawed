@@ -1279,10 +1279,12 @@ int main(int argc, char *argv[]) {
         printf("  %s \"PROMPT\"                       Execute single command and exit\n", argv[0]);
         printf("  %s -d, --dump-conversation [ID]  Dump conversation to console and exit\n", argv[0]);
         printf("                                      (defaults to most recent session if no ID given)\n");
+        printf("                                      (supports partial ID matching, like git hashes)\n");
         printf("  %s -dj, --dump-json [ID]         Dump conversation as JSON\n", argv[0]);
         printf("  %s -dm, --dump-md [ID]           Dump conversation as Markdown\n", argv[0]);
         printf("  %s -r, --resume [ID]             Resume a previous conversation session\n", argv[0]);
         printf("                                      (defaults to most recent session if no ID given)\n");
+        printf("                                      (supports partial ID matching, like git hashes)\n");
         printf("  %s -l, --list-sessions [N]       List available sessions (N = max to show)\n", argv[0]);
         printf("  %s -p, --provider NAME           Use named provider configuration (from .klawed/config.json)\n", argv[0]);
 

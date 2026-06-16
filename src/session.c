@@ -15,6 +15,104 @@
 #include "openai_messages.h"
 
 /**
+ * Resolve a partial session ID prefix to the full session ID.
+ *
+ * Queries the database for sessions whose ID starts with the given prefix.
+ * Returns the full session ID if exactly one match is found.
+ * Returns NULL if no match or multiple ambiguous matches are found.
+ *
+ * Parameters:
+ *   db: Persistence database handle
+ *   prefix: Partial session ID to resolve
+ *   errmsg: Optional output buffer for error message (must be at least 256 bytes
+ *           if non-NULL). Receives a human-readable error on ambiguity/no-match.
+ *
+ * Returns:
+ *   Newly allocated full session ID string (caller must free),
+ *   or NULL if resolution failed (check errmsg for details).
+ */
+char* session_resolve_partial_id(PersistenceDB *db, const char *prefix, char *errmsg) {
+    if (!db || !db->db || !prefix || prefix[0] == '\0') {
+        if (errmsg) {
+            strlcpy(errmsg, "Invalid session ID prefix", 256);
+        }
+        return NULL;
+    }
+
+    // Query for sessions matching the prefix
+    const char *query =
+        "SELECT DISTINCT session_id FROM api_calls "
+        "WHERE session_id LIKE ? || '%' "
+        "ORDER BY session_id";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(db->db, query, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("Failed to prepare partial match query: %s", sqlite3_errmsg(db->db));
+        if (errmsg) {
+            strlcpy(errmsg, "Database error during session lookup", 256);
+        }
+        return NULL;
+    }
+
+    sqlite3_bind_text(stmt, 1, prefix, -1, SQLITE_TRANSIENT);
+
+    // Collect all matching session IDs
+    char *matches[32];  // Reasonable upper bound for ambiguous matches
+    int match_count = 0;
+
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW && match_count < 32) {
+        const unsigned char *sid = sqlite3_column_text(stmt, 0);
+        if (sid) {
+            matches[match_count] = strdup((const char *)sid);
+            if (matches[match_count]) {
+                match_count++;
+            }
+        }
+    }
+
+    // Check if there are more matches beyond our limit
+    if (rc == SQLITE_ROW && match_count >= 32) {
+        // There are more - we can't know the exact count, but this is enough to report ambiguity
+        LOG_WARN("Too many sessions match prefix '%s' (at least %d)", prefix, match_count);
+    }
+
+    sqlite3_finalize(stmt);
+
+    char *result = NULL;
+
+    if (match_count == 0) {
+        LOG_ERROR("No sessions found matching prefix '%s'", prefix);
+        if (errmsg) {
+            snprintf(errmsg, 256, "No session found matching prefix '%s'", prefix);
+        }
+    } else if (match_count == 1) {
+        result = matches[0];  // Return the single match
+        LOG_INFO("Resolved partial session ID '%s' -> '%s'", prefix, result);
+    } else {
+        // Multiple ambiguous matches
+        LOG_ERROR("Ambiguous session prefix '%s' matches %d sessions", prefix, match_count);
+        if (errmsg) {
+            int offset = snprintf(errmsg, 256, "Ambiguous prefix '%s' matches %d sessions: ", prefix, match_count);
+            for (int i = 0; i < match_count && offset < 255; i++) {
+                int remaining = 255 - offset;
+                offset += snprintf(errmsg + offset, (size_t)remaining, "%s%s",
+                                   i > 0 ? ", " : "", matches[i]);
+            }
+            if (offset >= 255) {
+                strlcpy(errmsg + 252, "...", 4);
+            }
+        }
+        // Free all matches
+        for (int i = 0; i < match_count; i++) {
+            free(matches[i]);
+        }
+    }
+
+    return result;
+}
+
+/**
  * Load a session from the database and reconstruct the conversation state
  */
 int session_load_from_db(PersistenceDB *db, const char *session_id, ConversationState *state) {
@@ -52,7 +150,15 @@ int session_load_from_db(PersistenceDB *db, const char *session_id, Conversation
             return -1;
         }
     } else {
-        target_session_id = strdup(session_id);
+        // Try partial match resolution first
+        char errmsg[256] = {0};
+        target_session_id = session_resolve_partial_id(db, session_id, errmsg);
+        if (!target_session_id) {
+            LOG_ERROR("Failed to resolve session ID '%s': %s", session_id, errmsg);
+            fprintf(stderr, "Error: %s\n", errmsg);
+            fprintf(stderr, "Use -l/--list-sessions to see available session IDs.\n");
+            return -1;
+        }
     }
 
     LOG_INFO("Loading session: %s", target_session_id);

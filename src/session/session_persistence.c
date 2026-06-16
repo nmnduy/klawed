@@ -4,6 +4,7 @@
  */
 
 #include "session_persistence.h"
+#include "../session.h"
 #include "../persistence.h"
 #include "../dump_utils.h"
 #include "../logger.h"
@@ -21,6 +22,8 @@ int session_dump_conversation(const char *session_id, const char *format) {
         return 1;
     }
 
+    char *resolved_session_id = NULL;  // Non-const, freed at end
+
     // Query for all API calls in this session
     const char *query =
         "SELECT timestamp, request_json, response_json, model, status, error_message "
@@ -36,8 +39,9 @@ int session_dump_conversation(const char *session_id, const char *format) {
         return 1;
     }
 
-    // If no session_id provided, get the most recent one
+    // Resolve the session ID to use
     if (!session_id) {
+        // No session_id provided, get the most recent one
         const char *latest_query =
             "SELECT session_id FROM api_calls "
             "WHERE session_id IS NOT NULL "
@@ -56,20 +60,31 @@ int session_dump_conversation(const char *session_id, const char *format) {
         if (rc == SQLITE_ROW) {
             const unsigned char *sid = sqlite3_column_text(latest_stmt, 0);
             if (sid) {
-                session_id = strdup((const char *)sid);
+                resolved_session_id = strdup((const char *)sid);
             }
         }
         sqlite3_finalize(latest_stmt);
 
-        if (!session_id) {
+        if (!resolved_session_id) {
             fprintf(stderr, "Error: No sessions found in database\n");
+            sqlite3_finalize(stmt);
+            persistence_close(db);
+            return 1;
+        }
+    } else {
+        // User provided a session ID — try partial match resolution
+        char errmsg[256] = {0};
+        resolved_session_id = session_resolve_partial_id(db, session_id, errmsg);
+        if (!resolved_session_id) {
+            fprintf(stderr, "Error: %s\n", errmsg);
+            fprintf(stderr, "Use -l/--list-sessions to see available session IDs.\n");
             sqlite3_finalize(stmt);
             persistence_close(db);
             return 1;
         }
     }
 
-    sqlite3_bind_text(stmt, 1, session_id, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 1, resolved_session_id, -1, SQLITE_TRANSIENT);
 
     // Default format if not specified
     if (!format) {
@@ -82,7 +97,7 @@ int session_dump_conversation(const char *session_id, const char *format) {
     // For JSON format, we need to output a complete JSON array
     if (strcmp(format, "json") == 0) {
         fprintf(stdout, "{\n");
-        fprintf(stdout, "  \"session_id\": \"%s\",\n", session_id);
+        fprintf(stdout, "  \"session_id\": \"%s\",\n", resolved_session_id);
         fprintf(stdout, "  \"api_calls\": [\n");
 
         int first_call = 1;
@@ -121,7 +136,7 @@ int session_dump_conversation(const char *session_id, const char *format) {
     }
     // For Markdown format
     else if (strcmp(format, "markdown") == 0 || strcmp(format, "md") == 0) {
-        fprintf(stdout, "# Conversation: %s\n\n", session_id);
+        fprintf(stdout, "# Conversation: %s\n\n", resolved_session_id);
 
         while ((step_rc = sqlite3_step(stmt)) == SQLITE_ROW) {
             call_num++;
@@ -152,7 +167,7 @@ int session_dump_conversation(const char *session_id, const char *format) {
         fprintf(stdout, "=================================================================\n");
         fprintf(stdout, "                    CONVERSATION DUMP\n");
         fprintf(stdout, "=================================================================\n");
-        fprintf(stdout, "Session ID: %s\n", session_id);
+        fprintf(stdout, "Session ID: %s\n", resolved_session_id);
         fprintf(stdout, "=================================================================\n\n");
 
         while ((step_rc = sqlite3_step(stmt)) == SQLITE_ROW) {
@@ -255,6 +270,7 @@ int session_dump_conversation(const char *session_id, const char *format) {
     }
 
     sqlite3_finalize(stmt);
+    free(resolved_session_id);
     persistence_close(db);
     return 0;
 }
