@@ -451,6 +451,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
     // Initialize mode (start in INSERT mode for immediate input)
     tui->mode = TUI_MODE_INSERT;
     tui->normal_mode_last_key = 0;
+    tui->auto_scroll_enabled = 1;     // Start with auto-scroll on
 
     // Initialize marks (a-z, all unset)
     memset(&tui->marks, 0, sizeof(tui->marks));

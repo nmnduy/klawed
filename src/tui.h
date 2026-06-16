@@ -262,6 +262,12 @@ typedef struct TUIStateStruct {
 
     // Voice mode state (push-to-talk recording + transcription)
     VoiceModeState *voice_mode;       // Voice mode state (NULL if not initialized)
+
+    // Auto-scroll state: 1 = scroll to bottom when new content arrives,
+    // 0 = stay at current position. Set to 1 on init/submit/reaching-bottom,
+    // cleared to 0 when user scrolls up. Replaces the old per-event
+    // "was_at_bottom" position check with persistent user-intent tracking.
+    int auto_scroll_enabled;
 } TUIState;
 
 // Initialize TUI (must be called before any other TUI functions)

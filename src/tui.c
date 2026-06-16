@@ -525,6 +525,19 @@ void tui_scroll_conversation(TUIState *tui, int direction) {
     window_manager_scroll(&tui->wm, direction);
     window_manager_refresh_conversation(&tui->wm);
 
+    // Track auto-scroll user intent based on scroll direction
+    if (direction < 0) {
+        // User scrolled up (away from bottom) — stop auto-scrolling
+        tui->auto_scroll_enabled = 0;
+    } else if (direction > 0) {
+        // User scrolled down — check if they reached the bottom
+        int offset = window_manager_get_scroll_offset(&tui->wm);
+        int max_scroll = window_manager_get_max_scroll(&tui->wm);
+        if (max_scroll <= 0 || offset >= max_scroll) {
+            tui->auto_scroll_enabled = 1;
+        }
+    }
+
     // Update status bar (to show new scroll percentage in NORMAL mode)
     if (tui->mode == TUI_MODE_NORMAL && tui->wm.status_height > 0) {
         render_status_window(tui);
@@ -1672,6 +1685,11 @@ int tui_event_loop(TUIState *tui, const char *prompt,
                     LOG_DEBUG("[TUI] Submitting external input (%d bytes)", ext_bytes);
                     // Append to history (both in-memory and persistent)
                     tui_history_append(tui, ext_buffer);
+
+                    // Re-enable auto-scroll on submit and scroll to bottom
+                    tui->auto_scroll_enabled = 1;
+                    window_manager_scroll_to_bottom(&tui->wm);
+
                     // Call the callback
                     int callback_result = submit_callback(ext_buffer, user_data);
 
@@ -1724,6 +1742,11 @@ int tui_event_loop(TUIState *tui, const char *prompt,
                     LOG_DEBUG("[TUI] Submitting input (%zu bytes)", strlen(input));
                     // Append to history (both in-memory and persistent)
                     tui_history_append(tui, input);
+
+                    // Re-enable auto-scroll on submit and scroll to bottom
+                    tui->auto_scroll_enabled = 1;
+                    window_manager_scroll_to_bottom(&tui->wm);
+
                     // Call the callback
                     int callback_result = submit_callback(input, user_data);
 

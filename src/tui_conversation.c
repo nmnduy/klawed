@@ -141,26 +141,6 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
         return;
     }
 
-    // IMPORTANT: Capture "at bottom" state BEFORE adding new content
-    // This is needed because after content is added, max_scroll increases
-    // and the scroll_offset (which was at bottom) will appear to be less than max_scroll
-    int was_at_bottom = 0;
-    if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
-        int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
-        int max_scroll = window_manager_get_max_scroll(&tui->wm);
-        int content_lines = window_manager_get_content_lines(&tui->wm);
-
-        if (content_lines == 0 || max_scroll <= 0) {
-            // No content or everything fits in viewport
-            was_at_bottom = 1;
-        } else if (scroll_offset >= max_scroll - 1) {
-            // Already at bottom (with 1-line tolerance for 98-100% range)
-            was_at_bottom = 1;
-        }
-        LOG_DEBUG("[TUI] Pre-add scroll state: scroll_offset=%d, max_scroll=%d, was_at_bottom=%d",
-                  scroll_offset, max_scroll, was_at_bottom);
-    }
-
     // Track the starting line of assistant messages for scroll-to-response feature
     if (prefix && strcmp(prefix, tui_icon_assistant()) == 0) {
         tui->last_assistant_line = window_manager_get_content_lines(&tui->wm);
@@ -285,20 +265,11 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
     LOG_DEBUG("[TUI] Added line, total_lines now %d (estimated %d, actual %d)",
               cur_y, estimated_lines, cur_y - start_line);
 
-    // Auto-scroll logic:
-    // - In INSERT mode: always auto-scroll
-    // - In NORMAL/COMMAND mode: auto-scroll only if we WERE at 98-100% scroll height
-    //   BEFORE content was added (using was_at_bottom captured earlier)
-    if (tui->mode == TUI_MODE_INSERT || tui->mode == TUI_MODE_VOICE) {
+    // Auto-scroll logic: scroll to bottom only if auto-scroll is enabled.
+    // auto_scroll_enabled is set to 1 on init/submit/reaching-bottom and
+    // cleared to 0 whenever the user scrolls up (via any key/mouse action).
+    if (tui->auto_scroll_enabled) {
         window_manager_scroll_to_bottom(&tui->wm);
-    } else if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
-        // Use the was_at_bottom state captured BEFORE content was added
-        if (was_at_bottom) {
-            window_manager_scroll_to_bottom(&tui->wm);
-            LOG_DEBUG("[TUI] Auto-scroll: scrolling to bottom (was_at_bottom=1)");
-        } else {
-            LOG_DEBUG("[TUI] Auto-scroll: not scrolling (was_at_bottom=0)");
-        }
     }
     window_manager_refresh_conversation(&tui->wm);
 
@@ -367,26 +338,6 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
     if (!tui->wm.conv_pad) {
         LOG_ERROR("[TUI] Cannot update conversation line - conv_pad is NULL");
         return;
-    }
-
-    // IMPORTANT: Capture "at bottom" state BEFORE adding new content
-    // This is needed because after content is added, max_scroll increases
-    // and the scroll_offset (which was at bottom) will appear to be less than max_scroll
-    int was_at_bottom = 0;
-    if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
-        int scroll_offset = window_manager_get_scroll_offset(&tui->wm);
-        int max_scroll = window_manager_get_max_scroll(&tui->wm);
-        int content_lines = window_manager_get_content_lines(&tui->wm);
-
-        if (content_lines == 0 || max_scroll <= 0) {
-            // No content or everything fits in viewport
-            was_at_bottom = 1;
-        } else if (scroll_offset >= max_scroll - 1) {
-            // Already at bottom (with 1-line tolerance for 98-100% range)
-            was_at_bottom = 1;
-        }
-        LOG_DEBUG("[TUI] Pre-update scroll state: scroll_offset=%d, max_scroll=%d, was_at_bottom=%d",
-                  scroll_offset, max_scroll, was_at_bottom);
     }
 
     // Update the last entry in the conversation history
@@ -545,20 +496,11 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
         add_conversation_entry(tui, "", text, COLOR_PAIR_ASSISTANT);
     }
 
-    // Auto-scroll logic:
-    // - In INSERT mode: always auto-scroll
-    // - In NORMAL/COMMAND mode: auto-scroll only if we WERE at 98-100% scroll height
-    //   BEFORE content was added (using was_at_bottom captured earlier)
-    if (tui->mode == TUI_MODE_INSERT || tui->mode == TUI_MODE_VOICE) {
+    // Auto-scroll logic: scroll to bottom only if auto-scroll is enabled.
+    // auto_scroll_enabled is set to 1 on init/submit/reaching-bottom and
+    // cleared to 0 whenever the user scrolls up (via any key/mouse action).
+    if (tui->auto_scroll_enabled) {
         window_manager_scroll_to_bottom(&tui->wm);
-    } else if (tui->mode == TUI_MODE_NORMAL || tui->mode == TUI_MODE_COMMAND) {
-        // Use the was_at_bottom state captured BEFORE content was added
-        if (was_at_bottom) {
-            window_manager_scroll_to_bottom(&tui->wm);
-            LOG_DEBUG("[TUI] Auto-scroll (update): scrolling to bottom (was_at_bottom=1)");
-        } else {
-            LOG_DEBUG("[TUI] Auto-scroll (update): not scrolling (was_at_bottom=0)");
-        }
     }
     // NOTE: needs_conv_pad_rebuild is NOT set here per-token to avoid the
     // expensive full-pad rebuild (redraw_conversation) on every streaming
@@ -1036,6 +978,13 @@ int tui_populate_from_conversation(TUIState *tui, ConversationState *state) {
 // Scrolls so the last [Assistant] message is at the top of the viewport
 void tui_scroll_to_last_assistant(TUIState *tui) {
     if (!tui || !tui->is_initialized) {
+        return;
+    }
+
+    // Only auto-scroll to last assistant message if auto-scroll is enabled.
+    // If the user has manually scrolled up (disabling auto-scroll), don't
+    // yank them away from where they're reading at end of AI turn.
+    if (!tui->auto_scroll_enabled) {
         return;
     }
 
