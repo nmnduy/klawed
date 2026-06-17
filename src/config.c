@@ -777,70 +777,66 @@ int config_save(const KlawedConfig *config) {
         }
     }
 
-    // Save multiple provider configurations - only if providers section exists in local config
-    // or if there are providers that differ from defaults (i.e., provider_count > 0)
+    // Save multiple provider configurations.
+    // IMPORTANT: Only delete and rebuild providers if we actually have providers to save.
+    // If provider_count == 0 but the file has providers, preserve them (don't wipe).
     cJSON *existing_providers = cJSON_GetObjectItem(root, "providers");
-    if (existing_providers || config->provider_count > 0) {
-        cJSON *providers_obj = NULL;
-
+    if (config->provider_count > 0) {
+        // We have providers to save - delete existing and rebuild from in-memory config
         if (existing_providers && cJSON_IsObject(existing_providers)) {
-            // Clear existing providers to rebuild with current config
             cJSON_DeleteItemFromObject(root, "providers");
         }
 
-        // Only create providers section if we have providers to save
-        if (config->provider_count > 0) {
-            providers_obj = cJSON_AddObjectToObject(root, "providers");
+        cJSON *providers_obj = cJSON_AddObjectToObject(root, "providers");
 
-            if (providers_obj) {
-                for (int i = 0; i < config->provider_count; i++) {
-                    const NamedProviderConfig *named_provider = &config->providers[i];
-                    const LLMProviderConfig *provider_config = &named_provider->config;
+        if (providers_obj) {
+            for (int i = 0; i < config->provider_count; i++) {
+                const NamedProviderConfig *named_provider = &config->providers[i];
+                const LLMProviderConfig *provider_config = &named_provider->config;
 
-                    cJSON *provider_obj = cJSON_AddObjectToObject(providers_obj, named_provider->key);
-                    if (!provider_obj) {
-                        LOG_WARN("[Config] Failed to create provider object for '%s'", named_provider->key);
-                        continue;
-                    }
+                cJSON *provider_obj = cJSON_AddObjectToObject(providers_obj, named_provider->key);
+                if (!provider_obj) {
+                    LOG_WARN("[Config] Failed to create provider object for '%s'", named_provider->key);
+                    continue;
+                }
 
-                    // Add provider type
-                    cJSON_AddStringToObject(provider_obj, "provider_type", config_provider_type_to_string(provider_config->provider_type));
+                // Add provider type
+                cJSON_AddStringToObject(provider_obj, "provider_type", config_provider_type_to_string(provider_config->provider_type));
 
-                    // Add provider name (if non-empty)
-                    if (provider_config->provider_name[0] != '\0') {
-                        cJSON_AddStringToObject(provider_obj, "provider_name", provider_config->provider_name);
-                    }
+                // Add provider name (if non-empty)
+                if (provider_config->provider_name[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "provider_name", provider_config->provider_name);
+                }
 
-                    // Add model (if non-empty)
-                    if (provider_config->model[0] != '\0') {
-                        cJSON_AddStringToObject(provider_obj, "model", provider_config->model);
-                    }
+                // Add model (if non-empty)
+                if (provider_config->model[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "model", provider_config->model);
+                }
 
-                    // Add API base (if non-empty)
-                    if (provider_config->api_base[0] != '\0') {
-                        cJSON_AddStringToObject(provider_obj, "api_base", provider_config->api_base);
-                    }
+                // Add API base (if non-empty)
+                if (provider_config->api_base[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "api_base", provider_config->api_base);
+                }
 
-                    // Add API key (if non-empty, with security warning)
-                    if (provider_config->api_key[0] != '\0') {
-                        cJSON_AddStringToObject(provider_obj, "api_key", provider_config->api_key);
-                        LOG_WARN("[Config] Saving API key to config file for provider '%s' - consider using environment variable for better security", named_provider->key);
-                    }
+                // Add API key (if non-empty, with security warning)
+                if (provider_config->api_key[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "api_key", provider_config->api_key);
+                    LOG_WARN("[Config] Saving API key to config file for provider '%s' - consider using environment variable for better security", named_provider->key);
+                }
 
-                    // Add API key environment variable name (if non-empty)
-                    if (provider_config->api_key_env[0] != '\0') {
-                        cJSON_AddStringToObject(provider_obj, "api_key_env", provider_config->api_key_env);
-                    }
+                // Add API key environment variable name (if non-empty)
+                if (provider_config->api_key_env[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "api_key_env", provider_config->api_key_env);
+                }
 
-                    // Add API key file path (if non-empty)
-                    if (provider_config->api_key_file[0] != '\0') {
-                        cJSON_AddStringToObject(provider_obj, "api_key_file", provider_config->api_key_file);
-                    }
+                // Add API key file path (if non-empty)
+                if (provider_config->api_key_file[0] != '\0') {
+                    cJSON_AddStringToObject(provider_obj, "api_key_file", provider_config->api_key_file);
+                }
 
-                    // Add use_bedrock (legacy flag) - only if non-zero
-                    if (provider_config->use_bedrock != 0) {
-                        cJSON_AddNumberToObject(provider_obj, "use_bedrock", (double)(provider_config->use_bedrock ? 1 : 0));
-                    }
+                // Add use_bedrock (legacy flag) - only if non-zero
+                if (provider_config->use_bedrock != 0) {
+                    cJSON_AddNumberToObject(provider_obj, "use_bedrock", (double)(provider_config->use_bedrock ? 1 : 0));
                 }
             }
         }

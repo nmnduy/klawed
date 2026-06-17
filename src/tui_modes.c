@@ -53,9 +53,11 @@ static void tui_toggle_wrap(TUIState *tui) {
 
     tui->wrap_enabled = !tui->wrap_enabled;
 
-    // Save to config
+    // Save to config (load existing to preserve providers and other settings)
     KlawedConfig cfg;
-    config_init_defaults(&cfg);
+    if (config_load(&cfg) != 0) {
+        config_init_defaults(&cfg);
+    }
     cfg.wrap_enabled = tui->wrap_enabled;
     cfg.input_box_style = tui->input_box_style;
     config_save(&cfg);
@@ -894,10 +896,12 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
                 tui->input_box_style = INPUT_STYLE_BLAND;
                 tui_update_status(tui, "Input box style: bland");
             }
-            // Save the new style to config
+            // Save the new style to config (load existing to preserve providers)
             {
                 KlawedConfig cfg;
-                config_init_defaults(&cfg);
+                if (config_load(&cfg) != 0) {
+                    config_init_defaults(&cfg);
+                }
                 cfg.input_box_style = tui->input_box_style;
                 config_save(&cfg);
             }
@@ -926,10 +930,12 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
                 tui->response_style = RESPONSE_STYLE_BORDER;
                 tui_update_status(tui, "Response style: border");
             }
-            // Save the new style to config
+            // Save the new style to config (load existing to preserve providers)
             {
                 KlawedConfig cfg;
-                config_init_defaults(&cfg);
+                if (config_load(&cfg) != 0) {
+                    config_init_defaults(&cfg);
+                }
                 cfg.response_style = tui->response_style;
                 config_save(&cfg);
             }
@@ -951,10 +957,12 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
                 tui->thinking_style = THINKING_STYLE_WAVE;
                 tui_update_status(tui, "Thinking style: wave");
             }
-            // Save the new style to config
+            // Save the new style to config (load existing to preserve providers)
             {
                 KlawedConfig cfg;
-                config_init_defaults(&cfg);
+                if (config_load(&cfg) != 0) {
+                    config_init_defaults(&cfg);
+                }
                 cfg.thinking_style = tui->thinking_style;
                 config_save(&cfg);
             }

@@ -362,6 +362,187 @@ int main(void) {
         }
     }
 
+    // Clean up
+    delete_local_config();
+
+    // Test 6: Saving with provider_count=0 must NOT delete existing providers
+    // This is the defense-in-depth hardening — tests that config_save won't
+    // accidentally wipe providers even if the in-memory struct has provider_count=0.
+    printf("\nTest 6: Saving with provider_count=0 preserves existing providers\n");
+    {
+        KlawedConfig config;
+        config_init_defaults(&config);
+
+        // First, add a provider and save it to create providers in the file
+        LLMProviderConfig provider_config;
+        provider_config.provider_type = PROVIDER_OPENAI;
+        strlcpy(provider_config.provider_name, "My GPT-4", sizeof(provider_config.provider_name));
+        strlcpy(provider_config.model, "gpt-4", sizeof(provider_config.model));
+        provider_config.api_base[0] = '\0';
+        provider_config.api_key[0] = '\0';
+        provider_config.api_key_env[0] = '\0';
+        provider_config.use_bedrock = 0;
+        config_set_provider(&config, "gpt4-provider", &provider_config);
+        strlcpy(config.active_provider, "gpt4-provider", sizeof(config.active_provider));
+        config_save(&config);
+
+        // Now simulate the buggy toggle handler pattern: create a fresh
+        // defaults config with provider_count=0 and save (like the old
+        // tui_modes.c toggle handlers did). The DEFENSE-IN-DEPTH hardening
+        // in config_save should NOT delete the providers.
+        KlawedConfig defaults_only;
+        config_init_defaults(&defaults_only);
+        defaults_only.input_box_style = INPUT_STYLE_BORDER;
+        config_save(&defaults_only);
+
+        // Verify providers are STILL in the file
+        char *json_str = read_local_config_file();
+        if (json_str == NULL) {
+            printf("  FAIL: Local config file not found\n");
+            failures++;
+        } else {
+            cJSON *root = cJSON_Parse(json_str);
+            if (!root) {
+                printf("  FAIL: Could not parse local config JSON\n");
+                failures++;
+            } else {
+                // Check providers section still exists
+                cJSON *providers = cJSON_GetObjectItem(root, "providers");
+                if (providers == NULL || !cJSON_IsObject(providers)) {
+                    printf("  FAIL: providers section was deleted!\n");
+                    failures++;
+                } else {
+                    cJSON *gpt4 = cJSON_GetObjectItem(providers, "gpt4-provider");
+                    if (gpt4 == NULL) {
+                        printf("  FAIL: gpt4-provider was deleted from providers!\n");
+                        failures++;
+                    } else {
+                        printf("  PASS: providers preserved when saving with provider_count=0\n");
+                    }
+                }
+
+                // Check active_provider still exists
+                cJSON *active = cJSON_GetObjectItem(root, "active_provider");
+                if (active == NULL || !cJSON_IsString(active)) {
+                    printf("  FAIL: active_provider was removed\n");
+                    failures++;
+                } else if (strcmp(active->valuestring, "gpt4-provider") != 0) {
+                    printf("  FAIL: active_provider was changed: %s\n", active->valuestring);
+                    failures++;
+                } else {
+                    printf("  PASS: active_provider preserved\n");
+                }
+
+                cJSON_Delete(root);
+            }
+            free(json_str);
+        }
+    }
+
+    // Clean up
+    delete_local_config();
+
+    // Test 7: Toggle handler pattern (config_load + modify + save) preserves providers
+    // This tests the primary fix — the tui_modes.c toggle handlers now use
+    // config_load instead of config_init_defaults. Verifies that loading,
+    // modifying a TUI setting, and saving preserves all providers.
+    printf("\nTest 7: config_load + modify field + save preserves providers\n");
+    {
+        KlawedConfig config;
+        config_init_defaults(&config);
+
+        // Add two providers (as a user might have configured)
+        LLMProviderConfig pc1;
+        pc1.provider_type = PROVIDER_OPENAI;
+        strlcpy(pc1.provider_name, "GPT-4", sizeof(pc1.provider_name));
+        strlcpy(pc1.model, "gpt-4", sizeof(pc1.model));
+        pc1.api_base[0] = '\0';
+        pc1.api_key[0] = '\0';
+        pc1.api_key_env[0] = '\0';
+        pc1.use_bedrock = 0;
+        config_set_provider(&config, "openai-gpt4", &pc1);
+
+        LLMProviderConfig pc2;
+        pc2.provider_type = PROVIDER_ANTHROPIC;
+        strlcpy(pc2.provider_name, "Claude", sizeof(pc2.provider_name));
+        strlcpy(pc2.model, "claude-sonnet-4-20250514", sizeof(pc2.model));
+        pc2.api_base[0] = '\0';
+        pc2.api_key[0] = '\0';
+        pc2.api_key_env[0] = '\0';
+        pc2.use_bedrock = 0;
+        config_set_provider(&config, "anthropic-claude", &pc2);
+
+        strlcpy(config.active_provider, "openai-gpt4", sizeof(config.active_provider));
+        config_save(&config);
+
+        // Now simulate the FIXED toggle handler pattern:
+        // 1. Load config (like config_load)
+        // 2. Modify a TUI setting
+        // 3. Save
+        KlawedConfig loaded;
+        if (config_load(&loaded) != 0) {
+            printf("  FAIL: config_load returned error\n");
+            failures++;
+        } else {
+            // Modify a field (simulates toggling input box style with 'b' key)
+            loaded.input_box_style = INPUT_STYLE_BORDER;
+            config_save(&loaded);
+
+            // Verify everything is preserved
+            char *json_str = read_local_config_file();
+            if (json_str == NULL) {
+                printf("  FAIL: Local config file not found after save\n");
+                failures++;
+            } else {
+                cJSON *root = cJSON_Parse(json_str);
+                if (!root) {
+                    printf("  FAIL: Could not parse local config JSON\n");
+                    failures++;
+                } else {
+                    // Check both providers are still there
+                    cJSON *providers = cJSON_GetObjectItem(root, "providers");
+                    if (providers == NULL) {
+                        printf("  FAIL: providers section missing\n");
+                        failures++;
+                    } else {
+                        cJSON *gpt4 = cJSON_GetObjectItem(providers, "openai-gpt4");
+                        cJSON *claude = cJSON_GetObjectItem(providers, "anthropic-claude");
+                        if (gpt4 == NULL) {
+                            printf("  FAIL: openai-gpt4 provider lost\n");
+                            failures++;
+                        } else if (claude == NULL) {
+                            printf("  FAIL: anthropic-claude provider lost\n");
+                            failures++;
+                        } else {
+                            printf("  PASS: both providers preserved\n");
+                        }
+                    }
+
+                    // Check input_box_style was updated
+                    cJSON *style = cJSON_GetObjectItem(root, "input_box_style");
+                    if (style == NULL || strcmp(style->valuestring, "border") != 0) {
+                        printf("  FAIL: input_box_style not updated correctly\n");
+                        failures++;
+                    } else {
+                        printf("  PASS: input_box_style updated to 'border'\n");
+                    }
+
+                    // Check active_provider preserved
+                    cJSON *active = cJSON_GetObjectItem(root, "active_provider");
+                    if (active == NULL || strcmp(active->valuestring, "openai-gpt4") != 0) {
+                        printf("  FAIL: active_provider changed or lost\n");
+                        failures++;
+                    } else {
+                        printf("  PASS: active_provider preserved\n");
+                    }
+
+                    cJSON_Delete(root);
+                }
+                free(json_str);
+            }
+        }
+    }
+
     // Clean up after all tests
     delete_local_config();
 
