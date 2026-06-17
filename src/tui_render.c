@@ -1886,6 +1886,7 @@ void input_redraw(TUIState *tui, const char *prompt) {
 
     // Hide input window in NORMAL mode
     if (tui->mode == TUI_MODE_NORMAL) {
+        curs_set(0);  // Hide cursor
         werase(win);
         wrefresh(win);
         return;
