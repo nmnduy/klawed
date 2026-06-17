@@ -778,18 +778,32 @@ int config_save(const KlawedConfig *config) {
     }
 
     // Save multiple provider configurations.
-    // IMPORTANT: Only delete and rebuild providers if we actually have providers to save.
+    // IMPORTANT: Merge in-memory providers with existing file providers.
     // If provider_count == 0 but the file has providers, preserve them (don't wipe).
     cJSON *existing_providers = cJSON_GetObjectItem(root, "providers");
     if (config->provider_count > 0) {
-        // We have providers to save - delete existing and rebuild from in-memory config
+        // We have providers to save - merge with existing (don't wipe file-only providers)
+        cJSON *providers_obj = NULL;
+
         if (existing_providers && cJSON_IsObject(existing_providers)) {
-            cJSON_DeleteItemFromObject(root, "providers");
+            // Reuse existing providers object, update/insert in-memory providers
+            providers_obj = existing_providers;
+        } else {
+            // No existing providers object, create new one
+            providers_obj = cJSON_AddObjectToObject(root, "providers");
         }
 
-        cJSON *providers_obj = cJSON_AddObjectToObject(root, "providers");
-
         if (providers_obj) {
+            // First, remove any existing entries that we're about to overwrite
+            for (int i = 0; i < config->provider_count; i++) {
+                const NamedProviderConfig *named_provider = &config->providers[i];
+                cJSON *old_entry = cJSON_GetObjectItem(providers_obj, named_provider->key);
+                if (old_entry) {
+                    cJSON_DeleteItemFromObject(providers_obj, named_provider->key);
+                }
+            }
+
+            // Then add all in-memory providers (any file-only providers survive)
             for (int i = 0; i < config->provider_count; i++) {
                 const NamedProviderConfig *named_provider = &config->providers[i];
                 const LLMProviderConfig *provider_config = &named_provider->config;
