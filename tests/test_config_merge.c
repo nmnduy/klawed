@@ -244,14 +244,10 @@ int main(void) {
         config_init_defaults(&config);
 
         // Add a named provider
-        LLMProviderConfig provider_config;
+        LLMProviderConfig provider_config = {0};
         provider_config.provider_type = PROVIDER_OPENAI;
         strlcpy(provider_config.provider_name, "Test Provider", sizeof(provider_config.provider_name));
         strlcpy(provider_config.model, "gpt-4", sizeof(provider_config.model));
-        provider_config.api_base[0] = '\0';
-        provider_config.api_key[0] = '\0';
-        provider_config.api_key_env[0] = '\0';
-        provider_config.use_bedrock = 0;
 
         config_set_provider(&config, "test-provider", &provider_config);
 
@@ -374,14 +370,10 @@ int main(void) {
         config_init_defaults(&config);
 
         // First, add a provider and save it to create providers in the file
-        LLMProviderConfig provider_config;
+        LLMProviderConfig provider_config = {0};
         provider_config.provider_type = PROVIDER_OPENAI;
         strlcpy(provider_config.provider_name, "My GPT-4", sizeof(provider_config.provider_name));
         strlcpy(provider_config.model, "gpt-4", sizeof(provider_config.model));
-        provider_config.api_base[0] = '\0';
-        provider_config.api_key[0] = '\0';
-        provider_config.api_key_env[0] = '\0';
-        provider_config.use_bedrock = 0;
         config_set_provider(&config, "gpt4-provider", &provider_config);
         strlcpy(config.active_provider, "gpt4-provider", sizeof(config.active_provider));
         config_save(&config);
@@ -452,24 +444,16 @@ int main(void) {
         config_init_defaults(&config);
 
         // Add two providers (as a user might have configured)
-        LLMProviderConfig pc1;
+        LLMProviderConfig pc1 = {0};
         pc1.provider_type = PROVIDER_OPENAI;
         strlcpy(pc1.provider_name, "GPT-4", sizeof(pc1.provider_name));
         strlcpy(pc1.model, "gpt-4", sizeof(pc1.model));
-        pc1.api_base[0] = '\0';
-        pc1.api_key[0] = '\0';
-        pc1.api_key_env[0] = '\0';
-        pc1.use_bedrock = 0;
         config_set_provider(&config, "openai-gpt4", &pc1);
 
-        LLMProviderConfig pc2;
+        LLMProviderConfig pc2 = {0};
         pc2.provider_type = PROVIDER_ANTHROPIC;
         strlcpy(pc2.provider_name, "Claude", sizeof(pc2.provider_name));
         strlcpy(pc2.model, "claude-sonnet-4-20250514", sizeof(pc2.model));
-        pc2.api_base[0] = '\0';
-        pc2.api_key[0] = '\0';
-        pc2.api_key_env[0] = '\0';
-        pc2.use_bedrock = 0;
         config_set_provider(&config, "anthropic-claude", &pc2);
 
         strlcpy(config.active_provider, "openai-gpt4", sizeof(config.active_provider));
