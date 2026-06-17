@@ -24,7 +24,7 @@
 #define CONFIG_DISABLED_TOOLS_MAX 512
 
 // Maximum number of provider configurations
-#define CONFIG_MAX_PROVIDERS 32
+#define CONFIG_MAX_PROVIDERS 100
 // Maximum length for provider key/name
 #define CONFIG_PROVIDER_KEY_MAX 64
 
