@@ -2255,17 +2255,13 @@ void input_redraw(TUIState *tui, const char *prompt) {
     int cursor_screen_y = temp_line - input->line_scroll_offset + content_start_row;
     int cursor_screen_x = content_start_col + temp_col;
 
-    // Hide cursor in NORMAL mode, show it in INSERT/COMMAND modes
-    if (tui->mode == TUI_MODE_NORMAL) {
-        curs_set(0);  // Hide cursor — skip wmove to avoid positioning a phantom cursor
-    } else {
-        curs_set(2);  // Show block cursor
-        // Bounds check for cursor position
-        if (cursor_screen_y >= content_start_row &&
-            cursor_screen_y < bottom_boundary &&
-            cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
-            (void)tui_safe_wmove(win, cursor_screen_y, cursor_screen_x);
-        }
+    // Show block cursor (normal mode returns early above, so this is
+    // always INSERT / COMMAND / SEARCH / VOICE mode at this point)
+    curs_set(2);
+    if (cursor_screen_y >= content_start_row &&
+        cursor_screen_y < bottom_boundary &&
+        cursor_screen_x >= 0 && cursor_screen_x < input->win_width) {
+        (void)tui_safe_wmove(win, cursor_screen_y, cursor_screen_x);
     }
 
     // Draw vertical scroll bar on the right edge when input has scrolled
