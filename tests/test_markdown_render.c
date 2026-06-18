@@ -29,6 +29,19 @@ const char *find_italic_underscore(const char *start, size_t len);
 const char *find_italic_star(const char *start, size_t len);
 const char *find_bold_underscores(const char *start, size_t len);
 const char *find_bold_stars(const char *start, size_t len);
+const char *find_code_ticks(const char *start, size_t len, size_t tick_len);
+const char *find_strike_tildes(const char *start, size_t len);
+size_t table_split_cells(const char *row, size_t len,
+                         const char **cells, size_t *cell_lens, size_t max_cells);
+int cell_display_width(const char *text, size_t len);
+int cell_wrap_count(const char *text, size_t text_len, int max_width);
+int cell_get_wrapped_line(const char *text, size_t text_len, int max_width,
+                          int line_idx, const char **out_start, size_t *out_len);
+int table_should_wrap(size_t num_cols, int pad_width, int left_border_width,
+                      const int *max_content_widths);
+void table_distribute_widths(int *col_widths, size_t num_cols, int pad_width,
+                             int left_border_width, const int *max_content_widths);
+int markdown_stripped_display_width(const char *text, size_t len);
 
 /* Test framework colors */
 #define COLOR_RESET "\033[0m"
@@ -518,6 +531,311 @@ static void test_detect_multi_col_table(void) {
 }
 
 /* ==================================================================
+ * table_split_cells  tests
+ * ================================================================== */
+
+static void test_split_cells_simple(void) {
+    const char *name = "split_cells_simple";
+    const char *row = "| a | b | c |";
+    const char *cells[8];
+    size_t cell_lens[8];
+    size_t n = table_split_cells(row, strlen(row), cells, cell_lens, 8);
+    int ok = (n == 3) &&
+             (cell_lens[0] == 1 && memcmp(cells[0], "a", 1) == 0) &&
+             (cell_lens[1] == 1 && memcmp(cells[1], "b", 1) == 0) &&
+             (cell_lens[2] == 1 && memcmp(cells[2], "c", 1) == 0);
+    print_test_result(name, ok);
+}
+
+static void test_split_cells_whitespace(void) {
+    const char *name = "split_cells_whitespace";
+    const char *row = "|  hello  |  world  |";
+    const char *cells[8];
+    size_t cell_lens[8];
+    size_t n = table_split_cells(row, strlen(row), cells, cell_lens, 8);
+    int ok = (n == 2) &&
+             (cell_lens[0] == 5 && memcmp(cells[0], "hello", 5) == 0) &&
+             (cell_lens[1] == 5 && memcmp(cells[1], "world", 5) == 0);
+    print_test_result(name, ok);
+}
+
+static void test_split_cells_empty(void) {
+    const char *name = "split_cells_empty";
+    const char *row = "| a || c |";
+    const char *cells[8];
+    size_t cell_lens[8];
+    size_t n = table_split_cells(row, strlen(row), cells, cell_lens, 8);
+    int ok = (n == 3) &&
+             (cell_lens[0] == 1 && memcmp(cells[0], "a", 1) == 0) &&
+             (cell_lens[1] == 0) &&
+             (cell_lens[2] == 1 && memcmp(cells[2], "c", 1) == 0);
+    print_test_result(name, ok);
+}
+
+static void test_split_cells_leading_no_pipe(void) {
+    const char *name = "split_cells_leading_no_pipe";
+    const char *row = "a | b";
+    const char *cells[8];
+    size_t cell_lens[8];
+    size_t n = table_split_cells(row, strlen(row), cells, cell_lens, 8);
+    /* First cell includes everything up to the pipe, no trimming */
+    int ok = (n >= 1);
+    print_test_result(name, ok);
+}
+
+static void test_split_cells_max_limited(void) {
+    const char *name = "split_cells_max_limited";
+    const char *row = "| a | b | c | d | e |";
+    const char *cells[3];
+    size_t cell_lens[3];
+    size_t n = table_split_cells(row, strlen(row), cells, cell_lens, 3);
+    int ok = (n == 3);
+    print_test_result(name, ok);
+}
+
+/* ==================================================================
+ * cell_display_width  tests
+ * ================================================================== */
+
+static void test_display_width_ascii(void) {
+    const char *name = "display_width_ascii";
+    int w = cell_display_width("hello", 5);
+    print_test_result(name, w == 5);
+}
+
+static void test_display_width_empty(void) {
+    const char *name = "display_width_empty";
+    int w = cell_display_width("", 0);
+    print_test_result(name, w == 0);
+}
+
+static void test_display_width_wide(void) {
+    const char *name = "display_width_wide";
+    /* 4-byte emoji: 😀 = F0 9F 98 80 */
+    int w = cell_display_width("\xF0\x9F\x98\x80", 4);
+    print_test_result(name, w == 2);
+}
+
+/* ==================================================================
+ * cell_wrap_count / cell_get_wrapped_line  tests
+ * ================================================================== */
+
+static void test_wrap_count_no_wrap(void) {
+    const char *name = "wrap_count_no_wrap";
+    int n = cell_wrap_count("short", 5, 10);
+    print_test_result(name, n == 1);
+}
+
+static void test_wrap_count_two_lines(void) {
+    const char *name = "wrap_count_two_lines";
+    int n = cell_wrap_count("abcdefghijklmnop", 16, 8);
+    print_test_result(name, n == 2);
+}
+
+static void test_wrap_count_many_lines(void) {
+    const char *name = "wrap_count_many_lines";
+    int n = cell_wrap_count("abcdefghijklmnopqrstuvwxyz", 26, 3);
+    /* 26 chars / 3 per line = 9 lines */
+    int ok = (n == 9);
+    print_test_result(name, ok);
+}
+
+static void test_wrapped_line_get(void) {
+    const char *name = "wrapped_line_get";
+    const char *text = "abcdefghijklmnopqrstuvwxyz";
+    const char *seg;
+    size_t seg_len;
+    int found = cell_get_wrapped_line(text, 26, 5, 2, &seg, &seg_len);
+    /* Line 2 should be chars 10-14 */
+    int ok = found && (seg_len == 5) && (memcmp(seg, "klmno", 5) == 0);
+    print_test_result(name, ok);
+}
+
+static void test_wrapped_line_beyond(void) {
+    const char *name = "wrapped_line_beyond";
+    const char *text = "short";
+    const char *seg;
+    size_t seg_len;
+    int found = cell_get_wrapped_line(text, 5, 10, 5, &seg, &seg_len);
+    int ok = !found;
+    print_test_result(name, ok);
+}
+
+/* ==================================================================
+ * markdown_stripped_display_width  tests
+ * ================================================================== */
+
+static void test_stripped_plain_text(void) {
+    const char *name = "stripped_plain_text";
+    int w = markdown_stripped_display_width("hello world", 11);
+    print_test_result(name, w == 11);
+}
+
+static void test_stripped_empty(void) {
+    const char *name = "stripped_empty";
+    int w = markdown_stripped_display_width("", 0);
+    print_test_result(name, w == 0);
+}
+
+static void test_stripped_null(void) {
+    const char *name = "stripped_null";
+    int w = markdown_stripped_display_width(NULL, 10);
+    print_test_result(name, w == 0);
+}
+
+static void test_stripped_bold_stars(void) {
+    const char *name = "stripped_bold_stars";
+    /* **bold** -> bold (4 fewer chars) */
+    int w = markdown_stripped_display_width("**bold**", 8);
+    print_test_result(name, w == 4);
+}
+
+static void test_stripped_bold_underscores(void) {
+    const char *name = "stripped_bold_underscores";
+    /* __bold__ -> bold */
+    int w = markdown_stripped_display_width("__bold__", 8);
+    print_test_result(name, w == 4);
+}
+
+static void test_stripped_italic_star(void) {
+    const char *name = "stripped_italic_star";
+    /* *italic* -> italic */
+    int w = markdown_stripped_display_width("*italic*", 8);
+    print_test_result(name, w == 6);
+}
+
+static void test_stripped_italic_underscore(void) {
+    const char *name = "stripped_italic_underscore";
+    /* _italic_ -> italic */
+    int w = markdown_stripped_display_width("_italic_", 8);
+    print_test_result(name, w == 6);
+}
+
+static void test_stripped_code(void) {
+    const char *name = "stripped_code";
+    /* `code` -> code */
+    int w = markdown_stripped_display_width("`code`", 6);
+    print_test_result(name, w == 4);
+}
+
+static void test_stripped_strikethrough(void) {
+    const char *name = "stripped_strikethrough";
+    /* ~~strike~~ -> strike */
+    int w = markdown_stripped_display_width("~~strike~~", 10);
+    print_test_result(name, w == 6);
+}
+
+static void test_stripped_mixed_formatting(void) {
+    const char *name = "stripped_mixed_formatting";
+    /* **bold** and *italic* text: 26 raw chars, stripped = 4+5+6+5=20 */
+    int w = markdown_stripped_display_width("**bold** and *italic* text", 26);
+    print_test_result(name, w == 20);
+}
+
+static void test_stripped_unmatched_delimiter(void) {
+    const char *name = "stripped_unmatched_delimiter";
+    /* **unmatched: first * consumed as bold attempt (1), second * treated as
+     * italic attempt (1), then "unmatched" (9) = 11 total */
+    int w = markdown_stripped_display_width("**unmatched", 11);
+    print_test_result(name, w == 11);
+}
+
+static void test_stripped_snake_case(void) {
+    const char *name = "stripped_snake_case";
+    /* snake_case: _ after alnum is not italic delimiter */
+    int w = markdown_stripped_display_width("snake_case", 10);
+    print_test_result(name, w == 10);
+}
+
+static void test_stripped_intra_word_star(void) {
+    const char *name = "stripped_intra_word_star";
+    /* intra*word: * after alnum is not italic */
+    int w = markdown_stripped_display_width("intra*word", 10);
+    print_test_result(name, w == 10);
+}
+
+/* ==================================================================
+ * table_should_wrap / table_distribute_widths  tests
+ * ================================================================== */
+
+static void test_should_wrap_fits_naturally(void) {
+    const char *name = "should_wrap_fits_naturally";
+    int widths[] = {5, 5, 5};
+    /* 3 cols: natural = 1 + 3*(5+3) = 25. pad=80 > 25, so no wrap needed */
+    int r = table_should_wrap(3, 80, 0, widths);
+    print_test_result(name, r == 0);
+}
+
+static void test_should_wrap_overflow(void) {
+    const char *name = "should_wrap_overflow";
+    int widths[] = {40, 40, 40};
+    /* 3 cols: natural = 1 + 3*(40+3) = 130. pad=80 < 130, should wrap */
+    int r = table_should_wrap(3, 80, 0, widths);
+    print_test_result(name, r == 1);
+}
+
+static void test_should_wrap_too_many_cols(void) {
+    const char *name = "should_wrap_too_many_cols";
+    int widths[] = {10, 10, 10, 10, 10, 10, 10};
+    int r = table_should_wrap(7, 80, 0, widths);
+    print_test_result(name, r == 0);
+}
+
+static void test_should_wrap_narrow_screen(void) {
+    const char *name = "should_wrap_narrow_screen";
+    int widths[] = {20, 20};
+    int r = table_should_wrap(2, 30, 0, widths);
+    print_test_result(name, r == 0);
+}
+
+static void test_distribute_widths_proportional(void) {
+    const char *name = "distribute_widths_proportional";
+    int col_widths[3];
+    int max_widths[] = {5, 50, 15};
+    table_distribute_widths(col_widths, 3, 80, 0, max_widths);
+    /* avail = 80 - 1 - 9 = 70. min = 24. extra = 46.
+     * total_content = 5+50+15 = 70.
+     * col 0: 8 + (5*46)/70 = 8 + 3 = 11
+     * col 1: 8 + (50*46)/70 = 8 + 32 = 40
+     * col 2: 8 + (15*46)/70 = 8 + 9 = 17. Remainder: 46-3-32-9=2, so col2 = 19
+     */
+    int ok = (col_widths[0] == 11 && col_widths[1] == 40);
+    print_test_result(name, ok);
+}
+
+/* ==================================================================
+ * Integration: table cell with markdown formatting
+ * ================================================================== */
+
+static void test_stripped_table_cell_scenario(void) {
+    const char *name = "stripped_table_cell_scenario";
+    /* Simulate a typical AI response table cell with bold formatting */
+    const char *cell = "**2tgUb** buys tokens";
+    int raw = cell_display_width(cell, strlen(cell));
+    int stripped = markdown_stripped_display_width(cell, strlen(cell));
+    /* raw: 21, stripped: "2tgUb buys tokens" = 17 */
+    int ok = (raw == 21 && stripped == 17);
+    if (!ok) {
+        printf("  raw=%d stripped=%d\n", raw, stripped);
+    }
+    print_test_result(name, ok);
+}
+
+static void test_stripped_mixed_bold_italic(void) {
+    const char *name = "stripped_mixed_bold_italic";
+    /* **bold** and *italic* plus __more__: 35 raw chars */
+    const char *cell = "**bold** and *italic* plus __more__";
+    int raw = cell_display_width(cell, strlen(cell));
+    int stripped = markdown_stripped_display_width(cell, strlen(cell));
+    /* stripped: bold(4)+and(5)+italic(6)+plus(6)+more(4) = 25 */
+    int ok = (stripped == 25) && (raw == 35);
+    if (!ok) {
+        printf("  raw=%d stripped=%d expected_raw=35 expected_stripped=25\n", raw, stripped);
+    }
+    print_test_result(name, ok);
+}
+
+/* ==================================================================
  * Main
  * ================================================================== */
 
@@ -601,6 +919,57 @@ int main(void) {
     test_detect_hrule_not_table();
     test_detect_alignment_separator();
     test_detect_multi_col_table();
+
+    /* --- table_split_cells --- */
+    printf("\n--- table_split_cells ---\n");
+    test_split_cells_simple();
+    test_split_cells_whitespace();
+    test_split_cells_empty();
+    test_split_cells_leading_no_pipe();
+    test_split_cells_max_limited();
+
+    /* --- cell_display_width --- */
+    printf("\n--- cell_display_width ---\n");
+    test_display_width_ascii();
+    test_display_width_empty();
+    test_display_width_wide();
+
+    /* --- cell_wrap_count / cell_get_wrapped_line --- */
+    printf("\n--- cell_wrap_count / cell_get_wrapped_line ---\n");
+    test_wrap_count_no_wrap();
+    test_wrap_count_two_lines();
+    test_wrap_count_many_lines();
+    test_wrapped_line_get();
+    test_wrapped_line_beyond();
+
+    /* --- markdown_stripped_display_width --- */
+    printf("\n--- markdown_stripped_display_width ---\n");
+    test_stripped_plain_text();
+    test_stripped_empty();
+    test_stripped_null();
+    test_stripped_bold_stars();
+    test_stripped_bold_underscores();
+    test_stripped_italic_star();
+    test_stripped_italic_underscore();
+    test_stripped_code();
+    test_stripped_strikethrough();
+    test_stripped_mixed_formatting();
+    test_stripped_unmatched_delimiter();
+    test_stripped_snake_case();
+    test_stripped_intra_word_star();
+
+    /* --- table_should_wrap / table_distribute_widths --- */
+    printf("\n--- table_should_wrap / table_distribute_widths ---\n");
+    test_should_wrap_fits_naturally();
+    test_should_wrap_overflow();
+    test_should_wrap_too_many_cols();
+    test_should_wrap_narrow_screen();
+    test_distribute_widths_proportional();
+
+    /* --- integration: markdown in table cells --- */
+    printf("\n--- integration: markdown in table cells ---\n");
+    test_stripped_table_cell_scenario();
+    test_stripped_mixed_bold_italic();
 
     print_summary();
     return tests_failed > 0 ? 1 : 0;

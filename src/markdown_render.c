@@ -25,6 +25,22 @@ const char *find_bold_stars(const char *start, size_t len);
 const char *find_bold_underscores(const char *start, size_t len);
 const char *find_italic_star(const char *start, size_t len);
 const char *find_italic_underscore(const char *start, size_t len);
+const char *find_code_ticks(const char *start, size_t len, size_t tick_len);
+const char *find_strike_tildes(const char *start, size_t len);
+/* Table rendering helpers exposed for testing */
+size_t table_split_cells(const char *row, size_t len,
+                         const char **cells, size_t *cell_lens, size_t max_cells);
+int cell_display_width(const char *text, size_t len);
+int cell_display_width_mb(const char *text, size_t len, int max_width);
+size_t cell_wrap_point(const char *text, size_t text_len, int max_display_width);
+int cell_get_wrapped_line(const char *text, size_t text_len, int max_width,
+                          int line_idx, const char **out_start, size_t *out_len);
+int cell_wrap_count(const char *text, size_t text_len, int max_width);
+int table_should_wrap(size_t num_cols, int pad_width, int left_border_width,
+                      const int *max_content_widths);
+void table_distribute_widths(int *col_widths, size_t num_cols, int pad_width,
+                             int left_border_width, const int *max_content_widths);
+int markdown_stripped_display_width(const char *text, size_t len);
 #endif
 
 /* ============================================================================
@@ -113,7 +129,11 @@ static const char *find_italic_underscore(const char *start, size_t len) {
     return NULL;
 }
 
+#ifdef TEST_BUILD
+const char *find_code_ticks(const char *start, size_t len, size_t tick_len) {
+#else
 static const char *find_code_ticks(const char *start, size_t len, size_t tick_len) {
+#endif
     const char *p = start + tick_len;
     const char *end = start + len;
 
@@ -128,7 +148,11 @@ static const char *find_code_ticks(const char *start, size_t len, size_t tick_le
     return NULL;
 }
 
+#ifdef TEST_BUILD
+const char *find_strike_tildes(const char *start, size_t len) {
+#else
 static const char *find_strike_tildes(const char *start, size_t len) {
+#endif
     const char *p = start + 2;
     const char *end = start + len;
 
@@ -557,9 +581,15 @@ int markdown_is_table_separator(const char *line, size_t len) {
  * Each cell's text pointer and byte length are stored in cells/cell_lens.
  * Leading/trailing whitespace is trimmed from each cell.
  */
+#ifdef TEST_BUILD
+size_t table_split_cells(const char *row, size_t len,
+                         const char **cells, size_t *cell_lens,
+                         size_t max_cells) {
+#else
 static size_t table_split_cells(const char *row, size_t len,
                                 const char **cells, size_t *cell_lens,
                                 size_t max_cells) {
+#endif
     size_t n = 0;
     size_t start = 0;
     size_t i;
@@ -621,7 +651,11 @@ static size_t table_split_cells(const char *row, size_t len,
  * combining/narrow.  This is an approximation that works well enough
  * for most terminal content.
  */
+#ifdef TEST_BUILD
+int cell_display_width(const char *text, size_t len) {
+#else
 static int cell_display_width(const char *text, size_t len) {
+#endif
     int w = 0;
     size_t i = 0;
 
@@ -663,10 +697,41 @@ static int cell_display_width(const char *text, size_t len) {
 #define TABLE_WRAP_PER_COL_OVERHEAD 3
 
 /*
+ * Return the display width of a single character at *p (p must point to
+ * the lead byte of a valid UTF-8 sequence).  end is used for bounds checking.
+ */
+static int cell_char_display_width(const char *p, const char *end) {
+    unsigned char c = (unsigned char)*p;
+    if (c < 0x80) return 1;
+    if ((c & 0xE0) == 0xC0 && p + 1 < end) return 1;
+    if ((c & 0xF0) == 0xE0 && p + 2 < end) return 1;
+    if ((c & 0xF8) == 0xF0 && p + 3 < end) return 2;
+    return 1;
+}
+
+/*
+ * Return the byte length of a single character at *p (p must point to
+ * the lead byte of a valid UTF-8 sequence).
+ */
+static size_t cell_char_byte_len(const char *p, const char *end) {
+    unsigned char c = (unsigned char)*p;
+    if (c < 0x80) return 1;
+    if ((c & 0xE0) == 0xC0 && p + 1 < end) return 2;
+    if ((c & 0xF0) == 0xE0 && p + 2 < end) return 3;
+    if ((c & 0xF8) == 0xF0 && p + 3 < end) return 4;
+    return 1;
+}
+
+/*
  * Compute the display width of a UTF-8 byte sequence using mbrtowc/wcwidth.
  * Returns the number of terminal columns the text occupies (capped at max_width).
  */
+#ifdef TEST_BUILD
+int cell_display_width_mb(const char *text, size_t len, int max_width) {
+#else
+__attribute__((unused))
 static int cell_display_width_mb(const char *text, size_t len, int max_width) {
+#endif
     int w = 0;
     size_t i = 0;
     mbstate_t state;
@@ -699,7 +764,11 @@ static int cell_display_width_mb(const char *text, size_t len, int max_width) {
  * Find the byte length of text that fits within max_display_width columns.
  * Uses mbrtowc/wcwidth for accurate UTF-8 display width calculation.
  */
+#ifdef TEST_BUILD
+size_t cell_wrap_point(const char *text, size_t text_len, int max_display_width) {
+#else
 static size_t cell_wrap_point(const char *text, size_t text_len, int max_display_width) {
+#endif
     size_t bytes_used = 0;
     int display_width = 0;
     mbstate_t state;
@@ -732,8 +801,13 @@ static size_t cell_wrap_point(const char *text, size_t text_len, int max_display
  * Get the n-th wrapped line of a cell (0-indexed).
  * Returns 1 and sets *out_start and *out_len on success, 0 if beyond end.
  */
+#ifdef TEST_BUILD
+int cell_get_wrapped_line(const char *text, size_t text_len, int max_width,
+                          int line_idx, const char **out_start, size_t *out_len) {
+#else
 static int cell_get_wrapped_line(const char *text, size_t text_len, int max_width,
                                  int line_idx, const char **out_start, size_t *out_len) {
+#endif
     const char *p = text;
     size_t remaining = text_len;
     int current_line = 0;
@@ -760,7 +834,11 @@ static int cell_get_wrapped_line(const char *text, size_t text_len, int max_widt
 /*
  * Count how many wrapped lines a cell will produce at the given column width.
  */
+#ifdef TEST_BUILD
+int cell_wrap_count(const char *text, size_t text_len, int max_width) {
+#else
 static int cell_wrap_count(const char *text, size_t text_len, int max_width) {
+#endif
     if (!text || text_len == 0 || max_width <= 0) {
         return 1;
     }
@@ -780,11 +858,119 @@ static int cell_wrap_count(const char *text, size_t text_len, int max_width) {
 }
 
 /*
+ * Compute the display width of text after stripping markdown formatting
+ * delimiters.  This mirrors what markdown_render_inline would actually
+ * output — counting only the visible characters.
+ *
+ * Returns 0 for empty/NULL input.
+ */
+#ifdef TEST_BUILD
+int markdown_stripped_display_width(const char *text, size_t len) {
+#else
+static int markdown_stripped_display_width(const char *text, size_t len) {
+#endif
+    int w = 0;
+    const char *p = text;
+    const char *end;
+
+    if (!text || len == 0) {
+        return 0;
+    }
+
+    end = text + len;
+
+    while (p < end) {
+        size_t remaining = (size_t)(end - p);
+
+        if (remaining >= 2 && p[0] == '*' && p[1] == '*') {
+            const char *close = find_bold_stars(p, remaining);
+            if (close) {
+                w += cell_display_width(p + 2, (size_t)(close - (p + 2)));
+                p = close + 2;
+            } else {
+                w += cell_display_width(p, 1);
+                p++;
+            }
+        } else if (remaining >= 2 && p[0] == '_' && p[1] == '_') {
+            const char *close = find_bold_underscores(p, remaining);
+            if (close) {
+                w += cell_display_width(p + 2, (size_t)(close - (p + 2)));
+                p = close + 2;
+            } else {
+                w += cell_display_width(p, 1);
+                p++;
+            }
+        } else if (remaining >= 2 && p[0] == '~' && p[1] == '~') {
+            const char *close = find_strike_tildes(p, remaining);
+            if (close) {
+                w += cell_display_width(p + 2, (size_t)(close - (p + 2)));
+                p = close + 2;
+            } else {
+                w += cell_display_width(p, 1);
+                p++;
+            }
+        } else if (p[0] == '*') {
+            if (p > text && isalnum((unsigned char)p[-1])) {
+                w += cell_display_width(p, 1);
+                p++;
+            } else {
+                const char *close = find_italic_star(p, remaining);
+                if (close) {
+                    w += cell_display_width(p + 1, (size_t)(close - (p + 1)));
+                    p = close + 1;
+                } else {
+                    w += cell_display_width(p, 1);
+                    p++;
+                }
+            }
+        } else if (p[0] == '_') {
+            if (p > text && isalnum((unsigned char)p[-1])) {
+                w += cell_display_width(p, 1);
+                p++;
+            } else {
+                const char *close = find_italic_underscore(p, remaining);
+                if (close) {
+                    w += cell_display_width(p + 1, (size_t)(close - (p + 1)));
+                    p = close + 1;
+                } else {
+                    w += cell_display_width(p, 1);
+                    p++;
+                }
+            }
+        } else if (p[0] == '`') {
+            size_t tick_len = 1;
+            while (p + tick_len < end && p[tick_len] == '`') {
+                tick_len++;
+            }
+            const char *close = find_code_ticks(p, remaining, tick_len);
+            if (close) {
+                w += cell_display_width(p + tick_len,
+                                       (size_t)(close - (p + tick_len)));
+                p = close + tick_len;
+            } else {
+                w += cell_display_width(p, 1);
+                p++;
+            }
+        } else {
+            w += cell_char_display_width(p, end);
+            p += cell_char_byte_len(p, end);
+        }
+    }
+
+    return w;
+}
+
+/*
  * Decide whether wrapped table rendering is viable.
  * Returns 1 if wrapping should be used, 0 to fall back to fixed-width mode.
  */
+#ifdef TEST_BUILD
+int table_should_wrap(size_t num_cols, int pad_width,
+                      int left_border_width, const int *max_content_widths) {
+#else
 static int table_should_wrap(size_t num_cols, int pad_width,
                              int left_border_width, const int *max_content_widths) {
+#endif
     /* Must have 2-6 columns */
     if (num_cols < 2 || num_cols > TABLE_WRAP_MAX_COLS) {
         return 0;
@@ -825,8 +1011,13 @@ static int table_should_wrap(size_t num_cols, int pad_width,
  * Distribute available width among columns.
  * First assigns min width, then distributes extra proportionally to content width.
  */
+#ifdef TEST_BUILD
+void table_distribute_widths(int *col_widths, size_t num_cols, int pad_width,
+                             int left_border_width, const int *max_content_widths) {
+#else
 static void table_distribute_widths(int *col_widths, size_t num_cols, int pad_width,
                                     int left_border_width, const int *max_content_widths) {
+#endif
     int left_bw = (left_border_width > 0) ? left_border_width : 1;
     int avail = pad_width - left_bw - ((int)num_cols * TABLE_WRAP_PER_COL_OVERHEAD);
 
@@ -921,7 +1112,7 @@ static void table_render_wrapped_row(TUIState *tui, WINDOW *pad,
             if (cells[j] && cell_lens[j] > 0) {
                 if (cell_get_wrapped_line(cells[j], cell_lens[j], col_widths[j],
                                          line, &seg, &seg_len) && seg_len > 0) {
-                    seg_w = cell_display_width_mb(seg, seg_len, col_widths[j]);
+                    seg_w = markdown_stripped_display_width(seg, seg_len);
                 }
             }
 
@@ -1053,13 +1244,14 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
         num_cols = TABLE_MAX_COLS;
     }
 
-    /* Calculate max content widths for each column */
+    /* Calculate max content widths for each column (using stripped display
+     * width so that markdown formatting delimiters don't inflate columns) */
     memset(max_content_widths, 0, sizeof(max_content_widths));
     for (i = 0; i < num_display; i++) {
         for (j = 0; j < col_counts[i] && j < num_cols; j++) {
             int w;
             if (cells[i][j] && cell_lens[i][j] > 0) {
-                w = cell_display_width(cells[i][j], cell_lens[i][j]);
+                w = markdown_stripped_display_width(cells[i][j], cell_lens[i][j]);
             } else {
                 w = 0;
             }
@@ -1111,13 +1303,13 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
 
     /* --- Traditional fixed-width rendering (fallback) --- */
 
-    /* Calculate column widths */
+    /* Calculate column widths (using stripped display width) */
     memset(col_widths, 0, sizeof(col_widths));
     for (i = 0; i < num_display; i++) {
         for (j = 0; j < col_counts[i] && j < num_cols; j++) {
             int w;
             if (cells[i][j] && cell_lens[i][j] > 0) {
-                w = cell_display_width(cells[i][j], cell_lens[i][j]);
+                w = markdown_stripped_display_width(cells[i][j], cell_lens[i][j]);
             } else {
                 w = 0;
             }
@@ -1158,7 +1350,7 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
                 cell_len = 0;
             }
 
-            cell_w = cell_display_width(cell_text, cell_len);
+            cell_w = markdown_stripped_display_width(cell_text, cell_len);
             pad_w = col_widths[j] - cell_w;
 
             waddch(pad, ' ');
