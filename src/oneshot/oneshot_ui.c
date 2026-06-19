@@ -361,6 +361,82 @@ void oneshot_ui_print_tool_footer(OneshotStatus status, const char *summary, int
     fflush(stdout);
 }
 
+/*
+ * Print one display-line segment of text with the box border prefix.
+ * Used as a helper for word-wrap.
+ */
+static void oneshot_print_prefix(void) {
+    if (!g_colors.initialized) init_color_cache();
+    printf("%s%s%s ", g_colors.dim,
+           oneshot_ui_supports_unicode() ? BOX_VERTICAL : "|",
+           g_colors.reset);
+}
+
+/*
+ * Wrap and print a single logical line of text at word boundaries.
+ * Each display line gets the box border prefix.
+ */
+static void oneshot_print_line_wrapped(const char *text, size_t len, int avail_width) {
+    size_t pos = 0;
+    int first_segment = 1;
+
+    while (pos < len) {
+        oneshot_print_prefix();
+
+        // Skip leading spaces on continuation lines (the break point
+        // space is skipped by the caller; any remaining leading spaces
+        // on a new display line serve no purpose).
+        if (!first_segment) {
+            while (pos < len && text[pos] == ' ') {
+                pos++;
+            }
+        }
+        first_segment = 0;
+
+        if (pos >= len) {
+            printf("\n");
+            break;
+        }
+
+        size_t remaining = len - pos;
+        if ((int)remaining <= avail_width) {
+            // Remaining text fits on one display line
+            fwrite(text + pos, 1, remaining, stdout);
+            printf("\n");
+            break;
+        }
+
+        // Find a word boundary within avail_width columns.
+        // Walk backwards from pos+avail_width looking for a space.
+        size_t scan_end = pos + (size_t)avail_width;
+        if (scan_end > len) scan_end = len;
+
+        size_t break_at = scan_end;
+        for (size_t i = scan_end; i > pos; i--) {
+            if (text[i - 1] == ' ') {
+                break_at = i - 1;  // Break before the space
+                break;
+            }
+        }
+
+        if (break_at == scan_end) {
+            // No space found — word is longer than available width.
+            // Force-break at the column boundary.
+            break_at = pos + (size_t)avail_width;
+        }
+
+        // Print the segment
+        fwrite(text + pos, 1, break_at - pos, stdout);
+        printf("\n");
+
+        pos = break_at;
+        // Skip the space we broke at
+        if (pos < len && text[pos] == ' ') {
+            pos++;
+        }
+    }
+}
+
 void oneshot_ui_print_content(const char *content, int is_output) {
     (void)is_output;  // Unused for now, reserved for future styling differences
     if (!content || !content[0]) return;
@@ -373,7 +449,6 @@ void oneshot_ui_print_content(const char *content, int is_output) {
 
     if (g_ui_style == ONESHOT_UI_STYLE_COMPACT) {
         // In compact mode, just print content with minimal indentation
-        // Don't print trailing newlines to keep things tight
         const char *p = content;
         int first = 1;
         while (*p) {
@@ -388,28 +463,41 @@ void oneshot_ui_print_content(const char *content, int is_output) {
         return;
     }
 
-    // Full box style - indent content
-    const char *p = content;
-    int at_line_start = 1;
+    // Full box style — indent content with word-wrap to prevent
+    // mid-word breaks caused by terminal auto-wrapping.
+    int term_width = get_terminal_width();
+    int prefix_width = 2;  // "│ " or "| " — one glyph + one space
+    int avail_width = term_width - prefix_width;
+    if (avail_width < 20) avail_width = 20;
 
-    while (*p) {
-        if (at_line_start) {
-            printf("%s%s%s ", g_colors.dim, BOX_VERTICAL, g_colors.reset);
-            at_line_start = 0;
+    // Process input line by line (split on '\n')
+    const char *line_start = content;
+    while (*line_start) {
+        // Find end of this logical line
+        const char *line_end = line_start;
+        while (*line_end && *line_end != '\n') {
+            line_end++;
         }
+        size_t line_len = (size_t)(line_end - line_start);
 
-        if (*p == '\n') {
-            putchar(*p);
-            at_line_start = 1;
+        if (line_len == 0) {
+            // Empty line — prefix + newline only
+            oneshot_print_prefix();
+            printf("\n");
+        } else if ((int)line_len <= avail_width) {
+            // Line fits on one display line
+            oneshot_print_prefix();
+            fwrite(line_start, 1, line_len, stdout);
+            printf("\n");
         } else {
-            putchar(*p);
+            // Line needs wrapping at word boundaries
+            oneshot_print_line_wrapped(line_start, line_len, avail_width);
         }
-        p++;
-    }
 
-    // Ensure newline at end
-    if (!at_line_start && content[strlen(content)-1] != '\n') {
-        printf("\n");
+        line_start = line_end;
+        if (*line_start == '\n') {
+            line_start++;
+        }
     }
 
     fflush(stdout);
