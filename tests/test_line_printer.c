@@ -475,6 +475,277 @@ static void test_lp_print_raw_zero_len(void) {
  * lp_print_text_wrapped tests
  * ================================================================== */
 
+/* Regression: text that exactly fills a line, followed by explicit \n,
+ * should NOT produce a double newline (blank line).
+ * This tests the ncurses auto-wrap + explicit \n collision bug. */
+static void test_lp_wrap_exact_fill_then_newline(void) {
+    const char *name = "lp_wrap_exact_fill_then_newline";
+    /* pad width 10, "0123456789"=10chars exactly fills the line.
+     * After writing, ncurses may auto-wrap. The \n should NOT add a
+     * second newline, leaving cursor at (1,0) not (2,0). */
+    WINDOW *pad = newpad(10, 10);
+    assert(pad != NULL);
+
+    LinePrinter lp;
+    lp_init(&lp, pad, NULL, 0, 0, 10);
+
+    wmove(pad, 0, 0);
+    lp_print_text_wrapped(&lp, "0123456789\nabc");
+
+    int cur_y, cur_x;
+    getyx(pad, cur_y, cur_x);
+    /* Expected: y=1 (not 2 — no blank line), x=3 (len of "abc") */
+    int ok = (cur_y == 1) && (cur_x == 3);
+    if (!ok) {
+        printf("  expected (1,3) got (%d,%d)\n", cur_y, cur_x);
+    }
+    print_test_result(name, ok);
+    delwin(pad);
+}
+
+/* Regression: text that exceeds line width should wrap, but the
+ * overflow should NOT leave a blank line between the wrapped content. */
+static void test_lp_wrap_overflow_no_blank_line(void) {
+    const char *name = "lp_wrap_overflow_no_blank_line";
+    /* pad width 10, "0123456789abc" is 13 chars, first 10 fit, next 3 wrap.
+     * After wrapping, cursor should be at (1,3), not (2,3). */
+    WINDOW *pad = newpad(10, 10);
+    assert(pad != NULL);
+
+    LinePrinter lp;
+    lp_init(&lp, pad, NULL, 0, 0, 10);
+
+    wmove(pad, 0, 0);
+    lp_print_text_wrapped(&lp, "0123456789abc");
+
+    int cur_y, cur_x;
+    getyx(pad, cur_y, cur_x);
+    /* Expected: y=1 (wrapped once), x=3 (remaining "abc") */
+    int ok = (cur_y == 1) && (cur_x == 3);
+    if (!ok) {
+        printf("  expected (1,3) got (%d,%d)\n", cur_y, cur_x);
+    }
+    print_test_result(name, ok);
+    delwin(pad);
+}
+
+/* Regression: consecutive newlines (\n\n) for paragraph breaks
+ * should produce one blank line between paragraphs. */
+static void test_lp_wrap_paragraph_break_preserved(void) {
+    const char *name = "lp_wrap_paragraph_break_preserved";
+    WINDOW *pad = newpad(10, 80);
+    assert(pad != NULL);
+
+    LinePrinter lp;
+    lp_init(&lp, pad, NULL, 0, 0, 80);
+
+    wmove(pad, 0, 0);
+    /* "First" on line 0, blank line 1, "Second" on line 2 */
+    lp_print_text_wrapped(&lp, "First\n\nSecond");
+
+    int cur_y, cur_x;
+    getyx(pad, cur_y, cur_x);
+    /* "Second" is 6 chars, should be on line 2 (0: First, 1: blank, 2: Second) */
+    int ok = (cur_y == 2) && (cur_x == 6);
+    if (!ok) {
+        printf("  expected (2,6) got (%d,%d)\n", cur_y, cur_x);
+    }
+    print_test_result(name, ok);
+    delwin(pad);
+}
+
+/* Regression: exact-fill in bordered mode (border "│ " = 2 cols).
+ * pad_width=12, content_width=10. "0123456789" exactly fills
+ * the content area. Followed by \nabc. No double newline. */
+static void test_lp_wrap_bordered_exact_fill_then_newline(void) {
+    const char *name = "lp_wrap_bordered_exact_fill_then_newline";
+    WINDOW *pad = newpad(10, 12);
+    assert(pad != NULL);
+
+    LinePrinter lp;
+    lp_init(&lp, pad, "│ ", 1, 2, 12);
+
+    wmove(pad, 0, 0);
+    lp_print_text_wrapped(&lp, "0123456789\nabc");
+
+    int cur_y, cur_x;
+    getyx(pad, cur_y, cur_x);
+    /* Border (2) + content fits. After \n: line 1 has border+abc.
+     * Expected y=1, x=5 (2 border + 3 "abc") */
+    int ok = (cur_y == 1) && (cur_x == 5);
+    if (!ok) {
+        printf("  expected (1,5) got (%d,%d)\n", cur_y, cur_x);
+    }
+    print_test_result(name, ok);
+    delwin(pad);
+}
+
+/* Regression: bordered overflow should wrap without blank line */
+static void test_lp_wrap_bordered_overflow_no_blank(void) {
+    const char *name = "lp_wrap_bordered_overflow_no_blank";
+    WINDOW *pad = newpad(10, 12);
+    assert(pad != NULL);
+
+    LinePrinter lp;
+    lp_init(&lp, pad, "│ ", 1, 2, 12);
+
+    wmove(pad, 0, 0);
+    lp_print_text_wrapped(&lp, "0123456789abc");
+
+    int cur_y, cur_x;
+    getyx(pad, cur_y, cur_x);
+    /* 10 chars fill content, 3 wrap: y=1 (not 2), x=5 (2 border + 3) */
+    int ok = (cur_y == 1) && (cur_x == 5);
+    if (!ok) {
+        printf("  expected (1,5) got (%d,%d)\n", cur_y, cur_x);
+    }
+    print_test_result(name, ok);
+    delwin(pad);
+}
+
+/* Regression: explicit \n at pad_width (after content fills line)
+ * should not produce a double newline.  This is the real streaming
+ * scenario: a previous chunk filled to the right margin, leaving
+ * the cursor at pad_width.  The next chunk starts with \n.
+ * The \n should be consumed without creating a blank line. */
+static void test_lp_wrap_newline_at_col_zero_after_wrap(void) {
+    const char *name = "lp_wrap_newline_after_full_line";
+    WINDOW *pad = newpad(10, 10);
+    assert(pad != NULL);
+
+    LinePrinter lp;
+    lp_init(&lp, pad, NULL, 0, 0, 10);
+
+    /* Simulate: previous content filled the 10-wide line,
+     * leaving cursor at pad_width (10).  Next streaming chunk
+     * starts with \n. */
+    wmove(pad, 0, 10);  /* past right margin */
+    lp_print_text_wrapped(&lp, "\nabc");
+
+    int cur_y, cur_x;
+    getyx(pad, cur_y, cur_x);
+    /* \n at pad_width: handled by boundary code, no blank line.
+     * "abc" lands on line 1, x=3. */
+    int ok = (cur_y == 1) && (cur_x == 3);
+    if (!ok) {
+        printf("  expected (1,3) got (%d,%d)\n", cur_y, cur_x);
+    }
+    print_test_result(name, ok);
+    delwin(pad);
+}
+
+/* Regression: multiple newlines at col 0 after wrap should produce
+ * paragraph break. E.g., "0123456789\n\nabc" with pad_width=10.
+ * Line 0: "0123456789" (ncurses wraps), Line 1: blank, Line 2: "abc". */
+static void test_lp_wrap_double_newline_after_wrap(void) {
+    const char *name = "lp_wrap_double_newline_after_wrap";
+    WINDOW *pad = newpad(10, 10);
+    assert(pad != NULL);
+
+    LinePrinter lp;
+    lp_init(&lp, pad, NULL, 0, 0, 10);
+
+    wmove(pad, 0, 0);
+    lp_print_text_wrapped(&lp, "0123456789\n\nabc");
+
+    int cur_y, cur_x;
+    getyx(pad, cur_y, cur_x);
+    /* 10 chars fill line 0 → auto-wrap to (1,0).
+     * Double \n at (1,0): first \n is skipped (auto-wrap),
+     * second \n is paragraph break → line 2.
+     * "abc" on line 2.
+     * Expected: y=2, x=3 */
+    int ok = (cur_y == 2) && (cur_x == 3);
+    if (!ok) {
+        printf("  expected (2,3) got (%d,%d)\n", cur_y, cur_x);
+    }
+    print_test_result(name, ok);
+    delwin(pad);
+}
+
+/* Regression: text after explicit \n should render at correct position
+ * when previous content did NOT fill the line (no auto-wrap). */
+static void test_lp_wrap_newline_mid_line(void) {
+    const char *name = "lp_wrap_newline_mid_line";
+    WINDOW *pad = newpad(10, 80);
+    assert(pad != NULL);
+
+    LinePrinter lp;
+    lp_init(&lp, pad, NULL, 0, 0, 80);
+
+    wmove(pad, 0, 0);
+    /* "hello" is 5 chars, \n goes to line 1, "world" is 5 chars */
+    lp_print_text_wrapped(&lp, "hello\nworld");
+
+    int cur_y, cur_x;
+    getyx(pad, cur_y, cur_x);
+    int ok = (cur_y == 1) && (cur_x == 5);
+    if (!ok) {
+        printf("  expected (1,5) got (%d,%d)\n", cur_y, cur_x);
+    }
+    print_test_result(name, ok);
+    delwin(pad);
+}
+
+/* Regression: content fills line exactly multiple times,
+ * each with explicit \n, should not produce extra blank lines.
+ * On platforms where ncurses auto-wraps at the right margin,
+ * the cursor may end up on the next empty line after the
+ * last fill — this is the correct streaming behavior. */
+static void test_lp_wrap_multiple_exact_fills(void) {
+    const char *name = "lp_wrap_multiple_exact_fills";
+    WINDOW *pad = newpad(10, 10);
+    assert(pad != NULL);
+
+    LinePrinter lp;
+    lp_init(&lp, pad, NULL, 0, 0, 10);
+
+    wmove(pad, 0, 0);
+    /* Three lines of exactly 10 chars, each with explicit \n */
+    lp_print_text_wrapped(&lp, "AAAAAAAAAA\nBBBBBBBBBB\nCCCCCCCCCC");
+
+    int cur_y, cur_x;
+    getyx(pad, cur_y, cur_x);
+    /* Each line exactly fills → ncurses auto-wraps. Each \n is consumed.
+     * The cursor ends at the next line after the third fill.
+     * On platforms that auto-wrap during waddnstr: y=3, x=0.
+     * On platforms that don't: y=2, x=10. */
+    int ok = (cur_y == 3 && cur_x == 0) ||
+             (cur_y == 2 && cur_x == 10);
+    if (!ok) {
+        printf("  expected (3,0) or (2,10) got (%d,%d)\n", cur_y, cur_x);
+    }
+    print_test_result(name, ok);
+    delwin(pad);
+}
+
+/* Regression: in BG fill mode, exact fill + newline should not double */
+static void test_lp_wrap_bg_exact_fill_then_newline(void) {
+    const char *name = "lp_wrap_bg_exact_fill_then_newline";
+    WINDOW *pad = newpad(10, 10);
+    assert(pad != NULL);
+
+    LinePrinter lp;
+    lp_init(&lp, pad, NULL, 0, 0, 10);
+    lp.fill_bg_pair = 7;  /* simulate BG fill active */
+
+    wmove(pad, 0, 0);
+    /* "0123456789" fills 10-col pad. BG fill won't change width. */
+    lp_print_text_wrapped(&lp, "0123456789\nabc");
+
+    int cur_y, cur_x;
+    getyx(pad, cur_y, cur_x);
+    /* With BG fill, lp_fill_line fills to pad_width, then restores cursor.
+     * The \n after exact fill: ncurses behavior may differ with BG fill.
+     * We just check that y didn't jump too far. */
+    int ok = (cur_y == 1) && (cur_x == 3);
+    if (!ok) {
+        printf("  expected (1,3) got (%d,%d)\n", cur_y, cur_x);
+    }
+    print_test_result(name, ok);
+    delwin(pad);
+}
+
 static void test_lp_print_text_wrapped_simple(void) {
     const char *name = "lp_print_text_wrapped_simple";
     WINDOW *pad = newpad(10, 80);
@@ -604,6 +875,19 @@ int main(void) {
     test_lp_print_text_wrapped_simple();
     test_lp_print_text_wrapped_newlines();
     test_lp_print_text_wrapped_empty_lines();
+
+    /* --- lp_print_text_wrapped regression: double-newline after auto-wrap --- */
+    printf("\n--- lp_print_text_wrapped regression: auto-wrap double-newline ---\n");
+    test_lp_wrap_exact_fill_then_newline();
+    test_lp_wrap_overflow_no_blank_line();
+    test_lp_wrap_paragraph_break_preserved();
+    test_lp_wrap_bordered_exact_fill_then_newline();
+    test_lp_wrap_bordered_overflow_no_blank();
+    test_lp_wrap_newline_at_col_zero_after_wrap();
+    test_lp_wrap_double_newline_after_wrap();
+    test_lp_wrap_newline_mid_line();
+    test_lp_wrap_multiple_exact_fills();
+    test_lp_wrap_bg_exact_fill_then_newline();
 
     print_summary();
 

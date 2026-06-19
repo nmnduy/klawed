@@ -264,6 +264,7 @@ void lp_print_text_wrapped(LinePrinter *lp, const char *text) {
     }
 
     const char *p = text;
+    int just_wrapped = 0;  /* true when ncurses auto-wrapped the previous line */
     while (*p) {
         int cur_y, cur_x;
         getyx(lp->pad, cur_y, cur_x);
@@ -275,14 +276,36 @@ void lp_print_text_wrapped(LinePrinter *lp, const char *text) {
         }
 
         if (*p == '\n') {
+            /* If the previous content write caused ncurses to auto-wrap,
+             * a single \n would create a double newline.  Skip it but
+             * preserve paragraph breaks (\n\n). */
+            if (just_wrapped) {
+                just_wrapped = 0;
+                p++;
+                if (*p == '\n') {
+                    /* Paragraph break after wrap: emit one newline */
+                    p++;
+                    lp_newline(lp);
+                    continue;
+                }
+                continue;
+            }
             lp_newline(lp);
+            just_wrapped = 0;
             p++;
             continue;
         }
 
         int available = lp->pad_width - cur_x;
         if (available <= 0) {
-            lp_newline(lp);
+            /* Overflow: content filled the line.  Explicitly wrap
+             * instead of calling lp_newline to avoid the double
+             * newline interaction with ncurses auto-wrap. */
+            wmove(lp->pad, cur_y + 1, 0);
+            if (lp->border_str) {
+                lp_border(lp);
+            }
+            just_wrapped = 1;
             continue;
         }
 
@@ -304,6 +327,8 @@ void lp_print_text_wrapped(LinePrinter *lp, const char *text) {
         int seg_width = utf8_display_width(seg_copy);
         free(seg_copy);
 
+        /* Save y before write to detect auto-wrap */
+        int before_y = cur_y;
         if (seg_width <= available) {
             waddnstr(lp->pad, p, (int)seg_len);
             p = seg_end;
@@ -316,6 +341,22 @@ void lp_print_text_wrapped(LinePrinter *lp, const char *text) {
                 waddch(lp->pad, (chtype)(unsigned char)*p);
                 p++;
             }
+        }
+
+        /* Detect whether ncurses auto-wrapped the line */
+        getyx(lp->pad, cur_y, cur_x);
+        if (cur_y != before_y) {
+            /* ncurses auto-wrapped: the content filled the line exactly */
+            just_wrapped = 1;
+        } else if (cur_x >= lp->pad_width) {
+            /* Cursor past the right margin but ncurses didn't auto-wrap
+             * (platform-dependent).  Explicitly wrap to avoid double
+             * newline when the next char is \n. */
+            wmove(lp->pad, cur_y + 1, 0);
+            if (lp->border_str) {
+                lp_border(lp);
+            }
+            just_wrapped = 1;
         }
     }
 
