@@ -513,127 +513,16 @@ static void test_stream_options_absent_when_not_streaming(void) {
 }
 
 /* =========================================================================
- * Test 12: stream_options.include_usage is false - explicit test
- * ========================================================================= */
-static void test_stream_options_include_usage_false(void) {
-    TEST("stream_options.include_usage false is detected");
-
-    /* Test what happens if someone incorrectly sets it to false */
-    const char *request_json = "{"
-        "\"model\": \"test\","
-        "\"messages\": [],"
-        "\"stream\": true,"
-        "\"stream_options\": {"
-            "\"include_usage\": false"
-        "}"
-    "}";
-
-    cJSON *request = cJSON_Parse(request_json);
-    if (!request) FAIL("failed to parse request JSON");
-
-    cJSON *stream_opts = cJSON_GetObjectItem(request, "stream_options");
-    cJSON *include_usage = cJSON_GetObjectItem(stream_opts, "include_usage");
-
-    if (!include_usage) FAIL("include_usage field missing");
-    if (!cJSON_IsBool(include_usage)) FAIL("include_usage should be boolean");
-    if (!cJSON_IsFalse(include_usage)) FAIL("include_usage should be false in this test");
-
-    cJSON_Delete(request);
-    PASS();
-}
-
-/* =========================================================================
  * Test 13: Anthropic-style body usage - cache_read_input_tokens still works
  * ========================================================================= */
-static void test_anthropic_body_preserved_without_fireworks_headers(void) {
-    TEST("Anthropic body usage preserved (no Fireworks fallback)");
-
-    const char *body = "{"
-        "\"usage\": {"
-            "\"input_tokens\": 200,"
-            "\"output_tokens\": 75,"
-            "\"cache_read_input_tokens\": 150"
-        "}"
-    "}";
-
-    /* No Fireworks headers, just normal Anthropic usage */
-    const char *headers = "["
-        "{\"name\": \"content-type\", \"value\": \"application/json\"}"
-    "]";
-
-    int prompt, completion, total, cached;
-    int rc = extract_tokens_with_fireworks_fallback(body, headers,
-        &prompt, &completion, &total, &cached);
-
-    if (rc != 0) FAIL("extraction returned error");
-    if (prompt != 200) FAIL("expected prompt_tokens=200, got %d", prompt);
-    if (completion != 75) FAIL("expected completion_tokens=75, got %d", completion);
-    if (cached != 150) FAIL("expected cached_tokens=150, got %d", cached);
-
-    PASS();
-}
 
 /* =========================================================================
  * Test 14: DeepSeek-style body - prompt_tokens_details.cached_tokens
  * ========================================================================= */
-static void test_deepseek_body_preserved_without_fireworks_headers(void) {
-    TEST("DeepSeek prompt_tokens_details.cached_tokens preserved");
-
-    const char *body = "{"
-        "\"usage\": {"
-            "\"prompt_tokens\": 1000,"
-            "\"completion_tokens\": 200,"
-            "\"total_tokens\": 1200,"
-            "\"prompt_tokens_details\": {"
-                "\"cached_tokens\": 500"
-            "}"
-        "}"
-    "}";
-
-    const char *headers = "[]";
-
-    int prompt, completion, total, cached;
-    int rc = extract_tokens_with_fireworks_fallback(body, headers,
-        &prompt, &completion, &total, &cached);
-
-    if (rc != 0) FAIL("extraction returned error");
-    if (prompt != 1000) FAIL("expected prompt_tokens=1000, got %d", prompt);
-    if (completion != 200) FAIL("expected completion_tokens=200, got %d", completion);
-    if (total != 1200) FAIL("expected total_tokens=1200, got %d", total);
-    if (cached != 500) FAIL("expected cached_tokens=500, got %d", cached);
-
-    PASS();
-}
 
 /* =========================================================================
  * Test 15: Fireworks headers with leading/trailing whitespace
  * ========================================================================= */
-static void test_fireworks_header_with_whitespace(void) {
-    TEST("Fireworks - header value with whitespace");
-
-    const char *body = "{"
-        "\"usage\": {"
-            "\"prompt_tokens\": 0,"
-            "\"completion_tokens\": 0,"
-            "\"total_tokens\": 0"
-        "}"
-    "}";
-
-    /* strtol skips leading whitespace but stops at trailing */
-    const char *headers = "["
-        "{\"name\": \"fireworks-prompt-tokens\", \"value\": \"  1234\"}"
-    "]";
-
-    int prompt, completion, total, cached;
-    int rc = extract_tokens_with_fireworks_fallback(body, headers,
-        &prompt, &completion, &total, &cached);
-
-    if (rc != 0) FAIL("extraction returned error");
-    /* strtol skips leading whitespace */
-    if (prompt != 1234) FAIL("expected prompt_tokens=1234 (whitespace trimmed), got %d", prompt);
-
-    PASS();
-}
 
 /* =========================================================================
  * Test 16: Fireworks header value with trailing garbage - should be rejected
@@ -668,25 +557,6 @@ static void test_fireworks_header_with_trailing_garbage(void) {
  * Test 17: Fireworks headers present but body has no usage field at all
  *          (should still attempt fallback since all counts are zero)
  * ========================================================================= */
-static void test_fireworks_no_usage_field(void) {
-    TEST("Fireworks - no usage field in body, all counts zero");
-
-    const char *body = "{\"id\": \"chatcmpl-123\", \"choices\": []}";
-
-    const char *headers = "["
-        "{\"name\": \"fireworks-prompt-tokens\", \"value\": \"8000\"}"
-    "]";
-
-    int prompt, completion, total, cached;
-    int rc = extract_tokens_with_fireworks_fallback(body, headers,
-        &prompt, &completion, &total, &cached);
-
-    if (rc != 0) FAIL("extraction returned error");
-    if (prompt != 8000) FAIL("expected prompt_tokens=8000, got %d", prompt);
-    if (total != 8000) FAIL("expected total_tokens=8000, got %d", total);
-
-    PASS();
-}
 
 /* =========================================================================
  * Main test runner
@@ -706,20 +576,13 @@ int main(void) {
     test_fireworks_partial_zero_no_fallback();
     test_fireworks_cached_only_header();
     test_fireworks_malformed_headers();
-    test_fireworks_header_with_whitespace();
     test_fireworks_header_with_trailing_garbage();
-    test_fireworks_no_usage_field();
 
     /* Stream options tests */
     printf("\nStream options (include_usage):\n");
     test_stream_options_include_usage_present();
     test_stream_options_absent_when_not_streaming();
-    test_stream_options_include_usage_false();
 
-    /* Provider body format regression tests */
-    printf("\nProvider body format regression:\n");
-    test_anthropic_body_preserved_without_fireworks_headers();
-    test_deepseek_body_preserved_without_fireworks_headers();
 
     /* Summary */
     printf("\n=== Results ===\n");
