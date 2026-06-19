@@ -35,8 +35,11 @@ void lp_init(LinePrinter *lp, WINDOW *pad, const char *border_str,
  * Leaves text_pair active for subsequent writing. */
 void lp_border(LinePrinter *lp);
 
-/* Emit '\n' only if cursor is not already at column 0.
- * This avoids double newlines after ncurses auto-wrap. */
+/* Emit '\n' to advance to the next line.
+ * Always emits the newline, even at column 0, so that empty lines
+ * (paragraph breaks between markdown blocks) are preserved.
+ * If fill_bg_pair is active, fills the remainder of the current
+ * line with background-tinted spaces before emitting the newline. */
 void lp_newline(LinePrinter *lp);
 
 /* Fill rest of current line with background-tinted spaces.

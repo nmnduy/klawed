@@ -207,9 +207,7 @@ void lp_newline(LinePrinter *lp) {
         }
     }
 
-    if (cur_x > 0) {
-        waddch(lp->pad, '\n');
-    }
+    waddch(lp->pad, '\n');
 }
 
 void lp_fill_line(LinePrinter *lp) {
