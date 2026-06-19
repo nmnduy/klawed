@@ -227,6 +227,14 @@ static void openai_call_api(Provider *self, ConversationState *state, ApiCallRes
     // Add streaming parameter if enabled
     if (enable_streaming) {
         cJSON_AddBoolToObject(request, "stream", cJSON_True);
+
+        /* Request usage stats in final SSE chunk. This is required by
+         * Fireworks AI and supported by most OpenAI-compatible providers.
+         * Without it, Fireworks omits usage from SSE chunks entirely. */
+        cJSON *stream_opts = cJSON_CreateObject();
+        cJSON_AddBoolToObject(stream_opts, "include_usage", cJSON_True);
+        cJSON_AddItemToObject(request, "stream_options", stream_opts);
+
         LOG_DEBUG("OpenAI provider: streaming enabled");
     }
 
