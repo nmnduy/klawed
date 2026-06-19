@@ -551,6 +551,8 @@ TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
 TEST_TOKEN_USAGE_SESSION_TOTALS_SRC = tests/test_token_usage_session_totals.c
 TEST_TOKEN_USAGE_DB_METADATA_SRC = tests/test_token_usage_db_metadata.c
 TEST_TOKEN_USAGE_DB_METADATA_TARGET = $(BUILD_DIR)/test_token_usage_db_metadata
+TEST_FIREWORKS_TOKEN_FALLBACK_SRC = tests/test_fireworks_token_fallback.c
+TEST_FIREWORKS_TOKEN_FALLBACK_TARGET = $(BUILD_DIR)/test_fireworks_token_fallback
 TEST_HTTP_CLIENT_SRC = tests/test_http_client.c
 TEST_SSE_PARSER_SRC = tests/test_sse_parser.c
 TEST_STREAMING_TOOL_ACCUMULATOR_SRC = tests/test_streaming_tool_accumulator.c
@@ -592,7 +594,7 @@ TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET = $(BUILD_DIR)/test_model_switch_queue_re
 TEST_INSERT_SYSTEM_MESSAGE_SRC = tests/test_insert_system_message.c
 TEST_INSERT_SYSTEM_MESSAGE_TARGET = $(BUILD_DIR)/test_insert_system_message
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-paste-placeholder test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-line-printer test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools test-streaming-persistence query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-paste-placeholder test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-line-printer test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools test-streaming-persistence test-fireworks-token-fallback query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -610,7 +612,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-tui-reasoning-detection test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-streaming-persistence test-tool-disable test-session-resolve
+test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-tui-reasoning-detection test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-streaming-persistence test-fireworks-token-fallback test-tool-disable test-session-resolve
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -1017,6 +1019,12 @@ test-streaming-persistence: check-deps $(TEST_STREAMING_PERSISTENCE_TARGET)
 	@echo "Running Streaming Persistence tests..."
 	@echo ""
 	@./$(TEST_STREAMING_PERSISTENCE_TARGET)
+
+test-fireworks-token-fallback: check-deps $(TEST_FIREWORKS_TOKEN_FALLBACK_TARGET)
+	@echo ""
+	@echo "Running Fireworks Token Fallback tests..."
+	@echo ""
+	@./$(TEST_FIREWORKS_TOKEN_FALLBACK_TARGET)
 
 test-sse-parser: check-deps $(TEST_SSE_PARSER_TARGET)
 	@echo ""
@@ -3355,6 +3363,9 @@ test-token-usage-comprehensive: check-deps $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARG
 
 $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET): $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC)
 	@$(CC) $(CFLAGS) -o $(TEST_TOKEN_USAGE_COMPREHENSIVE_TARGET) $(TEST_TOKEN_USAGE_COMPREHENSIVE_SRC) $(LDFLAGS)
+
+$(TEST_FIREWORKS_TOKEN_FALLBACK_TARGET): $(TEST_FIREWORKS_TOKEN_FALLBACK_SRC)
+	@$(CC) $(CFLAGS) -o $(TEST_FIREWORKS_TOKEN_FALLBACK_TARGET) $(TEST_FIREWORKS_TOKEN_FALLBACK_SRC) $(LDFLAGS)
 
 $(TEST_HTTP_CLIENT_TARGET): $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(SSE_PARSER_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(RETRY_LOGIC_OBJ) $(DATA_DIR_OBJ)
 	@$(CC) $(CFLAGS) -o $(TEST_HTTP_CLIENT_TARGET) $(TEST_HTTP_CLIENT_SRC) $(HTTP_CLIENT_OBJ) $(SSE_PARSER_OBJ) $(LOGGER_OBJ) $(REDACT_UTILS_OBJ) $(RETRY_LOGIC_OBJ) $(DATA_DIR_OBJ) $(LDFLAGS)
