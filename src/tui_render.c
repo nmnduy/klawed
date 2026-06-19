@@ -1429,7 +1429,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                     size_t remaining = line_len;
 
                     while (remaining > 0) {
-                        size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
+                        size_t chunk_bytes = find_wrap_point_word(chunk_start, remaining, content_width);
                         render_md_segment(tui, chunk_start, chunk_bytes, border_pair, border_str,
                                           true, 1, text_pair, search_active);
                         chunk_start += chunk_bytes;
@@ -1494,7 +1494,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                         int first_chunk = 1;
 
                         while (remaining > 0) {
-                            size_t chunk_bytes = find_wrap_point(chunk_start, remaining, content_width);
+                            size_t chunk_bytes = find_wrap_point_word(chunk_start, remaining, content_width);
 
                             if (first_chunk && hlevel > 0) {
                                 size_t skip = 0;

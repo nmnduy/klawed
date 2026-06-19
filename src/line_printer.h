@@ -59,7 +59,14 @@ void lp_print_md(LinePrinter *lp, TUIState *tui, const char *text, size_t len);
  * lines.  Used for live streaming updates in bordered mode. */
 void lp_print_text_wrapped(LinePrinter *lp, const char *text);
 
-/* Find byte position that fits within max_display_width. */
+/* Find byte position that fits within max_display_width.
+ * Breaks at column boundaries, not word boundaries. */
 size_t find_wrap_point(const char *text, size_t text_len, int max_display_width);
+
+/* Find byte position that fits within max_display_width,
+ * preferring word boundaries.  Backs up to the previous space
+ * if the column-based break falls mid-word.  Falls back to
+ * column-based force-break for words longer than the width. */
+size_t find_wrap_point_word(const char *text, size_t text_len, int max_display_width);
 
 #endif /* LINE_PRINTER_H */

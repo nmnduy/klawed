@@ -107,6 +107,41 @@ size_t find_wrap_point(const char *text, size_t text_len, int max_display_width)
     return bytes_used > 0 ? bytes_used : 1;
 }
 
+/*
+ * Like find_wrap_point() but prefers word boundaries.
+ * If the column-based break falls mid-word, backs up to the previous space.
+ * If no space is found in the entire segment (word longer than width),
+ * falls back to a column-based force-break.
+ */
+size_t find_wrap_point_word(const char *text, size_t text_len, int max_display_width) {
+    /* Find the column-based break point first */
+    size_t col_break = find_wrap_point(text, text_len, max_display_width);
+    if (col_break == 0) return 1;
+
+    /* If we've consumed all the text, nothing to do */
+    if (col_break >= text_len) return col_break;
+
+    /* If the break is at a space, it's already at a word boundary */
+    if (text[col_break] == ' ' || text[col_break] == '\n') {
+        return col_break;
+    }
+
+    /* Check if there's a space before the break point.
+     * Walk backwards from the break point looking for a space. */
+    size_t pos = col_break;
+    while (pos > 0) {
+        pos--;
+        if (text[pos] == ' ') {
+            /* Break BEFORE the space (so the space is consumed/skipped) */
+            return pos;
+        }
+    }
+
+    /* No space found in the segment — word is longer than available width.
+     * Force-break at the column boundary. */
+    return col_break;
+}
+
 /* ============================================================================
  * Public API
  * ============================================================================ */
@@ -333,7 +368,7 @@ void lp_print_text_wrapped(LinePrinter *lp, const char *text) {
             waddnstr(lp->pad, p, (int)seg_len);
             p = seg_end;
         } else {
-            size_t chunk = find_wrap_point(p, seg_len, available);
+            size_t chunk = find_wrap_point_word(p, seg_len, available);
             if (chunk > 0) {
                 waddnstr(lp->pad, p, (int)chunk);
                 p += chunk;

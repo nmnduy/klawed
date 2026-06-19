@@ -7,6 +7,7 @@
 
 #include "oneshot_processor.h"
 #include "oneshot_output.h"
+#include "oneshot_ui.h"
 #include "../conversation/conversation_processor.h"
 #include "../logger.h"
 #include "../ui/tool_output_display.h"
@@ -32,9 +33,8 @@ static void oneshot_on_assistant_text(const char *text, const char *reasoning_co
         p++;
     }
 
-    if (*p != '\0') {  // Has non-whitespace content
-        printf("%s\n", p);
-        fflush(stdout);
+    if (*p != '\0') {  /* Has non-whitespace content */
+        oneshot_ui_print_content(p, 0);
     }
 }
 
