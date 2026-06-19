@@ -461,6 +461,7 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
 
                 // Update context-aware max_tokens tracking for next call
                 // Extract prompt_tokens from API response usage
+                int found_prompt_tokens = 0;
                 if (result.raw_response) {
                     cJSON *parsed_response = cJSON_Parse(result.raw_response);
                     if (parsed_response) {
@@ -474,11 +475,42 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
                             }
                             if (prompt_tokens_json && cJSON_IsNumber(prompt_tokens_json)) {
                                 state->last_prompt_tokens = (int)prompt_tokens_json->valueint;
+                                found_prompt_tokens = 1;
                                 LOG_DEBUG("Updated last_prompt_tokens: %d", state->last_prompt_tokens);
                             }
                         }
                         cJSON_Delete(parsed_response);
                     }
+
+                    /* Fireworks provider fallback: check response headers for
+                     * fireworks-prompt-tokens when body usage has zero prompt tokens */
+                    if (!found_prompt_tokens && result.headers_json) {
+                        cJSON *headers_array = cJSON_Parse(result.headers_json);
+                        if (headers_array && cJSON_IsArray(headers_array)) {
+                            int array_size = cJSON_GetArraySize(headers_array);
+                            for (int i = 0; i < array_size; i++) {
+                                cJSON *header_item = cJSON_GetArrayItem(headers_array, i);
+                                if (!header_item) continue;
+                                cJSON *name_item = cJSON_GetObjectItem(header_item, "name");
+                                cJSON *value_item = cJSON_GetObjectItem(header_item, "value");
+                                if (!name_item || !value_item) continue;
+                                if (!cJSON_IsString(name_item) || !cJSON_IsString(value_item)) continue;
+                                if (strcmp(name_item->valuestring, "fireworks-prompt-tokens") == 0) {
+                                    char *endptr;
+                                    long val = strtol(value_item->valuestring, &endptr, 10);
+                                    if (*endptr == '\0' && val >= 0) {
+                                        state->last_prompt_tokens = (int)val;
+                                        found_prompt_tokens = 1;
+                                        LOG_DEBUG("Fireworks fallback: last_prompt_tokens=%d from header",
+                                                 state->last_prompt_tokens);
+                                    }
+                                    break;
+                                }
+                            }
+                            cJSON_Delete(headers_array);
+                        }
+                    }
+
                     // Update context_limit if not already set
                     if (state->context_limit == 0 && state->model) {
                         ModelCapabilities caps = get_model_capabilities(state->model, 128000, 16384);

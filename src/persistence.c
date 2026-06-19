@@ -464,6 +464,53 @@ int persistence_log_api_call(
             LOG_DEBUG("Token usage extracted: prompt=%ld, completion=%ld, total=%ld, cached=%ld",
                      (long)prompt_tokens, (long)completion_tokens, (long)total_tokens, (long)cached_tokens);
 
+            /* Fireworks provider workaround: Fireworks models (e.g. accounts/fireworks/models/...)
+             * return token counts in response headers (fireworks-prompt-tokens,
+             * fireworks-cached-prompt-tokens) but return all zeros in the response
+             * body's usage object. When the body-derived counts are all zero,
+             * check the response headers for Fireworks-specific token info. */
+            if (prompt_tokens == 0 && completion_tokens == 0 && total_tokens == 0
+                && cached_tokens == 0 && headers_json) {
+                cJSON *headers_array = cJSON_Parse(headers_json);
+                if (headers_array && cJSON_IsArray(headers_array)) {
+                    int array_size = cJSON_GetArraySize(headers_array);
+                    for (int i = 0; i < array_size; i++) {
+                        cJSON *header_item = cJSON_GetArrayItem(headers_array, i);
+                        if (!header_item) continue;
+                        cJSON *name_item = cJSON_GetObjectItem(header_item, "name");
+                        cJSON *value_item = cJSON_GetObjectItem(header_item, "value");
+                        if (!name_item || !value_item) continue;
+                        if (!cJSON_IsString(name_item) || !cJSON_IsString(value_item)) continue;
+
+                        const char *name = name_item->valuestring;
+                        const char *value = value_item->valuestring;
+
+                        if (strcmp(name, "fireworks-prompt-tokens") == 0) {
+                            char *endptr;
+                            long val = strtol(value, &endptr, 10);
+                            if (*endptr == '\0' && val >= 0) {
+                                prompt_tokens = (int64_t)val;
+                                LOG_DEBUG("Fireworks fallback: prompt_tokens=%lld from header",
+                                         (long long)prompt_tokens);
+                            }
+                        } else if (strcmp(name, "fireworks-cached-prompt-tokens") == 0) {
+                            char *endptr;
+                            long val = strtol(value, &endptr, 10);
+                            if (*endptr == '\0' && val >= 0) {
+                                cached_tokens = (int64_t)val;
+                                LOG_DEBUG("Fireworks fallback: cached_tokens=%lld from header",
+                                         (long long)cached_tokens);
+                            }
+                        }
+                    }
+                    /* Set total_tokens from the header-derived values if we got prompt tokens */
+                    if (prompt_tokens > 0 && total_tokens == 0) {
+                        total_tokens = prompt_tokens + completion_tokens;
+                    }
+                    cJSON_Delete(headers_array);
+                }
+            }
+
             // Warn if session_id is NULL - this should not happen in normal operation
             if (!session_id) {
                 LOG_WARN("Creating token usage record with NULL session_id for api_call_id=%lld. "
