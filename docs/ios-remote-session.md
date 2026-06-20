@@ -542,92 +542,140 @@ the simplest path: run `cloudflared tunnel` and get a public URL instantly.
 
 ### 3.2 Project Structure
 
+Following the modular package architecture used by **scarf** (ScarfCore +
+ScarfDesign + ScarfIOS) and **ETOS-LLM-Studio** (ETOSCore + app targets):
+
 ```
 KlawedRemote/
-├── KlawedRemoteApp.swift          // @main App entry
-├── Models/
-│   ├── ServerConnection.swift     // Host, port, API key, WS state
-│   ├── Session.swift              // Session ID, title, metadata
-│   ├── Message.swift              // Role, content, timestamp, tool calls
-│   ├── ToolCall.swift             // Tool name, params, result
-│   ├── TodoItem.swift             // Content, status
-│   └── ServerInfo.swift           // Model, working dir, uptime
-├── Networking/
-│   ├── APIClient.swift            // REST calls via URLSession
-│   ├── WebSocketClient.swift      // WS connection, auto-reconnect
-│   └── Endpoint.swift             // URL builder, API versioning
-├── ViewModels/
-│   ├── ConnectionViewModel.swift  // Connect/disconnect, QR scan
-│   ├── SessionListViewModel.swift // List sessions, switch
-│   ├── ConversationViewModel.swift// Messages, send, streaming
-│   ├── TodoViewModel.swift        // TODO list, real-time updates
-│   └── GoalViewModel.swift        // Goal status, judge verdicts
-├── Views/
-│   ├── Connection/
-│   │   ├── ConnectionView.swift       // QR scan + manual entry
-│   │   └── ServerQRCodeView.swift     // QR scanner
-│   ├── Sessions/
-│   │   ├── SessionListView.swift      // Session browser
-│   │   └── SessionRowView.swift       // Single session row
-│   ├── Conversation/
-│   │   ├── ConversationView.swift     // Main chat interface
-│   │   ├── MessageBubbleView.swift    // User/assistant bubbles
-│   │   ├── ToolCallCardView.swift     // Collapsible tool call
-│   │   ├── ReasoningDisclosureView.swift // Thinking/reasoning
-│   │   ├── StreamingText.swift        // Animated streaming text
-│   │   └── MessageInputBar.swift      // Text input + send
-│   ├── Sidebar/
-│   │   ├── SidebarView.swift          // iPad sidebar
-│   │   └── FileBrowserView.swift      // Workspace file tree
-│   └── Settings/
-│       └── SettingsView.swift         // Appearance, about
-├── Resources/
-│   └── Assets.xcassets                // App icon, colors
-└── KlawedRemote.xcodeproj
+├── Packages/
+│   ├── KlawedCore/                    # Models + networking (no UI deps)
+│   │   ├── Package.swift
+│   │   └── Sources/KlawedCore/
+│   │       ├── Models/
+│   │       │   ├── ServerConnection.swift   # Host, port, API key, WS state
+│   │       │   ├── Session.swift            # Session ID, title, metadata
+│   │       │   ├── Message.swift            # Role, contentType enum, timestamp
+│   │       │   ├── ToolCall.swift           # Tool name, params, result
+│   │       │   ├── TodoItem.swift           # Content, status
+│   │       │   ├── GoalState.swift          # Goal text, status, judge verdict
+│   │       │   └── ServerEvent.swift        # WS event enum (parsed from JSON)
+│   │       ├── Transport/
+│   │       │   ├── KlawedTransport.swift    # Protocol: fetch, send, connect
+│   │       │   ├── KlawedRESTClient.swift   # URLSession REST implementation
+│   │       │   └── KlawedWebSocket.swift    # URLSessionWebSocket implementation
+│   │       └── Services/
+│   │           └── SessionCacheService.swift # Local SQLite cache (GRDB.swift)
+│   │
+│   └── KlawedDesign/                  # Reusable UI components (no biz logic)
+│       ├── Package.swift
+│       └── Sources/KlawedDesign/
+│           ├── Colors.swift                # Color tokens from klawed themes
+│           ├── Typography.swift            # Font styles
+│           ├── MessageBubble.swift         # Container: routes to sub-views
+│           ├── TextBubbleContent.swift     # Plain text message
+│           ├── ToolCallCard.swift          # Collapsible tool call with icon
+│           ├── ToolResultCard.swift        # Tool output (truncatable)
+│           ├── ReasoningDisclosure.swift   # Thinking/reasoning expandable
+│           ├── StreamingTextBubble.swift   # Animated streaming text
+│           ├── MessageInputBar.swift       # Text field + send button
+│           ├── ConnectionBadge.swift       # Connected/disconnected indicator
+│           ├── TypingIndicator.swift       # "AI is thinking..." animation
+│           └── StatusBanner.swift          # Persistent status bar
+│
+├── KlawedRemote.xcodeproj
+├── KlawedRemote/                      # iOS app target
+│   ├── KlawedApp.swift                # @main entry, wires DI
+│   ├── Coordinators/
+│   │   └── KlawedCoordinator.swift    # Cross-tab nav, pending actions
+│   ├── ViewModels/
+│   │   ├── ConnectionViewModel.swift  # Connect/disconnect, QR scan
+│   │   ├── SessionListViewModel.swift # List sessions, switch
+│   │   ├── ConversationViewModel.swift# Messages, send, streaming
+│   │   └── TodoViewModel.swift        # TODO list, real-time updates
+│   ├── Views/
+│   │   ├── Connection/
+│   │   │   ├── ConnectionView.swift       # QR scan + manual entry
+│   │   │   └── ServerQRCodeView.swift     # QR scanner
+│   │   ├── Sessions/
+│   │   │   ├── SessionListView.swift      # Session browser
+│   │   │   └── SessionRowView.swift       # Single session row
+│   │   ├── Conversation/
+│   │   │   └── ConversationView.swift     # Main chat (uses KlawedDesign)
+│   │   ├── Sidebar/
+│   │   │   ├── SidebarView.swift          # iPad sidebar
+│   │   │   └── FileBrowserView.swift      # Workspace file tree
+│   │   └── Settings/
+│   │       └── SettingsView.swift         # Appearance, about
+│   ├── Extensions/
+│   │   ├── ShareExtension/               # "Send to Klawed"
+│   │   └── Widget/                        # Home screen widget
+│   └── Resources/
+│       └── Assets.xcassets                # App icon, colors
+│
+└── KlawedRemoteTests/
+    ├── KlawedCoreTests/                   # Transport + model tests
+    └── KlawedRemoteUITests/               # UI tests
 ```
+
+**Dependency flow:** `App → KlawedDesign → KlawedCore` (never reverse).
+
+KlawedCore has zero SwiftUI imports — it can be tested without a simulator.
+KlawedDesign depends on KlawedCore for model types but contains no business
+logic. The app target wires everything together and provides the concrete
+transport implementation via environment injection.
 
 ### 3.3 Key Screens and UX Flow
 
 ```
-  ┌──────────────┐     ┌──────────────┐     ┌──────────────────────┐
-  │  Connect     │     │  Sessions    │     │  Conversation        │
-  │              │     │              │     │                      │
-  │ [QR Scan]   │────►│ Fix login   │────►│ ╭──────────────────╮  │
-  │              │     │ Add tests   │     │ │ I found the bug │  │
-  │  or          │     │ Refactor    │     │ │ in auth.ts:42   │  │
-  │ [Manual]     │     │             │     │ ╰──────────────────╯  │
-  │  host:port   │     │ [+ New]     │     │                      │
-  │  api key     │     │             │     │ ┌─────────────────┐  │
-  │              │     │             │     │ │ 🔧 Grep: login  │  │
-  └──────────────┘     └──────────────┘     │ │ src/auth.ts:42  │  │
-                                            │ └─────────────────┘  │
-                                            │                      │
-                                            │ [_____________] [▶] │
-                                            └──────────────────────┘
+  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────────────┐
+  │  Servers     │     │  Connect     │     │  Sessions    │     │  Conversation        │
+  │              │     │              │     │              │     │                      │
+  │ myserver    │────►│ [QR Scan]   │────►│ Fix login   │────►│ ╭──────────────────╮  │
+  │ dev-box     │     │              │     │ Add tests   │     │ │ I found the bug │  │
+  │              │     │  or          │     │ Refactor    │     │ │ in auth.ts:42   │  │
+  │ [+ Add]     │     │ [Manual]     │     │             │     │ ╰──────────────────╯  │
+  │              │     │  host:port   │     │ [+ New]     │     │                      │
+  └──────────────┘     │  api key     │     │             │     │ ┌─────────────────┐  │
+                       └──────────────┘     └──────────────┘     │ │ 🔧 Grep: login  │  │
+                                                                  │ │ src/auth.ts:42  │  │
+                                                                  │ └─────────────────┘  │
+                                                                  │                      │
+                                                                  │ [_____________] [▶] │
+                                                                  └──────────────────────┘
 ```
+
+**0. Server List** (adopted from scarf's `ServerListView`)
+- Shows all previously connected klawed instances
+- Each row: nickname, host:port, connection status dot
+- Swipe to forget (with confirmation dialog)
+- "+" to add a new server (opens Connection screen)
+- Tap to connect and proceed to Session List
 
 **1. Connection Screen**
 - QR code scanner (scan the TUI-displayed QR code)
-- Manual entry: host, port, API key
+- Manual entry: host, port, API key, optional nickname
 - "Remember this server" toggle → stored in Keychain
 - Connection status indicator (connecting/connected/error)
+- Test connection button before proceeding
 
 **2. Session List**
 - Pull-to-refresh from server
 - Session rows show title, date, message count, model
-- Tap to switch session
+- Tap to switch session and enter Conversation
 - "+" to start a new session
+- Long-press for session metadata/details
 - Pull-down to show file browser sidebar (iPad)
 
 **3. Conversation View**
 - Chat-style bubbles (user right, assistant left)
 - Tool calls shown as collapsible cards with icon + name
-- Streaming text animates character by character or chunk by chunk
+- Streaming text animates chunk by chunk via WebSocket deltas
 - Reasoning/thinking content in a disclosure group (collapsed by default)
-- Input bar at bottom with send button
-- Typing indicator when AI is thinking
+- Input bar at bottom with send button and slash-command autocomplete
+- Typing indicator when AI is thinking (three-dot animation)
 - Pull-down to show TODO list overlay
 - Goal/Ralph status as a persistent thin banner at top
+- Long-press message for copy/share/delete actions
 
 ### 3.4 Data Flow
 
@@ -651,96 +699,150 @@ WebSocket receives events:
        └── todos_updated           →  update TODO overlay
 ```
 
-### 3.5 Key SwiftUI Components (Pseudocode)
+### 3.5 Key SwiftUI Components
 
-#### WebSocketClient
+#### KlawedTransport Protocol (from scarf's ServerTransport pattern)
 
 ```swift
-@Observable
-final class WebSocketClient {
-    private var task: URLSessionWebSocketTask?
-    private(set) var isConnected = false
+// In KlawedCore — no SwiftUI dependencies
+protocol KlawedTransport: Sendable {
+    /// Fetch list of sessions from the server
+    func fetchSessions() async throws -> [Session]
 
-    // Published event stream — used by ViewModels
-    let events = AsyncStream<ServerEvent>.makeStream()
+    /// Switch the active session on the server
+    func switchSession(_ id: String) async throws -> Session
 
-    func connect(to url: URL, apiKey: String) {
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        task = URLSession.shared.webSocketTask(with: request)
-        task?.resume()
-        isConnected = true
-        subscribe(channels: ["conversation", "status", "todos"])
-        Task { await receiveLoop() }
+    /// Fetch conversation messages after a given index
+    func fetchMessages(after index: Int, limit: Int) async throws -> [Message]
+
+    /// Send a user message to the server (returns 202 Accepted)
+    func sendMessage(_ content: String) async throws
+
+    /// Open a WebSocket connection for real-time events
+    func connectWebSocket() -> AsyncStream<ServerEvent>
+
+    /// Send an interrupt signal to stop current generation
+    func interrupt() async throws
+
+    /// Fetch current TODO list
+    func fetchTodos() async throws -> [TodoItem]
+
+    /// Fetch current goal state (Ralph mode)
+    func fetchGoal() async throws -> GoalState?
+
+    /// Test connection health
+    func healthCheck() async throws -> ServerInfo
+}
+```
+
+#### KlawedCoordinator (from scarf's ScarfGoCoordinator pattern)
+
+```swift
+// In KlawedRemote app target
+@Observable @MainActor
+final class KlawedCoordinator {
+    var selectedTab: Tab = .conversation
+    var pendingSessionID: String?     // Consumed once by ConversationViewModel
+    var connectionState: ConnectionState = .disconnected
+
+    enum Tab: Hashable { case conversation, sessions, files, settings }
+    enum ConnectionState { case disconnected, connecting, connected, error(String) }
+
+    /// Navigate to a specific session from anywhere in the app
+    func navigateToSession(_ id: String) {
+        pendingSessionID = id
+        selectedTab = .conversation
     }
+}
 
-    private func receiveLoop() async {
-        while let message = try? await task?.receive() {
-            switch message {
-            case .string(let text):
-                if let data = text.data(using: .utf8),
-                   let event = try? JSONDecoder().decode(ServerEvent.self, from: data) {
-                    events.continuation.yield(event)
-                }
-            default: break
-            }
-        }
-        isConnected = false
-        // Auto-reconnect after delay
-    }
-
-    func send(_ message: ClientMessage) {
-        let data = try! JSONEncoder().encode(message)
-        let text = String(data: data, encoding: .utf8)!
-        task?.send(.string(text))
+// Custom environment key
+struct KlawedCoordinatorKey: EnvironmentKey {
+    static let defaultValue = KlawedCoordinator()
+}
+extension EnvironmentValues {
+    var klawedCoordinator: KlawedCoordinator {
+        get { self[KlawedCoordinatorKey.self] }
+        set { self[KlawedCoordinatorKey.self] = newValue }
     }
 }
 ```
 
-#### ConversationViewModel
+#### ConversationViewModel (ScenePhase-aware, uses transport protocol)
 
 ```swift
-@Observable
+// In KlawedRemote app target
+@Observable @MainActor
 final class ConversationViewModel {
     private(set) var messages: [Message] = []
     private(set) var streamingText: String = ""
     private(set) var isStreaming = false
     private(set) var status: ServerStatus = .idle
+    private(set) var todos: [TodoItem] = []
+    private(set) var goal: GoalState?
 
-    private let api: APIClient
-    private let ws: WebSocketClient
+    private let transport: any KlawedTransport
+    private let cache: SessionCacheService
+
+    init(transport: any KlawedTransport, cache: SessionCacheService) {
+        self.transport = transport
+        self.cache = cache
+        // Start consuming WebSocket events
+        Task { await consumeEvents() }
+    }
 
     func loadMessages() async {
-        messages = try await api.getConversation(afterIndex: messages.count)
+        // Show cache instantly, then refresh from server
+        messages = await cache.getCachedMessages(sessionID: currentSessionID)
+        do {
+            let fresh = try await transport.fetchMessages(after: messages.count)
+            messages.append(contentsOf: fresh)
+            await cache.cacheMessages(fresh)
+        } catch {
+            // Already showing cached data; surface error subtly
+        }
     }
 
     func sendMessage(_ content: String) async {
-        try await api.sendMessage(content)
+        let userMsg = Message(role: .user, content: content)
+        messages.append(userMsg)
+        try? await transport.sendMessage(content)
         // Response arrives via WebSocket events
+    }
+
+    private func consumeEvents() async {
+        for await event in transport.connectWebSocket() {
+            handleEvent(event)
+        }
     }
 
     func handleEvent(_ event: ServerEvent) {
         switch event {
-        case .status(let state, _):
-            status = state
-        case .streamStart(let idx):
-            isStreaming = true
-            streamingText = ""
+        case .status(let state, let detail):
+            status = .init(state: state, detail: detail)
+        case .streamStart:
+            isStreaming = true; streamingText = ""
         case .streamDelta(let delta):
             streamingText += delta
-        case .streamEnd(let idx):
-            // Convert streaming text to a message
-            messages.append(Message(role: .assistant, content: streamingText, ...))
-            streamingText = ""
-            isStreaming = false
-        case .toolCall(let call):
-            // Add tool call to last assistant message
-            break
-        case .toolResult(let result):
-            // Update tool call card
-            break
-        // ... other cases
+        case .streamEnd:
+            let msg = Message(role: .assistant, content: streamingText)
+            messages.append(msg)
+            streamingText = ""; isStreaming = false
+        case .toolCall(let id, let name, let params):
+            appendToolCall(toLastAssistant: id, name: name, params: params)
+        case .toolResult(let id, let output, let isError):
+            updateToolResult(id: id, output: output, isError: isError)
+        case .reasoningDelta(let delta):
+            appendReasoningDelta(delta)
+        case .todosUpdated(let items):
+            todos = items
+        case .goalUpdated(let state):
+            goal = state
         }
+    }
+
+    func handleScenePhase(_ phase: ScenePhase) {
+        // Pause/resume WebSocket on background/foreground transitions
+        // (adopted from scarf's scenePhaseTick pattern)
     }
 }
 ```
@@ -750,25 +852,27 @@ final class ConversationViewModel {
 ```swift
 struct ConversationView: View {
     @State var viewModel: ConversationViewModel
+    @Environment(\.klawedCoordinator) private var coordinator
+    @Environment(\.scenePhase) private var scenePhase
     @State private var inputText = ""
 
     var body: some View {
         VStack(spacing: 0) {
+            // Goal/Ralph status banner (if active)
+            if let goal = viewModel.goal {
+                StatusBanner(goal: goal)
+            }
+
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(viewModel.messages) { message in
-                            MessageBubbleView(message: message)
+                            MessageBubble(message: message)
+                                .id(message.id)
                         }
                         if viewModel.isStreaming {
-                            MessageBubbleView(
-                                message: Message(
-                                    role: .assistant,
-                                    content: viewModel.streamingText,
-                                    isStreaming: true
-                                )
-                            )
-                            .id("streaming")
+                            StreamingTextBubble(text: viewModel.streamingText)
+                                .id("streaming")
                         }
                     }
                     .padding()
@@ -776,28 +880,54 @@ struct ConversationView: View {
                 .onChange(of: viewModel.streamingText) { _, _ in
                     withAnimation { proxy.scrollTo("streaming", anchor: .bottom) }
                 }
+                .onChange(of: viewModel.messages.count) { _, _ in
+                    if let last = viewModel.messages.last {
+                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
+                }
             }
 
-            if viewModel.status == .thinking {
-                HStack {
-                    ProgressView()
-                    Text("Thinking...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal)
+            // Typing indicator
+            if viewModel.status.isThinking {
+                TypingIndicator()
             }
 
             MessageInputBar(text: $inputText) {
-                Task {
-                    let text = inputText
-                    inputText = ""
-                    await viewModel.sendMessage(text)
-                }
+                let text = inputText
+                inputText = ""
+                Task { await viewModel.sendMessage(text) }
             }
         }
         .task { await viewModel.loadMessages() }
+        // ScenePhase awareness (from scarf pattern):
+        // view model pauses WS on .background, resumes on .active
+        .onChange(of: scenePhase) { _, newPhase in
+            viewModel.handleScenePhase(newPhase)
+        }
+        // Handle coordinator-directed session navigation
+        .onAppear {
+            if let id = coordinator.pendingSessionID {
+                Task { await viewModel.switchToSession(id) }
+                coordinator.pendingSessionID = nil
+            }
+        }
+    }
+}
+```
+
+The `KlawedCoordinator` is injected at the app root:
+
+```swift
+@main
+struct KlawedApp: App {
+    @State private var coordinator = KlawedCoordinator()
+
+    var body: some Scene {
+        WindowGroup {
+            ServerListView()
+                .environment(\.klawedCoordinator, coordinator)
+                .environment(\.klawedTransport, /* configured transport */)
+        }
     }
 }
 ```
@@ -1031,3 +1161,299 @@ SERVER → { "type": "message_added", "message": {
     "interrupted": true
 }}
 ```
+
+---
+
+## 9. Architecture Patterns from Well-Designed Open Source iOS Apps
+
+We studied three well-architected open source iOS apps that are relevant to
+our design. Here are the key patterns we're adopting.
+
+### 9.1 Studied Projects
+
+| Project | Stars | Relevance | Key Takeaways |
+|---------|-------|-----------|---------------|
+| [**scarf**](https://github.com/awizemann/scarf) | ⭐636 | iOS AI agent app connecting to remote Hermes agent over SSH | Transport abstraction, coordinator pattern, modular packages, Keychain auth |
+| [**AICat**](https://github.com/Panl/AICat) | ⭐288 | Multi-platform SwiftUI ChatGPT client (iOS/iPadOS/Mac) | Clean ObservableObject pattern, SQLite via Blackbird, MarkdownUI for responses |
+| [**ETOS-LLM-Studio**](https://github.com/Eric-Terminal/ETOS-LLM-Studio) | ⭐140 | Feature-rich iOS LLM client (OpenAI/Claude/Gemini + local GGUF) | Modular ChatBubble views, ETOSCore shared framework, MCP integration |
+
+### 9.2 Adopted Architecture Patterns
+
+#### 9.2.1 Transport Abstraction (from scarf)
+
+Scarf defines a `ServerTransport` protocol with unified I/O primitives:
+`readFile`, `writeFile`, `runProcess`, `streamLines`. Local and SSH
+transports implement the same interface. All services and ViewModels
+depend on the protocol, never on concrete transports.
+
+**How we apply this:** Our `APIClient` + `WebSocketClient` in the iOS app
+form an equivalent transport layer. The bridge server in klawed is the
+"remote transport." The iOS app treats it as a generic "klawed transport"
+— whether the server is local or remote is transparent above the transport
+layer.
+
+```
+┌──────────────────────────────────┐
+│  ConversationViewModel           │   ← depends on protocol, not concrete
+│  SessionListViewModel            │
+│  TodoViewModel                   │
+└──────────────┬───────────────────┘
+               │
+┌──────────────▼───────────────────┐
+│  KlawedTransport (protocol)      │   ← unified interface
+│  - fetchSessions()               │
+│  - fetchMessages(after:)         │
+│  - sendMessage(_)                │
+│  - connectWebSocket()            │
+└──────┬────────────────┬──────────┘
+       │                │
+┌──────▼──────┐  ┌──────▼──────────┐
+│ APIClient   │  │ WebSocketClient │   ← concrete implementations
+│ (REST)      │  │ (real-time)     │
+└─────────────┘  └─────────────────┘
+```
+
+#### 9.2.2 Coordinator Pattern (from scarf)
+
+Scarf uses `ScarfGoCoordinator` — an `@Observable @MainActor` class injected
+via `.environment()` — for cross-tab navigation and inter-view signaling.
+It carries `selectedTab`, `pendingResumeSessionID`, and `pendingProjectChat`.
+
+**How we apply this:**
+
+```swift
+@Observable @MainActor
+final class KlawedCoordinator {
+    var selectedTab: Tab = .conversation
+    var pendingSessionID: String?   // Consumed by ConversationViewModel
+    var connectionState: ConnectionState = .disconnected
+
+    enum Tab { case conversation, sessions, files, settings }
+
+    func navigateToSession(_ id: String) {
+        pendingSessionID = id
+        selectedTab = .conversation
+    }
+}
+```
+
+This replaces ad-hoc `@State` / `@Binding` chains between views. Any view
+in the tree can read the coordinator via `@Environment(\.klawedCoordinator)`.
+
+#### 9.2.3 Modular Package Structure (from scarf and ETOS)
+
+Scarf splits into three Swift packages:
+- **ScarfCore** — Models, services, transport, no UI dependencies
+- **ScarfDesign** — Reusable UI components (colors, typography, controls)
+- **ScarfIOS** — iOS-specific bindings (Citadel transport, Keychain)
+
+ETOS-LLM-Studio splits into:
+- **ETOSCore** — Shared models, adapters (OpenAI, Anthropic, Gemini), ChatService
+- **ETOS LLM Studio iOS App** — iOS views
+- **ETOS LLM Studio Watch App** — Watch views
+
+**How we apply this:**
+
+```
+KlawedRemote/
+├── Packages/
+│   ├── KlawedCore/           # Models + networking (no UI)
+│   │   ├── Models/
+│   │   │   ├── Session.swift
+│   │   │   ├── Message.swift
+│   │   │   ├── ToolCall.swift
+│   │   │   ├── TodoItem.swift
+│   │   │   └── ServerEvent.swift
+│   │   ├── Transport/
+│   │   │   ├── KlawedTransport.swift    # Protocol
+│   │   │   ├── KlawedRESTClient.swift   # REST implementation
+│   │   │   └── KlawedWebSocket.swift    # WS implementation
+│   │   └── Services/
+│   │       └── SessionCacheService.swift # Local SQLite cache
+│   │
+│   └── KlawedDesign/         # Shared UI components (no business logic)
+│       ├── Colors.swift
+│       ├── Typography.swift
+│       ├── MessageBubble.swift
+│       ├── ToolCallCard.swift
+│       ├── StreamingText.swift
+│       └── ConnectionBadge.swift
+│
+├── KlawedRemote/             # iOS app target
+│   ├── KlawedApp.swift
+│   ├── Coordinators/
+│   │   └── KlawedCoordinator.swift
+│   ├── ViewModels/
+│   │   ├── ConnectionViewModel.swift
+│   │   ├── SessionListViewModel.swift
+│   │   ├── ConversationViewModel.swift
+│   │   └── TodoViewModel.swift
+│   └── Views/
+│       ├── Connection/ConnectionView.swift
+│       ├── Sessions/SessionListView.swift
+│       ├── Chat/ConversationView.swift
+│       └── Settings/SettingsView.swift
+```
+
+Benefits:
+- **KlawedCore** can be tested without UI or SwiftUI imports
+- **KlawedDesign** can be previewed in isolation with mock data
+- iOS and (future) macOS/watchOS targets share Core + Design
+- Clear dependency direction: App → Design → Core (never reverse)
+
+#### 9.2.4 Message Bubble Modularity (from ETOS-LLM-Studio)
+
+ETOS has separate view files for every aspect of chat bubbles:
+`ChatBubbleTextSupport.swift`, `ChatBubbleReasoningViews.swift`,
+`ChatBubbleToolWidgetViews.swift`, `ChatBubbleToolResults.swift`,
+`ChatBubbleAttachmentSupport.swift`, etc.
+
+**How we apply this:** Each message content type gets its own view component:
+
+```swift
+// In KlawedDesign:
+struct MessageBubble: View {
+    let message: Message
+
+    var body: some View {
+        VStack(alignment: message.role == .user ? .trailing : .leading) {
+            switch message.contentType {
+            case .text:
+                TextBubbleContent(text: message.content)
+            case .toolCall(let tool):
+                ToolCallCard(tool: tool)
+            case .toolResult(let result):
+                ToolResultCard(result: result)
+            case .reasoning(let reasoning):
+                ReasoningDisclosure(reasoning: reasoning)
+            case .streaming(let delta):
+                StreamingTextBubble(text: delta)
+            }
+        }
+    }
+}
+```
+
+Each sub-view is independently previewable, testable, and reusable across
+different screens (e.g., `ToolCallCard` appears in both the conversation
+view and a future "recent tool calls" sidebar).
+
+#### 9.2.5 SQLite Local Cache (from AICat)
+
+AICat uses **Blackbird** (a lightweight Swift SQLite ORM) to cache
+conversations and messages locally. This enables:
+- Instant app launch with cached data
+- Offline browsing of past conversations
+- Background sync when connection is restored
+
+**How we apply this:** Add a `SessionCacheService` in KlawedCore that mirrors
+the server's session/message data into a local SQLite database (using
+GRDB.swift or Blackbird):
+
+```swift
+actor SessionCacheService {
+    func cacheSession(_ session: Session) async { ... }
+    func cacheMessage(_ message: Message, sessionID: String) async { ... }
+    func getCachedSessions() async -> [Session] { ... }
+    func getCachedMessages(sessionID: String, after index: Int) async -> [Message] { ... }
+    func syncFromServer(_ transport: KlawedTransport) async { ... }
+}
+```
+
+The `ConversationViewModel` reads from cache first for instant display,
+then refreshes from the server.
+
+#### 9.2.6 Environment-Based Dependency Injection (from scarf)
+
+Scarf uses SwiftUI's `@Environment` for dependency injection, avoiding
+singletons and enabling testability:
+
+```swift
+// Scarf's approach:
+@Environment(\.serverContext) private var serverContext
+@Environment(\.scarfGoCoordinator) private var coordinator
+@Environment(\.hermesCapabilities) private var capabilities
+```
+
+**How we apply this:**
+
+```swift
+// Custom environment keys
+struct KlawedTransportKey: EnvironmentKey {
+    static let defaultValue: any KlawedTransport = NoopTransport()
+}
+struct KlawedCoordinatorKey: EnvironmentKey {
+    static let defaultValue = KlawedCoordinator()
+}
+
+extension EnvironmentValues {
+    var klawedTransport: any KlawedTransport {
+        get { self[KlawedTransportKey.self] }
+        set { self[KlawedTransportKey.self] = newValue }
+    }
+    var klawedCoordinator: KlawedCoordinator {
+        get { self[KlawedCoordinatorKey.self] }
+        set { self[KlawedCoordinatorKey.self] = newValue }
+    }
+}
+
+// Usage in views:
+struct ConversationView: View {
+    @Environment(\.klawedTransport) private var transport
+    @Environment(\.klawedCoordinator) private var coordinator
+    // ...
+}
+```
+
+#### 9.2.7 ScenePhase-Aware ViewModels (from scarf)
+
+Scarf tracks `ScenePhase` transitions (`.active` / `.background`) and
+propagates them to ViewModels even when they're on non-foreground tabs.
+This ensures proper pause/resume of WebSocket connections and polling.
+
+**How we apply this:**
+
+```swift
+@Observable @MainActor
+final class ConversationViewModel {
+    private(set) var isActive = true
+
+    func handleScenePhase(_ phase: ScenePhase) {
+        switch phase {
+        case .active:
+            isActive = true
+            reconnectIfNeeded()
+        case .background:
+            isActive = false
+            // Keep WS alive for background tasks, but pause UI updates
+        case .inactive:
+            break
+        }
+    }
+}
+```
+
+### 9.3 Patterns We Chose NOT to Adopt
+
+| Pattern | Source | Why Not |
+|---------|--------|---------|
+| SSH transport (Citadel) | scarf | Klawed uses HTTP/WS, not SSH exec channels. Simpler. |
+| Blackbird ORM | AICat | GRDB.swift is more actively maintained and features FTS5 like klawed's memory DB. |
+| ObservableObject (iOS 16) | AICat | We target iOS 17+ and use modern `@Observable` macro. |
+| Separate Watch app | ETOS | Defer to v2. The companion Watch app is a nice-to-have. |
+| Claude.ai OAuth in-app browser | ETOS | Defer to v2. We start with API-key-based auth. |
+
+### 9.4 Design Refinements from Study
+
+After reviewing these projects, we made the following improvements to our
+original design (sections 1–8 above have been updated):
+
+1. **Modular packages** (was: flat Xcode project) → KlawedCore + KlawedDesign
+2. **Coordinator pattern** (was: ad-hoc @State/@Binding) → KlawedCoordinator
+3. **Transport protocol** (was: hardcoded APIClient) → KlawedTransport protocol
+4. **Local SQLite cache** (was: server-only data) → SessionCacheService
+5. **ScenePhase awareness** (was: no lifecycle handling) → handleScenePhase()
+6. **Environment DI** (was: singletons) → @Environment injection
+7. **Message bubble modularity** (was: monolithic MessageView) → per-type sub-views
+8. **Message model with contentType enum** (was: flat Message struct) →
+   discriminated union of .text, .toolCall, .toolResult, .reasoning, .streaming
