@@ -1638,6 +1638,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     // Check if this is a [User] or [Assistant] message to apply new styling
     int is_user_message = (prefix && strcmp(prefix, tui_icon_user()) == 0);
     int is_assistant_message = (prefix && strcmp(prefix, tui_icon_assistant()) == 0);
+    int is_error_message = tui_conversation_is_error_message(prefix);
 
     // For user messages, add padding line before and caret prefix
     if (is_user_message) {
@@ -1704,6 +1705,30 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
             // Fall through to write text normally (no border)
+        }
+    } else if (is_error_message) {
+        // Error message: render icon prefix in red bold, then body text
+        // with red color on an error-tinted background for visual emphasis
+        free(tui->last_tool_name);
+        tui->last_tool_name = NULL;
+
+        // Render the error icon prefix (e.g. "" or "[Error]") in bold red
+        if (prefix && prefix[0] != '\0') {
+            if (has_colors()) {
+                wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ERROR) | A_BOLD);
+            }
+            { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); (void)tui_safe_mvwaddnstr(tui->wm.conv_pad, cur_y, cur_x, prefix, (int)strlen(prefix)); }
+            if (has_colors()) {
+                wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ERROR) | A_BOLD);
+            }
+            // Space after prefix icon
+            { int cur_y = 0; int cur_x = 0; getyx(tui->wm.conv_pad, cur_y, cur_x); (void)tui_safe_mvwaddch(tui->wm.conv_pad, cur_y, cur_x, ' '); }
+        }
+
+        // Render error body text with error-tinted background fill
+        if (text && text[0] != '\0') {
+            render_markdown_document(tui, text, NCURSES_PAIR_ERROR_BG, 0, NULL);
+            goto skip_newline;
         }
     } else {
         // Write prefix for other (non-user, non-assistant) messages

@@ -1308,7 +1308,7 @@ static TUIColorPair infer_color_from_prefix(const char *prefix) {
     if (strstr(prefix, "Tool")) {
         return COLOR_PAIR_TOOL;
     }
-    if (strstr(prefix, "Error")) {
+    if (strstr(prefix, "Error") || strcmp(prefix, tui_icon_error()) == 0) {
         return COLOR_PAIR_ERROR;
     }
     if (strstr(prefix, "Diff")) {
@@ -1409,10 +1409,12 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
             const char *assistant_icon = tui_icon_assistant();
             const char *reasoning_open_icon = tui_icon_reasoning_open();
             const char *reasoning_close_icon = tui_icon_reasoning_close();
+            const char *error_icon = tui_icon_error();
             if (strncmp(mutable_text, user_icon, 3) == 0 ||
                 strncmp(mutable_text, assistant_icon, 3) == 0 ||
                 strncmp(mutable_text, reasoning_open_icon, 3) == 0 ||
-                strncmp(mutable_text, reasoning_close_icon, 3) == 0) {
+                strncmp(mutable_text, reasoning_close_icon, 3) == 0 ||
+                strncmp(mutable_text, error_icon, 3) == 0) {
                 const char *content_start = mutable_text + 3;
                 while (*content_start == ' ') content_start++;
 
@@ -1421,6 +1423,8 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
                     color = COLOR_PAIR_USER;
                 } else if (strncmp(mutable_text, assistant_icon, 3) == 0) {
                     color = COLOR_PAIR_ASSISTANT;
+                } else if (strncmp(mutable_text, error_icon, 3) == 0) {
+                    color = COLOR_PAIR_ERROR;
                 } else {
                     color = COLOR_PAIR_TOOL_DIM;
                 }
@@ -1494,7 +1498,7 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
         case TUI_MSG_ERROR:
             tui_add_conversation_line(
                 tui,
-                "[Error]",
+                tui_icon_error(),
                 msg->text ? msg->text : "Unknown error",
                 COLOR_PAIR_ERROR);
             break;

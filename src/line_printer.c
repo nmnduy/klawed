@@ -160,9 +160,11 @@ void lp_init(LinePrinter *lp, WINDOW *pad, const char *border_str,
     lp->fill_bg_pair = 0;  // No background fill by default
 
     // Explicit: enable full-width background fill for the assistant BG
-    // response style.  This is simpler and more maintainable than runtime
-    // introspection via pair_content() — the intent is immediately clear.
-    if (text_pair == NCURSES_PAIR_ASSISTANT_BG) {
+    // response style and the error BG style.  This is simpler and more
+    // maintainable than runtime introspection via pair_content() — the
+    // intent is immediately clear.
+    if (text_pair == NCURSES_PAIR_ASSISTANT_BG ||
+        text_pair == NCURSES_PAIR_ERROR_BG) {
         lp->fill_bg_pair = text_pair;
     }
 

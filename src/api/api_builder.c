@@ -365,7 +365,7 @@ char* build_request_json_from_state(ConversationState *state) {
                      "ERROR: Duplicate tool definition detected: '%s'. "
                      "This will cause API errors. Please check your tool configuration.",
                      duplicate_name);
-            tui_add_conversation_line(state->tui, "[Error]", error_msg, COLOR_PAIR_ERROR);
+            tui_add_conversation_line(state->tui, tui_icon_error(), error_msg, COLOR_PAIR_ERROR);
         }
     }
 

@@ -140,7 +140,7 @@ void ui_show_error(TUIState *tui,
         LOG_WARN("Failed to enqueue error message, falling back to direct render");
     }
     if (tui) {
-        tui_add_conversation_line(tui, "[Error]", safe, COLOR_PAIR_ERROR);
+        tui_add_conversation_line(tui, tui_icon_error(), safe, COLOR_PAIR_ERROR);
         return;
     }
     print_error(safe);

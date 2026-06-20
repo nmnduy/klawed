@@ -69,6 +69,7 @@ MessageType tui_conversation_get_message_type(const char *prefix) {
         return MSG_TYPE_ASSISTANT;
     }
     if (strcmp(prefix, "[System]") == 0 || strcmp(prefix, "[Error]") == 0 ||
+        strcmp(prefix, tui_icon_error()) == 0 ||
         strcmp(prefix, "[Transcription]") == 0 || strcmp(prefix, "[Goal]") == 0) {
         return MSG_TYPE_SYSTEM;
     }
@@ -582,7 +583,7 @@ TUIColorPair tui_conversation_infer_color_from_prefix(const char *prefix) {
     if (tui_prefix_has_tool_icon(prefix, 0)) {
         return COLOR_PAIR_TOOL;
     }
-    if (strstr(prefix, "Error")) {
+    if (strstr(prefix, "Error") || strcmp(prefix, tui_icon_error()) == 0) {
         return COLOR_PAIR_ERROR;
     }
     if (strstr(prefix, "Diff")) {
@@ -701,6 +702,22 @@ int tui_conversation_is_reasoning_message(const char *prefix) {
 
     return (strcmp(prefix, tui_icon_reasoning_open()) == 0 ||
             strcmp(prefix, tui_icon_reasoning_close()) == 0);
+}
+
+// Check if a prefix is an error message (matches "[Error]" or error icon)
+// Returns 1 if error message, 0 otherwise
+int tui_conversation_is_error_message(const char *prefix) {
+    if (!prefix || prefix[0] == '\0') {
+        return 0;
+    }
+
+    if (strcmp(prefix, "[Error]") == 0) {
+        return 1;
+    }
+    if (strcmp(prefix, tui_icon_error()) == 0) {
+        return 1;
+    }
+    return 0;
 }
 
 // Determine the display prefix for a tool message

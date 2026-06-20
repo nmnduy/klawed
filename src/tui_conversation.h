@@ -60,6 +60,10 @@ int tui_conversation_is_tool_message(const char *prefix);
 // Handles both Nerd Font (/) and ASCII ("<Reasoning >>>"/"<<< Reasoning>") variants
 int tui_conversation_is_reasoning_message(const char *prefix);
 
+// Check if a prefix is an error message (matches "[Error]" or error icon)
+// Returns 1 if error message, 0 otherwise
+int tui_conversation_is_error_message(const char *prefix);
+
 // Determine the display prefix for a tool message
 // If same tool as last output, returns "└─"
 // Otherwise returns the full prefix

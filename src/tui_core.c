@@ -90,6 +90,7 @@ void tui_reload_colors(void) {
         int supports_256 = (COLORS >= 256);
         RGB input_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.user_rgb, 5);
         RGB assistant_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.assistant_rgb, 3);
+        RGB error_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.error_rgb, 4);
         RGB tool_dim_rgb = blend_rgb(g_theme.foreground_rgb, g_theme.background_rgb, 50);
 
         // Define custom colors (colors 16-21 are safe to redefine)
@@ -163,6 +164,11 @@ void tui_reload_colors(void) {
                 rgb_to_ncurses(tool_dim_rgb.g),
                 rgb_to_ncurses(tool_dim_rgb.b));
 
+            init_color(28,
+                rgb_to_ncurses(error_bg_rgb.r),
+                rgb_to_ncurses(error_bg_rgb.g),
+                rgb_to_ncurses(error_bg_rgb.b));
+
             // Initialize color pairs with custom colors
             init_pair(NCURSES_PAIR_FOREGROUND, 16, default_bg);
             init_pair(NCURSES_PAIR_USER, 17, default_bg);
@@ -186,6 +192,7 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_TOOL_DIM, 26, default_bg);             // Dimmed gray for tool text
             init_pair(NCURSES_PAIR_DIFF_CONTEXT, 26, default_bg);         // Dimmed gray for diff context (same as tool dim)
             init_pair(NCURSES_PAIR_GOAL, 19, default_bg);                 // Goal tag uses status/tool color
+            init_pair(NCURSES_PAIR_ERROR_BG, 20, 28);                    // Error text on error-tinted background
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -199,6 +206,7 @@ void tui_reload_colors(void) {
             int todo_accent_idx = rgb_to_256_index(g_theme.todo_accent_rgb);
             int input_bg_idx = rgb_to_256_index(input_bg_rgb);
             int assistant_bg_idx = rgb_to_256_index(assistant_bg_rgb);
+            int error_bg_idx = rgb_to_256_index(error_bg_rgb);
             int tool_dim_idx = rgb_to_256_index(tool_dim_rgb);
 
             init_pair(NCURSES_PAIR_FOREGROUND, (short)fg_idx, default_bg);
@@ -222,6 +230,7 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_TOOL_DIM, (short)tool_dim_idx, default_bg);
             init_pair(NCURSES_PAIR_DIFF_CONTEXT, (short)tool_dim_idx, default_bg);
             init_pair(NCURSES_PAIR_GOAL, (short)status_idx, default_bg);  // Goal tag uses status/tool color
+            init_pair(NCURSES_PAIR_ERROR_BG, (short)error_idx, (short)error_bg_idx);  // Error text on error-tinted bg
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -249,6 +258,7 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_TOOL_DIM, COLOR_WHITE, default_bg);  // Fallback: foreground color for dimmed tool text
             init_pair(NCURSES_PAIR_DIFF_CONTEXT, COLOR_WHITE, default_bg);  // Fallback: foreground color for diff context
             init_pair(NCURSES_PAIR_GOAL, COLOR_YELLOW, default_bg);  // Goal tag uses status/tool color
+            init_pair(NCURSES_PAIR_ERROR_BG, COLOR_RED, COLOR_BLACK);  // Fallback: red on black for error tint
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -275,6 +285,7 @@ void tui_reload_colors(void) {
         init_pair(NCURSES_PAIR_TOOL_DIM, COLOR_WHITE, default_bg);  // Fallback: foreground color for dimmed tool text
         init_pair(NCURSES_PAIR_DIFF_CONTEXT, COLOR_WHITE, default_bg);  // Fallback: foreground color for diff context
         init_pair(NCURSES_PAIR_GOAL, COLOR_YELLOW, default_bg);  // Goal tag uses status/tool color
+        init_pair(NCURSES_PAIR_ERROR_BG, COLOR_RED, COLOR_BLACK);  // Fallback: red on black for error tint
     }
 }
 

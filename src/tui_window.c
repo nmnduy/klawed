@@ -295,6 +295,7 @@ void tui_handle_resize(TUIState *tui) {
         // Check if this is a [User] or [Assistant] message to apply new styling
         int is_user_message = (entry->prefix && strcmp(entry->prefix, tui_icon_user()) == 0);
         int is_assistant_message = (entry->prefix && strcmp(entry->prefix, tui_icon_assistant()) == 0);
+        int is_error_message = tui_conversation_is_error_message(entry->prefix);
 
         // For user messages, add padding line before and caret prefix
         if (is_user_message) {
@@ -360,6 +361,24 @@ void tui_handle_resize(TUIState *tui) {
                 }
                 continue;
             }
+        } else if (is_error_message) {
+            // Error message: render icon prefix in red bold, then body text
+            // with red color on error-tinted background
+            if (entry->prefix && entry->prefix[0] != '\0') {
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ERROR) | A_BOLD);
+                }
+                waddstr(tui->wm.conv_pad, entry->prefix);
+                waddch(tui->wm.conv_pad, ' ');
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_ERROR) | A_BOLD);
+                }
+            }
+            if (entry->text && entry->text[0] != '\0') {
+                render_markdown_document(tui, entry->text, NCURSES_PAIR_ERROR_BG,
+                                         0, NULL);
+            }
+            continue;
         } else {
             // Write prefix for other (non-user, non-assistant) messages
             if (entry->prefix && entry->prefix[0] != '\0') {

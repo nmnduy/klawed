@@ -395,7 +395,7 @@ int tui_modes_handle_command(TUIState *tui, int ch, const char *prompt) {
             // Unknown command
             char error_msg[256];
             snprintf(error_msg, sizeof(error_msg), "Unknown command: %s", cmd);
-            tui_add_conversation_line(tui, "[Error]", error_msg, COLOR_PAIR_ERROR);
+            tui_add_conversation_line(tui, tui_icon_error(), error_msg, COLOR_PAIR_ERROR);
         }
 
         // Exit command mode
