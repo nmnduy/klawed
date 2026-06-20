@@ -12,7 +12,7 @@
 #   bump-patch (commit message starts with "chore: bump version")
 #   are detected and skipped to avoid infinite recursion.
 
-set -euxo pipefail
+set -euo pipefail
 
 # ── logging ──────────────────────────────────────────────────────────
 LOG_DIR="${KLAWED_CI_LOG_DIR:-/var/log}"
@@ -83,6 +83,11 @@ while read oldrev newrev refname; do
     echo "  cloning $BARE_REPO_PATH → $WORK_DIR …"
     git clone "$BARE_REPO_PATH" "$WORK_DIR"
     cd "$WORK_DIR"
+
+    # Git sets GIT_DIR to the bare repo before invoking hooks.
+    # Unset it so git commands in the clone see the clone's repo.
+    unset GIT_DIR
+
     git checkout -q "$BRANCH"
 
     # ── resolve make command ─────────────────────────────────────
@@ -133,4 +138,3 @@ while read oldrev newrev refname; do
 done
 
 exit 0
-# CI trigger test 1781984542
