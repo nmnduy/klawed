@@ -125,6 +125,10 @@ while read oldrev newrev refname; do
     fi
     echo "  ✓ make comprehensive-scan passed"
 
+    # ── configure git identity (required for bump-patch commits) ─
+    git config user.email "ci@klawed.local"
+    git config user.name "Klawed CI"
+
     # ── bump patch version and push ──────────────────────────────
     echo "  → make bump-patch"
     if ! "$MAKE" bump-patch; then

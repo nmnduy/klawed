@@ -3148,15 +3148,15 @@ bump-patch:
 	echo "✓ Updated README.md with v$$NEW_VERSION"; \
 	echo ""; \
 	echo "Staging version files..."; \
-	git add $(VERSION_FILE) $(VERSION_H) README.md; \
-	git commit -m "chore: bump version to $$NEW_VERSION"; \
-	echo ""; \
-	echo "Creating git tag v$$NEW_VERSION..."; \
-	git tag -a "v$$NEW_VERSION" -m "Release v$$NEW_VERSION"; \
-	echo ""; \
-	echo "Pushing to remote..."; \
-	git push origin master; \
-	git push origin "v$$NEW_VERSION"; \
+	git add $(VERSION_FILE) $(VERSION_H) README.md && \
+	git commit -m "chore: bump version to $$NEW_VERSION" && \
+	echo "" && \
+	echo "Creating git tag v$$NEW_VERSION..." && \
+	git tag -a "v$$NEW_VERSION" -m "Release v$$NEW_VERSION" && \
+	echo "" && \
+	echo "Pushing to remote..." && \
+	git push origin master && \
+	git push origin "v$$NEW_VERSION" && \
 	echo ""; \
 	echo "✓ Version $$NEW_VERSION released successfully!"; \
 	echo "  - Committed: $(VERSION_FILE) and $(VERSION_H)"; \
