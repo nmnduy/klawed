@@ -12,7 +12,7 @@
 #   bump-patch (commit message starts with "chore: bump version")
 #   are detected and skipped to avoid infinite recursion.
 
-set -euo pipefail
+set -euxo pipefail
 
 # ── logging ──────────────────────────────────────────────────────────
 LOG_DIR="${KLAWED_CI_LOG_DIR:-/var/log}"
