@@ -159,6 +159,61 @@ static void status_spinner_tick(TUIState *tui) {
     tui_update_terminal_title(tui);
 }
 
+/**
+ * Build a compact model label for the terminal/tmux title.
+ * Strips version-date suffixes (e.g., "-20250514") and long provider prefixes
+ * to keep the title readable in narrow tmux window tabs.
+ *
+ * Returns a pointer into a static buffer (not thread-safe; caller is the TUI
+ * render thread so this is fine).
+ */
+static const char* title_model_label(const char *model) {
+    static char buf[48];
+    if (!model || !model[0]) {
+        return "";
+    }
+
+    // Already short enough — use as-is
+    if (strlen(model) <= 24) {
+        return model;
+    }
+
+    // Strip trailing version-date suffix:  -YYYYMMDD  or  -vYYYYMMDD
+    // e.g. "claude-sonnet-4-20250514" → "claude-sonnet-4"
+    // e.g. "claude-opus-4-20250514"   → "claude-opus-4"
+    const char *suffix = model + strlen(model);
+    int digits = 0;
+    while (suffix > model) {
+        char c = *(suffix - 1);
+        if (c >= '0' && c <= '9') {
+            digits++;
+            suffix--;
+            if (digits == 8) {
+                break;  // Found an 8-digit date block
+            }
+        } else if (c == '-' && digits == 8) {
+            suffix--;  // Strip the hyphen before the date
+            break;
+        } else {
+            break;  // Not a date suffix
+        }
+    }
+
+    if (digits == 8 && suffix > model && (size_t)(suffix - model) < sizeof(buf)) {
+        size_t n = (size_t)(suffix - model);
+        memcpy(buf, model, n);
+        buf[n] = '\0';
+        return buf;
+    }
+
+    // Fallback: truncate and add ellipsis
+    size_t len = strlen(model);
+    if (len > 44) len = 44;
+    memcpy(buf, model, len);
+    buf[len] = '\0';
+    return buf;
+}
+
 void tui_update_terminal_title(TUIState *tui) {
     if (!tui) {
         return;
@@ -169,6 +224,10 @@ void tui_update_terminal_title(TUIState *tui) {
     if (vltrn_mode && strcmp(vltrn_mode, "1") == 0) {
         name = "vltrn";
     }
+
+    const char *model = tui->conversation_state
+        ? tui->conversation_state->model : NULL;
+    const char *model_label = title_model_label(model);
 
     const char *workdir = tui->conversation_state
         ? tui->conversation_state->working_dir : NULL;
@@ -189,9 +248,17 @@ void tui_update_terminal_title(TUIState *tui) {
             frame_count = SPINNER_FRAME_COUNT;
         }
         const char *frame = frames[tui->status_spinner_frame % frame_count];
-        len = snprintf(title, sizeof(title), "%s %s", frame, name);
+        if (model_label && model_label[0]) {
+            len = snprintf(title, sizeof(title), "%s %s(%s)", frame, name, model_label);
+        } else {
+            len = snprintf(title, sizeof(title), "%s %s", frame, name);
+        }
     } else {
-        len = snprintf(title, sizeof(title), "%s", name);
+        if (model_label && model_label[0]) {
+            len = snprintf(title, sizeof(title), "%s(%s)", name, model_label);
+        } else {
+            len = snprintf(title, sizeof(title), "%s", name);
+        }
     }
 
     if (dirname && len > 0 && (size_t)len < sizeof(title)) {
