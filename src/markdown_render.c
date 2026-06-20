@@ -1244,14 +1244,15 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
         num_cols = TABLE_MAX_COLS;
     }
 
-    /* Calculate max content widths for each column (using stripped display
-     * width so that markdown formatting delimiters don't inflate columns) */
+    /* Calculate max content widths for each column (raw display width —
+     * must match what cell_wrap_point counts so that column allocation
+     * and wrapping are consistent) */
     memset(max_content_widths, 0, sizeof(max_content_widths));
     for (i = 0; i < num_display; i++) {
         for (j = 0; j < col_counts[i] && j < num_cols; j++) {
             int w;
             if (cells[i][j] && cell_lens[i][j] > 0) {
-                w = markdown_stripped_display_width(cells[i][j], cell_lens[i][j]);
+                w = cell_display_width(cells[i][j], cell_lens[i][j]);
             } else {
                 w = 0;
             }
@@ -1303,13 +1304,14 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
 
     /* --- Traditional fixed-width rendering (fallback) --- */
 
-    /* Calculate column widths (using stripped display width) */
+    /* Calculate column widths (raw display width — must match what
+     * cell_wrap_point counts for consistent wrapping) */
     memset(col_widths, 0, sizeof(col_widths));
     for (i = 0; i < num_display; i++) {
         for (j = 0; j < col_counts[i] && j < num_cols; j++) {
             int w;
             if (cells[i][j] && cell_lens[i][j] > 0) {
-                w = markdown_stripped_display_width(cells[i][j], cell_lens[i][j]);
+                w = cell_display_width(cells[i][j], cell_lens[i][j]);
             } else {
                 w = 0;
             }

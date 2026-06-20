@@ -661,6 +661,62 @@ static void test_wrapped_line_beyond(void) {
     print_test_result(name, ok);
 }
 
+static void test_wrap_count_with_code_spans(void) {
+    const char *name = "wrap_count_with_code_spans";
+    /* Text with backtick code spans. Raw width = 34, stripped = 30.
+     * With fix: column width = raw width = 34, so no wrapping. */
+    const char *text = "Master added `--params`/`--pap` er";
+    int raw_w = cell_display_width(text, strlen(text));
+    int n = cell_wrap_count(text, strlen(text), raw_w);
+    int ok = (n == 1);
+    if (!ok) {
+        printf("  raw_w=%d lines=%d\n", raw_w, n);
+    }
+    print_test_result(name, ok);
+}
+
+static void test_wrap_count_code_at_column(void) {
+    const char *name = "wrap_count_code_at_column";
+    /* Text fits exactly at its raw display width */
+    const char *text = "foo `bar` baz";
+    int raw = cell_display_width(text, strlen(text));
+    int n = cell_wrap_count(text, strlen(text), raw);
+    int ok = (n == 1);
+    print_test_result(name, ok);
+}
+
+static void test_wrapped_line_code_spans(void) {
+    const char *name = "wrapped_line_code_spans";
+    /* Force a narrow column to trigger wrapping with code spans */
+    const char *text = "abc `def` ghi `jkl`";
+    const char *seg;
+    size_t seg_len;
+    /* Raw width = 19. With width=6, line 1 should be "abc `d" */
+    int found = cell_get_wrapped_line(text, strlen(text), 6, 1, &seg, &seg_len);
+    int ok = found && seg_len > 0;
+    if (!ok) {
+        printf("  found=%d\n", found);
+    }
+    print_test_result(name, ok);
+}
+
+static void test_cell_width_vs_stripped(void) {
+    const char *name = "cell_width_vs_stripped";
+    /* cell_display_width includes backticks; stripped excludes them.
+     * For correct wrapping, column widths must use raw width so the
+     * column is wide enough to hold formatting characters. */
+    const char *text = "`--params`/`--pap`";
+    int raw = cell_display_width(text, strlen(text));
+    int stripped = markdown_stripped_display_width(text, strlen(text));
+    /* raw: `--params`/`--pap` = 18 chars
+     * stripped: --params/--pap = 14 chars */
+    int ok = (raw == 18 && stripped == 14);
+    if (!ok) {
+        printf("  raw=%d stripped=%d\n", raw, stripped);
+    }
+    print_test_result(name, ok);
+}
+
 /* ==================================================================
  * markdown_stripped_display_width  tests
  * ================================================================== */
@@ -835,6 +891,23 @@ static void test_stripped_mixed_bold_italic(void) {
     print_test_result(name, ok);
 }
 
+static void test_table_cell_with_code_spans_fits(void) {
+    const char *name = "table_cell_with_code_spans_fits";
+    /* Regression test: table cell from the garbled-output bug.
+     * The cell content contains backtick code spans. Column width
+     * must use raw display width (not stripped) so wrapping doesn't
+     * break mid-word. */
+    const char *cell = "Master added `--params`/`--pap` er flags; Kelly added `--kelly` flags";
+    int raw = cell_display_width(cell, strlen(cell));
+    int stripped = markdown_stripped_display_width(cell, strlen(cell));
+    /* stripped excludes backticks → narrower → wrapping inconsistency */
+    int ok = (raw > stripped);
+    if (!ok) {
+        printf("  raw=%d stripped=%d (raw should be > stripped due to backticks)\n", raw, stripped);
+    }
+    print_test_result(name, ok);
+}
+
 /* ==================================================================
  * Main
  * ================================================================== */
@@ -941,6 +1014,10 @@ int main(void) {
     test_wrap_count_many_lines();
     test_wrapped_line_get();
     test_wrapped_line_beyond();
+    test_wrap_count_with_code_spans();
+    test_wrap_count_code_at_column();
+    test_wrapped_line_code_spans();
+    test_cell_width_vs_stripped();
 
     /* --- markdown_stripped_display_width --- */
     printf("\n--- markdown_stripped_display_width ---\n");
@@ -970,6 +1047,7 @@ int main(void) {
     printf("\n--- integration: markdown in table cells ---\n");
     test_stripped_table_cell_scenario();
     test_stripped_mixed_bold_italic();
+    test_table_cell_with_code_spans_fits();
 
     print_summary();
     return tests_failed > 0 ? 1 : 0;
