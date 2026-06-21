@@ -262,25 +262,6 @@ int submit_input_callback(const char *input, void *user_data) {
                                     break;
                                 }
 
-                                /* Safety: refuse to continue if last meaningful
-                                 * message is assistant (spurious continuation). */
-                                {
-                                    MessageRole lr = MSG_SYSTEM;
-                                    for (int i = state->count - 1; i >= 0; i--) {
-                                        MessageRole r = state->messages[i].role;
-                                        if (r != MSG_SYSTEM && r != MSG_AUTO_COMPACTION) {
-                                            lr = r;
-                                            break;
-                                        }
-                                    }
-                                    if (lr == MSG_ASSISTANT) {
-                                        LOG_WARN("Ralph loop: last meaningful message is assistant "
-                                                 "(no user/tool turn) — refusing to continue");
-                                        goal_pause(state, "spurious continuation prevented");
-                                        break;
-                                    }
-                                }
-
                                 const char *last_response = goal_get_last_assistant_text(state);
 
                                 /* Fast path: honor explicit goal-status markers */
@@ -433,25 +414,6 @@ int submit_input_callback(const char *input, void *user_data) {
             if (state->interrupt_requested) {
                 LOG_INFO("Ralph loop: interrupted by user");
                 break;
-            }
-
-            /* Safety: refuse to continue if the last meaningful message is
-             * an assistant message (spurious continuation). */
-            {
-                MessageRole last_role = MSG_SYSTEM;
-                for (int i = state->count - 1; i >= 0; i--) {
-                    MessageRole r = state->messages[i].role;
-                    if (r != MSG_SYSTEM && r != MSG_AUTO_COMPACTION) {
-                        last_role = r;
-                        break;
-                    }
-                }
-                if (last_role == MSG_ASSISTANT) {
-                    LOG_WARN("Ralph loop: last meaningful message is assistant "
-                             "(no user/tool turn) — refusing to continue");
-                    goal_pause(state, "spurious continuation prevented");
-                    break;
-                }
             }
 
             const char *last_response = goal_get_last_assistant_text(state);

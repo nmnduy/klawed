@@ -1110,27 +1110,6 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
             break;
         }
 
-        /* Safety: refuse to continue if the last meaningful message is
-         * an assistant message.  The Ralph loop should only continue
-         * after a user turn or tool results — never after the assistant's
-         * own output alone (which would indicate a spurious continuation). */
-        {
-            MessageRole last_role = MSG_SYSTEM;
-            for (int i = ctx->state->count - 1; i >= 0; i--) {
-                MessageRole r = ctx->state->messages[i].role;
-                if (r != MSG_SYSTEM && r != MSG_AUTO_COMPACTION) {
-                    last_role = r;
-                    break;
-                }
-            }
-            if (last_role == MSG_ASSISTANT) {
-                LOG_WARN("Ralph loop: last meaningful message is assistant "
-                         "(no user/tool turn) — refusing to continue");
-                goal_pause(ctx->state, "spurious continuation prevented");
-                break;
-            }
-        }
-
         const char *last_response = goal_get_last_assistant_text(ctx->state);
 
         /* Fast path: the system prompt instructs the model to emit
