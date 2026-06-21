@@ -1118,6 +1118,7 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
         int marker = goal_check_explicit_markers(last_response);
         if (marker == 1) {
             goal_mark_done(ctx->state, "assistant explicitly marked goal as done");
+            goal_clear(ctx->state);
             ui_set_status(NULL, ctx->tui_queue, "Goal achieved");
             break;
         } else if (marker == -1) {
@@ -1146,6 +1147,7 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
 
         if (verdict.done) {
             goal_mark_done(ctx->state, verdict.reason);
+            goal_clear(ctx->state);
             ui_set_status(NULL, ctx->tui_queue, "Goal achieved");
             free(verdict.reason);
             break;

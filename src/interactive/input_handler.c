@@ -268,6 +268,7 @@ int submit_input_callback(const char *input, void *user_data) {
                                 int marker = goal_check_explicit_markers(last_response);
                                 if (marker == 1) {
                                     goal_mark_done(state, "assistant explicitly marked goal as done");
+                                    goal_clear(state);
                                     ui_set_status(tui, queue, "Goal achieved");
                                     break;
                                 } else if (marker == -1) {
@@ -295,6 +296,7 @@ int submit_input_callback(const char *input, void *user_data) {
 
                                 if (verdict.done) {
                                     goal_mark_done(state, verdict.reason);
+                                    goal_clear(state);
                                     ui_set_status(tui, queue, "Goal achieved");
                                     free(verdict.reason);
                                     break;
@@ -423,6 +425,7 @@ int submit_input_callback(const char *input, void *user_data) {
             int marker = goal_check_explicit_markers(last_response);
             if (marker == 1) {
                 goal_mark_done(state, "assistant explicitly marked goal as done");
+                goal_clear(state);
                 ui_set_status(tui, queue, "Goal achieved");
                 break;
             } else if (marker == -1) {
@@ -451,6 +454,7 @@ int submit_input_callback(const char *input, void *user_data) {
 
             if (verdict.done) {
                 goal_mark_done(state, verdict.reason);
+                goal_clear(state);
                 ui_set_status(tui, queue, "Goal achieved");
                 free(verdict.reason);
                 break;
