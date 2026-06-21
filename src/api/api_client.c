@@ -304,8 +304,8 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
     await_system_prompt_ready(state);
 
     // Safety guard: validate conversation ends with a user/tool message.
-    // An API call where the last meaningful message is a system or compaction
-    // message (no user message) is always wrong and results in an API error.
+    // An API call where the last meaningful message is a system, compaction,
+    // or assistant message (no user/tool turn initiated) is always wrong.
     {
         int last_meaningful = -1;
         for (int i = state->count - 1; i >= 0; i--) {
@@ -318,6 +318,19 @@ ApiResponse* call_api_with_retries(ConversationState *state) {
         if (last_meaningful < 0) {
             LOG_ERROR("call_api_with_retries: no user/assistant message in state "
                       "(count=%d) — refusing to send invalid request", state->count);
+            return NULL;
+        }
+        /* Refuse if the last meaningful message is an assistant message.
+         * An API call should only be triggered by a user message or tool
+         * results — never by the assistant's own output.  This prevents
+         * spurious continuation after the assistant has finished its turn
+         * (e.g. after auto-compaction when no goal is active). */
+        if (state->messages[last_meaningful].role == MSG_ASSISTANT) {
+            LOG_ERROR("call_api_with_retries: last meaningful message is "
+                      "assistant (role=%d at idx=%d, count=%d) — refusing "
+                      "to send request without a user/tool turn",
+                      state->messages[last_meaningful].role,
+                      last_meaningful, state->count);
             return NULL;
         }
     }
