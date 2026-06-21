@@ -610,11 +610,10 @@ void tui_scroll_conversation(TUIState *tui, int direction) {
         render_status_window(tui);
     }
 
-    // Refresh input window to keep cursor visible
-    if (tui->wm.input_win) {
-        touchwin(tui->wm.input_win);
-        wrefresh(tui->wm.input_win);
-    }
+    // Note: callers of tui_scroll_conversation() always call input_redraw()
+    // immediately after, which properly does werase + redraw. Avoid double
+    // refresh here to prevent visual artifacts from touchwin+wrefresh without
+    // werase (stale internal buffer can briefly show conversation content).
 }
 
 // ============================================================================
