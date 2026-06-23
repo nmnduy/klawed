@@ -1686,7 +1686,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             render_markdown_document(tui, text, text_pair, 0, NULL);
             goto skip_newline;
         } else if (tui->response_style == RESPONSE_STYLE_ROBOT) {
-            // Robot style: print robot face header, then text with no border
+            // Robot style: print robot face header, then markdown-rendered text
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
@@ -1694,9 +1694,10 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             if (has_colors()) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
-            // Fall through to write text normally (no border)
+            render_markdown_document(tui, text, NCURSES_PAIR_FOREGROUND, 0, NULL);
+            goto skip_newline;
         } else if (tui->response_style == RESPONSE_STYLE_CAT) {
-            // Cat style: print cat face header, then text with no border
+            // Cat style: print cat face header, then markdown-rendered text
             if (has_colors()) {
                 wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
@@ -1704,7 +1705,8 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             if (has_colors()) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
-            // Fall through to write text normally (no border)
+            render_markdown_document(tui, text, NCURSES_PAIR_FOREGROUND, 0, NULL);
+            goto skip_newline;
         }
     } else if (is_error_message) {
         // Error message: render icon prefix in red bold, then body text
