@@ -1062,7 +1062,32 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
         return;
     }
 
-
+    /* ──────────────────────────────────────────────────────────────
+     * Duplicate-instruction guard: when the user types a message
+     * while a previous instruction's tool loop is still running,
+     * the message is added to the conversation immediately and the
+     * running loop picks it up.  When the duplicate instruction is
+     * later dequeued, the conversation is already settled — the
+     * last message is not a user message.
+     *
+     * We check last_msg->role != MSG_USER rather than checking for a
+     * specific "finished" role (e.g. MSG_ASSISTANT) because the turn
+     * may end with a non-assistant message: auto-compaction injects
+     * MSG_AUTO_COMPACTION and can leave it as the final message when
+     * keep_recent=0.  The invariant is simply: if the last message
+     * is not from the user, there is nothing left to respond to.
+     * ────────────────────────────────────────────────────────────── */
+    if (ctx->state && ctx->state->count > 0) {
+        InternalMessage *last_msg = &ctx->state->messages[ctx->state->count - 1];
+        if (last_msg->role != MSG_USER) {
+            LOG_INFO("Skipping instruction — conversation already settled "
+                     "(last_role=%d, msg_count=%d, text='%.60s')",
+                     last_msg->role,
+                     ctx->state->count,
+                     instruction->text ? instruction->text : "(null)");
+            return;
+        }
+    }
 
     ui_set_status_varied(NULL, ctx->tui_queue, SPINNER_CONTEXT_API_CALL);
     ApiResponse *response = call_api_with_retries(ctx->state);
