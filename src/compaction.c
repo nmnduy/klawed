@@ -1,5 +1,6 @@
 #include "klawed_internal.h"
 #include "compaction.h"
+#include "goal.h"
 #include "tool_utils.h"
 #include "logger.h"
 #include "persistence.h"
@@ -656,6 +657,26 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         }
     }
 
+    /* When keep_recent=0, preserve at least the last assistant message.
+     * The Ralph / goal loop needs the last assistant text for explicit
+     * marker detection and judge evaluation.  Without this, compaction
+     * with keep_recent=0 destroys the last assistant text, causing
+     * goal_judge to see an empty response and the Ralph loop to fire a
+     * spurious continuation API call. */
+    if (config->keep_recent == 0) {
+        int last_assistant = -1;
+        for (int i = state->count - 1; i >= compact_start; i--) {
+            if (state->messages[i].role == MSG_ASSISTANT) {
+                last_assistant = i;
+                break;
+            }
+        }
+        if (last_assistant >= 0 && compact_end >= last_assistant) {
+            compact_end = last_assistant - 1;
+            LOG_DEBUG("Compaction: preserving last assistant message at index %d (keep_recent=0)", last_assistant);
+        }
+    }
+
     // Check if we still have anything to compact after adjustment
     if (compact_end < compact_start) {
         LOG_INFO("Cannot compact - all candidate messages have pending tool calls");
@@ -738,7 +759,14 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
 
     // Generate AI summary of the compacted messages (before freeing them)
     // Summary buffer: 400 words * ~6 chars/word + formatting = ~3000 chars
+    // NOTE: this makes an API call using the same provider/model as the main
+    // conversation. It appears as an "extra" call in token-usage logs.
     char summary[4096] = "";
+    LOG_INFO("compaction_perform: calling summarization API for %d messages "
+             "(session=%s, goal_active=%d)",
+             compacted_count,
+             session_id ? session_id : "(null)",
+             goal_is_active(state));
     int summary_result = compaction_generate_summary(
         state,
         &state->messages[compact_start],
@@ -746,6 +774,9 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         summary,
         sizeof(summary)
     );
+    LOG_INFO("compaction_perform: summarization API returned (result=%d, "
+             "summary_len=%zu)",
+             summary_result, strlen(summary));
 
     if (summary_result != 0 || summary[0] == '\0') {
         LOG_WARN("Failed to generate compaction summary, using fallback notice");
@@ -838,8 +869,13 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
     config->last_compacted_index = compact_end;
     config->current_tokens = tokens_after;
 
-    LOG_INFO("Compaction complete. Messages: %d, Tokens: %zu (%.1f%% of limit)",
-             state->count, tokens_after, after_percent);
+    LOG_INFO("Compaction complete. Messages: %d (system+notice+%d recent), "
+             "Tokens: %zu (%.1f%% of limit), goal_active=%d, "
+             "last_msg_role=%d",
+             state->count, recent_count,
+             tokens_after, after_percent,
+             goal_is_active(state),
+             state->count > 1 ? (int)state->messages[state->count - 1].role : -1);
 
     return 0;
 }

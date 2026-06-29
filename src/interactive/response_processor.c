@@ -1097,6 +1097,18 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
     /* ──────────────────────────────────────────────────────────────
      * Ralph loop: autonomous continuation toward standing goal
      * ────────────────────────────────────────────────────────────── */
+    {
+        int is_active = goal_is_active(ctx->state);
+        LOG_INFO("Ralph loop guard: goal_is_active=%d (state->goal=%s, "
+                 "session=%s, msg_count=%d)",
+                 is_active,
+                 ctx->state->goal ? "present" : "NULL",
+                 ctx->state->session_id ? ctx->state->session_id : "(null)",
+                 ctx->state->count);
+        if (!is_active) {
+            LOG_DEBUG("Ralph loop: no active goal, skipping evaluation entirely");
+        }
+    }
     while (goal_is_active(ctx->state)) {
         /* Yield if a real user message is queued */
         if (ctx->instruction_queue && ai_queue_depth(ctx->instruction_queue) > 0) {

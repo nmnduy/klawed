@@ -368,6 +368,15 @@ GoalVerdict goal_judge(const ConversationState *state, const char *last_response
     if (!last_response[0]) {
         free(verdict.reason);
         verdict.reason = strdup("empty response (nothing to evaluate)");
+        /* Treat as parse failure so the Ralph loop pauses instead of
+         * continuing with a spurious API call (e.g. after compaction
+         * with keep_recent=0 removed the last assistant message). */
+        verdict.parse_failed = 1;
+        LOG_WARN("Goal judge: empty response detected - returning parse_failed "
+                 "to prevent spurious continuation (turns_used=%d/%d, "
+                 "msg_count=%d, goal_active=%d)",
+                 g->turns_used, g->max_turns,
+                 state->count, goal_is_active(state));
         return verdict;
     }
 
@@ -477,7 +486,11 @@ GoalVerdict goal_judge(const ConversationState *state, const char *last_response
 
     judge_state->count = 2;
 
-    LOG_INFO("Goal judge: evaluating turn %d/%d", g->turns_used, g->max_turns);
+    LOG_INFO("Goal judge: evaluating turn %d/%d (response_len=%zu, "
+             "goal_len=%zu, msg_count=%d)",
+             g->turns_used, g->max_turns,
+             strlen(last_response), strlen(g->text),
+             state->count);
 
     ApiResponse *response = call_api_with_retries(judge_state);
 

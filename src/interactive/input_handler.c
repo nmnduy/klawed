@@ -256,6 +256,17 @@ int submit_input_callback(const char *input, void *user_data) {
                             session_maybe_generate_title(state);
 
                             /* Ralph loop: autonomous continuation toward standing goal */
+                            {
+                                int is_active = goal_is_active(state);
+                                LOG_INFO("Ralph loop guard (sync/goal): goal_is_active=%d "
+                                         "(state->goal=%s, msg_count=%d)",
+                                         is_active,
+                                         state->goal ? "present" : "NULL",
+                                         state->count);
+                                if (!is_active) {
+                                    LOG_DEBUG("Ralph loop: no active goal, skipping");
+                                }
+                            }
                             while (goal_is_active(state)) {
                                 if (state->interrupt_requested) {
                                     LOG_INFO("Ralph loop: interrupted by user");
@@ -412,6 +423,17 @@ int submit_input_callback(const char *input, void *user_data) {
         /* ──────────────────────────────────────────────────────────────
          * Ralph loop (sync path)
          * ────────────────────────────────────────────────────────────── */
+        {
+            int is_active = goal_is_active(state);
+            LOG_INFO("Ralph loop guard (sync/normal): goal_is_active=%d "
+                     "(state->goal=%s, msg_count=%d)",
+                     is_active,
+                     state->goal ? "present" : "NULL",
+                     state->count);
+            if (!is_active) {
+                LOG_DEBUG("Ralph loop: no active goal, skipping");
+            }
+        }
         while (goal_is_active(state)) {
             if (state->interrupt_requested) {
                 LOG_INFO("Ralph loop: interrupted by user");
