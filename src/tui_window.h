@@ -27,6 +27,14 @@ int tui_window_calculate_needed_lines(const char *buffer, int buffer_len, int wi
 // Returns 0 on success, -1 on failure
 int tui_window_resize_input(TUIState *tui, int desired_lines);
 
+// Show TODO banner window (wraps window_manager with input buffer sync)
+// height: Number of lines for the TODO banner
+// Returns 0 on success, -1 on failure
+int tui_window_show_todo_banner(TUIState *tui, int height);
+
+// Hide TODO banner window (wraps window_manager with input buffer sync)
+void tui_window_hide_todo_banner(TUIState *tui);
+
 // Refresh conversation window viewport (using pad)
 void tui_window_refresh_conversation_viewport(TUIState *tui);
 

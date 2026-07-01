@@ -15,6 +15,7 @@
 #include "../arena.h"
 #include "../indicators.h"
 #include "../window_manager.h"
+#include "../tui_window.h"
 #include "../compaction.h"
 #include "../sqlite_queue.h"
 #include "../tui.h"
@@ -995,7 +996,7 @@ void process_response(ConversationState *state,
 
     // AI turn completed - hide todo banner in TUI mode
     if (tui) {
-        window_manager_hide_todo_window(&tui->wm);
+        tui_window_hide_todo_banner(tui);
     } else if (queue) {
         // Worker thread: post message to main thread to hide banner
         post_tui_message(queue, TUI_MSG_TODO_HIDE, NULL);

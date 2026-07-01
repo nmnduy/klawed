@@ -93,6 +93,42 @@ int tui_window_resize_input(TUIState *tui, int desired_lines) {
     return 0;
 }
 
+// Show TODO banner window (wraps window_manager with input buffer sync)
+int tui_window_show_todo_banner(TUIState *tui, int height) {
+    if (!tui || !tui->is_initialized) return -1;
+
+    if (window_manager_show_todo_window(&tui->wm, height) != 0) {
+        return -1;
+    }
+
+    // Sync input buffer to the recreated input window
+    if (tui->input_buffer && tui->wm.input_win) {
+        int h, w;
+        getmaxyx(tui->wm.input_win, h, w);
+        tui->input_buffer->win = tui->wm.input_win;
+        tui->input_buffer->win_width = w;
+        tui->input_buffer->win_height = h;
+    }
+
+    return 0;
+}
+
+// Hide TODO banner window (wraps window_manager with input buffer sync)
+void tui_window_hide_todo_banner(TUIState *tui) {
+    if (!tui || !tui->is_initialized) return;
+
+    window_manager_hide_todo_window(&tui->wm);
+
+    // Sync input buffer to the recreated input window
+    if (tui->input_buffer && tui->wm.input_win) {
+        int h, w;
+        getmaxyx(tui->wm.input_win, h, w);
+        tui->input_buffer->win = tui->wm.input_win;
+        tui->input_buffer->win_width = w;
+        tui->input_buffer->win_height = h;
+    }
+}
+
 // Refresh conversation window viewport (using pad)
 void tui_window_refresh_conversation_viewport(TUIState *tui) {
     if (!tui) return;

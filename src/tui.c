@@ -1576,7 +1576,7 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
         case TUI_MSG_TODO_HIDE:
             // Hide TODO banner when AI becomes idle
             if (tui->wm.todo_win) {
-                window_manager_hide_todo_window(&tui->wm);
+                tui_window_hide_todo_banner(tui);
             }
             break;
 

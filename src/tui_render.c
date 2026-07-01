@@ -1919,11 +1919,12 @@ void input_redraw(TUIState *tui, const char *prompt) {
         input->win = tui->wm.input_win;
         input->win_width = w;
         input->win_height = h;
-        LOG_WARN("[TUI] Synchronized stale input buffer window pointer");
+        LOG_DEBUG("[TUI] Synchronized stale input buffer window pointer");
     }
 
+    /* If window was deleted and not recreated, bail out */
     WINDOW *win = input->win;
-    if (!win) {
+    if (!win || !tui->wm.input_win) {
         return;
     }
 
@@ -2471,7 +2472,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     // If no todos at all, or all todos are completed, hide the TODO window
     if (total_count == 0 || incomplete_count == 0) {
         if (tui->wm.todo_win) {
-            window_manager_hide_todo_window(&tui->wm);
+            tui_window_hide_todo_banner(tui);
             // Refresh to clear the hidden window from screen
             window_manager_refresh_all(&tui->wm);
         }
@@ -2492,7 +2493,7 @@ int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     int needed_height = (int)(display_tasks + 1 + padding_lines);
 
     // Show the TODO window
-    if (window_manager_show_todo_window(&tui->wm, needed_height) != 0) {
+    if (tui_window_show_todo_banner(tui, needed_height) != 0) {
         return 0;
     }
 
