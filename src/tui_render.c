@@ -1906,6 +1906,22 @@ void input_redraw(TUIState *tui, const char *prompt) {
     }
 
     TUIInputBuffer *input = tui->input_buffer;
+
+    /* Synchronize input buffer's window pointer with the window manager.
+     * The window manager can recreate the input window (e.g. when showing
+     * or hiding the TODO banner) without updating this pointer. Using a
+     * stale pointer leads to werase/wrefresh on a deleted window, which
+     * causes undefined behavior — conversation content can bleed into
+     * the input box area. */
+    if (tui->wm.input_win && input->win != tui->wm.input_win) {
+        int h, w;
+        getmaxyx(tui->wm.input_win, h, w);
+        input->win = tui->wm.input_win;
+        input->win_width = w;
+        input->win_height = h;
+        LOG_WARN("[TUI] Synchronized stale input buffer window pointer");
+    }
+
     WINDOW *win = input->win;
     if (!win) {
         return;
