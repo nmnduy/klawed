@@ -1,0 +1,35 @@
+| Claim                        | Verdict     | Evidence                                                 |
+
+|------------------------------|-------------|----------------------------------------------------------|
+
+| A — hedge_model.py mar       | ✅ **CONFIR  | Lines 133-139: `post_crash_margin = final_equity * margi
+|
+| gin call uses ratio paramete | MED**       | n_ratio` recomputes loan as if broker auto-deleverages;  |
+
+| r, not original loan         |             | original $30K loan (line 94) never referenced in margin- |
+
+|                              |             | call check                                               |
+
+| B — simulate.py counts       | ✅ **CONFIR  | Lines 104-110: equity clamps to 0 but `yr_wd += monthl
+|
+|  withdrawals from dead accou | MED**       | y_wd still accumulates; ghost withdrawals included in    |
+
+| nts                          |             | print_table` total at line 138                           |
+
+| C — Monthly compounding      | ✅ **CONFIR  | Lines 91 (yld/12), 97 (decay/12), 99 (`MARGIN_RATE/1
+|
+| distorts stated yields       | MED**       | 2`) — all linear divisions compounded monthly; 21% state |
+
+|                              |             | d → ~23.14% effective                                    |
+
+| D — Backtest has no ETF      | ✅ **CONFIR  | Only VIX data is pulled (line 55-60); PORTFOLIO proxy ti
+|
+| price/market modeling        | MED**       | ckers are discarded via _ unpacking (lines 87, 94); NA   |
+
+|                              |             | V changes come only from fixed decay rates               |
+
+| E — sweep.py constant        | ✅ **CONFIR  | Line 27: ti = eq * (1 + mg) uses same mg every year;
+|
+| margin ratio, no margin-call | MED**       |  no tracking of outstanding loan, no safety limit        |
+
+|  check                       |             |     

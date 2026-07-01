@@ -20,6 +20,7 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
+#include <locale.h>
 
 /* Include markdown render header */
 #include "../src/markdown_render.h"
@@ -34,6 +35,7 @@ const char *find_strike_tildes(const char *start, size_t len);
 size_t table_split_cells(const char *row, size_t len,
                          const char **cells, size_t *cell_lens, size_t max_cells);
 int cell_display_width(const char *text, size_t len);
+size_t cell_wrap_point(const char *text, size_t text_len, int max_display_width);
 int cell_wrap_count(const char *text, size_t text_len, int max_width);
 int cell_get_wrapped_line(const char *text, size_t text_len, int max_width,
                           int line_idx, const char **out_start, size_t *out_len);
@@ -616,6 +618,84 @@ static void test_display_width_wide(void) {
     print_test_result(name, w == 2);
 }
 
+static void test_display_width_3byte_wide(void) {
+    const char *name = "display_width_3byte_wide";
+    /* ✅ = U+2705, 3-byte UTF-8: E2 9C 85. wcwidth=2.
+     * This is the regression case: the old naive byte-count gave 1,
+     * but wcwidth correctly gives 2. */
+    int w = cell_display_width("\xE2\x9C\x85", 3);
+    print_test_result(name, w == 2);
+}
+
+static void test_display_width_3byte_narrow(void) {
+    const char *name = "display_width_3byte_narrow";
+    /* — = U+2014, 3-byte UTF-8: E2 80 94. wcwidth=1. */
+    int w = cell_display_width("\xE2\x80\x94", 3);
+    print_test_result(name, w == 1);
+}
+
+static void test_display_width_mixed_wide_ascii(void) {
+    const char *name = "display_width_mixed_wide_ascii";
+    /* ✅ ok = 2 (emoji) + 1 (space) + 2 (ok) = 5 */
+    int w = cell_display_width("\xE2\x9C\x85 ok", 6);
+    print_test_result(name, w == 5);
+}
+
+static void test_display_width_stripped_wide_consistency(void) {
+    const char *name = "display_width_stripped_wide_consistency";
+    /* ✅ **CONFIRMED** — the exact broken-table cell.
+     * cell_display_width: 2(emoji) + 1(space) + 2(**) + 9(CONFIRMED) + 2(**) = 16
+     * stripped: 2(emoji) + 1(space) + 9(CONFIRMED) = 12
+     * The key check: cell_display_width must agree with cell_wrap_point. */
+    const char *cell = "\xE2\x9C\x85 **CONFIRMED**";
+    size_t len = strlen(cell);
+    int raw = cell_display_width(cell, len);
+    int stripped = markdown_stripped_display_width(cell, len);
+    int ok = (raw == 16 && stripped == 12);
+    if (!ok) {
+        printf("  raw=%d expected=16  stripped=%d expected=12\n", raw, stripped);
+    }
+    print_test_result(name, ok);
+}
+
+static void test_width_wrap_consistency_wide_3byte(void) {
+    const char *name = "width_wrap_consistency_wide_3byte";
+    /* Core regression test: cell_display_width and cell_wrap_point must
+     * agree on the display width of text containing 3-byte wide chars.
+     * If they disagree, columns are allocated too narrow and wrapping
+     * breaks words mid-syllable (the broken-table bug). */
+    const char *cell = "\xE2\x9C\x85 **CONFIRMED**";
+    size_t len = strlen(cell);
+    int display_w = cell_display_width(cell, len);
+
+    /* cell_wrap_point with max_width = display_w should consume the ENTIRE
+     * string (i.e. return len). If it returns less, the width functions
+     * disagree. */
+    size_t wrap_bytes = cell_wrap_point(cell, len, display_w);
+    int ok = (wrap_bytes == len);
+    if (!ok) {
+        printf("  display_width=%d  wrap_point(bytes)=%zu/%zu  MISMATCH!\n",
+               display_w, wrap_bytes, len);
+    }
+    print_test_result(name, ok);
+}
+
+static void test_width_wrap_consistency_cjk(void) {
+    const char *name = "width_wrap_consistency_cjk";
+    /* CJK character 中 = U+4E2D, 3-byte, wcwidth=2.
+     * Another 3-byte wide char that was miscounted. */
+    const char *cell = "\xE4\xB8\xAD\xE6\x96\x87 test";  /* 中文 test */
+    size_t len = strlen(cell);
+    int display_w = cell_display_width(cell, len);
+    size_t wrap_bytes = cell_wrap_point(cell, len, display_w);
+    int ok = (wrap_bytes == len);
+    if (!ok) {
+        printf("  display_width=%d  wrap_point(bytes)=%zu/%zu  MISMATCH!\n",
+               display_w, wrap_bytes, len);
+    }
+    print_test_result(name, ok);
+}
+
 /* ==================================================================
  * cell_wrap_count / cell_get_wrapped_line  tests
  * ================================================================== */
@@ -913,6 +993,12 @@ static void test_table_cell_with_code_spans_fits(void) {
  * ================================================================== */
 
 int main(void) {
+    /* Set locale for wcwidth/mbrtowc to work correctly with UTF-8 */
+    setlocale(LC_ALL, "en_US.UTF-8");
+    if (!setlocale(LC_ALL, "")) {
+        setlocale(LC_ALL, "C.UTF-8");
+    }
+
     printf(COLOR_CYAN "Running Markdown Render Tests\n" COLOR_RESET);
     printf("=============================\n\n");
 
@@ -1006,6 +1092,12 @@ int main(void) {
     test_display_width_ascii();
     test_display_width_empty();
     test_display_width_wide();
+    test_display_width_3byte_wide();
+    test_display_width_3byte_narrow();
+    test_display_width_mixed_wide_ascii();
+    test_display_width_stripped_wide_consistency();
+    test_width_wrap_consistency_wide_3byte();
+    test_width_wrap_consistency_cjk();
 
     /* --- cell_wrap_count / cell_get_wrapped_line --- */
     printf("\n--- cell_wrap_count / cell_get_wrapped_line ---\n");

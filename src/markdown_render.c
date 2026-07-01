@@ -658,27 +658,35 @@ static int cell_display_width(const char *text, size_t len) {
 #endif
     int w = 0;
     size_t i = 0;
+    mbstate_t state;
+    memset(&state, 0, sizeof(state));
 
     while (i < len) {
         unsigned char c = (unsigned char)text[i];
         if (c < 0x80) {
+            /* ASCII: always width 1, no need for wcwidth */
             w++;
             i++;
-        } else if ((c & 0xE0) == 0xC0) {
-            w++;  /* 2-byte sequence */
-            i += 2;
-            if (i > len) break;
-        } else if ((c & 0xF0) == 0xE0) {
-            w++;  /* 3-byte sequence */
-            i += 3;
-            if (i > len) break;
-        } else if ((c & 0xF8) == 0xF0) {
-            w += 2;  /* 4-byte sequence (wide chars, emoji etc) */
-            i += 4;
-            if (i > len) break;
         } else {
-            w++;
-            i++;
+            /* Multi-byte: use wcwidth for correct terminal column width.
+             * Must match cell_wrap_point() which also uses wcwidth. */
+            wchar_t wc;
+            size_t char_bytes = mbrtowc(&wc, text + i, len - i, &state);
+            if (char_bytes == 0) {
+                break;
+            } else if (char_bytes == (size_t)-1 || char_bytes == (size_t)-2) {
+                /* Invalid/incomplete sequence: count as 1 */
+                w++;
+                i++;
+                memset(&state, 0, sizeof(state));
+            } else {
+                int char_width = wcwidth(wc);
+                if (char_width < 0) {
+                    char_width = 1;
+                }
+                w += char_width;
+                i += char_bytes;
+            }
         }
     }
     return w;
@@ -699,14 +707,31 @@ static int cell_display_width(const char *text, size_t len) {
 /*
  * Return the display width of a single character at *p (p must point to
  * the lead byte of a valid UTF-8 sequence).  end is used for bounds checking.
+ * Uses wcwidth for accurate terminal column width (e.g. emoji = 2 columns).
  */
 static int cell_char_display_width(const char *p, const char *end) {
     unsigned char c = (unsigned char)*p;
     if (c < 0x80) return 1;
-    if ((c & 0xE0) == 0xC0 && p + 1 < end) return 1;
-    if ((c & 0xF0) == 0xE0 && p + 2 < end) return 1;
-    if ((c & 0xF8) == 0xF0 && p + 3 < end) return 2;
-    return 1;
+
+    /* Determine byte length */
+    size_t byte_len;
+    if ((c & 0xE0) == 0xC0) byte_len = 2;
+    else if ((c & 0xF0) == 0xE0) byte_len = 3;
+    else if ((c & 0xF8) == 0xF0) byte_len = 4;
+    else return 1;  /* invalid lead byte */
+
+    if (p + byte_len > end) return 1;  /* truncated sequence */
+
+    /* Use wcwidth for accurate width */
+    wchar_t wc;
+    mbstate_t state;
+    memset(&state, 0, sizeof(state));
+    size_t n = mbrtowc(&wc, p, byte_len, &state);
+    if (n == (size_t)-1 || n == (size_t)-2 || n == 0) {
+        return 1;
+    }
+    int w = wcwidth(wc);
+    return (w < 0) ? 1 : w;
 }
 
 /*
