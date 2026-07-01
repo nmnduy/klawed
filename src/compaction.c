@@ -729,7 +729,7 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         }
     }
 
-    LOG_INFO("compaction_perform: Tool usage counts: Read=%d, Write=%d, Edit=%d, Bash=%d",
+    LOG_DEBUG("compaction_perform: Tool usage counts: Read=%d, Write=%d, Edit=%d, Bash=%d",
              read_count, write_count, edit_count, bash_count);
 
     // Calculate token information
@@ -762,7 +762,7 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
     // NOTE: this makes an API call using the same provider/model as the main
     // conversation. It appears as an "extra" call in token-usage logs.
     char summary[4096] = "";
-    LOG_INFO("compaction_perform: calling summarization API for %d messages "
+    LOG_DEBUG("compaction_perform: calling summarization API for %d messages "
              "(session=%s, goal_active=%d)",
              compacted_count,
              session_id ? session_id : "(null)",
@@ -774,7 +774,7 @@ int compaction_perform(ConversationState *state, CompactionConfig *config, const
         summary,
         sizeof(summary)
     );
-    LOG_INFO("compaction_perform: summarization API returned (result=%d, "
+    LOG_DEBUG("compaction_perform: summarization API returned (result=%d, "
              "summary_len=%zu)",
              summary_result, strlen(summary));
 

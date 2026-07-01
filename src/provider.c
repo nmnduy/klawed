@@ -650,11 +650,11 @@ static char *get_api_url_from_env(void) {
 
     if (env_url && env_url[0] != '\0') {
         char *url = strdup(env_url);
-        if (url) LOG_INFO("Using API URL from environment: %s", url);
+        if (url) LOG_DEBUG("Using API URL from environment: %s", url);
         return url;
     }
     char *default_url = strdup(DEFAULT_ANTHROPIC_URL);
-    if (default_url) LOG_INFO("Using default API URL: %s", default_url);
+    if (default_url) LOG_DEBUG("Using default API URL: %s", default_url);
     return default_url;
 }
 
@@ -794,16 +794,16 @@ void provider_init(const char *model,
         const char *aws_secret_key = getenv("AWS_SECRET_ACCESS_KEY");
         const char *aws_session_token = getenv("AWS_SESSION_TOKEN");
 
-        LOG_INFO("Bedrock mode is enabled, creating Bedrock provider...");
-        LOG_INFO("Bedrock env summary: KLAWED_USE_BEDROCK=%s",
+        LOG_DEBUG("Bedrock mode is enabled, creating Bedrock provider...");
+        LOG_DEBUG("Bedrock env summary: KLAWED_USE_BEDROCK=%s",
                  use_bedrock_env ? use_bedrock_env : "(not set)");
-        LOG_INFO("Bedrock env summary: AWS_PROFILE=%s, AWS_REGION=%s",
+        LOG_DEBUG("Bedrock env summary: AWS_PROFILE=%s, AWS_REGION=%s",
                  aws_profile ? aws_profile : "(not set)",
                  aws_region ? aws_region : "(not set)");
-        LOG_INFO("Bedrock env summary: AWS_CONFIG_FILE=%s, AWS_SHARED_CREDENTIALS_FILE=%s",
+        LOG_DEBUG("Bedrock env summary: AWS_CONFIG_FILE=%s, AWS_SHARED_CREDENTIALS_FILE=%s",
                  aws_config_file ? aws_config_file : "(not set)",
                  aws_shared_creds ? aws_shared_creds : "(not set)");
-        LOG_INFO("Bedrock env summary: Credentials present? access_key=%s secret_key=%s session_token=%s",
+        LOG_DEBUG("Bedrock env summary: Credentials present? access_key=%s secret_key=%s session_token=%s",
                  aws_access_key ? "yes" : "no",
                  aws_secret_key ? "yes" : "no",
                  aws_session_token ? "yes" : "no");
@@ -901,12 +901,12 @@ void provider_init(const char *model,
     if (provider_type != PROVIDER_AUTO) {
         if (provider_type == PROVIDER_ANTHROPIC) {
             use_anthropic = 1;
-            LOG_INFO("Using Anthropic provider (explicitly configured)");
+            LOG_DEBUG("Using Anthropic provider (explicitly configured)");
         } else if (provider_type == PROVIDER_OPENAI) {
             use_anthropic = 0;
-            LOG_INFO("Using OpenAI provider (explicitly configured)");
+            LOG_DEBUG("Using OpenAI provider (explicitly configured)");
         } else if (provider_type == PROVIDER_DEEPSEEK) {
-            LOG_INFO("Using DeepSeek provider (explicitly configured)");
+            LOG_DEBUG("Using DeepSeek provider (explicitly configured)");
             Provider *prov = deepseek_provider_create(api_key_to_use, base_url);
             if (!prov) {
                 result->error_message = strdup("Failed to initialize DeepSeek provider (check logs for details)");
@@ -935,7 +935,7 @@ void provider_init(const char *model,
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_MOONSHOT) {
-            LOG_INFO("Using Moonshot provider (explicitly configured)");
+            LOG_DEBUG("Using Moonshot provider (explicitly configured)");
             // Use create_with_headers if extra_headers are present in config
             Provider *prov;
             if (provider_config && provider_config->extra_headers[0] != '\0') {
@@ -971,16 +971,16 @@ void provider_init(const char *model,
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_ZAI_CODING) {
-            LOG_INFO("[Provider] Initializing Z.AI GLM Coding Plan provider...");
-            LOG_INFO("[Provider] Model: %s", model);
-            LOG_INFO("[Provider] API key source: %s", api_key_source ? api_key_source : "(none)");
-            LOG_INFO("[Provider] Base URL: %s", base_url ? base_url : "(default)");
+            LOG_DEBUG("[Provider] Initializing Z.AI GLM Coding Plan provider...");
+            LOG_DEBUG("[Provider] Model: %s", model);
+            LOG_DEBUG("[Provider] API key source: %s", api_key_source ? api_key_source : "(none)");
+            LOG_DEBUG("[Provider] Base URL: %s", base_url ? base_url : "(default)");
 
             // Log API key status (safely)
             if (api_key_to_use && api_key_to_use[0] != '\0') {
                 size_t key_len = strlen(api_key_to_use);
                 if (key_len >= 8) {
-                    LOG_INFO("[Provider] API key available: length=%zu, prefix=%.4s..., suffix=...%.4s",
+                    LOG_DEBUG("[Provider] API key available: length=%zu, prefix=%.4s..., suffix=...%.4s",
                              key_len, api_key_to_use, api_key_to_use + key_len - 4);
                 } else {
                     LOG_WARN("[Provider] API key available but unusually short: length=%zu", key_len);
@@ -992,7 +992,7 @@ void provider_init(const char *model,
             // Use create_with_headers if extra_headers are present in config
             Provider *prov;
             if (provider_config && provider_config->extra_headers[0] != '\0') {
-                LOG_INFO("[Provider] Using extra headers: %s", provider_config->extra_headers);
+                LOG_DEBUG("[Provider] Using extra headers: %s", provider_config->extra_headers);
                 prov = zai_coding_provider_create_with_headers(api_key_to_use, base_url,
                                                                 provider_config->extra_headers);
             } else {
@@ -1023,17 +1023,17 @@ void provider_init(const char *model,
                 return;
             }
             LOG_INFO("[Provider] Z.AI provider initialized successfully");
-            LOG_INFO("[Provider] Base URL: %s", result->api_url);
+            LOG_DEBUG("[Provider] Base URL: %s", result->api_url);
             if (cfg && cfg->api_key) {
                 size_t key_len = strlen(cfg->api_key);
-                LOG_INFO("[Provider] API key in config: length=%zu", key_len);
+                LOG_DEBUG("[Provider] API key in config: length=%zu", key_len);
             } else {
                 LOG_WARN("[Provider] API key not found in provider config after initialization!");
             }
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_KIMI_CODING_PLAN) {
-            LOG_INFO("Using Kimi Coding Plan provider (explicitly configured)");
+            LOG_DEBUG("Using Kimi Coding Plan provider (explicitly configured)");
             Provider *prov = kimi_coding_plan_provider_create(model_to_use);
             if (!prov) {
                 result->error_message = strdup("Failed to initialize Kimi Coding Plan provider (check logs for details)");
@@ -1062,7 +1062,7 @@ void provider_init(const char *model,
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_MINIMAX_CODING) {
-            LOG_INFO("Using MiniMax Coding Plan provider (explicitly configured)");
+            LOG_DEBUG("Using MiniMax Coding Plan provider (explicitly configured)");
             Provider *prov = minimax_coding_provider_create(api_key_to_use, base_url);
             if (!prov) {
                 result->error_message = strdup("Failed to initialize MiniMax Coding Plan provider (check logs for details)");
@@ -1091,7 +1091,7 @@ void provider_init(const char *model,
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_OPENAI_SUB) {
-            LOG_INFO("Using OpenAI Subscription provider (explicitly configured)");
+            LOG_DEBUG("Using OpenAI Subscription provider (explicitly configured)");
             const char *api_base_to_use = (provider_config && provider_config->api_base[0] != '\0')
                                           ? provider_config->api_base : NULL;
             Provider *prov = openai_sub_provider_create(model_to_use, api_base_to_use);
@@ -1122,7 +1122,7 @@ void provider_init(const char *model,
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_ANTHROPIC_SUB) {
-            LOG_INFO("Using Anthropic Subscription provider (explicitly configured)");
+            LOG_DEBUG("Using Anthropic Subscription provider (explicitly configured)");
             const char *api_base_to_use = (provider_config && provider_config->api_base[0] != '\0')
                                           ? provider_config->api_base : NULL;
             Provider *prov = anthropic_sub_provider_create(model_to_use, api_base_to_use);
@@ -1155,7 +1155,7 @@ void provider_init(const char *model,
             arena_destroy(arena);
             return;
         } else if (provider_type == PROVIDER_OPENAI_RESPONSES) {
-            LOG_INFO("Using OpenAI Responses API provider (explicitly configured)");
+            LOG_DEBUG("Using OpenAI Responses API provider (explicitly configured)");
             const char *responses_api_base = (provider_config && provider_config->api_base[0] != '\0')
                                               ? provider_config->api_base : NULL;
             const char *responses_api_key = (provider_config && provider_config->api_key[0] != '\0')
@@ -1197,7 +1197,7 @@ void provider_init(const char *model,
         } else if (provider_type == PROVIDER_CUSTOM) {
             // For custom, we need to check URL patterns
             use_anthropic = 0; // Default to OpenAI-compatible for custom
-            LOG_INFO("Using custom provider (defaulting to OpenAI-compatible)");
+            LOG_DEBUG("Using custom provider (defaulting to OpenAI-compatible)");
         }
     } else {
         // Auto-detect based on environment variables and URL patterns
@@ -1213,27 +1213,27 @@ void provider_init(const char *model,
         // If OPENAI_API_BASE is explicitly set, prefer OpenAI provider
         if (openai_base && openai_base[0] != '\0') {
             use_anthropic = 0;
-            LOG_INFO("OPENAI_API_BASE is set, using OpenAI-compatible provider");
+            LOG_DEBUG("OPENAI_API_BASE is set, using OpenAI-compatible provider");
         }
         // Only use Anthropic if Anthropic-specific URLs are set and OpenAI base is not
         else if (anth_env && anth_env[0] != '\0') {
             use_anthropic = 1;
-            LOG_INFO("Anthropic-specific URL set, using Anthropic provider");
+            LOG_DEBUG("Anthropic-specific URL set, using Anthropic provider");
         }
         // Check URL patterns as final fallback
         else if (strstr(base_url, "anthropic.com") != NULL || strstr(base_url, "/anthropic") != NULL) {
             use_anthropic = 1;
-            LOG_INFO("Anthropic URL detected, using Anthropic provider");
+            LOG_DEBUG("Anthropic URL detected, using Anthropic provider");
         }
         else {
             // Default to OpenAI if no clear indicators
             use_anthropic = 0;
-            LOG_INFO("No specific provider indicators, defaulting to OpenAI-compatible provider");
+            LOG_DEBUG("No specific provider indicators, defaulting to OpenAI-compatible provider");
         }
     }
 
     if (use_anthropic) {
-        LOG_INFO("Using Anthropic provider (direct API)...");
+        LOG_DEBUG("Using Anthropic provider (direct API)...");
         Provider *prov = anthropic_provider_create(api_key_to_use, base_url);
         // base_url is arena-allocated, don't free it here
         if (!prov) {
@@ -1264,7 +1264,7 @@ void provider_init(const char *model,
         return;
     }
 
-    LOG_INFO("Using OpenAI-compatible provider...");
+    LOG_DEBUG("Using OpenAI-compatible provider...");
 
     Provider *prov = openai_provider_create(api_key_to_use, base_url);
     // base_url is arena-allocated, openai_provider_create makes its own copy
@@ -1279,7 +1279,7 @@ void provider_init(const char *model,
 
     // Apply extra_headers from provider config if present
     if (cfg && provider_config && provider_config->extra_headers[0] != '\0') {
-        LOG_INFO("[Provider] Loading extra_headers from config: %s", provider_config->extra_headers);
+        LOG_DEBUG("[Provider] Loading extra_headers from config: %s", provider_config->extra_headers);
 
         // Parse comma-separated headers
         char *extra_headers_copy = strdup(provider_config->extra_headers);
@@ -1412,7 +1412,7 @@ void provider_init_from_config(const char *provider_key,
 
     // Handle Bedrock provider
     if (config->use_bedrock || provider_type == PROVIDER_BEDROCK) {
-        LOG_INFO("Creating Bedrock provider from config...");
+        LOG_DEBUG("Creating Bedrock provider from config...");
 
         Provider *prov = bedrock_provider_create(model);
         if (!prov) {
@@ -1478,7 +1478,7 @@ void provider_init_from_config(const char *provider_key,
 
     // Create provider based on type
     if (provider_type == PROVIDER_DEEPSEEK) {
-        LOG_INFO("Creating DeepSeek provider from config...");
+        LOG_DEBUG("Creating DeepSeek provider from config...");
         Provider *prov = deepseek_provider_create(api_key, base_url);
         free(base_url);
         if (!prov) {
@@ -1508,7 +1508,7 @@ void provider_init_from_config(const char *provider_key,
     }
 
     if (provider_type == PROVIDER_MOONSHOT) {
-        LOG_INFO("Creating Moonshot provider from config...");
+        LOG_DEBUG("Creating Moonshot provider from config...");
         // Use create_with_headers if extra_headers are present in config
         Provider *prov;
         if (config && config->extra_headers[0] != '\0') {
@@ -1544,7 +1544,7 @@ void provider_init_from_config(const char *provider_key,
     }
 
     if (provider_type == PROVIDER_ZAI_CODING) {
-        LOG_INFO("Creating Z.AI GLM Coding Plan provider from config...");
+        LOG_DEBUG("Creating Z.AI GLM Coding Plan provider from config...");
         // Use create_with_headers if extra_headers are present in config
         Provider *prov;
         if (config && config->extra_headers[0] != '\0') {
@@ -1580,7 +1580,7 @@ void provider_init_from_config(const char *provider_key,
     }
 
     if (provider_type == PROVIDER_MINIMAX_CODING) {
-        LOG_INFO("Creating MiniMax Coding Plan provider from config...");
+        LOG_DEBUG("Creating MiniMax Coding Plan provider from config...");
         Provider *prov = minimax_coding_provider_create(api_key, base_url);
         free(base_url);
         if (!prov) {
@@ -1610,7 +1610,7 @@ void provider_init_from_config(const char *provider_key,
     }
 
     if (provider_type == PROVIDER_KIMI_CODING_PLAN) {
-        LOG_INFO("Creating Kimi Coding Plan provider from config...");
+        LOG_DEBUG("Creating Kimi Coding Plan provider from config...");
         free(base_url);  // Kimi Coding Plan provider manages its own URL
         Provider *prov = kimi_coding_plan_provider_create(model);
         if (!prov) {
@@ -1640,7 +1640,7 @@ void provider_init_from_config(const char *provider_key,
     }
 
     if (provider_type == PROVIDER_OPENAI_SUB) {
-        LOG_INFO("Creating OpenAI Subscription provider from config...");
+        LOG_DEBUG("Creating OpenAI Subscription provider from config...");
         const char *api_base_to_use = (config->api_base[0] != '\0') ? config->api_base : NULL;
         free(base_url);  /* OpenAI Sub provider manages its own URL */
         Provider *prov = openai_sub_provider_create(model, api_base_to_use);
@@ -1671,7 +1671,7 @@ void provider_init_from_config(const char *provider_key,
     }
 
     if (provider_type == PROVIDER_ANTHROPIC_SUB) {
-        LOG_INFO("Creating Anthropic Subscription provider from config...");
+        LOG_DEBUG("Creating Anthropic Subscription provider from config...");
         const char *api_base_to_use = (config->api_base[0] != '\0') ? config->api_base : NULL;
         free(base_url);  /* Anthropic Sub provider manages its own URL */
         Provider *prov = anthropic_sub_provider_create(model, api_base_to_use);
@@ -1704,7 +1704,7 @@ void provider_init_from_config(const char *provider_key,
     }
 
     if (provider_type == PROVIDER_OPENAI_RESPONSES) {
-        LOG_INFO("Creating OpenAI Responses API provider from config...");
+        LOG_DEBUG("Creating OpenAI Responses API provider from config...");
         const char *api_base_to_use = (config->api_base[0] != '\0') ? config->api_base : NULL;
         const char *api_key_to_use  = (config->api_key[0]  != '\0') ? config->api_key  : NULL;
         free(base_url);  /* Responses provider manages its own URL */
@@ -1749,7 +1749,7 @@ void provider_init_from_config(const char *provider_key,
     }
 
     if (use_anthropic) {
-        LOG_INFO("Creating Anthropic provider from config...");
+        LOG_DEBUG("Creating Anthropic provider from config...");
         Provider *prov = anthropic_provider_create(api_key, base_url);
         free(base_url);
         if (!prov) {
@@ -1779,7 +1779,7 @@ void provider_init_from_config(const char *provider_key,
     }
 
     // Default to OpenAI-compatible provider
-    LOG_INFO("Creating OpenAI-compatible provider from config...");
+    LOG_DEBUG("Creating OpenAI-compatible provider from config...");
     Provider *prov = openai_provider_create(api_key, base_url);
     free(base_url);
     if (!prov) {
@@ -1792,7 +1792,7 @@ void provider_init_from_config(const char *provider_key,
 
     // Apply extra_headers from provider config if present
     if (cfg && config && config->extra_headers[0] != '\0') {
-        LOG_INFO("[Provider] Loading extra_headers from config: %s", config->extra_headers);
+        LOG_DEBUG("[Provider] Loading extra_headers from config: %s", config->extra_headers);
 
         // Parse comma-separated headers
         char *extra_headers_copy = strdup(config->extra_headers);

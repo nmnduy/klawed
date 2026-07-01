@@ -429,7 +429,7 @@ int sqlite_queue_receive(SQLiteQueueContext *ctx, const char *sender_filter, int
         *messages = msg_array;
         *message_count = count;
         *message_ids = id_array;
-        LOG_INFO("SQLite Queue: Received %d message(s)", count);
+        LOG_DEBUG("SQLite Queue: Received %d message(s)", count);
         return SQLITE_QUEUE_ERROR_NONE;
     }
 
@@ -522,7 +522,7 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
         return SQLITE_QUEUE_ERROR_NO_MESSAGES;
     }
 
-    LOG_INFO("SQLite Queue: Received %d message(s), processing", message_count);
+    LOG_DEBUG("SQLite Queue: Received %d message(s), processing", message_count);
 
     for (int i = 0; i < message_count; i++) {
         char *message = messages[i];
@@ -581,7 +581,7 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
                 content && cJSON_IsString(content)) {
 
                 // Process text message with interactive tool call support
-                LOG_INFO("SQLite Queue: Processing TEXT message (length: %zu)", strlen(content->valuestring));
+                LOG_DEBUG("SQLite Queue: Processing TEXT message (length: %zu)", strlen(content->valuestring));
                 LOG_DEBUG("SQLite Queue: Message content: %.*s",
                         (int)(strlen(content->valuestring) > 200 ? 200 : strlen(content->valuestring)),
                         content->valuestring);
@@ -627,26 +627,26 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
 
             } else if (strcmp(msg_type, "TRIGGER_COMPACT") == 0) {
                 // Handle manual compaction trigger from client
-                LOG_INFO("SQLite Queue: Received TRIGGER_COMPACT message ID %lld", msg_id);
+                LOG_DEBUG("SQLite Queue: Received TRIGGER_COMPACT message ID %lld", msg_id);
                 printf("SQLite Queue: Processing compaction trigger request\n");
                 fflush(stdout);
 
                 int compact_result = sqlite_queue_handle_compact_trigger(ctx, state);
                 if (compact_result == 0) {
-                    LOG_INFO("SQLite Queue: Compaction trigger processed successfully");
+                    LOG_DEBUG("SQLite Queue: Compaction trigger processed successfully");
                 } else {
                     LOG_ERROR("SQLite Queue: Compaction trigger failed");
                 }
 
             } else if (strcmp(msg_type, "INTERRUPT") == 0) {
                 // Handle interrupt request from client
-                LOG_INFO("SQLite Queue: Received INTERRUPT message ID %lld", msg_id);
+                LOG_DEBUG("SQLite Queue: Received INTERRUPT message ID %lld", msg_id);
                 printf("SQLite Queue: Interrupt requested by client\n");
                 fflush(stdout);
 
                 int interrupt_result = sqlite_queue_interrupt(ctx);
                 if (interrupt_result == 0) {
-                    LOG_INFO("SQLite Queue: Interrupt processed successfully");
+                    LOG_DEBUG("SQLite Queue: Interrupt processed successfully");
                 } else {
                     LOG_ERROR("SQLite Queue: Interrupt failed");
                 }
@@ -680,7 +680,7 @@ int sqlite_queue_process_message(SQLiteQueueContext *ctx, struct ConversationSta
     free(message_ids);
     free(messages);
 
-    LOG_INFO("SQLite Queue: Message processing completed");
+    LOG_DEBUG("SQLite Queue: Message processing completed");
     return 0;
 }
 #endif // TEST_BUILD
@@ -785,7 +785,7 @@ static int sqlite_queue_send_text_response(SQLiteQueueContext *ctx, const char *
         return 0;
     }
 
-    LOG_INFO("SQLite Queue: Sending assistant text response");
+    LOG_DEBUG("SQLite Queue: Sending assistant text response");
 
     // Print to console with TUI-like formatting
     // Use colorscheme colors with ANSI fallback for console output
@@ -865,7 +865,7 @@ static int sqlite_queue_send_end_ai_turn(SQLiteQueueContext *ctx, const char *re
         return -1;
     }
 
-    LOG_INFO("SQLite Queue: Sending END_AI_TURN event");
+    LOG_DEBUG("SQLite Queue: Sending END_AI_TURN event");
     return sqlite_queue_send_json(ctx, receiver, "END_AI_TURN", NULL);
 }
 
@@ -908,7 +908,7 @@ static int sqlite_queue_send_tool_request(SQLiteQueueContext *ctx, const char *r
         return -1;
     }
 
-    LOG_INFO("SQLite Queue: Sending TOOL request for %s (id: %s)", tool_name, tool_id);
+    LOG_DEBUG("SQLite Queue: Sending TOOL request for %s (id: %s)", tool_name, tool_id);
     int result = sqlite_queue_send(ctx, receiver, request_str, strlen(request_str));
     free(request_str);
     cJSON_Delete(request_json);
@@ -928,7 +928,7 @@ static void sqlite_on_tool_start_ex(const char *tool_id, const char *tool_name,
                                     const char *reasoning_content, void *user_data) {
     SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
 
-    LOG_INFO("SQLite Queue: Starting tool: %s (id: %s)", tool_name, tool_id);
+    LOG_DEBUG("SQLite Queue: Starting tool: %s (id: %s)", tool_name, tool_id);
 
     // Get tool details from parameters if not provided
     const char *details = tool_details;
@@ -980,7 +980,7 @@ static void sqlite_on_tool_complete_ex(const char *tool_id, const char *tool_nam
                                        cJSON *result, int is_error, void *user_data) {
     SQLiteQueueCallbackContext *cb_ctx = (SQLiteQueueCallbackContext *)user_data;
 
-    LOG_INFO("SQLite Queue: Tool completed: %s (id: %s, error=%d)", tool_name, tool_id, is_error);
+    LOG_DEBUG("SQLite Queue: Tool completed: %s (id: %s, error=%d)", tool_name, tool_id, is_error);
 
     // Print tool result to console using the same formatter as the TUI
     // Get tool details for display
@@ -1028,7 +1028,7 @@ static int sqlite_should_interrupt(void *user_data) {
 
 static void sqlite_on_status_update(const char *status, void *user_data) {
     (void)user_data;
-    LOG_INFO("SQLite Queue: %s", status);
+    LOG_DEBUG("SQLite Queue: %s", status);
 }
 
 // Check for and inject pending messages
@@ -1046,7 +1046,7 @@ static void check_and_inject_pending_messages(SQLiteQueueContext *ctx,
         ctx->pending_count--;
         pthread_mutex_unlock(&ctx->queue_mutex);
 
-        LOG_INFO("SQLite Queue: Injecting pending user message ID %lld", pm->msg_id);
+        LOG_DEBUG("SQLite Queue: Injecting pending user message ID %lld", pm->msg_id);
         sqlite_queue_acknowledge(ctx, pm->msg_id);
 
         add_user_message(state, pm->content);
@@ -1074,7 +1074,7 @@ static void sqlite_on_after_tool_results(struct ConversationState *state, void *
     pthread_mutex_unlock(&ctx->queue_mutex);
 
     if (pending_count > 0) {
-        LOG_INFO("SQLite Queue: Real-time steering injection point - %d pending message(s)", pending_count);
+        LOG_DEBUG("SQLite Queue: Real-time steering injection point - %d pending message(s)", pending_count);
         check_and_inject_pending_messages(ctx, state, cb_ctx->response_receiver);
     }
 }
@@ -1213,11 +1213,11 @@ static int sqlite_queue_process_interactive(SQLiteQueueContext *ctx,
     // Without this, call_api_with_retries' pre-call check fires immediately and the
     // user's message is silently dropped (see docs/bug-interrupt-flag-not-cleared.md).
     if (state->interrupt_requested) {
-        LOG_INFO("SQLite Queue: Clearing stale interrupt flag at start of new turn");
+        LOG_DEBUG("SQLite Queue: Clearing stale interrupt flag at start of new turn");
         state->interrupt_requested = 0;
     }
 
-    LOG_INFO("SQLite Queue: Processing interactive message: %.*s",
+    LOG_DEBUG("SQLite Queue: Processing interactive message: %.*s",
              (int)(strlen(user_input) > 200 ? 200 : strlen(user_input)), user_input);
 
     const char *response_receiver = "client";
@@ -1334,7 +1334,7 @@ int sqlite_queue_send_compaction_notice(SQLiteQueueContext *ctx, const char *rec
         return -1;
     }
 
-    LOG_INFO("SQLite Queue: Sending AUTO_COMPACTION notice (%d messages, %zu→%zu tokens)",
+    LOG_DEBUG("SQLite Queue: Sending AUTO_COMPACTION notice (%d messages, %zu→%zu tokens)",
              messages_compacted, tokens_before, tokens_after);
 
     int result = sqlite_queue_send(ctx, receiver, notice_str, strlen(notice_str));
@@ -1388,7 +1388,7 @@ static int sqlite_queue_handle_compact_trigger(SQLiteQueueContext *ctx, struct C
     int ret = compaction_perform(state, state->compaction_config, state->session_id, &result);
 
     if (ret == 0 && result.success) {
-        LOG_INFO("SQLite Queue: Compaction successful - %d messages compacted, %.1f%% -> %.1f%%",
+        LOG_DEBUG("SQLite Queue: Compaction successful - %d messages compacted, %.1f%% -> %.1f%%",
                  result.messages_compacted, result.usage_before_pct, result.usage_after_pct);
 
         // Send success response with details
@@ -1420,7 +1420,7 @@ static int sqlite_queue_handle_compact_trigger(SQLiteQueueContext *ctx, struct C
 
     } else if (ret == 0) {
         // Nothing to compact - not enough messages
-        LOG_INFO("SQLite Queue: No compaction needed - not enough messages");
+        LOG_DEBUG("SQLite Queue: No compaction needed - not enough messages");
         sqlite_queue_send_json(ctx, response_receiver, "TEXT",
                                "Compaction skipped: Not enough messages to compact "
                                "(need at least keep_recent + system message)");
@@ -1657,7 +1657,7 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
                         cJSON_Delete(json);
                         break;
                     }
-                    LOG_INFO("SQLite Queue: restore: deferring user text (open_tool_calls=%d)", open_tool_calls);
+                    LOG_DEBUG("SQLite Queue: restore: deferring user text (open_tool_calls=%d)", open_tool_calls);
                 } else {
                     /* Normal case: flush pending assistant turn, then add user message */
                     if (flush_pending_assistant(state, &pa) != 0) {
@@ -1855,7 +1855,7 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
             /* Once all open tool calls in this turn are resolved, inject any
              * user messages that arrived during the tool round-trip. */
             if (open_tool_calls == 0 && deferred.count > 0) {
-                LOG_INFO("SQLite Queue: restore: injecting %d deferred user message(s) after tool results",
+                LOG_DEBUG("SQLite Queue: restore: injecting %d deferred user message(s) after tool results",
                          deferred.count);
                 if (flush_deferred_user_texts(state, &deferred, &restored) != 0) {
                     break;
@@ -1938,7 +1938,7 @@ int sqlite_queue_restore_conversation(SQLiteQueueContext *ctx, struct Conversati
             /* Inject any user messages that arrived during the interrupted
              * tool execution — same deferred-text logic as the normal path. */
             if (deferred.count > 0) {
-                LOG_INFO("SQLite Queue: restore: injecting %d deferred user message(s) after interrupted tool results",
+                LOG_DEBUG("SQLite Queue: restore: injecting %d deferred user message(s) after interrupted tool results",
                          deferred.count);
                 flush_deferred_user_texts(state, &deferred, &restored);
             }
@@ -2040,7 +2040,7 @@ static void *sqlite_queue_worker_thread(void *arg) {
         pthread_mutex_unlock(&ctx->queue_mutex);
 
         if (pm) {
-            LOG_INFO("SQLite Queue: Worker processing message ID %lld", pm->msg_id);
+            LOG_DEBUG("SQLite Queue: Worker processing message ID %lld", pm->msg_id);
             // Only log processing at debug level to reduce console noise
             LOG_DEBUG("SQLite Queue: Processing message ID %lld", pm->msg_id);
 
@@ -2049,7 +2049,7 @@ static void *sqlite_queue_worker_thread(void *arg) {
             // Process the message interactively
             sqlite_queue_process_interactive(ctx, ctx->state, pm->content);
 
-            LOG_INFO("SQLite Queue: Worker completed message ID %lld", pm->msg_id);
+            LOG_DEBUG("SQLite Queue: Worker completed message ID %lld", pm->msg_id);
             LOG_DEBUG("SQLite Queue: Completed message ID %lld", pm->msg_id);
 
             free(pm->content);
@@ -2124,7 +2124,7 @@ static int sqlite_queue_enqueue_message(SQLiteQueueContext *ctx, long long msg_i
     ctx->pending_tail = pm;
     ctx->pending_count++;
 
-    LOG_INFO("SQLite Queue: Enqueued message ID %lld for processing (queue depth: %d)",
+    LOG_DEBUG("SQLite Queue: Enqueued message ID %lld for processing (queue depth: %d)",
              msg_id, ctx->pending_count);
 
     pthread_cond_signal(&ctx->queue_cond);
@@ -2284,7 +2284,7 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
                     if (sqlite_queue_enqueue_message(ctx, msg_id, content->valuestring) == 0) {
                         message_count++;
                         error_count = 0;
-                        LOG_INFO("SQLite Queue: Enqueued message ID %lld for processing (queue depth: %d)",
+                        LOG_DEBUG("SQLite Queue: Enqueued message ID %lld for processing (queue depth: %d)",
                                  msg_id, sqlite_queue_pending_count(ctx));
                         // Only log at debug level to reduce console noise
                         LOG_DEBUG("SQLite Queue: Received message ID %lld (queue depth: %d)",
@@ -2303,7 +2303,7 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
 
                 } else if (strcmp(msg_type, "TRIGGER_COMPACT") == 0) {
                     // Handle manual compaction trigger from client (direct processing in daemon mode)
-                    LOG_INFO("SQLite Queue: Received TRIGGER_COMPACT message ID %lld in daemon mode", msg_id);
+                    LOG_DEBUG("SQLite Queue: Received TRIGGER_COMPACT message ID %lld in daemon mode", msg_id);
                     printf("SQLite Queue: Processing compaction trigger request\n");
                     fflush(stdout);
 
@@ -2313,14 +2313,14 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
                     // Perform compaction directly (no need to enqueue - compaction is quick)
                     int compact_result = sqlite_queue_handle_compact_trigger(ctx, state);
                     if (compact_result == 0) {
-                        LOG_INFO("SQLite Queue: Daemon mode compaction trigger processed successfully");
+                        LOG_DEBUG("SQLite Queue: Daemon mode compaction trigger processed successfully");
                     } else {
                         LOG_ERROR("SQLite Queue: Daemon mode compaction trigger failed");
                     }
 
                 } else if (strcmp(msg_type, "INTERRUPT") == 0) {
                     // Handle interrupt request from client (direct processing in daemon mode)
-                    LOG_INFO("SQLite Queue: Received INTERRUPT message ID %lld in daemon mode", msg_id);
+                    LOG_DEBUG("SQLite Queue: Received INTERRUPT message ID %lld in daemon mode", msg_id);
                     printf("SQLite Queue: Interrupt requested by client\n");
                     fflush(stdout);
 
@@ -2330,7 +2330,7 @@ int sqlite_queue_daemon_mode(SQLiteQueueContext *ctx, struct ConversationState *
                     // Process the interrupt
                     int interrupt_result = sqlite_queue_interrupt(ctx);
                     if (interrupt_result == 0) {
-                        LOG_INFO("SQLite Queue: Daemon mode interrupt processed successfully");
+                        LOG_DEBUG("SQLite Queue: Daemon mode interrupt processed successfully");
                     } else {
                         LOG_ERROR("SQLite Queue: Daemon mode interrupt failed");
                     }

@@ -396,7 +396,7 @@ void process_response(ConversationState *state,
         int tool_count = current_response->tool_count;
         ToolCall *tool_calls_array = current_response->tools;
 
-        LOG_INFO("process_response: iteration=%d finish_reason=%s parsed_tools=%d raw_tool_calls=%d text_present=%d ui_streamed=%d",
+        LOG_DEBUG("process_response: iteration=%d finish_reason=%s parsed_tools=%d raw_tool_calls=%d text_present=%d ui_streamed=%d",
                  iteration,
                  finish_reason_str ? finish_reason_str : "(null)",
                  tool_count,
@@ -436,7 +436,7 @@ void process_response(ConversationState *state,
 
         if (tool_count > 0) {
 
-            LOG_INFO("Processing %d tool call(s) in iteration %d", tool_count, iteration);
+            LOG_DEBUG("Processing %d tool call(s) in iteration %d", tool_count, iteration);
 
             // Log details of each tool call
             for (int i = 0; i < tool_count; i++) {
@@ -831,7 +831,7 @@ void process_response(ConversationState *state,
             long tool_exec_ms = (tool_end.tv_sec - tool_start.tv_sec) * 1000 +
                                 (tool_end.tv_nsec - tool_start.tv_nsec) / 1000000;
             total_tool_exec_ms += tool_exec_ms;
-            LOG_INFO("All %d tool(s) processed in %ld ms", started_threads, tool_exec_ms);
+            LOG_DEBUG("All %d tool(s) processed in %ld ms", started_threads, tool_exec_ms);
 
             if (tracker_initialized) {
                 tool_tracker_destroy(&tracker);
@@ -1032,7 +1032,7 @@ void process_response(ConversationState *state,
     clock_gettime(CLOCK_MONOTONIC, &proc_end);
     long proc_ms = (proc_end.tv_sec - proc_start.tv_sec) * 1000 +
                    (proc_end.tv_nsec - proc_start.tv_nsec) / 1000000;
-    LOG_INFO("Response processing completed in %ld ms (iterations=%d, total_tool_ms=%ld)",
+    LOG_DEBUG("Response processing completed in %ld ms (iterations=%d, total_tool_ms=%ld)",
              proc_ms, iteration, total_tool_exec_ms);
 }
 
@@ -1081,7 +1081,7 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
     if (ctx->state && ctx->state->count > 0) {
         InternalMessage *last_msg = &ctx->state->messages[ctx->state->count - 1];
         if (last_msg->role != MSG_USER) {
-            LOG_INFO("Skipping instruction — conversation already settled "
+            LOG_DEBUG("Skipping instruction — conversation already settled "
                      "(last_role=%d, msg_count=%d, text='%.60s')",
                      last_msg->role,
                      ctx->state->count,
@@ -1125,7 +1125,7 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
      * ────────────────────────────────────────────────────────────── */
     {
         int is_active = goal_is_active(ctx->state);
-        LOG_INFO("Ralph loop guard: goal_is_active=%d (state->goal=%s, "
+        LOG_DEBUG("Ralph loop guard: goal_is_active=%d (state->goal=%s, "
                  "session=%s, msg_count=%d)",
                  is_active,
                  ctx->state->goal ? "present" : "NULL",
@@ -1138,13 +1138,13 @@ void ai_worker_handle_instruction(AIWorkerContext *ctx, const AIInstruction *ins
     while (goal_is_active(ctx->state)) {
         /* Yield if a real user message is queued */
         if (ctx->instruction_queue && ai_queue_depth(ctx->instruction_queue) > 0) {
-            LOG_INFO("Ralph loop: pending user instruction, yielding");
+            LOG_DEBUG("Ralph loop: pending user instruction, yielding");
             break;
         }
 
         /* Yield if user requested interrupt */
         if (ctx->state->interrupt_requested) {
-            LOG_INFO("Ralph loop: interrupted by user");
+            LOG_DEBUG("Ralph loop: interrupted by user");
             break;
         }
 

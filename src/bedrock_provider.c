@@ -800,7 +800,7 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
                 AWSCredentials *polled_creds = bedrock_load_credentials(profile, config->region);
 
                 if (polled_creds && polled_creds->access_key_id) {
-                    LOG_INFO("✓ Credentials loaded successfully (attempt %d)", attempt + 1);
+                    LOG_DEBUG("✓ Credentials loaded successfully (attempt %d)", attempt + 1);
                     new_creds = polled_creds;
                     break;
                 } else {
@@ -811,7 +811,7 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
 
             if (new_creds) {
                 config->creds = new_creds;
-                LOG_INFO("Credentials loaded, proceeding with API call");
+                LOG_DEBUG("Credentials loaded, proceeding with API call");
             } else {
                 result.error_message = strdup("Failed to load credentials after authentication");
                 result.is_retryable = 0;
@@ -871,7 +871,7 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
 
     // Success on first try
     if (result.response) {
-        LOG_INFO("API call succeeded on first attempt");
+        LOG_DEBUG("API call succeeded on first attempt");
         free(saved_access_key);
         result.request_json = converse_json;  // Store for logging (caller frees)
         *out = result; return;
@@ -899,7 +899,7 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
 
             if (externally_rotated) {
                 // === STEP 4a: External rotation detected - use new credentials ===
-                LOG_INFO("✓ Detected externally rotated credentials (another process updated tokens)");
+                LOG_DEBUG("✓ Detected externally rotated credentials (another process updated tokens)");
 
                 // Update config with externally rotated credentials
                 bedrock_creds_free(config->creds);
@@ -917,7 +917,7 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
                 bedrock_execute_request(config, converse_json, state, enable_streaming, &result);
 
                 if (result.response) {
-                    LOG_INFO("API call succeeded after using externally rotated credentials");
+                    LOG_DEBUG("API call succeeded after using externally rotated credentials");
                     free(saved_access_key);
                     result.request_json = converse_json;  // Store for logging (caller frees)
                     *out = result; return;
@@ -926,13 +926,13 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
                 LOG_WARN("API call still failed after external rotation: %s", result.error_message);
             } else {
                 // === STEP 4b: No external rotation - force auth token rotation ===
-                LOG_INFO("✗ Credentials unchanged, forcing authentication token rotation...");
+                LOG_DEBUG("✗ Credentials unchanged, forcing authentication token rotation...");
                 bedrock_creds_free(fresh_creds);
 
                 // Call rotation command (aws sso login)
                 LOG_DEBUG("Calling bedrock_authenticate to rotate credentials...");
                 if (bedrock_authenticate(profile) == 0) {
-                    LOG_INFO("Authentication successful, waiting for credential cache to update...");
+                    LOG_DEBUG("Authentication successful, waiting for credential cache to update...");
 
                     // Poll for new credentials (AWS SSO writes credentials asynchronously)
                     // Try up to 10 times with 200ms intervals (max 2 seconds total)
@@ -951,7 +951,7 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
                         if (polled_creds && polled_creds->access_key_id) {
                             // Check if credentials have changed
                             if (saved_access_key && strcmp(saved_access_key, polled_creds->access_key_id) != 0) {
-                                LOG_INFO("✓ Detected new credentials after rotation (attempt %d)", attempt + 1);
+                                LOG_DEBUG("✓ Detected new credentials after rotation (attempt %d)", attempt + 1);
                                 LOG_DEBUG("Old key: %.10s..., New key: %.10s...",
                                          saved_access_key, polled_creds->access_key_id);
                                 new_creds = polled_creds;
@@ -982,7 +982,7 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
                         bedrock_execute_request(config, converse_json, state, enable_streaming, &result);
 
                         if (result.response) {
-                            LOG_INFO("API call succeeded after credential rotation");
+                            LOG_DEBUG("API call succeeded after credential rotation");
                             free(saved_access_key);
                             result.request_json = converse_json;  // Store for logging (caller frees)
                             *out = result; return;
@@ -1006,7 +1006,7 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
             LOG_WARN("Auth error persists after rotation, attempting one final rotation...");
 
             if (bedrock_authenticate(profile) == 0) {
-                LOG_INFO("Final authentication successful, polling for updated credentials...");
+                LOG_DEBUG("Final authentication successful, polling for updated credentials...");
 
                 // Poll for new credentials with the same strategy
                 AWSCredentials *final_creds = NULL;
@@ -1026,7 +1026,7 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
                     if (polled_creds && polled_creds->access_key_id) {
                         // Check if credentials have changed
                         if (current_key && strcmp(current_key, polled_creds->access_key_id) != 0) {
-                            LOG_INFO("✓ Detected new credentials on final rotation (attempt %d)", attempt + 1);
+                            LOG_DEBUG("✓ Detected new credentials on final rotation (attempt %d)", attempt + 1);
                             LOG_DEBUG("Old key: %.10s..., New key: %.10s...",
                                      current_key, polled_creds->access_key_id);
                             final_creds = polled_creds;
@@ -1056,7 +1056,7 @@ static void bedrock_call_api(Provider *self, ConversationState *state, ApiCallRe
                     bedrock_execute_request(config, converse_json, state, enable_streaming, &result);
 
                     if (result.response) {
-                        LOG_INFO("API call succeeded on final retry");
+                        LOG_DEBUG("API call succeeded on final retry");
                     } else {
                         LOG_ERROR("API call failed even after final credential rotation");
                     }
