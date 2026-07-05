@@ -38,7 +38,7 @@ sudo apt-get install libcurl4-openssl-dev libcjson-dev libbsd-dev libncurses-dev
 ### Build
 
 ```bash
-git clone --branch v0.35.12 https://github.com/nmnduy/klawed.git
+git clone --branch v0.35.13 https://github.com/nmnduy/klawed.git
 cd klawed
 make
 ```
