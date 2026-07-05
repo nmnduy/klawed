@@ -1793,8 +1793,11 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
                     wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
                 }
             }
+            /* BORDER style: use dim color for the border so it recedes
+             * rather than dominating — the border is a structural guide,
+             * not a visual element. The text carries the weight. */
             const char *border_str = (tui->response_style == RESPONSE_STYLE_BORDER) ? "│ " : NULL;
-            int bp = (tui->response_style == RESPONSE_STYLE_BORDER) ? mapped_pair : 0;
+            int bp = (tui->response_style == RESPONSE_STYLE_BORDER) ? NCURSES_PAIR_TOOL_DIM : 0;
             render_markdown_document(tui, text, text_pair, bp, border_str);
             goto skip_newline;
         } else if (tui->response_style == RESPONSE_STYLE_BG) {
