@@ -98,6 +98,11 @@ void tui_reload_colors(void) {
         RGB inline_code_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.assistant_rgb, 6);
         // H1 accent: use the theme's header/assistant color for the accent line
         RGB h1_accent_rgb = g_theme.assistant_rgb;
+        // Status bar: background darkened 8% (shadow line between earth and sky)
+        RGB status_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.foreground_rgb, 0);
+        status_bg_rgb.r = (status_bg_rgb.r * 92) / 100;
+        status_bg_rgb.g = (status_bg_rgb.g * 92) / 100;
+        status_bg_rgb.b = (status_bg_rgb.b * 92) / 100;
 
         // Define custom colors (colors 16-21 are safe to redefine)
         if (can_change_color()) {
@@ -193,6 +198,12 @@ void tui_reload_colors(void) {
                 rgb_to_ncurses(h1_accent_rgb.g),
                 rgb_to_ncurses(h1_accent_rgb.b));
 
+            // Status bar shadow background (slightly darker than main bg)
+            init_color(32,
+                rgb_to_ncurses(status_bg_rgb.r),
+                rgb_to_ncurses(status_bg_rgb.g),
+                rgb_to_ncurses(status_bg_rgb.b));
+
             // Initialize color pairs with custom colors
             init_pair(NCURSES_PAIR_FOREGROUND, 16, default_bg);
             init_pair(NCURSES_PAIR_USER, 17, default_bg);
@@ -220,6 +231,7 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_CODE_BLOCK, 16, 29);                  // Code text on recessed background
             init_pair(NCURSES_PAIR_INLINE_CODE, 16, 30);                 // Inline code on subtle tint
             init_pair(NCURSES_PAIR_H1_ACCENT, 31, default_bg);           // H1 accent color for text + rule
+            init_pair(NCURSES_PAIR_STATUS_BG, 16, 32);                   // Status bar: foreground on shadow background
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -238,6 +250,7 @@ void tui_reload_colors(void) {
             int code_block_bg_idx = rgb_to_256_index(code_block_bg_rgb);
             int inline_code_bg_idx = rgb_to_256_index(inline_code_bg_rgb);
             int h1_accent_idx = rgb_to_256_index(h1_accent_rgb);
+            int status_bg_idx = rgb_to_256_index(status_bg_rgb);
 
             init_pair(NCURSES_PAIR_FOREGROUND, (short)fg_idx, default_bg);
             init_pair(NCURSES_PAIR_USER, (short)user_idx, default_bg);
@@ -264,6 +277,7 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_CODE_BLOCK, (short)fg_idx, (short)code_block_bg_idx);
             init_pair(NCURSES_PAIR_INLINE_CODE, (short)fg_idx, (short)inline_code_bg_idx);
             init_pair(NCURSES_PAIR_H1_ACCENT, (short)h1_accent_idx, default_bg);
+            init_pair(NCURSES_PAIR_STATUS_BG, (short)fg_idx, (short)status_bg_idx);
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -295,6 +309,7 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_CODE_BLOCK, COLOR_WHITE, COLOR_BLACK);  // Fallback: code on black
             init_pair(NCURSES_PAIR_INLINE_CODE, COLOR_WHITE, COLOR_BLACK);  // Fallback: inline code on black
             init_pair(NCURSES_PAIR_H1_ACCENT, COLOR_CYAN, default_bg);  // Fallback: cyan for H1 accent
+            init_pair(NCURSES_PAIR_STATUS_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -325,6 +340,7 @@ void tui_reload_colors(void) {
         init_pair(NCURSES_PAIR_CODE_BLOCK, COLOR_WHITE, COLOR_BLACK);  // Fallback: code on black
         init_pair(NCURSES_PAIR_INLINE_CODE, COLOR_WHITE, COLOR_BLACK);  // Fallback: inline code on black
         init_pair(NCURSES_PAIR_H1_ACCENT, COLOR_CYAN, default_bg);  // Fallback: cyan for H1 accent
+        init_pair(NCURSES_PAIR_STATUS_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
     }
 }
 

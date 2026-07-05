@@ -562,6 +562,12 @@ void render_status_window(TUIState *tui) {
 
     werase(tui->wm.status_win);
 
+    /* Apply shadow line background — the status bar recedes rather than
+     * dividing. A subtle darker shade creates a horizon, not a border. */
+    if (has_colors()) {
+        wbkgd(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BG));
+    }
+
     // Prepare status message components (agent status - now on LEFT)
     // Note: We render spinner and text separately to use ncurses colors properly.
     // ANSI escape codes don't work with ncurses - they get displayed literally.
@@ -722,9 +728,15 @@ void render_status_window(TUIState *tui) {
     }
 
     // Show token count when non-zero, but NOT in PACMAN mode (pacman bar replaces it)
-    // Format: "17715 tok" (prompt tokens only — output tokens are usually negligible)
+    // Format: abbreviated with k/M suffixes for compact display
     if (prompt_tokens > 0 && tui->thinking_style != THINKING_STYLE_PACMAN) {
-        snprintf(token_str, sizeof(token_str), " %ld tok", (long)prompt_tokens);
+        if (prompt_tokens >= 1000000) {
+            snprintf(token_str, sizeof(token_str), " %.1fM tok", (double)prompt_tokens / 1000000.0);
+        } else if (prompt_tokens >= 10000) {
+            snprintf(token_str, sizeof(token_str), " %.1fk tok", (double)prompt_tokens / 1000.0);
+        } else {
+            snprintf(token_str, sizeof(token_str), " %ld tok", (long)prompt_tokens);
+        }
         token_str_len = (int)strlen(token_str);
         token_display_width = utf8_display_width(token_str);
         LOG_FINE("[TUI] Rendering token display: %s (mode=%d, width=%d)", token_str, tui->mode, width);
