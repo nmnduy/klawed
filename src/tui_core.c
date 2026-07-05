@@ -919,31 +919,104 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     const char *vltrn_mode = getenv("VLTRN_MODE");
     int is_vltrn = (vltrn_mode && strcmp(vltrn_mode, "1") == 0);
 
-    // Format banner lines with ASCII art cat mascot
-    char line1[256];
-    char line2[256];
-    char line3[256];
-    char line4[256];
-    char tip_line[512];
+    /* Get pad width for centering */
+    int pad_width = 80;
+    if (tui->wm.conv_pad) {
+        int ph = 0, pw = 0;
+        getmaxyx(tui->wm.conv_pad, ph, pw);
+        if (pw > 0) pad_width = pw;
+    }
 
-    // Create content lines without box borders
     const char *name = is_vltrn ? "vltrn" : "klawed";
-    snprintf(line1, sizeof(line1), "  /\\_/\\   %s v%s", name, version ? version : "?");
-    snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
-    snprintf(line3, sizeof(line3), "  > ^ <   %s", working_dir);
-    snprintf(line4, sizeof(line4), "          %s", session_id ? session_id : "(no session)");
 
-    // Add padding before mascot
+    /* Build the banner as a centered composition:
+     *
+     *       /\_/\
+     *      ( o.o )    klawed
+     *       > ^ <     ───────
+     *                 v0.35.11 · model
+     *                 ~/git/klawed
+     *
+     *                 ── session ──
+     *
+     * The name in accent color, the rule in dim, metadata faint.
+     */
+
+    /* Center the name + rule block (approx 20 chars wide) */
+    int name_block_width = 20;
+    int center_offset = (pad_width - name_block_width) / 2;
+    if (center_offset < 2) center_offset = 2;
+
+    char indent[64];
+    snprintf(indent, sizeof(indent), "%*s", center_offset, "");
+
+    /* Name line: accent color, bold */
+    char name_line[256];
+    snprintf(name_line, sizeof(name_line), "%s**%s v%s**", indent, name, version ? version : "?");
+
+    /* Rule line: thin accent rule beneath the name */
+    char rule_line[256];
+    int rule_len = (int)strlen(name) + (version ? (int)strlen(version) : 0) + 4; /* " v" + 2 padding */
+    if (rule_len > 40) rule_len = 40;
+    if (rule_len < 5) rule_len = 5;
+    char rule_str[64];
+    size_t ri = 0;
+    for (int i = 0; i < rule_len && ri < sizeof(rule_str) - 4; i++) {
+        rule_str[ri++] = '\xe2';
+        rule_str[ri++] = '\x80';
+        rule_str[ri++] = '\x94';  /* ─ U+2500 */
+    }
+    rule_str[ri] = '\0';
+    snprintf(rule_line, sizeof(rule_line), "%s%s", indent, rule_str);
+
+    /* Metadata lines: model and working directory in dim */
+    char model_line[256];
+    snprintf(model_line, sizeof(model_line), "%s%s", indent, model);
+    char dir_line[256];
+    snprintf(dir_line, sizeof(dir_line), "%s%s", indent, working_dir);
+
+    /* Session threshold line */
+    char session_line[256];
+    if (session_id && session_id[0]) {
+        snprintf(session_line, sizeof(session_line), "%s── %s ──", indent, session_id);
+    } else {
+        snprintf(session_line, sizeof(session_line), "%s── no session ──", indent);
+    }
+
+    /* Cat mascot — shifted left of the name block */
+    char cat_indent[64];
+    int cat_offset = center_offset - 12;
+    if (cat_offset < 0) cat_offset = 0;
+    snprintf(cat_indent, sizeof(cat_indent), "%*s", cat_offset, "");
+
+    char cat_line1[256], cat_line2[256], cat_line3[256];
+    snprintf(cat_line1, sizeof(cat_line1), "%s/\\_/\\", cat_indent);
+    snprintf(cat_line2, sizeof(cat_line2), "%s( o.o )", cat_indent);
+    snprintf(cat_line3, sizeof(cat_line3), "%s > ^ <", cat_indent);
+
+    /* Add padding before banner */
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
 
-    // Add banner lines to conversation window (without box)
-    // Skip cat mascot in VLTRN mode
     if (!is_vltrn) {
-        tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, line4, COLOR_PAIR_ASSISTANT);
+        /* Cat mascot in assistant color */
+        tui_add_conversation_line(tui, NULL, cat_line1, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, cat_line2, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, cat_line3, COLOR_PAIR_ASSISTANT);
     }
+
+    /* Name in accent color (bold via markdown) */
+    tui_add_conversation_line(tui, NULL, name_line, COLOR_PAIR_ASSISTANT);
+    /* Thin rule in dim */
+    tui_add_conversation_line(tui, NULL, rule_line, COLOR_PAIR_TOOL_DIM);
+    /* Metadata in dim */
+    tui_add_conversation_line(tui, NULL, model_line, COLOR_PAIR_TOOL_DIM);
+    tui_add_conversation_line(tui, NULL, dir_line, COLOR_PAIR_TOOL_DIM);
+
+    /* Blank line before session threshold */
+    tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
+    /* Session threshold in dim */
+    tui_add_conversation_line(tui, NULL, session_line, COLOR_PAIR_TOOL_DIM);
+
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);  // Blank line
 
     // Tips array: randomly select one to display at startup
@@ -951,25 +1024,19 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         "Esc/Ctrl+[ to enter Scroll mode (vim-style); press 'i' to insert.",
         "In Scroll mode, Scroll: j/k (line), Ctrl+D/U (half page), gg/G (top/bottom).",
         "In Scroll mode, use ( and ) to jump between text blocks (paragraphs).",
-        /* "Use PageUp/PageDown or Arrow keys to scroll.", */
-        /* "Type /help for commands (e.g., /clear, /exit, /add-dir).", */
         "Press Shift+Tab to toggle Plan mode (read-only tools only).",
         "Press Ctrl+C to cancel a running API/tool action.",
         "In Normal mode, :!cmd runs a shell command in the current dir (like Vim).",
         "In Normal mode, :re !cmd puts the command output into the input box.",
         "In Normal mode, :git opens vim-fugitive (requires vim-fugitive plugin).",
-        /* "Use /add-dir to attach a directory as context.", */
         "Press Ctrl+D to exit quickly.",
-        /* "Use /voice to record and transcribe audio (requires PortAudio).", */
         "Set KLAWED_THEME to change colors. Try light themes: atom-one-light, pencil-light, solarized-light, tomorrow.",
         "Set KLAWED_LOG_LEVEL=DEBUG for verbose logs.",
         "API history stored in ./.klawed/api_calls.db (configurable via KLAWED_DB_PATH).",
         "Insert mode supports readline keys: Ctrl+A, Ctrl+E, Alt+B, Alt+F.",
-        /* "Switch models via OPENAI_MODEL or ANTHROPIC_MODEL environment variables.", */
-        /* "Enable Bedrock with KLAWED_USE_BEDROCK=1 and ANTHROPIC_MODEL set.", */
         "Interrupt long tool runs any time with Ctrl+C.",
         "Press Ctrl+F to open file search popup (fuzzy find files, supports Alt+B/F/D/⌫).",
-        "Press Ctrl+R to open history search popup (fuzzy find previous commands).",        /* "Disable prompt caching with DISABLE_PROMPT_CACHING=1 if needed.", */
+        "Press Ctrl+R to open history search popup (fuzzy find previous commands).",
         "MCP is disabled by default; enable with KLAWED_MCP_ENABLED=1 and configure servers in ~/.klawed.",
         "Use /clear to clear conversation; /quit or /exit to leave.",
         "Use :help to see all available commands.",
@@ -981,6 +1048,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     // Compute a simple per-process pseudo-random index without relying on global srand
     unsigned int seed = (unsigned int)(time(NULL) ^ getpid());
     size_t tip_index = tips_count ? (seed % tips_count) : 0;
+    char tip_line[512];
     snprintf(tip_line, sizeof(tip_line), "Tip: %s", tips[tip_index]);
 
     tui_add_conversation_line(tui, NULL, tip_line, COLOR_PAIR_STATUS);
