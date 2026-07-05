@@ -99,12 +99,12 @@ void tui_reload_colors(void) {
         // H1 accent: use the theme's header/assistant color for the accent line
         RGB h1_accent_rgb = g_theme.assistant_rgb;
         // Status bar: background darkened 8% (shadow line between earth and sky)
-        RGB status_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.foreground_rgb, 0);
+        RGB status_bg_rgb = g_theme.background_rgb;
         status_bg_rgb.r = (status_bg_rgb.r * 92) / 100;
         status_bg_rgb.g = (status_bg_rgb.g * 92) / 100;
         status_bg_rgb.b = (status_bg_rgb.b * 92) / 100;
 
-        // Define custom colors (colors 16-21 are safe to redefine)
+        // Define custom colors (colors 16-32 are safe to redefine)
         if (can_change_color()) {
             // Foreground
             init_color(16,
@@ -979,8 +979,8 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     size_t ri = 0;
     for (int i = 0; i < rule_len && ri < sizeof(rule_str) - 4; i++) {
         rule_str[ri++] = '\xe2';
-        rule_str[ri++] = '\x80';
-        rule_str[ri++] = '\x94';  /* ─ U+2500 */
+        rule_str[ri++] = '\x94';
+        rule_str[ri++] = '\x80';  /* ─ U+2500 */
     }
     rule_str[ri] = '\0';
     snprintf(rule_line, sizeof(rule_line), "%s%s", indent, rule_str);
