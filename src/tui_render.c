@@ -362,35 +362,41 @@ static void select_context_spinner_variant(const char *message) {
     }
 
     /* Error/retry: stutter bounce — frame holds, then jumps */
-    if (strstr(message, "retry") || strstr(message, "Retry") ||
-        strstr(message, "error") || strstr(message, "Error") ||
-        strstr(message, "failed") || strstr(message, "Failed")) {
+    if (portable_strcasestr(message, "retry") ||
+        portable_strcasestr(message, "error") ||
+        portable_strcasestr(message, "failed")) {
         GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[7]; /* BOUNCE */
         return;
     }
 
     /* Tool executing: quick ripple — active, flowing */
-    if (strstr(message, "Executing") || strstr(message, "Running") ||
-        strstr(message, "Reading") || strstr(message, "Writing") ||
-        strstr(message, "Searching") || strstr(message, "Editing") ||
-        strstr(message, "tool") || strstr(message, "Tool") ||
-        strstr(message, "Bash") || strstr(message, "command")) {
+    if (portable_strcasestr(message, "Executing") ||
+        portable_strcasestr(message, "Running") ||
+        portable_strcasestr(message, "Reading") ||
+        portable_strcasestr(message, "Writing") ||
+        portable_strcasestr(message, "Searching") ||
+        portable_strcasestr(message, "Editing") ||
+        portable_strcasestr(message, "tool") ||
+        portable_strcasestr(message, "Bash") ||
+        portable_strcasestr(message, "command")) {
         GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[6]; /* RIPPLE */
         return;
     }
 
     /* Long reasoning: gentle wave — sustained, patient */
-    if (strstr(message, "reasoning") || strstr(message, "Reasoning") ||
-        strstr(message, "analyzing") || strstr(message, "Analyzing") ||
-        strstr(message, "compacting") || strstr(message, "Compacting") ||
-        strstr(message, "Processing")) {
+    if (portable_strcasestr(message, "reasoning") ||
+        portable_strcasestr(message, "analyzing") ||
+        portable_strcasestr(message, "compacting") ||
+        portable_strcasestr(message, "Processing")) {
         GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[5]; /* WAVE */
         return;
     }
 
     /* Initial API call / thinking: slow pulse — gathering, centering */
-    if (strstr(message, "Calling") || strstr(message, "Thinking") ||
-        strstr(message, "Generating") || strstr(message, "Waiting")) {
+    if (portable_strcasestr(message, "Calling") ||
+        portable_strcasestr(message, "Thinking") ||
+        portable_strcasestr(message, "Generating") ||
+        portable_strcasestr(message, "Waiting")) {
         GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[9]; /* PULSE */
         return;
     }
@@ -1313,13 +1319,10 @@ static void render_md_code_segment(TUIState *tui, const char *segment, size_t le
     LinePrinter lp;
     lp_init(&lp, pad, border_str, border_pair, code_pair, pad_width);
 
-    /* Use the code block background pair for the border too */
+    /* Use the code block background pair for the border too.
+     * lp_border() activates COLOR_PAIR(code_pair) and leaves it on
+     * for content rendering — no redundant wattron needed. */
     lp_border(&lp);
-
-    /* Switch to code block color pair for content */
-    if (has_colors()) {
-        wattron(pad, COLOR_PAIR(code_pair));
-    }
 
     if (search_active) {
         char *seg_buf = malloc(len + 1);
@@ -1335,11 +1338,12 @@ static void render_md_code_segment(TUIState *tui, const char *segment, size_t le
         waddnstr(pad, segment, (int)len);
     }
 
+    /* Balance lp_border's wattron(COLOR_PAIR(code_pair)) so the
+     * ncurses attribute stack stays clean — same pattern as
+     * render_md_segment. */
     if (has_colors()) {
         wattroff(pad, COLOR_PAIR(code_pair));
     }
-
-    /* Fill the rest of the line with the code block background */
     if (add_newline) {
         lp_newline(&lp);
     }
@@ -1426,8 +1430,8 @@ static void render_md_header_segment(TUIState *tui, const char *segment, size_t 
         if (has_colors()) {
             wattron(pad, COLOR_PAIR(NCURSES_PAIR_H1_ACCENT));
         }
-        /* Draw thin horizontal rule: ─ (U+2500) = E2 80 94 */
-        const char hrule_char[] = "\xe2\x80\x94";
+        /* Draw thin horizontal rule: ─ (U+2500) = E2 94 80 */
+        const char hrule_char[] = "\xe2\x94\x80";
         for (int i = 0; i < rule_width; i++) {
             waddstr(pad, hrule_char);
         }
@@ -1933,7 +1937,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
                 if (has_colors()) {
                     wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
                 }
-                const char hrule_char[] = "\xe2\x80\x94";
+                const char hrule_char[] = "\xe2\x94\x80";  /* ─ U+2500 */
                 for (int i = 0; i < rule_width; i++) {
                     waddstr(tui->wm.conv_pad, hrule_char);
                 }
