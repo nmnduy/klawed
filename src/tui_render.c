@@ -1864,6 +1864,29 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         // Render error body text with error-tinted background fill
         if (text && text[0] != '\0') {
             render_markdown_document(tui, text, NCURSES_PAIR_ERROR_BG, 0, NULL);
+
+            /* Closing rule: a thin dim line after the error that says
+             * "this happened, and now we continue." It closes the wound. */
+            {
+                int pad_width = 0, pad_height = 0;
+                getmaxyx(tui->wm.conv_pad, pad_height, pad_width);
+                (void)pad_height;
+                int rule_width = pad_width;
+                if (rule_width > 40) rule_width = 40;
+                if (rule_width < 5) rule_width = 5;
+
+                if (has_colors()) {
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
+                }
+                const char hrule_char[] = "\xe2\x80\x94";
+                for (int i = 0; i < rule_width; i++) {
+                    waddstr(tui->wm.conv_pad, hrule_char);
+                }
+                if (has_colors()) {
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
+                }
+                (void)tui_safe_waddch(tui->wm.conv_pad, '\n');
+            }
             goto skip_newline;
         }
     } else {
