@@ -92,6 +92,12 @@ void tui_reload_colors(void) {
         RGB assistant_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.assistant_rgb, 3);
         RGB error_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.error_rgb, 4);
         RGB tool_dim_rgb = blend_rgb(g_theme.foreground_rgb, g_theme.background_rgb, 50);
+        // Code block: foreground dimmed 15% toward background (recessed "set type" feel)
+        RGB code_block_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.foreground_rgb, 8);
+        // Inline code: subtle cool wash from assistant color
+        RGB inline_code_bg_rgb = blend_rgb(g_theme.background_rgb, g_theme.assistant_rgb, 6);
+        // H1 accent: use the theme's header/assistant color for the accent line
+        RGB h1_accent_rgb = g_theme.assistant_rgb;
 
         // Define custom colors (colors 16-21 are safe to redefine)
         if (can_change_color()) {
@@ -169,6 +175,24 @@ void tui_reload_colors(void) {
                 rgb_to_ncurses(error_bg_rgb.g),
                 rgb_to_ncurses(error_bg_rgb.b));
 
+            // Code block recessed background
+            init_color(29,
+                rgb_to_ncurses(code_block_bg_rgb.r),
+                rgb_to_ncurses(code_block_bg_rgb.g),
+                rgb_to_ncurses(code_block_bg_rgb.b));
+
+            // Inline code subtle tint background
+            init_color(30,
+                rgb_to_ncurses(inline_code_bg_rgb.r),
+                rgb_to_ncurses(inline_code_bg_rgb.g),
+                rgb_to_ncurses(inline_code_bg_rgb.b));
+
+            // H1 accent color (header/assistant color)
+            init_color(31,
+                rgb_to_ncurses(h1_accent_rgb.r),
+                rgb_to_ncurses(h1_accent_rgb.g),
+                rgb_to_ncurses(h1_accent_rgb.b));
+
             // Initialize color pairs with custom colors
             init_pair(NCURSES_PAIR_FOREGROUND, 16, default_bg);
             init_pair(NCURSES_PAIR_USER, 17, default_bg);
@@ -193,6 +217,9 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_DIFF_CONTEXT, 26, default_bg);         // Dimmed gray for diff context (same as tool dim)
             init_pair(NCURSES_PAIR_GOAL, 19, default_bg);                 // Goal tag uses status/tool color
             init_pair(NCURSES_PAIR_ERROR_BG, 20, 28);                    // Error text on error-tinted background
+            init_pair(NCURSES_PAIR_CODE_BLOCK, 16, 29);                  // Code text on recessed background
+            init_pair(NCURSES_PAIR_INLINE_CODE, 16, 30);                 // Inline code on subtle tint
+            init_pair(NCURSES_PAIR_H1_ACCENT, 31, default_bg);           // H1 accent color for text + rule
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -208,6 +235,9 @@ void tui_reload_colors(void) {
             int assistant_bg_idx = rgb_to_256_index(assistant_bg_rgb);
             int error_bg_idx = rgb_to_256_index(error_bg_rgb);
             int tool_dim_idx = rgb_to_256_index(tool_dim_rgb);
+            int code_block_bg_idx = rgb_to_256_index(code_block_bg_rgb);
+            int inline_code_bg_idx = rgb_to_256_index(inline_code_bg_rgb);
+            int h1_accent_idx = rgb_to_256_index(h1_accent_rgb);
 
             init_pair(NCURSES_PAIR_FOREGROUND, (short)fg_idx, default_bg);
             init_pair(NCURSES_PAIR_USER, (short)user_idx, default_bg);
@@ -231,6 +261,9 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_DIFF_CONTEXT, (short)tool_dim_idx, default_bg);
             init_pair(NCURSES_PAIR_GOAL, (short)status_idx, default_bg);  // Goal tag uses status/tool color
             init_pair(NCURSES_PAIR_ERROR_BG, (short)error_idx, (short)error_bg_idx);  // Error text on error-tinted bg
+            init_pair(NCURSES_PAIR_CODE_BLOCK, (short)fg_idx, (short)code_block_bg_idx);
+            init_pair(NCURSES_PAIR_INLINE_CODE, (short)fg_idx, (short)inline_code_bg_idx);
+            init_pair(NCURSES_PAIR_H1_ACCENT, (short)h1_accent_idx, default_bg);
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -259,6 +292,9 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_DIFF_CONTEXT, COLOR_WHITE, default_bg);  // Fallback: foreground color for diff context
             init_pair(NCURSES_PAIR_GOAL, COLOR_YELLOW, default_bg);  // Goal tag uses status/tool color
             init_pair(NCURSES_PAIR_ERROR_BG, COLOR_RED, COLOR_BLACK);  // Fallback: red on black for error tint
+            init_pair(NCURSES_PAIR_CODE_BLOCK, COLOR_WHITE, COLOR_BLACK);  // Fallback: code on black
+            init_pair(NCURSES_PAIR_INLINE_CODE, COLOR_WHITE, COLOR_BLACK);  // Fallback: inline code on black
+            init_pair(NCURSES_PAIR_H1_ACCENT, COLOR_CYAN, default_bg);  // Fallback: cyan for H1 accent
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -286,6 +322,9 @@ void tui_reload_colors(void) {
         init_pair(NCURSES_PAIR_DIFF_CONTEXT, COLOR_WHITE, default_bg);  // Fallback: foreground color for diff context
         init_pair(NCURSES_PAIR_GOAL, COLOR_YELLOW, default_bg);  // Goal tag uses status/tool color
         init_pair(NCURSES_PAIR_ERROR_BG, COLOR_RED, COLOR_BLACK);  // Fallback: red on black for error tint
+        init_pair(NCURSES_PAIR_CODE_BLOCK, COLOR_WHITE, COLOR_BLACK);  // Fallback: code on black
+        init_pair(NCURSES_PAIR_INLINE_CODE, COLOR_WHITE, COLOR_BLACK);  // Fallback: inline code on black
+        init_pair(NCURSES_PAIR_H1_ACCENT, COLOR_CYAN, default_bg);  // Fallback: cyan for H1 accent
     }
 }
 

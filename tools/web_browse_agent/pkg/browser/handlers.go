@@ -531,8 +531,8 @@ func (d *Driver) handleListFrames(req *ipc.Request) (*ipc.Response, error) {
 	var frameURLs []map[string]interface{}
 	for _, f := range frames {
 		frameURLs = append(frameURLs, map[string]interface{}{
-			"name": f.Name,
-			"url":  f.URL,
+			"name": f.Name(),
+			"url":  f.URL(),
 		})
 	}
 

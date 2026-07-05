@@ -164,7 +164,8 @@ void lp_init(LinePrinter *lp, WINDOW *pad, const char *border_str,
     // maintainable than runtime introspection via pair_content() — the
     // intent is immediately clear.
     if (text_pair == NCURSES_PAIR_ASSISTANT_BG ||
-        text_pair == NCURSES_PAIR_ERROR_BG) {
+        text_pair == NCURSES_PAIR_ERROR_BG ||
+        text_pair == NCURSES_PAIR_CODE_BLOCK) {
         lp->fill_bg_pair = text_pair;
     }
 

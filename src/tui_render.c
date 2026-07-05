@@ -1230,20 +1230,29 @@ static void render_md_segment(TUIState *tui, const char *segment, size_t len,
     }
 }
 
-static void render_md_header_segment(TUIState *tui, const char *segment, size_t len,
-                                     int border_pair, const char *border_str,
-                                     bool add_newline, int text_pair, int search_active) {
+/*
+ * Render a code block line on a recessed background.
+ * Uses NCURSES_PAIR_CODE_BLOCK for the "set type" feel — code that
+ * belongs in the document rather than being pasted in.
+ */
+static void render_md_code_segment(TUIState *tui, const char *segment, size_t len,
+                                   int border_pair, const char *border_str,
+                                   bool add_newline, int code_pair, int search_active) {
     WINDOW *pad = tui->wm.conv_pad;
     int pad_width = 0, pad_height = 0;
     getmaxyx(pad, pad_height, pad_width);
     (void)pad_height;
 
     LinePrinter lp;
-    lp_init(&lp, pad, border_str, border_pair, text_pair, pad_width);
+    lp_init(&lp, pad, border_str, border_pair, code_pair, pad_width);
+
+    /* Use the code block background pair for the border too */
     lp_border(&lp);
 
-    // lp_border already enabled COLOR_PAIR(text_pair) — no redundant wattron needed.
-    wattron(pad, A_BOLD);
+    /* Switch to code block color pair for content */
+    if (has_colors()) {
+        wattron(pad, COLOR_PAIR(code_pair));
+    }
 
     if (search_active) {
         char *seg_buf = malloc(len + 1);
@@ -1256,10 +1265,111 @@ static void render_md_header_segment(TUIState *tui, const char *segment, size_t 
             waddnstr(pad, segment, (int)len);
         }
     } else {
-        markdown_render_inline(tui, segment, len, text_pair);
+        waddnstr(pad, segment, (int)len);
     }
 
-    wattroff(pad, A_BOLD);
+    if (has_colors()) {
+        wattroff(pad, COLOR_PAIR(code_pair));
+    }
+
+    /* Fill the rest of the line with the code block background */
+    if (add_newline) {
+        lp_newline(&lp);
+    }
+}
+
+static void render_md_header_segment(TUIState *tui, const char *segment, size_t len,
+                                     int border_pair, const char *border_str,
+                                     bool add_newline, int text_pair, int search_active,
+                                     int header_level) {
+    WINDOW *pad = tui->wm.conv_pad;
+    int pad_width = 0, pad_height = 0;
+    getmaxyx(pad, pad_height, pad_width);
+    (void)pad_height;
+
+    LinePrinter lp;
+    lp_init(&lp, pad, border_str, border_pair, text_pair, pad_width);
+    lp_border(&lp);
+
+    /* Tonal header hierarchy:
+     *   H1: accent color + bold + thin rule beneath
+     *   H2: accent color, no bold
+     *   H3: foreground + bold
+     *   H4-6: foreground + dim (recedes)
+     */
+    int header_pair = text_pair;
+    chtype header_attr = A_BOLD;
+
+    if (has_colors()) {
+        if (header_level == 1 || header_level == 2) {
+            header_pair = NCURSES_PAIR_H1_ACCENT;
+        }
+    }
+    if (header_level == 2) {
+        header_attr = 0;       /* no bold — accent color alone carries the weight */
+    } else if (header_level >= 4) {
+        header_attr = A_DIM;   /* recedes like a stagehand */
+        header_pair = text_pair;
+    } else if (header_level == 3) {
+        header_attr = A_BOLD;
+        header_pair = text_pair;
+    }
+
+    /* Apply color + attribute for header text */
+    if (header_pair > 0 && has_colors()) {
+        wattron(pad, COLOR_PAIR(header_pair));
+    }
+    if (header_attr) {
+        wattron(pad, header_attr);
+    }
+
+    if (search_active) {
+        char *seg_buf = malloc(len + 1);
+        if (seg_buf) {
+            memcpy(seg_buf, segment, len);
+            seg_buf[len] = '\0';
+            render_text_with_search_highlight(pad, seg_buf, 0, tui->last_search_pattern, 0);
+            free(seg_buf);
+        } else {
+            waddnstr(pad, segment, (int)len);
+        }
+    } else {
+        markdown_render_inline(tui, segment, len, header_pair);
+    }
+
+    if (header_attr) {
+        wattroff(pad, header_attr);
+    }
+    if (header_pair > 0 && has_colors()) {
+        wattroff(pad, COLOR_PAIR(header_pair));
+    }
+
+    /* H1: draw a thin accent-colored rule beneath the header text */
+    if (header_level == 1 && add_newline) {
+        lp_newline(&lp);
+
+        /* Draw the rule on the next line, using the same border + accent color */
+        int border_display_width = utf8_display_width(border_str);
+        int rule_width = pad_width - border_display_width;
+        if (rule_width < 1) rule_width = 1;
+        /* Cap rule width to keep it elegant — a threshold, not a full line */
+        if (rule_width > 40) rule_width = 40;
+
+        lp_border(&lp);
+        if (has_colors()) {
+            wattron(pad, COLOR_PAIR(NCURSES_PAIR_H1_ACCENT));
+        }
+        /* Draw thin horizontal rule: ─ (U+2500) = E2 80 94 */
+        const char hrule_char[] = "\xe2\x80\x94";
+        for (int i = 0; i < rule_width; i++) {
+            waddstr(pad, hrule_char);
+        }
+        if (has_colors()) {
+            wattroff(pad, COLOR_PAIR(NCURSES_PAIR_H1_ACCENT));
+        }
+    }
+
+    /* Balance the lp_border wattron so the ncurses attribute stack stays clean */
     if (has_colors()) {
         wattroff(pad, COLOR_PAIR(text_pair));
     }
@@ -1364,7 +1474,12 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                     table_buf_count = 0;
                 }
                 in_code_block = !in_code_block;
-                is_code_line = 1;
+                /* Skip the fence line itself — code feels like set type,
+                 * not like something pasted in. The fence is a structural
+                 * marker, not visual content. */
+                if (*p == '\n') p++;
+                line_start = p;
+                continue;
             } else if (in_code_block) {
                 is_code_line = 1;
             }
@@ -1410,6 +1525,10 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
             }
 
             if (is_code_line) {
+                /* Render code on a recessed background — "set type" feel.
+                 * The fence lines are already skipped; code content gets
+                 * the code block color pair with dim text. */
+                int code_pair = NCURSES_PAIR_CODE_BLOCK;
                 int line_display_width = 0;
                 char *tmp = malloc(line_len + 1);
                 if (tmp) {
@@ -1422,16 +1541,16 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                 }
 
                 if (line_display_width <= content_width) {
-                    render_md_segment(tui, line_start, line_len, border_pair, border_str,
-                                      (*p == '\n'), 1, text_pair, search_active);
+                    render_md_code_segment(tui, line_start, line_len, border_pair, border_str,
+                                           (*p == '\n'), code_pair, search_active);
                 } else {
                     const char *chunk_start = line_start;
                     size_t remaining = line_len;
 
                     while (remaining > 0) {
                         size_t chunk_bytes = find_wrap_point_word(chunk_start, remaining, content_width);
-                        render_md_segment(tui, chunk_start, chunk_bytes, border_pair, border_str,
-                                          true, 1, text_pair, search_active);
+                        render_md_code_segment(tui, chunk_start, chunk_bytes, border_pair, border_str,
+                                               true, code_pair, search_active);
                         chunk_start += chunk_bytes;
                         remaining -= chunk_bytes;
                     }
@@ -1479,7 +1598,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                             }
                             render_md_header_segment(tui, line_start + skip, line_len - skip,
                                                      border_pair, border_str, (*p == '\n'),
-                                                     text_pair, search_active);
+                                                     text_pair, search_active, hlevel);
                         } else if (is_special_prefix) {
                             render_md_segment(tui, line_start + skip_prefix, line_len - skip_prefix,
                                               border_pair, border_str, (*p == '\n'), 0,
@@ -1504,11 +1623,11 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                                 if (chunk_bytes > skip) {
                                     render_md_header_segment(tui, chunk_start + skip, chunk_bytes - skip,
                                                              border_pair, border_str, true,
-                                                             text_pair, search_active);
+                                                             text_pair, search_active, hlevel);
                                 } else {
                                     render_md_header_segment(tui, chunk_start, chunk_bytes,
                                                              border_pair, border_str, true,
-                                                             text_pair, search_active);
+                                                             text_pair, search_active, hlevel);
                                 }
                                 first_chunk = 0;
                             } else if (first_chunk && is_special_prefix) {

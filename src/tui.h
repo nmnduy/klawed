@@ -73,6 +73,9 @@ typedef enum {
 #define NCURSES_PAIR_DIFF_CONTEXT 18         // Dimmed gray for diff context lines
 #define NCURSES_PAIR_GOAL 19                 // Goal tag (matches tool tag color, italicized)
 #define NCURSES_PAIR_ERROR_BG 20             // Error text on error-tinted background
+#define NCURSES_PAIR_CODE_BLOCK 21           // Code block text on recessed background
+#define NCURSES_PAIR_INLINE_CODE 22          // Inline code with subtle tint
+#define NCURSES_PAIR_H1_ACCENT 23            // H1 header accent color for text + rule
 
 // Conversation message entry
 typedef struct {

@@ -263,10 +263,21 @@ static void md_render_code(WINDOW *win, const char **pp, size_t len, int base_pa
     const char *close = find_code_ticks(*pp, len, tick_len);
 
     if (close) {
+        /* Inline code: subtle tint background instead of A_DIM.
+         * Reads as "embedded crystal" in the prose — a faint cool wash
+         * that distinguishes code without fading it. */
         (void)base_pair;
-        wattron(win, A_DIM);
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_INLINE_CODE));
+        }
         md_output_plain(win, *pp + tick_len, (size_t)(close - (*pp + tick_len)));
-        wattroff(win, A_DIM);
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_INLINE_CODE));
+            /* Restore the base pair so subsequent text keeps its color */
+            if (base_pair > 0) {
+                wattron(win, COLOR_PAIR(base_pair));
+            }
+        }
         *pp = close + tick_len;
     } else {
         md_output_plain(win, *pp, 1);
