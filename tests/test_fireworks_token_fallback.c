@@ -160,8 +160,8 @@ static int extract_tokens_with_fireworks_fallback(
             if (prompt_tokens > 0 && total_tokens == 0) {
                 total_tokens = prompt_tokens + completion_tokens;
             }
-            cJSON_Delete(headers_array);
         }
+        cJSON_Delete(headers_array);
     }
 
     cJSON_Delete(json);
