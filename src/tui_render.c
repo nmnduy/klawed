@@ -346,14 +346,69 @@ static int status_message_wants_spinner(const char *message) {
     return 0;
 }
 
+/*
+ * Select spinner variant based on the current status message.
+ * The motion should match the mood:
+ *   - Initial API call / thinking:  slow pulse (gathering, centering)
+ *   - Tool executing:               quick ripple (active, flowing)
+ *   - Long reasoning:               gentle wave (sustained, patient)
+ *   - Error / retry:                bounce (friction, something's wrong)
+ * Falls back to random wave selection for unrecognized messages.
+ */
+static void select_context_spinner_variant(const char *message) {
+    if (!message || message[0] == '\0') {
+        init_global_spinner_variant();
+        return;
+    }
+
+    /* Error/retry: stutter bounce — frame holds, then jumps */
+    if (strstr(message, "retry") || strstr(message, "Retry") ||
+        strstr(message, "error") || strstr(message, "Error") ||
+        strstr(message, "failed") || strstr(message, "Failed")) {
+        GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[7]; /* BOUNCE */
+        return;
+    }
+
+    /* Tool executing: quick ripple — active, flowing */
+    if (strstr(message, "Executing") || strstr(message, "Running") ||
+        strstr(message, "Reading") || strstr(message, "Writing") ||
+        strstr(message, "Searching") || strstr(message, "Editing") ||
+        strstr(message, "tool") || strstr(message, "Tool") ||
+        strstr(message, "Bash") || strstr(message, "command")) {
+        GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[6]; /* RIPPLE */
+        return;
+    }
+
+    /* Long reasoning: gentle wave — sustained, patient */
+    if (strstr(message, "reasoning") || strstr(message, "Reasoning") ||
+        strstr(message, "analyzing") || strstr(message, "Analyzing") ||
+        strstr(message, "compacting") || strstr(message, "Compacting") ||
+        strstr(message, "Processing")) {
+        GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[5]; /* WAVE */
+        return;
+    }
+
+    /* Initial API call / thinking: slow pulse — gathering, centering */
+    if (strstr(message, "Calling") || strstr(message, "Thinking") ||
+        strstr(message, "Generating") || strstr(message, "Waiting")) {
+        GLOBAL_SPINNER_VARIANT = SPINNER_VARIANTS[9]; /* PULSE */
+        return;
+    }
+
+    /* Unrecognized: fall back to random wave selection */
+    init_global_spinner_variant();
+}
+
 static void status_spinner_start(TUIState *tui) {
     if (!tui) {
         return;
     }
     if (!tui->status_spinner_active) {
         tui->status_spinner_frame = 0;
-        // Pick a fresh random spinner variant for this thinking session
-        init_global_spinner_variant();
+        /* Select spinner variant based on what the agent is doing.
+         * The motion should match the mood — pulse for thinking,
+         * ripple for tools, wave for reasoning, bounce for errors. */
+        select_context_spinner_variant(tui->status_message);
         // Initialize spinner effect with pulse
         spinner_effect_init(&tui->status_spinner_effect, SPINNER_EFFECT_PULSE,
                             SPINNER_COLOR_SOLID,
@@ -2563,6 +2618,12 @@ void tui_update_status(TUIState *tui, const char *status_text) {
 
         // Start text diffusion animation for the new message
         text_diffusion_set_target(&tui->status_text_diffusion, message);
+
+        /* If spinner is already active, re-select variant to match
+         * the new situation — the motion should track the mood. */
+        if (tui->status_spinner_active) {
+            select_context_spinner_variant(message);
+        }
     }
 
     if (status_message_wants_spinner(message)) {
