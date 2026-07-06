@@ -963,75 +963,88 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     int center_offset = (pad_width - name_block_width) / 2;
     if (center_offset < 2) center_offset = 2;
 
-    char indent[64];
-    snprintf(indent, sizeof(indent), "%*s", center_offset, "");
-
-    /* Name line: accent color, bold */
-    char name_line[256];
-    snprintf(name_line, sizeof(name_line), "%s**%s v%s**", indent, name, version ? version : "?");
-
-    /* Rule line: thin accent rule beneath the name */
-    char rule_line[256];
-    int rule_len = (int)strlen(name) + (version ? (int)strlen(version) : 0) + 4; /* " v" + 2 padding */
-    if (rule_len > 40) rule_len = 40;
-    if (rule_len < 5) rule_len = 5;
-    char rule_str[64];
-    size_t ri = 0;
-    for (int i = 0; i < rule_len && ri < sizeof(rule_str) - 4; i++) {
-        rule_str[ri++] = '\xe2';
-        rule_str[ri++] = '\x94';
-        rule_str[ri++] = '\x80';  /* ─ U+2500 */
-    }
-    rule_str[ri] = '\0';
-    snprintf(rule_line, sizeof(rule_line), "%s%s", indent, rule_str);
-
-    /* Metadata lines: model and working directory in dim */
-    char model_line[256];
-    snprintf(model_line, sizeof(model_line), "%s%s", indent, model);
-    char dir_line[256];
-    snprintf(dir_line, sizeof(dir_line), "%s%s", indent, working_dir);
-
-    /* Session threshold line */
-    char session_line[256];
-    if (session_id && session_id[0]) {
-        snprintf(session_line, sizeof(session_line), "%s── %s ──", indent, session_id);
-    } else {
-        snprintf(session_line, sizeof(session_line), "%s── no session ──", indent);
-    }
-
     /* Cat mascot — shifted left of the name block */
     char cat_indent[64];
     int cat_offset = center_offset - 12;
     if (cat_offset < 0) cat_offset = 0;
     snprintf(cat_indent, sizeof(cat_indent), "%*s", cat_offset, "");
 
-    char cat_line1[256], cat_line2[256], cat_line3[256];
-    snprintf(cat_line1, sizeof(cat_line1), "%s/\\_/\\", cat_indent);
-    snprintf(cat_line2, sizeof(cat_line2), "%s( o.o )", cat_indent);
-    snprintf(cat_line3, sizeof(cat_line3), "%s > ^ <", cat_indent);
+    /* Build combined cat + text lines for side-by-side layout:
+     *
+     *       /\_/\    **klawed v0.36.0**
+     *      ( o.o )   ────────────────
+     *       > ^ <    deepseek-v4-pro
+     *                /Users/puter/git/klawed
+     *
+     *                ── session ──
+     *
+     * Cat glyph widths: line1=5, line2=7, line3=6.
+     * Text starts at center_offset (= cat_offset + 12).
+     * Gap between cat end and text = 12 - cat_width + 1 extra space.
+     */
+    int gap1 = 12 - 5 + 1;  /* 8 spaces: "/\_/\" (5) + 8 spaces = 13 → cat_offset+13 ≈ center_offset+1 */
+    int gap2 = 12 - 7 + 1;  /* 6 spaces: "( o.o )" (7) + 6 spaces = 13 */
+    int gap3 = 12 - 6 + 1;  /* 7 spaces: " > ^ <" (6) + 7 spaces = 13 */
+
+    /* Build the text content (without indent) for each combined line */
+    char name_content[256];
+    snprintf(name_content, sizeof(name_content), "**%s v%s**", name, version ? version : "?");
+
+    /* Line 2 rule content (without indent, without unicode prefix) */
+    char rule_content[128];
+    int rule_len = (int)strlen(name) + (version ? (int)strlen(version) : 0) + 4;
+    if (rule_len > 40) rule_len = 40;
+    if (rule_len < 5) rule_len = 5;
+    size_t ri = 0;
+    for (int i = 0; i < rule_len && ri < sizeof(rule_content) - 4; i++) {
+        rule_content[ri++] = '\xe2';
+        rule_content[ri++] = '\x94';
+        rule_content[ri++] = '\x80';
+    }
+    rule_content[ri] = '\0';
+
+    /* Combined lines: cat_indent + cat_glyph + gap_spaces + text_content */
+    char combined1[512], combined2[512], combined3[512];
+
+    snprintf(combined1, sizeof(combined1), "%s/\\_/\\%*s%s",
+             cat_indent, gap1, "", name_content);
+    snprintf(combined2, sizeof(combined2), "%s( o.o )%*s%s",
+             cat_indent, gap2, "", rule_content);
+    snprintf(combined3, sizeof(combined3), "%s > ^ <%*s%s",
+             cat_indent, gap3, "", model);
+
+    /* Lines without cat — align with text in combined lines */
+    char meta_indent[64];
+    /* Text in combined lines starts at cat_offset + 13 = center_offset + 1 */
+    int meta_col = center_offset + 1;
+    if (meta_col < 2) meta_col = 2;
+    snprintf(meta_indent, sizeof(meta_indent), "%*s", meta_col, "");
+
+    char dir_meta[512], session_meta[512];
+    snprintf(dir_meta, sizeof(dir_meta), "%s%s", meta_indent, working_dir);
+    if (session_id && session_id[0]) {
+        snprintf(session_meta, sizeof(session_meta), "%s── %s ──", meta_indent, session_id);
+    } else {
+        snprintf(session_meta, sizeof(session_meta), "%s── no session ──", meta_indent);
+    }
 
     /* Add padding before banner */
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
 
     if (!is_vltrn) {
-        /* Cat mascot in assistant color */
-        tui_add_conversation_line(tui, NULL, cat_line1, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, cat_line2, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, cat_line3, COLOR_PAIR_ASSISTANT);
+        /* Cat + name/rule/model on same lines, side by side */
+        tui_add_conversation_line(tui, NULL, combined1, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, combined2, COLOR_PAIR_TOOL_DIM);
+        tui_add_conversation_line(tui, NULL, combined3, COLOR_PAIR_TOOL_DIM);
     }
 
-    /* Name in accent color (bold via markdown) */
-    tui_add_conversation_line(tui, NULL, name_line, COLOR_PAIR_ASSISTANT);
-    /* Thin rule in dim */
-    tui_add_conversation_line(tui, NULL, rule_line, COLOR_PAIR_TOOL_DIM);
-    /* Metadata in dim */
-    tui_add_conversation_line(tui, NULL, model_line, COLOR_PAIR_TOOL_DIM);
-    tui_add_conversation_line(tui, NULL, dir_line, COLOR_PAIR_TOOL_DIM);
+    /* Working dir on its own line, no cat */
+    tui_add_conversation_line(tui, NULL, dir_meta, COLOR_PAIR_TOOL_DIM);
 
     /* Blank line before session threshold */
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
     /* Session threshold in dim */
-    tui_add_conversation_line(tui, NULL, session_line, COLOR_PAIR_TOOL_DIM);
+    tui_add_conversation_line(tui, NULL, session_meta, COLOR_PAIR_TOOL_DIM);
 
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);  // Blank line
 
