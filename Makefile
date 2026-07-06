@@ -577,6 +577,8 @@ TEST_MARKDOWN_RENDER_SRC = tests/test_markdown_render.c
 TEST_MARKDOWN_RENDER_TARGET = $(BUILD_DIR)/test_markdown_render
 TEST_LINE_PRINTER_SRC = tests/test_line_printer.c
 TEST_LINE_PRINTER_TARGET = $(BUILD_DIR)/test_line_printer
+TEST_CODE_BLOCK_FILL_SRC = tests/test_code_block_fill.c
+TEST_CODE_BLOCK_FILL_TARGET = $(BUILD_DIR)/test_code_block_fill
 TEST_BEDROCK_CONVERSE_SRC = tests/test_bedrock_converse.c
 TEST_BEDROCK_CONVERSE_TARGET = $(BUILD_DIR)/test_bedrock_converse
 TEST_CODEX_TOOLS_SRC = tests/test_codex_tools.c
@@ -594,7 +596,7 @@ TEST_MODEL_SWITCH_QUEUE_RESTART_TARGET = $(BUILD_DIR)/test_model_switch_queue_re
 TEST_INSERT_SYSTEM_MESSAGE_SRC = tests/test_insert_system_message.c
 TEST_INSERT_SYSTEM_MESSAGE_TARGET = $(BUILD_DIR)/test_insert_system_message
 
-.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-paste-placeholder test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-line-printer test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools test-streaming-persistence test-fireworks-token-fallback query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
+.PHONY: all clean check-deps install install-web-browse-agent test test-edit test-read test-todo test-todo-write test-compaction test-paste test-paste-placeholder test-retry-jitter test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-event-loop test-wrap test-mcp test-mcp-image test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-tool-results-regression test-tool-details test-duplicate-tool-detection test-array-resize test-memory-db test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-line-printer test-code-block-fill test-provider-init-from-config test-openai-responses-provider test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-moonshot-streaming-tools test-streaming-persistence test-fireworks-token-fallback query-tool debug analyze sanitize-ub sanitize-all sanitize-leak valgrind memscan comprehensive-scan clang-tidy cppcheck flawfinder version show-version update-version bump-version bump-patch bump-minor-version build clang ci-test ci-gcc ci-clang ci-gcc-sanitize ci-clang-sanitize ci-all fmt-whitespace
 
 all: check-deps $(TARGET)
 TEST_TOKEN_USAGE_COMPREHENSIVE_SRC = tests/test_token_usage_comprehensive.c
@@ -612,7 +614,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-tui-reasoning-detection test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-streaming-persistence test-fireworks-token-fallback test-tool-disable test-session-resolve
+test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-line-printer test-code-block-fill test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-tui-reasoning-detection test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-streaming-persistence test-fireworks-token-fallback test-tool-disable test-session-resolve
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -1073,6 +1075,12 @@ test-line-printer: check-deps $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(TEST_
 	@echo "Running LinePrinter tests..."
 	@echo ""
 	@./$(TEST_LINE_PRINTER_TARGET)
+
+test-code-block-fill: check-deps $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(TEST_CODE_BLOCK_FILL_TARGET)
+	@echo ""
+	@echo "Running code block fill tests..."
+	@echo ""
+	@./$(TEST_CODE_BLOCK_FILL_TARGET)
 
 # Socket test removed
 
@@ -3502,6 +3510,16 @@ $(TEST_LINE_PRINTER_TARGET): $(TEST_LINE_PRINTER_SRC) $(LINE_PRINTER_OBJ) $(MARK
 	@$(CC) -o $(TEST_LINE_PRINTER_TARGET) $(BUILD_DIR)/test_line_printer.o $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ LinePrinter test build successful!"
+
+# Test target for code block background fill spacing
+$(TEST_CODE_BLOCK_FILL_TARGET): $(TEST_CODE_BLOCK_FILL_SRC) $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling code block fill test..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/test_code_block_fill.o $(TEST_CODE_BLOCK_FILL_SRC)
+	@echo "Linking code block fill test executable..."
+	@$(CC) -o $(TEST_CODE_BLOCK_FILL_TARGET) $(BUILD_DIR)/test_code_block_fill.o $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(LDFLAGS)
+	@echo ""
+	@echo "✓ Code block fill test build successful!"
 
 # Socket test build rule removed - will be reimplemented with ZMQ
 
