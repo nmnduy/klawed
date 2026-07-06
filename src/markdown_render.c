@@ -1242,6 +1242,12 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
         return;
     }
 
+    /* Disable scrollok to prevent ncurses auto-wrap from creating extra
+     * blank lines when table row widths exactly fill the pad.  Table
+     * rendering uses explicit \n for line breaks and does not need
+     * bottom-edge scrolling during layout. */
+    scrollok(pad, FALSE);
+
     edge_pair = (left_border_pair > 0) ? left_border_pair : base_pair;
 
     if (num_rows > TABLE_MAX_ROWS) {
@@ -1259,7 +1265,7 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
     }
 
     if (num_display == 0) {
-        return;
+        goto table_cleanup;
     }
 
     /* Parse all cells */
@@ -1274,7 +1280,7 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
     }
 
     if (num_cols == 0) {
-        return;
+        goto table_cleanup;
     }
     if (num_cols > TABLE_MAX_COLS) {
         num_cols = TABLE_MAX_COLS;
@@ -1335,7 +1341,7 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
             }
         }
 
-        return;
+        goto table_cleanup;
     }
 
     /* --- Traditional fixed-width rendering (fallback) --- */
@@ -1448,4 +1454,7 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
             waddch(pad, '\n');
         }
     }
+
+table_cleanup:
+    scrollok(pad, TRUE);
 }
