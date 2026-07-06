@@ -236,7 +236,16 @@ void lp_newline(LinePrinter *lp) {
         if (has_colors()) {
             wattron(lp->pad, COLOR_PAIR((unsigned)lp->fill_bg_pair));
         }
-        while (cur_x < lp->pad_width) {
+        /* Fill to pad_width-1, not pad_width.  scrollok is enabled on
+         * the conversation pad, so writing a character at the last
+         * column (pad_width-1) triggers ncurses auto-wrap.  If we fill
+         * to pad_width, the auto-wrap moves the cursor to column 0 of
+         * the next line, and the subsequent waddch('\n') below creates
+         * a blank line after every background-filled line (code blocks,
+         * assistant bg, error bg).  Stopping at pad_width-1 leaves the
+         * cursor at the last column so waddch('\n') handles the newline
+         * correctly via its built-in clrtoeol+linefeed. */
+        while (cur_x < lp->pad_width - 1) {
             waddch(lp->pad, ' ');
             cur_x++;
         }
@@ -260,11 +269,12 @@ void lp_fill_line(LinePrinter *lp) {
     // Used at the end of a streaming chunk to paint the incomplete line,
     // then the cursor is restored so the next chunk continues from the
     // correct position.
+    // See lp_newline for explanation of pad_width-1 vs pad_width.
     if (lp->fill_bg_pair > 0 && cur_x < lp->pad_width) {
         if (has_colors()) {
             wattron(lp->pad, COLOR_PAIR((unsigned)lp->fill_bg_pair));
         }
-        while (cur_x < lp->pad_width) {
+        while (cur_x < lp->pad_width - 1) {
             waddch(lp->pad, ' ');
             cur_x++;
         }
