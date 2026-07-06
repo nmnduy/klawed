@@ -80,12 +80,13 @@ static int extract_tokens_with_fireworks_fallback(
 {
     int prompt_tokens = 0, completion_tokens = 0, total_tokens = 0;
     int cached_tokens = 0;
+    int ret = -1;
+    cJSON *json = NULL;
+    cJSON *headers_array = NULL;
 
-    cJSON *json = cJSON_Parse(response_json);
+    json = cJSON_Parse(response_json);
     if (!json) {
-        *out_prompt = 0; *out_completion = 0;
-        *out_total = 0; *out_cached = 0;
-        return -1;
+        goto cleanup;
     }
 
     cJSON *usage = cJSON_GetObjectItem(json, "usage");
@@ -128,7 +129,7 @@ static int extract_tokens_with_fireworks_fallback(
      * are zero, check the response headers. */
     if (prompt_tokens == 0 && completion_tokens == 0 && total_tokens == 0
         && cached_tokens == 0 && headers_json) {
-        cJSON *headers_array = cJSON_Parse(headers_json);
+        headers_array = cJSON_Parse(headers_json);
         if (headers_array && cJSON_IsArray(headers_array)) {
             int array_size = cJSON_GetArraySize(headers_array);
             for (int i = 0; i < array_size; i++) {
@@ -161,21 +162,21 @@ static int extract_tokens_with_fireworks_fallback(
                 total_tokens = prompt_tokens + completion_tokens;
             }
         }
-        cJSON_Delete(headers_array);
     }
 
+    ret = 0;
+
+cleanup:
+    cJSON_Delete(headers_array);
     cJSON_Delete(json);
 
     *out_prompt = prompt_tokens;
     *out_completion = completion_tokens;
     *out_total = total_tokens;
     *out_cached = cached_tokens;
-    return 0;
+    return ret;
 }
 
-/* =========================================================================
- * Test 1: Fireworks header fallback with all-zero body, valid headers
- * ========================================================================= */
 static void test_fireworks_header_fallback_basic(void) {
     TEST("Fireworks header fallback - all zeros, valid headers");
 
@@ -468,18 +469,24 @@ static void test_stream_options_include_usage_present(void) {
 
     /* Verify stream is true */
     cJSON *stream = cJSON_GetObjectItem(request, "stream");
-    if (!stream || !cJSON_IsBool(stream) || !cJSON_IsTrue(stream))
+    if (!stream || !cJSON_IsBool(stream) || !cJSON_IsTrue(stream)) {
+        cJSON_Delete(request);
         FAIL("stream should be true");
+    }
 
     /* Verify stream_options exists */
     cJSON *stream_opts = cJSON_GetObjectItem(request, "stream_options");
-    if (!stream_opts || !cJSON_IsObject(stream_opts))
+    if (!stream_opts || !cJSON_IsObject(stream_opts)) {
+        cJSON_Delete(request);
         FAIL("stream_options should exist as an object");
+    }
 
     /* Verify include_usage is true */
     cJSON *include_usage = cJSON_GetObjectItem(stream_opts, "include_usage");
-    if (!include_usage || !cJSON_IsBool(include_usage) || !cJSON_IsTrue(include_usage))
+    if (!include_usage || !cJSON_IsBool(include_usage) || !cJSON_IsTrue(include_usage)) {
+        cJSON_Delete(request);
         FAIL("stream_options.include_usage should be true");
+    }
 
     cJSON_Delete(request);
     PASS();
@@ -502,11 +509,17 @@ static void test_stream_options_absent_when_not_streaming(void) {
 
     /* Verify stream is NOT present */
     cJSON *stream = cJSON_GetObjectItem(request, "stream");
-    if (stream) FAIL("stream should not be present in non-streaming request");
+    if (stream) {
+        cJSON_Delete(request);
+        FAIL("stream should not be present in non-streaming request");
+    }
 
     /* Verify stream_options is NOT present */
     cJSON *stream_opts = cJSON_GetObjectItem(request, "stream_options");
-    if (stream_opts) FAIL("stream_options should not be present in non-streaming request");
+    if (stream_opts) {
+        cJSON_Delete(request);
+        FAIL("stream_options should not be present in non-streaming request");
+    }
 
     cJSON_Delete(request);
     PASS();
