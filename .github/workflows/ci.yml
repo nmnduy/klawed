@@ -1,45 +1,14 @@
-name: CI
+name: CI (GitHub)
 
 on:
   push:
     branches: [master]
 
-permissions:
-  contents: write  # needed for pushing version bump commits and tags
-
-# Prevent recursive CI runs when the version bump commit is pushed
-# by skipping commits made by the CI bot itself
 jobs:
-  # Gate: only run CI if this is NOT a version bump commit
-  skip-check:
-    runs-on: ubuntu-latest
-    outputs:
-      should_run: ${{ steps.check.outputs.should_run }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - id: check
-        run: |
-          MSG=$(git log -1 --pretty=%s)
-          if echo "$MSG" | grep -q "^chore: bump version to"; then
-            echo "Skipping CI — version bump commit (pushed by CI bot)"
-            echo "should_run=false" >> $GITHUB_OUTPUT
-          else
-            echo "should_run=true" >> $GITHUB_OUTPUT
-          fi
-
   build-and-test:
-    needs: skip-check
-    if: needs.skip-check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    outputs:
-      new_tag: ${{ steps.bump.outputs.new_tag }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         run: |
@@ -101,42 +70,3 @@ jobs:
             test-session-resolve \
             test-codex-tools \
             test-tool-disable
-
-      - name: Bump patch version, commit, and tag
-        id: bump
-        if: success()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          make bump-patch
-          echo "new_tag=v$(cat VERSION)" >> $GITHUB_OUTPUT
-
-  push-to-registry:
-    needs: build-and-test
-    if: needs.build-and-test.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Push tag and master to registry server
-        run: |
-          if [ -z "$REGISTRY_SSH_KEY" ]; then
-            echo "No REGISTRY_SSH_KEY secret configured — skipping registry push"
-            exit 0
-          fi
-          mkdir -p ~/.ssh
-          echo "$REGISTRY_SSH_KEY" > ~/.ssh/id_registry
-          chmod 600 ~/.ssh/id_registry
-          cat >> ~/.ssh/config << 'SSHEOF'
-          Host registry.kasafox.com
-            IdentityFile ~/.ssh/id_registry
-            StrictHostKeyChecking no
-          SSHEOF
-          TAG="v$(cat VERSION)"
-          echo "Pushing master and $TAG to registry server..."
-          git push root@registry.kasafox.com:/opt/git/klawed.git master
-          git push root@registry.kasafox.com:/opt/git/klawed.git "$TAG"
-          echo "Registry push complete"
-        env:
-          REGISTRY_SSH_KEY: ${{ secrets.REGISTRY_SSH_KEY }}

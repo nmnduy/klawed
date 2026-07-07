@@ -1,0 +1,134 @@
+#!/bin/bash
+#
+# Post-receive hook for the registry server (registry.kasafox.com:/opt/git/klawed.git)
+#
+# On every push to master, this hook:
+#   1. Checks out the repo to a temp working directory
+#   2. Builds and runs tests
+#   3. On success: bumps the patch version, commits, and tags
+#
+# The tag is created directly in the bare repo, so subsequent clones/fetches
+# from the registry server will see the new tag.
+#
+# Installation (run as root on registry.kasafox.com):
+#   cp scripts/registry-post-receive /opt/git/klawed.git/hooks/post-receive
+#   chmod +x /opt/git/klawed.git/hooks/post-receive
+#   apt-get install libcurl4-openssl-dev libcjson-dev libbsd-dev libsqlite3-dev libncursesw5-dev libssl-dev
+
+set -euo pipefail
+
+# Only act on master branch pushes
+BRANCH=""
+while read -r oldrev newrev refname; do
+    case "$refname" in
+        refs/heads/master)
+            BRANCH="master"
+            NEWREV="$newrev"
+            ;;
+    esac
+done
+
+if [ "$BRANCH" != "master" ]; then
+    exit 0
+fi
+
+echo "[registry-ci] Push to master detected ($NEWREV)"
+
+# Skip version bump commits to avoid infinite recursion
+COMMIT_MSG=$(git --git-dir="$(pwd)" log -1 --pretty=%s "$NEWREV")
+if echo "$COMMIT_MSG" | grep -q "^chore: bump version to"; then
+    echo "[registry-ci] Skipping — this is a version bump commit (pushed by CI)"
+    exit 0
+fi
+
+# Create a temp working directory
+WORKDIR=$(mktemp -d /tmp/klawed-ci-XXXXXX)
+trap 'rm -rf "$WORKDIR"' EXIT
+
+echo "[registry-ci] Cloning to $WORKDIR..."
+git clone "$(pwd)" "$WORKDIR"
+cd "$WORKDIR"
+git checkout "$NEWREV"
+
+echo "[registry-ci] Building..."
+make 2>&1 | tail -5
+
+echo "[registry-ci] Running tests..."
+if ! make \
+    test-arena \
+    test-array-resize \
+    test-base64 \
+    test-config \
+    test-config-merge \
+    test-redact \
+    test-wrap \
+    test-edit \
+    test-http-client \
+    test-json-parsing \
+    test-markdown-render \
+    test-line-printer \
+    test-code-block-fill \
+    test-dump-utils \
+    test-todo \
+    test-todo-write \
+    test-model-capabilities \
+    test-paste \
+    test-paste-placeholder \
+    test-memory-null-fix \
+    test-rotation \
+    test-message-queue \
+    test-bash-timeout \
+    test-bash-stderr \
+    test-bash-truncation \
+    test-cancel-flow \
+    test-tool-results-regression \
+    test-history-file \
+    test-tui-input-buffer \
+    test-tui-auto-scroll \
+    test-tool-details \
+    test-token-usage \
+    test-token-usage-comprehensive \
+    test-token-usage-session-totals \
+    test-token-usage-db-metadata \
+    test-sqlite-queue-seeding \
+    test-file-search \
+    test-provider-init-from-config \
+    test-provider-init \
+    test-session-resolve \
+    test-codex-tools \
+    test-tool-disable \
+    2>&1; then
+    echo "[registry-ci] Tests failed — skipping version bump"
+    exit 1
+fi
+
+echo "[registry-ci] All tests passed. Bumping patch version..."
+
+CURRENT_VERSION=$(cat VERSION)
+VERSION_MAJOR=$(echo "$CURRENT_VERSION" | sed 's/^\([0-9]*\)\..*/\1/')
+VERSION_MINOR=$(echo "$CURRENT_VERSION" | sed 's/^[0-9]*\.\([0-9]*\)\..*/\1/')
+VERSION_PATCH=$(echo "$CURRENT_VERSION" | sed 's/^[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/')
+NEW_PATCH=$((VERSION_PATCH + 1))
+NEW_VERSION="$VERSION_MAJOR.$VERSION_MINOR.$NEW_PATCH"
+
+echo "[registry-ci] $CURRENT_VERSION → $NEW_VERSION"
+
+echo "$NEW_VERSION" > VERSION
+rm -f src/version.h
+make src/version.h
+
+# Update README.md clone command
+sed -i.bak "s/git clone --branch v[0-9]*\.[0-9]*\.[0-9]*/git clone --branch v$NEW_VERSION/g" README.md
+rm -f README.md.bak
+
+git config user.name "registry-ci"
+git config user.email "ci@registry.kasafox.com"
+git add VERSION src/version.h README.md
+git commit -m "chore: bump version to $NEW_VERSION"
+git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+
+echo "[registry-ci] Pushing version bump and tag back to registry..."
+git push origin master
+git push origin "v$NEW_VERSION"
+
+echo "[registry-ci] Done — tagged v$NEW_VERSION"
