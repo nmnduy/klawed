@@ -2148,6 +2148,9 @@ void input_redraw(TUIState *tui, const char *prompt) {
     if (tui->mode == TUI_MODE_NORMAL) {
         curs_set(0);  // Hide cursor
         werase(win);
+        touchwin(win);  // Force full physical screen update — prevents
+                        // conversation pad content from bleeding through
+                        // when doupdate skips the area thinking it's unchanged.
         wrefresh(win);
         return;
     }
@@ -2233,6 +2236,10 @@ void input_redraw(TUIState *tui, const char *prompt) {
     // BLAND style: no extra height
     tui_window_resize_input(tui, window_height_needed);
     input = tui->input_buffer;
+    /* Defensive re-sync: tui_window_resize_input synced the pointer, but if
+     * window_manager_show_todo_window or similar recreated the window between
+     * the top-of-function sync and now, input->win could be stale. Re-read
+     * from the freshly-validated input_buffer. */
     win = input->win;
     if (!win) {
         return;
@@ -2583,6 +2590,10 @@ void input_redraw(TUIState *tui, const char *prompt) {
         }
     }
 
+    // Force a full physical screen update — ensures the input area is
+    // always properly refreshed even if doupdate would otherwise skip it
+    // because it sees no virtual-screen changes.
+    touchwin(win);
     wrefresh(win);
 
     // Suppress unused parameter warning - prompt kept for API compatibility
