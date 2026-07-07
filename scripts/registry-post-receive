@@ -101,8 +101,12 @@ else
 fi
 
 echo "[registry-ci] Running tests..."
+# Set TERM so ncurses-based tests don't fail in non-TTY CI environment
+export TERM=xterm-256color
 TEST_LOG="/tmp/klawed-test.log"
-if make \
+# Run all tests with -k (keep going) so one failure doesn't skip remaining tests
+make -k \
+    test-arena \
     test-arena \
     test-array-resize \
     test-base64 \
@@ -145,16 +149,17 @@ if make \
     test-session-resolve \
     test-codex-tools \
     test-tool-disable \
-    > "$TEST_LOG" 2>&1; then
-    echo "[registry-ci] All tests passed"
-    TEST_PASSED=1
-else
+    > "$TEST_LOG" 2>&1
+# Check log for actual test failures (make -k always exits non-zero on failure,
+# but we want to continue running all tests before checking results)
+if grep -qE '^make: .*Error|FAILED|Aborted|Segmentation fault' "$TEST_LOG"; then
     echo "[registry-ci] Tests FAILED"
     FAIL_COUNT=$(grep -c 'FAIL\|FAILED\|failed\|Error' "$TEST_LOG" 2>/dev/null || echo "?")
     TEST_TAIL=$(tail -5 "$TEST_LOG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
     notify_err "Tests <b>FAILED</b> for <code>${SHORT_HASH}</code> (${FAIL_COUNT} failures)&#10;<pre>${TEST_TAIL}</pre>"
     exit 1
 fi
+echo "[registry-ci] All tests passed"
 
 echo "[registry-ci] All tests passed. Bumping patch version..."
 
