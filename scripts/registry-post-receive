@@ -172,6 +172,13 @@ NEW_VERSION="$VERSION_MAJOR.$VERSION_MINOR.$NEW_PATCH"
 
 echo "[registry-ci] $CURRENT_VERSION → $NEW_VERSION"
 
+# Check if this tag already exists (another CI run may have beaten us)
+if git tag -l "v$NEW_VERSION" | grep -q .; then
+    echo "[registry-ci] Tag v$NEW_VERSION already exists — skipping (already bumped by another run)"
+    notify_info "Tag v${NEW_VERSION} already exists — skipping bump"
+    exit 0
+fi
+
 echo "$NEW_VERSION" > VERSION
 rm -f src/version.h
 make src/version.h
@@ -187,7 +194,8 @@ git commit -m "chore: bump version to $NEW_VERSION"
 git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
 
 echo "[registry-ci] Pushing version bump and tag back to registry..."
-git push origin master
+# Push bump commit to master (HEAD is detached, so push explicitly)
+git push origin HEAD:refs/heads/master
 git push origin "v$NEW_VERSION"
 
 echo "[registry-ci] Done — tagged v$NEW_VERSION"
