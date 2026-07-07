@@ -84,6 +84,9 @@ trap 'rm -rf "$WORKDIR"' EXIT
 echo "[registry-ci] Cloning to $WORKDIR..."
 git clone "$(pwd)" "$WORKDIR"
 cd "$WORKDIR"
+# Git hooks export GIT_DIR=. which breaks commands after we cd into
+# the non-bare clone. Unset it so git uses the .git/ directory normally.
+unset GIT_DIR
 git checkout "$NEWREV"
 
 echo "[registry-ci] Building..."
