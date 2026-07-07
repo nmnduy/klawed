@@ -935,117 +935,30 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
     const char *vltrn_mode = getenv("VLTRN_MODE");
     int is_vltrn = (vltrn_mode && strcmp(vltrn_mode, "1") == 0);
 
-    /* Get pad width for centering */
-    int pad_width = 80;
-    if (tui->wm.conv_pad) {
-        int ph = 0, pw = 0;
-        getmaxyx(tui->wm.conv_pad, ph, pw);
-        if (pw > 0) pad_width = pw;
-    }
-
     const char *name = is_vltrn ? "vltrn" : "klawed";
 
-    /* Build the banner as a centered composition:
-     *
-     *       /\_/\
-     *      ( o.o )    klawed
-     *       > ^ <     ───────
-     *                 v0.35.11 · model
-     *                 ~/git/klawed
-     *
-     *                 ── session ──
-     *
-     * The name in accent color, the rule in dim, metadata faint.
-     */
+    // Format banner lines with ASCII art cat mascot, left-justified
+    char line1[256];
+    char line2[256];
+    char line3[256];
+    char line4[256];
 
-    /* Center the name + rule block (approx 20 chars wide) */
-    int name_block_width = 20;
-    int center_offset = (pad_width - name_block_width) / 2;
-    if (center_offset < 2) center_offset = 2;
+    // Create content lines — cat on left, text inline
+    snprintf(line1, sizeof(line1), "  /\\_/\\   %s v%s", name, version ? version : "?");
+    snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
+    snprintf(line3, sizeof(line3), "  > ^ <   %s", working_dir);
+    snprintf(line4, sizeof(line4), "          %s", session_id ? session_id : "(no session)");
 
-    /* Cat mascot — shifted left of the name block */
-    char cat_indent[64];
-    int cat_offset = center_offset - 12;
-    if (cat_offset < 0) cat_offset = 0;
-    snprintf(cat_indent, sizeof(cat_indent), "%*s", cat_offset, "");
-
-    /* Build combined cat + text lines for side-by-side layout:
-     *
-     *       /\_/\    **klawed v0.36.0**
-     *      ( o.o )   ────────────────
-     *       > ^ <    deepseek-v4-pro
-     *                /Users/puter/git/klawed
-     *
-     *                ── session ──
-     *
-     * Cat glyph widths: line1=5, line2=7, line3=6.
-     * Text starts at center_offset (= cat_offset + 12).
-     * Gap between cat end and text = 12 - cat_width + 1 extra space.
-     */
-    int gap1 = 12 - 5 + 1;  /* 8 spaces: "/\_/\" (5) + 8 spaces = 13 → cat_offset+13 ≈ center_offset+1 */
-    int gap2 = 12 - 7 + 1;  /* 6 spaces: "( o.o )" (7) + 6 spaces = 13 */
-    int gap3 = 12 - 6 + 1;  /* 7 spaces: " > ^ <" (6) + 7 spaces = 13 */
-
-    /* Build the text content (without indent) for each combined line */
-    char name_content[256];
-    snprintf(name_content, sizeof(name_content), "**%s v%s**", name, version ? version : "?");
-
-    /* Line 2 rule content (without indent, without unicode prefix) */
-    char rule_content[128];
-    int rule_len = (int)strlen(name) + (version ? (int)strlen(version) : 0) + 4;
-    if (rule_len > 40) rule_len = 40;
-    if (rule_len < 5) rule_len = 5;
-    size_t ri = 0;
-    for (int i = 0; i < rule_len && ri < sizeof(rule_content) - 4; i++) {
-        rule_content[ri++] = '\xe2';
-        rule_content[ri++] = '\x94';
-        rule_content[ri++] = '\x80';
-    }
-    rule_content[ri] = '\0';
-
-    /* Combined lines: cat_indent + cat_glyph + gap_spaces + text_content */
-    char combined1[512], combined2[512], combined3[512];
-
-    snprintf(combined1, sizeof(combined1), "%s/\\_/\\%*s%s",
-             cat_indent, gap1, "", name_content);
-    snprintf(combined2, sizeof(combined2), "%s( o.o )%*s%s",
-             cat_indent, gap2, "", rule_content);
-    snprintf(combined3, sizeof(combined3), "%s > ^ <%*s%s",
-             cat_indent, gap3, "", model);
-
-    /* Lines without cat — align with text in combined lines */
-    char meta_indent[64];
-    /* Text in combined lines starts at cat_offset + 13 = center_offset + 1 */
-    int meta_col = center_offset + 1;
-    if (meta_col < 2) meta_col = 2;
-    snprintf(meta_indent, sizeof(meta_indent), "%*s", meta_col, "");
-
-    char dir_meta[512], session_meta[512];
-    snprintf(dir_meta, sizeof(dir_meta), "%s%s", meta_indent, working_dir);
-    if (session_id && session_id[0]) {
-        snprintf(session_meta, sizeof(session_meta), "%s── %s ──", meta_indent, session_id);
-    } else {
-        snprintf(session_meta, sizeof(session_meta), "%s── no session ──", meta_indent);
-    }
-
-    /* Add padding before banner */
+    // Add padding before banner
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
 
+    // Add banner lines to conversation window (skip cat mascot in VLTRN mode)
     if (!is_vltrn) {
-        /* Cat + name/rule/model on same lines, side by side */
-        tui_add_conversation_line(tui, NULL, combined1, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, combined2, COLOR_PAIR_TOOL_DIM);
-        tui_add_conversation_line(tui, NULL, combined3, COLOR_PAIR_TOOL_DIM);
+        tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, line4, COLOR_PAIR_ASSISTANT);
     }
-
-    /* Working dir on its own line, no cat */
-    tui_add_conversation_line(tui, NULL, dir_meta, COLOR_PAIR_TOOL_DIM);
-
-    /* Blank line before session threshold */
-    tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
-    /* Session threshold in dim */
-    tui_add_conversation_line(tui, NULL, session_meta, COLOR_PAIR_TOOL_DIM);
-
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);  // Blank line
 
     // Tips array: randomly select one to display at startup
