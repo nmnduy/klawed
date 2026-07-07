@@ -287,6 +287,7 @@ make clean && make SANITIZE=1 test
 - [Auto-Compaction](docs/auto_compaction.md)
 - [Color Themes](docs/COLOR_THEMES.md)
 - [Streaming](docs/streaming.md)
+- [Tmux Integration](docs/tmux-integration.md)
 
 ## License
 
