@@ -152,7 +152,7 @@ make -k \
     > "$TEST_LOG" 2>&1
 # Check log for actual test failures (make -k always exits non-zero on failure,
 # but we want to continue running all tests before checking results)
-if grep -qE '^make: .*Error|FAILED|Aborted|Segmentation fault' "$TEST_LOG"; then
+if grep -qE '(^make: .*Error)|(FAIL$)|(FAILED$)|(✗.*FAIL)|Aborted|Segmentation fault' "$TEST_LOG"; then
     echo "[registry-ci] Tests FAILED"
     FAIL_COUNT=$(grep -c 'FAIL\|FAILED\|failed\|Error' "$TEST_LOG" 2>/dev/null || echo "?")
     TEST_TAIL=$(tail -5 "$TEST_LOG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
