@@ -288,6 +288,18 @@ make clean && make SANITIZE=1 test
 - [Color Themes](docs/COLOR_THEMES.md)
 - [Streaming](docs/streaming.md)
 - [Tmux Integration](docs/tmux-integration.md)
+- [Release Process](docs/RELEASE.md)
+
+## CI/CD
+
+CI runs automatically on every push to `master`:
+
+| Runner | What it does |
+|--------|-------------|
+| **GitHub Actions** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) | Build + test on every push |
+| **Registry server** (`registry.kasafox.com`) | Build + test, then auto-bumps patch version, commits, tags, and pushes back to the bare repo. Sends Telegram notifications for each stage. |
+
+The registry CI is a [post-receive hook](scripts/registry-post-receive) installed at `/opt/git/klawed.git/hooks/post-receive`. Version bumps are fully automated — no manual `make bump-patch` needed after merge.
 
 ## License
 

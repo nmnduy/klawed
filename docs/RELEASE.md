@@ -181,27 +181,33 @@ All release binaries include version information:
 
 ## Integration with CI/CD
 
-### GitHub Actions
+### Registry Server CI (Primary)
 
-The release workflow uses the VERSION file:
+The main CI runs on the registry server (`registry.kasafox.com`) via a post-receive hook at
+`/opt/git/klawed.git/hooks/post-receive`. On every push to master:
 
-```yaml
-- name: Get version
-  id: version
-  run: |
-    VERSION=$(cat VERSION)
-    echo "version=$VERSION" >> $GITHUB_OUTPUT
-```
+1. Clones the bare repo to a temp directory
+2. Builds with `-Werror`
+3. Runs all unit tests with `make -k`
+4. On success: auto-bumps the patch version, commits, tags, and pushes back
+5. Sends Telegram notifications for build/test/bump events
+6. Skips version bump commits to prevent recursion
+7. Detects tag collisions from concurrent CI runs and skips gracefully
 
-### Docker Images
+The hook script lives at [`scripts/registry-post-receive`](../scripts/registry-post-receive).
 
-Docker images are tagged with version:
+### GitHub Actions (Secondary)
+
+A lighter CI runs on GitHub Actions ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml))
+that builds and runs tests. It does **not** manage versions or tags — that's handled by the registry server.
+
+### Manual Version Bump
+
+For manual version bumps (major/minor releases, or when CI is unavailable):
 
 ```bash
-# Tags automatically created
-ghcr.io/username/klawed:1.0.0
-ghcr.io/username/klawed:v1.0.0
-ghcr.io/username/klawed:latest
+make bump-patch       # Auto-bump patch, commit, tag, push
+make update-version VERSION=1.0.0  # Manual bump to specific version
 ```
 
 ## Multiple Codebases
