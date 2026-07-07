@@ -9,20 +9,20 @@
 #define VERSION_H
 
 // Version string (e.g., "0.0.2", "1.0.0", "1.2.3-beta.1")
-#define KLAWED_VERSION "0.36.2"
+#define KLAWED_VERSION "0.36.3"
 
 // Version components for programmatic use
 #define KLAWED_VERSION_MAJOR 0
 #define KLAWED_VERSION_MINOR 36
-#define KLAWED_VERSION_PATCH 2
+#define KLAWED_VERSION_PATCH 3
 
 // Version as numeric value for comparisons (e.g., 0x000002)
-#define KLAWED_VERSION_NUMBER 0x002402
+#define KLAWED_VERSION_NUMBER 0x002403
 
 // Build timestamp (automatically generated)
 #define KLAWED_BUILD_TIMESTAMP "2026-07-07"
 
 // Full version string with build info
-#define KLAWED_VERSION_FULL "0.36.2 (built 2026-07-07)"
+#define KLAWED_VERSION_FULL "0.36.3 (built 2026-07-07)"
 
 #endif // VERSION_H
