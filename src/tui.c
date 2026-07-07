@@ -237,8 +237,8 @@ void tui_update_terminal_title(TUIState *tui) {
         dirname = last_slash ? last_slash + 1 : workdir;
     }
 
-    char title[256];
-    int len;
+    /* Build the spinner frame prefix if active */
+    const char *frame = NULL;
     if (tui->status_spinner_active) {
         const spinner_variant_t *variant = status_spinner_variant();
         int frame_count = variant->count;
@@ -247,37 +247,77 @@ void tui_update_terminal_title(TUIState *tui) {
             frames = SPINNER_FRAMES;
             frame_count = SPINNER_FRAME_COUNT;
         }
-        const char *frame = frames[tui->status_spinner_frame % frame_count];
+        frame = frames[tui->status_spinner_frame % frame_count];
+    }
+
+    /*
+     * Window title (OSC 0 / OSC k): medium-length, includes model + dir.
+     * Example: "◉ klawed(gpt-4o) · project" or "klawed(gpt-4o) · project"
+     */
+    char window_title[256];
+    int wlen;
+    if (frame) {
         if (model_label && model_label[0]) {
-            len = snprintf(title, sizeof(title), "%s %s(%s)", frame, name, model_label);
+            wlen = snprintf(window_title, sizeof(window_title),
+                           "%s %s(%s)", frame, name, model_label);
         } else {
-            len = snprintf(title, sizeof(title), "%s %s", frame, name);
+            wlen = snprintf(window_title, sizeof(window_title),
+                           "%s %s", frame, name);
         }
     } else {
         if (model_label && model_label[0]) {
-            len = snprintf(title, sizeof(title), "%s(%s)", name, model_label);
+            wlen = snprintf(window_title, sizeof(window_title),
+                           "%s(%s)", name, model_label);
         } else {
-            len = snprintf(title, sizeof(title), "%s", name);
+            wlen = snprintf(window_title, sizeof(window_title),
+                           "%s", name);
         }
     }
-
-    if (dirname && len > 0 && (size_t)len < sizeof(title)) {
-        // Use plain ASCII separator for terminal title — terminal title bars
-        // often cannot render Nerd Font glyphs or emojis, causing a ? box.
-        snprintf(title + len, sizeof(title) - (size_t)len, " · %s", dirname);
+    if (dirname && wlen > 0 && (size_t)wlen < sizeof(window_title)) {
+        /* Plain ASCII separator — terminal title bars often can't render
+         * Nerd Font glyphs or emojis, causing a ? box. */
+        snprintf(window_title + wlen, sizeof(window_title) - (size_t)wlen,
+                 " · %s", dirname);
     }
 
-    // OSC 0: set icon name and window title
-    printf("\033]0;%s\007", title);
+    /*
+     * Pane title (OSC 2, tmux 2.6+): compact, just the essentials.
+     * Example: "◉ project" or "klawed project"
+     */
+    char pane_title[128];
+    if (frame && dirname) {
+        snprintf(pane_title, sizeof(pane_title), "%s %s", frame, dirname);
+    } else if (dirname) {
+        snprintf(pane_title, sizeof(pane_title), "%s %s", name, dirname);
+    } else if (frame) {
+        snprintf(pane_title, sizeof(pane_title), "%s %s", frame, name);
+    } else {
+        snprintf(pane_title, sizeof(pane_title), "%s", name);
+    }
 
-    // Check if we're inside tmux and set the tmux window name too
+    /* Write escape sequences directly to STDOUT_FILENO.
+     * Using dprintf() bypasses both stdio and ncurses buffering layers,
+     * ensuring the escape sequences reach the terminal/tmux reliably.
+     * This is critical because ncurses owns the terminal during TUI mode
+     * and printf/fflush may not flush through ncurses' internal buffers. */
+
+    /* OSC 0: set icon name and window title (works in most terminals) */
+    dprintf(STDOUT_FILENO, "\033]0;%s\007", window_title);
+
+    /* Check if we're inside tmux */
     const char *tmux_env = getenv("TMUX");
     if (tmux_env && tmux_env[0] != '\0') {
-        // OSC k: set tmux window name (ESC k title ESC \)
-        printf("\033k%s\033\\", title);
-    }
+        /* OSC k: set tmux window name (tmux-specific escape).
+         * Requires: set -g allow-rename on  and  set -g automatic-rename off */
+        dprintf(STDOUT_FILENO, "\033k%s\033\\", window_title);
 
-    fflush(stdout);
+        /* OSC 2: set tmux pane title (xterm window title escape,
+         * interpreted as pane title by tmux 2.6+).
+         * Pane titles appear when: set -g pane-border-status top
+         * (or bottom). Each pane shows its own title — great for
+         * multi-pane workflows where you run klawed in one pane. */
+        dprintf(STDOUT_FILENO, "\033]2;%s\007", pane_title);
+    }
 }
 
 // Cached nerd font check (-1 = uninitialized, 0 = no, 1 = yes)
