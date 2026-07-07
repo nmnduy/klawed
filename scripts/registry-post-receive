@@ -1,11 +1,17 @@
 #!/bin/bash
 #
+# Source CI environment (Telegram tokens etc.)
+if [ -f /opt/git/klawed.git/hooks/post-receive.env ]; then
+  . /opt/git/klawed.git/hooks/post-receive.env
+fi
+#
 # Post-receive hook for the registry server (registry.kasafox.com:/opt/git/klawed.git)
 #
 # On every push to master, this hook:
 #   1. Checks out the repo to a temp working directory
 #   2. Builds and runs tests
 #   3. On success: bumps the patch version, commits, and tags
+#   4. Sends Telegram notifications for each stage
 #
 # The tag is created directly in the bare repo, so subsequent clones/fetches
 # from the registry server will see the new tag.
@@ -14,8 +20,34 @@
 #   cp scripts/registry-post-receive /opt/git/klawed.git/hooks/post-receive
 #   chmod +x /opt/git/klawed.git/hooks/post-receive
 #   apt-get install libcurl4-openssl-dev libcjson-dev libbsd-dev libsqlite3-dev libncursesw5-dev libssl-dev
+#
+# Environment variables (set on registry server or in hook):
+#   ALERT_BOT_TOKEN  - Telegram bot token
+#   ALERT_CHAT_ID    - Telegram chat ID for notifications
 
 set -euo pipefail
+
+# ── Telegram notification ──────────────────────────────────────────────
+TELEGRAM_API="https://api.telegram.org"
+BOT_TOKEN="${ALERT_BOT_TOKEN:-}"
+CHAT_ID="${ALERT_CHAT_ID:-}"
+
+notify_telegram() {
+    local text="$1"
+    if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+        return 0  # silently skip if not configured
+    fi
+    curl -s -X POST "${TELEGRAM_API}/bot${BOT_TOKEN}/sendMessage" \
+        -d "chat_id=${CHAT_ID}" \
+        -d "text=${text}" \
+        -d "parse_mode=HTML" \
+        -o /dev/null 2>/dev/null || true
+}
+
+notify_ok()  { notify_telegram "✅ <b>$1</b>"; }
+notify_err() { notify_telegram "❌ <b>$1</b>"; }
+notify_info() { notify_telegram "ℹ️ $1"; }
+# ───────────────────────────────────────────────────────────────────────
 
 # Only act on master branch pushes
 BRANCH=""
@@ -41,6 +73,10 @@ if echo "$COMMIT_MSG" | grep -q "^chore: bump version to"; then
     exit 0
 fi
 
+COMMIT_AUTHOR=$(git --git-dir="$(pwd)" log -1 --pretty=%an "$NEWREV")
+SHORT_HASH=$(echo "$NEWREV" | cut -c1-8)
+notify_info "CI started for <code>${SHORT_HASH}</code> by ${COMMIT_AUTHOR}&#10;<i>${COMMIT_MSG}</i>"
+
 # Create a temp working directory
 WORKDIR=$(mktemp -d /tmp/klawed-ci-XXXXXX)
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -51,10 +87,19 @@ cd "$WORKDIR"
 git checkout "$NEWREV"
 
 echo "[registry-ci] Building..."
-make 2>&1 | tail -5
+if make 2>&1 | tail -20 > /tmp/klawed-build.log; then
+    echo "[registry-ci] Build passed"
+    notify_ok "Build passed for <code>${SHORT_HASH}</code>"
+else
+    echo "[registry-ci] Build FAILED"
+    BUILD_TAIL=$(tail -5 /tmp/klawed-build.log | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+    notify_err "Build <b>FAILED</b> for <code>${SHORT_HASH}</code>&#10;<pre>${BUILD_TAIL}</pre>"
+    exit 1
+fi
 
 echo "[registry-ci] Running tests..."
-if ! make \
+TEST_LOG="/tmp/klawed-test.log"
+if make \
     test-arena \
     test-array-resize \
     test-base64 \
@@ -97,8 +142,14 @@ if ! make \
     test-session-resolve \
     test-codex-tools \
     test-tool-disable \
-    2>&1; then
-    echo "[registry-ci] Tests failed — skipping version bump"
+    > "$TEST_LOG" 2>&1; then
+    echo "[registry-ci] All tests passed"
+    TEST_PASSED=1
+else
+    echo "[registry-ci] Tests FAILED"
+    FAIL_COUNT=$(grep -c 'FAIL\|FAILED\|failed\|Error' "$TEST_LOG" 2>/dev/null || echo "?")
+    TEST_TAIL=$(tail -5 "$TEST_LOG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+    notify_err "Tests <b>FAILED</b> for <code>${SHORT_HASH}</code> (${FAIL_COUNT} failures)&#10;<pre>${TEST_TAIL}</pre>"
     exit 1
 fi
 
@@ -132,3 +183,4 @@ git push origin master
 git push origin "v$NEW_VERSION"
 
 echo "[registry-ci] Done — tagged v$NEW_VERSION"
+notify_ok "klawed <b>v${NEW_VERSION}</b> tagged and pushed&#10;<code>${SHORT_HASH}</code> → ${CURRENT_VERSION} → ${NEW_VERSION}"
