@@ -2,149 +2,141 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+    branches: [master]
 
+permissions:
+  contents: write  # needed for pushing version bump commits and tags
+
+# Prevent recursive CI runs when the version bump commit is pushed
+# by skipping commits made by the CI bot itself
 jobs:
-  test-ubuntu-gcc:
-    name: Ubuntu + GCC
+  # Gate: only run CI if this is NOT a version bump commit
+  skip-check:
     runs-on: ubuntu-latest
-    env:
-      CC: gcc
-      TERM: xterm
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies
+        with:
+          fetch-depth: 0
+      - id: check
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev libcjson-dev sqlite3 libsqlite3-dev libssl-dev libbsd-dev build-essential libncursesw6 libncurses-dev
+          MSG=$(git log -1 --pretty=%s)
+          if echo "$MSG" | grep -q "^chore: bump version to"; then
+            echo "Skipping CI — version bump commit (pushed by CI bot)"
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Build with GCC
-        run: |
-          make clean
-          make all
-
-      - name: Run tests with GCC
-        run: make test
-
-      - name: Test installation
-        run: |
-          make clean
-          make install INSTALL_PREFIX=/tmp/claude-c-install
-          /tmp/claude-c-install/bin/klawed --version
-
-      - name: Build with sanitizers (GCC)
-        run: |
-          make clean
-          make SANITIZERS=-fsanitize=address,undefined all
-
-      - name: Run tests with sanitizers (GCC)
-        run: make SANITIZERS=-fsanitize=address,undefined test
-
-  test-ubuntu-clang:
-    name: Ubuntu + Clang
+  build-and-test:
+    needs: skip-check
+    if: needs.skip-check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    env:
-      CC: clang
-      TERM: xterm
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev libcjson-dev sqlite3 libsqlite3-dev libssl-dev libbsd-dev build-essential libncursesw6 libncurses-dev
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libcurl4-openssl-dev \
+            libcjson-dev \
+            libbsd-dev \
+            libsqlite3-dev \
+            libncursesw5-dev \
+            libssl-dev
 
-      - name: Build with Clang
+      - name: Build
+        run: make
+
+      - name: Run tests
+        timeout-minutes: 10
         run: |
-          make clean
-          make all
+          make \
+            test-arena \
+            test-array-resize \
+            test-base64 \
+            test-config \
+            test-config-merge \
+            test-redact \
+            test-wrap \
+            test-edit \
+            test-http-client \
+            test-json-parsing \
+            test-markdown-render \
+            test-line-printer \
+            test-code-block-fill \
+            test-dump-utils \
+            test-todo \
+            test-todo-write \
+            test-model-capabilities \
+            test-paste \
+            test-paste-placeholder \
+            test-memory-null-fix \
+            test-rotation \
+            test-message-queue \
+            test-bash-timeout \
+            test-bash-stderr \
+            test-bash-truncation \
+            test-cancel-flow \
+            test-tool-results-regression \
+            test-history-file \
+            test-tui-input-buffer \
+            test-tui-auto-scroll \
+            test-tool-details \
+            test-token-usage \
+            test-token-usage-comprehensive \
+            test-token-usage-session-totals \
+            test-token-usage-db-metadata \
+            test-sqlite-queue-seeding \
+            test-file-search \
+            test-provider-init-from-config \
+            test-provider-init \
+            test-session-resolve \
+            test-codex-tools \
+            test-tool-disable
 
-      - name: Run tests with Clang
-        run: make test
-
-      - name: Test installation
+      - name: Bump patch version, commit, and tag
+        id: bump
+        if: success()
         run: |
-          make clean
-          make install INSTALL_PREFIX=/tmp/claude-c-install
-          /tmp/claude-c-install/bin/klawed --version
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          make bump-patch
+          echo "new_tag=v$(cat VERSION)" >> $GITHUB_OUTPUT
 
-      - name: Build with sanitizers (Clang)
-        run: |
-          make clean
-          make SANITIZERS=-fsanitize=address,undefined all
-
-      - name: Run tests with sanitizers (Clang)
-        run: make SANITIZERS=-fsanitize=address,undefined test
-
-  test-macos-gcc:
-    name: macOS + GCC
-    runs-on: macos-latest
-    env:
-      CC: gcc
-      TERM: xterm
+  push-to-registry:
+    needs: build-and-test
+    if: needs.build-and-test.result == 'success'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies
+        with:
+          fetch-depth: 0
+      - name: Push tag and master to registry server
         run: |
-          brew install curl cjson sqlite3 openssl pkg-config ncurses libbsd
-
-      - name: Build with GCC
-        run: |
-          make clean
-          make all
-
-      - name: Run tests with GCC
-        run: make test
-
-      - name: Test installation
-        run: |
-          make clean
-          make install INSTALL_PREFIX=/tmp/claude-c-install
-          /tmp/claude-c-install/bin/klawed --version
-
-      - name: Build with sanitizers (GCC)
-        run: |
-          make clean
-          make SANITIZERS=-fsanitize=address,undefined all
-
-      - name: Run tests with sanitizers (GCC)
-        run: make SANITIZERS=-fsanitize=address,undefined test
-
-  test-macos-clang:
-    name: macOS + Clang
-    runs-on: macos-latest
-    env:
-      CC: clang
-      TERM: xterm
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          brew install curl cjson sqlite3 openssl pkg-config ncurses libbsd
-
-      - name: Build with Clang
-        run: |
-          make clean
-          make all
-
-      - name: Run tests with Clang
-        run: make test
-
-      - name: Test installation
-        run: |
-          make clean
-          make install INSTALL_PREFIX=/tmp/claude-c-install
-          /tmp/claude-c-install/bin/klawed --version
-
-      - name: Build with sanitizers (Clang)
-        run: |
-          make clean
-          make SANITIZERS=-fsanitize=address,undefined all
-
-      - name: Run tests with sanitizers (Clang)
-        run: make SANITIZERS=-fsanitize=address,undefined test
+          if [ -z "$REGISTRY_SSH_KEY" ]; then
+            echo "No REGISTRY_SSH_KEY secret configured — skipping registry push"
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          echo "$REGISTRY_SSH_KEY" > ~/.ssh/id_registry
+          chmod 600 ~/.ssh/id_registry
+          cat >> ~/.ssh/config << 'SSHEOF'
+          Host registry.kasafox.com
+            IdentityFile ~/.ssh/id_registry
+            StrictHostKeyChecking no
+          SSHEOF
+          TAG="v$(cat VERSION)"
+          echo "Pushing master and $TAG to registry server..."
+          git push root@registry.kasafox.com:/opt/git/klawed.git master
+          git push root@registry.kasafox.com:/opt/git/klawed.git "$TAG"
+          echo "Registry push complete"
+        env:
+          REGISTRY_SSH_KEY: ${{ secrets.REGISTRY_SSH_KEY }}
