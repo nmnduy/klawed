@@ -929,13 +929,55 @@ static void test_distribute_widths_proportional(void) {
     int col_widths[3];
     int max_widths[] = {5, 50, 15};
     table_distribute_widths(col_widths, 3, 80, 0, max_widths);
-    /* avail = 80 - 1 - 9 = 70. min = 24. extra = 46.
+    /* avail = 80 - 1 - 9 - 1 = 69 (1 col right margin reserved).
+     * min = 24. extra = 45.
      * total_content = 5+50+15 = 70.
-     * col 0: 8 + (5*46)/70 = 8 + 3 = 11
-     * col 1: 8 + (50*46)/70 = 8 + 32 = 40
-     * col 2: 8 + (15*46)/70 = 8 + 9 = 17. Remainder: 46-3-32-9=2, so col2 = 19
+     * col 0: 8 + (5*45)/70 = 8 + 3 = 11
+     * col 1: 8 + (50*45)/70 = 8 + 32 = 40
+     * col 2: 8 + (45-3-32) = 8 + 10 = 18
      */
     int ok = (col_widths[0] == 11 && col_widths[1] == 40);
+    print_test_result(name, ok);
+}
+
+/* Verify total rendered width never reaches pad_width — this is the
+ * safety invariant that prevents ncurses right-edge auto-wrap from
+ * creating phantom blank lines after every table row. */
+static void test_distribute_widths_total_lt_padwidth(void) {
+    const char *name = "distribute_widths_total_lt_padwidth";
+    int widths_2[] = {30, 30};
+    int widths_3[] = {40, 30, 50};
+    int widths_4[] = {25, 20, 30, 35};
+    int widths_6[] = {15, 15, 15, 15, 15, 15};
+    struct { int *cw; size_t nc; } cases[] = {
+        {widths_2, 2}, {widths_3, 3}, {widths_4, 4}, {widths_6, 6},
+    };
+    int ok = 1;
+    for (size_t c = 0; c < 4; c++) {
+        size_t nc = cases[c].nc;
+        int col_w[16];
+        /* Test at several pad widths */
+        int test_widths[] = {60, 80, 100, 140, 200};
+        for (size_t tw = 0; tw < 5; tw++) {
+            int pw = test_widths[tw];
+            /* Only test configs where wrapped mode would actually be used.
+             * table_distribute_widths is only called after table_should_wrap
+             * returns true; testing configs it rejects is invalid. */
+            if (!table_should_wrap(nc, pw, 0, cases[c].cw)) continue;
+            table_distribute_widths(col_w, nc, pw, 0, cases[c].cw);
+            /* Compute total rendered row width:
+             * left_bw(1) + sum(1 space + col_width + 1 space + 1 pipe) */
+            int total = 1; /* left border '|' */
+            for (size_t j = 0; j < nc; j++) {
+                total += 1 + col_w[j] + 1 + 1;
+            }
+            if (total >= pw) {
+                printf("  FAIL: nc=%zu pw=%d total=%d >= pad_width\n",
+                       nc, pw, total);
+                ok = 0;
+            }
+        }
+    }
     print_test_result(name, ok);
 }
 
@@ -1134,6 +1176,7 @@ int main(void) {
     test_should_wrap_too_many_cols();
     test_should_wrap_narrow_screen();
     test_distribute_widths_proportional();
+    test_distribute_widths_total_lt_padwidth();
 
     /* --- integration: markdown in table cells --- */
     printf("\n--- integration: markdown in table cells ---\n");
