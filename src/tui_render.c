@@ -2236,10 +2236,10 @@ void input_redraw(TUIState *tui, const char *prompt) {
     // BLAND style: no extra height
     tui_window_resize_input(tui, window_height_needed);
     input = tui->input_buffer;
-    /* Defensive re-sync: tui_window_resize_input synced the pointer, but if
-     * window_manager_show_todo_window or similar recreated the window between
-     * the top-of-function sync and now, input->win could be stale. Re-read
-     * from the freshly-validated input_buffer. */
+    /* Re-read win from input->win after resize: tui_window_resize_input may
+     * have recreated the input window (delwin + newwin), making the local
+     * 'win' variable declared above a stale pointer. input->win was synced
+     * by tui_window_resize_input. */
     win = input->win;
     if (!win) {
         return;
