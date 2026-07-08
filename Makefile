@@ -575,6 +575,8 @@ TEST_FILE_SEARCH_SRC = tests/test_file_search.c
 TEST_FILE_SEARCH_TARGET = $(BUILD_DIR)/test_file_search
 TEST_MARKDOWN_RENDER_SRC = tests/test_markdown_render.c
 TEST_MARKDOWN_RENDER_TARGET = $(BUILD_DIR)/test_markdown_render
+TEST_TABLE_WIDTH_SAFETY_SRC = tests/test_table_width_safety.c
+TEST_TABLE_WIDTH_SAFETY_TARGET = $(BUILD_DIR)/test_table_width_safety
 TEST_LINE_PRINTER_SRC = tests/test_line_printer.c
 TEST_LINE_PRINTER_TARGET = $(BUILD_DIR)/test_line_printer
 TEST_CODE_BLOCK_FILL_SRC = tests/test_code_block_fill.c
@@ -1070,6 +1072,12 @@ test-markdown-render: check-deps $(TEST_MARKDOWN_RENDER_TARGET)
 	@echo ""
 	@./$(TEST_MARKDOWN_RENDER_TARGET)
 
+
+test-table-width-safety: check-deps $(TEST_TABLE_WIDTH_SAFETY_TARGET)
+	@echo ""
+	@echo "Running table width safety validator..."
+	@echo ""
+	@./$(TEST_TABLE_WIDTH_SAFETY_TARGET)
 test-line-printer: check-deps $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(TEST_LINE_PRINTER_TARGET)
 	@echo ""
 	@echo "Running LinePrinter tests..."
@@ -3500,6 +3508,15 @@ $(TEST_MARKDOWN_RENDER_TARGET): src/markdown_render.c $(TEST_MARKDOWN_RENDER_SRC
 	@$(CC) $(CFLAGS) -DTEST_BUILD -I./src -o $(TEST_MARKDOWN_RENDER_TARGET) $(TEST_MARKDOWN_RENDER_SRC) src/markdown_render.c $(LDFLAGS)
 	@echo ""
 	@echo "✓ Markdown render test build successful!"
+
+# One-off table width safety validator — sweeps pad widths × content profiles
+# to verify total rendered table width < pad_width (no ncurses auto-wrap)
+$(TEST_TABLE_WIDTH_SAFETY_TARGET): src/markdown_render.c $(TEST_TABLE_WIDTH_SAFETY_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling table width safety validator..."
+	@$(CC) $(CFLAGS) -DTEST_BUILD -I./src -o $(TEST_TABLE_WIDTH_SAFETY_TARGET) $(TEST_TABLE_WIDTH_SAFETY_SRC) src/markdown_render.c $(LDFLAGS)
+	@echo ""
+	@echo "✓ Table width safety validator build successful!"
 
 # Test target for LinePrinter (pad-based line rendering)
 $(TEST_LINE_PRINTER_TARGET): $(TEST_LINE_PRINTER_SRC) $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ)
