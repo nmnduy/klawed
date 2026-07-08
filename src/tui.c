@@ -349,6 +349,10 @@ const char* tui_icon_reasoning_close(void) {
     return tui_is_nerd_font_enabled() ? "\xef\x80\x8c" : "<<< Reasoning>"; // 
 }
 
+const char* tui_icon_command(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x92\x89" : "[Command]"; // 
+}
+
 const char* tui_icon_tool(void) {
     return tui_is_nerd_font_enabled() ? "\xef\x82\xad" : "\xe2\x97\x8f"; //  or ●
 }

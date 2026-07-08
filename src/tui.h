@@ -406,6 +406,9 @@ const char* tui_icon_user(void);
 const char* tui_icon_reasoning_open(void);
 const char* tui_icon_reasoning_close(void);
 
+// Command icon (e.g. "" or "[Command]")
+const char* tui_icon_command(void);
+
 // Tool icon (just the icon character, e.g. "●" or "")
 const char* tui_icon_tool(void);
 

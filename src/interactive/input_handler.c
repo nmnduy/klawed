@@ -78,7 +78,7 @@ int submit_input_callback(const char *input, void *user_data) {
 
     // Check for vim-style commands (starting with ':')
     if (input_copy[0] == ':') {
-        ui_append_line(tui, queue, "[Command]", input_copy, COLOR_PAIR_STATUS);
+        ui_append_line(tui, queue, tui_icon_command(), input_copy, COLOR_PAIR_STATUS);
         int result = handle_vim_command(tui, queue, input_copy);
         free(input_copy);
         return result;  // 1 means exit, 0 means continue
