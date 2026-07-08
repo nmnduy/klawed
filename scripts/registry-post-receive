@@ -75,7 +75,7 @@ fi
 
 COMMIT_AUTHOR=$(git --git-dir="$(pwd)" log -1 --pretty=%an "$NEWREV")
 SHORT_HASH=$(echo "$NEWREV" | cut -c1-8)
-notify_info "CI started for <code>${SHORT_HASH}</code> by ${COMMIT_AUTHOR}&#10;<i>${COMMIT_MSG}</i>"
+notify_info "🔧 klawed CI started for <code>${SHORT_HASH}</code> by ${COMMIT_AUTHOR}&#10;<i>${COMMIT_MSG}</i>"
 
 # Create a temp working directory
 WORKDIR=$(mktemp -d /tmp/klawed-ci-XXXXXX)
@@ -92,11 +92,11 @@ git checkout "$NEWREV"
 echo "[registry-ci] Building..."
 if make 2>&1 | tail -20 > /tmp/klawed-build.log; then
     echo "[registry-ci] Build passed"
-    notify_ok "Build passed for <code>${SHORT_HASH}</code>"
+    notify_ok "klawed CI: Build passed for <code>${SHORT_HASH}</code>"
 else
     echo "[registry-ci] Build FAILED"
     BUILD_TAIL=$(tail -5 /tmp/klawed-build.log | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-    notify_err "Build <b>FAILED</b> for <code>${SHORT_HASH}</code>&#10;<pre>${BUILD_TAIL}</pre>"
+    notify_err "klawed CI: Build <b>FAILED</b> for <code>${SHORT_HASH}</code>&#10;<pre>${BUILD_TAIL}</pre>"
     exit 1
 fi
 
@@ -156,7 +156,7 @@ if grep -qE '(^make: .*Error)|(FAIL$)|(FAILED$)|(✗.*FAIL)|Aborted|Segmentation
     echo "[registry-ci] Tests FAILED"
     FAIL_COUNT=$(grep -c 'FAIL\|FAILED\|failed\|Error' "$TEST_LOG" 2>/dev/null || echo "?")
     TEST_TAIL=$(tail -5 "$TEST_LOG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-    notify_err "Tests <b>FAILED</b> for <code>${SHORT_HASH}</code> (${FAIL_COUNT} failures)&#10;<pre>${TEST_TAIL}</pre>"
+    notify_err "klawed CI: Tests <b>FAILED</b> for <code>${SHORT_HASH}</code> (${FAIL_COUNT} failures)&#10;<pre>${TEST_TAIL}</pre>"
     exit 1
 fi
 echo "[registry-ci] All tests passed"
@@ -175,7 +175,7 @@ echo "[registry-ci] $CURRENT_VERSION → $NEW_VERSION"
 # Check if this tag already exists (another CI run may have beaten us)
 if git tag -l "v$NEW_VERSION" | grep -q .; then
     echo "[registry-ci] Tag v$NEW_VERSION already exists — skipping (already bumped by another run)"
-    notify_info "Tag v${NEW_VERSION} already exists — skipping bump"
+    notify_info "klawed CI: Tag v${NEW_VERSION} already exists — skipping bump"
     exit 0
 fi
 
@@ -199,4 +199,4 @@ git push origin HEAD:refs/heads/master
 git push origin "v$NEW_VERSION"
 
 echo "[registry-ci] Done — tagged v$NEW_VERSION"
-notify_ok "klawed <b>v${NEW_VERSION}</b> tagged and pushed&#10;<code>${SHORT_HASH}</code> → ${CURRENT_VERSION} → ${NEW_VERSION}"
+notify_ok "klawed CI: <b>v${NEW_VERSION}</b> tagged and pushed&#10;<code>${SHORT_HASH}</code> → ${CURRENT_VERSION} → ${NEW_VERSION}"
