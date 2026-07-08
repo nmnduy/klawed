@@ -1020,8 +1020,10 @@ static int table_should_wrap(size_t num_cols, int pad_width,
     /* Left border width: if non-NULL border string, measure it; else 1 for '|' */
     int left_bw = (left_border_width > 0) ? left_border_width : 1;
 
-    /* Available width for column content */
-    int avail = pad_width - left_bw - ((int)num_cols * TABLE_WRAP_PER_COL_OVERHEAD);
+    /* Available width for column content.  Reserve 1 column of right
+     * margin to prevent ncurses auto-wrap (which adds a phantom newline
+     * when the final '|' lands on the pad's right edge). */
+    int avail = pad_width - left_bw - ((int)num_cols * TABLE_WRAP_PER_COL_OVERHEAD) - 1;
 
     /* Check if table would overflow without wrapping */
     size_t total_natural_width = 0;
@@ -1055,7 +1057,9 @@ static void table_distribute_widths(int *col_widths, size_t num_cols, int pad_wi
                                     int left_border_width, const int *max_content_widths) {
 #endif
     int left_bw = (left_border_width > 0) ? left_border_width : 1;
-    int avail = pad_width - left_bw - ((int)num_cols * TABLE_WRAP_PER_COL_OVERHEAD);
+    /* Reserve 1 column of right margin to prevent ncurses auto-wrap
+     * when the final '|' lands exactly on the pad's right edge. */
+    int avail = pad_width - left_bw - ((int)num_cols * TABLE_WRAP_PER_COL_OVERHEAD) - 1;
 
     /* Minimum guaranteed */
     int used = 0;
