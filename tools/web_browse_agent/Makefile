@@ -56,7 +56,7 @@ install-deps:
 	@echo "Installing dependencies..."
 	$(GOMOD) download
 	@echo "Installing Playwright browsers..."
-	$(GOCMD) run github.com/playwright-community/playwright-go/cmd/playwright@v0.5200.1 install chromium
+	$(GOCMD) run github.com/mxschmitt/playwright-go/cmd/playwright@v0.6100.0 install chromium
 
 # Install system libraries for Chromium in datacenter/stripped container environments
 # Downloads Debian bookworm packages and extracts to ./chromium_libs/

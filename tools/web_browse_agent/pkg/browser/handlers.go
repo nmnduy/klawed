@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/klawed/tools/web_browse_agent/pkg/ipc"
-	"github.com/playwright-community/playwright-go"
+	"github.com/mxschmitt/playwright-go"
 )
 
 // frameChainSeparator splits nested frame selectors for multi-level iframe targeting.

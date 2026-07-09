@@ -3,7 +3,7 @@ package browser
 import (
 	"os"
 
-	"github.com/playwright-community/playwright-go"
+	"github.com/mxschmitt/playwright-go"
 )
 
 // stealthEnabled returns true when WEB_AGENT_STEALTH env var is not set to "0" or "false".

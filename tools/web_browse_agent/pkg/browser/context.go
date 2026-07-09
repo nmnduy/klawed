@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/playwright-community/playwright-go"
+	"github.com/mxschmitt/playwright-go"
 )
 
 // logger is a package-level logger for browser operations
