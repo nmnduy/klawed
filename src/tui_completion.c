@@ -326,3 +326,34 @@ int tui_handle_tab_completion(TUIState *tui, const char *prompt) {
         return 0;
     }
 }
+
+/* Find matching slash commands from the command registry.
+ * Returns count of matches (0 if none). Each match is an allocated string
+ * that the caller must free. */
+int tui_find_slash_command_matches(const char *prefix, char **matches, int max_matches) {
+    if (!prefix || !matches || max_matches <= 0) {
+        return 0;
+    }
+
+    int prefix_len = (int)strlen(prefix);
+    if (prefix_len == 0) {
+        /* Empty prefix — return all commands */
+    }
+
+    int count;
+    const Command **cmds = commands_list(&count);
+    int match_count = 0;
+
+    for (int i = 0; i < count && match_count < max_matches; i++) {
+        const char *name = cmds[i]->name;
+        if (prefix_len == 0 || strncmp(name, prefix, (size_t)prefix_len) == 0) {
+            /* Allocate and store a copy of the command name */
+            matches[match_count] = strdup(name);
+            if (matches[match_count]) {
+                match_count++;
+            }
+        }
+    }
+
+    return match_count;
+}

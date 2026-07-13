@@ -54,4 +54,18 @@ int tui_find_command_matches(const char *prefix, const char **matches, int max_m
  */
 int tui_find_bash_command_matches(const char *prefix, const char **matches, int max_matches);
 
+/**
+ * Find matching slash commands from the command registry
+ *
+ * Searches the command registry for commands whose names start with the
+ * given prefix. Used for the auto-complete dropdown when the user types
+ * input starting with ';' or ':'.
+ *
+ * @param prefix       Command prefix to match (e.g., "ex" matches "/exit")
+ * @param matches      Array to fill with allocated command name strings
+ * @param max_matches  Maximum number of matches to return
+ * @return Number of matches found (0 if none)
+ */
+int tui_find_slash_command_matches(const char *prefix, char **matches, int max_matches);
+
 #endif // TUI_COMPLETION_H

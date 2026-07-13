@@ -563,6 +563,14 @@ int tui_init(TUIState *tui, ConversationState *state) {
     tui->last_search_match_line = -1;
     tui->last_search_pattern = NULL;
 
+    // Initialize command auto-complete state
+    tui->cmd_autocomplete_active = 0;
+    tui->cmd_autocomplete_filter = NULL;
+    tui->cmd_autocomplete_selected = -1;
+    tui->cmd_autocomplete_options = NULL;
+    tui->cmd_autocomplete_count = 0;
+    tui->cmd_autocomplete_prefix_type = 0;
+
     // Initialize input buffer
     if (tui_input_init(tui) != 0) {
         window_manager_destroy(&tui->wm);
@@ -679,6 +687,20 @@ void tui_cleanup(TUIState *tui) {
     tui->search_buffer = NULL;
     free(tui->last_search_pattern);
     tui->last_search_pattern = NULL;
+
+    // Free command auto-complete state
+    free(tui->cmd_autocomplete_filter);
+    tui->cmd_autocomplete_filter = NULL;
+    if (tui->cmd_autocomplete_options) {
+        for (int i = 0; i < tui->cmd_autocomplete_count; i++) {
+            free(tui->cmd_autocomplete_options[i]);
+        }
+        free(tui->cmd_autocomplete_options);
+        tui->cmd_autocomplete_options = NULL;
+    }
+    tui->cmd_autocomplete_count = 0;
+    tui->cmd_autocomplete_selected = -1;
+    tui->cmd_autocomplete_active = 0;
 
     // Free file search state
     file_search_free(&tui->file_search);

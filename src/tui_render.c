@@ -2144,6 +2144,11 @@ void input_redraw(TUIState *tui, const char *prompt) {
         return;
     }
 
+    /* Update command auto-complete state when in INSERT mode */
+    if (tui->mode == TUI_MODE_INSERT) {
+        update_cmd_autocomplete(tui);
+    }
+
     // Hide input window in NORMAL mode
     if (tui->mode == TUI_MODE_NORMAL) {
         curs_set(0);  // Hide cursor
@@ -2234,6 +2239,17 @@ void input_redraw(TUIState *tui, const char *prompt) {
         window_height_needed += 2;  // +2 for top and bottom padding
     }
     // BLAND style: no extra height
+
+    /* Autocomplete dropdown: add extra lines for command suggestions */
+    int autocomplete_dropdown_height = 0;
+    if (tui->cmd_autocomplete_active && tui->cmd_autocomplete_count > 0) {
+        autocomplete_dropdown_height = tui->cmd_autocomplete_count;
+        if (autocomplete_dropdown_height > 6) {
+            autocomplete_dropdown_height = 6;  /* Cap at 6 lines */
+        }
+        window_height_needed += autocomplete_dropdown_height;
+    }
+
     tui_window_resize_input(tui, window_height_needed);
     input = tui->input_buffer;
     /* Re-read win from input->win after resize: tui_window_resize_input may
@@ -2298,10 +2314,13 @@ void input_redraw(TUIState *tui, const char *prompt) {
     int content_start_row = (tui->input_box_style == INPUT_STYLE_BORDER) ? 1 :
                             (tui->input_box_style == INPUT_STYLE_HORIZONTAL) ? 1 :
                             (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 1 : 0;
+    /* Shift content down to make room for autocomplete dropdown */
+    content_start_row += autocomplete_dropdown_height;
+
     int border_height_offset = (tui->input_box_style == INPUT_STYLE_BORDER) ? 2 :
                                (tui->input_box_style == INPUT_STYLE_HORIZONTAL) ? 2 :
                                (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 2 : 0;
-    int max_visible_lines = input->win_height - border_height_offset;
+    int max_visible_lines = input->win_height - border_height_offset - autocomplete_dropdown_height;
     if (cursor_line < input->line_scroll_offset) {
         input->line_scroll_offset = cursor_line;
     } else if (cursor_line >= input->line_scroll_offset + max_visible_lines) {
@@ -2434,6 +2453,61 @@ void input_redraw(TUIState *tui, const char *prompt) {
             if (has_colors()) {
                 wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             }
+        }
+    }
+
+    /* ── Render autocomplete dropdown ── */
+    if (autocomplete_dropdown_height > 0 && tui->cmd_autocomplete_count > 0) {
+        int base_row = (tui->input_box_style == INPUT_STYLE_BORDER) ? 1 :
+                       (tui->input_box_style == INPUT_STYLE_HORIZONTAL) ? 1 :
+                       (tui->input_box_style == INPUT_STYLE_BACKGROUND) ? 1 : 0;
+        int max_display = autocomplete_dropdown_height;
+
+        for (int i = 0; i < max_display && i < tui->cmd_autocomplete_count; i++) {
+            int row = base_row + i;
+            const char *opt = tui->cmd_autocomplete_options[i];
+            int is_selected = (i == tui->cmd_autocomplete_selected);
+
+            /* Clear the line first */
+            wmove(win, row, 0);
+            wclrtoeol(win);
+
+            if (has_colors()) {
+                if (is_selected) {
+                    wattron(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
+                } else {
+                    wattron(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+                }
+            }
+
+            /* Show the prefix character and the option name */
+            char prefix_char = (tui->cmd_autocomplete_prefix_type == 0) ? '/'
+                             : (tui->cmd_autocomplete_prefix_type == 1 &&
+                                tui->input_buffer->length >= 2 &&
+                                tui->input_buffer->buffer[1] == '!') ? '!' : ':';
+            char display[128];
+            snprintf(display, sizeof(display), " %c%s", prefix_char, opt);
+            tui_safe_mvwaddnstr(win, row, 1, display, (int)strlen(display));
+
+            if (has_colors()) {
+                if (is_selected) {
+                    wattroff(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
+                } else {
+                    wattroff(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+                }
+            }
+        }
+
+        /* Draw a thin separator line below the dropdown */
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+        }
+        int sep_row = base_row + max_display;
+        for (int col = 1; col < input->win_width - 1; col++) {
+            tui_safe_mvwaddch(win, sep_row, col, ACS_HLINE);
+        }
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
         }
     }
 

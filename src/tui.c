@@ -744,6 +744,131 @@ static int check_paste_timeout(TUIState *tui, const char *prompt) {
     return 0;
 }
 
+/* Update command autocomplete state based on current input buffer.
+ * Called after each character change when in INSERT mode.
+ * If input starts with ';' or ':', computes matching commands and
+ * populates the autocomplete dropdown state. */
+void update_cmd_autocomplete(TUIState *tui) {
+    TUIInputBuffer *input = tui->input_buffer;
+    if (!input || !input->buffer) {
+        return;
+    }
+
+    /* Free previous autocomplete options */
+    if (tui->cmd_autocomplete_options) {
+        for (int i = 0; i < tui->cmd_autocomplete_count; i++) {
+            free(tui->cmd_autocomplete_options[i]);
+        }
+        free(tui->cmd_autocomplete_options);
+        tui->cmd_autocomplete_options = NULL;
+    }
+    tui->cmd_autocomplete_count = 0;
+    tui->cmd_autocomplete_selected = 0;
+    tui->cmd_autocomplete_active = 0;
+    free(tui->cmd_autocomplete_filter);
+    tui->cmd_autocomplete_filter = NULL;
+
+    /* Check if input starts with ';' or ':' */
+    if (input->length == 0) return;
+    char first_char = input->buffer[0];
+
+    if (first_char == ';') {
+        /* Semicolon is an alias for '/' (slash commands) */
+        tui->cmd_autocomplete_prefix_type = 0;
+
+        /* Extract filter text after ';' */
+        const char *filter = input->buffer + 1;
+        int filter_len = input->length - 1;
+
+        /* Skip leading whitespace */
+        while (*filter == ' ' || *filter == '\t') {
+            filter++;
+            filter_len--;
+        }
+        if (filter_len < 0) filter_len = 0;
+
+        /* Only activate if filter has something or we want to show all */
+        if (input->length > 1 || filter_len == 0) {
+            char *matches[32];
+            char prefix[64];
+            int plen = filter_len < 64 ? filter_len : 63;
+            memcpy(prefix, filter, (size_t)plen);
+            prefix[plen] = '\0';
+
+            int count = tui_find_slash_command_matches(prefix, matches, 32);
+            if (count > 0) {
+                tui->cmd_autocomplete_active = 1;
+                tui->cmd_autocomplete_count = count;
+                tui->cmd_autocomplete_selected = 0;
+                tui->cmd_autocomplete_options = reallocarray(NULL, (size_t)count, sizeof(char*));
+                for (int i = 0; i < count; i++) {
+                    tui->cmd_autocomplete_options[i] = matches[i];
+                }
+                tui->cmd_autocomplete_filter = strdup(prefix);
+            }
+        }
+    } else if (first_char == ':') {
+        /* Colon is for vim-style commands */
+        tui->cmd_autocomplete_prefix_type = 1;
+
+        /* Check for shell escape :!<cmd> */
+        int is_shell = (input->length >= 2 && input->buffer[1] == '!');
+        const char *filter_start;
+        int filter_offset;
+
+        if (is_shell) {
+            filter_start = input->buffer + 2;
+            filter_offset = 2;
+        } else {
+            filter_start = input->buffer + 1;
+            filter_offset = 1;
+        }
+
+        /* Skip leading whitespace */
+        while (*filter_start == ' ' || *filter_start == '\t') {
+            filter_start++;
+            filter_offset++;
+        }
+        int filter_len = input->length - filter_offset;
+        if (filter_len < 0) filter_len = 0;
+
+        if (is_shell) {
+            /* Shell command completion — use bash command list */
+            char prefix[64];
+            int plen = filter_len < 64 ? filter_len : 63;
+            memcpy(prefix, filter_start, (size_t)plen);
+            prefix[plen] = '\0';
+
+            const char *matches[64];
+            int count = tui_find_bash_command_matches(prefix, matches, 64);
+            if (count > 0) {
+                tui->cmd_autocomplete_active = 1;
+                tui->cmd_autocomplete_count = count;
+                tui->cmd_autocomplete_selected = 0;
+                tui->cmd_autocomplete_options = reallocarray(NULL, (size_t)count, sizeof(char*));
+                for (int i = 0; i < count; i++) {
+                    tui->cmd_autocomplete_options[i] = strdup(matches[i]);
+                }
+                tui->cmd_autocomplete_filter = strdup(prefix);
+            }
+        } else if (input->length > 1) {
+            /* Vim command completion */
+            const char *matches[32];
+            int count = tui_find_command_matches(filter_start, matches, 32);
+            if (count > 0) {
+                tui->cmd_autocomplete_active = 1;
+                tui->cmd_autocomplete_count = count;
+                tui->cmd_autocomplete_selected = 0;
+                tui->cmd_autocomplete_options = reallocarray(NULL, (size_t)count, sizeof(char*));
+                for (int i = 0; i < count; i++) {
+                    tui->cmd_autocomplete_options[i] = strdup(matches[i]);
+                }
+                tui->cmd_autocomplete_filter = strdup(filter_start);
+            }
+        }
+    }
+}
+
 int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user_data) {
     if (!tui || !tui->is_initialized || !tui->wm.input_win) {
         return -1;
@@ -954,6 +1079,77 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         }
 
         input->last_input_time = current_time;
+    }
+
+    /* ── Command autocomplete navigation ──
+     * When the dropdown is active in INSERT mode, these keys navigate
+     * and select instead of their normal behavior. */
+    if (tui->cmd_autocomplete_active && tui->cmd_autocomplete_count > 0) {
+        if (ch == KEY_UP) {
+            if (tui->cmd_autocomplete_selected > 0) {
+                tui->cmd_autocomplete_selected--;
+            } else {
+                tui->cmd_autocomplete_selected = tui->cmd_autocomplete_count - 1;
+            }
+            input_redraw(tui, prompt);
+            return 0;
+        } else if (ch == KEY_DOWN) {
+            if (tui->cmd_autocomplete_selected < tui->cmd_autocomplete_count - 1) {
+                tui->cmd_autocomplete_selected++;
+            } else {
+                tui->cmd_autocomplete_selected = 0;
+            }
+            input_redraw(tui, prompt);
+            return 0;
+        } else if (ch == '\t' || ch == 9) {
+            /* Tab: select the currently highlighted option and complete */
+            if (tui->cmd_autocomplete_selected >= 0 &&
+                tui->cmd_autocomplete_selected < tui->cmd_autocomplete_count) {
+                const char *selection = tui->cmd_autocomplete_options[tui->cmd_autocomplete_selected];
+                /* Replace the filter portion of the buffer with the selection */
+                int prefix_len = (tui->cmd_autocomplete_prefix_type == 0) ? 1 : 1;
+                if (tui->cmd_autocomplete_prefix_type == 1 &&
+                    input->length >= 2 && input->buffer[1] == '!') {
+                    /* :! command — preserve the :! prefix */
+                    prefix_len = 2;
+                }
+                /* Clear from prefix_len onward and insert selection */
+                input->length = prefix_len;
+                input->cursor = prefix_len;
+                input->buffer[prefix_len] = '\0';
+                /* Insert selection (adds space after) */
+                tui_input_insert_string(input, selection);
+                tui_input_insert_string(input, " ");
+                /* Close the autocomplete */
+                tui->cmd_autocomplete_active = 0;
+                input_redraw(tui, prompt);
+            }
+            return 0;
+        } else if (ch == 27) {
+            /* Escape: close autocomplete, stay in INSERT mode */
+            tui->cmd_autocomplete_active = 0;
+            input_redraw(tui, prompt);
+            return 0;
+        } else if (ch == 13 || ch == 10) {
+            /* Enter: if a selection is highlighted, complete it before submitting */
+            if (tui->cmd_autocomplete_selected >= 0 &&
+                tui->cmd_autocomplete_selected < tui->cmd_autocomplete_count) {
+                const char *selection = tui->cmd_autocomplete_options[tui->cmd_autocomplete_selected];
+                int prefix_len = (tui->cmd_autocomplete_prefix_type == 0) ? 1 : 1;
+                if (tui->cmd_autocomplete_prefix_type == 1 &&
+                    input->length >= 2 && input->buffer[1] == '!') {
+                    prefix_len = 2;
+                }
+                input->length = prefix_len;
+                input->cursor = prefix_len;
+                input->buffer[prefix_len] = '\0';
+                tui_input_insert_string(input, selection);
+            }
+            /* Close the autocomplete */
+            tui->cmd_autocomplete_active = 0;
+            input->rapid_input_count = 0;
+            return 1;  /* Submit */
+        }
     }
 
     // Handle special keys

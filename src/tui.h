@@ -202,6 +202,14 @@ typedef struct TUIStateStruct {
     int last_search_match_line; // Line number of last search match
     char *last_search_pattern;  // Last search pattern used
 
+    // Auto-complete state for command input (triggered by ; or : prefix in INSERT mode)
+    int cmd_autocomplete_active;       // 1 when showing autocomplete dropdown
+    char *cmd_autocomplete_filter;     // Filter text (what user typed after prefix)
+    int cmd_autocomplete_selected;     // Currently selected index (0-based, -1 = none)
+    char **cmd_autocomplete_options;   // Matching command name suggestions
+    int cmd_autocomplete_count;        // Number of matching options
+    int cmd_autocomplete_prefix_type;  // 0 = slash commands ';'→'/', 1 = colon commands ':'
+
     int is_initialized;      // Whether TUI has been set up
 
     // Persistent input history (memory + DB)
@@ -451,6 +459,10 @@ void redraw_conversation(TUIState *tui);
 
 // Render input window (rendering module)
 void input_redraw(TUIState *tui, const char *prompt);
+
+// Update command autocomplete state based on current input buffer content.
+// Called from input_redraw when in INSERT mode to keep the dropdown in sync.
+void update_cmd_autocomplete(TUIState *tui);
 
 // Refresh conversation viewport after resize (rendering module)
 void refresh_conversation_viewport(TUIState *tui);
