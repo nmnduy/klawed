@@ -984,7 +984,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
         "Use :help to see all available commands.",
         "Token usage stats shown in status bar when in Normal mode (Esc).",
         "Exit methods: Ctrl+D, /quit, or /exit.",
-        "Tmux users: set -g allow-rename on; set -g automatic-rename off in tmux.conf to see window/pane titles."
+        "Tmux users: set -g allow-rename on; set -g automatic-rename off; set -g pane-border-status top in tmux.conf to see pane titles."
     };
     size_t tips_count = sizeof(tips) / sizeof(tips[0]);
 
@@ -999,17 +999,17 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
 
     /* If running inside tmux, show a one-time config reminder.
      * Tmux blocks escape-sequence renames by default (allow-rename is off).
-     * Users need two settings for window/pane titles to appear:
-     *   set -g allow-rename on        (allow apps to rename windows)
-     *   set -g automatic-rename off   (don't overwrite our custom name)
-     *   set -g pane-border-status top (optional: show per-pane titles)
+     * Users need these settings for pane titles to appear:
+     *   set -g allow-rename on         (allow apps to rename panes)
+     *   set -g automatic-rename off    (don't overwrite our custom name)
+     *   set -g pane-border-status top  (show per-pane titles)
      */
     {
         const char *tmux_env = getenv("TMUX");
         if (tmux_env && tmux_env[0] != '\0') {
             tui_add_conversation_line(tui, NULL,
-                "TMUX detected: window/pane titles require "
-                "'set -g allow-rename on; set -g automatic-rename off' "
+                "TMUX detected: pane titles require "
+                "'set -g allow-rename on; set -g automatic-rename off; set -g pane-border-status top' "
                 "in your tmux.conf. See docs/tmux-integration.md.",
                 COLOR_PAIR_TOOL_DIM);
             tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);

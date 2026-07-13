@@ -1,20 +1,19 @@
 # Tmux Integration
 
-Klawed sets your tmux window and pane titles so you can see what it's doing at a glance — spinner animation, model name, and working directory — even when Klawed is in another pane.
+Klawed sets your tmux pane titles so you can see what it's doing at a glance — spinner animation, model name, and working directory — even when Klawed is in another pane.
 
 ## Quick Setup
 
 Add these to your `~/.tmux.conf`:
 
 ```tmux
-# Allow programs like klawed to rename windows and panes
+# Allow programs like klawed to rename panes
 set -g allow-rename on
 
 # Don't let tmux auto-rename over our custom titles
 set -g automatic-rename off
 
-# Optional: show pane titles in the pane border bar
-# This is especially useful with multi-pane workflows
+# Show pane titles in the pane border bar (required to see titles)
 set -g pane-border-status top
 set -g pane-border-format ' #{pane_title} '
 ```
@@ -23,17 +22,18 @@ Then reload: `tmux source-file ~/.tmux.conf`
 
 ## What Klawed Sets
 
-Klawed sends three escape sequences when the AI is working or changing state:
+Klawed sends two escape sequences when the AI is working or changing state:
 
 | Escape Sequence | What It Sets | Requires |
 |---|---|---|
-| `OSC 0` (`\033]0;...\007`) | Terminal window title (icon name + title) | Standard terminal support |
-| `OSC k` (`\033k...\033\`) | Tmux window name | `allow-rename on` |
+| `OSC 0` (`\033]0;...\007`) | Terminal window title | Standard terminal support |
 | `OSC 2` (`\033]2;...\007`) | Tmux pane title (2.6+) | `allow-rename on` + `pane-border-status` |
+
+Klawed does **not** set tmux window names (`OSC k`). Since klawed runs in individual panes, pane-level titles are the right granularity — each pane gets its own title without competing for the window name.
 
 ### Title Formats
 
-**Window title** (medium-length, includes model + working directory):
+**Terminal window title** (medium-length, includes model + working directory):
 ```
 ◉ klawed(gpt-4o) · my-project    ← while AI is working
 klawed(gpt-4o) · my-project      ← idle
@@ -49,22 +49,22 @@ The spinner character changes based on what Klawed is doing (thinking, calling t
 
 ## Multi-Pane Workflows
 
-With `pane-border-status top`, each pane shows its own title. This is useful when you have:
+With `pane-border-status top`, each pane shows its own title. This works perfectly when you have:
 
 ```
 ┌─ ◉ my-project ─────────────────────────────┐
 │ klawed working on your code...              │
-└─────────────────────────────────────────────┘
-┌─ $ zsh ────────────────────────────────────┐
+├─────────────────────────────────────────────┤
+│ $ zsh                                       │
 │ Running tests, checking logs, etc.          │
 └─────────────────────────────────────────────┘
 ```
 
-The klawed pane shows `◉ my-project` while it's working, so you always know it's busy.
+Since klawed only sets pane titles (not window names), multiple klawed instances in different panes won't fight over the window name — each pane independently shows its own status.
 
 ## Troubleshooting
 
-### Window titles not updating
+### Pane titles not showing
 
 1. Verify `allow-rename` is on:
    ```bash
@@ -78,21 +78,13 @@ The klawed pane shows `◉ my-project` while it's working, so you always know it
    # Should print: automatic-rename off
    ```
 
-3. If using per-window settings, check the window options too:
-   ```bash
-   tmux show-option -w allow-rename
-   tmux show-option -w automatic-rename
-   ```
-
-### Pane titles not showing
-
-1. Make sure `pane-border-status` is set:
+3. Verify `pane-border-status` is set:
    ```bash
    tmux show-option -g pane-border-status
    # Should print: pane-border-status top (or bottom)
    ```
 
-2. Ensure your tmux version is 2.6 or later:
+4. Ensure your tmux version is 2.6 or later:
    ```bash
    tmux -V
    ```

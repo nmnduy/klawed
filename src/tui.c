@@ -251,7 +251,8 @@ void tui_update_terminal_title(TUIState *tui) {
     }
 
     /*
-     * Window title (OSC 0 / OSC k): medium-length, includes model + dir.
+     * Terminal window title (OSC 0): medium-length, includes model + dir.
+     * This sets the terminal emulator's own window title (not tmux-specific).
      * Example: "◉ klawed(gpt-4o) · project" or "klawed(gpt-4o) · project"
      */
     char window_title[256];
@@ -307,10 +308,6 @@ void tui_update_terminal_title(TUIState *tui) {
     /* Check if we're inside tmux */
     const char *tmux_env = getenv("TMUX");
     if (tmux_env && tmux_env[0] != '\0') {
-        /* OSC k: set tmux window name (tmux-specific escape).
-         * Requires: set -g allow-rename on  and  set -g automatic-rename off */
-        dprintf(STDOUT_FILENO, "\033k%s\033\\", window_title);
-
         /* OSC 2: set tmux pane title (xterm window title escape,
          * interpreted as pane title by tmux 2.6+).
          * Pane titles appear when: set -g pane-border-status top
