@@ -314,6 +314,17 @@ void tui_update_terminal_title(TUIState *tui) {
          * (or bottom). Each pane shows its own title — great for
          * multi-pane workflows where you run klawed in one pane. */
         dprintf(STDOUT_FILENO, "\033]2;%s\007", pane_title);
+
+        /* OSC k: set tmux window name (tmux-specific escape).
+         * Requires: set -g allow-rename on and set -g automatic-rename off.
+         * Sets the window tab label in the tmux status bar.
+         *
+         * Multi-klawed coordination: idle klaweds don't call this function
+         * (status_spinner_tick bails early when spinner inactive), so only
+         * working klaweds update the window title. When a klawed stops
+         * working and clears its spinner, another working klawed will
+         * restore the spinner prefix on its next tick (~16ms). */
+        dprintf(STDOUT_FILENO, "\033k%s\033\\", window_title);
     }
 }
 

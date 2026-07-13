@@ -184,7 +184,7 @@ All release binaries include version information:
 ### Registry Server CI (Primary)
 
 The main CI runs on the registry server (`registry.kasafox.com`) via a post-receive hook at
-`/opt/git/klawed.git/hooks/post-receive`. On every push to master:
+`/home/git/repos/klawed.git/hooks/post-receive`. On every push to master:
 
 1. Clones the bare repo to a temp directory
 2. Builds with `-Werror`

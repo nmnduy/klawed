@@ -22,14 +22,15 @@ Then reload: `tmux source-file ~/.tmux.conf`
 
 ## What Klawed Sets
 
-Klawed sends two escape sequences when the AI is working or changing state:
+Klawed sends three escape sequences when the AI is working or changing state:
 
 | Escape Sequence | What It Sets | Requires |
 |---|---|---|
 | `OSC 0` (`\033]0;...\007`) | Terminal window title | Standard terminal support |
 | `OSC 2` (`\033]2;...\007`) | Tmux pane title (2.6+) | `allow-rename on` + `pane-border-status` |
+| `OSC k` (`\033k...\033\\`) | Tmux window name | `allow-rename on` + `automatic-rename off` |
 
-Klawed does **not** set tmux window names (`OSC k`). Since klawed runs in individual panes, pane-level titles are the right granularity — each pane gets its own title without competing for the window name.
+**Window name vs pane title:** The window name appears in the tmux status bar as the tab label for the window. The pane title appears in each pane's border bar. Both show a spinner when klawed is working.
 
 ### Title Formats
 
@@ -43,6 +44,12 @@ klawed(gpt-4o) · my-project      ← idle
 ```
 ◉ my-project    ← while AI is working
 klawed my-project  ← idle
+```
+
+**Tmux window name** (same format as terminal window title, shown in status bar tab):
+```
+◉ klawed(gpt-4o) · my-project    ← any klawed working in this window
+klawed(gpt-4o) · my-project      ← all klaweds idle
 ```
 
 The spinner character changes based on what Klawed is doing (thinking, calling tools, reasoning, etc.).
@@ -60,7 +67,16 @@ With `pane-border-status top`, each pane shows its own title. This works perfect
 └─────────────────────────────────────────────┘
 ```
 
-Since klawed only sets pane titles (not window names), multiple klawed instances in different panes won't fight over the window name — each pane independently shows its own status.
+### Window Title Coordination
+
+When multiple klawed instances run in different panes of the same tmux window, the window title (shown in the tmux status bar tab) coordinates naturally:
+
+- **Working klaweds** update the window title with a spinner at ~60fps
+- **Idle klaweds** don't touch the window title (they only update titles while actively working)
+- As long as **any** klawed in the window is working, the window tab shows the spinner
+- When the last klawed stops, the spinner is cleared from the window tab
+
+This means you can glance at the tmux window tab to see if anything is happening across all your klawed panes.
 
 ## Troubleshooting
 

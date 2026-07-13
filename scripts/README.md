@@ -20,20 +20,20 @@ message starts with `chore: bump version`), preventing infinite recursion.
 ## Deployment
 
 The hook runs on the **registry server** inside the bare repo at
-`/opt/git/klawed.git`.
+`/home/git/repos/klawed.git`.
 
 ### 1. Copy the hook into place
 
 From this repo (the same repo you already have cloned):
 
 ```bash
-scp scripts/post-receive-ci.sh root@registry.kasafox.com:/opt/git/klawed.git/hooks/post-receive
+scp scripts/post-receive-ci.sh root@registry.kasafox.com:/home/git/repos/klawed.git/hooks/post-receive
 ```
 
 ### 2. Make it executable on the server
 
 ```bash
-ssh root@registry.kasafox.com "chmod +x /opt/git/klawed.git/hooks/post-receive"
+ssh root@registry.kasafox.com "chmod +x /home/git/repos/klawed.git/hooks/post-receive"
 ```
 
 ### 3. Verify
@@ -54,7 +54,7 @@ Set these environment variables on the registry server to customise:
 | `KLAWED_CI_BRANCHES` | `master` | Space-separated list of branches that trigger CI |
 | `KLAWED_CI_MAKE_TIMEOUT` | `1800` | Seconds before each make target is killed (0 = no limit) |
 
-Edit `/opt/git/klawed.git/hooks/post-receive` and add exports near the top,
+Edit `/home/git/repos/klawed.git/hooks/post-receive` and add exports near the top,
 or set them system-wide (e.g. `/etc/environment`).
 
 ## Removing CI
@@ -62,11 +62,11 @@ or set them system-wide (e.g. `/etc/environment`).
 To disable the CI hook without losing the script:
 
 ```bash
-ssh root@registry.kasafox.com "mv /opt/git/klawed.git/hooks/post-receive /opt/git/klawed.git/hooks/post-receive.disabled"
+ssh root@registry.kasafox.com "mv /home/git/repos/klawed.git/hooks/post-receive /home/git/repos/klawed.git/hooks/post-receive.disabled"
 ```
 
 To re-enable:
 
 ```bash
-ssh root@registry.kasafox.com "mv /opt/git/klawed.git/hooks/post-receive.disabled /opt/git/klawed.git/hooks/post-receive"
+ssh root@registry.kasafox.com "mv /home/git/repos/klawed.git/hooks/post-receive.disabled /home/git/repos/klawed.git/hooks/post-receive"
 ```

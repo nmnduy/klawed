@@ -2,8 +2,8 @@
 # post-receive-ci.sh — CI hook for the Klawed bare repo on registry.kasafox.com
 #
 # INSTALL (on the registry server):
-#   cp scripts/post-receive-ci.sh /opt/git/klawed.git/hooks/post-receive
-#   chmod +x /opt/git/klawed.git/hooks/post-receive
+#   cp scripts/post-receive-ci.sh /home/git/repos/klawed.git/hooks/post-receive
+#   chmod +x /home/git/repos/klawed.git/hooks/post-receive
 #
 # WHAT IT DOES:
 #   On every push to master, clones the repo to a temp directory,
