@@ -38,7 +38,7 @@ sudo apt-get install libcurl4-openssl-dev libcjson-dev libbsd-dev libncurses-dev
 ### Build
 
 ```bash
-git clone --branch v0.36.8 https://github.com/nmnduy/klawed.git
+git clone --branch v0.36.9 https://github.com/nmnduy/klawed.git
 cd klawed
 make
 ```
@@ -299,7 +299,7 @@ CI runs automatically on every push to `master`:
 | **GitHub Actions** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) | Build + test on every push |
 | **Registry server** (`registry.kasafox.com`) | Build + test, then auto-bumps patch version, commits, tags, and pushes back to the bare repo. Sends Telegram notifications for each stage. |
 
-The registry CI is a [post-receive hook](scripts/registry-post-receive) installed at `/opt/git/klawed.git/hooks/post-receive`. Version bumps are fully automated — no manual `make bump-patch` needed after merge.
+The registry CI is a [post-receive hook](scripts/registry-post-receive) installed at `/home/git/repos/klawed.git/hooks/post-receive`. Version bumps are fully automated — no manual `make bump-patch` needed after merge.
 
 ## License
 
