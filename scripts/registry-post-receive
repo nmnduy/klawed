@@ -77,10 +77,15 @@ COMMIT_AUTHOR=$(git --git-dir="$(pwd)" log -1 --pretty=%an "$NEWREV")
 SHORT_HASH=$(echo "$NEWREV" | cut -c1-8)
 notify_info "🔧 klawed CI started for <code>${SHORT_HASH}</code> by ${COMMIT_AUTHOR}&#10;<i>${COMMIT_MSG}</i>"
 
-# Create temp working directory and log files
-WORKDIR=$(mktemp -d /tmp/klawed-ci-XXXXXX)
-BUILD_LOG=$(mktemp /tmp/klawed-build-XXXXXX.log)
-TEST_LOG=$(mktemp /tmp/klawed-test-XXXXXX.log)
+# Create temp working directory and log files.
+# Fall back to PID-based paths if mktemp fails (e.g. /tmp unwritable).
+WORKDIR=$(mktemp -d /tmp/klawed-ci-XXXXXX 2>/dev/null || true)
+if [ -z "$WORKDIR" ]; then
+    WORKDIR="/tmp/klawed-ci-$$"
+    mkdir -p "$WORKDIR"
+fi
+BUILD_LOG=$(mktemp /tmp/klawed-build-XXXXXX.log 2>/dev/null || echo "/tmp/klawed-build-$$.log")
+TEST_LOG=$(mktemp /tmp/klawed-test-XXXXXX.log 2>/dev/null || echo "/tmp/klawed-test-$$.log")
 trap 'rm -rf "$WORKDIR"; rm -f "$BUILD_LOG" "$TEST_LOG"' EXIT
 
 echo "[registry-ci] Cloning to $WORKDIR..."
@@ -91,12 +96,14 @@ cd "$WORKDIR"
 unset GIT_DIR
 git checkout "$NEWREV"
 echo "[registry-ci] Building..."
-if make 2>&1 | tail -20 > "$BUILD_LOG"; then
+make 2>&1 | tail -20 > "$BUILD_LOG" 2>/dev/null || true
+BUILD_EXIT=${PIPESTATUS[0]:-1}
+if [ "$BUILD_EXIT" -eq 0 ]; then
     echo "[registry-ci] Build passed"
     notify_ok "klawed CI: Build passed for <code>${SHORT_HASH}</code>"
 else
-    echo "[registry-ci] Build FAILED"
-    BUILD_TAIL=$(tail -5 "$BUILD_LOG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+    echo "[registry-ci] Build FAILED (exit=$BUILD_EXIT)"
+    BUILD_TAIL=$(tail -5 "$BUILD_LOG" 2>/dev/null | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' || echo "(log unavailable)")
     notify_err "klawed CI: Build <b>FAILED</b> for <code>${SHORT_HASH}</code>&#10;<pre>${BUILD_TAIL}</pre>"
     rm -f "$BUILD_LOG"
     exit 1
@@ -151,10 +158,14 @@ make -k \
     test-session-resolve \
     test-codex-tools \
     test-tool-disable \
-    > "$TEST_LOG" 2>&1
+    > "$TEST_LOG" 2>/dev/null || true
 # Check log for actual test failures (make -k always exits non-zero on failure,
 # but we want to continue running all tests before checking results)
-if grep -qE '(^make: .*Error)|(FAIL$)|(FAILED$)|(✗.*FAIL)|Aborted|Segmentation fault' "$TEST_LOG"; then
+if [ ! -s "$TEST_LOG" ]; then
+    echo "[registry-ci] Test log empty — infrastructure issue?"
+    notify_err "klawed CI: Test log <b>empty</b> for <code>${SHORT_HASH}</code> (possible infrastructure issue)"
+    exit 1
+elif grep -qE '(^make: .*Error)|(FAIL$)|(FAILED$)|(✗.*FAIL)|Aborted|Segmentation fault' "$TEST_LOG"; then
     echo "[registry-ci] Tests FAILED"
     FAIL_COUNT=$(grep -c 'FAIL\|FAILED\|failed\|Error' "$TEST_LOG" 2>/dev/null || echo "?")
     TEST_TAIL=$(tail -5 "$TEST_LOG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
