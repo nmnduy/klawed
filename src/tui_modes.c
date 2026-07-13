@@ -553,10 +553,10 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
     // Handle key combinations (like gg, G)
     if (tui->normal_mode_last_key == 'g' && ch == 'g') {
         // gg: Go to top
+        // scroll_to_top calls prefresh() internally — no redundant refresh needed
         window_manager_scroll_to_top(&tui->wm);
         tui->auto_scroll_enabled = 0;  // Scrolled to top — disable auto-scroll
         tui->normal_mode_last_key = 0;
-        refresh_conversation_viewport(tui);
         if (tui->wm.status_height > 0) {
             render_status_window(tui);
         }
@@ -754,9 +754,9 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
             break;
 
         case 'G':  // Go to bottom
+            // scroll_to_bottom calls prefresh() internally — no redundant refresh needed
             window_manager_scroll_to_bottom(&tui->wm);
             tui->auto_scroll_enabled = 1;  // Explicitly scrolled to bottom
-            refresh_conversation_viewport(tui);
             if (tui->wm.status_height > 0) {
                 render_status_window(tui);
             }

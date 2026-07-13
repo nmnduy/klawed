@@ -627,11 +627,14 @@ void tui_clear_conversation(TUIState *tui, const char *version, const char *mode
 }
 
 // Redraw the entire conversation from stored entries
-// This is useful for applying search highlighting after a search
 void tui_scroll_conversation(TUIState *tui, int direction) {
     if (!tui || !tui->is_initialized || !tui->wm.conv_pad) return;
+
+    // window_manager_scroll calls prefresh() internally when the offset
+    // actually changes. No need for a second prefresh here — it only adds
+    // a redundant doupdate() that can interfere with input window refresh
+    // and cause conversation content to bleed into the input area.
     window_manager_scroll(&tui->wm, direction);
-    window_manager_refresh_conversation(&tui->wm);
 
     // Track auto-scroll user intent based on scroll direction
     if (direction < 0) {
@@ -652,9 +655,7 @@ void tui_scroll_conversation(TUIState *tui, int direction) {
     }
 
     // Note: callers of tui_scroll_conversation() always call input_redraw()
-    // immediately after, which properly does werase + redraw. Avoid double
-    // refresh here to prevent visual artifacts from touchwin+wrefresh without
-    // werase (stale internal buffer can briefly show conversation content).
+    // immediately after, which properly does werase + redraw.
 }
 
 // ============================================================================
@@ -1928,8 +1929,19 @@ int tui_event_loop(TUIState *tui, const char *prompt,
         // The spinner uses wnoutrefresh (to avoid cursor movement), so we need doupdate()
         // to actually display the changes on screen. This should happen in ANY mode.
         if (tui->status_spinner_active) {
-            // In INSERT/COMMAND modes, also refresh input window to keep cursor positioned there
-            if (tui->wm.input_win && tui->mode != TUI_MODE_NORMAL) {
+            // Always refresh input window before doupdate() to prevent conversation
+            // content from bleeding into the input area. In NORMAL mode especially,
+            // skipping this refresh leaves newscr with stale content in the input
+            // area, which doupdate() then copies to the physical screen —
+            // overwriting the blank input window with old conversation text.
+            if (tui->wm.input_win) {
+                // If in NORMAL mode, the input window should be blank (erased).
+                // Ensure newscr reflects this so doupdate() doesn't copy stale
+                // conversation content back into the input area.
+                if (tui->mode == TUI_MODE_NORMAL) {
+                    werase(tui->wm.input_win);
+                    touchwin(tui->wm.input_win);
+                }
                 wnoutrefresh(tui->wm.input_win);
             }
             // Sync virtual screen to physical - this displays the spinner in all modes
