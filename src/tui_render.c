@@ -649,9 +649,17 @@ void render_status_window(TUIState *tui) {
             }
             const char *frame = frames[tui->status_spinner_frame % frame_count];
 
-            // Store spinner frame for separate rendering
-            snprintf(spinner_frame, sizeof(spinner_frame), "%s", frame);
-            spinner_frame_len = (int)strlen(spinner_frame);
+            /* When running inside tmux, the window title (OSC k) already
+             * shows the spinner. Suppress the duplicate spinner in klawed's
+             * own status bar to avoid showing three spinners simultaneously
+             * (klawed status bar + tmux pane title + tmux window title). */
+            int hide_klawed_spinner = (getenv("TMUX") != NULL);
+
+            // Store spinner frame for separate rendering (unless in tmux)
+            if (!hide_klawed_spinner) {
+                snprintf(spinner_frame, sizeof(spinner_frame), "%s", frame);
+                spinner_frame_len = (int)strlen(spinner_frame);
+            }
             has_spinner = 1;
 
             // When screen is narrow, show only spinner without text
@@ -954,20 +962,24 @@ void render_status_window(TUIState *tui) {
             // No status text in pacman style — bar only
         } else {
             // Render regular spinner character with STATUS color (yellow)
-            if (has_colors()) {
-                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
-            } else {
-                wattron(tui->wm.status_win, A_BOLD);
+            // (when in tmux, spinner_frame_len is 0 and we skip the spinner)
+            if (spinner_frame_len > 0) {
+                if (has_colors()) {
+                    wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+                } else {
+                    wattron(tui->wm.status_win, A_BOLD);
+                }
+                tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, spinner_frame, spinner_frame_len);
+                if (has_colors()) {
+                    wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+                } else {
+                    wattroff(tui->wm.status_win, A_BOLD);
+                }
+                left_col += utf8_display_width(spinner_frame);
             }
-            tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, spinner_frame, spinner_frame_len);
-            if (has_colors()) {
-                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
-            } else {
-                wattroff(tui->wm.status_win, A_BOLD);
-            }
-            left_col += utf8_display_width(spinner_frame);
 
             // Render status text after spinner (if present)
+            // This fires even when the spinner is hidden (e.g., in tmux)
             if (status_text_len > 0 && left_col + utf8_display_width(status_text) <= left_limit) {
                 if (has_colors()) {
                     wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);

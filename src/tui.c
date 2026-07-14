@@ -281,17 +281,24 @@ void tui_update_terminal_title(TUIState *tui) {
                  " · %s", dirname);
     }
 
+    /* Check if we're inside tmux early — affects pane title formatting. */
+    const char *tmux_env = getenv("TMUX");
+    int inside_tmux = (tmux_env && tmux_env[0] != '\0');
+
     /*
      * Pane title (OSC 2, tmux 2.6+): compact, just the essentials.
-     * Example: "◉ project" or "klawed project"
+     * When inside tmux we omit the spinner from the pane title — the
+     * window title (OSC k) already carries the spinner, so showing it
+     * in the pane title too creates redundant visual noise.
      */
     char pane_title[128];
-    if (frame && dirname) {
-        snprintf(pane_title, sizeof(pane_title), "%s %s", frame, dirname);
+    const char *pane_frame = inside_tmux ? NULL : frame;
+    if (pane_frame && dirname) {
+        snprintf(pane_title, sizeof(pane_title), "%s %s", pane_frame, dirname);
     } else if (dirname) {
         snprintf(pane_title, sizeof(pane_title), "%s %s", name, dirname);
-    } else if (frame) {
-        snprintf(pane_title, sizeof(pane_title), "%s %s", frame, name);
+    } else if (pane_frame) {
+        snprintf(pane_title, sizeof(pane_title), "%s %s", pane_frame, name);
     } else {
         snprintf(pane_title, sizeof(pane_title), "%s", name);
     }
@@ -305,19 +312,21 @@ void tui_update_terminal_title(TUIState *tui) {
     /* OSC 0: set icon name and window title (works in most terminals) */
     dprintf(STDOUT_FILENO, "\033]0;%s\007", window_title);
 
-    /* Check if we're inside tmux */
-    const char *tmux_env = getenv("TMUX");
-    if (tmux_env && tmux_env[0] != '\0') {
+    if (inside_tmux) {
         /* OSC 2: set tmux pane title (xterm window title escape,
          * interpreted as pane title by tmux 2.6+).
          * Pane titles appear when: set -g pane-border-status top
          * (or bottom). Each pane shows its own title — great for
-         * multi-pane workflows where you run klawed in one pane. */
+         * multi-pane workflows where you run klawed in one pane.
+         * No spinner here — the window title (OSC k) carries it. */
         dprintf(STDOUT_FILENO, "\033]2;%s\007", pane_title);
 
         /* OSC k: set tmux window name (tmux-specific escape).
          * Requires: set -g allow-rename on and set -g automatic-rename off.
          * Sets the window tab label in the tmux status bar.
+         * This is the *only* place the spinner appears when inside tmux,
+         * avoiding three simultaneous spinners (klawed status bar,
+         * tmux pane title, tmux window title).
          *
          * Multi-klawed coordination: idle klaweds don't call this function
          * (status_spinner_tick bails early when spinner inactive), so only
