@@ -159,61 +159,6 @@ static void status_spinner_tick(TUIState *tui) {
     tui_update_terminal_title(tui);
 }
 
-/**
- * Build a compact model label for the terminal/tmux title.
- * Strips version-date suffixes (e.g., "-20250514") and long provider prefixes
- * to keep the title readable in narrow tmux window tabs.
- *
- * Returns a pointer into a static buffer (not thread-safe; caller is the TUI
- * render thread so this is fine).
- */
-static const char* title_model_label(const char *model) {
-    static char buf[48];
-    if (!model || !model[0]) {
-        return "";
-    }
-
-    // Already short enough — use as-is
-    if (strlen(model) <= 24) {
-        return model;
-    }
-
-    // Strip trailing version-date suffix:  -YYYYMMDD  or  -vYYYYMMDD
-    // e.g. "claude-sonnet-4-20250514" → "claude-sonnet-4"
-    // e.g. "claude-opus-4-20250514"   → "claude-opus-4"
-    const char *suffix = model + strlen(model);
-    int digits = 0;
-    while (suffix > model) {
-        char c = *(suffix - 1);
-        if (c >= '0' && c <= '9') {
-            digits++;
-            suffix--;
-            if (digits == 8) {
-                break;  // Found an 8-digit date block
-            }
-        } else if (c == '-' && digits == 8) {
-            suffix--;  // Strip the hyphen before the date
-            break;
-        } else {
-            break;  // Not a date suffix
-        }
-    }
-
-    if (digits == 8 && suffix > model && (size_t)(suffix - model) < sizeof(buf)) {
-        size_t n = (size_t)(suffix - model);
-        memcpy(buf, model, n);
-        buf[n] = '\0';
-        return buf;
-    }
-
-    // Fallback: truncate and add ellipsis
-    size_t len = strlen(model);
-    if (len > 44) len = 44;
-    memcpy(buf, model, len);
-    buf[len] = '\0';
-    return buf;
-}
-
 void tui_update_terminal_title(TUIState *tui) {
     if (!tui) {
         return;
@@ -224,10 +169,6 @@ void tui_update_terminal_title(TUIState *tui) {
     if (vltrn_mode && strcmp(vltrn_mode, "1") == 0) {
         name = "vltrn";
     }
-
-    const char *model = tui->conversation_state
-        ? tui->conversation_state->model : NULL;
-    const char *model_label = title_model_label(model);
 
     const char *workdir = tui->conversation_state
         ? tui->conversation_state->working_dir : NULL;
@@ -251,28 +192,18 @@ void tui_update_terminal_title(TUIState *tui) {
     }
 
     /*
-     * Terminal window title (OSC 0): medium-length, includes model + dir.
+     * Terminal window title (OSC 0): compact, just name + dir.
      * This sets the terminal emulator's own window title (not tmux-specific).
-     * Example: "◉ klawed(gpt-4o) · project" or "klawed(gpt-4o) · project"
+     * Example: "◉ klawed · project" or "klawed · project"
      */
     char window_title[256];
     int wlen;
     if (frame) {
-        if (model_label && model_label[0]) {
-            wlen = snprintf(window_title, sizeof(window_title),
-                           "%s %s(%s)", frame, name, model_label);
-        } else {
-            wlen = snprintf(window_title, sizeof(window_title),
-                           "%s %s", frame, name);
-        }
+        wlen = snprintf(window_title, sizeof(window_title),
+                       "%s %s", frame, name);
     } else {
-        if (model_label && model_label[0]) {
-            wlen = snprintf(window_title, sizeof(window_title),
-                           "%s(%s)", name, model_label);
-        } else {
-            wlen = snprintf(window_title, sizeof(window_title),
-                           "%s", name);
-        }
+        wlen = snprintf(window_title, sizeof(window_title),
+                       "%s", name);
     }
     if (dirname && wlen > 0 && (size_t)wlen < sizeof(window_title)) {
         /* Plain ASCII separator — terminal title bars often can't render
@@ -287,12 +218,38 @@ void tui_update_terminal_title(TUIState *tui) {
 
     /*
      * Pane title (OSC 2, tmux 2.6+): compact, just the essentials.
-     * When inside tmux we omit the spinner from the pane title — the
-     * window title (OSC k) already carries the spinner, so showing it
-     * in the pane title too creates redundant visual noise.
+     * When inside tmux with only one pane, the window title (OSC k)
+     * already carries the spinner, so the pane title doesn't need it.
+     * With multiple panes, show the spinner on each pane title so you
+     * can tell which pane is actively working.
+     *
+     * The multi-pane check is cached for 1 second to avoid spawning
+     * a tmux subprocess on every spinner tick (~60 fps).
      */
+    int show_pane_spinner = 1;
+    if (inside_tmux) {
+        static int pane_count_cached = -1;
+        static uint64_t pane_count_checked_ns = 0;
+        uint64_t now_ns = monotonic_time_ns();
+        if (pane_count_cached < 0 ||
+            (now_ns - pane_count_checked_ns) > 1000000000ULL) {
+            pane_count_cached = 1; /* default: single pane */
+            FILE *fp = popen("tmux display-message -p '#{window_panes}' 2>/dev/null", "r");
+            if (fp) {
+                char buf[16];
+                if (fgets(buf, sizeof(buf), fp)) {
+                    int count = atoi(buf);
+                    if (count > 0) pane_count_cached = count;
+                }
+                pclose(fp);
+            }
+            pane_count_checked_ns = now_ns;
+        }
+        show_pane_spinner = (pane_count_cached > 1);
+    }
+
     char pane_title[128];
-    const char *pane_frame = inside_tmux ? NULL : frame;
+    const char *pane_frame = show_pane_spinner ? frame : NULL;
     if (pane_frame && dirname) {
         snprintf(pane_title, sizeof(pane_title), "%s %s", pane_frame, dirname);
     } else if (dirname) {
@@ -318,15 +275,16 @@ void tui_update_terminal_title(TUIState *tui) {
          * Pane titles appear when: set -g pane-border-status top
          * (or bottom). Each pane shows its own title — great for
          * multi-pane workflows where you run klawed in one pane.
-         * No spinner here — the window title (OSC k) carries it. */
+         * Spinner shown when multiple panes exist in the window,
+         * so you can tell which pane is actively working. */
         dprintf(STDOUT_FILENO, "\033]2;%s\007", pane_title);
 
         /* OSC k: set tmux window name (tmux-specific escape).
          * Requires: set -g allow-rename on and set -g automatic-rename off.
          * Sets the window tab label in the tmux status bar.
-         * This is the *only* place the spinner appears when inside tmux,
-         * avoiding three simultaneous spinners (klawed status bar,
-         * tmux pane title, tmux window title).
+         * The spinner always appears here (and in the pane title when
+         * there are multiple panes). The klawed status bar spinner is
+         * suppressed inside tmux to avoid redundant animations.
          *
          * Multi-klawed coordination: idle klaweds don't call this function
          * (status_spinner_tick bails early when spinner inactive), so only
