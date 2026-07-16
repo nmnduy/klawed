@@ -432,6 +432,9 @@ const char* tui_icon_warning(void);
 const char* tui_icon_active(void);
 const char* tui_icon_pending(void);
 
+// Goal tag (e.g. "" or "[Goal]")
+const char* tui_icon_goal(void);
+
 // Folder icon for path display
 const char* tui_icon_folder(void);
 

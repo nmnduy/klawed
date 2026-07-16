@@ -364,6 +364,10 @@ const char* tui_icon_pending(void) {
     return tui_is_nerd_font_enabled() ? "\xef\x84\x97" : "\xe2\x97\x8b"; //  or ○
 }
 
+const char* tui_icon_goal(void) {
+    return tui_is_nerd_font_enabled() ? "\xef\x86\x92" : "[Goal]";  //  (nf-fa-bullseye)
+}
+
 const char* tui_icon_folder(void) {
     return tui_is_nerd_font_enabled() ? "\xef\x81\xbb" : "\xf0\x9f\x93\x81"; //  or 📁
 }

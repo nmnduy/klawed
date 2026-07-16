@@ -70,7 +70,7 @@ MessageType tui_conversation_get_message_type(const char *prefix) {
     }
     if (strcmp(prefix, "[System]") == 0 || strcmp(prefix, "[Error]") == 0 ||
         strcmp(prefix, tui_icon_error()) == 0 ||
-        strcmp(prefix, "[Transcription]") == 0 || strcmp(prefix, "[Goal]") == 0) {
+        strcmp(prefix, "[Transcription]") == 0 || strcmp(prefix, tui_icon_goal()) == 0) {
         return MSG_TYPE_SYSTEM;
     }
     // Check for tools - must come after checking specific system prefixes

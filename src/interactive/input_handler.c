@@ -217,7 +217,7 @@ int submit_input_callback(const char *input, void *user_data) {
                     for (int j = 0; j < state->messages[i].content_count; j++) {
                         // Compare against InternalContentType to avoid enum mismatch
                         if (state->messages[i].contents[j].type == INTERNAL_TEXT) {
-                            ui_append_line(tui, queue, "[Goal]",
+                            ui_append_line(tui, queue, tui_icon_goal(),
                                          state->messages[i].contents[j].text,
                                          COLOR_PAIR_GOAL);
                             added_text = state->messages[i].contents[j].text;
