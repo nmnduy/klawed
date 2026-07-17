@@ -1794,9 +1794,10 @@ static int count_text_lines(const char *text) {
     return (lines < 1) ? 1 : lines;
 }
 
-// Render a folded summary line: "prefix (N lines) ─── press H to expand"
+// Render a folded summary line: "prefix (N lines) ─── press <key> to expand"
 static void render_folded_summary(TUIState *tui, const char *prefix,
-                                   int line_count, int mapped_pair) {
+                                   int line_count, int mapped_pair,
+                                   const char *hint_key) {
     if (!tui || !tui->wm.conv_pad) return;
 
     // Render prefix in its color
@@ -1837,8 +1838,8 @@ static void render_folded_summary(TUIState *tui, const char *prefix,
     }
 
     // Hint text
-    const char hint[] = " press H to expand";
-    (void)tui_safe_mvwaddnstr(tui->wm.conv_pad, 0, 0, "", 0);  // no-op to get position
+    char hint[32];
+    snprintf(hint, sizeof(hint), " press %s to expand", hint_key);
     { int cy = 0, cx = 0; getyx(tui->wm.conv_pad, cy, cx);
       waddnstr(tui->wm.conv_pad, hint, (int)strlen(hint)); }
 
@@ -1854,7 +1855,7 @@ static void render_folded_summary(TUIState *tui, const char *prefix,
 // Returns 1 if text was truncated, 0 if full text fit within limits.
 static int render_abbreviated_text(TUIState *tui, const char *text,
                                     int max_lines, int max_chars,
-                                    int text_pair) {
+                                    int text_pair, const char *hint_key) {
     if (!tui || !tui->wm.conv_pad || !text || !text[0]) return 0;
 
     int total_lines = count_text_lines(text);
@@ -1889,24 +1890,34 @@ static int render_abbreviated_text(TUIState *tui, const char *text,
         const char *line_end = strchr(line_start, '\n');
         size_t line_len = line_end ? (size_t)(line_end - line_start) : strlen(line_start);
 
-        // Check if adding this line would exceed limits
-        if (lines_shown >= max_lines || chars_shown + (int)line_len > max_chars) {
+        // Check if adding this line would exceed limits.
+        // Always show at least the first line (even if it exceeds max_chars)
+        // so the user has some context about what's being hidden.
+        if (lines_shown >= max_lines || (lines_shown > 0 && chars_shown + (int)line_len > max_chars)) {
             done = 1;
             break;
         }
 
+        // If this is the first line and it exceeds max_chars, truncate it
+        int write_len = (int)line_len;
+        if (lines_shown == 0 && chars_shown + (int)line_len > max_chars) {
+            write_len = max_chars - chars_shown;
+            if (write_len < 1) write_len = 1;
+        }
+
         // Write this line
         { int cy = 0, cx = 0; getyx(tui->wm.conv_pad, cy, cx);
-          if (cy >= 0 && cx >= 0) waddnstr(tui->wm.conv_pad, line_start, (int)line_len); }
-        chars_shown += (int)line_len;
+          if (cy >= 0 && cx >= 0) waddnstr(tui->wm.conv_pad, line_start, write_len); }
+        chars_shown += write_len;
 
-        // Add newline if there are more lines
-        if (line_end) {
+        // Add newline if there are more lines and we didn't truncate mid-line
+        if (write_len == (int)line_len && line_end) {
             (void)tui_safe_waddch(tui->wm.conv_pad, '\n');
             chars_shown++;  // count the newline
             line_start = line_end + 1;
             lines_shown++;
         } else {
+            // Either truncated mid-line or last line — stop
             break;
         }
     }
@@ -1952,7 +1963,8 @@ static int render_abbreviated_text(TUIState *tui, const char *text,
                 waddstr(tui->wm.conv_pad, hrule_char);
             }
         }
-        const char hint[] = " press H to expand";
+        char hint[32];
+        snprintf(hint, sizeof(hint), " press %s to expand", hint_key);
         waddnstr(tui->wm.conv_pad, hint, (int)strlen(hint));
 
         if (has_colors()) {
@@ -2028,6 +2040,10 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     int is_user_message = (prefix && strcmp(prefix, tui_icon_user()) == 0);
     int is_assistant_message = (prefix && strcmp(prefix, tui_icon_assistant()) == 0);
     int is_error_message = tui_conversation_is_error_message(prefix);
+    // Classify tool/reasoning once for density logic and text coloring
+    int is_tool_msg = tui_conversation_is_tool_message(prefix);
+    int is_reasoning_msg = tui_conversation_is_reasoning_message(prefix);
+    int search_active = (tui->last_search_pattern && tui->last_search_pattern[0] != '\0');
 
     // For user messages, add padding line before and caret prefix
     if (is_user_message) {
@@ -2158,19 +2174,18 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
 
         // Display density: check if this entry should be folded or abbreviated.
         // Active search overrides density — always show full text during search.
-        int is_tool_msg = tui_conversation_is_tool_message(prefix);
-        int is_reasoning_msg = tui_conversation_is_reasoning_message(prefix);
-        int search_active = (tui->last_search_pattern && tui->last_search_pattern[0] != '\0');
-
+        // Classification (is_tool_msg, is_reasoning_msg, search_active) computed at top.
         if (text && text[0] != '\0' && !search_active) {
             // Folded reasoning: render summary line, skip full text
             if (is_reasoning_msg && tui->reasoning_density == DENSITY_FOLDED) {
-                render_folded_summary(tui, prefix, count_text_lines(text), mapped_pair);
+                render_folded_summary(tui, prefix, count_text_lines(text), mapped_pair, "H");
                 goto skip_newline;
             }
-            // Folded tool output: render summary line, skip full text
+            // Folded tool output: render summary line, skip full text.
+            // Update tool tracking so tree connectors stay correct after a folded entry.
             if (is_tool_msg && tui->tool_density == DENSITY_FOLDED) {
-                render_folded_summary(tui, prefix, count_text_lines(text), mapped_pair);
+                (void)tui_conversation_get_tool_display_prefix(tui, prefix);
+                render_folded_summary(tui, prefix, count_text_lines(text), mapped_pair, "T");
                 goto skip_newline;
             }
         }
@@ -2208,11 +2223,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             // User message: use foreground color (no background)
             text_pair = NCURSES_PAIR_FOREGROUND;
         } else if (prefix && prefix[0] != '\0') {
-            // Check for tool messages using centralized detection
-            int is_tool_message = tui_conversation_is_tool_message(prefix);
-            // Check for reasoning messages using centralized detection
-            int is_reasoning_message = tui_conversation_is_reasoning_message(prefix);
-            if (is_tool_message || is_reasoning_message) {
+            if (is_tool_msg || is_reasoning_msg) {
                 // Tool or reasoning message: use dimmed color for text (tag keeps its color)
                 text_pair = NCURSES_PAIR_TOOL_DIM;
             } else {
@@ -2226,16 +2237,15 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
 
         // Display density: abbreviate tool/reasoning output if configured.
         // Active search overrides density — always show full text during search.
-        int search_active = (tui->last_search_pattern && tui->last_search_pattern[0] != '\0');
+        // Reuses is_tool_msg/is_reasoning_msg/search_active computed above.
         if (!search_active && !is_user_message && !is_assistant_message && !is_error_message) {
-            int is_tool_msg = tui_conversation_is_tool_message(prefix);
-            int is_reasoning_msg = tui_conversation_is_reasoning_message(prefix);
             DisplayDensity density = DENSITY_EXPANDED;
             if (is_reasoning_msg) density = tui->reasoning_density;
             else if (is_tool_msg) density = tui->tool_density;
 
             if (density == DENSITY_ABBREVIATED) {
-                render_abbreviated_text(tui, text, tui->abbrev_lines, tui->abbrev_chars, text_pair);
+                const char *hint_key = is_reasoning_msg ? "H" : "T";
+                render_abbreviated_text(tui, text, tui->abbrev_lines, tui->abbrev_chars, text_pair, hint_key);
                 (void)tui_safe_waddch(tui->wm.conv_pad, '\n');
                 goto skip_newline;
             }
