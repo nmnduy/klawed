@@ -1829,7 +1829,7 @@ static void render_folded_summary(TUIState *tui, const char *prefix,
     // Account for prefix + summary already on this line
     int cur_y = 0, cur_x = 0;
     getyx(tui->wm.conv_pad, cur_y, cur_x);
-    int remaining = pad_width - cur_x - 28;  // leave room for longer hint text
+    int remaining = pad_width - cur_x - 20;  // leave room for hint text
     if (remaining > 0) {
         const char hrule_char[] = "\xe2\x94\x80";  /* ─ U+2500 */
         for (int i = 0; i < remaining && i < 40; i++) {
@@ -1837,9 +1837,9 @@ static void render_folded_summary(TUIState *tui, const char *prefix,
         }
     }
 
-    // Hint text — "Esc then H" because these hotkeys only work in Normal mode
-    char hint[48];
-    snprintf(hint, sizeof(hint), " press Esc then %s to expand", hint_key);
+    // Hint text
+    char hint[32];
+    snprintf(hint, sizeof(hint), " press %s to expand", hint_key);
     { int cy = 0, cx = 0; getyx(tui->wm.conv_pad, cy, cx);
       waddnstr(tui->wm.conv_pad, hint, (int)strlen(hint)); }
 
@@ -1956,15 +1956,15 @@ static int render_abbreviated_text(TUIState *tui, const char *text,
         (void)pad_height;
         int cur_y = 0, cur_x = 0;
         getyx(tui->wm.conv_pad, cur_y, cur_x);
-        int rule_space = pad_width - cur_x - 28;  // leave room for longer hint
+        int rule_space = pad_width - cur_x - 20;
         if (rule_space > 0) {
             const char hrule_char[] = "\xe2\x94\x80";
             for (int i = 0; i < rule_space && i < 40; i++) {
                 waddstr(tui->wm.conv_pad, hrule_char);
             }
         }
-        char hint[48];
-        snprintf(hint, sizeof(hint), " press Esc then %s to expand", hint_key);
+        char hint[32];
+        snprintf(hint, sizeof(hint), " press %s to expand", hint_key);
         waddnstr(tui->wm.conv_pad, hint, (int)strlen(hint));
 
         if (has_colors()) {
