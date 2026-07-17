@@ -535,10 +535,6 @@ int tui_init(TUIState *tui, ConversationState *state) {
         tui->response_style = loaded_config.response_style;
         tui->thinking_style = loaded_config.thinking_style;
         tui->wrap_enabled = loaded_config.wrap_enabled;
-        tui->reasoning_density = (DisplayDensity)loaded_config.view_mode.reasoning;
-        tui->tool_density = (DisplayDensity)loaded_config.view_mode.tool_output;
-        tui->abbrev_lines = loaded_config.view_mode.abbrev_lines;
-        tui->abbrev_chars = loaded_config.view_mode.abbrev_chars;
         LOG_DEBUG("[TUI] Loaded input_box_style from config: %s",
                   config_input_style_to_string(tui->input_box_style));
         LOG_DEBUG("[TUI] Loaded response_style from config: %s",
@@ -547,18 +543,11 @@ int tui_init(TUIState *tui, ConversationState *state) {
                   config_thinking_style_to_string(tui->thinking_style));
         LOG_DEBUG("[TUI] Loaded wrap_enabled from config: %d",
                   tui->wrap_enabled);
-        LOG_DEBUG("[TUI] Loaded reasoning_density: %s, tool_density: %s",
-                  config_density_to_string(loaded_config.view_mode.reasoning),
-                  config_density_to_string(loaded_config.view_mode.tool_output));
     } else {
         tui->input_box_style = INPUT_STYLE_BACKGROUND;
         tui->response_style = RESPONSE_STYLE_BORDER;
         tui->thinking_style = THINKING_STYLE_WAVE;
         tui->wrap_enabled = 1;
-        tui->reasoning_density = DENSITY_FOLDED;
-        tui->tool_density = DENSITY_ABBREVIATED;
-        tui->abbrev_lines = 8;
-        tui->abbrev_chars = 500;
     }
 
     // Initialize command mode buffer

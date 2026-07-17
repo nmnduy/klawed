@@ -64,27 +64,11 @@ typedef struct {
     LLMProviderConfig config;               // Provider configuration
 } NamedProviderConfig;
 
-// Display density — how much of an entry's text to render
-typedef enum {
-    CONFIG_DENSITY_EXPANDED = 0,   // Show full content
-    CONFIG_DENSITY_FOLDED,         // Show collapsed summary line only
-    CONFIG_DENSITY_ABBREVIATED     // Show first N lines/chars, then truncation indicator
-} ConfigDisplayDensity;
-
-// View mode settings — display density for conversation entry types
-typedef struct {
-    ConfigDisplayDensity reasoning;    // Reasoning/thinking trace density
-    ConfigDisplayDensity tool_output;  // Tool output density
-    int abbrev_lines;                  // Max lines when abbreviated (default 8)
-    int abbrev_chars;                  // Max chars when abbreviated (default 500)
-} ViewModeConfig;
-
 // Configuration structure
 typedef struct {
     TUIInputBoxStyle input_box_style;
     TUIResponseStyle response_style;
     TUIThinkingStyle thinking_style;
-    ViewModeConfig view_mode;              // Display density settings
     int wrap_enabled;
     int streaming_enabled;
     int auto_compact_enabled;
@@ -167,22 +151,6 @@ const char* config_thinking_style_to_string(TUIThinkingStyle style);
  * @return The style enum value, or THINKING_STYLE_WAVE if unknown
  */
 TUIThinkingStyle config_thinking_style_from_string(const char *str);
-
-/**
- * Convert display density to string
- *
- * @param density The density enum value
- * @return String name of the density
- */
-const char* config_density_to_string(ConfigDisplayDensity density);
-
-/**
- * Parse display density from string
- *
- * @param str String name of the density
- * @return The density enum value, or CONFIG_DENSITY_EXPANDED if unknown
- */
-ConfigDisplayDensity config_density_from_string(const char *str);
 
 /**
  * Get provider type name as string

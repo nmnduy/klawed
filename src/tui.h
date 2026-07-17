@@ -134,13 +134,6 @@ typedef struct {
     char pending;              // 'm' when waiting for mark char, '\'' when waiting for jump char, 0 otherwise
 } TUIMarkState;
 
-// Display density — how much of an entry's text to render
-typedef enum {
-    DENSITY_EXPANDED = 0,   // Show full content (current behavior)
-    DENSITY_FOLDED,         // Show collapsed summary line only
-    DENSITY_ABBREVIATED     // Show first N lines/chars, then truncation indicator
-} DisplayDensity;
-
 // TUI State
 typedef struct TUIStateStruct {
     // Centralized window manager (owns ncurses windows)
@@ -196,10 +189,6 @@ typedef struct TUIStateStruct {
     TUIInputBoxStyle input_box_style; // Current input box visual style
     TUIResponseStyle response_style;  // Current response visual style
     TUIThinkingStyle thinking_style;  // Current thinking/spinner visual style
-    DisplayDensity reasoning_density; // How to render reasoning/thinking entries
-    DisplayDensity tool_density;      // How to render tool output entries
-    int abbrev_lines;                 // Max lines to show when abbreviated (default 8)
-    int abbrev_chars;                 // Max chars to show when abbreviated (default 500)
     int normal_mode_last_key; // Previous key in normal mode (for gg, G combos)
     char *command_buffer;    // Buffer for command mode input (starts with ':')
     int command_buffer_len;  // Length of command buffer
