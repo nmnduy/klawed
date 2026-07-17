@@ -277,6 +277,25 @@ make clean && make SANITIZE=1 test
 - API keys are read from environment variables or config files (not hardcoded)
 - Secret values are redacted in logs and TUI output
 
+## Tmux: Disabling the activity flash
+
+Klawed updates tmux window/pane titles every ~16ms while the AI is working (for the spinner animation). This triggers tmux's `monitor-activity` feature, causing the window tab to flash or grey out — it looks like a "bell" ringing on every title update.
+
+To silence it without losing activity monitoring entirely:
+
+```tmux
+set -g activity-action none    # tmux 3.2+: ignore activity from title updates
+```
+
+Or disable activity monitoring completely:
+
+```tmux
+set -g monitor-activity off
+set -g visual-activity off
+```
+
+See [docs/tmux-integration.md](docs/tmux-integration.md) for full setup.
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
