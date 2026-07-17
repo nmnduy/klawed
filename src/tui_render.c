@@ -621,13 +621,13 @@ void render_status_window(TUIState *tui) {
         }
     }
 
-    werase(tui->wm.status_win);
-
     /* Apply shadow line background — the status bar recedes rather than
-     * dividing. A subtle darker shade creates a horizon, not a border. */
+     * dividing. A subtle darker shade creates a horizon, not a border.
+     * Set wbkgd BEFORE werase so the erase fills with the correct background. */
     if (has_colors()) {
         wbkgd(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BG));
     }
+    werase(tui->wm.status_win);
 
     // Prepare status message components (agent status - now on LEFT)
     // Note: We render spinner and text separately to use ncurses colors properly.

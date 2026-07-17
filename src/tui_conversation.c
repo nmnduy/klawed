@@ -443,12 +443,14 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                                 break;
                         }
                         if (has_colors()) {
-                            wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                            chtype attr = (last_entry->color_pair == COLOR_PAIR_GOAL) ? A_ITALIC : A_BOLD;
+                            wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | attr);
                         }
                         waddstr(tui->wm.conv_pad, last_entry->prefix);
                         waddch(tui->wm.conv_pad, ' ');
                         if (has_colors()) {
-                            wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                            chtype attr = (last_entry->color_pair == COLOR_PAIR_GOAL) ? A_ITALIC : A_BOLD;
+                            wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | attr);
                         }
                     }
                 }
@@ -474,12 +476,13 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                         text_pair = NCURSES_PAIR_TOOL_DIM;
                     }
                 }
+                chtype text_attr = (last_entry->color_pair == COLOR_PAIR_GOAL) ? A_ITALIC : 0;
                 if (has_colors()) {
-                    wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair) | text_attr);
                 }
                 waddstr(tui->wm.conv_pad, text);
                 if (has_colors()) {
-                    wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair) | text_attr);
                 }
             }
 

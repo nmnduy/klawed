@@ -418,13 +418,14 @@ void tui_handle_resize(TUIState *tui) {
         } else {
             // Write prefix for other (non-user, non-assistant) messages
             if (entry->prefix && entry->prefix[0] != '\0') {
+                chtype attr = (entry->color_pair == COLOR_PAIR_GOAL) ? A_ITALIC : A_BOLD;
                 if (has_colors()) {
-                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | attr);
                 }
                 waddstr(tui->wm.conv_pad, entry->prefix);
                 waddch(tui->wm.conv_pad, ' ');
                 if (has_colors()) {
-                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | attr);
                 }
             }
         }
@@ -459,12 +460,13 @@ void tui_handle_resize(TUIState *tui) {
                     // Other messages with prefix use foreground
                     text_pair = NCURSES_PAIR_FOREGROUND;
                 }
+                chtype text_attr = (entry->color_pair == COLOR_PAIR_GOAL) ? A_ITALIC : 0;
                 if (has_colors()) {
-                    wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair));
+                    wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair) | text_attr);
                 }
                 waddstr(tui->wm.conv_pad, entry->text);
                 if (has_colors()) {
-                    wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair));
+                    wattroff(tui->wm.conv_pad, COLOR_PAIR(text_pair) | text_attr);
                 }
             } else {
                 // No prefix: use the mapped pair
