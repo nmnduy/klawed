@@ -391,6 +391,92 @@ int tui_modes_handle_command(TUIState *tui, int ch, const char *prompt) {
             } else {
                 tui_update_status(tui, "Word wrap is already disabled");
             }
+        } else if (strncmp(cmd, "set reasoning ", 14) == 0) {
+            // Set reasoning display density
+            const char *value = cmd + 14;
+            if (strcmp(value, "folded") == 0) {
+                tui->reasoning_density = DENSITY_FOLDED;
+            } else if (strcmp(value, "abbreviated") == 0) {
+                tui->reasoning_density = DENSITY_ABBREVIATED;
+            } else if (strcmp(value, "expanded") == 0) {
+                tui->reasoning_density = DENSITY_EXPANDED;
+            } else {
+                tui_update_status(tui, "Usage: :set reasoning folded|abbreviated|expanded");
+                // Exit command mode without saving
+                tui->mode = TUI_MODE_NORMAL;
+                tui->command_buffer_len = 0;
+                tui->command_buffer[0] = '\0';
+                if (tui->wm.status_height > 0) {
+                    render_status_window(tui);
+                }
+                input_redraw(tui, prompt);
+                return 0;
+            }
+            // Save and redraw
+            { KlawedConfig cfg; if (config_load(&cfg) != 0) config_init_defaults(&cfg);
+              cfg.view_mode.reasoning = (ConfigDisplayDensity)tui->reasoning_density;
+              config_save(&cfg); }
+            { char msg[64]; snprintf(msg, sizeof(msg), "Reasoning: %s", value);
+              tui_update_status(tui, msg); }
+            redraw_conversation(tui);
+            refresh_conversation_viewport(tui);
+        } else if (strncmp(cmd, "set tool ", 9) == 0) {
+            // Set tool output display density
+            const char *value = cmd + 9;
+            if (strcmp(value, "abbreviated") == 0) {
+                tui->tool_density = DENSITY_ABBREVIATED;
+            } else if (strcmp(value, "expanded") == 0) {
+                tui->tool_density = DENSITY_EXPANDED;
+            } else if (strcmp(value, "folded") == 0) {
+                tui->tool_density = DENSITY_FOLDED;
+            } else {
+                tui_update_status(tui, "Usage: :set tool abbreviated|expanded|folded");
+                // Exit command mode without saving
+                tui->mode = TUI_MODE_NORMAL;
+                tui->command_buffer_len = 0;
+                tui->command_buffer[0] = '\0';
+                if (tui->wm.status_height > 0) {
+                    render_status_window(tui);
+                }
+                input_redraw(tui, prompt);
+                return 0;
+            }
+            // Save and redraw
+            { KlawedConfig cfg; if (config_load(&cfg) != 0) config_init_defaults(&cfg);
+              cfg.view_mode.tool_output = (ConfigDisplayDensity)tui->tool_density;
+              config_save(&cfg); }
+            { char msg[64]; snprintf(msg, sizeof(msg), "Tool output: %s", value);
+              tui_update_status(tui, msg); }
+            redraw_conversation(tui);
+            refresh_conversation_viewport(tui);
+        } else if (strncmp(cmd, "set abbrev_lines ", 17) == 0) {
+            // Set abbreviation line limit
+            int n = atoi(cmd + 17);
+            if (n > 0 && n <= 1000) {
+                tui->abbrev_lines = n;
+                { KlawedConfig cfg; if (config_load(&cfg) != 0) config_init_defaults(&cfg);
+                  cfg.view_mode.abbrev_lines = n; config_save(&cfg); }
+                { char msg[64]; snprintf(msg, sizeof(msg), "Abbreviation: %d lines", n);
+                  tui_update_status(tui, msg); }
+                redraw_conversation(tui);
+                refresh_conversation_viewport(tui);
+            } else {
+                tui_update_status(tui, "abbrev_lines must be 1-1000");
+            }
+        } else if (strncmp(cmd, "set abbrev_chars ", 17) == 0) {
+            // Set abbreviation char limit
+            int n = atoi(cmd + 17);
+            if (n > 0 && n <= 100000) {
+                tui->abbrev_chars = n;
+                { KlawedConfig cfg; if (config_load(&cfg) != 0) config_init_defaults(&cfg);
+                  cfg.view_mode.abbrev_chars = n; config_save(&cfg); }
+                { char msg[64]; snprintf(msg, sizeof(msg), "Abbreviation: %d chars", n);
+                  tui_update_status(tui, msg); }
+                redraw_conversation(tui);
+                refresh_conversation_viewport(tui);
+            } else {
+                tui_update_status(tui, "abbrev_chars must be 1-100000");
+            }
         } else if (cmd[0] != '\0') {
             // Unknown command
             char error_msg[256];
@@ -967,6 +1053,64 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
                 config_save(&cfg);
             }
             // Re-render to show the style change
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            break;
+
+        case 'H':  // Cycle reasoning display density: folded → abbreviated → expanded
+            if (tui->reasoning_density == DENSITY_FOLDED) {
+                tui->reasoning_density = DENSITY_ABBREVIATED;
+                tui_update_status(tui, "Reasoning: abbreviated");
+            } else if (tui->reasoning_density == DENSITY_ABBREVIATED) {
+                tui->reasoning_density = DENSITY_EXPANDED;
+                tui_update_status(tui, "Reasoning: expanded");
+            } else {
+                tui->reasoning_density = DENSITY_FOLDED;
+                tui_update_status(tui, "Reasoning: folded");
+            }
+            // Save to config
+            {
+                KlawedConfig cfg;
+                if (config_load(&cfg) != 0) {
+                    config_init_defaults(&cfg);
+                }
+                cfg.view_mode.reasoning = (ConfigDisplayDensity)tui->reasoning_density;
+                config_save(&cfg);
+            }
+            // Re-render conversation to show the density change
+            redraw_conversation(tui);
+            refresh_conversation_viewport(tui);
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            break;
+
+        case 'T':  // Cycle tool output display density: abbreviated → expanded
+            if (tui->tool_density == DENSITY_ABBREVIATED) {
+                tui->tool_density = DENSITY_EXPANDED;
+                tui_update_status(tui, "Tool output: expanded");
+            } else if (tui->tool_density == DENSITY_EXPANDED) {
+                tui->tool_density = DENSITY_FOLDED;
+                tui_update_status(tui, "Tool output: folded");
+            } else {
+                tui->tool_density = DENSITY_ABBREVIATED;
+                tui_update_status(tui, "Tool output: abbreviated");
+            }
+            // Save to config
+            {
+                KlawedConfig cfg;
+                if (config_load(&cfg) != 0) {
+                    config_init_defaults(&cfg);
+                }
+                cfg.view_mode.tool_output = (ConfigDisplayDensity)tui->tool_density;
+                config_save(&cfg);
+            }
+            // Re-render conversation to show the density change
+            redraw_conversation(tui);
+            refresh_conversation_viewport(tui);
             if (tui->wm.status_height > 0) {
                 render_status_window(tui);
             }

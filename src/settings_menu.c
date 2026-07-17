@@ -16,6 +16,8 @@ typedef enum {
     SETTINGS_ITEM_THRESHOLD,
     SETTINGS_ITEM_STREAMING,
     SETTINGS_ITEM_THINKING_STYLE,
+    SETTINGS_ITEM_REASONING_DENSITY,
+    SETTINGS_ITEM_TOOL_DENSITY,
     SETTINGS_ITEM_DISABLED_TOOLS,
     SETTINGS_ITEM_COUNT
 } SettingsItem;
@@ -25,7 +27,7 @@ static void get_popup_dimensions(int max_y, int max_x, int *height, int *width, 
     if (*width < 64) *width = 64;
     if (*width > max_x - 4) *width = max_x - 4;
 
-    *height = 18;
+    *height = 20;
     if (*height > max_y - 4) *height = max_y - 4;
 
     *start_y = (max_y - *height) / 2;
@@ -52,6 +54,12 @@ static void value_for_item(const KlawedConfig *config, SettingsItem item, char *
             break;
         case SETTINGS_ITEM_THINKING_STYLE:
             strlcpy(out, config_thinking_style_to_string(config->thinking_style), out_size);
+            break;
+        case SETTINGS_ITEM_REASONING_DENSITY:
+            strlcpy(out, config_density_to_string(config->view_mode.reasoning), out_size);
+            break;
+        case SETTINGS_ITEM_TOOL_DENSITY:
+            strlcpy(out, config_density_to_string(config->view_mode.tool_output), out_size);
             break;
         case SETTINGS_ITEM_DISABLED_TOOLS:
             strlcpy(out, config->disabled_tools[0] != '\0' ? config->disabled_tools : "(none)", out_size);
@@ -136,6 +144,26 @@ static int apply_item_change(ConversationState *state, KlawedConfig *config, Set
             config->thinking_style = (config->thinking_style == THINKING_STYLE_WAVE) ? THINKING_STYLE_PACMAN : THINKING_STYLE_WAVE;
             strlcpy(value, config_thinking_style_to_string(config->thinking_style), sizeof(value));
             return config_apply_setting(state, "thinking_style", value, status, status_size);
+        case SETTINGS_ITEM_REASONING_DENSITY: {
+            // Cycle: folded → abbreviated → expanded → folded
+            ConfigDisplayDensity d = config->view_mode.reasoning;
+            if (d == CONFIG_DENSITY_FOLDED) d = CONFIG_DENSITY_ABBREVIATED;
+            else if (d == CONFIG_DENSITY_ABBREVIATED) d = CONFIG_DENSITY_EXPANDED;
+            else d = CONFIG_DENSITY_FOLDED;
+            config->view_mode.reasoning = d;
+            strlcpy(value, config_density_to_string(d), sizeof(value));
+            return config_apply_setting(state, "view_reasoning", value, status, status_size);
+        }
+        case SETTINGS_ITEM_TOOL_DENSITY: {
+            // Cycle: abbreviated → expanded → folded → abbreviated
+            ConfigDisplayDensity d = config->view_mode.tool_output;
+            if (d == CONFIG_DENSITY_ABBREVIATED) d = CONFIG_DENSITY_EXPANDED;
+            else if (d == CONFIG_DENSITY_EXPANDED) d = CONFIG_DENSITY_FOLDED;
+            else d = CONFIG_DENSITY_ABBREVIATED;
+            config->view_mode.tool_output = d;
+            strlcpy(value, config_density_to_string(d), sizeof(value));
+            return config_apply_setting(state, "view_tool", value, status, status_size);
+        }
         case SETTINGS_ITEM_DISABLED_TOOLS:
             prompt_disabled_tools(win, height, width, config);
             return config_apply_setting(state, "disabled_tools", config->disabled_tools, status, status_size);
@@ -156,6 +184,8 @@ static void render_settings_menu(WINDOW *win, const KlawedConfig *config, int se
         "Compaction threshold",
         "Streaming",
         "Thinking style",
+        "Reasoning density",
+        "Tool output density",
         "Disabled tools"
     };
 

@@ -282,6 +282,76 @@ int config_apply_setting(ConversationState *state,
                                status_out_size);
     }
 
+    if (strcmp(setting, "view_reasoning") == 0) {
+        ConfigDisplayDensity density = config_density_from_string(value);
+        if (strcmp(value, "folded") != 0 && strcmp(value, "abbreviated") != 0 &&
+            strcmp(value, "expanded") != 0) {
+            copy_status(status_out, status_out_size, "view_reasoning must be folded|abbreviated|expanded");
+            return -1;
+        }
+        config.view_mode.reasoning = density;
+        if (state->tui) {
+            state->tui->reasoning_density = (DisplayDensity)density;
+            redraw_conversation(state->tui);
+            refresh_conversation_viewport(state->tui);
+        }
+        char message[256];
+        snprintf(message, sizeof(message), "Reasoning: %s", value);
+        return save_and_report(&config, state, message, status_out, status_out_size);
+    }
+
+    if (strcmp(setting, "view_tool") == 0) {
+        ConfigDisplayDensity density = config_density_from_string(value);
+        if (strcmp(value, "folded") != 0 && strcmp(value, "abbreviated") != 0 &&
+            strcmp(value, "expanded") != 0) {
+            copy_status(status_out, status_out_size, "view_tool must be folded|abbreviated|expanded");
+            return -1;
+        }
+        config.view_mode.tool_output = density;
+        if (state->tui) {
+            state->tui->tool_density = (DisplayDensity)density;
+            redraw_conversation(state->tui);
+            refresh_conversation_viewport(state->tui);
+        }
+        char message[256];
+        snprintf(message, sizeof(message), "Tool output: %s", value);
+        return save_and_report(&config, state, message, status_out, status_out_size);
+    }
+
+    if (strcmp(setting, "abbrev_lines") == 0) {
+        int n = atoi(value);
+        if (n < 1 || n > 1000) {
+            copy_status(status_out, status_out_size, "abbrev_lines must be 1-1000");
+            return -1;
+        }
+        config.view_mode.abbrev_lines = n;
+        if (state->tui) {
+            state->tui->abbrev_lines = n;
+            redraw_conversation(state->tui);
+            refresh_conversation_viewport(state->tui);
+        }
+        char message[256];
+        snprintf(message, sizeof(message), "Abbreviation: %d lines", n);
+        return save_and_report(&config, state, message, status_out, status_out_size);
+    }
+
+    if (strcmp(setting, "abbrev_chars") == 0) {
+        int n = atoi(value);
+        if (n < 1 || n > 100000) {
+            copy_status(status_out, status_out_size, "abbrev_chars must be 1-100000");
+            return -1;
+        }
+        config.view_mode.abbrev_chars = n;
+        if (state->tui) {
+            state->tui->abbrev_chars = n;
+            redraw_conversation(state->tui);
+            refresh_conversation_viewport(state->tui);
+        }
+        char message[256];
+        snprintf(message, sizeof(message), "Abbreviation: %d chars", n);
+        return save_and_report(&config, state, message, status_out, status_out_size);
+    }
+
     copy_status(status_out, status_out_size, "Unknown setting");
     return -1;
 }
@@ -294,6 +364,10 @@ static void print_config_help(void) {
     printf("  compaction_threshold <1-100>\n");
     printf("  streaming <on|off>\n");
     printf("  thinking_style <wave|pacman>\n");
+    printf("  view_reasoning <folded|abbreviated|expanded>\n");
+    printf("  view_tool <folded|abbreviated|expanded>\n");
+    printf("  abbrev_lines <1-1000>\n");
+    printf("  abbrev_chars <1-100000>\n");
     printf("  disabled_tools <comma-separated tool names>\n");
 }
 

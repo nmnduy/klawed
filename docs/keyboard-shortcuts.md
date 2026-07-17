@@ -65,6 +65,14 @@ Marks let you bookmark positions in the conversation and quickly jump back to th
 - `b` - Toggle input box style (cycles: bland → background → border → horizontal → bland)
 - `r` - Toggle response style (cycles: border → caret → robot → border)
 - `t` - Toggle thinking style (cycles: wave → pacman → wave)
+- `H` - Cycle reasoning display density (cycles: folded → abbreviated → expanded → folded)
+  - **folded**: collapsed summary line "(N lines) — press H to expand"
+  - **abbreviated**: first N lines/chars + truncation indicator
+  - **expanded**: full reasoning text (default for cycling; initial default is folded)
+- `T` - Cycle tool output display density (cycles: abbreviated → expanded → folded → abbreviated)
+  - **abbreviated**: first N lines/chars + truncation indicator (initial default)
+  - **expanded**: full tool output
+  - **folded**: collapsed summary line
 - `w` - Toggle word wrap on/off (when off, use `h`/`l` to scroll horizontally)
 - `h` - Scroll left (horizontal scroll when wrap is disabled)
 - `l` - Scroll right (horizontal scroll when wrap is disabled)
@@ -107,6 +115,14 @@ From Normal mode, press `:` to enter command mode. The command prompt will appea
 - `:noh` or `:nohlsearch` - Clear search highlighting
 - `:wrap` or `:set wrap` - Enable word wrap
 - `:nowrap` or `:set nowrap` - Disable word wrap (horizontal scroll mode)
+- `:set reasoning folded` - Fold all reasoning traces (summary line only)
+- `:set reasoning abbreviated` - Show first N lines/chars of reasoning
+- `:set reasoning expanded` - Show full reasoning text
+- `:set tool abbreviated` - Abbreviate tool outputs (first N lines/chars)
+- `:set tool expanded` - Show full tool output
+- `:set tool folded` - Fold tool outputs (summary line only)
+- `:set abbrev_lines N` - Set abbreviation line limit (default 8)
+- `:set abbrev_chars N` - Set abbreviation character limit (default 500)
 - `:!<cmd>` - Execute shell command (e.g., `:!ls -la`)
 - `:re !<cmd>` - Replace input buffer with shell command output
 

@@ -31,6 +31,12 @@ void config_init_defaults(KlawedConfig *config) {
     config->disabled_tools[0] = '\0';
     config->theme[0] = '\0';  // Empty means use default or KLAWED_THEME env var
 
+    // View mode defaults: reasoning folded, tool output abbreviated
+    config->view_mode.reasoning = CONFIG_DENSITY_FOLDED;
+    config->view_mode.tool_output = CONFIG_DENSITY_ABBREVIATED;
+    config->view_mode.abbrev_lines = 8;
+    config->view_mode.abbrev_chars = 500;
+
     // Initialize LLM provider defaults (legacy single-provider)
     config->llm_provider.provider_type = PROVIDER_AUTO;
     strlcpy(config->llm_provider.provider_name, "auto", CONFIG_PROVIDER_NAME_MAX);
@@ -136,6 +142,29 @@ TUIThinkingStyle config_thinking_style_from_string(const char *str) {
         return THINKING_STYLE_PACMAN;
     }
     return THINKING_STYLE_WAVE;
+}
+
+const char* config_density_to_string(ConfigDisplayDensity density) {
+    switch (density) {
+        case CONFIG_DENSITY_FOLDED:
+            return "folded";
+        case CONFIG_DENSITY_ABBREVIATED:
+            return "abbreviated";
+        case CONFIG_DENSITY_EXPANDED:
+        default:
+            return "expanded";
+    }
+}
+
+ConfigDisplayDensity config_density_from_string(const char *str) {
+    if (!str) return CONFIG_DENSITY_EXPANDED;
+
+    if (strcmp(str, "folded") == 0) {
+        return CONFIG_DENSITY_FOLDED;
+    } else if (strcmp(str, "abbreviated") == 0) {
+        return CONFIG_DENSITY_ABBREVIATED;
+    }
+    return CONFIG_DENSITY_EXPANDED;
 }
 
 /**
@@ -248,6 +277,37 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
     if (thinking_style_item && cJSON_IsString(thinking_style_item)) {
         config->thinking_style = config_thinking_style_from_string(thinking_style_item->valuestring);
         LOG_DEBUG("[Config] Loaded thinking_style from %s: %s", label, thinking_style_item->valuestring);
+    }
+
+    // Read view_mode (display density settings)
+    cJSON *view_mode_item = cJSON_GetObjectItem(root, "view_mode");
+    if (view_mode_item && cJSON_IsObject(view_mode_item)) {
+        cJSON *reasoning_item = cJSON_GetObjectItem(view_mode_item, "reasoning");
+        if (reasoning_item && cJSON_IsString(reasoning_item)) {
+            config->view_mode.reasoning = config_density_from_string(reasoning_item->valuestring);
+            LOG_DEBUG("[Config] Loaded view_mode.reasoning from %s: %s", label, reasoning_item->valuestring);
+        }
+        cJSON *tool_item = cJSON_GetObjectItem(view_mode_item, "tool_output");
+        if (tool_item && cJSON_IsString(tool_item)) {
+            config->view_mode.tool_output = config_density_from_string(tool_item->valuestring);
+            LOG_DEBUG("[Config] Loaded view_mode.tool_output from %s: %s", label, tool_item->valuestring);
+        }
+        cJSON *abbrev_lines_item = cJSON_GetObjectItem(view_mode_item, "abbrev_lines");
+        if (abbrev_lines_item && cJSON_IsNumber(abbrev_lines_item)) {
+            double val = cJSON_GetNumberValue(abbrev_lines_item);
+            int n = (int)val;
+            if (n > 0 && n <= 1000) {
+                config->view_mode.abbrev_lines = n;
+            }
+        }
+        cJSON *abbrev_chars_item = cJSON_GetObjectItem(view_mode_item, "abbrev_chars");
+        if (abbrev_chars_item && cJSON_IsNumber(abbrev_chars_item)) {
+            double val = cJSON_GetNumberValue(abbrev_chars_item);
+            int n = (int)val;
+            if (n > 0 && n <= 100000) {
+                config->view_mode.abbrev_chars = n;
+            }
+        }
     }
 
     // Read wrap_enabled
@@ -627,6 +687,52 @@ int config_save(const KlawedConfig *config) {
         cJSON_SetValuestring(existing_thinking_style, config_thinking_style_to_string(config->thinking_style));
     } else if (config->thinking_style != defaults.thinking_style) {
         cJSON_AddStringToObject(root, "thinking_style", config_thinking_style_to_string(config->thinking_style));
+    }
+
+    // Update view_mode (display density settings)
+    // Save the whole view_mode object if any field differs from default
+    // or if the object already exists in the config file
+    cJSON *existing_view_mode = cJSON_GetObjectItem(root, "view_mode");
+    int view_mode_differs = (config->view_mode.reasoning != defaults.view_mode.reasoning ||
+                             config->view_mode.tool_output != defaults.view_mode.tool_output ||
+                             config->view_mode.abbrev_lines != defaults.view_mode.abbrev_lines ||
+                             config->view_mode.abbrev_chars != defaults.view_mode.abbrev_chars);
+    if (existing_view_mode) {
+        // Update existing object fields
+        cJSON *vm_reasoning = cJSON_GetObjectItem(existing_view_mode, "reasoning");
+        if (vm_reasoning) {
+            cJSON_SetValuestring(vm_reasoning, config_density_to_string(config->view_mode.reasoning));
+        } else {
+            cJSON_AddStringToObject(existing_view_mode, "reasoning", config_density_to_string(config->view_mode.reasoning));
+        }
+        cJSON *vm_tool = cJSON_GetObjectItem(existing_view_mode, "tool_output");
+        if (vm_tool) {
+            cJSON_SetValuestring(vm_tool, config_density_to_string(config->view_mode.tool_output));
+        } else {
+            cJSON_AddStringToObject(existing_view_mode, "tool_output", config_density_to_string(config->view_mode.tool_output));
+        }
+        cJSON *vm_abbrev_lines = cJSON_GetObjectItem(existing_view_mode, "abbrev_lines");
+        if (vm_abbrev_lines) {
+            cJSON_ReplaceItemInObject(existing_view_mode, "abbrev_lines", cJSON_CreateNumber(config->view_mode.abbrev_lines));
+        } else {
+            cJSON_AddNumberToObject(existing_view_mode, "abbrev_lines", config->view_mode.abbrev_lines);
+        }
+        cJSON *vm_abbrev_chars = cJSON_GetObjectItem(existing_view_mode, "abbrev_chars");
+        if (vm_abbrev_chars) {
+            cJSON_ReplaceItemInObject(existing_view_mode, "abbrev_chars", cJSON_CreateNumber(config->view_mode.abbrev_chars));
+        } else {
+            cJSON_AddNumberToObject(existing_view_mode, "abbrev_chars", config->view_mode.abbrev_chars);
+        }
+    } else if (view_mode_differs) {
+        // Create new view_mode object
+        cJSON *vm = cJSON_CreateObject();
+        if (vm) {
+            cJSON_AddStringToObject(vm, "reasoning", config_density_to_string(config->view_mode.reasoning));
+            cJSON_AddStringToObject(vm, "tool_output", config_density_to_string(config->view_mode.tool_output));
+            cJSON_AddNumberToObject(vm, "abbrev_lines", config->view_mode.abbrev_lines);
+            cJSON_AddNumberToObject(vm, "abbrev_chars", config->view_mode.abbrev_chars);
+            cJSON_AddItemToObject(root, "view_mode", vm);
+        }
     }
 
     // Update wrap_enabled - only add if differs from default or already exists
