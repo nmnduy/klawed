@@ -1637,8 +1637,14 @@ int main(int argc, char *argv[]) {
                 api_key = "oauth";  /* Placeholder; real auth happens at first API call */
                 api_key_source = "oauth";
             } else {
-                LOG_ERROR("OPENAI_API_KEY environment variable not set");
-                fprintf(stderr, "Error: OPENAI_API_KEY environment variable not set\n");
+                /* Use provider's specific api_key_env in the error message, if configured */
+                const LLMProviderConfig *effective = provider_config_get_effective(&unified_config);
+                const char *required_var = "OPENAI_API_KEY";
+                if (effective && effective->api_key_env[0] != '\0') {
+                    required_var = effective->api_key_env;
+                }
+                LOG_ERROR("%s environment variable not set", required_var);
+                fprintf(stderr, "Error: %s environment variable not set\n", required_var);
                 fprintf(stderr, "\nTo use AWS Bedrock instead, set:\n");
                 fprintf(stderr, "  export KLAWED_USE_BEDROCK=true\n");
                 fprintf(stderr, "  export ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0\n");
