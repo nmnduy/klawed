@@ -919,11 +919,11 @@ void render_status_window(TUIState *tui) {
         int mode_label_width = utf8_display_width(mode_label);
         if (left_col + mode_label_width + 2 <= left_limit) {
             if (has_colors()) {
-                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_DIM) | A_DIM);
+                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
             tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, mode_label, mode_label_len);
             if (has_colors()) {
-                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_DIM) | A_DIM);
+                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
             left_col += mode_label_width + 1;  // +1 for spacing
         }
@@ -946,32 +946,32 @@ void render_status_window(TUIState *tui) {
             build_pacman_frame(tui, pacman_buf, sizeof(pacman_buf), (int)prompt_tokens, has_spinner);
             int pacman_len = (int)strlen(pacman_buf);
 
-            // Render pacman with STATUS bar active color
+            // Render pacman with STATUS color
             if (has_colors()) {
-                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE) | A_BOLD);
+                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             } else {
                 wattron(tui->wm.status_win, A_BOLD);
             }
             tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, pacman_buf, pacman_len);
             if (has_colors()) {
-                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE) | A_BOLD);
+                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
             } else {
                 wattroff(tui->wm.status_win, A_BOLD);
             }
             left_col += utf8_display_width(pacman_buf);
             // No status text in pacman style — bar only
         } else {
-            // Render regular spinner character with status bar active color
+            // Render regular spinner character with STATUS color (yellow)
             // (when in tmux, spinner_frame_len is 0 and we skip the spinner)
             if (spinner_frame_len > 0) {
                 if (has_colors()) {
-                    wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE) | A_BOLD);
+                    wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
                 } else {
                     wattron(tui->wm.status_win, A_BOLD);
                 }
                 tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, spinner_frame, spinner_frame_len);
                 if (has_colors()) {
-                    wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE) | A_BOLD);
+                    wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
                 } else {
                     wattroff(tui->wm.status_win, A_BOLD);
                 }
@@ -982,13 +982,13 @@ void render_status_window(TUIState *tui) {
             // This fires even when the spinner is hidden (e.g., in tmux)
             if (status_text_len > 0 && left_col + utf8_display_width(status_text) <= left_limit) {
                 if (has_colors()) {
-                    wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE) | A_BOLD);
+                    wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
                 } else {
                     wattron(tui->wm.status_win, A_BOLD);
                 }
                 tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
                 if (has_colors()) {
-                    wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE) | A_BOLD);
+                    wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
                 } else {
                     wattroff(tui->wm.status_win, A_BOLD);
                 }
@@ -1006,15 +1006,15 @@ void render_status_window(TUIState *tui) {
         build_pacman_frame(tui, pacman_buf, sizeof(pacman_buf), (int)prompt_tokens, 0);
         int pacman_len = (int)strlen(pacman_buf);
 
-        // Render pacman with status bar active color
+        // Render pacman with STATUS color
         if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE) | A_BOLD);
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
         tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, pacman_buf, pacman_len);
         if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE) | A_BOLD);
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
             wattroff(tui->wm.status_win, A_BOLD);
         }
@@ -1022,13 +1022,13 @@ void render_status_window(TUIState *tui) {
     } else if (status_text_len > 0 && status_display_width <= left_limit) {
         // No spinner, just render status text on the left
         if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE) | A_BOLD);
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
         tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, status_text, status_text_len);
         if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE) | A_BOLD);
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
         } else {
             wattroff(tui->wm.status_win, A_BOLD);
         }
@@ -1052,11 +1052,11 @@ void render_status_window(TUIState *tui) {
             int help_col = left_col + (available_width - active_help_width) / 2;
             if (help_col < left_col) help_col = left_col;
             if (has_colors()) {
-                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_DIM) | A_DIM);
+                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
             tui_safe_mvwaddnstr(tui->wm.status_win, 0, help_col, active_help, active_help_len);
             if (has_colors()) {
-                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_DIM) | A_DIM);
+                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
             }
         }
     }
@@ -1067,11 +1067,11 @@ void render_status_window(TUIState *tui) {
         if (marks_display_width >= 4 && left_col + marks_display_width <= left_limit) {
             // Use status color but not bold, so marks are visible but not distracting
             if (has_colors()) {
-                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE));
+                wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
             }
             tui_safe_mvwaddnstr(tui->wm.status_win, 0, left_col, marks_str, marks_str_len);
             if (has_colors()) {
-                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE));
+                wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
             }
             left_col += marks_display_width;
         }
@@ -1084,11 +1084,11 @@ void render_status_window(TUIState *tui) {
     // Token usage
     if (token_str_len > 0 && right_col + token_display_width <= width) {
         if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_DIM) | A_DIM);
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
         }
         tui_safe_mvwaddnstr(tui->wm.status_win, 0, right_col, token_str, token_str_len);
         if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_DIM) | A_DIM);
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM) | A_DIM);
         }
         right_col += token_display_width;
     }
@@ -1096,11 +1096,11 @@ void render_status_window(TUIState *tui) {
     // Scroll percentage (NORMAL mode only)
     if (scroll_str_len > 0 && right_col + scroll_display_width <= width) {
         if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE));
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
         tui_safe_mvwaddnstr(tui->wm.status_win, 0, right_col, scroll_str, scroll_str_len);
         if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_ACTIVE));
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS));
         }
         right_col += scroll_display_width;
     }
@@ -1110,13 +1110,13 @@ void render_status_window(TUIState *tui) {
         LOG_FINE("[TUI] Rendering plan mode at col=%d, width=%d, plan_display_width=%d, mode=%d",
                   right_col, width, plan_display_width, tui->mode);
         if (has_colors()) {
-            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_PROMPT) | A_BOLD);
+            wattron(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         } else {
             wattron(tui->wm.status_win, A_BOLD);
         }
         tui_safe_mvwaddnstr(tui->wm.status_win, 0, right_col, plan_str, plan_str_len);
         if (has_colors()) {
-            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_STATUS_BAR_PROMPT) | A_BOLD);
+            wattroff(tui->wm.status_win, COLOR_PAIR(NCURSES_PAIR_PROMPT) | A_BOLD);
         } else {
             wattroff(tui->wm.status_win, A_BOLD);
         }
