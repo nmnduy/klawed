@@ -232,6 +232,9 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_INLINE_CODE, 16, 30);                 // Inline code on subtle tint
             init_pair(NCURSES_PAIR_H1_ACCENT, 31, default_bg);           // H1 accent color for text + rule
             init_pair(NCURSES_PAIR_STATUS_BG, 16, 32);                   // Status bar: foreground on shadow background
+            init_pair(NCURSES_PAIR_STATUS_BAR_ACTIVE, 19, 32);           // Status bar: active text on shadow bg
+            init_pair(NCURSES_PAIR_STATUS_BAR_DIM, 26, 32);              // Status bar: dimmed text on shadow bg
+            init_pair(NCURSES_PAIR_STATUS_BAR_PROMPT, 17, 32);           // Status bar: prompt-colored text on shadow bg
 
             LOG_DEBUG("[TUI] Custom colors initialized with truecolor support");
         } else if (supports_256) {
@@ -278,6 +281,9 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_INLINE_CODE, (short)fg_idx, (short)inline_code_bg_idx);
             init_pair(NCURSES_PAIR_H1_ACCENT, (short)h1_accent_idx, default_bg);
             init_pair(NCURSES_PAIR_STATUS_BG, (short)fg_idx, (short)status_bg_idx);
+            init_pair(NCURSES_PAIR_STATUS_BAR_ACTIVE, (short)status_idx, (short)status_bg_idx);
+            init_pair(NCURSES_PAIR_STATUS_BAR_DIM, (short)tool_dim_idx, (short)status_bg_idx);
+            init_pair(NCURSES_PAIR_STATUS_BAR_PROMPT, (short)user_idx, (short)status_bg_idx);
 
             LOG_DEBUG("[TUI] Custom colors initialized using 256-color palette (no direct color change support)");
         } else {
@@ -310,6 +316,9 @@ void tui_reload_colors(void) {
             init_pair(NCURSES_PAIR_INLINE_CODE, COLOR_WHITE, COLOR_BLACK);  // Fallback: inline code on black
             init_pair(NCURSES_PAIR_H1_ACCENT, COLOR_CYAN, default_bg);  // Fallback: cyan for H1 accent
             init_pair(NCURSES_PAIR_STATUS_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
+            init_pair(NCURSES_PAIR_STATUS_BAR_ACTIVE, COLOR_YELLOW, COLOR_BLACK);  // Fallback: yellow on black
+            init_pair(NCURSES_PAIR_STATUS_BAR_DIM, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
+            init_pair(NCURSES_PAIR_STATUS_BAR_PROMPT, COLOR_GREEN, COLOR_BLACK);  // Fallback: green on black
         }
     } else {
         LOG_DEBUG("[TUI] No theme loaded, using standard ncurses colors");
@@ -341,6 +350,9 @@ void tui_reload_colors(void) {
         init_pair(NCURSES_PAIR_INLINE_CODE, COLOR_WHITE, COLOR_BLACK);  // Fallback: inline code on black
         init_pair(NCURSES_PAIR_H1_ACCENT, COLOR_CYAN, default_bg);  // Fallback: cyan for H1 accent
         init_pair(NCURSES_PAIR_STATUS_BG, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
+        init_pair(NCURSES_PAIR_STATUS_BAR_ACTIVE, COLOR_YELLOW, COLOR_BLACK);  // Fallback: yellow on black
+        init_pair(NCURSES_PAIR_STATUS_BAR_DIM, COLOR_WHITE, COLOR_BLACK);  // Fallback: white on black
+        init_pair(NCURSES_PAIR_STATUS_BAR_PROMPT, COLOR_GREEN, COLOR_BLACK);  // Fallback: green on black
     }
 }
 

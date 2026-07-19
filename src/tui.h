@@ -77,6 +77,9 @@ typedef enum {
 #define NCURSES_PAIR_INLINE_CODE 22          // Inline code with subtle tint
 #define NCURSES_PAIR_H1_ACCENT 23            // H1 header accent color for text + rule
 #define NCURSES_PAIR_STATUS_BG 24            // Status bar shadow line (slightly darker than bg)
+#define NCURSES_PAIR_STATUS_BAR_ACTIVE 25    // Status bar: active text on shadow bg
+#define NCURSES_PAIR_STATUS_BAR_DIM 26       // Status bar: dimmed text on shadow bg
+#define NCURSES_PAIR_STATUS_BAR_PROMPT 27    // Status bar: prompt-colored text on shadow bg
 
 // Conversation message entry
 typedef struct {
