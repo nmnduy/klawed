@@ -79,7 +79,7 @@ Marks let you bookmark positions in the conversation and quickly jump back to th
 - `Delete` - Delete character at cursor
 - `Ctrl+W` - Delete word before cursor
 - `Ctrl+U` - Delete from cursor to beginning of line
-- `Ctrl+K` - Delete from cursor to end of line
+- `Ctrl+K` - Delete from cursor to end of line (opens command palette when input is empty)
 
 ### Cursor Movement
 - `←`/`→` - Move cursor left/right
@@ -93,6 +93,7 @@ Marks let you bookmark positions in the conversation and quickly jump back to th
 - `Ctrl+L` - Clear screen/redraw
 - `Ctrl+F` - Open file search popup
 - `Ctrl+R` - Open history search popup
+- `Ctrl+K` - Open command palette (when input is empty, like Cmd+K in web UIs); otherwise, delete from cursor to end of line
 - `Tab` - Command/path autocomplete (context-dependent)
 
 ## Command Mode
@@ -159,6 +160,21 @@ Search through command history:
 - `↑`/`↓` - Navigate results
 - `Enter` - Insert selected command
 - `ESC` - Cancel and close
+
+## Command Palette (Ctrl+K)
+
+Press `Ctrl+K` when the input is empty to open the command palette, similar to Cmd+K in most web UIs. This lets you quickly find and execute slash commands without memorizing them.
+
+### Using the palette
+- **Type to filter** — the palette filters commands by name and description as you type
+- `↑` / `↓` — Navigate through matching commands
+- `Enter` — Select the highlighted command (inserts `/command ` into the input buffer)
+- `ESC` or `Ctrl+C` — Cancel and close the palette, returning to INSERT mode
+
+### Tips
+- Press `Ctrl+K` on empty input to browse all available commands
+- Start typing to quickly narrow down the list (e.g., type "clea" to find "/clear")
+- After selecting, the command is inserted with the `/` prefix ready for you to add arguments or press Enter to run
 
 ## Slash Commands
 

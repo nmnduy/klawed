@@ -381,6 +381,7 @@ const char* tui_mode_label(TUIMode mode) {
         case TUI_MODE_FILE_SEARCH:  return "FILES";
         case TUI_MODE_HISTORY_SEARCH: return "HIST";
         case TUI_MODE_VOICE: return "VOICE";
+        case TUI_MODE_COMMAND_PALETTE: return "CMDPAL";
         default: return "?";
     }
 }
@@ -915,6 +916,97 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         return tui_history_process_search_key(tui, ch, prompt);
     }
 
+    // Handle command palette mode separately
+    if (tui->mode == TUI_MODE_COMMAND_PALETTE) {
+        if (ch == 27 || ch == 3) {  // ESC or Ctrl+C: cancel
+            tui->cmd_palette_active = 0;
+            free(tui->cmd_palette_filter);
+            tui->cmd_palette_filter = NULL;
+            tui->cmd_palette_filter_len = 0;
+            tui->cmd_palette_filter_capacity = 0;
+            tui->cmd_palette_commands = NULL;
+            tui->cmd_palette_count = 0;
+            tui->mode = TUI_MODE_INSERT;
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            return 0;
+        }
+        if (ch == 13 || ch == KEY_ENTER) {  // Enter: select command
+            if (tui->cmd_palette_selected >= 0 &&
+                tui->cmd_palette_selected < tui->cmd_palette_count) {
+                const Command *cmd = tui->cmd_palette_commands[tui->cmd_palette_selected];
+                if (cmd) {
+                    // Insert the command into the input buffer with '/' prefix
+                    tui_clear_input_buffer(tui);
+                    char cmd_text[256];
+                    snprintf(cmd_text, sizeof(cmd_text), "/%s ", cmd->name);
+                    tui_input_insert_string(tui->input_buffer, cmd_text);
+                }
+            }
+            tui->cmd_palette_active = 0;
+            free(tui->cmd_palette_filter);
+            tui->cmd_palette_filter = NULL;
+            tui->cmd_palette_filter_len = 0;
+            tui->cmd_palette_filter_capacity = 0;
+            tui->cmd_palette_commands = NULL;
+            tui->cmd_palette_count = 0;
+            tui->mode = TUI_MODE_INSERT;
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+            return 0;
+        }
+        if (ch == KEY_UP) {  // Up: previous command
+            if (tui->cmd_palette_count > 0) {
+                tui->cmd_palette_selected--;
+                if (tui->cmd_palette_selected < 0) {
+                    tui->cmd_palette_selected = tui->cmd_palette_count - 1;
+                }
+                input_redraw(tui, prompt);
+            }
+            return 0;
+        }
+        if (ch == KEY_DOWN) {  // Down: next command
+            if (tui->cmd_palette_count > 0) {
+                tui->cmd_palette_selected++;
+                if (tui->cmd_palette_selected >= tui->cmd_palette_count) {
+                    tui->cmd_palette_selected = 0;
+                }
+                input_redraw(tui, prompt);
+            }
+            return 0;
+        }
+        if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {  // Backspace: remove filter char
+            if (tui->cmd_palette_filter_len > 0) {
+                tui->cmd_palette_filter_len--;
+                tui->cmd_palette_filter[tui->cmd_palette_filter_len] = '\0';
+                tui->cmd_palette_selected = 0;
+                input_redraw(tui, prompt);
+            }
+            return 0;
+        }
+        if (ch >= 32 && ch < 127) {  // Printable: add to filter
+            // Grow filter buffer if needed
+            if (tui->cmd_palette_filter_len + 2 > tui->cmd_palette_filter_capacity) {
+                int new_cap = tui->cmd_palette_filter_capacity > 0 ?
+                    tui->cmd_palette_filter_capacity * 2 : 64;
+                char *new_buf = realloc(tui->cmd_palette_filter, (size_t)new_cap);
+                if (!new_buf) return 0;
+                tui->cmd_palette_filter = new_buf;
+                tui->cmd_palette_filter_capacity = new_cap;
+            }
+            tui->cmd_palette_filter[tui->cmd_palette_filter_len++] = (char)ch;
+            tui->cmd_palette_filter[tui->cmd_palette_filter_len] = '\0';
+            tui->cmd_palette_selected = 0;
+            input_redraw(tui, prompt);
+            return 0;
+        }
+        return 0;
+    }
+
     // Handle voice mode separately
     if (tui->mode == TUI_MODE_VOICE) {
         if (!tui->voice_mode || !voice_mode_is_active(tui->voice_mode)) {
@@ -1229,10 +1321,34 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         input_redraw(tui, prompt);
     } else if (ch == 4) {  // Ctrl+D: EOF
         return -1;
-    } else if (ch == 11) {  // Ctrl+K: kill to end of line
-        input->buffer[input->cursor] = '\0';
-        input->length = input->cursor;
-        input_redraw(tui, prompt);
+    } else if (ch == 11) {  // Ctrl+K: kill to end of line, or open command palette on empty input
+        if (input->length == 0) {
+            // Open command palette
+            tui->mode = TUI_MODE_COMMAND_PALETTE;
+            tui->cmd_palette_active = 1;
+            // Free any previous filter
+            free(tui->cmd_palette_filter);
+            tui->cmd_palette_filter = NULL;
+            tui->cmd_palette_filter_len = 0;
+            tui->cmd_palette_filter_capacity = 0;
+            tui->cmd_palette_selected = 0;
+            tui->cmd_palette_commands = NULL;
+            tui->cmd_palette_count = 0;
+            // Get all commands
+            int cmd_count = 0;
+            const Command **cmds = commands_list(&cmd_count);
+            tui->cmd_palette_commands = cmds;
+            tui->cmd_palette_count = cmd_count;
+            if (tui->wm.status_height > 0) {
+                render_status_window(tui);
+            }
+            input_redraw(tui, prompt);
+        } else {
+            // Normal behavior: kill to end of line
+            input->buffer[input->cursor] = '\0';
+            input->length = input->cursor;
+            input_redraw(tui, prompt);
+        }
     } else if (ch == 21) {  // Ctrl+U: kill to beginning of line
         if (input->cursor > 0) {
             memmove(input->buffer,

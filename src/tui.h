@@ -20,6 +20,7 @@
 #include "spring.h"
 #include "spinner_effects.h"
 #include "text_diffusion.h"
+#include "commands.h"
 #ifndef TEST_BUILD
 #include "persistence.h"
 #else
@@ -94,7 +95,8 @@ typedef enum {
     TUI_MODE_SEARCH,      // Search mode (entered with '/' or '?' from normal mode)
     TUI_MODE_FILE_SEARCH,   // File search mode (entered with Ctrl+F from insert mode)
     TUI_MODE_HISTORY_SEARCH, // History search mode (entered with Ctrl+R from insert mode)
-    TUI_MODE_VOICE           // Voice mode (entered by holding spacebar in INSERT mode)
+    TUI_MODE_VOICE,           // Voice mode (entered by holding spacebar in INSERT mode)
+    TUI_MODE_COMMAND_PALETTE  // Command palette (entered with Ctrl+K on empty input)
 } TUIMode;
 
 // Input box style (visual appearance)
@@ -272,6 +274,15 @@ typedef struct TUIStateStruct {
 
     // Vim-style marks (m{a-z} to set, '{a-z} to jump)
     TUIMarkState marks;               // Marks state for conversation navigation
+
+    // Command palette state (Ctrl+K on empty input)
+    int cmd_palette_active;           // 1 when command palette is visible
+    char *cmd_palette_filter;         // Filter text buffer
+    int cmd_palette_filter_len;       // Length of filter text
+    int cmd_palette_filter_capacity;  // Capacity of filter buffer
+    int cmd_palette_selected;         // Currently selected command index (0-based)
+    const Command **cmd_palette_commands; // Array of matching command pointers
+    int cmd_palette_count;            // Number of matching commands
 
     // Voice mode state (push-to-talk recording + transcription)
     VoiceModeState *voice_mode;       // Voice mode state (NULL if not initialized)

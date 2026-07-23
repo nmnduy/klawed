@@ -2172,6 +2172,214 @@ void input_redraw(TUIState *tui, const char *prompt) {
         return;
     }
 
+    // Command palette mode: render command list overlay
+    if (tui->mode == TUI_MODE_COMMAND_PALETTE && tui->cmd_palette_active) {
+        // Request a larger input window for the palette
+        int palette_needed = 12;  // header + filter + up to 8 cmds + footer
+        if (palette_needed > input->win_height) {
+            tui_window_resize_input(tui, palette_needed);
+            input = tui->input_buffer;
+            win = input->win;
+            if (!win) {
+                return;
+            }
+        }
+
+        int palette_height = input->win_height;
+        int palette_width = input->win_width;
+
+        // Clear and apply background
+        werase(win);
+        if (has_colors()) {
+            wbkgd(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+        }
+
+        // Header row (row 0)
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+        }
+        const char *header = "⌘ Commands";
+        tui_safe_mvwaddnstr(win, 0, 1, header, (int)strlen(header));
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_STATUS) | A_BOLD);
+            // Separator under header
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+        }
+        for (int col = 1; col < palette_width - 1; col++) {
+            tui_safe_mvwaddch(win, 1, col, ACS_HLINE);
+        }
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+        }
+
+        // Filter input line (row 2)
+        {
+            int filter_row = 2;
+            if (has_colors()) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+            }
+            tui_safe_mvwaddnstr(win, filter_row, 1, "> ", 2);
+            if (has_colors()) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+            }
+            if (tui->cmd_palette_filter && tui->cmd_palette_filter_len > 0) {
+                if (has_colors()) {
+                    wattron(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+                }
+                int max_filter = palette_width - 5;
+                int display_len = tui->cmd_palette_filter_len;
+                if (display_len > max_filter) display_len = max_filter;
+                tui_safe_mvwaddnstr(win, filter_row, 3,
+                    tui->cmd_palette_filter, display_len);
+                if (has_colors()) {
+                    wattroff(win, COLOR_PAIR(NCURSES_PAIR_FOREGROUND));
+                }
+            }
+            // Blinking cursor indicator
+            if (has_colors()) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_PROMPT));
+            }
+            int cursor_vis_col = 3 + tui->cmd_palette_filter_len;
+            if (cursor_vis_col >= palette_width - 1) cursor_vis_col = palette_width - 2;
+            tui_safe_mvwaddch(win, filter_row, cursor_vis_col, ' ' | A_REVERSE);
+            if (has_colors()) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_PROMPT));
+            }
+        }
+
+        // Filter commands based on filter text
+        int matched_count = 0;
+        int matched_indices[64];
+        const char *filter = tui->cmd_palette_filter;
+        int filter_len = tui->cmd_palette_filter_len;
+
+        for (int i = 0; i < tui->cmd_palette_count && matched_count < 64; i++) {
+            const Command *cmd = tui->cmd_palette_commands[i];
+            if (!cmd || !cmd->name) continue;
+
+            if (filter_len == 0) {
+                matched_indices[matched_count++] = i;
+            } else {
+                const char *name = cmd->name;
+                const char *desc = cmd->description ? cmd->description : "";
+                int found = 0;
+                // Case-insensitive substring match in name
+                for (int ni = 0; name[ni] && !found; ni++) {
+                    int match = 1;
+                    for (int fi = 0; fi < filter_len && match; fi++) {
+                        char nc = name[ni + fi];
+                        if (!nc) { match = 0; break; }
+                        if (tolower((unsigned char)nc) != tolower((unsigned char)filter[fi])) {
+                            match = 0;
+                        }
+                    }
+                    if (match) found = 1;
+                }
+                // Case-insensitive substring match in description
+                if (!found) {
+                    for (int di = 0; desc[di] && !found; di++) {
+                        int match = 1;
+                        for (int fi = 0; fi < filter_len && match; fi++) {
+                            char dc = desc[di + fi];
+                            if (!dc) { match = 0; break; }
+                            if (tolower((unsigned char)dc) != tolower((unsigned char)filter[fi])) {
+                                match = 0;
+                            }
+                        }
+                        if (match) found = 1;
+                    }
+                }
+                if (found) {
+                    matched_indices[matched_count++] = i;
+                }
+            }
+        }
+
+        // Ensure selected is within range
+        if (matched_count > 0 && tui->cmd_palette_selected >= matched_count) {
+            tui->cmd_palette_selected = matched_count - 1;
+        }
+        if (matched_count == 0) {
+            tui->cmd_palette_selected = -1;
+        }
+
+        // Command list (starting from row 4)
+        int list_start_row = 4;
+        int max_cmds = palette_height - list_start_row - 1;
+        if (max_cmds < 1) max_cmds = 1;
+
+        for (int i = 0; i < matched_count && i < max_cmds; i++) {
+            int cmd_idx = matched_indices[i];
+            const Command *cmd = tui->cmd_palette_commands[cmd_idx];
+            if (!cmd) continue;
+
+            int row = list_start_row + i;
+            int is_selected = (i == tui->cmd_palette_selected);
+
+            if (has_colors()) {
+                if (is_selected) {
+                    wattron(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
+                } else {
+                    wattron(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+                }
+            }
+
+            // Format: "  /name  description"
+            char line[256];
+            int written = snprintf(line, sizeof(line), "  /%-18s %s",
+                                  cmd->name,
+                                  cmd->description ? cmd->description : "");
+            if (written > palette_width - 2) written = palette_width - 2;
+            tui_safe_mvwaddnstr(win, row, 1, line, written);
+
+            if (has_colors()) {
+                if (is_selected) {
+                    wattroff(win, COLOR_PAIR(NCURSES_PAIR_SEARCH) | A_BOLD);
+                } else {
+                    wattroff(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+                }
+            }
+        }
+
+        // "No matches" message
+        if (matched_count == 0) {
+            if (has_colors()) {
+                wattron(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+            }
+            const char *no_match = "  (no matching commands)";
+            tui_safe_mvwaddnstr(win, list_start_row, 1, no_match, (int)strlen(no_match));
+            if (has_colors()) {
+                wattroff(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+            }
+        }
+
+        // Footer hint (bottom row)
+        if (has_colors()) {
+            wattron(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+        }
+        char footer[64];
+        if (matched_count > max_cmds) {
+            snprintf(footer, sizeof(footer), "%d matches (%d shown)  ESC:cancel  ↑↓:nav  Enter:select",
+                     matched_count, max_cmds);
+        } else {
+            snprintf(footer, sizeof(footer), "%d matches  ESC:cancel  ↑↓:navigate  Enter:select",
+                     matched_count);
+        }
+        int footer_row = palette_height - 1;
+        tui_safe_mvwaddnstr(win, footer_row, 1, footer, (int)strlen(footer));
+        if (has_colors()) {
+            wattroff(win, COLOR_PAIR(NCURSES_PAIR_TOOL_DIM));
+        }
+
+        curs_set(2);
+        int cursor_row = 2;
+        int cursor_col = 3 + tui->cmd_palette_filter_len;
+        if (cursor_col >= palette_width - 1) cursor_col = palette_width - 2;
+        (void)tui_safe_wmove(win, cursor_row, cursor_col);
+        wrefresh(win);
+        return;
+    }
+
     // For command/search mode, we show the prefix (:/? + buffer)
     // For insert mode, no prompt prefix
     int mode_prefix_len = 0;
