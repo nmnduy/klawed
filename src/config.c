@@ -24,6 +24,7 @@ void config_init_defaults(KlawedConfig *config) {
     config->input_box_style = INPUT_STYLE_BACKGROUND;
     config->response_style = RESPONSE_STYLE_BORDER;
     config->thinking_style = THINKING_STYLE_WAVE;
+    config->mascot_style = MASCOT_NYAN;
     config->wrap_enabled = 1;
     config->streaming_enabled = 0;
     config->auto_compact_enabled = 0;
@@ -138,6 +139,25 @@ TUIThinkingStyle config_thinking_style_from_string(const char *str) {
     return THINKING_STYLE_WAVE;
 }
 
+const char* config_mascot_style_to_string(TUIMascotStyle style) {
+    switch (style) {
+        case MASCOT_CLASSIC:
+            return "classic";
+        case MASCOT_NYAN:
+        default:
+            return "nyan";
+    }
+}
+
+TUIMascotStyle config_mascot_style_from_string(const char *str) {
+    if (!str) return MASCOT_NYAN;
+
+    if (strcmp(str, "classic") == 0) {
+        return MASCOT_CLASSIC;
+    }
+    return MASCOT_NYAN;
+}
+
 /**
  * Get the path to the global config file (~/.klawed/config.json)
  *
@@ -248,6 +268,13 @@ static int config_load_from_file(KlawedConfig *config, const char *file_path, co
     if (thinking_style_item && cJSON_IsString(thinking_style_item)) {
         config->thinking_style = config_thinking_style_from_string(thinking_style_item->valuestring);
         LOG_DEBUG("[Config] Loaded thinking_style from %s: %s", label, thinking_style_item->valuestring);
+    }
+
+    // Read mascot_style
+    cJSON *mascot_style_item = cJSON_GetObjectItem(root, "mascot_style");
+    if (mascot_style_item && cJSON_IsString(mascot_style_item)) {
+        config->mascot_style = config_mascot_style_from_string(mascot_style_item->valuestring);
+        LOG_DEBUG("[Config] Loaded mascot_style from %s: %s", label, mascot_style_item->valuestring);
     }
 
     // Read wrap_enabled
@@ -627,6 +654,14 @@ int config_save(const KlawedConfig *config) {
         cJSON_SetValuestring(existing_thinking_style, config_thinking_style_to_string(config->thinking_style));
     } else if (config->thinking_style != defaults.thinking_style) {
         cJSON_AddStringToObject(root, "thinking_style", config_thinking_style_to_string(config->thinking_style));
+    }
+
+    // Update mascot_style - only add if it differs from default or already exists
+    cJSON *existing_mascot_style = cJSON_GetObjectItem(root, "mascot_style");
+    if (existing_mascot_style) {
+        cJSON_SetValuestring(existing_mascot_style, config_mascot_style_to_string(config->mascot_style));
+    } else if (config->mascot_style != defaults.mascot_style) {
+        cJSON_AddStringToObject(root, "mascot_style", config_mascot_style_to_string(config->mascot_style));
     }
 
     // Update wrap_enabled - only add if differs from default or already exists

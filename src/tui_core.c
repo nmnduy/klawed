@@ -533,6 +533,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
         tui->input_box_style = loaded_config.input_box_style;
         tui->response_style = loaded_config.response_style;
         tui->thinking_style = loaded_config.thinking_style;
+        tui->mascot_style = loaded_config.mascot_style;
         tui->wrap_enabled = loaded_config.wrap_enabled;
         LOG_DEBUG("[TUI] Loaded input_box_style from config: %s",
                   config_input_style_to_string(tui->input_box_style));
@@ -540,13 +541,24 @@ int tui_init(TUIState *tui, ConversationState *state) {
                   config_response_style_to_string(tui->response_style));
         LOG_DEBUG("[TUI] Loaded thinking_style from config: %s",
                   config_thinking_style_to_string(tui->thinking_style));
+        LOG_DEBUG("[TUI] Loaded mascot_style from config: %s",
+                  config_mascot_style_to_string(tui->mascot_style));
         LOG_DEBUG("[TUI] Loaded wrap_enabled from config: %d",
                   tui->wrap_enabled);
     } else {
         tui->input_box_style = INPUT_STYLE_BACKGROUND;
         tui->response_style = RESPONSE_STYLE_BORDER;
         tui->thinking_style = THINKING_STYLE_WAVE;
+        tui->mascot_style = MASCOT_NYAN;
         tui->wrap_enabled = 1;
+    }
+
+    // Override mascot style from environment variable
+    const char *mascot_env = getenv("KLAWED_MASCOT");
+    if (mascot_env && mascot_env[0] != '\0') {
+        tui->mascot_style = config_mascot_style_from_string(mascot_env);
+        LOG_DEBUG("[TUI] Overriding mascot_style from KLAWED_MASCOT env: %s -> %s",
+                  mascot_env, config_mascot_style_to_string(tui->mascot_style));
     }
 
     // Initialize command mode buffer
@@ -974,16 +986,48 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
 
     // Add banner lines to conversation window (skip cat mascot in VLTRN mode)
     if (!is_vltrn) {
-        tui_add_conversation_line(tui, NULL, " ,----------.", COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, " |  ` .` `. |", COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, " | `. ` `,^----^.", COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, "\\| .  `. | @ w @|", COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, " `v-v----\"-v-v-\"", COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
-        tui_add_conversation_line(tui, NULL, info1, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, info2, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, info3, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, info4, COLOR_PAIR_ASSISTANT);
+        if (tui->mascot_style == MASCOT_CLASSIC) {
+            /* Classic cat: inline text alongside cat */
+            char line1[256];
+            char line2[256];
+            char line3[256];
+            char line4[256];
+            snprintf(line1, sizeof(line1), "  /\\_/\\   %s v%s", name, version ? version : "?");
+            snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
+            snprintf(line3, sizeof(line3), "  > ^ <   %s", working_dir);
+            snprintf(line4, sizeof(line4), "          %s", session_id ? session_id : "(no session)");
+            tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
+            tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
+            tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
+            tui_add_conversation_line(tui, NULL, line4, COLOR_PAIR_ASSISTANT);
+        } else {
+            /* Nyan cat: side-by-side with info if screen is wide enough */
+            if (tui->wm.screen_width >= 65) {
+                const int cat_col = 25;
+                char line1[256], line2[256], line3[256], line4[256], line5[256];
+                snprintf(line1, sizeof(line1), "%-*s %s", cat_col, " ,----------.", info1);
+                snprintf(line2, sizeof(line2), "%-*s %s", cat_col, " |  ` .` `. |", info2);
+                snprintf(line3, sizeof(line3), "%-*s %s", cat_col, " | `. ` `,^----^.", info3);
+                snprintf(line4, sizeof(line4), "%-*s %s", cat_col, "\\| .  `. | @ w @|", info4);
+                snprintf(line5, sizeof(line5), "%-*s", cat_col, " `v-v----\"-v-v-\"");
+                tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, line4, COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, line5, COLOR_PAIR_ASSISTANT);
+            } else {
+                /* Narrow screen: stacked, no blank line between */
+                tui_add_conversation_line(tui, NULL, " ,----------.", COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, " |  ` .` `. |", COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, " | `. ` `,^----^.", COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, "\\| .  `. | @ w @|", COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, " `v-v----\"-v-v-\"", COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, info1, COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, info2, COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, info3, COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, info4, COLOR_PAIR_ASSISTANT);
+            }
+        }
     }
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);  // Blank line
 

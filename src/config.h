@@ -69,6 +69,7 @@ typedef struct {
     TUIInputBoxStyle input_box_style;
     TUIResponseStyle response_style;
     TUIThinkingStyle thinking_style;
+    TUIMascotStyle mascot_style;
     int wrap_enabled;
     int streaming_enabled;
     int auto_compact_enabled;
@@ -151,6 +152,22 @@ const char* config_thinking_style_to_string(TUIThinkingStyle style);
  * @return The style enum value, or THINKING_STYLE_WAVE if unknown
  */
 TUIThinkingStyle config_thinking_style_from_string(const char *str);
+
+/**
+ * Convert mascot style to string
+ *
+ * @param style The mascot style enum value
+ * @return String name of the mascot style
+ */
+const char* config_mascot_style_to_string(TUIMascotStyle style);
+
+/**
+ * Parse mascot style from string
+ *
+ * @param str String name of the mascot style
+ * @return The mascot style enum value, or MASCOT_NYAN if unknown
+ */
+TUIMascotStyle config_mascot_style_from_string(const char *str);
 
 /**
  * Get provider type name as string

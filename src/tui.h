@@ -120,6 +120,12 @@ typedef enum {
     THINKING_STYLE_PACMAN    // Pacman eating dots, distance shows context usage
 } TUIThinkingStyle;
 
+// Mascot style (which cat art to show in the startup banner)
+typedef enum {
+    MASCOT_NYAN,     // Nyan cat (boxy face with @ w @ eyes, default)
+    MASCOT_CLASSIC   // Classic /\\_/\\ cat
+} TUIMascotStyle;
+
 // Vim-style marks for navigating the conversation
 #define MAX_MARKS 26  // a-z
 
@@ -189,6 +195,7 @@ typedef struct TUIStateStruct {
     TUIInputBoxStyle input_box_style; // Current input box visual style
     TUIResponseStyle response_style;  // Current response visual style
     TUIThinkingStyle thinking_style;  // Current thinking/spinner visual style
+    TUIMascotStyle mascot_style;      // Current mascot style for startup banner
     int normal_mode_last_key; // Previous key in normal mode (for gg, G combos)
     char *command_buffer;    // Buffer for command mode input (starts with ':')
     int command_buffer_len;  // Length of command buffer
