@@ -527,6 +527,15 @@ int tui_init(TUIState *tui, ConversationState *state) {
     }
     tui->marks.pending = 0;
 
+    // Initialize command palette state
+    tui->cmd_palette_active = 0;
+    tui->cmd_palette_filter = NULL;
+    tui->cmd_palette_filter_len = 0;
+    tui->cmd_palette_filter_capacity = 0;
+    tui->cmd_palette_selected = 0;
+    tui->cmd_palette_commands = NULL;
+    tui->cmd_palette_count = 0;
+
     // Load config and apply input box style (default to horizontal if not found)
     KlawedConfig loaded_config;
     if (config_load(&loaded_config) == 0) {
@@ -712,6 +721,15 @@ void tui_cleanup(TUIState *tui) {
     tui->cmd_autocomplete_count = 0;
     tui->cmd_autocomplete_selected = -1;
     tui->cmd_autocomplete_active = 0;
+
+    // Free command palette state
+    free(tui->cmd_palette_filter);
+    tui->cmd_palette_filter = NULL;
+    tui->cmd_palette_filter_len = 0;
+    tui->cmd_palette_filter_capacity = 0;
+    tui->cmd_palette_active = 0;
+    tui->cmd_palette_commands = NULL;
+    tui->cmd_palette_count = 0;
 
     // Free file search state
     file_search_free(&tui->file_search);
