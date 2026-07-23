@@ -289,7 +289,9 @@ typedef struct TUIStateStruct {
     int cmd_palette_filter_capacity;  // Capacity of filter buffer
     int cmd_palette_selected;         // Currently selected command index (0-based)
     const Command **cmd_palette_commands; // Array of matching command pointers
-    int cmd_palette_count;            // Number of matching commands
+    int cmd_palette_count;            // Number of total commands
+    int cmd_palette_matched_count;    // Number of commands after filtering
+    int cmd_palette_matched_indices[MAX_COMMANDS]; // Indices of matched commands
 
     // Voice mode state (push-to-talk recording + transcription)
     VoiceModeState *voice_mode;       // Voice mode state (NULL if not initialized)

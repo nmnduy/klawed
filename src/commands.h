@@ -15,6 +15,8 @@
 // Command Definition
 // ============================================================================
 
+#define MAX_COMMANDS 32
+
 typedef struct {
     const char *name;         // Command name (without '/' prefix), e.g., "add-dir"
     const char *usage;        // Usage string, e.g., "/add-dir <path>"

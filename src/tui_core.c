@@ -730,6 +730,8 @@ void tui_cleanup(TUIState *tui) {
     tui->cmd_palette_active = 0;
     tui->cmd_palette_commands = NULL;
     tui->cmd_palette_count = 0;
+    tui->cmd_palette_matched_count = 0;
+    tui->cmd_palette_selected = 0;
 
     // Free file search state
     file_search_free(&tui->file_search);

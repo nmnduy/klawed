@@ -2175,6 +2175,9 @@ void input_redraw(TUIState *tui, const char *prompt) {
     // Command palette mode: render command list overlay
     if (tui->mode == TUI_MODE_COMMAND_PALETTE && tui->cmd_palette_active) {
         // Request a larger input window for the palette
+        // Note: when the palette closes and mode returns to INSERT, the normal
+        // insert-mode render path in input_redraw recalculates window_height_needed
+        // based on buffer content, which implicitly shrinks the window back.
         int palette_needed = 12;  // header + filter + up to 8 cmds + footer
         if (palette_needed > input->win_height) {
             tui_window_resize_input(tui, palette_needed);
@@ -2249,11 +2252,11 @@ void input_redraw(TUIState *tui, const char *prompt) {
 
         // Filter commands based on filter text
         int matched_count = 0;
-        int matched_indices[64];
+        int *matched_indices = tui->cmd_palette_matched_indices;
         const char *filter = tui->cmd_palette_filter;
         int filter_len = tui->cmd_palette_filter_len;
 
-        for (int i = 0; i < tui->cmd_palette_count && matched_count < 64; i++) {
+        for (int i = 0; i < tui->cmd_palette_count && matched_count < MAX_COMMANDS; i++) {
             const Command *cmd = tui->cmd_palette_commands[i];
             if (!cmd || !cmd->name) continue;
 
@@ -2295,7 +2298,10 @@ void input_redraw(TUIState *tui, const char *prompt) {
             }
         }
 
-        // Ensure selected is within range
+        // Store filtered results in TUI state for input handler access
+        tui->cmd_palette_matched_count = matched_count;
+
+        // Ensure selected is within range of filtered results
         if (matched_count > 0 && tui->cmd_palette_selected >= matched_count) {
             tui->cmd_palette_selected = matched_count - 1;
         }
@@ -2329,6 +2335,9 @@ void input_redraw(TUIState *tui, const char *prompt) {
             int written = snprintf(line, sizeof(line), "  /%-18s %s",
                                   cmd->name,
                                   cmd->description ? cmd->description : "");
+            /* Clamp snprintf return: first to buffer size, then to display width */
+            if (written < 0) written = 0;
+            if (written > (int)sizeof(line) - 1) written = (int)sizeof(line) - 1;
             if (written > palette_width - 2) written = palette_width - 2;
             tui_safe_mvwaddnstr(win, row, 1, line, written);
 

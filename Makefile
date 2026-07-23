@@ -539,6 +539,8 @@ TEST_BASH_STDERR_SRC = tests/test_bash_stderr.c
 TEST_BASH_TRUNCATION_SRC = tests/test_bash_truncation.c
 TEST_HISTORY_FILE_SRC = tests/test_history_file.c
 TEST_TUI_INPUT_BUFFER_SRC = tests/test_tui_input_buffer.c
+TEST_COMMAND_PALETTE_SRC = tests/test_command_palette.c
+TEST_COMMAND_PALETTE_TARGET = $(BUILD_DIR)/test_command_palette
 TEST_TUI_AUTO_SCROLL_SRC = tests/test_tui_auto_scroll.c
 TEST_TOOL_DETAILS_SRC = tests/test_tool_details_simple.c
 TEST_DUPLICATE_TOOL_DETECTION_SRC = tests/test_duplicate_tool_detection.c
@@ -616,7 +618,7 @@ debug: check-deps $(BUILD_DIR)/klawed-debug
 
 query-tool: check-deps $(QUERY_TOOL)
 
-test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-line-printer test-code-block-fill test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-tui-reasoning-detection test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-streaming-persistence test-fireworks-token-fallback test-tool-disable test-session-resolve
+test: $(TARGET) test-edit test-read test-todo test-todo-write test-model-capabilities test-paste test-paste-placeholder test-json-parsing test-timing test-openai-format test-openai-responses test-openai-response-parsing test-memory-null-fix test-dump-utils test-write-diff-integration test-rotation test-function-context test-thread-cancel test-aws-cred-rotation test-message-queue test-wrap test-mcp test-mcp-image test-wm test-bash-summary test-bash-timeout test-bash-stderr test-bash-truncation test-cancel-flow test-tool-results-regression test-base64 test-redact test-history-file test-tui-input-buffer test-tui-auto-scroll test-tool-details test-array-resize test-arena test-config test-config-merge test-token-usage test-token-usage-comprehensive test-token-usage-session-totals test-token-usage-db-metadata test-http-client test-sqlite-queue-seeding test-reasoning-content-sqlite-queue test-file-search test-markdown-render test-line-printer test-code-block-fill test-provider-init-from-config test-provider-init test-openai-responses-provider test-realtime-steering test-tui-tool-connector test-tui-streaming-index test-tui-reasoning-detection test-bedrock-converse test-codex-tools test-model-switch-interactive test-model-switch-sqlite-queue test-model-switch-queue-restart test-insert-system-message test-streaming-persistence test-fireworks-token-fallback test-tool-disable test-command-palette test-session-resolve
 
 test-edit: check-deps $(TARGET) $(TEST_EDIT_TARGET)
 	@echo ""
@@ -883,6 +885,12 @@ test-history-file: check-deps $(TEST_HISTORY_FILE_TARGET)
 	@echo "Running History File tests..."
 	@echo ""
 	@./$(TEST_HISTORY_FILE_TARGET)
+
+test-command-palette: check-deps $(TEST_COMMAND_PALETTE_TARGET)
+	@echo ""
+	@echo "Running Command Palette tests..."
+	@echo ""
+	@./$(TEST_COMMAND_PALETTE_TARGET)
 
 test-tui-input-buffer: check-deps $(TEST_TUI_INPUT_BUFFER_TARGET)
 	@echo ""
@@ -3328,6 +3336,17 @@ $(TEST_TUI_INPUT_BUFFER_TARGET): $(TEST_TUI_INPUT_BUFFER_SRC)
 	@$(CC) -o $(TEST_TUI_INPUT_BUFFER_TARGET) $(BUILD_DIR)/test_tui_input_buffer.o $(LDFLAGS)
 	@echo ""
 	@echo "✓ TUI Input Buffer test build successful!"
+	@echo ""
+
+# Test target for Command Palette filtering logic (standalone test)
+$(TEST_COMMAND_PALETTE_TARGET): $(TEST_COMMAND_PALETTE_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Compiling Command Palette test suite..."
+	@$(CC) $(CFLAGS) -c -o $(BUILD_DIR)/test_command_palette.o $(TEST_COMMAND_PALETTE_SRC)
+	@echo "Linking test executable..."
+	@$(CC) -o $(TEST_COMMAND_PALETTE_TARGET) $(BUILD_DIR)/test_command_palette.o $(LDFLAGS)
+	@echo ""
+	@echo "✓ Command Palette test build successful!"
 	@echo ""
 
 # Test target for TUI Auto-Scroll logic (simplified standalone test)

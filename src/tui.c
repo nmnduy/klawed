@@ -386,6 +386,19 @@ const char* tui_mode_label(TUIMode mode) {
     }
 }
 
+// Reset command palette state (DRY: used by ESC, Enter, Ctrl+K, and cleanup)
+static void cmd_palette_reset(TUIState *tui) {
+    tui->cmd_palette_active = 0;
+    free(tui->cmd_palette_filter);
+    tui->cmd_palette_filter = NULL;
+    tui->cmd_palette_filter_len = 0;
+    tui->cmd_palette_filter_capacity = 0;
+    tui->cmd_palette_commands = NULL;
+    tui->cmd_palette_count = 0;
+    tui->cmd_palette_matched_count = 0;
+    tui->cmd_palette_selected = 0;
+}
+
 // Initialize ncurses color pairs from our colorscheme
 // Clear the resize flag (called after handling resize)
 /*
@@ -919,13 +932,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
     // Handle command palette mode separately
     if (tui->mode == TUI_MODE_COMMAND_PALETTE) {
         if (ch == 27 || ch == 3) {  // ESC or Ctrl+C: cancel
-            tui->cmd_palette_active = 0;
-            free(tui->cmd_palette_filter);
-            tui->cmd_palette_filter = NULL;
-            tui->cmd_palette_filter_len = 0;
-            tui->cmd_palette_filter_capacity = 0;
-            tui->cmd_palette_commands = NULL;
-            tui->cmd_palette_count = 0;
+            cmd_palette_reset(tui);
             tui->mode = TUI_MODE_INSERT;
             if (tui->wm.status_height > 0) {
                 render_status_window(tui);
@@ -935,8 +942,9 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         }
         if (ch == 13 || ch == KEY_ENTER) {  // Enter: select command
             if (tui->cmd_palette_selected >= 0 &&
-                tui->cmd_palette_selected < tui->cmd_palette_count) {
-                const Command *cmd = tui->cmd_palette_commands[tui->cmd_palette_selected];
+                tui->cmd_palette_selected < tui->cmd_palette_matched_count) {
+                int real_idx = tui->cmd_palette_matched_indices[tui->cmd_palette_selected];
+                const Command *cmd = tui->cmd_palette_commands[real_idx];
                 if (cmd) {
                     // Insert the command into the input buffer with '/' prefix
                     tui_clear_input_buffer(tui);
@@ -945,13 +953,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
                     tui_input_insert_string(tui->input_buffer, cmd_text);
                 }
             }
-            tui->cmd_palette_active = 0;
-            free(tui->cmd_palette_filter);
-            tui->cmd_palette_filter = NULL;
-            tui->cmd_palette_filter_len = 0;
-            tui->cmd_palette_filter_capacity = 0;
-            tui->cmd_palette_commands = NULL;
-            tui->cmd_palette_count = 0;
+            cmd_palette_reset(tui);
             tui->mode = TUI_MODE_INSERT;
             if (tui->wm.status_height > 0) {
                 render_status_window(tui);
@@ -960,19 +962,19 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
             return 0;
         }
         if (ch == KEY_UP) {  // Up: previous command
-            if (tui->cmd_palette_count > 0) {
+            if (tui->cmd_palette_matched_count > 0) {
                 tui->cmd_palette_selected--;
                 if (tui->cmd_palette_selected < 0) {
-                    tui->cmd_palette_selected = tui->cmd_palette_count - 1;
+                    tui->cmd_palette_selected = tui->cmd_palette_matched_count - 1;
                 }
                 input_redraw(tui, prompt);
             }
             return 0;
         }
         if (ch == KEY_DOWN) {  // Down: next command
-            if (tui->cmd_palette_count > 0) {
+            if (tui->cmd_palette_matched_count > 0) {
                 tui->cmd_palette_selected++;
-                if (tui->cmd_palette_selected >= tui->cmd_palette_count) {
+                if (tui->cmd_palette_selected >= tui->cmd_palette_matched_count) {
                     tui->cmd_palette_selected = 0;
                 }
                 input_redraw(tui, prompt);
@@ -993,7 +995,7 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
             if (tui->cmd_palette_filter_len + 2 > tui->cmd_palette_filter_capacity) {
                 int new_cap = tui->cmd_palette_filter_capacity > 0 ?
                     tui->cmd_palette_filter_capacity * 2 : 64;
-                char *new_buf = realloc(tui->cmd_palette_filter, (size_t)new_cap);
+                char *new_buf = reallocarray(tui->cmd_palette_filter, (size_t)new_cap, 1);
                 if (!new_buf) return 0;
                 tui->cmd_palette_filter = new_buf;
                 tui->cmd_palette_filter_capacity = new_cap;
@@ -1324,16 +1326,9 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
     } else if (ch == 11) {  // Ctrl+K: kill to end of line, or open command palette on empty input
         if (input->length == 0) {
             // Open command palette
+            cmd_palette_reset(tui);
             tui->mode = TUI_MODE_COMMAND_PALETTE;
             tui->cmd_palette_active = 1;
-            // Free any previous filter
-            free(tui->cmd_palette_filter);
-            tui->cmd_palette_filter = NULL;
-            tui->cmd_palette_filter_len = 0;
-            tui->cmd_palette_filter_capacity = 0;
-            tui->cmd_palette_selected = 0;
-            tui->cmd_palette_commands = NULL;
-            tui->cmd_palette_count = 0;
             // Get all commands
             int cmd_count = 0;
             const Command **cmds = commands_list(&cmd_count);

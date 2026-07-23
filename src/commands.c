@@ -35,7 +35,6 @@
 // Command Registry
 // ============================================================================
 
-#define MAX_COMMANDS 32
 static const Command *command_registry[MAX_COMMANDS];
 static int command_count = 0;
 
