@@ -958,27 +958,32 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
 
     const char *name = is_vltrn ? "vltrn" : "klawed";
 
-    // Format banner lines with ASCII art cat mascot, left-justified
-    char line1[256];
-    char line2[256];
-    char line3[256];
-    char line4[256];
+    // Format banner: ASCII art cat mascot first, then info lines below
+    char info1[256];
+    char info2[256];
+    char info3[256];
+    char info4[256];
 
-    // Create content lines — cat on left, text inline
-    snprintf(line1, sizeof(line1), "  /\\_/\\   %s v%s", name, version ? version : "?");
-    snprintf(line2, sizeof(line2), " ( o.o )  %s", model);
-    snprintf(line3, sizeof(line3), "  > ^ <   %s", working_dir);
-    snprintf(line4, sizeof(line4), "          %s", session_id ? session_id : "(no session)");
+    snprintf(info1, sizeof(info1), "%s v%s", name, version ? version : "?");
+    snprintf(info2, sizeof(info2), "%s", model);
+    snprintf(info3, sizeof(info3), "%s", working_dir);
+    snprintf(info4, sizeof(info4), "%s", session_id ? session_id : "(no session)");
 
     // Add padding before banner
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
 
     // Add banner lines to conversation window (skip cat mascot in VLTRN mode)
     if (!is_vltrn) {
-        tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
-        tui_add_conversation_line(tui, NULL, line4, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, "    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ,----------.", COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, "    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ |  ` .` `. |", COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, "    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ | `. ` `,^----^.", COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, "    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\\| .  `. | @ w @|", COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, "    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ `v-v----\"-v-v-\"", COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
+        tui_add_conversation_line(tui, NULL, info1, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, info2, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, info3, COLOR_PAIR_ASSISTANT);
+        tui_add_conversation_line(tui, NULL, info4, COLOR_PAIR_ASSISTANT);
     }
     tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);  // Blank line
 
