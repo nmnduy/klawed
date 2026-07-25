@@ -990,7 +990,7 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
 
     const char *name = is_vltrn ? "vltrn" : "klawed";
 
-    // Format banner: ASCII art cat mascot first, then info lines below
+    // Format banner: nyan cat on the right of info text, shifted one line up
     char info1[256];
     char info2[256];
     char info3[256];
@@ -1021,15 +1021,48 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
             tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
             tui_add_conversation_line(tui, NULL, line4, COLOR_PAIR_ASSISTANT);
         } else {
-            /* Nyan cat: side-by-side with info if screen is wide enough */
+            /* Nyan cat: text on left, ~ wave trail, cat on right (shifted one line up) */
             if (tui->wm.screen_width >= 65) {
-                const int cat_col = 25;
                 char line1[256], line2[256], line3[256], line4[256], line5[256];
-                snprintf(line1, sizeof(line1), "%-*s %s", cat_col, " ,----------.", info1);
-                snprintf(line2, sizeof(line2), "%-*s %s", cat_col, " |  ` .` `. |", info2);
-                snprintf(line3, sizeof(line3), "%-*s %s", cat_col, " | `. ` `,^----^.", info3);
-                snprintf(line4, sizeof(line4), "%-*s %s", cat_col, "\\| .  `. | @ w @|", info4);
-                snprintf(line5, sizeof(line5), "%-*s", cat_col, " `v-v----\"-v-v-\"");
+                const char *cats[] = {
+                    " ,----------.",
+                    "|  ` .` `. |",
+                    "| `. ` `,^----^.",
+                    "\\| .  `. | @ w @|",
+                    " `v-v----\"-v-v-\""
+                };
+                const char *texts[] = { "", info1, info2, info3, info4 };
+                char *lines[] = { line1, line2, line3, line4, line5 };
+
+                /* Compute cat column: at least 15-char trail after longest text */
+                size_t max_tlen = 0;
+                for (int i = 0; i < 5; i++) {
+                    size_t tlen = strlen(texts[i]);
+                    if (tlen > max_tlen) max_tlen = tlen;
+                }
+                size_t cat_col = max_tlen + 16;  /* +1 space, +15 trail chars */
+                if (cat_col < 30) cat_col = 30;  /* minimum cat position */
+
+                for (int i = 0; i < 5; i++) {
+                    size_t pos = 0;
+                    size_t tlen = strlen(texts[i]);
+                    if (tlen > 0) {
+                        strlcpy(lines[i], texts[i], 256);
+                        pos = tlen;
+                        if (pos < 255) lines[i][pos++] = ' ';
+                    }
+                    /* Fill ~ wave trail to cat_col */
+                    int ti = 0;
+                    while (pos < cat_col && pos < 255) {
+                        lines[i][pos] = "~ "[ti % 2];
+                        pos++;
+                        ti++;
+                    }
+                    /* Space + cat */
+                    if (pos < 255) lines[i][pos++] = ' ';
+                    strlcpy(lines[i] + pos, cats[i], 256 - pos);
+                }
+
                 tui_add_conversation_line(tui, NULL, line1, COLOR_PAIR_ASSISTANT);
                 tui_add_conversation_line(tui, NULL, line2, COLOR_PAIR_ASSISTANT);
                 tui_add_conversation_line(tui, NULL, line3, COLOR_PAIR_ASSISTANT);
