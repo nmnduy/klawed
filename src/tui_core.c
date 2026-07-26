@@ -1025,8 +1025,8 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
             if (tui->wm.screen_width >= 65) {
                 char line1[256], line2[256], line3[256], line4[256], line5[256];
                 const char *cats[] = {
-                    " ,----------.",
-                    "|  ` .` `. |",
+                    " ,------------.",
+                    "|  ` .` `. `. |",
                     "| `. ` `,^----^.",
                     "\\| .  `. | @ w @|",
                     " `v-v----\"-v-v-\""
@@ -1070,8 +1070,8 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
                 tui_add_conversation_line(tui, NULL, line5, COLOR_PAIR_ASSISTANT);
             } else {
                 /* Narrow screen: stacked, no blank line between */
-                tui_add_conversation_line(tui, NULL, " ,----------.", COLOR_PAIR_ASSISTANT);
-                tui_add_conversation_line(tui, NULL, " |  ` .` `. |", COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, " ,------------.", COLOR_PAIR_ASSISTANT);
+                tui_add_conversation_line(tui, NULL, " |  ` .` `. `. |", COLOR_PAIR_ASSISTANT);
                 tui_add_conversation_line(tui, NULL, " | `. ` `,^----^.", COLOR_PAIR_ASSISTANT);
                 tui_add_conversation_line(tui, NULL, "\\| .  `. | @ w @|", COLOR_PAIR_ASSISTANT);
                 tui_add_conversation_line(tui, NULL, " `v-v----\"-v-v-\"", COLOR_PAIR_ASSISTANT);
