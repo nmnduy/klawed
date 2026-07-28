@@ -212,6 +212,7 @@ export OPENAI_API_KEY="your-api-key"
   - `KLAWED_ONESHOT_STYLE` - Visual style for one-shot mode: `boxes` (Unicode box-drawing, default), `compact` (minimal single-line output), or `minimal` (ultra-minimal)
   - `KLAWED_LLM_PROVIDER` - Select which named LLM provider to use from configuration (e.g., "sonnet-4.5-bedrock")
   - `KLAWED_NARROW_SCREEN_THRESHOLD` - Screen width threshold (in characters) below which status text is hidden to make space for token count and scroll percentage (default: 80, 0=always hide status text)
+  - `KLAWED_SHORT_SCREEN_THRESHOLD` - Screen height threshold (in lines) below which the TODO banner is hidden to save vertical space (default: 15, 0=always hide TODO banner)
   - `KLAWED_PACMAN_MAX_CONTEXT` - Maximum context tokens for pacman thinking style (default: 200000). The distance from the first dot to pacman's position shows context usage as a ratio of this value.
 - **Session Titles**: `KLAWED_SESSION_TITLE_THRESHOLD` - Minimum total tokens before a session title is auto-generated from the first user message (default: 1000, set to 0 to disable auto-generation). Session titles appear in `-l`/`--list-sessions` output.
 - **API Limits**:

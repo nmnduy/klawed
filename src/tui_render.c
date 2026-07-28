@@ -2972,8 +2972,38 @@ void tui_refresh(TUIState *tui) {
 #define TODO_ICON_PENDING   tui_icon_todo_pending()
 #define TODO_ICON_COMPLETED tui_icon_todo_completed()
 
+/* Helper: parse KLAWED_SHORT_SCREEN_THRESHOLD env var (default 15 lines) */
+static int get_short_screen_threshold(void) {
+    const char *short_threshold_str = getenv("KLAWED_SHORT_SCREEN_THRESHOLD");
+    int threshold = 15; /* default: hide todo banner when screen is shorter than 15 lines */
+    if (short_threshold_str) {
+        char *endptr;
+        long val = strtol(short_threshold_str, &endptr, 10);
+        if (endptr != short_threshold_str && *endptr == '\0' && val >= 0 && val <= 200) {
+            threshold = (int)val;
+        }
+    }
+    return threshold;
+}
+
 int tui_render_todo_banner(TUIState *tui, const TodoList *list) {
     if (!tui || !tui->is_initialized) {
+        return 0;
+    }
+
+    /* Check if screen is too short for todo banner */
+    int short_threshold = get_short_screen_threshold();
+    if (tui->wm.screen_height < short_threshold) {
+        /* Screen is very short - hide todo banner to save space */
+        if (tui->wm.todo_win) {
+            tui_window_hide_todo_banner(tui);
+            window_manager_refresh_all(&tui->wm);
+        }
+        /* Invalidate cache with sentinel so re-render happens when screen grows */
+        tui->todo_banner_last_in_progress = (size_t)-1;
+        tui->todo_banner_last_pending     = (size_t)-1;
+        tui->todo_banner_last_completed   = (size_t)-1;
+        tui->todo_banner_last_was_visible = 0;
         return 0;
     }
 
