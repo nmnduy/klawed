@@ -864,6 +864,30 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
         return -1;
     }
 
+    // Handle mouse events: consume the event so raw escape sequences never
+    // leak into the input buffer. Scroll wheel events scroll the conversation.
+    if (ch == KEY_MOUSE) {
+        MEVENT event;
+        if (getmouse(&event) == OK) {
+            if (event.bstate & BUTTON4_PRESSED) {
+                // Scroll wheel up: scroll conversation up
+                tui_scroll_conversation(tui, -3);
+                input_redraw(tui, prompt);
+            }
+#ifdef BUTTON5_PRESSED
+            else if (event.bstate & BUTTON5_PRESSED) {
+                // Scroll wheel down: scroll conversation down
+                tui_scroll_conversation(tui, 3);
+                input_redraw(tui, prompt);
+            }
+#endif
+            // All other mouse events (clicks, releases, etc.) are consumed
+            // and discarded to prevent escape sequences from entering the
+            // input buffer as garbage characters.
+        }
+        return 0;
+    }
+
     // Handle command mode separately
     if (tui->mode == TUI_MODE_COMMAND) {
         int result = tui_modes_handle_command(tui, ch, prompt);

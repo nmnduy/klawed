@@ -426,6 +426,7 @@ int tui_init(TUIState *tui, ConversationState *state) {
     noecho();  // Don't echo input
     nonl();    // Don't translate Enter to newline (allows distinguishing Enter from Ctrl+J)
     keypad(stdscr, TRUE);  // Enable function keys
+    mousemask(ALL_MOUSE_EVENTS, NULL);  // Intercept mouse events to prevent escape sequences from leaking into input buffer
     nodelay(stdscr, FALSE);  // Blocking input
     curs_set(2);  // Make cursor very visible (block cursor)
 
