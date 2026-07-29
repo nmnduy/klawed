@@ -609,16 +609,23 @@ void render_status_window(TUIState *tui) {
     getmaxyx(tui->wm.status_win, height, width);
     (void)height;
 
-    // Get narrow screen threshold from environment variable
-    // Default is 80 characters (standard terminal width)
-    const char *narrow_threshold_str = getenv("KLAWED_NARROW_SCREEN_THRESHOLD");
-    int narrow_threshold = 80; // default
-    if (narrow_threshold_str) {
-        char *endptr;
-        long val = strtol(narrow_threshold_str, &endptr, 10);
-        if (endptr != narrow_threshold_str && *endptr == '\0' && val >= 0 && val <= 1000) {
-            narrow_threshold = (int)val;
+    // Cache env var lookups — this function is called every frame (60 FPS)
+    // and getenv() is a linear scan of the environment block.
+    static int narrow_threshold = -1;
+    static int tmux_cached = -1;
+    if (narrow_threshold < 0) {
+        narrow_threshold = 80; // default
+        const char *narrow_threshold_str = getenv("KLAWED_NARROW_SCREEN_THRESHOLD");
+        if (narrow_threshold_str) {
+            char *endptr;
+            long val = strtol(narrow_threshold_str, &endptr, 10);
+            if (endptr != narrow_threshold_str && *endptr == '\0' && val >= 0 && val <= 1000) {
+                narrow_threshold = (int)val;
+            }
         }
+    }
+    if (tmux_cached < 0) {
+        tmux_cached = (getenv("TMUX") != NULL) ? 1 : 0;
     }
 
     /* Apply shadow line background — the status bar recedes rather than
@@ -653,7 +660,7 @@ void render_status_window(TUIState *tui) {
              * shows the spinner. Suppress the duplicate spinner in klawed's
              * own status bar to avoid showing three spinners simultaneously
              * (klawed status bar + tmux pane title + tmux window title). */
-            int hide_klawed_spinner = (getenv("TMUX") != NULL);
+            int hide_klawed_spinner = tmux_cached;
 
             // Store spinner frame for separate rendering (unless in tmux)
             if (!hide_klawed_spinner) {
@@ -2974,8 +2981,13 @@ void tui_refresh(TUIState *tui) {
 
 /* Helper: parse KLAWED_SHORT_SCREEN_THRESHOLD env var (default 15 lines) */
 static int get_short_screen_threshold(void) {
+    /* Cache the result — called every frame from tui_render_todo_banner */
+    static int threshold = -1;
+    if (threshold >= 0) {
+        return threshold;
+    }
+    threshold = 15; /* default: hide todo banner when screen is shorter than 15 lines */
     const char *short_threshold_str = getenv("KLAWED_SHORT_SCREEN_THRESHOLD");
-    int threshold = 15; /* default: hide todo banner when screen is shorter than 15 lines */
     if (short_threshold_str) {
         char *endptr;
         long val = strtol(short_threshold_str, &endptr, 10);

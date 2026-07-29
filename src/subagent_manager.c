@@ -6,6 +6,7 @@
 #include "logger.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <sys/wait.h>
 #include <errno.h>
 #include <signal.h>
@@ -133,6 +134,7 @@ int subagent_manager_add(SubagentManager *manager, pid_t pid, const char *log_fi
 }
 
 // Helper: Read last N lines from a file
+// Uses fseek from end to avoid reading the entire file when logs are large.
 static char* read_file_tail(const char *log_file, int tail_lines, int *out_lines_read) {
     if (!log_file || tail_lines <= 0) {
         if (out_lines_read) *out_lines_read = 0;
@@ -145,60 +147,99 @@ static char* read_file_tail(const char *log_file, int tail_lines, int *out_lines
         return NULL;
     }
 
-    // Count total lines
-    int total_lines = 0;
-    char line[4096];
-    while (fgets(line, sizeof(line), fp)) {
-        total_lines++;
+    /* Seek to end and read backwards to find the last N lines.
+     * This avoids the O(file_size) cost of reading the entire file
+     * line-by-line, which caused 200%+ CPU when subagent logs were large. */
+
+    /* Get file size */
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    if (file_size <= 0) {
+        fclose(fp);
+        if (out_lines_read) *out_lines_read = 0;
+        return NULL;
     }
 
-    // Calculate start line
-    int start_line = (total_lines > tail_lines) ? (total_lines - tail_lines) : 0;
-    int lines_to_read = (total_lines > tail_lines) ? tail_lines : total_lines;
+    /* Read backwards in chunks to find the start of the last N lines.
+     * We read a chunk from the end, count newlines, and expand backward
+     * until we have enough lines or reach the beginning. */
+    const long chunk_size = 4096;
+    int newlines_found = 0;
+    long read_offset = file_size;
+    long search_pos = file_size;
 
-    // Allocate buffer for tail output (conservative estimate: 256 bytes per line)
-    size_t buffer_size = (size_t)(lines_to_read * 256 + 1);
+    /* We need tail_lines newlines. The last line may not end with \n,
+     * so we count it as a line if there's content. */
+    char *chunk_buf = malloc((size_t)chunk_size + 1);
+    if (!chunk_buf) {
+        fclose(fp);
+        if (out_lines_read) *out_lines_read = 0;
+        return NULL;
+    }
+
+    while (search_pos > 0 && newlines_found <= tail_lines) {
+        long this_chunk = (search_pos < chunk_size) ? search_pos : chunk_size;
+        search_pos -= this_chunk;
+        fseek(fp, search_pos, SEEK_SET);
+        size_t bytes_read = fread(chunk_buf, 1, (size_t)this_chunk, fp);
+        chunk_buf[bytes_read] = '\0';
+
+        for (long i = (long)bytes_read - 1; i >= 0; i--) {
+            if (chunk_buf[i] == '\n') {
+                newlines_found++;
+                if (newlines_found > tail_lines) {
+                    /* The line starting position is just after this newline */
+                    read_offset = search_pos + i + 1;
+                    break;
+                }
+            }
+        }
+        if (newlines_found > tail_lines) {
+            break;
+        }
+        read_offset = search_pos;
+    }
+
+    /* Edge case: if file doesn't end with newline, count the last partial line */
+    if (newlines_found <= tail_lines) {
+        read_offset = 0;
+    }
+
+    free(chunk_buf);
+
+    /* Now read from read_offset to end of file */
+    fseek(fp, read_offset, SEEK_SET);
+
+    /* Estimate buffer size: remaining bytes + some headroom */
+    long remaining = file_size - read_offset;
+    if (remaining < 0) remaining = 0;
+    size_t buffer_size = (size_t)remaining + 1;
+    if (buffer_size < 64) buffer_size = 64;
+
     char *tail_output = malloc(buffer_size);
     if (!tail_output) {
         fclose(fp);
         if (out_lines_read) *out_lines_read = 0;
         return NULL;
     }
-    tail_output[0] = '\0';
 
-    // Read the tail content
-    rewind(fp);
-    int current_line = 0;
-    size_t tail_size = 0;
-
-    while (fgets(line, sizeof(line), fp) && current_line < total_lines) {
-        if (current_line >= start_line) {
-            size_t line_len = strlen(line);
-
-            // Ensure we have space (double buffer if needed)
-            if (tail_size + line_len + 1 >= buffer_size) {
-                buffer_size *= 2;
-                char *new_output = realloc(tail_output, buffer_size);
-                if (!new_output) {
-                    free(tail_output);
-                    fclose(fp);
-                    if (out_lines_read) *out_lines_read = 0;
-                    return NULL;
-                }
-                tail_output = new_output;
-            }
-
-            // Append line using safe string functions
-            strlcpy(tail_output + tail_size, line, buffer_size - tail_size);
-            tail_size += line_len;
-        }
-        current_line++;
-    }
+    size_t tail_size = fread(tail_output, 1, (size_t)remaining, fp);
+    tail_output[tail_size] = '\0';
 
     fclose(fp);
 
+    /* Count lines read for the out parameter */
+    int lines_read = 0;
+    for (size_t i = 0; i < tail_size; i++) {
+        if (tail_output[i] == '\n') lines_read++;
+    }
+    /* If there's content after the last newline, count that as a line too */
+    if (tail_size > 0 && tail_output[tail_size - 1] != '\n') {
+        lines_read++;
+    }
+
     if (out_lines_read) {
-        *out_lines_read = lines_to_read;
+        *out_lines_read = lines_read;
     }
 
     return tail_output;

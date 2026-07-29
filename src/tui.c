@@ -164,11 +164,13 @@ void tui_update_terminal_title(TUIState *tui) {
         return;
     }
 
-    const char *name = "klawed";
-    const char *vltrn_mode = getenv("VLTRN_MODE");
-    if (vltrn_mode && strcmp(vltrn_mode, "1") == 0) {
-        name = "vltrn";
+    /* Cache name lookup — this function is called every frame via spinner tick */
+    static const char *cached_name = NULL;
+    if (!cached_name) {
+        const char *vltrn_mode = getenv("VLTRN_MODE");
+        cached_name = (vltrn_mode && strcmp(vltrn_mode, "1") == 0) ? "vltrn" : "klawed";
     }
+    const char *name = cached_name;
 
     const char *workdir = tui->conversation_state
         ? tui->conversation_state->working_dir : NULL;
@@ -212,9 +214,14 @@ void tui_update_terminal_title(TUIState *tui) {
                  " · %s", dirname);
     }
 
-    /* Check if we're inside tmux early — affects pane title formatting. */
-    const char *tmux_env = getenv("TMUX");
-    int inside_tmux = (tmux_env && tmux_env[0] != '\0');
+    /* Check if we're inside tmux early — affects pane title formatting.
+     * Cached since this is called every frame via status_spinner_tick. */
+    static int inside_tmux_cached = -1;
+    if (inside_tmux_cached < 0) {
+        const char *tmux_env = getenv("TMUX");
+        inside_tmux_cached = (tmux_env && tmux_env[0] != '\0') ? 1 : 0;
+    }
+    int inside_tmux = inside_tmux_cached;
 
     /*
      * Pane title (OSC 2, tmux 2.6+): compact, just the essentials.
@@ -2021,7 +2028,7 @@ int tui_event_loop(TUIState *tui, const char *prompt,
 
     TUIMessageQueue *msg_queue = (TUIMessageQueue *)msg_queue_ptr;
     int running = 1;
-    const long frame_time_us = 8333;  // ~120 FPS (1/120 second in microseconds)
+    const long frame_time_us = 16667;  // ~60 FPS (1/60 second in microseconds)
 
     // Note: tui->conversation_state is already set during tui_init()
     // No need to copy plan_mode separately
@@ -2227,12 +2234,18 @@ int tui_event_loop(TUIState *tui, const char *prompt,
             }
         }
 
-        // 5. Update subagent status periodically (every frame)
-        // This updates internal state but doesn't render yet
+        // 5. Update subagent status periodically (throttled to ~1/sec, not every frame)
+        // read_file_tail() reads the ENTIRE log file line-by-line, so calling it
+        // at 120 FPS with large subagent logs causes severe CPU spikes (200%+).
+        // Throttling to once per second is sufficient for status monitoring.
+        static uint64_t last_subagent_update_ns = 0;
         if (tui->conversation_state && tui->conversation_state->subagent_manager) {
-            // Update status of all tracked subagents (check if running, read log tails)
-            // Use 5 lines of tail output for monitoring
-            subagent_manager_update_all(tui->conversation_state->subagent_manager, 5);
+            uint64_t now_ns = monotonic_time_ns();
+            if (last_subagent_update_ns == 0 ||
+                (now_ns - last_subagent_update_ns) >= 1000000000ULL) {
+                subagent_manager_update_all(tui->conversation_state->subagent_manager, 5);
+                last_subagent_update_ns = now_ns;
+            }
         }
 
         // Update spinner animation if active
