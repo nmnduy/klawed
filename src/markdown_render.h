@@ -9,6 +9,7 @@
 #define MARKDOWN_RENDER_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 struct TUIStateStruct;
 typedef struct TUIStateStruct TUIState;
@@ -94,5 +95,54 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
                            size_t num_rows, int base_pair,
                            const char *left_border, int left_border_pair,
                            int pad_width);
+
+/*
+ * Markdown pre-parse cache
+ *
+ * Pre-computes line boundaries and classifies each line (header, code fence,
+ * table row, etc) so that conversation pad rebuilds can skip re-scanning text
+ * and re-calling all the line-type detection functions.
+ *
+ * Attached to ConversationEntry::md_cache.  Freed when the entry is cleared
+ * or its text changes (streaming append).
+ */
+
+typedef enum {
+    MD_LINE_REGULAR = 0,
+    MD_LINE_EMPTY,
+    MD_LINE_HEADER,
+    MD_LINE_CODE_OPEN,
+    MD_LINE_CODE_CLOSE,
+    MD_LINE_CODE_CONTENT,
+    MD_LINE_TABLE_ROW,
+    MD_LINE_TABLE_SEP,
+    MD_LINE_HRULE,
+    MD_LINE_LIST_ITEM,
+    MD_LINE_BLOCKQUOTE,
+} MDParsedLineType;
+
+typedef struct {
+    MDParsedLineType type;
+    int      header_level;  /* 1-6 for headers, 0 otherwise */
+    char     list_type;      /* '-','*','+','1' for lists, 0 otherwise */
+    int      list_number;    /* for ordered lists */
+    uint32_t line_offset;    /* byte offset of this line within source_text */
+    uint16_t line_len;       /* length of this line (excluding newline) */
+    uint16_t content_off;    /* byte offset past prefix (## , > , -  etc.) */
+} MDParsedLine;
+
+typedef struct {
+    MDParsedLine *lines;
+    int           line_count;
+    int           capacity;
+    const char   *source_text;  /* pointer to text we parsed; NULL after free */
+} MDParsedDoc;
+
+/* Pre-parse markdown text into line descriptors.  Returns NULL if text is
+ * empty, allocation fails, or the text is too long for 16-bit offsets. */
+MDParsedDoc *markdown_cache_parse(const char *text);
+
+/* Free a pre-parsed document.  Safe to call with NULL. */
+void markdown_cache_free(MDParsedDoc *doc);
 
 #endif /* MARKDOWN_RENDER_H */

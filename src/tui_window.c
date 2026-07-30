@@ -372,7 +372,8 @@ void tui_handle_resize(TUIState *tui) {
                 // Border style: left border decoration on each line
                 if (entry->text && entry->text[0] != '\0') {
                     render_markdown_document(tui, entry->text, NCURSES_PAIR_FOREGROUND,
-                                             NCURSES_PAIR_ASSISTANT_BORDER_BG, "│ ");
+                                             NCURSES_PAIR_ASSISTANT_BORDER_BG, "│ ",
+                                             &entry->md_cache);
                 }
                 continue;  // Skip regular text/newline handling below
             } else if (tui->response_style == RESPONSE_STYLE_CARET) {
@@ -386,14 +387,14 @@ void tui_handle_resize(TUIState *tui) {
                 }
                 if (entry->text && entry->text[0] != '\0') {
                     render_markdown_document(tui, entry->text, NCURSES_PAIR_FOREGROUND,
-                                             0, NULL);
+                                             0, NULL, &entry->md_cache);
                 }
                 continue;
             } else if (tui->response_style == RESPONSE_STYLE_BG) {
                 // BG style: render text with background-tinted pair, no border/prefix
                 if (entry->text && entry->text[0] != '\0') {
                     render_markdown_document(tui, entry->text, NCURSES_PAIR_ASSISTANT_BG,
-                                             0, NULL);
+                                             0, NULL, &entry->md_cache);
                 }
                 continue;
             }
@@ -412,7 +413,7 @@ void tui_handle_resize(TUIState *tui) {
             }
             if (entry->text && entry->text[0] != '\0') {
                 render_markdown_document(tui, entry->text, NCURSES_PAIR_ERROR_BG,
-                                         0, NULL);
+                                         0, NULL, &entry->md_cache);
             }
             continue;
         } else {

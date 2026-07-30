@@ -19,6 +19,7 @@
 #include "window_manager.h"
 #include "array_resize.h"
 #include "line_printer.h"
+#include "markdown_render.h"
 #include <stdlib.h>
 #include <string.h>
 #include <bsd/string.h>
@@ -125,6 +126,10 @@ void tui_conversation_free_entries(TUIState *tui) {
     for (int i = 0; i < tui->entries_count; i++) {
         free(tui->entries[i].prefix);
         free(tui->entries[i].text);
+        if (tui->entries[i].md_cache) {
+            markdown_cache_free((MDParsedDoc *)tui->entries[i].md_cache);
+            tui->entries[i].md_cache = NULL;
+        }
     }
     free(tui->entries);
     tui->entries = NULL;
@@ -243,7 +248,7 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
         } else {
             // Render the spacing line
             int spacing_start = window_manager_get_content_lines(&tui->wm);
-            render_entry_to_pad(tui, NULL, "", COLOR_PAIR_FOREGROUND);
+            render_entry_to_pad(tui, NULL, "", COLOR_PAIR_FOREGROUND, NULL);
             tui->entries[tui->entries_count - 1].pad_start_line = spacing_start;
         }
     }
@@ -256,7 +261,8 @@ void tui_add_conversation_line(TUIState *tui, const char *prefix, const char *te
 
     // Render the actual entry
     int start_line = window_manager_get_content_lines(&tui->wm);
-    if (render_entry_to_pad(tui, prefix, text, color_pair) != 0) {
+    if (render_entry_to_pad(tui, prefix, text, color_pair,
+                            &tui->entries[tui->entries_count - 1].md_cache) != 0) {
         LOG_ERROR("[TUI] Failed to render entry to pad");
         return;
     }
@@ -355,6 +361,12 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
             }
             strlcat(new_text, text, old_len + new_len + 1);
             last_entry->text = new_text;
+
+            /* Invalidate the markdown cache — text pointer changed (realloc) */
+            if (last_entry->md_cache) {
+                markdown_cache_free((MDParsedDoc *)last_entry->md_cache);
+                last_entry->md_cache = NULL;
+            }
 
             // Just append to the end of the pad (simple approach)
             // Get current cursor position
@@ -559,6 +571,13 @@ void tui_update_conversation_entry(TUIState *tui, int entry_index, const char *t
         }
         strlcat(new_text, text, old_len + new_len + 1);
         entry->text = new_text;
+
+        /* Invalidate cache — text pointer changed */
+        if (entry->md_cache) {
+            markdown_cache_free((MDParsedDoc *)entry->md_cache);
+            entry->md_cache = NULL;
+        }
+
         LOG_DEBUG("[TUI] Updated entry %d with %zu bytes (deferred redraw)", entry_index, new_len);
 
         // Schedule a full pad rebuild so the updated text becomes visible.

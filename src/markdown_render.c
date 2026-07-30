@@ -16,6 +16,7 @@
 #include <ncurses.h>
 #include <ctype.h>
 #include <string.h>
+#include <stdlib.h>
 #include <wchar.h>
 #include <locale.h>
 
@@ -1461,4 +1462,120 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
 
 table_cleanup:
     scrollok(pad, TRUE);
+}
+
+/* ============================================================================
+ * Markdown pre-parse cache
+ *
+ * Single-pass scan that records line boundaries and classifies each line.
+ * Uses 16-bit offsets/lengths (max 65535 bytes per line, 4 GB total offset
+ * stored in 32 bits).  The cache is updated in-place during the scan and
+ * returned as a heap-allocated MDParsedDoc.
+ * ============================================================================ */
+
+static int md_cache_grow(MDParsedDoc *doc) {
+    int nc = (doc->capacity == 0) ? 128 : doc->capacity * 2;
+    if (nc > 1048576) return -1; /* safety ceiling: 1M lines */
+    MDParsedLine *nl = realloc(doc->lines, (size_t)nc * sizeof(MDParsedLine));
+    if (!nl) return -1;
+    doc->lines = nl;
+    doc->capacity = nc;
+    return 0;
+}
+
+MDParsedDoc *markdown_cache_parse(const char *text) {
+    if (!text || !text[0]) return NULL;
+
+    MDParsedDoc *doc = calloc(1, sizeof(MDParsedDoc));
+    if (!doc) return NULL;
+    doc->source_text = text;
+
+    if (md_cache_grow(doc) != 0) { free(doc); return NULL; }
+
+    const char *p = text;
+    const char *ls = text;    /* line start */
+    int in_code = 0;
+
+    while (*p) {
+        /* advance to end of line */
+        while (*p && *p != '\n') p++;
+
+        size_t llen = (size_t)(p - ls);
+        size_t off  = (size_t)(ls - text);
+        if (llen > 65535 || off > 0xFFFFFFFFU) {
+            /* line or offset too large for our fixed-width storage */
+            markdown_cache_free(doc);
+            return NULL;
+        }
+
+        if (doc->line_count + 1 >= doc->capacity) {
+            if (md_cache_grow(doc) != 0) {
+                markdown_cache_free(doc);
+                return NULL;
+            }
+        }
+
+        MDParsedLine *pl = &doc->lines[doc->line_count];
+        memset(pl, 0, sizeof(*pl));
+        pl->line_offset = (uint32_t)off;
+        pl->line_len    = (uint16_t)llen;
+
+        if (llen == 0) {
+            pl->type = MD_LINE_EMPTY;
+        } else {
+            int fence = markdown_code_fence(ls, llen);
+            if (fence != 0) {
+                in_code = !in_code;
+                pl->type = in_code ? MD_LINE_CODE_OPEN : MD_LINE_CODE_CLOSE;
+            } else if (in_code) {
+                pl->type = MD_LINE_CODE_CONTENT;
+            } else if (markdown_is_table_separator(ls, llen)) {
+                pl->type = MD_LINE_TABLE_SEP;
+            } else if (markdown_is_table_row(ls, llen)) {
+                pl->type = MD_LINE_TABLE_ROW;
+            } else {
+                int hl = markdown_header_level(ls, llen);
+                if (hl > 0) {
+                    pl->type = MD_LINE_HEADER;
+                    pl->header_level = hl;
+                    size_t skip = 0;
+                    while (skip < llen && (ls[skip] == '#' ||
+                           isspace((unsigned char)ls[skip]))) skip++;
+                    pl->content_off = (skip < llen) ? (uint16_t)skip : (uint16_t)llen;
+                } else if (markdown_hrule(ls, llen)) {
+                    pl->type = MD_LINE_HRULE;
+                } else {
+                    size_t prlen = 0;
+                    int ln = 0;
+                    char lt = markdown_list_item(ls, llen, &prlen, &ln);
+                    if (lt != 0) {
+                        pl->type = MD_LINE_LIST_ITEM;
+                        pl->list_type = lt;
+                        pl->list_number = ln;
+                        pl->content_off = (uint16_t)prlen;
+                    } else {
+                        size_t qlen = 0;
+                        if (markdown_blockquote(ls, llen, &qlen)) {
+                            pl->type = MD_LINE_BLOCKQUOTE;
+                            pl->content_off = (uint16_t)qlen;
+                        }
+                        /* else: stays MD_LINE_REGULAR */
+                    }
+                }
+            }
+        }
+
+        doc->line_count++;
+        if (*p == '\n') p++;
+        ls = p;
+    }
+
+    return doc;
+}
+
+void markdown_cache_free(MDParsedDoc *doc) {
+    if (!doc) return;
+    free(doc->lines);
+    memset(doc, 0, sizeof(*doc));
+    free(doc);
 }

@@ -1475,10 +1475,39 @@ static void render_md_header_segment(TUIState *tui, const char *segment, size_t 
 // If border_str is non-NULL, each line is prefixed with the border.
 // If border_str is NULL, no border is drawn (caret-style).
 void render_markdown_document(TUIState *tui, const char *text, int text_pair,
-                              int border_pair, const char *border_str) {
+                              int border_pair, const char *border_str,
+                              void **md_cache_ptr) {
     if (!text || !text[0]) {
         return;
     }
+
+    /* --- cache validation --- */
+    MDParsedDoc *cache = NULL;
+    int use_cache = 0;
+    if (md_cache_ptr) {
+        cache = (MDParsedDoc *)*md_cache_ptr;
+        if (cache && cache->source_text == text) {
+            use_cache = 1;
+        } else {
+            /* text pointer changed (realloc during streaming) — discard */
+            if (cache) {
+                markdown_cache_free(cache);
+                *md_cache_ptr = NULL;
+                cache = NULL;
+            }
+        }
+    }
+
+    /* If we have a valid cache, use the fast rendering path that iterates
+     * through pre-parsed line descriptors instead of scanning the raw text
+     * and re-calling all the classification functions. */
+    if (use_cache) {
+        goto render_cached;
+    }
+
+    /* =====================================================================
+     * SLOW PATH — scan text, classify per line, render
+     * ===================================================================== */
 
     WINDOW *pad = tui->wm.conv_pad;
     int pad_width = 0;
@@ -1781,10 +1810,204 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
     if (cur_x > 0) {
         (void)tui_safe_waddch(pad_final, '\n');
     }
+
+    /* Populate cache for future rebuilds */
+    if (md_cache_ptr && *md_cache_ptr == NULL) {
+        *md_cache_ptr = markdown_cache_parse(text);
+    }
+    return;
+
+render_cached:
+    /* Fast path: render from pre-parsed MDParsedDoc cache */
+    {
+        WINDOW *pad2 = tui->wm.conv_pad;
+        int pw = 0, ph = 0;
+        getmaxyx(pad2, ph, pw);
+        (void)ph;
+
+        int bdw = utf8_display_width(border_str);
+        int cw  = pw - bdw;
+        if (cw < 1) cw = 1;
+
+        int sa2 = (tui->last_search_pattern && tui->last_search_pattern[0] != '\0');
+
+#define CTB_MAX 64
+        struct { const char *s; size_t n; } cbuf[CTB_MAX];
+        int cbc = 0;
+
+        const char *tx = text;
+
+        for (int i = 0; i < cache->line_count; i++) {
+            MDParsedLine *pl = &cache->lines[i];
+            const char *ls2 = tx + pl->line_offset;
+            size_t llen2 = pl->line_len;
+            int at_end = (i == cache->line_count - 1);
+
+            /* Flush table buffer when non-table line encountered */
+            if (pl->type != MD_LINE_TABLE_ROW && pl->type != MD_LINE_TABLE_SEP) {
+                if (cbc > 0) {
+                    int hs = 0;
+                    for (int ti = 0; ti < cbc; ti++)
+                        if (markdown_is_table_separator(cbuf[ti].s, cbuf[ti].n)) { hs = 1; break; }
+                    if (hs) {
+                        const char *r2[CTB_MAX]; size_t l2[CTB_MAX];
+                        for (int ti = 0; ti < cbc; ti++) { r2[ti] = cbuf[ti].s; l2[ti] = cbuf[ti].n; }
+                        markdown_render_table(tui, r2, l2, (size_t)cbc, text_pair, border_str, border_pair, pw);
+                    } else {
+                        for (int ti = 0; ti < cbc; ti++)
+                            render_md_segment(tui, cbuf[ti].s, cbuf[ti].n, border_pair, border_str, false, 0, text_pair, sa2);
+                        waddch(pad2, '\n');
+                    }
+                    cbc = 0;
+                }
+            }
+
+            switch (pl->type) {
+            case MD_LINE_EMPTY:
+                render_bordered_segment(tui, "", 0, border_pair, border_str, !at_end, text_pair);
+                break;
+
+            case MD_LINE_CODE_OPEN:
+            case MD_LINE_CODE_CLOSE:
+                /* Skip fence lines — structural markers, not visual content */
+                break;
+
+            case MD_LINE_CODE_CONTENT: {
+                int cp = NCURSES_PAIR_CODE_BLOCK;
+                if (llen2 > 0 && (size_t)((int)llen2) == llen2) {
+                    char *tmp2 = malloc(llen2 + 1);
+                    int ldw = (int)llen2;
+                    if (tmp2) { memcpy(tmp2, ls2, llen2); tmp2[llen2] = '\0'; ldw = utf8_display_width(tmp2); free(tmp2); }
+                    if (ldw <= cw) {
+                        render_md_code_segment(tui, ls2, llen2, border_pair, border_str, !at_end, cp, sa2);
+                    } else {
+                        const char *cs = ls2; size_t rem = llen2;
+                        while (rem > 0) {
+                            size_t cb = find_wrap_point_word(cs, rem, cw);
+                            render_md_code_segment(tui, cs, cb, border_pair, border_str, true, cp, sa2);
+                            cs += cb; rem -= cb;
+                        }
+                    }
+                }
+                break;
+            }
+
+            case MD_LINE_TABLE_ROW:
+            case MD_LINE_TABLE_SEP:
+                if (cbc < CTB_MAX) { cbuf[cbc].s = ls2; cbuf[cbc].n = llen2; cbc++; }
+                break;
+
+            case MD_LINE_HEADER: {
+                size_t skip = pl->content_off;
+                if (skip > llen2) skip = llen2;
+                const char *cs2 = ls2 + skip; size_t rem2 = llen2 - skip;
+                if (llen2 > 0 && (size_t)((int)llen2) == llen2) {
+                    char *tmp3 = malloc(llen2 + 1);
+                    int ldw2 = (int)llen2;
+                    if (tmp3) { memcpy(tmp3, ls2, llen2); tmp3[llen2] = '\0'; ldw2 = utf8_display_width(tmp3); free(tmp3); }
+                    if (ldw2 <= cw) {
+                        render_md_header_segment(tui, cs2, rem2, border_pair, border_str, !at_end, text_pair, sa2, pl->header_level);
+                    } else {
+                        const char *cs3 = ls2; size_t rem3 = llen2; int first = 1;
+                        while (rem3 > 0) {
+                            size_t cb2 = find_wrap_point_word(cs3, rem3, cw);
+                            if (first && cb2 > skip) {
+                                render_md_header_segment(tui, cs3 + skip, cb2 - skip, border_pair, border_str, true, text_pair, sa2, pl->header_level);
+                            } else if (first) {
+                                render_md_header_segment(tui, cs3, cb2, border_pair, border_str, true, text_pair, sa2, pl->header_level);
+                            } else {
+                                render_md_segment(tui, cs3, cb2, border_pair, border_str, true, 0, text_pair, sa2);
+                            }
+                            first = 0; cs3 += cb2; rem3 -= cb2;
+                        }
+                    }
+                }
+                break;
+            }
+
+            case MD_LINE_HRULE:
+                { static const char hr2[] = "────────────────────────"; render_md_segment(tui, hr2, sizeof(hr2)-1, border_pair, border_str, !at_end, 1, text_pair, sa2); }
+                break;
+
+            case MD_LINE_LIST_ITEM:
+            case MD_LINE_BLOCKQUOTE: {
+                size_t skip2 = pl->content_off;
+                if (skip2 > llen2) skip2 = llen2;
+                const char *cs4 = ls2 + skip2; size_t rem4 = llen2 - skip2;
+                if (llen2 > 0 && (size_t)((int)llen2) == llen2) {
+                    char *tmp4 = malloc(llen2 + 1);
+                    int ldw3 = (int)llen2;
+                    if (tmp4) { memcpy(tmp4, ls2, llen2); tmp4[llen2] = '\0'; ldw3 = utf8_display_width(tmp4); free(tmp4); }
+                    if (ldw3 <= cw) {
+                        render_md_segment(tui, cs4, rem4, border_pair, border_str, !at_end, 0, text_pair, sa2);
+                    } else {
+                        const char *cs5 = ls2; size_t rem5 = llen2; int first2 = 1;
+                        while (rem5 > 0) {
+                            size_t cb3 = find_wrap_point_word(cs5, rem5, cw);
+                            if (first2 && cb3 > skip2) {
+                                render_md_segment(tui, cs5 + skip2, cb3 - skip2, border_pair, border_str, true, 0, text_pair, sa2);
+                            } else if (first2) {
+                                render_md_segment(tui, cs5, cb3, border_pair, border_str, true, 0, text_pair, sa2);
+                            } else {
+                                render_md_segment(tui, cs5, cb3, border_pair, border_str, true, 0, text_pair, sa2);
+                            }
+                            first2 = 0; cs5 += cb3; rem5 -= cb3;
+                        }
+                    }
+                }
+                break;
+            }
+
+            case MD_LINE_REGULAR:
+            default: {
+                if (llen2 > 0 && (size_t)((int)llen2) == llen2) {
+                    char *tmp5 = malloc(llen2 + 1);
+                    int ldw4 = (int)llen2;
+                    if (tmp5) { memcpy(tmp5, ls2, llen2); tmp5[llen2] = '\0'; ldw4 = utf8_display_width(tmp5); free(tmp5); }
+                    if (ldw4 <= cw) {
+                        render_md_segment(tui, ls2, llen2, border_pair, border_str, !at_end, 0, text_pair, sa2);
+                    } else {
+                        const char *cs6 = ls2; size_t rem6 = llen2;
+                        while (rem6 > 0) {
+                            size_t cb4 = find_wrap_point_word(cs6, rem6, cw);
+                            render_md_segment(tui, cs6, cb4, border_pair, border_str, true, 0, text_pair, sa2);
+                            cs6 += cb4; rem6 -= cb4;
+                        }
+                    }
+                }
+                break;
+            }
+            }
+        }
+
+        /* Flush remaining table buffer */
+        if (cbc > 0) {
+            int hs = 0;
+            for (int ti = 0; ti < cbc; ti++)
+                if (markdown_is_table_separator(cbuf[ti].s, cbuf[ti].n)) { hs = 1; break; }
+            if (hs) {
+                const char *r2[CTB_MAX]; size_t l2[CTB_MAX];
+                for (int ti = 0; ti < cbc; ti++) { r2[ti] = cbuf[ti].s; l2[ti] = cbuf[ti].n; }
+                markdown_render_table(tui, r2, l2, (size_t)cbc, text_pair, border_str, border_pair, pw);
+            } else {
+                for (int ti = 0; ti < cbc; ti++)
+                    render_md_segment(tui, cbuf[ti].s, cbuf[ti].n, border_pair, border_str, false, 0, text_pair, sa2);
+                waddch(pad2, '\n');
+            }
+        }
+#undef CTB_MAX
+
+        {
+            int ccy = 0, ccx = 0;
+            getyx(pad2, ccy, ccx);
+            if (ccx > 0) (void)tui_safe_waddch(pad2, '\n');
+        }
+    }
 }
 
 
-int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair) {
+int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair,
+                        void **md_cache_ptr) {
     if (!tui || !tui->wm.conv_pad) {
         return -1;
     }
@@ -1888,14 +2111,14 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
              * not a visual element. The text carries the weight. */
             const char *border_str = (tui->response_style == RESPONSE_STYLE_BORDER) ? "│ " : NULL;
             int bp = (tui->response_style == RESPONSE_STYLE_BORDER) ? NCURSES_PAIR_TOOL_DIM : 0;
-            render_markdown_document(tui, text, text_pair, bp, border_str);
+            render_markdown_document(tui, text, text_pair, bp, border_str, md_cache_ptr);
             goto skip_newline;
         } else if (tui->response_style == RESPONSE_STYLE_BG) {
             // BG style: render text with background-tinted pair, no border/prefix
             // The NCURSES_PAIR_ASSISTANT_BG pair has foreground text on a subtle
             // assistant-tinted background for a painted background effect
             int text_pair = NCURSES_PAIR_ASSISTANT_BG;
-            render_markdown_document(tui, text, text_pair, 0, NULL);
+            render_markdown_document(tui, text, text_pair, 0, NULL, md_cache_ptr);
             goto skip_newline;
         } else if (tui->response_style == RESPONSE_STYLE_ROBOT) {
             // Robot style: print robot face header, then markdown-rendered text
@@ -1906,7 +2129,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             if (has_colors()) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
-            render_markdown_document(tui, text, NCURSES_PAIR_FOREGROUND, 0, NULL);
+            render_markdown_document(tui, text, NCURSES_PAIR_FOREGROUND, 0, NULL, md_cache_ptr);
             goto skip_newline;
         } else if (tui->response_style == RESPONSE_STYLE_CAT) {
             // Cat style: print cat face header, then markdown-rendered text
@@ -1917,7 +2140,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
             if (has_colors()) {
                 wattroff(tui->wm.conv_pad, COLOR_PAIR(mapped_pair) | A_BOLD);
             }
-            render_markdown_document(tui, text, NCURSES_PAIR_FOREGROUND, 0, NULL);
+            render_markdown_document(tui, text, NCURSES_PAIR_FOREGROUND, 0, NULL, md_cache_ptr);
             goto skip_newline;
         }
     } else if (is_error_message) {
@@ -1941,7 +2164,7 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
 
         // Render error body text with error-tinted background fill
         if (text && text[0] != '\0') {
-            render_markdown_document(tui, text, NCURSES_PAIR_ERROR_BG, 0, NULL);
+            render_markdown_document(tui, text, NCURSES_PAIR_ERROR_BG, 0, NULL, md_cache_ptr);
 
             /* Closing rule: a thin dim line after the error that says
              * "this happened, and now we continue." It closes the wound. */
@@ -2116,7 +2339,8 @@ void redraw_conversation(TUIState *tui) {
     for (int i = 0; i < tui->entries_count; i++) {
         ConversationEntry *entry = &tui->entries[i];
         entry->pad_start_line = window_manager_get_content_lines(&tui->wm);
-        render_entry_to_pad(tui, entry->prefix, entry->text, entry->color_pair);
+        render_entry_to_pad(tui, entry->prefix, entry->text, entry->color_pair,
+                            &entry->md_cache);
     }
 
     // Restore scroll position

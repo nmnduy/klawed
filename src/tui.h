@@ -85,6 +85,7 @@ typedef struct {
     char *text;              // Message text
     TUIColorPair color_pair; // Color for display
     int pad_start_line;      // Exact line where this entry starts in the current pad
+    void *md_cache;          // Opaque markdown pre-parse cache (MDParsedDoc *)
 } ConversationEntry;
 
 // TUI Mode (Vim-like)
@@ -466,13 +467,17 @@ const char* tui_mode_label(TUIMode mode);
 
 // Render a conversation entry to the pad (rendering module)
 // Returns 0 on success, -1 on error
-int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair);
+int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUIColorPair color_pair,
+                        void **md_cache_ptr);
 
 // Render a markdown document to the conversation pad.
 // If border_str is non-NULL, each line is prefixed with the border.
 // If border_str is NULL, no border is drawn (caret-style).
+// md_cache_ptr: optional opaque pointer to a markdown pre-parse cache (MDParsedDoc *).
+//               If non-NULL and valid, avoids re-scanning text on rebuilds.
 void render_markdown_document(TUIState *tui, const char *text, int text_pair,
-                              int border_pair, const char *border_str);
+                              int border_pair, const char *border_str,
+                              void **md_cache_ptr);
 
 // Render the status window (rendering module)
 void render_status_window(TUIState *tui);

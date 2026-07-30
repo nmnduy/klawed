@@ -1031,6 +1031,152 @@ static void test_table_cell_with_code_spans_fits(void) {
 }
 
 /* ==================================================================
+ * markdown_cache_parse / markdown_cache_free  tests
+ * ================================================================== */
+
+static void test_cache_parse_empty(void) {
+    const char *name = "cache_parse_empty";
+    MDParsedDoc *doc = markdown_cache_parse("");
+    print_test_result(name, doc == NULL);
+}
+
+static void test_cache_parse_null(void) {
+    const char *name = "cache_parse_null";
+    MDParsedDoc *doc = markdown_cache_parse(NULL);
+    print_test_result(name, doc == NULL);
+}
+
+static void test_cache_parse_plain_text(void) {
+    const char *name = "cache_parse_plain_text";
+    const char *text = "hello world\nfoo bar\n";
+    MDParsedDoc *doc = markdown_cache_parse(text);
+    int ok = (doc != NULL && doc->line_count == 2);
+    ok = ok && (doc->lines[0].type == MD_LINE_REGULAR);
+    ok = ok && (doc->lines[1].type == MD_LINE_REGULAR);
+    ok = ok && (doc->lines[0].line_len == 11);
+    ok = ok && (doc->lines[1].line_len == 7);
+    markdown_cache_free(doc);
+    print_test_result(name, ok);
+}
+
+static void test_cache_parse_header(void) {
+    const char *name = "cache_parse_header";
+    const char *text = "# Title\n## Subtitle\nplain\n";
+    MDParsedDoc *doc = markdown_cache_parse(text);
+    int ok = (doc != NULL && doc->line_count == 3);
+    ok = ok && (doc->lines[0].type == MD_LINE_HEADER && doc->lines[0].header_level == 1);
+    ok = ok && (doc->lines[1].type == MD_LINE_HEADER && doc->lines[1].header_level == 2);
+    ok = ok && (doc->lines[2].type == MD_LINE_REGULAR);
+    /* content_offset should skip '#' and space */
+    ok = ok && (doc->lines[0].content_off == 2); /* "# Title" -> skip "# " */
+    markdown_cache_free(doc);
+    print_test_result(name, ok);
+}
+
+static void test_cache_parse_code_fence(void) {
+    const char *name = "cache_parse_code_fence";
+    const char *text = "```\ncode line\n```\nplain\n";
+    MDParsedDoc *doc = markdown_cache_parse(text);
+    int ok = (doc != NULL && doc->line_count == 4);
+    ok = ok && (doc->lines[0].type == MD_LINE_CODE_OPEN);
+    ok = ok && (doc->lines[1].type == MD_LINE_CODE_CONTENT);
+    ok = ok && (doc->lines[2].type == MD_LINE_CODE_CLOSE);
+    ok = ok && (doc->lines[3].type == MD_LINE_REGULAR);
+    markdown_cache_free(doc);
+    print_test_result(name, ok);
+}
+
+static void test_cache_parse_table(void) {
+    const char *name = "cache_parse_table";
+    const char *text = "| A | B |\n|---|---|\n| 1 | 2 |\n";
+    MDParsedDoc *doc = markdown_cache_parse(text);
+    int ok = (doc != NULL && doc->line_count == 3);
+    ok = ok && (doc->lines[0].type == MD_LINE_TABLE_ROW);
+    ok = ok && (doc->lines[1].type == MD_LINE_TABLE_SEP);
+    ok = ok && (doc->lines[2].type == MD_LINE_TABLE_ROW);
+    markdown_cache_free(doc);
+    print_test_result(name, ok);
+}
+
+static void test_cache_parse_hrule(void) {
+    const char *name = "cache_parse_hrule";
+    const char *text = "text\n---\nmore\n";
+    MDParsedDoc *doc = markdown_cache_parse(text);
+    int ok = (doc != NULL && doc->line_count == 3);
+    /* "---" should be detected as hrule */
+    ok = ok && (doc->lines[1].type == MD_LINE_HRULE);
+    ok = ok && (doc->lines[0].type == MD_LINE_REGULAR);
+    ok = ok && (doc->lines[2].type == MD_LINE_REGULAR);
+    markdown_cache_free(doc);
+    print_test_result(name, ok);
+}
+
+static void test_cache_parse_list(void) {
+    const char *name = "cache_parse_list";
+    const char *text = "- item1\n* item2\n1. item3\nplain\n";
+    MDParsedDoc *doc = markdown_cache_parse(text);
+    int ok = (doc != NULL && doc->line_count == 4);
+    ok = ok && (doc->lines[0].type == MD_LINE_LIST_ITEM && doc->lines[0].list_type == '-');
+    ok = ok && (doc->lines[1].type == MD_LINE_LIST_ITEM && doc->lines[1].list_type == '*');
+    ok = ok && (doc->lines[2].type == MD_LINE_LIST_ITEM && doc->lines[2].list_type == '1');
+    ok = ok && (doc->lines[3].type == MD_LINE_REGULAR);
+    ok = ok && (doc->lines[2].list_number == 1);
+    /* content_off should skip "- " or "* " or "1. " */
+    ok = ok && (doc->lines[0].content_off == 2); /* "- item1" -> skip "- " */
+    markdown_cache_free(doc);
+    print_test_result(name, ok);
+}
+
+static void test_cache_parse_blockquote(void) {
+    const char *name = "cache_parse_blockquote";
+    const char *text = "> quoted\nplain\n";
+    MDParsedDoc *doc = markdown_cache_parse(text);
+    int ok = (doc != NULL && doc->line_count == 2);
+    ok = ok && (doc->lines[0].type == MD_LINE_BLOCKQUOTE);
+    ok = ok && (doc->lines[1].type == MD_LINE_REGULAR);
+    ok = ok && (doc->lines[0].content_off == 2); /* "> quoted" -> skip "> " */
+    markdown_cache_free(doc);
+    print_test_result(name, ok);
+}
+
+static void test_cache_parse_mixed(void) {
+    const char *name = "cache_parse_mixed";
+    /* Note: | A | is a single-column table, which markdown_is_table_row
+     * rejects (needs >=2 columns with interior |).  Use two-column rows. */
+    const char *text = "# Header\n\nplain\n```\ncode\n```\n| A | B |\n|---|---|\n| 1 | 2 |\n";
+    MDParsedDoc *doc = markdown_cache_parse(text);
+    int ok = (doc != NULL && doc->line_count == 9);
+    ok = ok && (doc->lines[0].type == MD_LINE_HEADER && doc->lines[0].header_level == 1);
+    ok = ok && (doc->lines[1].type == MD_LINE_EMPTY);
+    ok = ok && (doc->lines[2].type == MD_LINE_REGULAR);
+    ok = ok && (doc->lines[3].type == MD_LINE_CODE_OPEN);
+    ok = ok && (doc->lines[4].type == MD_LINE_CODE_CONTENT);
+    ok = ok && (doc->lines[5].type == MD_LINE_CODE_CLOSE);
+    ok = ok && (doc->lines[6].type == MD_LINE_TABLE_ROW);
+    ok = ok && (doc->lines[7].type == MD_LINE_TABLE_SEP);
+    ok = ok && (doc->lines[8].type == MD_LINE_TABLE_ROW);
+    markdown_cache_free(doc);
+    print_test_result(name, ok);
+}
+
+static void test_cache_free_null(void) {
+    /* Should not crash */
+    markdown_cache_free(NULL);
+    print_test_result("cache_free_null", 1);
+}
+
+static void test_cache_free_roundtrip(void) {
+    const char *name = "cache_free_roundtrip";
+    const char *text = "hello\nworld\n";
+    MDParsedDoc *doc = markdown_cache_parse(text);
+    int ok = (doc != NULL);
+    markdown_cache_free(doc);
+    /* After free, double-free-safety: free(NULL) is a no-op */
+    markdown_cache_free(NULL);
+    print_test_result(name, ok);
+}
+
+/* ==================================================================
  * Main
  * ================================================================== */
 
@@ -1183,6 +1329,21 @@ int main(void) {
     test_stripped_table_cell_scenario();
     test_stripped_mixed_bold_italic();
     test_table_cell_with_code_spans_fits();
+
+    /* --- markdown_cache_parse --- */
+    printf("\n--- markdown_cache_parse ---\n");
+    test_cache_parse_empty();
+    test_cache_parse_null();
+    test_cache_parse_plain_text();
+    test_cache_parse_header();
+    test_cache_parse_code_fence();
+    test_cache_parse_table();
+    test_cache_parse_hrule();
+    test_cache_parse_list();
+    test_cache_parse_blockquote();
+    test_cache_parse_mixed();
+    test_cache_free_null();
+    test_cache_free_roundtrip();
 
     print_summary();
     return tests_failed > 0 ? 1 : 0;
