@@ -881,13 +881,14 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
                 tui_scroll_conversation(tui, -3);
                 input_redraw(tui, prompt);
             }
-#ifdef BUTTON5_PRESSED
+#ifndef BUTTON5_PRESSED
+#define BUTTON5_PRESSED NCURSES_MOUSE_MASK(5, NCURSES_BUTTON_PRESSED)
+#endif
             else if (event.bstate & BUTTON5_PRESSED) {
                 // Scroll wheel down: scroll conversation down
                 tui_scroll_conversation(tui, 3);
                 input_redraw(tui, prompt);
             }
-#endif
             // All other mouse events (clicks, releases, etc.) are consumed
             // and discarded to prevent escape sequences from entering the
             // input buffer as garbage characters.
