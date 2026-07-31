@@ -286,10 +286,17 @@ int window_manager_resize_screen(WindowManager *wm) {
     refresh();
     clear();
 
-    // Re-enable mouse events after endwin/refresh — some ncurses
-    // implementations (including macOS 5.4) drop the mouse mask across
-    // the endwin/refresh cycle, causing scroll wheel to stop working.
-    mousemask(ALL_MOUSE_EVENTS, NULL);
+    // CRITICAL: endwin()/refresh() resets ALL ncurses terminal settings
+    // to their defaults. We must restore every setting that tui_core.c
+    // configured during init, otherwise raw mode, keypad support, echo
+    // suppression, and input blocking are lost. On macOS ncurses 5.4
+    // this can cause wgetch() to return spurious events or ERR rapidly,
+    // causing 100% CPU spin in the TUI event loop.
+    raw();                              // Disable line buffering + signal generation
+    noecho();                           // Suppress character echo
+    keypad(stdscr, TRUE);               // Enable function/arrow keys
+    nodelay(stdscr, FALSE);             // Blocking input mode
+    mousemask(ALL_MOUSE_EVENTS, NULL);  // Intercept mouse events
 
     // Get new screen dimensions
     int old_width = wm->screen_width;

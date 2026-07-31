@@ -2237,6 +2237,24 @@ int tui_event_loop(TUIState *tui, const char *prompt,
                 LOG_DEBUG("[TUI] Processed %d queued message(s)", messages_processed);
                 tui_redraw_input(tui, prompt);
             }
+
+            // Message queue flood detection: log if queue depth is growing
+            // (indicates a worker thread is posting faster than we consume)
+            static int last_msg_queue_depth = 0;
+            static int msg_flood_warnings = 0;
+            int current_depth = (int)msg_queue->count;
+            if (current_depth > (int)(msg_queue->capacity * 3 / 4)) {
+                // Queue is >75% full
+                msg_flood_warnings++;
+                if (msg_flood_warnings == 1 || msg_flood_warnings % 60 == 0) {
+                    LOG_WARN("[TUI-QUEUE] Message queue near capacity: %d/%zu messages. "
+                             "Worker thread may be flooding the TUI. (warning #%d)",
+                             current_depth, msg_queue->capacity, msg_flood_warnings);
+                }
+            } else {
+                msg_flood_warnings = 0;
+            }
+            last_msg_queue_depth = current_depth;
         }
 
         // 5. Update subagent status periodically (throttled to ~1/sec, not every frame)
@@ -2293,9 +2311,62 @@ int tui_event_loop(TUIState *tui, const char *prompt,
                          (frame_end.tv_nsec - frame_start.tv_nsec);
         long elapsed_us = elapsed_ns / 1000;
 
+        // CPU spin watchdog: log every ~5s if frames are completing too fast
+        // (i.e., no blocking I/O happened, indicating a potential spin loop)
+        static uint64_t last_watchdog_ns = 0;
+        static long watchdog_max_elapsed_us = 0;
+        static long watchdog_min_elapsed_us = LONG_MAX;
+        static int watchdog_frame_count = 0;
+        static int watchdog_spin_warnings = 0;
+
+        watchdog_frame_count++;
+        if (elapsed_us > watchdog_max_elapsed_us) {
+            watchdog_max_elapsed_us = elapsed_us;
+        }
+        if (elapsed_us < watchdog_min_elapsed_us) {
+            watchdog_min_elapsed_us = elapsed_us;
+        }
+
+        uint64_t frame_end_ns = (uint64_t)frame_end.tv_sec * 1000000000ULL +
+                               (uint64_t)frame_end.tv_nsec;
+        if (last_watchdog_ns == 0) {
+            last_watchdog_ns = frame_end_ns;
+        } else if ((frame_end_ns - last_watchdog_ns) >= 5000000000ULL) {
+            // Log every 5 seconds
+            LOG_DEBUG("[TUI-WATCHDOG] %d frames in 5s, elapsed_us range [%ld, %ld], "
+                      "spin_warnings=%d, mode=%d, spinner=%d",
+                      watchdog_frame_count,
+                      watchdog_min_elapsed_us, watchdog_max_elapsed_us,
+                      watchdog_spin_warnings,
+                      tui->mode, tui->status_spinner_active);
+            last_watchdog_ns = frame_end_ns;
+            watchdog_max_elapsed_us = 0;
+            watchdog_min_elapsed_us = LONG_MAX;
+            watchdog_frame_count = 0;
+            watchdog_spin_warnings = 0;
+        }
+
         if (elapsed_us < frame_time_us) {
             usleep((useconds_t)(frame_time_us - elapsed_us));
-      }
+        }
+
+        // Detect spin: if every frame for the past second has taken < 100us
+        // (i.e., wgetch returns ERR immediately, no blocking), log a warning
+        if (elapsed_us < 100) {
+            watchdog_spin_warnings++;
+            if (watchdog_spin_warnings == 300) {
+                // ~300 consecutive sub-100us frames (~5s at 60fps)
+                LOG_WARN("[TUI-WATCHDOG] Possible CPU spin detected: %d consecutive "
+                         "sub-100us frames. Input window may be in non-blocking mode. "
+                         "nodelay state may be corrupted.",
+                         watchdog_spin_warnings);
+            }
+        } else {
+            // Reset counter when a frame takes normal time (blocking I/O happened)
+            if (watchdog_spin_warnings > 0) {
+                watchdog_spin_warnings = 0;
+            }
+        }
     }
 
     return 0;

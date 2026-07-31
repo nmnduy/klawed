@@ -412,5 +412,9 @@ void vltrn_show_greeting(TUIState *tui) {
     // Wait for any key press on input window
     nodelay(tui->wm.input_win, FALSE);  // Blocking mode
     wgetch(tui->wm.input_win);
-    nodelay(tui->wm.input_win, TRUE);   // Return to non-blocking mode
+    // Restore to BLOCKING mode (the default) — the TUI event loop's
+    // tui_poll_input() handles its own nodelay toggling per frame.
+    // Leaving nodelay(TRUE) here risks CPU spin if the event loop
+    // doesn't immediately call tui_poll_input on its first frame.
+    nodelay(tui->wm.input_win, FALSE);  // Blocking mode (default)
 }
