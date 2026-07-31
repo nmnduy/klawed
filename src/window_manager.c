@@ -286,6 +286,11 @@ int window_manager_resize_screen(WindowManager *wm) {
     refresh();
     clear();
 
+    // Re-enable mouse events after endwin/refresh — some ncurses
+    // implementations (including macOS 5.4) drop the mouse mask across
+    // the endwin/refresh cycle, causing scroll wheel to stop working.
+    mousemask(ALL_MOUSE_EVENTS, NULL);
+
     // Get new screen dimensions
     int old_width = wm->screen_width;
     int old_height = wm->screen_height;
