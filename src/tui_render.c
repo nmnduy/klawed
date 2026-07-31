@@ -2327,20 +2327,92 @@ void redraw_conversation(TUIState *tui) {
     // Save current scroll position
     int saved_scroll_offset = tui->wm.conv_scroll_offset;
 
-    // Clear the pad
-    werase(tui->wm.conv_pad);
-    window_manager_set_content_lines(&tui->wm, 0);
-
-    // Reset tool tracking for fresh redraw
-    free(tui->last_tool_name);
-    tui->last_tool_name = NULL;
-
-    // Re-render all entries
+    // Find the first dirty entry. If none are dirty and the pad has content,
+    // there's nothing to rebuild — bail out early.
+    int first_dirty = tui->entries_count;
     for (int i = 0; i < tui->entries_count; i++) {
+        if (tui->entries[i].dirty) {
+            first_dirty = i;
+            break;
+        }
+    }
+
+    if (first_dirty >= tui->entries_count && tui->entries_count > 0) {
+        // No dirty entries — pad is already up to date.
+        // Just refresh the viewport in case scroll changed.
+        window_manager_refresh_conversation(&tui->wm);
+        return;
+    }
+
+    int rebuild_start_line = 0;
+    if (first_dirty > 0) {
+        // Incremental rebuild: only clear and re-render from first_dirty onward.
+        // Entries 0..first_dirty-1 are untouched. We need to rebuild the tool
+        // tracking state so tree connectors render correctly.
+        rebuild_start_line = tui->entries[first_dirty].pad_start_line;
+
+        // If pad_start_line is -1 (entry was never successfully rendered),
+        // the layout above is unknown. Fall back to a full rebuild instead
+        // of risking clearing rendered content from line 0.
+        if (rebuild_start_line < 0) {
+            first_dirty = 0;  // fall through to full-rebuild branch
+        } else {
+            // Rebuild last_tool_name by scanning entries before first_dirty.
+            // Must mirror render_entry_to_pad semantics:
+            //  - Skip empty-text tool entries (they don't update tracking in render)
+            //  - Reset tracking when extract_tool_name returns NULL
+            free(tui->last_tool_name);
+            tui->last_tool_name = NULL;
+            for (int i = 0; i < first_dirty; i++) {
+                ConversationEntry *prev = &tui->entries[i];
+                if (!prev->prefix || prev->prefix[0] == '\0') continue;
+
+                // Match render_entry_to_pad: empty-text entries skip
+                // tui_conversation_get_tool_display_prefix entirely
+                if (!prev->text || prev->text[0] == '\0') continue;
+
+                if (tui_conversation_is_tool_message(prev->prefix)) {
+                    char *tool = tui_conversation_extract_tool_name(prev->prefix);
+                    if (tool) {
+                        free(tui->last_tool_name);
+                        tui->last_tool_name = tool;  // transfer ownership
+                    } else {
+                        // Unparseable tool name — reset, matching
+                        // get_tool_display_prefix → reset_tool_tracking
+                        free(tui->last_tool_name);
+                        tui->last_tool_name = NULL;
+                    }
+                } else {
+                    // Non-tool message resets tool tracking
+                    free(tui->last_tool_name);
+                    tui->last_tool_name = NULL;
+                }
+            }
+        }
+    }
+
+    if (first_dirty == 0) {
+        // Full rebuild: clear entire pad
+        werase(tui->wm.conv_pad);
+        window_manager_set_content_lines(&tui->wm, 0);
+
+        // Reset tool tracking for fresh redraw
+        free(tui->last_tool_name);
+        tui->last_tool_name = NULL;
+    } else {
+        // Incremental rebuild: move to rebuild start, clear from there
+        (void)wmove(tui->wm.conv_pad, rebuild_start_line, 0);
+        wclrtobot(tui->wm.conv_pad);
+        window_manager_set_content_lines(&tui->wm, rebuild_start_line);
+    }
+
+    // Re-render entries from first_dirty onward
+    for (int i = first_dirty; i < tui->entries_count; i++) {
         ConversationEntry *entry = &tui->entries[i];
         entry->pad_start_line = window_manager_get_content_lines(&tui->wm);
         render_entry_to_pad(tui, entry->prefix, entry->text, entry->color_pair,
                             &entry->md_cache);
+        entry->dirty = 0;  // Clear after successful render (Finding 3 fix)
     }
 
     // Restore scroll position

@@ -352,6 +352,7 @@ static int cmd_themes(ConversationState *state, const char *args) {
                 // Redraw the TUI to reflect the new theme
                 tui_resume(state->tui);
                 // Clear and redraw conversation with new colors
+                tui_mark_all_entries_dirty(state->tui);
                 redraw_conversation(state->tui);
                 tui_refresh(state->tui);
                 tui_update_status(state->tui, "Theme applied successfully");

@@ -85,6 +85,7 @@ typedef struct {
     char *text;              // Message text
     TUIColorPair color_pair; // Color for display
     int pad_start_line;      // Exact line where this entry starts in the current pad
+    int dirty;               // 1 if entry needs re-render (text change, style change)
     void *md_cache;          // Opaque markdown pre-parse cache (MDParsedDoc *)
 } ConversationEntry;
 
@@ -484,6 +485,12 @@ void render_status_window(TUIState *tui);
 
 // Redraw conversation from entries (rendering module)
 void redraw_conversation(TUIState *tui);
+
+// Mark all conversation entries as dirty, forcing a full rebuild on next
+// redraw_conversation call. Use when any visual property of rendered entries
+// changes without text modification: search pattern, response style, theme,
+// pad width (resize, wrap toggle), etc.
+void tui_mark_all_entries_dirty(TUIState *tui);
 
 // Render input window (rendering module)
 void input_redraw(TUIState *tui, const char *prompt);

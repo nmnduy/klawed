@@ -107,6 +107,8 @@ static int add_conversation_entry(TUIState *tui, const char *prefix, const char 
     entry->text = text ? strdup(text) : NULL;
     entry->color_pair = color_pair;
     entry->pad_start_line = -1;
+    entry->dirty = 0;
+    entry->md_cache = NULL;
 
     if ((prefix && !entry->prefix) || (text && !entry->text)) {
         free(entry->prefix);
@@ -135,6 +137,13 @@ void tui_conversation_free_entries(TUIState *tui) {
     tui->entries = NULL;
     tui->entries_count = 0;
     tui->entries_capacity = 0;
+}
+
+void tui_mark_all_entries_dirty(TUIState *tui) {
+    if (!tui || !tui->entries) return;
+    for (int i = 0; i < tui->entries_count; i++) {
+        tui->entries[i].dirty = 1;
+    }
 }
 
 // Add a conversation line to the display (public API implementation)
@@ -368,6 +377,10 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
                 last_entry->md_cache = NULL;
             }
 
+            /* Mark entry dirty — its text changed. On the next pad rebuild
+             * (e.g. stream-end), only this entry needs re-rendering. */
+            last_entry->dirty = 1;
+
             // Just append to the end of the pad (simple approach)
             // Get current cursor position
             int cur_y, cur_x;
@@ -508,8 +521,12 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
             window_manager_set_content_lines(&tui->wm, content_lines);
         }
     } else {
-        // No entries exist - create a new one
+        // No entries exist - create a new one. Mark it dirty so the next
+        // redraw_conversation renders it (it wasn't rendered inline).
         add_conversation_entry(tui, "", text, COLOR_PAIR_ASSISTANT);
+        if (tui->entries_count > 0) {
+            tui->entries[tui->entries_count - 1].dirty = 1;
+        }
     }
 
     // Auto-scroll logic: scroll to bottom only if auto-scroll is enabled.
@@ -577,6 +594,10 @@ void tui_update_conversation_entry(TUIState *tui, int entry_index, const char *t
             markdown_cache_free((MDParsedDoc *)entry->md_cache);
             entry->md_cache = NULL;
         }
+
+        /* Mark entry dirty — its text changed. The next pad rebuild
+         * will re-render from this entry onward. */
+        entry->dirty = 1;
 
         LOG_DEBUG("[TUI] Updated entry %d with %zu bytes (deferred redraw)", entry_index, new_len);
 

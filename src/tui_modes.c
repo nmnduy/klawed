@@ -79,6 +79,7 @@ static void tui_toggle_wrap(TUIState *tui) {
     // auto-wraps (or doesn't) based on the new pad width.
     // Reset vertical scroll to top since line counts change with wrapping.
     tui->wm.conv_scroll_offset = 0;
+    tui_mark_all_entries_dirty(tui);
     redraw_conversation(tui);
     refresh_conversation_viewport(tui);
 
@@ -441,6 +442,7 @@ int tui_modes_handle_search(TUIState *tui, int ch, const char *prompt) {
         // Clear search pattern and redraw without highlights
         free(tui->last_search_pattern);
         tui->last_search_pattern = NULL;
+        tui_mark_all_entries_dirty(tui);
         redraw_conversation(tui);
         if (tui->wm.status_height > 0) {
             render_status_window(tui);
@@ -460,6 +462,7 @@ int tui_modes_handle_search(TUIState *tui, int ch, const char *prompt) {
             // Clear search pattern and redraw without highlights
             free(tui->last_search_pattern);
             tui->last_search_pattern = NULL;
+            tui_mark_all_entries_dirty(tui);
             redraw_conversation(tui);
             if (tui->wm.status_height > 0) {
                 render_status_window(tui);
@@ -483,6 +486,7 @@ int tui_modes_handle_search(TUIState *tui, int ch, const char *prompt) {
             tui_search_perform(tui, tui->search_buffer, tui->search_direction);
 
             // Redraw conversation with search highlights
+            tui_mark_all_entries_dirty(tui);
             redraw_conversation(tui);
         }
 
@@ -940,6 +944,7 @@ int tui_modes_handle_normal(TUIState *tui, int ch, const char *prompt, void *use
                 config_save(&cfg);
             }
             // Re-render conversation to show the style change
+            tui_mark_all_entries_dirty(tui);
             redraw_conversation(tui);
             refresh_conversation_viewport(tui);
             if (tui->wm.status_height > 0) {
