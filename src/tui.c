@@ -1833,17 +1833,19 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
                 break;
             }
 
-            // Check for nerd font user/assistant/reasoning prefixes
+            // Check for nerd font user/assistant/reasoning/goal prefixes
             const char *user_icon = tui_icon_user();
             const char *assistant_icon = tui_icon_assistant();
             const char *reasoning_open_icon = tui_icon_reasoning_open();
             const char *reasoning_close_icon = tui_icon_reasoning_close();
             const char *error_icon = tui_icon_error();
+            const char *goal_icon = tui_icon_goal();
             if (strncmp(mutable_text, user_icon, 3) == 0 ||
                 strncmp(mutable_text, assistant_icon, 3) == 0 ||
                 strncmp(mutable_text, reasoning_open_icon, 3) == 0 ||
                 strncmp(mutable_text, reasoning_close_icon, 3) == 0 ||
-                strncmp(mutable_text, error_icon, 3) == 0) {
+                strncmp(mutable_text, error_icon, 3) == 0 ||
+                strncmp(mutable_text, goal_icon, 3) == 0) {
                 const char *content_start = mutable_text + 3;
                 while (*content_start == ' ') content_start++;
 
@@ -1854,6 +1856,8 @@ static void dispatch_tui_message(TUIState *tui, TUIMessage *msg) {
                     color = COLOR_PAIR_ASSISTANT;
                 } else if (strncmp(mutable_text, error_icon, 3) == 0) {
                     color = COLOR_PAIR_ERROR;
+                } else if (strncmp(mutable_text, goal_icon, 3) == 0) {
+                    color = COLOR_PAIR_GOAL;
                 } else {
                     color = COLOR_PAIR_TOOL_DIM;
                 }
