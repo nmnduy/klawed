@@ -352,14 +352,19 @@ static void* check_vim_fugitive_thread(void *arg) {
 
     // Check if vim-fugitive is available by running vim with a test command
     // On macOS, wrap with timeout to prevent hangs from credential prompts or
-    // vim waiting for user input if misconfigured
+    // vim waiting for user input if misconfigured.
+    // CRITICAL: redirect stdin from /dev/null. vim (spawned via popen) inherits
+    // the terminal as stdin, and a blocking tty read by the child makes the main
+    // thread's tcsetattr() (inside endwin() during a terminal resize) block
+    // forever on macOS — the tty lock held by the pending read never releases.
+    // This deadlocked the whole TUI on the first resize within ~5s of startup.
     char test_cmd[512];
 #ifdef __APPLE__
     snprintf(test_cmd, sizeof(test_cmd),
-             "timeout 5 vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" 2>&1");
+             "timeout 5 vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" < /dev/null 2>&1");
 #else
     snprintf(test_cmd, sizeof(test_cmd),
-             "vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" 2>&1");
+             "vim -c \"if exists(':Git') | q | else | cquit 1 | endif\" -c \"q\" < /dev/null 2>&1");
 #endif
 
     FILE *fp = popen(test_cmd, "r");

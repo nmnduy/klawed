@@ -18,15 +18,24 @@
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <wchar.h>
 #include <locale.h>
 #include <limits.h>
+#include <sys/ioctl.h>
+#include <termios.h>
 
 #define INPUT_WIN_MIN_HEIGHT 2  // Min height for input window (content lines, no borders)
 #define INPUT_WIN_MAX_HEIGHT_PERCENT 20  // Max height as percentage of viewport
 
 // Global flag to detect terminal resize
 static volatile sig_atomic_t g_resize_flag = 0;
+
+// Terminal size of the last SUCCESSFUL resize rebuild (-1 = never rebuilt).
+// Used to skip the redundant second handling (SIGWINCH flag + KEY_RESIZE fire
+// for the same resize event) without dropping genuine size changes.
+static int g_last_handled_width = -1;
+static int g_last_handled_height = -1;
 
 // Signal handler for window resize
 #ifdef SIGWINCH
@@ -186,6 +195,32 @@ static int find_anchor_entry(TUIState *tui, int scroll_offset) {
 void tui_handle_resize(TUIState *tui) {
     if (!tui || !tui->is_initialized) return;
 
+    // Skip redundant resize handling. A single terminal resize event reaches
+    // this function twice: once via the SIGWINCH flag (event loop) and once
+    // via ncurses' KEY_RESIZE key (wgetch still reports the same resize as
+    // pending even after endwin()/refresh() handled it). Each call used to
+    // run the full endwin()/refresh() cycle + conversation pad rebuild, so a
+    // resize event was rebuilt TWICE — during window drags (many events/sec)
+    // this doubled the rebuild load and made the TUI appear frozen.
+    //
+    // getmaxyx(stdscr) is ncurses-cached and still reports the OLD size until
+    // endwin()/refresh(), so compare against the REAL terminal size via
+    // TIOCGWINSZ (uncached). g_last_handled_width/height hold the size of the
+    // last successful rebuild; if they match the real terminal size, nothing
+    // changed and the expensive rebuild can be skipped safely.
+    {
+        struct winsize ws;
+        if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 &&
+            g_last_handled_width > 0 && g_last_handled_height > 0 &&
+            ws.ws_col == (unsigned short)g_last_handled_width &&
+            ws.ws_row == (unsigned short)g_last_handled_height) {
+            LOG_DEBUG("[TUI] Resize requested but terminal size unchanged "
+                      "(%dx%d) — skipping redundant rebuild",
+                      g_last_handled_width, g_last_handled_height);
+            return;
+        }
+    }
+
     // Temporarily save scroll position and reset to 0 to avoid accessing
     // invalid pad coordinates during rebuild
     int saved_scroll_offset = tui->wm.conv_scroll_offset;
@@ -267,6 +302,12 @@ void tui_handle_resize(TUIState *tui) {
 
     validate_tui_windows(tui);
     window_manager_refresh_all(&tui->wm);
+
+    // Record the size we successfully rebuilt at, so a duplicate resize event
+    // (KEY_RESIZE for the same resize) can be skipped on the next call.
+    g_last_handled_width = tui->wm.screen_width;
+    g_last_handled_height = tui->wm.screen_height;
+
     LOG_DEBUG("[TUI] Resize handled via WM (screen=%dx%d, conv_h=%d, status_h=%d, input_h=%d, scroll=%d/%d)",
               tui->wm.screen_width, tui->wm.screen_height, tui->wm.conv_viewport_height,
               tui->wm.status_height, tui->wm.input_height,

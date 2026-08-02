@@ -294,9 +294,16 @@ int window_manager_resize_screen(WindowManager *wm) {
     // causing 100% CPU spin in the TUI event loop.
     raw();                              // Disable line buffering + signal generation
     noecho();                           // Suppress character echo
+    nonl();                             // Keep Enter arriving as \r (not \n) — otherwise
+                                        // Enter is treated as Ctrl+J and stops submitting
     keypad(stdscr, TRUE);               // Enable function/arrow keys
     nodelay(stdscr, FALSE);             // Blocking input mode
     mousemask(ALL_MOUSE_EVENTS, NULL);  // Intercept mouse events
+    curs_set(2);                        // Restore visible block cursor
+    set_escdelay(25);                   // Keep ESC responsive (default is 1000ms)
+    // Re-enable bracketed paste mode (endwin() disables it)
+    printf("\033[?2004h");
+    fflush(stdout);
 
     // Get new screen dimensions
     int old_width = wm->screen_width;
