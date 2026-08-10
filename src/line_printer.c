@@ -15,50 +15,80 @@
 #include <ncurses.h>
 #include <wchar.h>
 #include <locale.h>
+#include <langinfo.h>
 
 /* ============================================================================
  * Static helpers
  * ============================================================================ */
 
+/* Ensure LC_CTYPE is UTF-8 so multibyte conversion (mbrtowc/wcwidth) yields
+ * correct terminal column widths.  Runs ONCE — afterwards the locale is left
+ * alone.  The old code called setlocale() + strdup() + restore on EVERY
+ * invocation of utf8_display_width()/find_wrap_point(); setlocale() loads
+ * locale data files each time it changes the locale, which showed up as a
+ * top CPU consumer (open$NOCANCEL in profile stacks) when rendering long
+ * conversations. */
+static void ensure_utf8_locale(void) {
+    static int checked = 0;
+    if (checked) {
+        return;
+    }
+    checked = 1;
+
+    const char *codeset = nl_langinfo(CODESET);
+    if (!codeset ||
+        (strstr(codeset, "UTF-8") == NULL &&
+         strstr(codeset, "utf-8") == NULL &&
+         strstr(codeset, "UTF8") == NULL)) {
+        /* Non-UTF-8 locale — switch LC_CTYPE only, so isspace()/collation
+         * in other categories keep the user's configured behavior. */
+        setlocale(LC_CTYPE, "C.UTF-8");
+    }
+}
+
+/* Display width (terminal columns) of a length-bounded UTF-8 string.
+ * Allocation-free and locale-switch-free. */
+int utf8_display_width_n(const char *str, size_t len) {
+    if (!str || len == 0) {
+        return 0;
+    }
+
+    ensure_utf8_locale();
+
+    int width = 0;
+    size_t remaining = len;
+    mbstate_t state;
+    memset(&state, 0, sizeof(state));
+
+    while (remaining > 0) {
+        wchar_t wc;
+        size_t char_bytes = mbrtowc(&wc, str, remaining, &state);
+
+        if (char_bytes == 0) {
+            break;  /* Embedded NUL */
+        } else if (char_bytes == (size_t)-1 || char_bytes == (size_t)-2) {
+            /* Invalid or incomplete sequence: count remaining bytes as 1 col */
+            width += (int)remaining;
+            break;
+        } else {
+            int char_width = wcwidth(wc);
+            if (char_width < 0) {
+                char_width = 1;
+            }
+            width += char_width;
+            str += char_bytes;
+            remaining -= char_bytes;
+        }
+    }
+
+    return width;
+}
+
 static int utf8_display_width(const char *str) {
     if (!str || !*str) {
         return 0;
     }
-
-    char *old_locale = setlocale(LC_ALL, NULL);
-    if (old_locale) {
-        old_locale = strdup(old_locale);
-    }
-    setlocale(LC_ALL, "C.UTF-8");
-
-    size_t len = mbstowcs(NULL, str, 0);
-    if (len == (size_t)-1) {
-        if (old_locale) {
-            setlocale(LC_ALL, old_locale);
-            free(old_locale);
-        }
-        return (int)strlen(str);
-    }
-
-    wchar_t *wstr = malloc((len + 1) * sizeof(wchar_t));
-    if (!wstr) {
-        if (old_locale) {
-            setlocale(LC_ALL, old_locale);
-            free(old_locale);
-        }
-        return (int)strlen(str);
-    }
-
-    mbstowcs(wstr, str, len + 1);
-    int width = wcswidth(wstr, len);
-    free(wstr);
-
-    if (old_locale) {
-        setlocale(LC_ALL, old_locale);
-        free(old_locale);
-    }
-
-    return width >= 0 ? width : (int)strlen(str);
+    return utf8_display_width_n(str, strlen(str));
 }
 
 size_t find_wrap_point(const char *text, size_t text_len, int max_display_width) {
@@ -66,11 +96,7 @@ size_t find_wrap_point(const char *text, size_t text_len, int max_display_width)
         return 1;
     }
 
-    char *old_locale = setlocale(LC_ALL, NULL);
-    if (old_locale) {
-        old_locale = strdup(old_locale);
-    }
-    setlocale(LC_ALL, "C.UTF-8");
+    ensure_utf8_locale();
 
     size_t bytes_used = 0;
     int display_width = 0;
@@ -97,11 +123,6 @@ size_t find_wrap_point(const char *text, size_t text_len, int max_display_width)
             bytes_used += char_bytes;
             display_width += char_width;
         }
-    }
-
-    if (old_locale) {
-        setlocale(LC_ALL, old_locale);
-        free(old_locale);
     }
 
     return bytes_used > 0 ? bytes_used : 1;
@@ -146,12 +167,23 @@ size_t find_wrap_point_word(const char *text, size_t text_len, int max_display_w
  * Public API
  * ============================================================================ */
 
-void lp_init(LinePrinter *lp, WINDOW *pad, const char *border_str,
+/* Ensure the pad has room below the cursor before writing.  Prevents
+ * ncurses bottom-edge scrolling (wscrl), which memmoves the entire pad
+ * buffer per character — catastrophic O(n^2) cost for long sessions. */
+static void lp_ensure_room(LinePrinter *lp) {
+    if (!lp || !lp->tui || !lp->pad) {
+        return;
+    }
+    (void)window_manager_ensure_cursor_room(&lp->tui->wm, WM_PAD_GROW_MARGIN);
+}
+
+void lp_init(LinePrinter *lp, TUIState *tui, WINDOW *pad, const char *border_str,
              int border_pair, int text_pair, int pad_width) {
     if (!lp) {
         return;
     }
     lp->pad = pad;
+    lp->tui = tui;
     lp->border_str = border_str;
     lp->border_pair = border_pair;
     lp->text_pair = text_pair;
@@ -187,6 +219,8 @@ void lp_border(LinePrinter *lp) {
     if (!lp || !lp->pad) {
         return;
     }
+
+    lp_ensure_room(lp);
 
     if (lp->border_str) {
         /* Draw non-space glyphs with border color; draw trailing spaces
@@ -224,6 +258,9 @@ void lp_newline(LinePrinter *lp) {
     if (!lp || !lp->pad) {
         return;
     }
+
+    lp_ensure_room(lp);
+
     int cur_y = 0, cur_x = 0;
     getyx(lp->pad, cur_y, cur_x);
     (void)cur_y;
@@ -261,6 +298,9 @@ void lp_fill_line(LinePrinter *lp) {
     if (!lp || !lp->pad) {
         return;
     }
+
+    lp_ensure_room(lp);
+
     int cur_y = 0, cur_x = 0;
     getyx(lp->pad, cur_y, cur_x);
     int orig_x = cur_x;
@@ -290,6 +330,7 @@ void lp_print_raw(LinePrinter *lp, const char *text, size_t len, int dim) {
     if (!lp || !lp->pad || !text || len == 0) {
         return;
     }
+    lp_ensure_room(lp);
     if (dim) {
         wattron(lp->pad, A_DIM);
     }
@@ -349,6 +390,7 @@ void lp_print_text_wrapped(LinePrinter *lp, const char *text) {
             /* Overflow: content filled the line.  Explicitly wrap
              * instead of calling lp_newline to avoid the double
              * newline interaction with ncurses auto-wrap. */
+            lp_ensure_room(lp);
             wmove(lp->pad, cur_y + 1, 0);
             if (lp->border_str) {
                 lp_border(lp);
@@ -363,17 +405,8 @@ void lp_print_text_wrapped(LinePrinter *lp, const char *text) {
         }
         size_t seg_len = (size_t)(seg_end - p);
 
-        /* Calculate display width of segment */
-        char *seg_copy = malloc(seg_len + 1);
-        if (!seg_copy) {
-            waddch(lp->pad, (chtype)(unsigned char)*p);
-            p++;
-            continue;
-        }
-        memcpy(seg_copy, p, seg_len);
-        seg_copy[seg_len] = '\0';
-        int seg_width = utf8_display_width(seg_copy);
-        free(seg_copy);
+        /* Calculate display width of segment (allocation-free) */
+        int seg_width = utf8_display_width_n(p, seg_len);
 
         /* Save y before write to detect auto-wrap */
         int before_y = cur_y;

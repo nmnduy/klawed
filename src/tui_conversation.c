@@ -317,7 +317,7 @@ static void write_streaming_text_bordered(TUIState *tui, const char *text) {
     (void)pad_height;
 
     LinePrinter lp;
-    lp_init(&lp, pad, "│ ", NCURSES_PAIR_ASSISTANT_BORDER_BG,
+    lp_init(&lp, tui, pad, "│ ", NCURSES_PAIR_ASSISTANT_BORDER_BG,
             NCURSES_PAIR_FOREGROUND, pad_width);
     lp_print_text_wrapped(&lp, text);
     /* Leave FOREGROUND active for the next streaming chunk.
@@ -342,7 +342,7 @@ static void write_streaming_text_bg(TUIState *tui, const char *text) {
 
     LinePrinter lp;
     /* border_str=NULL, border_pair=0 — no left border decoration */
-    lp_init(&lp, pad, NULL, 0, NCURSES_PAIR_ASSISTANT_BG, pad_width);
+    lp_init(&lp, tui, pad, NULL, 0, NCURSES_PAIR_ASSISTANT_BG, pad_width);
     lp_print_text_wrapped(&lp, text);
 }
 
@@ -354,6 +354,27 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
     if (!tui->wm.conv_pad) {
         LOG_ERROR("[TUI] Cannot update conversation line - conv_pad is NULL");
         return;
+    }
+
+    // Grow the pad before appending streamed text.  The entry was sized by
+    // an estimate based on the FIRST chunk only; long streaming responses
+    // would otherwise overflow the pad and trigger ncurses bottom-edge
+    // scrolling (full-pad memmove per character).  Growth covers this
+    // chunk's worst-case wrapped lines (newlines + bytes/floor(width/2)).
+    {
+        int ccy = 0, ccx = 0, estw2 = 1;
+        getyx(tui->wm.conv_pad, ccy, ccx);
+        (void)ccx;
+        int ccw = 0, cch = 0;
+        getmaxyx(tui->wm.conv_pad, cch, ccw);
+        (void)cch;
+        if (ccw > 1) {
+            estw2 = ccw / 2;
+        }
+        int need = ccy + 1 + (int)strlen(text) / estw2 + WM_PAD_GROW_MARGIN;
+        if (need > tui->wm.conv_pad_capacity) {
+            (void)window_manager_ensure_pad_capacity(&tui->wm, need);
+        }
     }
 
     // Update the last entry in the conversation history

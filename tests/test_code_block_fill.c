@@ -95,7 +95,7 @@ static int test_code_block(const char *name, const char **lines, int nlines,
     const char *border_str = "│ ";
 
     LinePrinter lp;
-    lp_init(&lp, pad, border_str, border_pair, code_pair, pad_width);
+    lp_init(&lp, NULL, pad, border_str, border_pair, code_pair, pad_width);
 
     for (int i = 0; i < nlines; i++) {
         lp_border(&lp);

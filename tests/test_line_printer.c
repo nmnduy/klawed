@@ -67,7 +67,7 @@ static void test_lp_init_no_border(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     int ok = (lp.pad == pad) &&
              (lp.border_str == NULL) &&
@@ -85,7 +85,7 @@ static void test_lp_init_with_border(void) {
 
     LinePrinter lp;
     /* "│ " is 2 columns wide */
-    lp_init(&lp, pad, "│ ", 1, 2, 80);
+    lp_init(&lp, NULL, pad, "│ ", 1, 2, 80);
 
     int ok = (lp.pad == pad) &&
              (lp.border_str != NULL) &&
@@ -103,7 +103,7 @@ static void test_lp_init_bg_style(void) {
 
     LinePrinter lp;
     /* NCURSES_PAIR_ASSISTANT_BG triggers fill_bg_pair */
-    lp_init(&lp, pad, NULL, 0, NCURSES_PAIR_ASSISTANT_BG, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, NCURSES_PAIR_ASSISTANT_BG, 80);
 
     int ok = (lp.fill_bg_pair == NCURSES_PAIR_ASSISTANT_BG);
     print_test_result(name, ok);
@@ -118,7 +118,7 @@ static void test_lp_init_narrow_content(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, "│ ", 1, 2, 2);
+    lp_init(&lp, NULL, pad, "│ ", 1, 2, 2);
 
     int ok = (lp.content_width == 1);
     if (!ok) {
@@ -131,7 +131,7 @@ static void test_lp_init_narrow_content(void) {
 static void test_lp_init_null_lp(void) {
     const char *name = "lp_init_null_lp";
     /* Should not crash */
-    lp_init(NULL, NULL, NULL, 0, 0, 0);
+    lp_init(NULL, NULL, NULL, NULL, 0, 0, 0);
     print_test_result(name, 1);
 }
 
@@ -145,7 +145,7 @@ static void test_lp_newline_advances_y(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     /* Position cursor at (0, 5) - simulating mid-line content */
     wmove(pad, 0, 5);
@@ -171,7 +171,7 @@ static void test_lp_newline_at_col_zero(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     /* Position cursor at (0, 0) - simulating empty line */
     wmove(pad, 0, 0);
@@ -197,7 +197,7 @@ static void test_lp_newline_multiple_empty_lines(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     wmove(pad, 0, 0);
     lp_newline(&lp);  /* line 0 -> 1 */
@@ -223,7 +223,7 @@ static void test_lp_newline_mixed_content_and_empty(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     /* First paragraph */
     wmove(pad, 0, 0);
@@ -260,7 +260,7 @@ static void test_lp_newline_with_border_at_col_zero(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, "│ ", 1, 2, 80);
+    lp_init(&lp, NULL, pad, "│ ", 1, 2, 80);
 
     wmove(pad, 0, 0);
     lp_border(&lp);  /* advances cur_x to 2 */
@@ -281,7 +281,7 @@ static void test_lp_newline_with_fill_bg(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
     lp.fill_bg_pair = 7;  /* simulate BG fill active */
 
     wmove(pad, 0, 0);
@@ -324,7 +324,7 @@ static void test_lp_border_null_border(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     wmove(pad, 0, 0);
     lp_border(&lp);
@@ -343,7 +343,7 @@ static void test_lp_border_with_border(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, "│ ", 1, 2, 80);
+    lp_init(&lp, NULL, pad, "│ ", 1, 2, 80);
 
     wmove(pad, 0, 0);
     lp_border(&lp);
@@ -422,7 +422,7 @@ static void test_lp_print_raw_basic(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     wmove(pad, 0, 0);
     lp_print_raw(&lp, "hello", 5, 0);
@@ -440,7 +440,7 @@ static void test_lp_print_raw_null_text(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     wmove(pad, 0, 0);
     lp_print_raw(&lp, NULL, 5, 0);
@@ -459,7 +459,7 @@ static void test_lp_print_raw_zero_len(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     wmove(pad, 0, 0);
     lp_print_raw(&lp, "hello", 0, 0);
@@ -487,7 +487,7 @@ static void test_lp_wrap_exact_fill_then_newline(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 10);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 10);
 
     wmove(pad, 0, 0);
     lp_print_text_wrapped(&lp, "0123456789\nabc");
@@ -513,7 +513,7 @@ static void test_lp_wrap_overflow_no_blank_line(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 10);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 10);
 
     wmove(pad, 0, 0);
     lp_print_text_wrapped(&lp, "0123456789abc");
@@ -537,7 +537,7 @@ static void test_lp_wrap_paragraph_break_preserved(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     wmove(pad, 0, 0);
     /* "First" on line 0, blank line 1, "Second" on line 2 */
@@ -563,7 +563,7 @@ static void test_lp_wrap_bordered_exact_fill_then_newline(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, "│ ", 1, 2, 12);
+    lp_init(&lp, NULL, pad, "│ ", 1, 2, 12);
 
     wmove(pad, 0, 0);
     lp_print_text_wrapped(&lp, "0123456789\nabc");
@@ -587,7 +587,7 @@ static void test_lp_wrap_bordered_overflow_no_blank(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, "│ ", 1, 2, 12);
+    lp_init(&lp, NULL, pad, "│ ", 1, 2, 12);
 
     wmove(pad, 0, 0);
     lp_print_text_wrapped(&lp, "0123456789abc");
@@ -614,7 +614,7 @@ static void test_lp_wrap_newline_at_col_zero_after_wrap(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 10);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 10);
 
     /* Simulate: previous content filled the 10-wide line,
      * leaving cursor at pad_width (10).  Next streaming chunk
@@ -643,7 +643,7 @@ static void test_lp_wrap_double_newline_after_wrap(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 10);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 10);
 
     wmove(pad, 0, 0);
     lp_print_text_wrapped(&lp, "0123456789\n\nabc");
@@ -671,7 +671,7 @@ static void test_lp_wrap_newline_mid_line(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     wmove(pad, 0, 0);
     /* "hello" is 5 chars, \n goes to line 1, "world" is 5 chars */
@@ -698,7 +698,7 @@ static void test_lp_wrap_multiple_exact_fills(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 10);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 10);
 
     wmove(pad, 0, 0);
     /* Three lines of exactly 10 chars, each with explicit \n */
@@ -726,7 +726,7 @@ static void test_lp_wrap_bg_exact_fill_then_newline(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 10);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 10);
     lp.fill_bg_pair = 7;  /* simulate BG fill active */
 
     wmove(pad, 0, 0);
@@ -752,7 +752,7 @@ static void test_lp_print_text_wrapped_simple(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     wmove(pad, 0, 0);
     lp_print_text_wrapped(&lp, "hello world");
@@ -774,7 +774,7 @@ static void test_lp_print_text_wrapped_newlines(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     wmove(pad, 0, 0);
     lp_print_text_wrapped(&lp, "line one\nline two\nline three");
@@ -799,7 +799,7 @@ static void test_lp_print_text_wrapped_empty_lines(void) {
     assert(pad != NULL);
 
     LinePrinter lp;
-    lp_init(&lp, pad, NULL, 0, 0, 80);
+    lp_init(&lp, NULL, pad, NULL, 0, 0, 80);
 
     wmove(pad, 0, 0);
     /* First paragraph, blank line, second paragraph */

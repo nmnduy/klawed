@@ -17,6 +17,13 @@
 // Forward declaration for WINDOW type
 typedef struct _win_st WINDOW;
 
+// Safety margin (rows) kept free below the pad's current cursor position.
+// Renderers call window_manager_ensure_cursor_room() before writing each
+// visual line; keeping this margin prevents the cursor from ever reaching
+// the pad's last row, which would trigger ncurses bottom-edge scrolling
+// (wscrl) — a full-pad memmove per character (O(n^2) for long sessions).
+#define WM_PAD_GROW_MARGIN 64
+
 // Window manager configuration
 typedef struct {
     int min_conv_height;      // Minimum conversation viewport height
@@ -88,6 +95,12 @@ int window_manager_resize_screen(WindowManager *wm);
 // Automatically expands pad and copies content if needed
 // Returns: 0 on success, -1 on failure
 int window_manager_ensure_pad_capacity(WindowManager *wm, int needed_lines);
+
+// Ensure the pad has at least `margin` free rows below the current cursor
+// position, expanding capacity (and preserving the cursor) if needed.
+// Prevents ncurses bottom-edge scrolling during rendering.
+// Returns: 0 on success, -1 on failure
+int window_manager_ensure_cursor_room(WindowManager *wm, int margin);
 
 // Change the conversation pad width (used when toggling wrap on/off)
 // Recreates the pad and copies existing content

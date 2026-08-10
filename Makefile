@@ -515,6 +515,11 @@ TEST_EVENT_LOOP_SRC = tests/test_event_loop.c
 TEST_JSON_PARSING_SRC = tests/test_json_parsing.c
 TEST_STUBS_SRC = tests/test_stubs.c
 TEST_STUBS_OBJ = $(BUILD_DIR)/test_stubs.o
+
+# Standalone stub object for render tests that link without window_manager.o
+$(TEST_STUBS_OBJ): $(TEST_STUBS_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@$(CC) $(CFLAGS) -c -o $@ $<
 TEST_MCP_SRC = tests/test_mcp.c
 TEST_MCP_IMAGE_SRC = tests/test_mcp_image.c
 TEST_MCP_IMAGE_TARGET = $(BUILD_DIR)/test_mcp_image
@@ -3521,39 +3526,39 @@ $(TEST_FILE_SEARCH_TARGET): $(FILE_SEARCH_SRC) $(TEST_FILE_SEARCH_SRC) $(LOGGER_
 	@echo "✓ File Search test build successful!"
 
 # Test target for Markdown table detection
-$(TEST_MARKDOWN_RENDER_TARGET): src/markdown_render.c $(TEST_MARKDOWN_RENDER_SRC)
+$(TEST_MARKDOWN_RENDER_TARGET): src/markdown_render.c $(TEST_MARKDOWN_RENDER_SRC) $(TEST_STUBS_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling Markdown render test..."
-	@$(CC) $(CFLAGS) -DTEST_BUILD -I./src -o $(TEST_MARKDOWN_RENDER_TARGET) $(TEST_MARKDOWN_RENDER_SRC) src/markdown_render.c $(LDFLAGS)
+	@$(CC) $(CFLAGS) -DTEST_BUILD -I./src -o $(TEST_MARKDOWN_RENDER_TARGET) $(TEST_MARKDOWN_RENDER_SRC) src/markdown_render.c $(TEST_STUBS_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Markdown render test build successful!"
 
 # One-off table width safety validator — sweeps pad widths × content profiles
 # to verify total rendered table width < pad_width (no ncurses auto-wrap)
-$(TEST_TABLE_WIDTH_SAFETY_TARGET): src/markdown_render.c $(TEST_TABLE_WIDTH_SAFETY_SRC)
+$(TEST_TABLE_WIDTH_SAFETY_TARGET): src/markdown_render.c $(TEST_TABLE_WIDTH_SAFETY_SRC) $(TEST_STUBS_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling table width safety validator..."
-	@$(CC) $(CFLAGS) -DTEST_BUILD -I./src -o $(TEST_TABLE_WIDTH_SAFETY_TARGET) $(TEST_TABLE_WIDTH_SAFETY_SRC) src/markdown_render.c $(LDFLAGS)
+	@$(CC) $(CFLAGS) -DTEST_BUILD -I./src -o $(TEST_TABLE_WIDTH_SAFETY_TARGET) $(TEST_TABLE_WIDTH_SAFETY_SRC) src/markdown_render.c $(TEST_STUBS_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Table width safety validator build successful!"
 
 # Test target for LinePrinter (pad-based line rendering)
-$(TEST_LINE_PRINTER_TARGET): $(TEST_LINE_PRINTER_SRC) $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ)
+$(TEST_LINE_PRINTER_TARGET): $(TEST_LINE_PRINTER_SRC) $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(TEST_STUBS_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling LinePrinter test..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/test_line_printer.o $(TEST_LINE_PRINTER_SRC)
 	@echo "Linking LinePrinter test executable..."
-	@$(CC) -o $(TEST_LINE_PRINTER_TARGET) $(BUILD_DIR)/test_line_printer.o $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_LINE_PRINTER_TARGET) $(BUILD_DIR)/test_line_printer.o $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(TEST_STUBS_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ LinePrinter test build successful!"
 
 # Test target for code block background fill spacing
-$(TEST_CODE_BLOCK_FILL_TARGET): $(TEST_CODE_BLOCK_FILL_SRC) $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ)
+$(TEST_CODE_BLOCK_FILL_TARGET): $(TEST_CODE_BLOCK_FILL_SRC) $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(TEST_STUBS_OBJ)
 	@mkdir -p $(BUILD_DIR)
 	@echo "Compiling code block fill test..."
 	@$(CC) $(CFLAGS) -DTEST_BUILD -c -o $(BUILD_DIR)/test_code_block_fill.o $(TEST_CODE_BLOCK_FILL_SRC)
 	@echo "Linking code block fill test executable..."
-	@$(CC) -o $(TEST_CODE_BLOCK_FILL_TARGET) $(BUILD_DIR)/test_code_block_fill.o $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(LDFLAGS)
+	@$(CC) -o $(TEST_CODE_BLOCK_FILL_TARGET) $(BUILD_DIR)/test_code_block_fill.o $(LINE_PRINTER_OBJ) $(MARKDOWN_RENDER_OBJ) $(TEST_STUBS_OBJ) $(LDFLAGS)
 	@echo ""
 	@echo "✓ Code block fill test build successful!"
 

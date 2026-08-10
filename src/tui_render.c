@@ -260,58 +260,26 @@ static int tui_safe_waddch(WINDOW *win, chtype ch) {
 }
 
 // Calculate display width of a UTF-8 string
+// Display width of a NUL-terminated UTF-8 string.
+// Shared, allocation-free implementation lives in line_printer.c
+// (utf8_display_width_n) — no per-call setlocale() churn.
 static int utf8_display_width(const char *str) {
     if (!str || !*str) {
         return 0;
     }
+    return utf8_display_width_n(str, strlen(str));
+}
 
-    // Save current locale
-    char *old_locale = setlocale(LC_ALL, NULL);
-    if (old_locale) {
-        old_locale = strdup(old_locale);
+/* Ensure the conversation pad has free rows below the current cursor before
+ * the next visual line is written.  Without this, once a session exceeds the
+ * pad's capacity, every character past the last row triggers ncurses
+ * bottom-edge scrolling (wscrl) — a full-pad memmove per character, i.e.
+ * O(n^2) rendering that pegs the CPU.  Call at every line boundary. */
+static void tui_ensure_pad_room(TUIState *tui) {
+    if (!tui || !tui->wm.conv_pad) {
+        return;
     }
-
-    // Set to UTF-8 locale for mbstowcs
-    setlocale(LC_ALL, "C.UTF-8");
-
-    // Convert to wide characters
-    size_t len = mbstowcs(NULL, str, 0);
-    if (len == (size_t)-1) {
-        // Conversion failed, fall back to strlen (assume ASCII)
-        if (old_locale) {
-            setlocale(LC_ALL, old_locale);
-            free(old_locale);
-        }
-        return (int)strlen(str);
-    }
-
-    wchar_t *wstr = malloc((len + 1) * sizeof(wchar_t));
-    if (!wstr) {
-        if (old_locale) {
-            setlocale(LC_ALL, old_locale);
-            free(old_locale);
-        }
-        return (int)strlen(str);  // Fall back
-    }
-
-    mbstowcs(wstr, str, len + 1);
-
-    // Calculate display width using wcswidth
-    int width = wcswidth(wstr, len);
-    free(wstr);
-
-    // Restore locale
-    if (old_locale) {
-        setlocale(LC_ALL, old_locale);
-        free(old_locale);
-    }
-
-    // If wcswidth returns -1 (unknown characters), fall back to character count
-    if (width < 0) {
-        return (int)len;
-    }
-
-    return width;
+    (void)window_manager_ensure_cursor_room(&tui->wm, WM_PAD_GROW_MARGIN);
 }
 
 // ============================================================================
@@ -1240,8 +1208,10 @@ static void render_bordered_segment(TUIState *tui, const char *segment, size_t l
     getmaxyx(pad, pad_height, pad_width);
     (void)pad_height;
 
+    tui_ensure_pad_room(tui);
+
     LinePrinter lp;
-    lp_init(&lp, pad, border_str, border_pair, text_pair, pad_width);
+    lp_init(&lp, tui, pad, border_str, border_pair, text_pair, pad_width);
     lp_border(&lp);
 
     if (tui->last_search_pattern && tui->last_search_pattern[0] != '\0') {
@@ -1280,8 +1250,10 @@ static void render_md_segment(TUIState *tui, const char *segment, size_t len,
     getmaxyx(pad, pad_height, pad_width);
     (void)pad_height;
 
+    tui_ensure_pad_room(tui);
+
     LinePrinter lp;
-    lp_init(&lp, pad, border_str, border_pair, text_pair, pad_width);
+    lp_init(&lp, tui, pad, border_str, border_pair, text_pair, pad_width);
     lp_border(&lp);
 
     if (in_code_block) {
@@ -1335,8 +1307,10 @@ static void render_md_code_segment(TUIState *tui, const char *segment, size_t le
     getmaxyx(pad, pad_height, pad_width);
     (void)pad_height;
 
+    tui_ensure_pad_room(tui);
+
     LinePrinter lp;
-    lp_init(&lp, pad, border_str, border_pair, code_pair, pad_width);
+    lp_init(&lp, tui, pad, border_str, border_pair, code_pair, pad_width);
 
     /* Use the code block background pair for the border too.
      * lp_border() activates COLOR_PAIR(code_pair) and leaves it on
@@ -1377,8 +1351,10 @@ static void render_md_header_segment(TUIState *tui, const char *segment, size_t 
     getmaxyx(pad, pad_height, pad_width);
     (void)pad_height;
 
+    tui_ensure_pad_room(tui);
+
     LinePrinter lp;
-    lp_init(&lp, pad, border_str, border_pair, text_pair, pad_width);
+    lp_init(&lp, tui, pad, border_str, border_pair, text_pair, pad_width);
     lp_border(&lp);
 
     /* Tonal header hierarchy:
@@ -1559,6 +1535,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                                           border_pair, border_str, false, 0,
                                           text_pair, search_active);
                     }
+                    tui_ensure_pad_room(tui);
                     waddch(pad, '\n');
                 }
                 table_buf_count = 0;
@@ -1588,6 +1565,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                                               border_pair, border_str, false, 0,
                                               text_pair, search_active);
                         }
+                        tui_ensure_pad_room(tui);
                         waddch(pad, '\n');
                     }
                     table_buf_count = 0;
@@ -1637,6 +1615,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                                               border_pair, border_str, false, 0,
                                               text_pair, search_active);
                         }
+                        tui_ensure_pad_room(tui);
                         waddch(pad, '\n');
                     }
                     table_buf_count = 0;
@@ -1648,16 +1627,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                  * The fence lines are already skipped; code content gets
                  * the code block color pair with dim text. */
                 int code_pair = NCURSES_PAIR_CODE_BLOCK;
-                int line_display_width = 0;
-                char *tmp = malloc(line_len + 1);
-                if (tmp) {
-                    memcpy(tmp, line_start, line_len);
-                    tmp[line_len] = '\0';
-                    line_display_width = utf8_display_width(tmp);
-                    free(tmp);
-                } else {
-                    line_display_width = (int)line_len;
-                }
+                int line_display_width = utf8_display_width_n(line_start, line_len);
 
                 if (line_display_width <= content_width) {
                     render_md_code_segment(tui, line_start, line_len, border_pair, border_str,
@@ -1698,16 +1668,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                     render_md_segment(tui, hrule, sizeof(hrule) - 1, border_pair, border_str,
                                       (*p == '\n'), 1, text_pair, search_active);
                 } else {
-                    int line_display_width = 0;
-                    char *tmp = malloc(line_len + 1);
-                    if (tmp) {
-                        memcpy(tmp, line_start, line_len);
-                        tmp[line_len] = '\0';
-                        line_display_width = utf8_display_width(tmp);
-                        free(tmp);
-                    } else {
-                        line_display_width = (int)line_len;
-                    }
+                    int line_display_width = utf8_display_width_n(line_start, line_len);
 
                     if (line_display_width <= content_width) {
                         if (hlevel > 0) {
@@ -1799,6 +1760,7 @@ void render_markdown_document(TUIState *tui, const char *text, int text_pair,
                                   border_pair, border_str, false, 0,
                                   text_pair, search_active);
             }
+            tui_ensure_pad_room(tui);
             waddch(pad, '\n');
         }
     }
@@ -1856,6 +1818,7 @@ render_cached:
                     } else {
                         for (int ti = 0; ti < cbc; ti++)
                             render_md_segment(tui, cbuf[ti].s, cbuf[ti].n, border_pair, border_str, false, 0, text_pair, sa2);
+                        tui_ensure_pad_room(tui);
                         waddch(pad2, '\n');
                     }
                     cbc = 0;
@@ -1874,10 +1837,8 @@ render_cached:
 
             case MD_LINE_CODE_CONTENT: {
                 int cp = NCURSES_PAIR_CODE_BLOCK;
-                if (llen2 > 0 && (size_t)((int)llen2) == llen2) {
-                    char *tmp2 = malloc(llen2 + 1);
-                    int ldw = (int)llen2;
-                    if (tmp2) { memcpy(tmp2, ls2, llen2); tmp2[llen2] = '\0'; ldw = utf8_display_width(tmp2); free(tmp2); }
+                if (llen2 > 0) {
+                    int ldw = utf8_display_width_n(ls2, llen2);
                     if (ldw <= cw) {
                         render_md_code_segment(tui, ls2, llen2, border_pair, border_str, !at_end, cp, sa2);
                     } else {
@@ -1901,10 +1862,8 @@ render_cached:
                 size_t skip = pl->content_off;
                 if (skip > llen2) skip = llen2;
                 const char *cs2 = ls2 + skip; size_t rem2 = llen2 - skip;
-                if (llen2 > 0 && (size_t)((int)llen2) == llen2) {
-                    char *tmp3 = malloc(llen2 + 1);
-                    int ldw2 = (int)llen2;
-                    if (tmp3) { memcpy(tmp3, ls2, llen2); tmp3[llen2] = '\0'; ldw2 = utf8_display_width(tmp3); free(tmp3); }
+                if (llen2 > 0) {
+                    int ldw2 = utf8_display_width_n(ls2, llen2);
                     if (ldw2 <= cw) {
                         render_md_header_segment(tui, cs2, rem2, border_pair, border_str, !at_end, text_pair, sa2, pl->header_level);
                     } else {
@@ -1934,10 +1893,8 @@ render_cached:
                 size_t skip2 = pl->content_off;
                 if (skip2 > llen2) skip2 = llen2;
                 const char *cs4 = ls2 + skip2; size_t rem4 = llen2 - skip2;
-                if (llen2 > 0 && (size_t)((int)llen2) == llen2) {
-                    char *tmp4 = malloc(llen2 + 1);
-                    int ldw3 = (int)llen2;
-                    if (tmp4) { memcpy(tmp4, ls2, llen2); tmp4[llen2] = '\0'; ldw3 = utf8_display_width(tmp4); free(tmp4); }
+                if (llen2 > 0) {
+                    int ldw3 = utf8_display_width_n(ls2, llen2);
                     if (ldw3 <= cw) {
                         render_md_segment(tui, cs4, rem4, border_pair, border_str, !at_end, 0, text_pair, sa2);
                     } else {
@@ -1960,10 +1917,8 @@ render_cached:
 
             case MD_LINE_REGULAR:
             default: {
-                if (llen2 > 0 && (size_t)((int)llen2) == llen2) {
-                    char *tmp5 = malloc(llen2 + 1);
-                    int ldw4 = (int)llen2;
-                    if (tmp5) { memcpy(tmp5, ls2, llen2); tmp5[llen2] = '\0'; ldw4 = utf8_display_width(tmp5); free(tmp5); }
+                if (llen2 > 0) {
+                    int ldw4 = utf8_display_width_n(ls2, llen2);
                     if (ldw4 <= cw) {
                         render_md_segment(tui, ls2, llen2, border_pair, border_str, !at_end, 0, text_pair, sa2);
                     } else {
@@ -1992,6 +1947,7 @@ render_cached:
             } else {
                 for (int ti = 0; ti < cbc; ti++)
                     render_md_segment(tui, cbuf[ti].s, cbuf[ti].n, border_pair, border_str, false, 0, text_pair, sa2);
+                tui_ensure_pad_room(tui);
                 waddch(pad2, '\n');
             }
         }
@@ -2000,6 +1956,7 @@ render_cached:
         {
             int ccy = 0, ccx = 0;
             getyx(pad2, ccy, ccx);
+            tui_ensure_pad_room(tui);
             if (ccx > 0) (void)tui_safe_waddch(pad2, '\n');
         }
     }
@@ -2066,6 +2023,9 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
     // Move to end of pad
     int start_line = window_manager_get_content_lines(&tui->wm);
     (void)tui_safe_wmove(tui->wm.conv_pad, start_line, 0);
+    // Grow the pad on demand so this entry (which may render many lines)
+    // never triggers ncurses bottom-edge scrolling (full-pad memmove/char).
+    tui_ensure_pad_room(tui);
 
     // Check if this is a [User] or [Assistant] message to apply new styling
     int is_user_message = (prefix && strcmp(prefix, tui_icon_user()) == 0);
@@ -2253,6 +2213,28 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         }
         if (has_colors()) {
             wattron(tui->wm.conv_pad, COLOR_PAIR(text_pair) | text_attr);
+        }
+
+        /* Plain-text entries (user messages, tool output) can be very long.
+         * Pre-grow the pad for the worst-case wrapped line count before the
+         * single waddnstr below, so ncurses bottom-edge scrolling (full-pad
+         * memmove per character) never triggers mid-write.  The estimate
+         * (newlines + bytes/floor(width/2)) is conservative: bytes per
+         * column never exceeds 2 (ASCII=1, CJK=3B/2col, emoji=4B/2col). */
+        {
+            int pady = 0, padx = 0, estw2 = 1;
+            getyx(tui->wm.conv_pad, pady, padx);
+            (void)padx;
+            int padw = 0, padh = 0;
+            getmaxyx(tui->wm.conv_pad, padh, padw);
+            (void)padh;
+            if (padw > 1) {
+                estw2 = padw / 2;
+            }
+            int need = pady + 1 + (int)strlen(text) / estw2 + WM_PAD_GROW_MARGIN;
+            if (need > tui->wm.conv_pad_capacity) {
+                (void)window_manager_ensure_pad_capacity(&tui->wm, need);
+            }
         }
 
         // Check if we have an active search pattern to highlight

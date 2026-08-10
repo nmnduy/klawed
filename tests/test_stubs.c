@@ -70,3 +70,13 @@ int is_tool_disabled(const char *tool_name) {
     (void)tool_name;
     return 0;
 }
+
+/* Stub for standalone render tests (line_printer/markdown_render link
+ * without window_manager.o).  Tests use small pads that never overflow,
+ * so pad growth is a no-op here. */
+#include "../src/window_manager.h"
+int window_manager_ensure_cursor_room(WindowManager *wm, int margin) {
+    (void)wm;
+    (void)margin;
+    return 0;
+}

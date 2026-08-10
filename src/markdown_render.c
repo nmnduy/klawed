@@ -1108,6 +1108,23 @@ static void table_distribute_widths(int *col_widths, size_t num_cols, int pad_wi
  * Each cell's text is wrapped at col_widths[j]; all cells align on the same
  * visual line boundaries (the row may span multiple pad lines).
  */
+#ifdef TEST_BUILD
+/* Unit tests link markdown_render.c standalone (no window_manager.o).
+ * Rendering correctness is unaffected by skipping pad growth. */
+static void md_table_ensure_room(TUIState *tui) {
+    (void)tui;
+}
+#else
+static void md_table_ensure_room(TUIState *tui) {
+    if (!tui || !tui->wm.conv_pad) {
+        return;
+    }
+    /* Grow the pad on demand so table rows never trigger ncurses
+     * bottom-edge scrolling (full-pad memmove per character). */
+    (void)window_manager_ensure_cursor_room(&tui->wm, WM_PAD_GROW_MARGIN);
+}
+#endif
+
 static void table_render_wrapped_row(TUIState *tui, WINDOW *pad,
                                      const char **cells, const size_t *cell_lens,
                                      size_t num_cols, const int *col_widths,
@@ -1135,6 +1152,8 @@ static void table_render_wrapped_row(TUIState *tui, WINDOW *pad,
 
     /* Render each visual line */
     for (int line = 0; line < max_lines; line++) {
+        md_table_ensure_room(tui);
+
         /* Left border */
         if (edge_pair > 0 && has_colors()) {
             wattron(pad, COLOR_PAIR((unsigned)edge_pair));
@@ -1341,6 +1360,7 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
 
             /* Separator line after header */
             if (i == 0 && num_display > 1) {
+                md_table_ensure_room(tui);
                 table_render_separator(pad, num_cols, col_widths,
                                        edge_pair, left_border);
             }
@@ -1377,6 +1397,8 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
 
     /* Render rows */
     for (i = 0; i < num_display; i++) {
+        md_table_ensure_room(tui);
+
         /* Left border */
         if (edge_pair > 0 && has_colors()) {
             wattron(pad, COLOR_PAIR((unsigned)edge_pair));
@@ -1436,6 +1458,7 @@ void markdown_render_table(TUIState *tui, const char **rows, const size_t *row_l
 
         /* Separator line after header */
         if (i == 0 && num_display > 1) {
+            md_table_ensure_room(tui);
             if (edge_pair > 0 && has_colors()) {
                 wattron(pad, COLOR_PAIR((unsigned)edge_pair));
             }

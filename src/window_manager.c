@@ -486,6 +486,62 @@ int window_manager_ensure_pad_capacity(WindowManager *wm, int needed_lines) {
     return 0;
 }
 
+int window_manager_ensure_cursor_room(WindowManager *wm, int margin) {
+    if (!wm || !wm->is_initialized || !wm->conv_pad) {
+        return -1;
+    }
+    if (margin < 1) {
+        margin = 1;
+    }
+
+    int cur_y = 0, cur_x = 0;
+    getyx(wm->conv_pad, cur_y, cur_x);
+
+    int pad_h = 0, pad_w = 0;
+    getmaxyx(wm->conv_pad, pad_h, pad_w);
+
+    if (cur_y < pad_h - margin) {
+        return 0;  // Enough free rows below the cursor; nothing to do
+    }
+
+    /* Cursor is within `margin` rows of the pad bottom.  Expand the pad so
+     * rendering never triggers ncurses bottom-edge scrolling (wscrl), which
+     * memmoves the ENTIRE pad buffer per character — catastrophic O(n^2)
+     * cost once a long session exceeds the initial pad capacity.
+     * Growing by doubling keeps expansion amortized O(1) per rendered line. */
+    int needed = cur_y + margin * 2;
+    if (needed < cur_y) {
+        LOG_ERROR("[WM] Cursor room overflow (cur_y=%d, margin=%d)", cur_y, margin);
+        return -1;
+    }
+
+    /* Grow the pad IN PLACE with wresize().  Replacing the pad (newpad +
+     * copy, as window_manager_ensure_pad_capacity() does) would leave every
+     * renderer's cached WINDOW* (render_md_segment's `pad`, LinePrinter's
+     * `lp->pad`) pointing at freed memory the moment a growth happens
+     * mid-render.  wresize() keeps the pointer, content, and cursor valid
+     * (verified on both ncurses 6.x and macOS system ncurses 5.4). */
+    int new_h = wm->conv_pad_capacity;
+    while (new_h < needed) {
+        new_h *= 2;
+    }
+    if (wresize(wm->conv_pad, new_h, pad_w) != OK) {
+        LOG_ERROR("[WM] wresize failed (new_h=%d, pad_w=%d)", new_h, pad_w);
+        return -1;
+    }
+    wm->conv_pad_capacity = new_h;
+
+    /* wresize() preserves the cursor; clamp defensively in case a variant
+     * shifts it (e.g. when the cursor sat at the old bottom-right corner). */
+    int y2 = 0, x2 = 0;
+    getyx(wm->conv_pad, y2, x2);
+    if (y2 != cur_y || x2 != cur_x) {
+        (void)wmove(wm->conv_pad, cur_y, cur_x);
+    }
+
+    return 0;
+}
+
 int window_manager_set_pad_width(WindowManager *wm, int new_width) {
     if (!wm || !wm->is_initialized || !wm->conv_pad) {
         return -1;

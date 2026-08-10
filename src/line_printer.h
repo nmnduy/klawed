@@ -18,6 +18,7 @@ typedef struct _win_st WINDOW;
 
 typedef struct {
     WINDOW *pad;
+    TUIState *tui;               /* owner state (for pad growth on demand) */
     const char *border_str;      /* e.g. "│ " or NULL */
     int border_pair;             /* ncurses COLOR_PAIR for border glyph */
     int text_pair;               /* ncurses COLOR_PAIR for text */
@@ -28,7 +29,7 @@ typedef struct {
 } LinePrinter;
 
 /* Initialize a LinePrinter.  border_str may be NULL for no border. */
-void lp_init(LinePrinter *lp, WINDOW *pad, const char *border_str,
+void lp_init(LinePrinter *lp, TUIState *tui, WINDOW *pad, const char *border_str,
              int border_pair, int text_pair, int pad_width);
 
 /* Draw border glyph + space at current cursor position.
@@ -62,6 +63,11 @@ void lp_print_text_wrapped(LinePrinter *lp, const char *text);
 /* Find byte position that fits within max_display_width.
  * Breaks at column boundaries, not word boundaries. */
 size_t find_wrap_point(const char *text, size_t text_len, int max_display_width);
+
+/* Display width (terminal columns) of a length-bounded UTF-8 string.
+ * Allocation-free and locale-switch-free (UTF-8 locale ensured once).
+ * Falls back to one column per byte for invalid sequences. */
+int utf8_display_width_n(const char *str, size_t len);
 
 /* Find byte position that fits within max_display_width,
  * preferring word boundaries.  Backs up to the previous space
