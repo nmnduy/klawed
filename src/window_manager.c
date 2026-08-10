@@ -523,7 +523,17 @@ int window_manager_ensure_cursor_room(WindowManager *wm, int margin) {
      * (verified on both ncurses 6.x and macOS system ncurses 5.4). */
     int new_h = wm->conv_pad_capacity;
     while (new_h < needed) {
+        if (new_h > INT_MAX / 2) {
+            LOG_ERROR("[WM] Pad growth would overflow (needed=%d)", needed);
+            return -1;
+        }
         new_h *= 2;
+    }
+    /* Belt-and-suspenders: never attempt an absurd resize even when the
+     * loop didn't iterate (initial capacity already >= needed). */
+    if (new_h > INT_MAX / 2) {
+        LOG_ERROR("[WM] Pad growth too large (new_h=%d)", new_h);
+        return -1;
     }
     if (wresize(wm->conv_pad, new_h, pad_w) != OK) {
         LOG_ERROR("[WM] wresize failed (new_h=%d, pad_w=%d)", new_h, pad_w);
@@ -540,6 +550,48 @@ int window_manager_ensure_cursor_room(WindowManager *wm, int margin) {
     }
 
     return 0;
+}
+
+int window_manager_ensure_room_for_text(WindowManager *wm, const char *text) {
+    if (!wm || !wm->is_initialized || !wm->conv_pad) {
+        return -1;
+    }
+    if (!text || text[0] == '\0') {
+        return 0;
+    }
+
+    int cur_y = 0, cur_x = 0;
+    getyx(wm->conv_pad, cur_y, cur_x);
+    (void)cur_x;
+
+    int pad_h = 0, pad_w = 0;
+    getmaxyx(wm->conv_pad, pad_h, pad_w);
+    (void)pad_h;
+    if (pad_w < 2) {
+        pad_w = 2;  // Avoid div-by-zero in the byte-per-row estimate below
+    }
+
+    /* Worst-case extra rows below the cursor that writing `text` with
+     * wrapping can consume: each '\n' forces a row advance, wrapped bytes
+     * take at most 2 columns each (ASCII=1B/col, CJK=3B/2col, emoji=4B/2col),
+     * and each '\t' expands to a tab stop (up to 8 columns). */
+    size_t newlines = 0, tabs = 0;
+    for (const char *p = text; *p != '\0'; p++) {
+        if (*p == '\n') {
+            newlines++;
+        } else if (*p == '\t') {
+            tabs++;
+        }
+    }
+    long bytes_eff = (long)strlen(text) + (long)tabs * 7;
+    long extra = (long)newlines + bytes_eff / (pad_w / 2) + 1;
+    if (extra > (long)INT_MAX - cur_y - WM_PAD_GROW_MARGIN) {
+        LOG_ERROR("[WM] Text row estimate overflow (cur_y=%d, text=%zuB)",
+                  cur_y, strlen(text));
+        return -1;
+    }
+
+    return window_manager_ensure_cursor_room(wm, (int)extra + WM_PAD_GROW_MARGIN);
 }
 
 int window_manager_set_pad_width(WindowManager *wm, int new_width) {

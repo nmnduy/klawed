@@ -38,6 +38,7 @@
 #include <string.h>
 #include <strings.h>
 #include <stdio.h>
+#include <limits.h>
 #include <time.h>
 #include <ncurses.h>
 #include <bsd/string.h>
@@ -2218,22 +2219,15 @@ int render_entry_to_pad(TUIState *tui, const char *prefix, const char *text, TUI
         /* Plain-text entries (user messages, tool output) can be very long.
          * Pre-grow the pad for the worst-case wrapped line count before the
          * single waddnstr below, so ncurses bottom-edge scrolling (full-pad
-         * memmove per character) never triggers mid-write.  The estimate
-         * (newlines + bytes/floor(width/2)) is conservative: bytes per
-         * column never exceeds 2 (ASCII=1, CJK=3B/2col, emoji=4B/2col). */
+         * memmove per character) never triggers mid-write.  Growth is IN
+         * PLACE via wresize (cursor preserved) — replacing the pad
+         * (newpad+copy) here would reset the cursor to (0,0) and the text
+         * would overwrite the top of the conversation.  The estimate is
+         * conservative: one row per newline, <=2 bytes per column
+         * (ASCII=1, CJK=3B/2col, emoji=4B/2col), 8 columns per tab. */
         {
-            int pady = 0, padx = 0, estw2 = 1;
-            getyx(tui->wm.conv_pad, pady, padx);
-            (void)padx;
-            int padw = 0, padh = 0;
-            getmaxyx(tui->wm.conv_pad, padh, padw);
-            (void)padh;
-            if (padw > 1) {
-                estw2 = padw / 2;
-            }
-            int need = pady + 1 + (int)strlen(text) / estw2 + WM_PAD_GROW_MARGIN;
-            if (need > tui->wm.conv_pad_capacity) {
-                (void)window_manager_ensure_pad_capacity(&tui->wm, need);
+            if (window_manager_ensure_room_for_text(&tui->wm, text) != 0) {
+                LOG_ERROR("[TUI] Failed to pre-grow pad for plain-text entry");
             }
         }
 
@@ -2276,17 +2270,24 @@ skip_newline:
     (void)current_pad_width;
     if (cur_y >= current_pad_height) {
         LOG_ERROR("[TUI] Cursor position %d exceeds pad height %d! Expanding pad.", cur_y, current_pad_height);
-        // Emergency expansion with overflow check
-        int emergency_capacity = cur_y + 100;
-        if (emergency_capacity < cur_y) {  // Check for integer overflow
+        // Emergency expansion with overflow check.  Uses cursor-preserving
+        // growth (wresize); ensure_pad_capacity() replaces the pad and
+        // would drop the cursor back to (0,0), corrupting the next write.
+        int emergency_rows = 100;
+        if (cur_y > INT_MAX - emergency_rows) {  // Check for integer overflow
             LOG_ERROR("[TUI] Emergency expansion would overflow! Limiting cursor.");
             cur_y = current_pad_height - 1;
-        } else if (window_manager_ensure_pad_capacity(&tui->wm, emergency_capacity) != 0) {
+            cur_x = 0;
+        } else if (window_manager_ensure_cursor_room(&tui->wm, emergency_rows) != 0) {
             LOG_ERROR("[TUI] Failed to expand pad in emergency!");
             // Try to recover by limiting to current capacity
             cur_y = current_pad_height - 1;
+            cur_x = 0;
+        } else {
+            // Growth succeeded with the cursor preserved; re-fetch the real
+            // position so the content-lines accounting below is correct.
+            getyx(tui->wm.conv_pad, cur_y, cur_x);
         }
-        cur_x = 0;  // Reset cur_x after clamping cur_y
     }
 
     // If the cursor is mid-line (cur_x > 0), the current row has content and

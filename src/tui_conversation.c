@@ -359,21 +359,14 @@ void tui_update_last_conversation_line(TUIState *tui, const char *text) {
     // Grow the pad before appending streamed text.  The entry was sized by
     // an estimate based on the FIRST chunk only; long streaming responses
     // would otherwise overflow the pad and trigger ncurses bottom-edge
-    // scrolling (full-pad memmove per character).  Growth covers this
-    // chunk's worst-case wrapped lines (newlines + bytes/floor(width/2)).
+    // scrolling (full-pad memmove per character).  Growth is IN PLACE via
+    // wresize (cursor preserved — replacing the pad would reset the cursor
+    // to (0,0) and the stream would overwrite the top of the conversation)
+    // using a conservative worst-case estimate for this chunk: one row per
+    // newline, <=2 bytes per column, 8 columns per tab.
     {
-        int ccy = 0, ccx = 0, estw2 = 1;
-        getyx(tui->wm.conv_pad, ccy, ccx);
-        (void)ccx;
-        int ccw = 0, cch = 0;
-        getmaxyx(tui->wm.conv_pad, cch, ccw);
-        (void)cch;
-        if (ccw > 1) {
-            estw2 = ccw / 2;
-        }
-        int need = ccy + 1 + (int)strlen(text) / estw2 + WM_PAD_GROW_MARGIN;
-        if (need > tui->wm.conv_pad_capacity) {
-            (void)window_manager_ensure_pad_capacity(&tui->wm, need);
+        if (window_manager_ensure_room_for_text(&tui->wm, text) != 0) {
+            LOG_ERROR("[TUI] Failed to pre-grow pad for streamed text");
         }
     }
 

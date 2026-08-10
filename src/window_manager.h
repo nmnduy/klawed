@@ -102,6 +102,16 @@ int window_manager_ensure_pad_capacity(WindowManager *wm, int needed_lines);
 // Returns: 0 on success, -1 on failure
 int window_manager_ensure_cursor_room(WindowManager *wm, int margin);
 
+// Ensure the pad has room for `text` written at the current cursor position
+// with ncurses line wrapping.  Grows the pad IN PLACE (wresize) so the
+// cursor and content survive — the cursor must never reach the pad's last
+// row, or ncurses bottom-edge scrolling (wscrl, a full-pad memmove per
+// character) turns rendering into O(n^2).  The row estimate is
+// conservative: one row per newline, <=2 bytes per column, and 8 columns
+// per tab (ncurses expands tabs to tab stops).
+// Returns: 0 on success, -1 on failure
+int window_manager_ensure_room_for_text(WindowManager *wm, const char *text);
+
 // Change the conversation pad width (used when toggling wrap on/off)
 // Recreates the pad and copies existing content
 // Returns: 0 on success, -1 on failure

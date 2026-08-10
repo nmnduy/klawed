@@ -33,16 +33,29 @@ static void ensure_utf8_locale(void) {
     if (checked) {
         return;
     }
+    /* Set the flag FIRST so this never re-runs: the old code called
+     * setlocale() on EVERY line, and setlocale() loads locale data files
+     * each time it changes the locale (a top CPU cost — open$NOCANCEL in
+     * profile stacks when rendering long conversations). */
     checked = 1;
 
     const char *codeset = nl_langinfo(CODESET);
-    if (!codeset ||
-        (strstr(codeset, "UTF-8") == NULL &&
-         strstr(codeset, "utf-8") == NULL &&
-         strstr(codeset, "UTF8") == NULL)) {
-        /* Non-UTF-8 locale — switch LC_CTYPE only, so isspace()/collation
-         * in other categories keep the user's configured behavior. */
-        setlocale(LC_CTYPE, "C.UTF-8");
+    if (codeset &&
+        (strstr(codeset, "UTF-8") != NULL ||
+         strstr(codeset, "utf-8") != NULL ||
+         strstr(codeset, "UTF8") != NULL)) {
+        return;  // Already UTF-8
+    }
+
+    /* Non-UTF-8 locale — switch LC_CTYPE only, so isspace()/collation in
+     * other categories keep the user's configured behavior.  Try a couple
+     * of common names; if none is available we keep the current locale and
+     * fall back to per-byte width accounting (degraded, not broken). */
+    static const char *const candidates[] = {"C.UTF-8", "UTF-8", NULL};
+    for (int i = 0; candidates[i] != NULL; i++) {
+        if (setlocale(LC_CTYPE, candidates[i]) != NULL) {
+            break;
+        }
     }
 }
 
