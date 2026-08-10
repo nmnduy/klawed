@@ -1144,6 +1144,28 @@ void tui_show_startup_banner(TUIState *tui, const char *version, const char *mod
             tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
         }
     }
+
+    /* If running inside tmux with the 'mouse' option off, tmux never forwards
+     * wheel/click events to panes, so the mouse cannot scroll the
+     * conversation. Show a one-time hint pointing at the fix.
+     */
+    {
+        const char *tmux_env = getenv("TMUX");
+        if (tmux_env && tmux_env[0] != '\0') {
+            FILE *fp = popen("tmux display-message -p '#{mouse}' 2>/dev/null", "r");
+            if (fp) {
+                char buf[64] = {0};
+                if (fgets(buf, sizeof(buf), fp) != NULL && strstr(buf, "off") != NULL) {
+                    tui_add_conversation_line(tui, NULL,
+                        "TMUX: mouse scrolling is disabled (mouse option is off). "
+                        "Run 'tmux set -g mouse on' or add 'set -g mouse on' to your tmux.conf.",
+                        COLOR_PAIR_TOOL_DIM);
+                    tui_add_conversation_line(tui, NULL, "", COLOR_PAIR_FOREGROUND);
+                }
+                pclose(fp);
+            }
+        }
+    }
 }
 
 // Simple cache for ANSI color pairs to avoid recreating them

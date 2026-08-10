@@ -33,6 +33,48 @@ typedef struct _win_st WINDOW;
 typedef struct TUIInputBuffer TUIInputBuffer;
 typedef struct VoiceModeState VoiceModeState;
 
+/*
+ * Mouse wheel scroll delta for a given ncurses button state (bstate).
+ *
+ * Returns a positive delta (scroll down / toward newer messages) for
+ * wheel-down events, a negative delta for wheel-up events, and 0 when
+ * bstate is not a wheel event.
+ *
+ * Two ncurses generations are handled:
+ *
+ *   - Modern ncurses (6.x, SGR mouse protocol) reports clean single-button
+ *     events: wheel-up = BUTTON4_PRESSED, wheel-down = BUTTON5_PRESSED.
+ *
+ *   - Apple's system ncurses 5.4 (legacy X10 protocol, NCURSES_MOUSE_VERSION=1)
+ *     has a lossy parser: it sets BUTTON5_PRESSED on BOTH wheel directions
+ *     and pairs it with a low button bit instead — wheel-up decodes as
+ *     BUTTON5_PRESSED | BUTTON1_PRESSED (0x02000002), wheel-down as
+ *     BUTTON5_PRESSED | BUTTON2_PRESSED (0x02000080). The BUTTON1_PRESSED
+ *     pairing is what distinguishes the directions on macOS. (Verified
+ *     empirically against libncurses.5.4 on macOS with X10 wheel sequences.)
+ */
+static inline int tui_mouse_wheel_delta(mmask_t bstate) {
+#ifndef BUTTON5_PRESSED
+    /* Apple's system ncurses (libncurses.5.4, NCURSES_MOUSE_VERSION=1)
+     * omits BUTTON5_PRESSED from its headers, so compute it exactly like
+     * the other button masks. */
+#define BUTTON5_PRESSED NCURSES_MOUSE_MASK(5, NCURSES_BUTTON_PRESSED)
+#endif
+    if (bstate & BUTTON5_PRESSED) {
+        if (bstate & BUTTON1_PRESSED) {
+            /* Apple ncurses: wheel up arrives paired with button 1 */
+            return -3;
+        }
+        /* Wheel down (button 5 on both ncurses generations) */
+        return 3;
+    }
+    if (bstate & BUTTON4_PRESSED) {
+        /* Modern ncurses: button 4 = wheel up */
+        return -3;
+    }
+    return 0;
+}
+
 // TUI Color pairs (public API for conversation entries)
 typedef enum {
     COLOR_PAIR_DEFAULT = 1,    // Foreground color for main text
