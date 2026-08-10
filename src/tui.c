@@ -876,34 +876,18 @@ int tui_process_input_char(TUIState *tui, int ch, const char *prompt, void *user
     if (ch == KEY_MOUSE) {
         MEVENT event;
         if (getmouse(&event) == OK) {
-#ifndef BUTTON5_PRESSED
-// Apple's system ncurses (libncurses.5.4, NCURSES_MOUSE_VERSION=1) omits
-// BUTTON5_PRESSED from its headers, so compute it exactly like the other
-// button masks.
-#define BUTTON5_PRESSED NCURSES_MOUSE_MASK(5, NCURSES_BUTTON_PRESSED)
-#endif
-            // IMPORTANT: check the wheel-DOWN (button 5) bit FIRST.
-            //
-            // Apple's system ncurses uses the legacy X10 mouse protocol and
-            // delivers a wheel-down notch as a press (which getmouse() can't
-            // decode) followed by a release whose bstate carries BOTH the
-            // button-4 and button-5 bits (0x2080000 = BUTTON4_PRESSED |
-            // BUTTON5_PRESSED). If BUTTON4 were checked first, wheel-down
-            // would scroll UP on macOS. Modern ncurses (6.x) delivers clean
-            // single-button events, so checking button 5 first is a no-op
-            // there and only corrects the Apple quirk.
-            if (event.bstate & BUTTON5_PRESSED) {
-                // Scroll wheel down: scroll conversation down
-                tui_scroll_conversation(tui, 3);
-                input_redraw(tui, prompt);
-            } else if (event.bstate & BUTTON4_PRESSED) {
-                // Scroll wheel up: scroll conversation up
-                tui_scroll_conversation(tui, -3);
+            // Scroll wheel events scroll the conversation; all other mouse
+            // events (clicks, releases, etc.) are consumed and discarded to
+            // prevent escape sequences from entering the input buffer as
+            // garbage characters. See tui_mouse_wheel_delta() in tui.h for
+            // the wheel-direction decoding, which handles both modern
+            // ncurses (6.x, SGR protocol) and Apple's legacy X10-based
+            // system ncurses 5.4.
+            int wheel_delta = tui_mouse_wheel_delta(event.bstate);
+            if (wheel_delta != 0) {
+                tui_scroll_conversation(tui, wheel_delta);
                 input_redraw(tui, prompt);
             }
-            // All other mouse events (clicks, releases, etc.) are consumed
-            // and discarded to prevent escape sequences from entering the
-            // input buffer as garbage characters.
         }
         return 0;
     }

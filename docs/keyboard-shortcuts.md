@@ -171,6 +171,20 @@ Press `Ctrl+K` when the input is empty to open the command palette, similar to C
 - `Enter` — Select the highlighted command (inserts `/command ` into the input buffer)
 - `ESC` or `Ctrl+C` — Cancel and close the palette, returning to INSERT mode
 
+### Mouse
+
+- **Scroll wheel** — scrolls the conversation in any mode: wheel up = older
+  messages, wheel down = newer messages.
+- Wheel scrolling requires terminal mouse reporting, which klawed enables
+  automatically at startup (`mousemask`). Both modern ncurses (6.x, SGR
+  protocol) and Apple's system ncurses (5.4, legacy X10 protocol) are
+  supported; the Apple X10 decode quirk (both wheel directions reported with
+  the button-5 bit) is handled internally.
+- **Inside tmux**: tmux only forwards mouse events to a pane when its `mouse`
+  option is on. If the wheel does nothing, run `tmux set -g mouse on` (or add
+  `set -g mouse on` to `~/.tmux.conf` to make it permanent). Klawed shows a
+  hint about this at startup when it detects tmux with mouse mode off.
+
 ### Tips
 - Press `Ctrl+K` on empty input to browse all available commands
 - Start typing to quickly narrow down the list (e.g., type "clea" to find "/clear")
