@@ -4,10 +4,20 @@
  * Tests tui_mouse_wheel_delta() from tui.h against the bstate values that
  * real ncurses implementations produce:
  *   - Modern ncurses (6.x, SGR protocol): clean BUTTON4/BUTTON5 events
- *   - Apple's system ncurses 5.4 (legacy X10 protocol): BUTTON5_PRESSED is
- *     set on BOTH wheel directions, paired with BUTTON1 (wheel up) or
- *     BUTTON2 (wheel down). The literal 0x02000002/0x02000080 values below
- *     were captured empirically with the X10 wheel sequences on macOS.
+ *   - Apple's system ncurses 5.4 (legacy X10 protocol): every wheel byte was
+ *     fed through the real libncurses.5.4 on macOS and the resulting bstates
+ *     captured. The literal values below are that empirical table:
+ *
+ *       '$' (36)  0x02000002 = SHIFT|BUTTON1          classic wheel-up
+ *       '%' (37)  0x02000080 = SHIFT|BUTTON2          classic wheel-down
+ *       '`' (96)  0x00080000 = BUTTON4                plain X10 wheel-up
+ *       'a' (97)  0x08000000 = REPORT_MOUSE_POSITION  plain X10 wheel-down
+ *       'd' (100) 0x02080000 = SHIFT|BUTTON4          96-offset wheel-up
+ *       'e' (101) 0x0a000000 = SHIFT|REPORT_POS       96-offset wheel-down
+ *
+ * The plain '`'/'a' pair is what xterm-style terminals (and phone emulators)
+ * actually send; 'd'/'e' is the iTerm2 / Terminal.app convention.  'a' is
+ * only delivered if REPORT_MOUSE_POSITION is included in the mousemask.
  */
 
 #include <stdio.h>
@@ -84,11 +94,14 @@ static int test_apple_pairing_events(void) {
 static int test_apple_literal_bstates(void) {
 #if NCURSES_MOUSE_VERSION == 1
     // Verified empirically against libncurses.5.4 on macOS with the legacy
-    // X10 wheel sequences: wheel-up decodes to 0x02000002, wheel-down to
-    // 0x02000080.
-    ASSERT(tui_mouse_wheel_delta(0x02000002UL) < 0);
-    ASSERT(tui_mouse_wheel_delta(0x02000080UL) > 0);
-    print_test_result("apple ncurses 5.4 literal bstate values", 1);
+    // X10 wheel sequences (see header comment for the byte table):
+    ASSERT(tui_mouse_wheel_delta(0x02000002UL) < 0);   // '$' classic wheel-up
+    ASSERT(tui_mouse_wheel_delta(0x02000080UL) > 0);   // '%' classic wheel-down
+    ASSERT(tui_mouse_wheel_delta(0x00080000UL) < 0);   // '`' plain wheel-up
+    ASSERT(tui_mouse_wheel_delta(0x02080000UL) < 0);   // 'd' 96-offset wheel-up
+    ASSERT(tui_mouse_wheel_delta(0x0a000000UL) > 0);   // 'e' 96-offset wheel-down
+    ASSERT(tui_mouse_wheel_delta(0x08000000UL) > 0);   // 'a' plain wheel-down
+    print_test_result("apple ncurses 5.4 literal bstate values (6 bytes)", 1);
 #else
     // On modern ncurses these literals are not the native encoding; the
     // pairing test above already covers the semantics.

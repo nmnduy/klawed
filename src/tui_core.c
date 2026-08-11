@@ -431,7 +431,12 @@ int tui_init(TUIState *tui, ConversationState *state) {
     noecho();  // Don't echo input
     nonl();    // Don't translate Enter to newline (allows distinguishing Enter from Ctrl+J)
     keypad(stdscr, TRUE);  // Enable function keys
-    mousemask(ALL_MOUSE_EVENTS, NULL);  // Intercept mouse events to prevent escape sequences from leaking into input buffer
+    // Intercept mouse events to prevent escape sequences from leaking into
+    // input buffer. Include REPORT_MOUSE_POSITION: Apple's ncurses 5.4
+    // decodes the plain X10 wheel-down byte 'a' (97) to REPORT_MOUSE_POSITION,
+    // which is excluded from ALL_MOUSE_EVENTS — without it the event is
+    // dropped and wheel-down silently does nothing.
+    mousemask(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION, NULL);
     nodelay(stdscr, FALSE);  // Blocking input
     curs_set(2);  // Make cursor very visible (block cursor)
 

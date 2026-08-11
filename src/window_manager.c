@@ -298,7 +298,10 @@ int window_manager_resize_screen(WindowManager *wm) {
                                         // Enter is treated as Ctrl+J and stops submitting
     keypad(stdscr, TRUE);               // Enable function/arrow keys
     nodelay(stdscr, FALSE);             // Blocking input mode
-    mousemask(ALL_MOUSE_EVENTS, NULL);  // Intercept mouse events
+    // Intercept mouse events. Include REPORT_MOUSE_POSITION so Apple
+    // ncurses 5.4's plain X10 wheel-down ('a' -> REPORT_MOUSE_POSITION) is
+    // delivered instead of dropped (see tui_mouse_wheel_delta in tui.h).
+    mousemask(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION, NULL);
     curs_set(2);                        // Restore visible block cursor
     set_escdelay(25);                   // Keep ESC responsive (default is 1000ms)
     // Re-enable bracketed paste mode (endwin() disables it)

@@ -46,12 +46,22 @@ typedef struct VoiceModeState VoiceModeState;
  *     events: wheel-up = BUTTON4_PRESSED, wheel-down = BUTTON5_PRESSED.
  *
  *   - Apple's system ncurses 5.4 (legacy X10 protocol, NCURSES_MOUSE_VERSION=1)
- *     has a lossy parser: it sets BUTTON5_PRESSED on BOTH wheel directions
- *     and pairs it with a low button bit instead — wheel-up decodes as
- *     BUTTON5_PRESSED | BUTTON1_PRESSED (0x02000002), wheel-down as
- *     BUTTON5_PRESSED | BUTTON2_PRESSED (0x02000080). The BUTTON1_PRESSED
- *     pairing is what distinguishes the directions on macOS. (Verified
- *     empirically against libncurses.5.4 on macOS with X10 wheel sequences.)
+ *     has a lossy parser with no button 5. Wheel bytes decode as follows
+ *     (all verified empirically against libncurses.5.4 on macOS by feeding
+ *     every X10 button byte through the real library):
+ *
+ *         '$' (36)  0x02000002 = SHIFT|BUTTON1          classic wheel-up
+ *         '%' (37)  0x02000080 = SHIFT|BUTTON2          classic wheel-down
+ *         '`' (96)  0x00080000 = BUTTON4                plain X10 wheel-up
+ *         'a' (97)  0x08000000 = REPORT_MOUSE_POSITION  plain X10 wheel-down
+ *         'd' (100) 0x02080000 = SHIFT|BUTTON4          96-offset wheel-up
+ *         'e' (101) 0x0a000000 = SHIFT|REPORT_POS       96-offset wheel-down
+ *
+ *     The plain '`'/'a' pair is what xterm-style terminals (and phone
+ *     emulators) actually send; the 96-offset 'd'/'e' pair is the iTerm2 /
+ *     Terminal.app convention.  The 'a' wheel-down must be enabled by
+ *     including REPORT_MOUSE_POSITION in the mousemask, otherwise ncurses
+ *     drops the event before it reaches getmouse().
  */
 static inline int tui_mouse_wheel_delta(mmask_t bstate) {
 #ifndef BUTTON5_PRESSED
@@ -60,18 +70,31 @@ static inline int tui_mouse_wheel_delta(mmask_t bstate) {
      * the other button masks. */
 #define BUTTON5_PRESSED NCURSES_MOUSE_MASK(5, NCURSES_BUTTON_PRESSED)
 #endif
-    if (bstate & BUTTON5_PRESSED) {
-        if (bstate & BUTTON1_PRESSED) {
-            /* Apple ncurses: wheel up arrives paired with button 1 */
-            return -3;
-        }
-        /* Wheel down (button 5 on both ncurses generations) */
-        return 3;
-    }
+    /* BUTTON4_PRESSED is wheel-up on both generations. Checking it first
+     * also fixes the 96-offset wheel-up ('d'), which Apple decodes as
+     * SHIFT|BUTTON4 (0x02080000) — the old BUTTON5-first order misread it
+     * as a wheel-down. */
     if (bstate & BUTTON4_PRESSED) {
-        /* Modern ncurses: button 4 = wheel up */
         return -3;
     }
+    if (bstate & BUTTON5_PRESSED) {
+        if (bstate & BUTTON1_PRESSED) {
+            /* Apple ncurses: classic wheel-up '$' = SHIFT|BUTTON1 */
+            return -3;
+        }
+        /* Wheel-down: classic '%' (SHIFT|BUTTON2), 96-offset 'e'
+         * (SHIFT|REPORT_MOUSE_POSITION), or button 5 on modern ncurses */
+        return 3;
+    }
+#if NCURSES_MOUSE_VERSION == 1
+    /* Apple ncurses 5.4: the plain X10 wheel-down 'a' carries no shift bit
+     * and decodes to REPORT_MOUSE_POSITION alone (0x08000000).  This branch
+     * only fires when the caller includes REPORT_MOUSE_POSITION in the
+     * mousemask, otherwise ncurses discards the event entirely. */
+    if (bstate & REPORT_MOUSE_POSITION) {
+        return 3;
+    }
+#endif
     return 0;
 }
 
