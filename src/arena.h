@@ -712,6 +712,10 @@ void arena_add_allocation(Arena *arena, size_t size)
     if (arena->head_allocation == NULL)
     {
         arena->head_allocation = malloc(sizeof(Arena_Allocation));
+        if (arena->head_allocation == NULL)
+        {
+            return;
+        }
         arena->head_allocation->index = arena->index;
         arena->head_allocation->size = size;
         arena->head_allocation->pointer = arena->region + arena->index;
@@ -726,6 +730,10 @@ void arena_add_allocation(Arena *arena, size_t size)
         }
 
         current->next = malloc(sizeof(Arena_Allocation));
+        if (current->next == NULL)
+        {
+            return;
+        }
         current->next->index = arena->index;
         current->next->size = size;
         current->next->pointer = arena->region + arena->index;
