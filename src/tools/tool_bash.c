@@ -119,7 +119,7 @@ cJSON* tool_bash(cJSON *params, ConversationState *state) {
     size_t j = 0;
     for (size_t i = 0; command_copy[i] && j < sizeof(escaped_command) - 1; i++) {
         if (command_copy[i] == '\'') {
-            if (j < sizeof(escaped_command) - 2) {
+            if (j + 4 < sizeof(escaped_command)) {
                 escaped_command[j++] = '\'';
                 escaped_command[j++] = '\\';
                 escaped_command[j++] = '\'';
