@@ -821,9 +821,25 @@ static void test_lp_print_text_wrapped_empty_lines(void) {
  * ================================================================== */
 
 int main(void) {
-    /* Initialize ncurses before any tests that use pads */
+    /* Initialize ncurses before any tests that use pads.
+     *
+     * Use newterm() with /dev/null output instead of initscr() so the tests
+     * can run headless (e.g., in CI). Skip gracefully if no terminal
+     * description is available rather than failing the run. */
     setlocale(LC_ALL, "");
-    initscr();
+
+    FILE *devnull = fopen("/dev/null", "w");
+    if (!devnull) {
+        return 0;
+    }
+
+    SCREEN *scr = newterm(NULL, devnull, stdin);
+    if (!scr) {
+        fprintf(stderr, "SKIP: cannot create ncurses screen (headless)\n");
+        fclose(devnull);
+        return 0;
+    }
+    (void)set_term(scr);
     noecho();
     cbreak();
 
@@ -892,5 +908,6 @@ int main(void) {
     print_summary();
 
     endwin();
+    fclose(devnull);
     return tests_failed > 0 ? 1 : 0;
 }
