@@ -978,11 +978,23 @@ CompletionResult* commands_tab_completer(const char *line, int cursor_pos, void 
         if (!res) return NULL;
         // Use reallocarray for overflow-safe allocation
         res->options = reallocarray(NULL, (size_t)match_count, sizeof(char*));
+        if (!res->options) {
+            free(res);
+            return NULL;
+        }
         res->count = 0; res->selected = 0; res->arena_allocated = 0;
         for (int i = 0; i < command_count; i++) {
             const char *name = command_registry[i]->name;
             if (strncmp(name, line + 1, (size_t)cmd_name_len) == 0) {
                 char *opt = malloc(strlen(name) + 2);
+                if (!opt) {
+                    for (int j = 0; j < res->count; j++) {
+                        free(res->options[j]);
+                    }
+                    free(res->options);
+                    free(res);
+                    return NULL;
+                }
                 snprintf(opt, strlen(name) + 2, "/%s", name);
                 res->options[res->count++] = opt;
             }
@@ -1043,12 +1055,27 @@ static CompletionResult* dir_path_completer(const char *line, int cursor_pos, vo
     if (!res) { globfree(&globbuf); return NULL; }
     // Use reallocarray for overflow-safe allocation
     res->options = reallocarray(NULL, dir_count, sizeof(char*));
+    if (!res->options) {
+        free(res);
+        globfree(&globbuf);
+        return NULL;
+    }
     res->count = 0; res->selected = 0; res->arena_allocated = 0;
     for (size_t i = 0; i < globbuf.gl_pathc; i++) {
         const char *m = globbuf.gl_pathv[i];
         size_t len = strlen(m);
         if (len > 0 && m[len-1] == '/') {
-            res->options[res->count++] = strdup(m);
+            char *opt = strdup(m);
+            if (!opt) {
+                for (int j = 0; j < res->count; j++) {
+                    free(res->options[j]);
+                }
+                free(res->options);
+                free(res);
+                globfree(&globbuf);
+                return NULL;
+            }
+            res->options[res->count++] = opt;
         }
     }
     globfree(&globbuf);
