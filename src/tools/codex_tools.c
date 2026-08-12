@@ -29,7 +29,6 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <limits.h>
-#include <time.h>
 #include <signal.h>
 
 #ifdef __APPLE__
@@ -1609,22 +1608,29 @@ cJSON* codex_tool_spawn_agent(cJSON *args) {
 
     /* Create log directory */
     const char *log_dir = ".klawed/subagent";
-    mkdir_p(log_dir);
+    if (mkdir_p(log_dir) != 0) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to create subagent log directory");
+        return error;
+    }
 
-    /* Generate log file path */
-    time_t now = time(NULL);
-    struct tm *tm_info = localtime(&now);
-    char timestamp[32];
-    strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_info);
-
+    /* Create a unique log file atomically (mkstemp) to avoid collisions when
+     * multiple subagents are spawned in parallel. */
     char log_file[PATH_MAX];
-    int ret = snprintf(log_file, sizeof(log_file), "%s/subagent_%s_%d.log",
-                       log_dir, timestamp, getpid());
+    int ret = snprintf(log_file, sizeof(log_file), "%s/subagent_XXXXXX", log_dir);
     if (ret < 0 || (size_t)ret >= sizeof(log_file)) {
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error", "Log file path too long");
         return error;
     }
+
+    int log_fd = mkstemp(log_file);
+    if (log_fd < 0) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "Failed to create subagent log file");
+        return error;
+    }
+    close(log_fd);
 
     /* Escape message for shell */
     size_t escaped_size = strlen(message) * 2 + 1;

@@ -15,7 +15,6 @@
 #include <bsd/string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <time.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -151,13 +150,11 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         return error;
     }
 
-    // Generate unique log filename with timestamp
-    time_t now = time(NULL);
-    struct tm *tm_info = localtime(&now);
-    char timestamp[32];
-    strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_info);
-
-    // Use dynamic allocation to avoid truncation warnings
+    // Create a unique log file with mkstemp (atomic O_CREAT|O_EXCL semantics).
+    // The previous timestamp+getpid() scheme collided when multiple subagents
+    // were spawned in parallel: they share the parent PID and a 1-second
+    // timestamp resolution, producing identical paths that each truncate the
+    // same file.
     size_t log_file_size = strlen(log_dir) + 64; // Extra space for suffix
     char *log_file = malloc(log_file_size);
     if (!log_file) {
@@ -165,7 +162,19 @@ cJSON* tool_subagent(cJSON *params, ConversationState *state) {
         cJSON_AddStringToObject(error, "error", "Out of memory");
         return error;
     }
-    snprintf(log_file, log_file_size, "%s/subagent_%s_%d.log", log_dir, timestamp, getpid());
+    snprintf(log_file, log_file_size, "%s/subagent_XXXXXX", log_dir);
+
+    int log_fd = mkstemp(log_file);
+    if (log_fd < 0) {
+        char err_msg[256];
+        snprintf(err_msg, sizeof(err_msg), "Failed to create subagent log file: %s",
+                 strerror(errno));
+        free(log_file);
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", err_msg);
+        return error;
+    }
+    close(log_fd);
 
     // Find the path to the current executable
     char exe_path[PATH_MAX];
