@@ -150,5 +150,6 @@ void interactive_mode(ConversationState *state) {
 
     // Cleanup TUI
     tui_cleanup(&tui);
+    state->tui = NULL;
     printf("Goodbye!\n");
 }
