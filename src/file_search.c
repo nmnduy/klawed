@@ -915,7 +915,7 @@ static size_t move_backward_word_in_pattern(FileSearchState *state) {
 // Move cursor forward one word in search pattern
 static size_t move_forward_word_in_pattern(FileSearchState *state) {
     if (!state || state->pattern_len == 0) {
-        return state->pattern_len;
+        return 0;
     }
 
     size_t cursor = state->pattern_len;  // Current cursor is at end of pattern
