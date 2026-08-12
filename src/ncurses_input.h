@@ -29,6 +29,7 @@ typedef struct CompletionResult {
     char **options;      // Array of completion options
     int count;           // Number of options
     int selected;        // Which option is highlighted (for cycling)
+    int arena_allocated; // 1 if allocated with an embedded arena, 0 otherwise
 } CompletionResult;
 
 // Completion callback: given line + cursor position, return suggestions

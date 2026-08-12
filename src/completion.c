@@ -104,34 +104,25 @@ static CompletionResult* completion_result_create_with_arena(size_t arena_size) 
     acr->result.options = NULL;
     acr->result.count = 0;
     acr->result.selected = 0;
+    acr->result.arena_allocated = 1;
 
     return &acr->result;
 }
 
 // Helper to check if CompletionResult is arena-allocated
 static int completion_result_is_arena_allocated(CompletionResult *result) {
-    if (!result) return 0;
-
-    // Check if pointer is at least sizeof(uint32_t) + sizeof(Arena*) before result
-    // Use memcpy to avoid alignment issues
-    uint32_t magic;
-    char *ptr = (char*)result - offsetof(ArenaCompletionResult, result);
-    memcpy(&magic, ptr, sizeof(uint32_t));
-
-    // Verify magic number
-    return (magic == COMPLETION_ARENA_MAGIC);
+    return result != NULL && result->arena_allocated != 0;
 }
 
 // Helper to get arena from CompletionResult (if arena-allocated)
 static Arena* completion_result_get_arena(CompletionResult *result) {
-    if (!result || !completion_result_is_arena_allocated(result)) {
+    if (!completion_result_is_arena_allocated(result)) {
         return NULL;
     }
 
-    // Get arena pointer using memcpy to avoid alignment issues
+    char *acr_ptr = (char*)result - offsetof(ArenaCompletionResult, result);
     Arena *arena;
-    char *ptr = (char*)result - offsetof(ArenaCompletionResult, result) + offsetof(ArenaCompletionResult, arena);
-    memcpy(&arena, ptr, sizeof(Arena*));
+    memcpy(&arena, acr_ptr + offsetof(ArenaCompletionResult, arena), sizeof(arena));
     return arena;
 }
 
@@ -140,17 +131,15 @@ void completion_free_result(CompletionResult *result) {
     if (!result) return;
 
     if (completion_result_is_arena_allocated(result)) {
-        // Get arena pointer using memcpy to avoid alignment issues
+        char *acr_ptr = (char*)result - offsetof(ArenaCompletionResult, result);
         Arena *arena;
-        char *ptr = (char*)result - offsetof(ArenaCompletionResult, result) + offsetof(ArenaCompletionResult, arena);
-        memcpy(&arena, ptr, sizeof(Arena*));
+        memcpy(&arena, acr_ptr + offsetof(ArenaCompletionResult, arena), sizeof(arena));
 
         if (arena) {
             arena_destroy(arena);
         }
 
         // Free the ArenaCompletionResult structure
-        char *acr_ptr = (char*)result - offsetof(ArenaCompletionResult, result);
         free(acr_ptr);
     } else {
         // Regular allocation - free individual strings and arrays

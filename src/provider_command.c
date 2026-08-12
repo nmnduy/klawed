@@ -171,6 +171,7 @@ CompletionResult* provider_completer(const char *line, int cursor_pos, void *ctx
 
     res->count = 0;
     res->selected = 0;
+    res->arena_allocated = 0;
 
     // Add "list" if it matches
     if (strncmp("list", prefix, (size_t)prefix_len) == 0) {
