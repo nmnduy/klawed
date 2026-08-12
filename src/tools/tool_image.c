@@ -101,57 +101,62 @@ cJSON* tool_upload_image(cJSON *params, ConversationState *state) {
         } else {
             close(fd);
             temp_copy_path = strdup(template);
+            if (!temp_copy_path) {
+                unlink(template);
+                LOG_WARN("Failed to allocate temp path for macOS screenshot copy");
+                // Continue with original path
+            } else {
+                // Copy the file
+                FILE *src = fopen(resolved_path, "rb");
+                FILE *dst = fopen(temp_copy_path, "wb");
 
-            // Copy the file
-            FILE *src = fopen(resolved_path, "rb");
-            FILE *dst = fopen(temp_copy_path, "wb");
+                if (src && dst) {
+                    char buffer[8192];
+                    size_t bytes;
+                    int copy_success = 1;
 
-            if (src && dst) {
-                char buffer[8192];
-                size_t bytes;
-                int copy_success = 1;
-
-                while (!feof(src) && !ferror(src)) {
-                    bytes = fread(buffer, 1, sizeof(buffer), src);
-                    if (bytes > 0) {
-                        if (fwrite(buffer, 1, bytes, dst) != bytes) {
-                            copy_success = 0;
-                            break;
+                    while (!feof(src) && !ferror(src)) {
+                        bytes = fread(buffer, 1, sizeof(buffer), src);
+                        if (bytes > 0) {
+                            if (fwrite(buffer, 1, bytes, dst) != bytes) {
+                                copy_success = 0;
+                                break;
+                            }
                         }
                     }
-                }
 
-                // Check for read/write errors
-                if (ferror(src) || ferror(dst)) {
-                    copy_success = 0;
-                }
+                    // Check for read/write errors
+                    if (ferror(src) || ferror(dst)) {
+                        copy_success = 0;
+                    }
 
-                // Always close the streams
-                fclose(src);
-                fclose(dst);
+                    // Always close the streams
+                    fclose(src);
+                    fclose(dst);
 
-                if (copy_success) {
-                    LOG_DEBUG("Copied macOS temporary screenshot from '%s' to '%s'",
-                             resolved_path, temp_copy_path);
+                    if (copy_success) {
+                        LOG_DEBUG("Copied macOS temporary screenshot from '%s' to '%s'",
+                                 resolved_path, temp_copy_path);
 
-                    // Use the temp copy for reading
-                    path_to_read = temp_copy_path;
-                    created_temp_copy = 1;
+                        // Use the temp copy for reading
+                        path_to_read = temp_copy_path;
+                        created_temp_copy = 1;
+                    } else {
+                        LOG_WARN("Failed to copy macOS temporary screenshot");
+                        unlink(temp_copy_path); // Clean up failed copy
+                        free(temp_copy_path);
+                        temp_copy_path = NULL;
+                        // Continue with original path
+                    }
                 } else {
-                    LOG_WARN("Failed to copy macOS temporary screenshot");
-                    unlink(temp_copy_path); // Clean up failed copy
+                    if (src) fclose(src);
+                    if (dst) fclose(dst);
+                    unlink(template); // Clean up failed copy
                     free(temp_copy_path);
                     temp_copy_path = NULL;
+                    LOG_WARN("Failed to copy macOS temporary screenshot");
                     // Continue with original path
                 }
-            } else {
-                if (src) fclose(src);
-                if (dst) fclose(dst);
-                unlink(template); // Clean up failed copy
-                free(temp_copy_path);
-                temp_copy_path = NULL;
-                LOG_WARN("Failed to copy macOS temporary screenshot");
-                // Continue with original path
             }
         }
     }
